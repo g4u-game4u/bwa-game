@@ -7,6 +7,7 @@ import { CompanyService } from '@services/company.service';
 import { KPIService } from '@services/kpi.service';
 import { ToastService } from '@services/toast.service';
 import { PerformanceMonitorService } from '@services/performance-monitor.service';
+import { SessaoProvider } from '@providers/sessao/sessao.provider';
 import { 
   PlayerStatus, 
   PointWallet, 
@@ -89,10 +90,20 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     private kpiService: KPIService,
     private toastService: ToastService,
     private cdr: ChangeDetectorRef,
-    private performanceMonitor: PerformanceMonitorService
+    private performanceMonitor: PerformanceMonitorService,
+    private sessaoProvider: SessaoProvider
   ) {
     // Start measuring render time
     this.endRenderMeasurement = this.performanceMonitor.measureRenderTime('GamificationDashboardComponent');
+  }
+  
+  /**
+   * Get current player ID from session or use 'me' for Funifier API
+   */
+  private getPlayerId(): string {
+    // Funifier API supports 'me' as a special identifier for the current authenticated user
+    // This is the preferred approach as it doesn't require knowing the player ID upfront
+    return 'me';
   }
   
   ngOnInit(): void {
@@ -164,22 +175,24 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   private loadPlayerData(): void {
     this.isLoadingPlayer = true;
     
-    // Get current player ID (in real app, this would come from auth service)
-    const playerId = 'current-player-id'; // TODO: Get from auth service
+    const playerId = this.getPlayerId();
     
     // Load player status
+    console.log('📊 Loading player data for:', playerId);
     this.playerService.getPlayerStatus(playerId)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (status) => {
+          console.log('📊 Player status loaded:', status);
           this.playerStatus = status;
           this.isLoadingPlayer = false;
           this.cdr.markForCheck();
         },
         error: (error) => {
-          console.error('Failed to load player status:', error);
+          console.error('📊 Failed to load player status:', error);
           this.toastService.error('Erro ao carregar dados do jogador');
           this.isLoadingPlayer = false;
+          this.cdr.markForCheck();
         }
       });
     
@@ -188,11 +201,13 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (points) => {
+          console.log('📊 Point wallet loaded:', points);
           this.pointWallet = points;
           this.cdr.markForCheck();
         },
         error: (error) => {
-          console.error('Failed to load point wallet:', error);
+          console.error('📊 Failed to load point wallet:', error);
+          this.cdr.markForCheck();
         }
       });
     
@@ -201,11 +216,13 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (progress) => {
+          console.log('📊 Season progress loaded:', progress);
           this.seasonProgress = progress;
           this.cdr.markForCheck();
         },
         error: (error) => {
-          console.error('Failed to load season progress:', error);
+          console.error('📊 Failed to load season progress:', error);
+          this.cdr.markForCheck();
         }
       });
   }
@@ -216,20 +233,22 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   private loadCompanyData(): void {
     this.isLoadingCompanies = true;
     
-    const playerId = 'current-player-id'; // TODO: Get from auth service
+    const playerId = this.getPlayerId();
     
     this.companyService.getCompanies(playerId)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (companies) => {
+          console.log('📊 Companies loaded:', companies);
           this.companies = companies;
           this.isLoadingCompanies = false;
           this.cdr.markForCheck();
         },
         error: (error) => {
-          console.error('Failed to load companies:', error);
+          console.error('📊 Failed to load companies:', error);
           this.toastService.error('Erro ao carregar carteira de empresas');
           this.isLoadingCompanies = false;
+          this.cdr.markForCheck();
         }
       });
   }
@@ -240,20 +259,22 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   private loadKPIData(): void {
     this.isLoadingKPIs = true;
     
-    const playerId = 'current-player-id'; // TODO: Get from auth service
+    const playerId = this.getPlayerId();
     
     this.kpiService.getPlayerKPIs(playerId)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (kpis) => {
+          console.log('📊 KPIs loaded:', kpis);
           this.playerKPIs = kpis;
           this.isLoadingKPIs = false;
           this.cdr.markForCheck();
         },
         error: (error) => {
-          console.error('Failed to load KPIs:', error);
+          console.error('📊 Failed to load KPIs:', error);
           this.toastService.error('Erro ao carregar KPIs');
           this.isLoadingKPIs = false;
+          this.cdr.markForCheck();
         }
       });
   }

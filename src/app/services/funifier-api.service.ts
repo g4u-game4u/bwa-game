@@ -126,6 +126,8 @@ export class FunifierApiService {
   /**
    * Get authorization headers for Funifier API
    * Uses Basic Auth for /database endpoints, Bearer token for others
+   * Note: For player endpoints, the AuthInterceptor will add the Bearer token
+   * from the session, so we don't need to add it here
    */
   private getHeaders(endpoint: string): HttpHeaders {
     let headers = new HttpHeaders({
@@ -141,13 +143,9 @@ export class FunifierApiService {
       // Use Basic Auth for database operations
       headers = headers.set('Authorization', `Basic ${this.basicToken}`);
       console.log('Using Basic Auth for database endpoint:', endpoint);
-    } else {
-      // Use Bearer token for player data
-      const token = this.authToken || localStorage.getItem('funifier_token');
-      if (token) {
-        headers = headers.set('Authorization', `Bearer ${token}`);
-      }
     }
+    // For non-database endpoints, the AuthInterceptor will add the Bearer token
+    // from the session storage, so we don't add it here to avoid conflicts
 
     return headers;
   }

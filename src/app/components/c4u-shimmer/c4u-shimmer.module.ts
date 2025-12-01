@@ -9,6 +9,9 @@ import {C4uShimmerComponent} from './c4u-shimmer.component';
     ],
     imports: [
         CommonModule
+    ],
+    exports: [
+        C4uShimmerComponent
     ]
 })
 export class C4uShimmerModule {
