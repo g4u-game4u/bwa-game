@@ -53,9 +53,35 @@ export class SessaoProvider {
     }
 
     public async getUserAfterValidations(user: any) {
-        if (!user) await this.logout();
-        if (!user.roles) user.roles = [user.user_role];
-        user.roles.push(ROLES_LIST.ACCESS_PLAYER_PANEL);
+        if (!user) {
+            await this.logout();
+            return;
+        }
+        
+        // Handle Funifier response format - roles might be in different places
+        if (!user.roles) {
+            user.roles = [];
+            // Try to get role from user_role field
+            if (user.user_role) {
+                user.roles.push(user.user_role);
+            }
+            // Try to get role from extra.role field (Funifier format)
+            if (user.extra?.role) {
+                user.roles.push(user.extra.role);
+            }
+        }
+        
+        // Ensure roles is an array and filter out undefined/null values
+        if (!Array.isArray(user.roles)) {
+            user.roles = [];
+        }
+        user.roles = user.roles.filter((r: any) => r && typeof r === 'string');
+        
+        // Add default player panel access
+        if (!user.roles.includes(ROLES_LIST.ACCESS_PLAYER_PANEL)) {
+            user.roles.push(ROLES_LIST.ACCESS_PLAYER_PANEL);
+        }
+        
         this._usuario = user;
     }
 
@@ -83,7 +109,7 @@ export class SessaoProvider {
 
     private verifyUserProfile(...rolesType: ROLES_LIST[]) {
         return this._usuario?.roles?.some((role) =>
-            rolesType.some((roleType) => role.includes(roleType))
+            role && typeof role === 'string' && rolesType.some((roleType) => role.includes(roleType))
         );
     }
 
