@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { Observable, of, throwError } from 'rxjs';
+import { Observable, of } from 'rxjs';
 import { map, catchError, shareReplay } from 'rxjs/operators';
 import { FunifierApiService } from './funifier-api.service';
 import { ActivityMetrics, MacroMetrics } from '@model/gamification-dashboard.model';

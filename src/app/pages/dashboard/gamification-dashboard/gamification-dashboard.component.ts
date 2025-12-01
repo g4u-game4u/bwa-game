@@ -39,8 +39,8 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   private readonly MOBILE_BREAKPOINT = 768;
   private readonly TABLET_BREAKPOINT = 1024;
   
-  @HostListener('window:resize', ['$event'])
-  onResize(event: Event): void {
+  @HostListener('window:resize')
+  onResize(): void {
     this.checkResponsiveBreakpoints();
   }
   
@@ -373,7 +373,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   /**
    * Track by function for KPI list
    */
-  trackByKpiId(index: number, kpi: KPIData): string {
+  trackByKpiId(_index: number, kpi: KPIData): string {
     return kpi.id;
   }
   
