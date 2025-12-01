@@ -58,6 +58,17 @@ export class SessaoProvider {
             return;
         }
         
+        // Handle Funifier response format - map _id to email if email is not set
+        // Funifier uses _id as the email/player identifier
+        if (!user.email && user._id) {
+            user.email = user._id;
+        }
+        
+        // Map name to full_name if full_name is not set
+        if (!user.full_name && user.name) {
+            user.full_name = user.name;
+        }
+        
         // Handle Funifier response format - roles might be in different places
         if (!user.roles) {
             user.roles = [];
@@ -82,6 +93,7 @@ export class SessaoProvider {
             user.roles.push(ROLES_LIST.ACCESS_PLAYER_PANEL);
         }
         
+        console.log('👤 User data after validation:', user);
         this._usuario = user;
     }
 
