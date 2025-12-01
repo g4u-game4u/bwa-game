@@ -76,17 +76,20 @@ export class PlayerMapper {
 
   /**
    * Map Funifier API response to SeasonProgress model
+   * Data comes from player status level_progress
    */
   toSeasonProgress(apiResponse: any, seasonDates: { start: Date; end: Date }): SeasonProgress {
-    const progress = apiResponse.progress || {};
+    const levelProgress = apiResponse.level_progress || {};
+    const extra = apiResponse.extra || {};
     
+    // Extract from level progress and extra fields
     return {
       metas: {
-        current: progress.metas?.current || 0,
-        target: progress.metas?.target || 0
+        current: extra.metas_current || 0,
+        target: extra.metas_target || 0
       },
-      clientes: progress.clientes || 0,
-      tarefasFinalizadas: progress.tarefasFinalizadas || progress.tasks_completed || 0,
+      clientes: extra.clientes || 0,
+      tarefasFinalizadas: extra.tarefas_finalizadas || 0,
       seasonDates
     };
   }

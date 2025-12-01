@@ -7,18 +7,29 @@ import {firstValueFrom, Observable} from "rxjs";
   providedIn: 'root',
 })
 export class AuthProvider {
+  private readonly funifierBaseUrl = 'https://service2.funifier.com';
+  private readonly funifierApiKey = '68ffd888e179d46fce277c00';
+
   constructor(private http: HttpClient) {
   }
 
   async login(email: string, password: string) {
-    return firstValueFrom(this.http.post<LoginResponse>(`${environment.backend_url_base}/auth/login`, {
-      email: email,
+    // Use Funifier authentication
+    const authBody = {
+      apiKey: this.funifierApiKey,
+      grant_type: 'password',
+      username: email,
       password: password
-    }));
+    };
+
+    return firstValueFrom(
+      this.http.post<LoginResponse>(`${this.funifierBaseUrl}/v3/auth/token`, authBody)
+    );
   }
 
   userInfo(): Observable<any> {
-    return this.http.get(`${environment.backend_url_base}/auth/user`);
+    // Get user info from Funifier player status
+    return this.http.get(`${this.funifierBaseUrl}/v3/player/me/status`);
   }
 
   async requestPasswordReset(email: string) {

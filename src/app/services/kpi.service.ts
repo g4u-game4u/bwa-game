@@ -24,7 +24,8 @@ export class KPIService {
   ) {}
 
   /**
-   * Get player KPIs
+   * Get player KPIs from player status extra.kpi
+   * KPIs are calculated as average of player's companies KPIs
    */
   getPlayerKPIs(playerId: string): Observable<KPIData[]> {
     const cached = this.getCachedData(this.playerKPICache, playerId);
@@ -32,8 +33,19 @@ export class KPIService {
       return cached;
     }
 
-    const request$ = this.funifierApi.get<any[]>(`/v3/player/${playerId}/kpis`).pipe(
-      map(response => this.mapper.toKPIDataArray(response)),
+    const request$ = this.funifierApi.get<any>(`/v3/player/${playerId}/status`).pipe(
+      map(response => {
+        const kpiData = response.extra?.kpi;
+        
+        // Handle case where KPI data is not present
+        if (!kpiData) {
+          console.warn('KPI data not available in player status');
+          return [];
+        }
+        
+        // Convert KPI object to array format
+        return this.mapper.toKPIDataArray(kpiData);
+      }),
       catchError(error => {
         console.error('Error fetching player KPIs:', error);
         return throwError(() => error);
@@ -46,7 +58,8 @@ export class KPIService {
   }
 
   /**
-   * Get company KPIs
+   * Get company KPIs from cnpj_performance__c database
+   * companyId is the CNPJ
    */
   getCompanyKPIs(companyId: string): Observable<KPIData[]> {
     const cached = this.getCachedData(this.companyKPICache, companyId);
@@ -54,8 +67,28 @@ export class KPIService {
       return cached;
     }
 
-    const request$ = this.funifierApi.get<any[]>(`/v3/company/${companyId}/kpis`).pipe(
-      map(response => this.mapper.toKPIDataArray(response)),
+    // Query the custom database with aggregate
+    const aggregateBody = [
+      { $match: { _id: companyId } },
+      { $limit: 1 }
+    ];
+
+    const request$ = this.funifierApi.post<any[]>(
+      `/v3/database/cnpj_performance__c/aggregate?strict=true`,
+      aggregateBody
+    ).pipe(
+      map(response => {
+        // Response is an array, get first item
+        const companyData = response && response.length > 0 ? response[0] : null;
+        
+        if (!companyData) {
+          console.warn(`Company KPI data not found for CNPJ ${companyId}`);
+          return [];
+        }
+        
+        // Extract KPIs from company data (nps, multas, eficiencia, extra, prazo)
+        return this.mapper.toKPIDataArray(companyData);
+      }),
       catchError(error => {
         console.error('Error fetching company KPIs:', error);
         return throwError(() => error);

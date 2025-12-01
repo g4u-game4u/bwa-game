@@ -95,6 +95,7 @@ export class PlayerService {
 
   /**
    * Get season progress with caching
+   * Data comes from player status endpoint
    */
   getSeasonProgress(playerId: string, seasonDates: { start: Date; end: Date }): Observable<SeasonProgress> {
     const cacheKey = `${playerId}_${seasonDates.start.getTime()}_${seasonDates.end.getTime()}`;
@@ -103,10 +104,8 @@ export class PlayerService {
       return cached;
     }
 
-    const request$ = this.funifierApi.get<any>(`/v3/player/${playerId}/progress`, {
-      start_date: seasonDates.start.toISOString(),
-      end_date: seasonDates.end.toISOString()
-    }).pipe(
+    // Use player status endpoint - progress data is in the same response
+    const request$ = this.funifierApi.get<any>(`/v3/player/${playerId}/status`).pipe(
       map(response => this.mapper.toSeasonProgress(response, seasonDates)),
       tap(progress => {
         this.lastKnownProgress = progress;

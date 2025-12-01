@@ -25,6 +25,7 @@ export class CompanyService {
 
   /**
    * Get companies with optional filtering
+   * Companies come from player status extra.companies
    */
   getCompanies(playerId: string, filter?: { search?: string; minHealth?: number }): Observable<Company[]> {
     const cacheKey = `${playerId}_${JSON.stringify(filter || {})}`;
@@ -33,9 +34,18 @@ export class CompanyService {
       return cached;
     }
 
-    const request$ = this.funifierApi.get<any[]>(`/v3/player/${playerId}/companies`).pipe(
+    const request$ = this.funifierApi.get<any>(`/v3/player/${playerId}/status`).pipe(
       map(response => {
-        let companies = response.map(item => this.mapper.toCompany(item));
+        // Extract companies from extra.companies
+        const companiesData = response.extra?.companies || [];
+        
+        // Handle case where data is not present
+        if (!Array.isArray(companiesData)) {
+          console.warn('Companies data not available in player status');
+          return [];
+        }
+        
+        let companies = companiesData.map((item: any) => this.mapper.toCompany(item));
         
         // Apply filters
         if (filter) {
@@ -66,7 +76,8 @@ export class CompanyService {
   }
 
   /**
-   * Get company details
+   * Get company details from cnpj_performance__c database
+   * companyId is the CNPJ
    */
   getCompanyDetails(companyId: string): Observable<CompanyDetails> {
     const cached = this.getCachedData(this.companyDetailsCache, companyId);
@@ -74,8 +85,26 @@ export class CompanyService {
       return cached;
     }
 
-    const request$ = this.funifierApi.get<any>(`/v3/company/${companyId}`).pipe(
-      map(response => this.mapper.toCompanyDetails(response)),
+    // Query the custom database with aggregate
+    const aggregateBody = [
+      { $match: { _id: companyId } },
+      { $limit: 1 }
+    ];
+
+    const request$ = this.funifierApi.post<any[]>(
+      `/v3/database/cnpj_performance__c/aggregate?strict=true`,
+      aggregateBody
+    ).pipe(
+      map(response => {
+        // Response is an array, get first item
+        const companyData = response && response.length > 0 ? response[0] : null;
+        
+        if (!companyData) {
+          throw new Error(`Company with CNPJ ${companyId} not found`);
+        }
+        
+        return this.mapper.toCompanyDetails(companyData);
+      }),
       catchError(error => {
         console.error('Error fetching company details:', error);
         return throwError(() => error);

@@ -10,21 +10,36 @@ export class CompanyMapper {
 
   /**
    * Map Funifier API response to Company model
+   * Data comes from player status extra.companies or cnpj_performance__c
    */
   toCompany(apiResponse: any): Company {
+    // Extract KPIs from the response
+    const kpis = this.kpiMapper.toKPIDataArray(apiResponse);
+    
+    // Calculate health score as average of KPIs (if available)
+    let healthScore = apiResponse.healthScore || apiResponse.health || 0;
+    if (kpis.length > 0 && healthScore === 0) {
+      const avgScore = kpis.reduce((sum, kpi) => {
+        const percentage = kpi.target > 0 ? (kpi.current / kpi.target) * 100 : 0;
+        return sum + percentage;
+      }, 0) / kpis.length;
+      healthScore = Math.round(avgScore);
+    }
+    
     return {
-      id: apiResponse._id || apiResponse.id || '',
-      name: apiResponse.name || '',
-      cnpj: apiResponse.cnpj || apiResponse.document || '',
-      healthScore: apiResponse.healthScore || apiResponse.health || 0,
-      kpi1: this.kpiMapper.toKPIData(apiResponse.kpi1 || {}, 'KPI 1'),
-      kpi2: this.kpiMapper.toKPIData(apiResponse.kpi2 || {}, 'KPI 2'),
-      kpi3: this.kpiMapper.toKPIData(apiResponse.kpi3 || {}, 'KPI 3')
+      id: apiResponse._id || apiResponse.id || apiResponse.cnpj || '',
+      name: apiResponse.name || `CNPJ ${apiResponse._id || apiResponse.cnpj || ''}`,
+      cnpj: apiResponse.cnpj || apiResponse._id || '',
+      healthScore,
+      kpi1: kpis[0] || this.kpiMapper.toKPIData({}, 'KPI 1'),
+      kpi2: kpis[1] || this.kpiMapper.toKPIData({}, 'KPI 2'),
+      kpi3: kpis[2] || this.kpiMapper.toKPIData({}, 'KPI 3')
     };
   }
 
   /**
    * Map Funifier API response to CompanyDetails model
+   * For now, processes/activities/macros are empty as they're not in cnpj_performance__c
    */
   toCompanyDetails(apiResponse: any): CompanyDetails {
     const company = this.toCompany(apiResponse);

@@ -22,28 +22,86 @@ export interface AuthToken {
 })
 export class FunifierApiService {
   private readonly baseUrl = 'https://service2.funifier.com';
+  private readonly apiKey = '68ffd888e179d46fce277c00';
+  private readonly basicToken = 'NjhmZmQ4ODhlMTc5ZDQ2ZmNlMjc3YzAwOjY3ZWM0ZTRhMjMyN2Y3NGYzYTJmOTZmNQ==';
   private authToken: string | null = null;
+  private tokenExpiry: number | null = null;
 
-  constructor(private http: HttpClient) {}
+  constructor(private http: HttpClient) {
+    // Load token from localStorage on service initialization
+    this.loadStoredToken();
+  }
 
   /**
-   * Authenticate with Funifier API
+   * Load stored token from localStorage
+   */
+  private loadStoredToken(): void {
+    const token = localStorage.getItem('funifier_token');
+    const expiry = localStorage.getItem('funifier_token_expiry');
+    
+    if (token && expiry) {
+      const expiryTime = parseInt(expiry, 10);
+      if (Date.now() < expiryTime) {
+        this.authToken = token;
+        this.tokenExpiry = expiryTime;
+      } else {
+        // Token expired, clear it
+        this.clearAuth();
+      }
+    }
+  }
+
+  /**
+   * Authenticate with Funifier API using username and password
+   * POST /v3/auth/token
    */
   authenticate(credentials: AuthCredentials): Observable<AuthToken> {
-    return this.http.post<AuthToken>(`${this.baseUrl}/auth/token`, credentials).pipe(
+    const authBody = {
+      apiKey: credentials.apiKey || this.apiKey,
+      grant_type: credentials.grant_type || 'password',
+      username: credentials.username,
+      password: credentials.password
+    };
+
+    return this.http.post<AuthToken>(`${this.baseUrl}/v3/auth/token`, authBody).pipe(
       tap(response => {
         this.authToken = response.access_token;
+        this.tokenExpiry = response.expires_in;
+        
+        // Store token and expiry in localStorage
         localStorage.setItem('funifier_token', response.access_token);
+        localStorage.setItem('funifier_token_expiry', response.expires_in.toString());
+        
+        console.log('Funifier authentication successful');
       }),
       catchError(this.handleError)
     );
   }
 
   /**
+   * Check if user is authenticated and token is valid
+   */
+  isAuthenticated(): boolean {
+    if (!this.authToken || !this.tokenExpiry) {
+      return false;
+    }
+    
+    // Check if token is expired
+    return Date.now() < this.tokenExpiry;
+  }
+
+  /**
+   * Get current auth token
+   */
+  getToken(): string | null {
+    return this.authToken;
+  }
+
+  /**
    * GET request to Funifier API
    */
   get<T>(endpoint: string, params?: any): Observable<T> {
-    const headers = this.getHeaders();
+    const headers = this.getHeaders(endpoint);
     const url = `${this.baseUrl}${endpoint}`;
     
     return this.http.get<T>(url, { headers, params }).pipe(
@@ -56,7 +114,7 @@ export class FunifierApiService {
    * POST request to Funifier API
    */
   post<T>(endpoint: string, body: any): Observable<T> {
-    const headers = this.getHeaders();
+    const headers = this.getHeaders(endpoint);
     const url = `${this.baseUrl}${endpoint}`;
     
     return this.http.post<T>(url, body, { headers }).pipe(
@@ -67,16 +125,27 @@ export class FunifierApiService {
 
   /**
    * Get authorization headers for Funifier API
+   * Uses Basic Auth for /database endpoints, Bearer token for others
    */
-  private getHeaders(): HttpHeaders {
+  private getHeaders(endpoint: string): HttpHeaders {
     let headers = new HttpHeaders({
       'Content-Type': 'application/json',
       'X-Funifier-Request': 'true' // Marker to prevent auth interceptor from overriding
     });
 
-    const token = this.authToken || localStorage.getItem('funifier_token');
-    if (token) {
-      headers = headers.set('Authorization', `Bearer ${token}`);
+    // Check if this is a database endpoint
+    const isDatabaseEndpoint = endpoint.includes('/database');
+
+    if (isDatabaseEndpoint) {
+      // Use Basic Auth for database operations
+      headers = headers.set('Authorization', `Basic ${this.basicToken}`);
+      console.log('Using Basic Auth for database endpoint:', endpoint);
+    } else {
+      // Use Bearer token for player data
+      const token = this.authToken || localStorage.getItem('funifier_token');
+      if (token) {
+        headers = headers.set('Authorization', `Bearer ${token}`);
+      }
     }
 
     return headers;
@@ -125,6 +194,8 @@ export class FunifierApiService {
    */
   clearAuth(): void {
     this.authToken = null;
+    this.tokenExpiry = null;
     localStorage.removeItem('funifier_token');
+    localStorage.removeItem('funifier_token_expiry');
   }
 }
