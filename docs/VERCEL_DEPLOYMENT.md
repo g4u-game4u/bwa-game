@@ -36,9 +36,17 @@ The project includes a `vercel.json` configuration file with the following setti
 {
   "buildCommand": "npm run build -- --configuration=production",
   "outputDirectory": "dist/game4u-front",
-  "installCommand": "npm ci"
+  "installCommand": "npm ci",
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
 }
 ```
+
+**Note**: Uses `rewrites` instead of `routes` to be compatible with `headers` configuration.
 
 ## Build Process
 
@@ -105,17 +113,14 @@ npm run build -- --configuration=production
 
 ### 404 Errors on Page Refresh
 
-**Solution**: The `vercel.json` includes routing configuration to handle SPA routing:
+**Solution**: The `vercel.json` includes rewrite configuration to handle SPA routing:
 
 ```json
 {
-  "routes": [
+  "rewrites": [
     {
-      "handle": "filesystem"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/index.html"
+      "source": "/(.*)",
+      "destination": "/index.html"
     }
   ]
 }
