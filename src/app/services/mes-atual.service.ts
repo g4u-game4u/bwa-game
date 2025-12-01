@@ -24,34 +24,58 @@ export class MesAtualService {
     }
 
     public async getDadosMesAtualDashboard(id: number, tipo: number): Promise<ResumoMes> {
-        let url = this.basePath;
-
-        // Usar primeiro e último dia do mês atual
-        this.firstDayOfMonth.setUTCHours(0, 0, 0, 0);
-        this.lastDayOfMonth.setUTCHours(23, 59, 59, 999);
-
-        let queryParams = '?start=' + this.firstDayOfMonth.toISOString() +
-                         '&end=' + this.lastDayOfMonth.toISOString();
-
-        if (tipo === TIPO_CONSULTA_TIME) {
-            url = '/game/team-stats';
-            queryParams += '&team=' + id;
-        } else {
-            queryParams += '&user=' + id;
+        // Check if backend_url_base is configured - if not, return empty data
+        if (!environment.backend_url_base || environment.backend_url_base === 'http://localhost') {
+            console.warn('⚠️ MesAtualService: backend_url_base not configured, returning empty data');
+            return this.getEmptyResumoMes();
         }
 
-        const response = await this.api.get<any>(url + queryParams);
+        try {
+            let url = this.basePath;
 
-        return <ResumoMes>{
-            pontos: response?.action_stats.total_points + response?.action_stats.total_blocked_points || 0,
-            pendingTasks: response?.action_stats.PENDING.count || 0,
-            doingTasks: response?.action_stats.DOING.count || 0,
-            completedTasks: response?.action_stats.DONE.count || 0,
-            deliveredTasks: response?.action_stats.DELIVERED.count || 0,
-            pendingDeliveries: response?.delivery_stats.PENDING || 0,
-            incompleteDeliveries: response?.delivery_stats.INCOMPLETE || 0,
-            completedDeliveries: response?.delivery_stats.DELIVERED || 0,
+            // Usar primeiro e último dia do mês atual
+            this.firstDayOfMonth.setUTCHours(0, 0, 0, 0);
+            this.lastDayOfMonth.setUTCHours(23, 59, 59, 999);
+
+            let queryParams = '?start=' + this.firstDayOfMonth.toISOString() +
+                             '&end=' + this.lastDayOfMonth.toISOString();
+
+            if (tipo === TIPO_CONSULTA_TIME) {
+                url = '/game/team-stats';
+                queryParams += '&team=' + id;
+            } else {
+                queryParams += '&user=' + id;
+            }
+
+            const response = await this.api.get<any>(url + queryParams);
+
+            return <ResumoMes>{
+                pontos: (response?.action_stats?.total_points || 0) + (response?.action_stats?.total_blocked_points || 0),
+                pendingTasks: response?.action_stats?.PENDING?.count || 0,
+                doingTasks: response?.action_stats?.DOING?.count || 0,
+                completedTasks: response?.action_stats?.DONE?.count || 0,
+                deliveredTasks: response?.action_stats?.DELIVERED?.count || 0,
+                pendingDeliveries: response?.delivery_stats?.PENDING || 0,
+                incompleteDeliveries: response?.delivery_stats?.INCOMPLETE || 0,
+                completedDeliveries: response?.delivery_stats?.DELIVERED || 0,
+            };
+        } catch (error) {
+            console.error('❌ MesAtualService: Error fetching current month data:', error);
+            return this.getEmptyResumoMes();
         }
+    }
+
+    private getEmptyResumoMes(): ResumoMes {
+        return {
+            pontos: 0,
+            pendingTasks: 0,
+            doingTasks: 0,
+            completedTasks: 0,
+            deliveredTasks: 0,
+            pendingDeliveries: 0,
+            incompleteDeliveries: 0,
+            completedDeliveries: 0,
+        };
     }
 
     getGameActions(status: string, page: number, pageSize: number, id?: string, tipo?: number) {

@@ -80,10 +80,9 @@ export class RewardsComponent implements AfterViewInit, OnInit {
       this.idConsulta = usuario.email;
       this.nomeConsulta = usuario.full_name || usuario.name || '';
       this.tipoConsulta = TIPO_CONSULTA_COLABORADOR;
-      this.temporadaService.getDadosTemporadaDashboard(this.idConsulta, this.tipoConsulta)
-        .then(data => {
-          this.seasonData = data;
-        });
+      // Note: Removed call to temporadaService.getDadosTemporadaDashboard as it uses
+      // the old /game/stats endpoint which is no longer available.
+      // Season data will be loaded from Funifier API via the sidenav component if needed.
     }
 
     // Carrega categorias e recompensas da API

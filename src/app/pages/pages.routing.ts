@@ -1,8 +1,11 @@
 import {Routes} from '@angular/router';
-import {DashboardComponent} from "./dashboard/dashboard.component";
+import {DashboardComponent} from './dashboard/dashboard.component';
 
 export const PagesRoutes: Routes = [
-  {path: '', component: DashboardComponent},
+  {
+    path: '',
+    component: DashboardComponent
+  },
   {
     path: 'rewards',
     loadChildren: () => import('./recompensas/rewards.module').then(m => m.RewardsModule)
