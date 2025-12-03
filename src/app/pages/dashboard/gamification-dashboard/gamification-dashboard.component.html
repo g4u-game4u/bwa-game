@@ -105,16 +105,22 @@
     </section>
     
     <!-- Company Portfolio Section -->
-    <section class="dashboard-section" aria-labelledby="company-section-title">
+    <section class="dashboard-section carteira-section" aria-labelledby="company-section-title">
       <h2 id="company-section-title" class="section-title">Carteira</h2>
       
-      <c4u-company-table
-        *ngIf="companies.length > 0"
-        [companies]="companies"
-        (companySelected)="onCompanySelected($event)">
-      </c4u-company-table>
-      
-      <c4u-shimmer *ngIf="isLoadingCompanies"></c4u-shimmer>
+      <c4u-card class="carteira-card">
+        <c4u-company-table
+          *ngIf="companies.length > 0"
+          [companies]="companies"
+          (companySelected)="onCompanySelected($event)">
+        </c4u-company-table>
+        
+        <c4u-shimmer *ngIf="isLoadingCompanies"></c4u-shimmer>
+        
+        <div *ngIf="!isLoadingCompanies && companies.length === 0" class="empty-state">
+          <p>Nenhuma empresa encontrada na carteira</p>
+        </div>
+      </c4u-card>
     </section>
   </main>
   

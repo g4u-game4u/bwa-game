@@ -64,14 +64,24 @@
     transition: all 0.2s ease;
     border-radius: 8px;
     background: transparent;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    
+    &:last-child {
+      border-bottom: none;
+    }
     
     &:hover {
-      background: rgba(255, 255, 255, 0.05);
+      background: rgba(255, 255, 255, 0.08);
+      transform: translateX(4px);
     }
 
     &:focus {
       outline: 2px solid $primary-electric-blue;
       outline-offset: 2px;
+    }
+    
+    &:active {
+      background: rgba(255, 255, 255, 0.12);
     }
   }
 

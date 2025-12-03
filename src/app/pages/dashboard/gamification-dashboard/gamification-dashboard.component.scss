@@ -292,4 +292,31 @@
       justify-content: center;
     }
   }
+  
+  // Carteira section with card background
+  .carteira-section {
+    .carteira-card {
+      display: block;
+      width: 100%;
+      border-radius: $border-radius;
+      
+      ::ng-deep {
+        .content {
+          h1 {
+            display: none; // Hide the title since we use our own
+          }
+        }
+      }
+      
+      .empty-state {
+        padding: $spacing-xl;
+        text-align: center;
+        color: $text-secondary;
+        
+        p {
+          margin: 0;
+        }
+      }
+    }
+  }
 }

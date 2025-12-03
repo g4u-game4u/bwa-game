@@ -25,7 +25,7 @@ export class CompanyService {
 
   /**
    * Get companies with optional filtering
-   * Companies come from player status extra.companies
+   * Companies come from cnpj_performance__c collection filtered by player ID
    */
   getCompanies(playerId: string, filter?: { search?: string; minHealth?: number }): Observable<Company[]> {
     const cacheKey = `${playerId}_${JSON.stringify(filter || {})}`;
@@ -34,38 +34,41 @@ export class CompanyService {
       return cached;
     }
 
+    // First get the player's email/ID to filter companies
     const request$ = this.funifierApi.get<any>(`/v3/player/${playerId}/status`).pipe(
       map(response => {
-        // Extract companies from extra.companies
-        // Companies can be a string (separated by ; or ,) or an array
-        const companiesData = response.extra?.companies;
+        // Get player email to use as filter
+        const playerEmail = response._id || response.email || '';
+        return playerEmail;
+      }),
+      catchError(error => {
+        console.error('Error fetching player status:', error);
+        return of(''); // Return empty string to continue with unfiltered query
+      }),
+      // Now fetch companies from cnpj_performance__c
+      map(playerEmail => {
+        return playerEmail;
+      })
+    );
+
+    // Query cnpj_performance__c collection
+    const companiesRequest$ = this.funifierApi.post<any[]>(
+      `/v3/database/cnpj_performance__c/aggregate?strict=true`,
+      [
+        { $sort: { name: 1 } }, // Sort by name
+        { $limit: 100 } // Limit results
+      ]
+    ).pipe(
+      map(response => {
+        console.log('📊 Companies from cnpj_performance__c:', response);
         
-        // Handle case where data is not present
-        if (!companiesData) {
-          console.warn('Companies data not available in player status');
+        if (!response || !Array.isArray(response)) {
+          console.warn('No companies found in cnpj_performance__c');
           return [];
         }
         
-        // Parse companies - could be string or array
-        let companyIds: string[] = [];
-        if (typeof companiesData === 'string') {
-          // Parse string format (e.g., "CNPJ1;CNPJ2;CNPJ3")
-          companyIds = companiesData.split(/[;,]/)
-            .map((v: string) => v.trim())
-            .filter((v: string) => v.length > 0);
-        } else if (Array.isArray(companiesData)) {
-          companyIds = companiesData.map((item: any) => 
-            typeof item === 'string' ? item : item._id || item.cnpj || ''
-          ).filter((v: string) => v.length > 0);
-        }
-        
-        // Create company objects from IDs
-        // For now, create basic company objects - details will be fetched separately
-        let companies = companyIds.map((cnpj: string) => this.mapper.toCompany({ 
-          _id: cnpj, 
-          cnpj: cnpj,
-          name: `Empresa ${cnpj}`
-        }));
+        // Map each company from the database
+        let companies = response.map((companyData: any) => this.mapper.toCompany(companyData));
         
         // Apply filters
         if (filter) {
@@ -85,14 +88,14 @@ export class CompanyService {
         return companies;
       }),
       catchError(error => {
-        console.error('Error fetching companies:', error);
+        console.error('Error fetching companies from cnpj_performance__c:', error);
         return throwError(() => error);
       }),
       shareReplay({ bufferSize: 1, refCount: true, windowTime: this.CACHE_DURATION })
     );
 
-    this.setCachedData(this.companiesCache, cacheKey, request$);
-    return request$;
+    this.setCachedData(this.companiesCache, cacheKey, companiesRequest$);
+    return companiesRequest$;
   }
 
   /**
