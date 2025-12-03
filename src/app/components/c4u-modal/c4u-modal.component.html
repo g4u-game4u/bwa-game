@@ -1,19 +1,21 @@
-<div class="container" role="dialog" aria-modal="true" [attr.aria-labelledby]="'modal-title-' + modalId">
-  <div flex hAlign="space-between" vAlign="center" [marginBottom]="40">
-    <span class="title-content">
-      <i *ngIf="icon" class="{{ icon }}" aria-hidden="true"></i>
-      <h2 [id]="'modal-title-' + modalId" class="modal-title">{{ modalTitle }}</h2>
-    </span>
-    <button 
-      type="button"
-      class="btnClose icon-close" 
-      (click)="close()"
-      (keydown.escape)="close()"
-      aria-label="Fechar modal"
-      title="Fechar">
-    </button>
-  </div>
-  <div role="document">
-    <ng-content> </ng-content>
+<div class="modal-overlay" *ngIf="isVisible" (click)="close()">
+  <div class="container" role="dialog" aria-modal="true" [attr.aria-labelledby]="'modal-title-' + modalId" (click)="$event.stopPropagation()">
+    <div flex hAlign="space-between" vAlign="center" [marginBottom]="40">
+      <span class="title-content">
+        <i *ngIf="icon" class="{{ icon }}" aria-hidden="true"></i>
+        <h2 [id]="'modal-title-' + modalId" class="modal-title">{{ modalTitle }}</h2>
+      </span>
+      <button 
+        type="button"
+        class="btnClose icon-close" 
+        (click)="close()"
+        (keydown.escape)="close()"
+        aria-label="Fechar modal"
+        title="Fechar">
+      </button>
+    </div>
+    <div role="document">
+      <ng-content> </ng-content>
+    </div>
   </div>
 </div>

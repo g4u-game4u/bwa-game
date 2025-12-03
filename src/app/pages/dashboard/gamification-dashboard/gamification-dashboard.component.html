@@ -127,6 +127,7 @@
   <!-- Company Detail Modal -->
   <modal-company-detail
     *ngIf="selectedCompany"
-    [company]="selectedCompany">
+    [company]="selectedCompany"
+    (closed)="onCompanyModalClosed()">
   </modal-company-detail>
 </div>

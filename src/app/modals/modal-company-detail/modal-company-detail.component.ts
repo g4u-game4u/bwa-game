@@ -1,4 +1,4 @@
-import { Component, Input, OnInit, ViewChild } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, ViewChild } from '@angular/core';
 import { C4uModalComponent } from '@components/c4u-modal/c4u-modal.component';
 import { Company, CompanyDetails, Process } from '@model/gamification-dashboard.model';
 import { CompanyService } from '@services/company.service';
@@ -14,6 +14,9 @@ export class ModalCompanyDetailComponent implements OnInit {
 
   @Input()
   company: Company | undefined;
+  
+  @Output()
+  closed = new EventEmitter<void>();
 
   companyDetails: CompanyDetails | undefined;
   selectedTab: number = 0;
@@ -86,5 +89,10 @@ export class ModalCompanyDetailComponent implements OnInit {
     if (this.modal) {
       this.modal.close();
     }
+    this.closed.emit();
+  }
+  
+  onModalClosed(): void {
+    this.closed.emit();
   }
 }

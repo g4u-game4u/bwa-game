@@ -1,4 +1,4 @@
-<c4u-modal [modalTitle]="company?.name || ''" *ngIf="company">
+<c4u-modal [modalTitle]="company?.name || ''" *ngIf="company" (closed)="onModalClosed()">
   <!-- KPI Header Section - Figma Design -->
   <div class="kpi-header">
     <div class="kpi-item">

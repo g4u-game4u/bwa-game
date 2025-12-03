@@ -1,4 +1,4 @@
-import { Component, Input, OnInit, OnDestroy, HostListener, ElementRef } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, HostListener, ElementRef, Optional } from '@angular/core';
 import { NgbActiveModal } from '@ng-bootstrap/ng-bootstrap';
 
 @Component({
@@ -12,13 +12,17 @@ export class C4uModalComponent implements OnInit, OnDestroy {
 
   @Input()
   icon = '';
+  
+  @Output()
+  closed = new EventEmitter<void>();
 
   modalId: string = '';
+  isVisible: boolean = true;
   private focusableElements: HTMLElement[] = [];
   private previouslyFocusedElement: HTMLElement | null = null;
 
   constructor(
-    private modal: NgbActiveModal,
+    @Optional() private modal: NgbActiveModal | null,
     private elementRef: ElementRef
   ) {
     // Generate unique modal ID
@@ -43,7 +47,14 @@ export class C4uModalComponent implements OnInit, OnDestroy {
   }
 
   close() {
-    this.modal.close();
+    if (this.modal) {
+      // If opened via NgbModal.open()
+      this.modal.close();
+    } else {
+      // If used directly in template
+      this.isVisible = false;
+      this.closed.emit();
+    }
   }
 
   private setupAccessibility(): void {
