@@ -21,7 +21,7 @@
           [metadata]="playerStatus.metadata">
         </c4u-season-level>
         
-        <c4u-shimmer *ngIf="isLoadingPlayer && !playerStatus" [height]="'120px'"></c4u-shimmer>
+        <c4u-shimmer *ngIf="isLoadingPlayer && !playerStatus"></c4u-shimmer>
         
         <div class="missing-data" *ngIf="!isLoadingPlayer && !playerStatus">
           <span class="missing-data-text">Faltam dados</span>
@@ -35,7 +35,7 @@
           [points]="pointWallet">
         </c4u-point-wallet>
         
-        <c4u-shimmer *ngIf="isLoadingPlayer && !pointWallet" [height]="'180px'"></c4u-shimmer>
+        <c4u-shimmer *ngIf="isLoadingPlayer && !pointWallet"></c4u-shimmer>
         
         <div class="missing-data" *ngIf="!isLoadingPlayer && !pointWallet">
           <span class="missing-data-text">Faltam dados</span>
@@ -46,13 +46,10 @@
       <div class="sidebar-section">
         <c4u-season-progress
           *ngIf="seasonProgress"
-          [progress]="seasonProgress.metas"
-          [clientes]="seasonProgress.clientes"
-          [tarefasFinalizadas]="seasonProgress.tarefasFinalizadas"
-          [seasonDates]="seasonProgress.seasonDates">
+          [progress]="seasonProgress">
         </c4u-season-progress>
         
-        <c4u-shimmer *ngIf="isLoadingPlayer && !seasonProgress" [height]="'200px'"></c4u-shimmer>
+        <c4u-shimmer *ngIf="isLoadingPlayer && !seasonProgress"></c4u-shimmer>
         
         <div class="missing-data" *ngIf="!isLoadingPlayer && !seasonProgress">
           <span class="missing-data-text">Faltam dados</span>
@@ -66,8 +63,7 @@
     <!-- Header with Month Selector and Refresh -->
     <div class="dashboard-header" role="banner">
       <c4u-seletor-mes
-        [currentMonth]="selectedMonth"
-        (monthSelected)="onMonthChange($event)">
+        (onSelectedMonth)="onMonthChange($event)">
       </c4u-seletor-mes>
       
       <button 
@@ -77,7 +73,7 @@
         [attr.aria-label]="isLoading ? 'Atualizando dados...' : 'Atualizar dados do painel'"
         title="Atualizar dados">
         <i class="ri-refresh-line" [class.spinning]="isLoading" aria-hidden="true"></i>
-        <span class="refresh-time" *ngIf="lastRefreshTime" aria-label="Última atualização: {{ formattedRefreshTime }}">{{ formattedRefreshTime }}</span>
+        <span class="refresh-time" *ngIf="lastRefreshTime" [attr.aria-label]="'Última atualização: ' + formattedRefreshTime">{{ formattedRefreshTime }}</span>
       </button>
     </div>
     
@@ -91,15 +87,14 @@
           [label]="kpi.label"
           [current]="kpi.current"
           [target]="kpi.target"
-          [unit]="kpi.unit"
-          [attr.aria-label]="kpi.label + ': ' + kpi.current + ' de ' + kpi.target + (kpi.unit ? ' ' + kpi.unit : '')">
+          [attr.aria-label]="kpi.label + ': ' + kpi.current + ' de ' + kpi.target">
         </c4u-kpi-circular-progress>
       </div>
       
       <div class="kpi-grid" *ngIf="isLoadingKPIs">
-        <c4u-shimmer [height]="'150px'"></c4u-shimmer>
-        <c4u-shimmer [height]="'150px'"></c4u-shimmer>
-        <c4u-shimmer [height]="'150px'"></c4u-shimmer>
+        <c4u-shimmer></c4u-shimmer>
+        <c4u-shimmer></c4u-shimmer>
+        <c4u-shimmer></c4u-shimmer>
       </div>
       
       <div class="missing-data" *ngIf="!isLoadingKPIs && playerKPIs.length === 0">
@@ -117,7 +112,7 @@
         [macros]="macroMetrics">
       </c4u-activity-progress>
       
-      <c4u-shimmer *ngIf="isLoadingProgress" [height]="'200px'"></c4u-shimmer>
+      <c4u-shimmer *ngIf="isLoadingProgress"></c4u-shimmer>
       
       <div class="missing-data" *ngIf="!isLoadingProgress && (!activityMetrics || !macroMetrics)">
         <span class="missing-data-text">Faltam dados</span>
@@ -134,7 +129,7 @@
         (companySelected)="onCompanySelected($event)">
       </c4u-company-table>
       
-      <c4u-shimmer *ngIf="isLoadingCompanies" [height]="'300px'"></c4u-shimmer>
+      <c4u-shimmer *ngIf="isLoadingCompanies"></c4u-shimmer>
       
       <div class="missing-data" *ngIf="!isLoadingCompanies && companies.length === 0">
         <span class="missing-data-text">Faltam dados</span>
@@ -145,8 +140,6 @@
   <!-- Company Detail Modal -->
   <modal-company-detail
     *ngIf="selectedCompany"
-    [company]="selectedCompany"
-    [isOpen]="isCompanyModalOpen"
-    (closed)="onCompanyModalClosed()">
+    [company]="selectedCompany">
   </modal-company-detail>
 </div>

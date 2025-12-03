@@ -363,9 +363,12 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   }
   
   /**
-   * Handle month change event
+   * Handle month change event from c4u-seletor-mes
+   * @param monthsAgo - Number of months ago (0 = current month)
    */
-  onMonthChange(date: Date): void {
+  onMonthChange(monthsAgo: number): void {
+    const date = new Date();
+    date.setMonth(date.getMonth() - monthsAgo);
     this.selectedMonth = date;
     const monthName = date.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
     this.announceToScreenReader(`Mês alterado para ${monthName}`);
