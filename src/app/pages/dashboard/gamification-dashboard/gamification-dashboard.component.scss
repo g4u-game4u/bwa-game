@@ -2,13 +2,22 @@
 @import '../../../../styles/mixins.scss';
 
 .gamification-dashboard {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  gap: $spacing-lg;
   padding: $spacing-lg;
   min-height: 100vh;
   position: relative;
   
   @include fade-in;
   
+  @include tablet-only {
+    grid-template-columns: 280px 1fr;
+    gap: $spacing-md;
+  }
+  
   @include mobile-only {
+    grid-template-columns: 1fr;
     padding: $spacing-md;
   }
 
@@ -348,6 +357,18 @@ textarea:focus-visible {
 
 // Dashboard layout
 .dashboard-sidebar {
+  position: sticky;
+  top: $spacing-lg;
+  height: fit-content;
+  max-height: calc(100vh - #{$spacing-lg * 2});
+  overflow-y: auto;
+  
+  @include mobile-only {
+    position: static;
+    max-height: none;
+    order: -1;
+  }
+  
   .sidebar-content {
     display: flex;
     flex-direction: column;
