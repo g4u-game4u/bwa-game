@@ -23,6 +23,14 @@
   &.gold {
     stroke: url(#goldColor);
   }
+
+  &.blue {
+    stroke: url(#blueColor);
+  }
+
+  &.purple {
+    stroke: url(#purpleColor);
+  }
 }
 
 .centro {
@@ -38,6 +46,14 @@
 
   &.gold .valor {
     color: #956f0e;
+  }
+
+  &.blue .valor {
+    color: #3B82F6;
+  }
+
+  &.purple .valor {
+    color: #A855F7;
   }
 }
 

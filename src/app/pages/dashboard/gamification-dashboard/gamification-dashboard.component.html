@@ -1,4 +1,4 @@
-<div class="gamification-dashboard" full role="main" aria-label="Painel de Gamificação">
+<div class="gamification-dashboard" [class.sidebar-collapsed]="sidebarCollapsed" full role="main" aria-label="Painel de Gamificação">
   <!-- Screen reader announcements -->
   <div aria-live="polite" aria-atomic="true" class="sr-only" id="dashboard-announcements">
     {{ screenReaderAnnouncement }}
@@ -10,7 +10,7 @@
   </a>
 
   <!-- Left Sidebar -->
-  <aside class="dashboard-sidebar" role="complementary" aria-label="Informações do jogador">
+  <aside class="dashboard-sidebar" [class.collapsed]="sidebarCollapsed" role="complementary" aria-label="Informações do jogador">
     <div class="sidebar-content">
       <!-- Season Level -->
       <div class="sidebar-section">
@@ -22,10 +22,6 @@
         </c4u-season-level>
         
         <c4u-shimmer *ngIf="isLoadingPlayer && !playerStatus"></c4u-shimmer>
-        
-        <div class="missing-data" *ngIf="!isLoadingPlayer && !playerStatus">
-          <span class="missing-data-text">Faltam dados</span>
-        </div>
       </div>
       
       <!-- Point Wallet -->
@@ -36,10 +32,6 @@
         </c4u-point-wallet>
         
         <c4u-shimmer *ngIf="isLoadingPlayer && !pointWallet"></c4u-shimmer>
-        
-        <div class="missing-data" *ngIf="!isLoadingPlayer && !pointWallet">
-          <span class="missing-data-text">Faltam dados</span>
-        </div>
       </div>
       
       <!-- Season Progress -->
@@ -50,22 +42,21 @@
         </c4u-season-progress>
         
         <c4u-shimmer *ngIf="isLoadingPlayer && !seasonProgress"></c4u-shimmer>
-        
-        <div class="missing-data" *ngIf="!isLoadingPlayer && !seasonProgress">
-          <span class="missing-data-text">Faltam dados</span>
-        </div>
       </div>
     </div>
+    
+    <!-- Sidebar Toggle Button -->
+    <button class="sidebar-toggle" (click)="toggleSidebar()" [attr.aria-label]="sidebarCollapsed ? 'Expandir menu' : 'Recolher menu'">
+      <i class="ri-arrow-left-s-line" [class.rotated]="sidebarCollapsed"></i>
+    </button>
   </aside>
   
   <!-- Main Content Area -->
   <main class="dashboard-main" id="main-content">
-    <!-- Header with Month Selector and Refresh -->
+    <!-- Header with Month Selector centered -->
     <div class="dashboard-header" role="banner">
-      <c4u-seletor-mes
-        (onSelectedMonth)="onMonthChange($event)">
-      </c4u-seletor-mes>
-      
+      <div class="header-spacer"></div>
+      <c4u-seletor-mes (onSelectedMonth)="onMonthChange($event)"></c4u-seletor-mes>
       <button 
         class="refresh-button"
         (click)="refreshData()"
@@ -73,7 +64,7 @@
         [attr.aria-label]="isLoading ? 'Atualizando dados...' : 'Atualizar dados do painel'"
         title="Atualizar dados">
         <i class="ri-refresh-line" [class.spinning]="isLoading" aria-hidden="true"></i>
-        <span class="refresh-time" *ngIf="lastRefreshTime" [attr.aria-label]="'Última atualização: ' + formattedRefreshTime">{{ formattedRefreshTime }}</span>
+        <span class="refresh-time" *ngIf="lastRefreshTime">{{ formattedRefreshTime }}</span>
       </button>
     </div>
     
@@ -83,11 +74,11 @@
       
       <div class="kpi-grid" *ngIf="playerKPIs.length > 0" role="group" aria-labelledby="kpi-section-title">
         <c4u-kpi-circular-progress
-          *ngFor="let kpi of playerKPIs; trackBy: trackByKpiId"
+          *ngFor="let kpi of playerKPIs; let i = index; trackBy: trackByKpiId"
           [label]="kpi.label"
           [current]="kpi.current"
           [target]="kpi.target"
-          [attr.aria-label]="kpi.label + ': ' + kpi.current + ' de ' + kpi.target">
+          [colorIndex]="i">
         </c4u-kpi-circular-progress>
       </div>
       
@@ -95,10 +86,6 @@
         <c4u-shimmer></c4u-shimmer>
         <c4u-shimmer></c4u-shimmer>
         <c4u-shimmer></c4u-shimmer>
-      </div>
-      
-      <div class="missing-data" *ngIf="!isLoadingKPIs && playerKPIs.length === 0">
-        <span class="missing-data-text">Faltam dados</span>
       </div>
     </section>
     
@@ -113,10 +100,6 @@
       </c4u-activity-progress>
       
       <c4u-shimmer *ngIf="isLoadingProgress"></c4u-shimmer>
-      
-      <div class="missing-data" *ngIf="!isLoadingProgress && (!activityMetrics || !macroMetrics)">
-        <span class="missing-data-text">Faltam dados</span>
-      </div>
     </section>
     
     <!-- Company Portfolio Section -->
@@ -130,10 +113,6 @@
       </c4u-company-table>
       
       <c4u-shimmer *ngIf="isLoadingCompanies"></c4u-shimmer>
-      
-      <div class="missing-data" *ngIf="!isLoadingCompanies && companies.length === 0">
-        <span class="missing-data-text">Faltam dados</span>
-      </div>
     </section>
   </main>
   

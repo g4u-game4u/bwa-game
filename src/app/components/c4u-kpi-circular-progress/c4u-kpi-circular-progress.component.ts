@@ -9,6 +9,12 @@ export class C4uKpiCircularProgressComponent {
   @Input() label: string = '';
   @Input() current: number = 0;
   @Input() target: number = 0;
+  @Input() colorIndex: number = 0;
+
+  // Color palette for different KPIs
+  private readonly colorPalette: Array<'green' | 'gold' | 'red' | 'blue' | 'purple'> = [
+    'green', 'blue', 'purple', 'gold', 'red'
+  ];
 
   get percentage(): number {
     if (this.target === 0) {
@@ -17,14 +23,8 @@ export class C4uKpiCircularProgressComponent {
     return Math.round((this.current / this.target) * 100);
   }
 
-  get progressColor(): 'red' | 'gold' | 'green' {
-    const percent = this.percentage;
-    if (percent >= 80) {
-      return 'green';
-    }
-    if (percent >= 50) {
-      return 'gold';
-    }
-    return 'red';
+  get progressColor(): 'green' | 'blue' | 'purple' | 'gold' | 'red' {
+    // Use colorIndex to assign different colors to each KPI
+    return this.colorPalette[this.colorIndex % this.colorPalette.length];
   }
 }

@@ -8,247 +8,37 @@
   padding: $spacing-lg;
   min-height: 100vh;
   position: relative;
+  transition: grid-template-columns 0.3s ease;
   
   @include fade-in;
+  
+  // Collapsed sidebar state
+  &.sidebar-collapsed {
+    grid-template-columns: 60px 1fr;
+    
+    .dashboard-sidebar {
+      .sidebar-content {
+        opacity: 0;
+        pointer-events: none;
+      }
+    }
+  }
   
   @include tablet-only {
     grid-template-columns: 280px 1fr;
     gap: $spacing-md;
+    
+    &.sidebar-collapsed {
+      grid-template-columns: 60px 1fr;
+    }
   }
   
   @include mobile-only {
     grid-template-columns: 1fr;
     padding: $spacing-md;
-  }
-
-  .header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: $spacing-xl;
     
-    @include slide-up;
-    
-    @include mobile-only {
-      flex-direction: column;
-      gap: $spacing-md;
-      text-align: center;
-    }
-
-    h1 {
-      @include text-heading-1;
-      margin: 0;
-      background: linear-gradient(135deg, $primary-electric-blue, $success-green);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
-      
-      @include mobile-only {
-        font-size: $font-size-h2;
-      }
-    }
-    
-    .header-actions {
-      display: flex;
-      gap: $spacing-md;
-      align-items: center;
-      
-      @include mobile-only {
-        width: 100%;
-        justify-content: center;
-      }
-    }
-  }
-
-  .dashboard-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-    gap: $spacing-lg;
-    margin-bottom: $spacing-xl;
-    
-    @include mobile-only {
+    &.sidebar-collapsed {
       grid-template-columns: 1fr;
-      gap: $spacing-md;
-    }
-  }
-
-  .card {
-    @include card;
-    position: relative;
-    overflow: hidden;
-    
-    &::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      height: 4px;
-      background: linear-gradient(90deg, $primary-electric-blue, $success-green);
-    }
-    
-    &:hover {
-      transform: translateY(-2px);
-      
-      @include reduced-motion {
-        transform: none;
-      }
-    }
-    
-    .card-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: $spacing-md;
-      padding-bottom: $spacing-sm;
-      border-bottom: 1px solid $border-color;
-      
-      h3 {
-        @include text-heading-3;
-        margin: 0;
-      }
-      
-      .card-icon {
-        width: 24px;
-        height: 24px;
-        color: $primary-electric-blue;
-      }
-    }
-    
-    .card-content {
-      flex: 1;
-    }
-  }
-
-  .companies-section {
-    margin-top: $spacing-xl;
-    
-    .section-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: $spacing-lg;
-      
-      @include mobile-only {
-        flex-direction: column;
-        gap: $spacing-md;
-        align-items: stretch;
-      }
-      
-      h2 {
-        @include text-heading-2;
-        margin: 0;
-      }
-      
-      .section-actions {
-        display: flex;
-        gap: $spacing-sm;
-        
-        @include mobile-only {
-          justify-content: center;
-        }
-      }
-    }
-    
-    .companies-card {
-      @include card;
-      padding: 0;
-      overflow: hidden;
-      
-      .companies-header {
-        padding: $spacing-lg;
-        background: linear-gradient(135deg, $surface, lighten($surface, 5%));
-        border-bottom: 1px solid $border-color;
-        
-        h3 {
-          @include text-heading-3;
-          margin: 0;
-        }
-      }
-      
-      .companies-content {
-        padding: $spacing-lg;
-      }
-    }
-  }
-
-  .error-message {
-    @include card;
-    background: linear-gradient(135deg, rgba($error-red, 0.1), rgba($error-red, 0.05));
-    border-left: 4px solid $error-red;
-    color: $text-primary;
-    
-    .error-icon {
-      color: $error-red;
-      margin-right: $spacing-sm;
-    }
-    
-    .error-content {
-      display: flex;
-      align-items: center;
-      
-      .error-text {
-        flex: 1;
-      }
-      
-      .error-actions {
-        margin-left: $spacing-md;
-      }
-    }
-  }
-
-  .loading {
-    @include card;
-    text-align: center;
-    padding: $spacing-xxl;
-    
-    .loading-spinner {
-      width: 40px;
-      height: 40px;
-      border: 4px solid rgba($primary-electric-blue, 0.2);
-      border-top: 4px solid $primary-electric-blue;
-      border-radius: 50%;
-      animation: spin 1s linear infinite;
-      margin: 0 auto $spacing-md;
-    }
-    
-    .loading-text {
-      @include text-secondary;
-      font-size: $font-size-small;
-    }
-  }
-  
-  .empty-state {
-    @include card;
-    text-align: center;
-    padding: $spacing-xxl;
-    
-    .empty-icon {
-      width: 64px;
-      height: 64px;
-      color: $text-secondary;
-      margin: 0 auto $spacing-lg;
-    }
-    
-    .empty-title {
-      @include text-heading-3;
-      margin-bottom: $spacing-sm;
-    }
-    
-    .empty-description {
-      @include text-secondary;
-      margin-bottom: $spacing-lg;
-    }
-    
-    .empty-actions {
-      display: flex;
-      gap: $spacing-sm;
-      justify-content: center;
-      
-      @include mobile-only {
-        flex-direction: column;
-        align-items: center;
-      }
     }
   }
 }
@@ -257,34 +47,6 @@
 @keyframes spin {
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
-}
-
-// Staggered animation for grid items
-.dashboard-grid .card {
-  animation: slideUp $transition-duration $transition-easing;
-  
-  @for $i from 1 through 6 {
-    &:nth-child(#{$i}) {
-      animation-delay: #{$i * 0.1}s;
-    }
-  }
-}
-
-// Focus management
-.dashboard-grid .card:focus-within {
-  outline: $focus-outline;
-  outline-offset: $focus-offset;
-}
-
-// High contrast mode
-@media (prefers-contrast: high) {
-  .card {
-    border: 2px solid $text-primary;
-  }
-  
-  .error-message {
-    border: 2px solid $error-red;
-  }
 }
 
 // Accessibility styles
@@ -313,55 +75,18 @@
   
   &:focus {
     top: 0;
-    outline: $focus-outline;
-    outline-offset: $focus-offset;
   }
 }
 
-// Focus visible styles for better keyboard navigation
-*:focus-visible {
-  outline: $focus-outline;
-  outline-offset: $focus-offset;
-}
-
-// Ensure all interactive elements have visible focus
-button:focus-visible,
-a:focus-visible,
-input:focus-visible,
-select:focus-visible,
-textarea:focus-visible {
-  outline: $focus-outline;
-  outline-offset: $focus-offset;
-}
-
-
-// Missing data placeholder
-.missing-data {
-  @include card;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: $spacing-lg;
-  background: linear-gradient(135deg, rgba($warning-orange, 0.1), rgba($warning-orange, 0.05));
-  border: 1px dashed rgba($warning-orange, 0.5);
-  border-radius: $border-radius-sm;
-  min-height: 80px;
-  
-  .missing-data-text {
-    color: $text-secondary;
-    font-size: $font-size-body;
-    font-style: italic;
-    text-align: center;
-  }
-}
-
-// Dashboard layout
+// Dashboard Sidebar
 .dashboard-sidebar {
   position: sticky;
   top: $spacing-lg;
   height: fit-content;
   max-height: calc(100vh - #{$spacing-lg * 2});
   overflow-y: auto;
+  overflow-x: hidden;
+  transition: all 0.3s ease;
   
   @include mobile-only {
     position: static;
@@ -373,21 +98,74 @@ textarea:focus-visible {
     display: flex;
     flex-direction: column;
     gap: $spacing-md;
+    transition: opacity 0.3s ease;
   }
   
   .sidebar-section {
-    min-height: 80px;
+    min-height: 60px;
+  }
+  
+  // Sidebar toggle button
+  .sidebar-toggle {
+    position: absolute;
+    right: -12px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 24px;
+    height: 48px;
+    background: $surface;
+    border: 1px solid $border-color;
+    border-radius: 0 $border-radius-sm $border-radius-sm 0;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: $text-secondary;
+    transition: all 0.2s ease;
+    z-index: 10;
+    
+    &:hover {
+      background: rgba($primary-electric-blue, 0.1);
+      color: $primary-electric-blue;
+    }
+    
+    i {
+      font-size: 1rem;
+      transition: transform 0.3s ease;
+      
+      &.rotated {
+        transform: rotate(180deg);
+      }
+    }
+    
+    @include mobile-only {
+      display: none;
+    }
   }
 }
 
+// Dashboard Main Content
 .dashboard-main {
+  min-width: 0; // Prevent grid blowout
+  
   .dashboard-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
     margin-bottom: $spacing-lg;
-    flex-wrap: wrap;
     gap: $spacing-md;
+    
+    .header-spacer {
+      flex: 1;
+      
+      @include mobile-only {
+        display: none;
+      }
+    }
+    
+    c4u-seletor-mes {
+      flex: 0 0 auto;
+    }
     
     @include mobile-only {
       flex-direction: column;
@@ -396,8 +174,10 @@ textarea:focus-visible {
   }
   
   .refresh-button {
+    flex: 1;
     display: flex;
     align-items: center;
+    justify-content: flex-end;
     gap: $spacing-xs;
     padding: $spacing-sm $spacing-md;
     background: transparent;
@@ -405,7 +185,7 @@ textarea:focus-visible {
     border-radius: $border-radius-sm;
     color: $text-secondary;
     cursor: pointer;
-    transition: all $transition-duration $transition-easing;
+    transition: all 0.2s ease;
     
     &:hover:not(:disabled) {
       background: rgba($primary-electric-blue, 0.1);
@@ -429,6 +209,10 @@ textarea:focus-visible {
     .refresh-time {
       font-size: $font-size-small;
     }
+    
+    @include mobile-only {
+      justify-content: center;
+    }
   }
   
   .dashboard-section {
@@ -441,12 +225,17 @@ textarea:focus-visible {
   }
   
   .kpi-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    display: flex;
+    flex-wrap: wrap;
     gap: $spacing-md;
+    justify-content: flex-start;
+    
+    c4u-kpi-circular-progress {
+      flex: 0 0 auto;
+    }
     
     @include mobile-only {
-      grid-template-columns: repeat(2, 1fr);
+      justify-content: center;
     }
   }
 }

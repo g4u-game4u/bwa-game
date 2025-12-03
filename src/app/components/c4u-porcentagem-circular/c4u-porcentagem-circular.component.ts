@@ -18,7 +18,7 @@ export class C4uPorcentagemCircularComponent {
     total: number | string | null = null;
 
     @Input()
-    theme: 'red' | 'gold' | 'green' = 'red';
+    theme: 'red' | 'gold' | 'green' | 'blue' | 'purple' = 'green';
 
     @Input()
     set percent(val: number) {

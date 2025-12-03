@@ -413,6 +413,14 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   }
   
   /**
+   * Toggle sidebar collapsed state
+   */
+  toggleSidebar(): void {
+    this.sidebarCollapsed = !this.sidebarCollapsed;
+    this.announceToScreenReader(this.sidebarCollapsed ? 'Menu recolhido' : 'Menu expandido');
+  }
+  
+  /**
    * Track by function for KPI list
    */
   trackByKpiId(_index: number, kpi: KPIData): string {
