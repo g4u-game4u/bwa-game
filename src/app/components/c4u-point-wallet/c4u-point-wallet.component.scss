@@ -1,184 +1,60 @@
-@import '../../../styles/variables.scss';
-@import '../../../styles/mixins.scss';
-
 .point-wallet {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: $text-primary;
-  padding: $spacing-lg;
-  border-radius: $border-radius;
-  text-align: center;
-  box-shadow: $shadow-card;
-  position: relative;
-  overflow: hidden;
-  transition: all $transition-duration $transition-easing;
+  padding: 16px;
   
-  &::before {
-    content: '';
-    position: absolute;
-    top: -50%;
-    right: -50%;
-    width: 200%;
-    height: 200%;
-    background: radial-gradient(circle, rgba(255, 255, 255, 0.1) 0%, transparent 70%);
-    animation: wave1 #{$wave-animation-duration * 2} ease-in-out infinite;
+  .wallet-title {
+    text-align: center;
+    font-size: 14px;
+    font-weight: 500;
+    color: #a0a0a0;
+    margin: 0 0 16px 0;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
   }
   
-  &:hover {
-    transform: translateY(-4px);
-    box-shadow: $shadow-hover;
-    
-    @include reduced-motion {
-      transform: none;
-    }
-  }
-  
-  .wallet-header {
-    margin-bottom: $spacing-md;
-    position: relative;
-    z-index: 1;
-    
-    h3 {
-      margin: 0 0 $spacing-xs 0;
-      font-size: $font-size-body;
-      font-weight: $font-weight-medium;
-      opacity: 0.9;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-    }
-    
-    .wallet-icon {
-      font-size: 2rem;
-      margin-bottom: $spacing-sm;
-      filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
-    }
-  }
-  
-  .points-display {
-    position: relative;
-    z-index: 1;
-    
-    .points-value {
-      font-size: 2.5rem;
-      font-weight: $font-weight-bold;
-      margin: 0;
-      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
-      line-height: 1;
-      
-      @include mobile-only {
-        font-size: 2rem;
-      }
-    }
-    
-    .points-label {
-      font-size: $font-size-small;
-      opacity: 0.8;
-      margin-top: $spacing-xs;
-      font-weight: $font-weight-regular;
-    }
-  }
-  
-  .wallet-actions {
-    margin-top: $spacing-lg;
+  .point-rows {
     display: flex;
-    gap: $spacing-sm;
-    justify-content: center;
-    position: relative;
-    z-index: 1;
-    
-    @include mobile-only {
-      flex-direction: column;
-    }
-    
-    .btn {
-      padding: $spacing-sm $spacing-md;
-      border: 2px solid rgba(255, 255, 255, 0.3);
-      background: rgba(255, 255, 255, 0.1);
-      color: $text-primary;
-      border-radius: 20px;
-      cursor: pointer;
-      font-size: $font-size-small;
-      font-weight: $font-weight-medium;
-      transition: all $transition-duration $transition-easing;
-      min-height: $min-touch-target;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: $spacing-xs;
-      
-      &:hover {
-        background: rgba(255, 255, 255, 0.2);
-        border-color: rgba(255, 255, 255, 0.5);
-        transform: scale(1.05);
-        
-        @include reduced-motion {
-          transform: none;
-        }
-      }
-      
-      &:active {
-        transform: scale(0.98);
-      }
-      
-      @include focus-visible;
-    }
+    flex-direction: column;
+    gap: 12px;
   }
   
-  .wallet-breakdown {
-    margin-top: $spacing-lg;
-    padding-top: $spacing-md;
-    border-top: 1px solid rgba(255, 255, 255, 0.2);
-    position: relative;
-    z-index: 1;
+  .point-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
     
-    .breakdown-item {
+    .row-left {
       display: flex;
-      justify-content: space-between;
       align-items: center;
-      padding: $spacing-xs 0;
-      font-size: $font-size-small;
-      
-      .breakdown-label {
-        opacity: 0.8;
-      }
-      
-      .breakdown-value {
-        font-weight: $font-weight-semibold;
-      }
-    }
-  }
-}
-
-// Variants
-.point-wallet.variant-blue {
-  background: linear-gradient(135deg, $primary-electric-blue 0%, $primary-deep-blue 100%);
-}
-
-.point-wallet.variant-green {
-  background: linear-gradient(135deg, $success-green 0%, darken($success-green, 15%) 100%);
-}
-
-.point-wallet.variant-orange {
-  background: linear-gradient(135deg, $warning-orange 0%, darken($warning-orange, 15%) 100%);
-}
-
-// Accessibility
-.point-wallet {
-  @include focus-visible;
-}
-
-// Reduced motion
-@include reduced-motion {
-  .point-wallet {
-    &::before {
-      animation: none;
+      gap: 10px;
     }
     
-    &:hover {
-      transform: none;
+    .icon {
+      font-size: 16px;
+      width: 20px;
+      text-align: center;
+      
+      &.bloqueados {
+        color: #ff6b6b;
+      }
+      
+      &.desbloqueados {
+        color: #51cf66;
+      }
+      
+      &.moedas {
+        color: #ffd43b;
+      }
     }
     
-    .wallet-actions .btn:hover {
-      transform: none;
+    .label {
+      font-size: 13px;
+      color: #e0e0e0;
+    }
+    
+    .value {
+      font-size: 14px;
+      font-weight: 600;
+      color: #ffffff;
     }
   }
 }

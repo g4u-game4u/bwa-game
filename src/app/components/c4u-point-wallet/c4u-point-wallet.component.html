@@ -1,35 +1,29 @@
 <div class="point-wallet">
   <h4 class="wallet-title">Carteira de Pontos</h4>
   
-  <div class="point-categories">
-    <div class="point-category">
-      <div class="category-icon bloqueados">
-        <i class="ri-lock-fill"></i>
+  <div class="point-rows">
+    <div class="point-row">
+      <div class="row-left">
+        <i class="ri-lock-fill icon bloqueados"></i>
+        <span class="label">Bloqueados</span>
       </div>
-      <div class="category-info">
-        <span class="category-label">Bloqueados</span>
-        <span class="category-value">{{ points.bloqueados | number:'1.0-0':'pt-BR' }}</span>
-      </div>
+      <span class="value">{{ points.bloqueados | number:'1.0-0':'pt-BR' }}</span>
     </div>
 
-    <div class="point-category">
-      <div class="category-icon desbloqueados">
-        <i class="ri-unlock-fill"></i>
+    <div class="point-row">
+      <div class="row-left">
+        <i class="ri-unlock-fill icon desbloqueados"></i>
+        <span class="label">Desbloqueados</span>
       </div>
-      <div class="category-info">
-        <span class="category-label">Desbloqueados</span>
-        <span class="category-value">{{ points.desbloqueados | number:'1.0-0':'pt-BR' }}</span>
-      </div>
+      <span class="value">{{ points.desbloqueados | number:'1.0-0':'pt-BR' }}</span>
     </div>
 
-    <div class="point-category">
-      <div class="category-icon moedas">
-        <i class="ri-coin-fill"></i>
+    <div class="point-row">
+      <div class="row-left">
+        <i class="ri-coin-fill icon moedas"></i>
+        <span class="label">Moedas</span>
       </div>
-      <div class="category-info">
-        <span class="category-label">Moedas</span>
-        <span class="category-value">{{ points.moedas | number:'1.0-0':'pt-BR' }}</span>
-      </div>
+      <span class="value">{{ points.moedas | number:'1.0-0':'pt-BR' }}</span>
     </div>
   </div>
 </div>
