@@ -266,18 +266,18 @@
   }
   
   .refresh-button {
-    flex: 1;
+    flex: 0 0 auto; // Don't grow, don't shrink, auto width
     display: flex;
     align-items: center;
-    justify-content: flex-end;
     gap: $spacing-xs;
-    padding: $spacing-sm $spacing-md;
+    padding: 8px 16px; // 16px horizontal padding
     background: transparent;
     border: 1px solid $border-color;
     border-radius: $border-radius-sm;
     color: $text-secondary;
     cursor: pointer;
     transition: all 0.2s ease;
+    white-space: nowrap; // Prevent text wrapping
     
     &:hover:not(:disabled) {
       background: rgba($primary-electric-blue, 0.1);
@@ -291,7 +291,7 @@
     }
     
     i {
-      font-size: 1.2rem;
+      font-size: 1rem;
       
       &.spinning {
         animation: spin 1s linear infinite;
