@@ -4,37 +4,29 @@
     <p class="season-dates">{{ seasonDateRange }}</p>
   </div>
 
-  <div class="progress-metrics">
-    <div class="metric-item">
-      <div class="metric-icon">
-        <i class="ri-target-line"></i>
+  <div class="progress-rows">
+    <div class="progress-row">
+      <div class="row-left">
+        <i class="ri-focus-3-line icon metas"></i>
+        <span class="label">Metas</span>
       </div>
-      <div class="metric-info">
-        <span class="metric-label">Metas</span>
-        <span class="metric-value">
-          {{ progress.metas.current }} / {{ progress.metas.target }}
-        </span>
-      </div>
+      <span class="value">{{ progress.metas.current }} / {{ progress.metas.target }}</span>
     </div>
 
-    <div class="metric-item">
-      <div class="metric-icon">
-        <i class="ri-building-line"></i>
+    <div class="progress-row">
+      <div class="row-left">
+        <i class="ri-building-line icon clientes"></i>
+        <span class="label">Clientes</span>
       </div>
-      <div class="metric-info">
-        <span class="metric-label">Clientes</span>
-        <span class="metric-value">{{ progress.clientes | number:'1.0-0':'pt-BR' }}</span>
-      </div>
+      <span class="value">{{ progress.clientes | number:'1.0-0':'pt-BR' }}</span>
     </div>
 
-    <div class="metric-item">
-      <div class="metric-icon">
-        <i class="ri-checkbox-circle-line"></i>
+    <div class="progress-row">
+      <div class="row-left">
+        <i class="ri-checkbox-circle-line icon tarefas"></i>
+        <span class="label">Tarefas Finalizadas</span>
       </div>
-      <div class="metric-info">
-        <span class="metric-label">Tarefas Finalizadas</span>
-        <span class="metric-value">{{ progress.tarefasFinalizadas | number:'1.0-0':'pt-BR' }}</span>
-      </div>
+      <span class="value">{{ progress.tarefasFinalizadas | number:'1.0-0':'pt-BR' }}</span>
     </div>
   </div>
 </div>

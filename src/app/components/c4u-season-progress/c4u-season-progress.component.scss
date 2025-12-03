@@ -1,117 +1,69 @@
 .season-progress {
-  padding: 1rem;
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: 12px;
-  backdrop-filter: blur(10px);
+  padding: 16px;
 
   .progress-header {
-    margin-bottom: 1rem;
+    margin-bottom: 16px;
 
     .progress-title {
-      font-size: 0.875rem;
-      font-weight: 600;
-      color: rgba(255, 255, 255, 0.9);
-      margin: 0 0 0.25rem 0;
+      font-size: 14px;
+      font-weight: 500;
+      color: #a0a0a0;
+      margin: 0 0 4px 0;
       text-transform: uppercase;
       letter-spacing: 0.5px;
     }
 
     .season-dates {
-      font-size: 0.75rem;
-      color: rgba(255, 255, 255, 0.6);
+      font-size: 12px;
+      color: #707070;
       margin: 0;
     }
   }
 
-  .progress-metrics {
+  .progress-rows {
     display: flex;
     flex-direction: column;
-    gap: 0.75rem;
+    gap: 12px;
   }
 
-  .metric-item {
+  .progress-row {
     display: flex;
     align-items: center;
-    gap: 0.75rem;
-    padding: 0.75rem;
-    background: rgba(255, 255, 255, 0.03);
-    border-radius: 8px;
-    transition: background 0.2s ease;
+    justify-content: space-between;
 
-    &:hover {
-      background: rgba(255, 255, 255, 0.06);
-    }
-
-    .metric-icon {
-      width: 40px;
-      height: 40px;
-      border-radius: 8px;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    .row-left {
       display: flex;
       align-items: center;
-      justify-content: center;
-      flex-shrink: 0;
+      gap: 10px;
+    }
 
-      i {
-        font-size: 1.25rem;
-        color: #ffffff;
+    .icon {
+      font-size: 16px;
+      width: 20px;
+      text-align: center;
+
+      &.metas {
+        color: #a78bfa; // Purple for targets
+      }
+
+      &.clientes {
+        color: #60a5fa; // Blue for clients
+      }
+
+      &.tarefas {
+        color: #34d399; // Green for completed tasks
       }
     }
 
-    .metric-info {
-      display: flex;
-      flex-direction: column;
-      flex: 1;
-      min-width: 0;
-
-      .metric-label {
-        font-size: 0.75rem;
-        color: rgba(255, 255, 255, 0.7);
-        margin-bottom: 0.125rem;
-      }
-
-      .metric-value {
-        font-size: 1.125rem;
-        font-weight: 700;
-        color: #ffffff;
-      }
-    }
-  }
-}
-
-@media (max-width: 768px) {
-  .season-progress {
-    .progress-header {
-      .progress-title {
-        font-size: 0.75rem;
-      }
-
-      .season-dates {
-        font-size: 0.625rem;
-      }
+    .label {
+      font-size: 13px;
+      color: #e0e0e0;
     }
 
-    .metric-item {
-      padding: 0.5rem;
-
-      .metric-icon {
-        width: 36px;
-        height: 36px;
-
-        i {
-          font-size: 1rem;
-        }
-      }
-
-      .metric-info {
-        .metric-label {
-          font-size: 0.625rem;
-        }
-
-        .metric-value {
-          font-size: 1rem;
-        }
-      }
+    .value {
+      font-size: 14px;
+      font-weight: 600;
+      color: #ffffff;
     }
   }
 }
