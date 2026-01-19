@@ -67,6 +67,30 @@ interface CacheEntry<T> {
   timestamp: number;
 }
 
+/**
+ * Helper to generate Funifier relative date expressions
+ * Funifier supports: -0d-, -0d+, -1d-, -0M-, -0M+, -0y-, etc.
+ * - `-0M-` = start of current month
+ * - `-0M+` = end of current month
+ * - `-1M-` = start of previous month
+ * - `-1M+` = end of previous month
+ */
+function getRelativeDateExpression(month: Date | undefined, position: 'start' | 'end'): { $date: string } | number {
+  const targetMonth = month || new Date();
+  const now = new Date();
+  const currentMonth = now.getMonth();
+  const currentYear = now.getFullYear();
+  const targetMonthNum = targetMonth.getMonth();
+  const targetYear = targetMonth.getFullYear();
+  
+  // Calculate month difference
+  const monthDiff = (currentYear - targetYear) * 12 + (currentMonth - targetMonthNum);
+  
+  // Use Funifier relative date syntax
+  const suffix = position === 'start' ? '-' : '+';
+  return { $date: `-${monthDiff}M${suffix}` };
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -80,26 +104,28 @@ export class ActionLogService {
   /**
    * Get action log entries for a player for the current month
    * Uses userId field to match the user's email
+   * Uses Funifier's relative date expressions for time filtering
    * Note: action_log uses 'time' field for timestamp, not 'created'
    */
   getPlayerActionLogForMonth(playerId: string, month?: Date): Observable<ActionLogEntry[]> {
     const targetMonth = month || new Date();
-    const startOfMonth = dayjs(targetMonth).startOf('month').valueOf();
-    const endOfMonth = dayjs(targetMonth).endOf('month').valueOf();
-    
     const cacheKey = `${playerId}_${dayjs(targetMonth).format('YYYY-MM')}`;
     const cached = this.getCachedData(this.actionLogCache, cacheKey);
     if (cached) {
       return cached;
     }
 
-    // Aggregate query to get action log for this player in the current month
-    // Uses userId field and time field (not player/created)
+    // Use Funifier's relative date syntax for time filtering
+    const startDate = getRelativeDateExpression(month, 'start');
+    const endDate = getRelativeDateExpression(month, 'end');
+
+    // Aggregate query to get action log for this player in the target month
+    // Uses userId field and time field with Funifier $date expressions
     const aggregateBody = [
       { 
         $match: { 
           userId: playerId,
-          time: { $gte: startOfMonth, $lte: endOfMonth }
+          time: { $gte: startDate, $lte: endDate }
         } 
       },
       { $sort: { time: -1 } }
@@ -145,18 +171,19 @@ export class ActionLogService {
   /**
    * Get points from achievements for the month
    * Queries achievement collection for type=0 entries
+   * Uses Funifier's relative date expressions
    */
   getPontosForMonth(playerId: string, month?: Date): Observable<number> {
-    const targetMonth = month || new Date();
-    const startOfMonth = dayjs(targetMonth).startOf('month').valueOf();
-    const endOfMonth = dayjs(targetMonth).endOf('month').valueOf();
+    // Use Funifier's relative date syntax
+    const startDate = getRelativeDateExpression(month, 'start');
+    const endDate = getRelativeDateExpression(month, 'end');
 
     const aggregateBody = [
       {
         $match: {
           player: playerId,
           type: 0, // type 0 = points
-          created: { $gte: startOfMonth, $lte: endOfMonth }
+          created: { $gte: startDate, $lte: endDate }
         }
       },
       {
@@ -169,7 +196,7 @@ export class ActionLogService {
 
     console.log('📊 Achievement points query:', JSON.stringify(aggregateBody));
 
-    return this.funifierApi.post<any[]>(
+    return this.funifierApi.post<{ _id: null; total: number }[]>(
       '/v3/database/achievement/aggregate?strict=true',
       aggregateBody
     ).pipe(
@@ -189,17 +216,18 @@ export class ActionLogService {
 
   /**
    * Get unique CNPJs count from user's action_log
+   * Uses Funifier's relative date expressions
    */
   getUniqueClientesCount(playerId: string, month?: Date): Observable<number> {
-    const targetMonth = month || new Date();
-    const startOfMonth = dayjs(targetMonth).startOf('month').valueOf();
-    const endOfMonth = dayjs(targetMonth).endOf('month').valueOf();
+    // Use Funifier's relative date syntax
+    const startDate = getRelativeDateExpression(month, 'start');
+    const endDate = getRelativeDateExpression(month, 'end');
 
     const aggregateBody = [
       {
         $match: {
           userId: playerId,
-          time: { $gte: startOfMonth, $lte: endOfMonth }
+          time: { $gte: startDate, $lte: endDate }
         }
       },
       {
@@ -465,18 +493,18 @@ export class ActionLogService {
 
   /**
    * Get list of unique CNPJs from player's action_log
-   * Uses userId field and time field (not player/created)
+   * Uses userId field and time field with Funifier relative dates
    */
   getPlayerCnpjList(playerId: string, month?: Date): Observable<string[]> {
-    const targetMonth = month || new Date();
-    const startOfMonth = dayjs(targetMonth).startOf('month').valueOf();
-    const endOfMonth = dayjs(targetMonth).endOf('month').valueOf();
+    // Use Funifier's relative date syntax
+    const startDate = getRelativeDateExpression(month, 'start');
+    const endDate = getRelativeDateExpression(month, 'end');
 
     const aggregateBody = [
       {
         $match: {
           userId: playerId,
-          time: { $gte: startOfMonth, $lte: endOfMonth },
+          time: { $gte: startDate, $lte: endDate },
           'attributes.cnpj': { $ne: null }
         }
       },
@@ -506,18 +534,18 @@ export class ActionLogService {
 
   /**
    * Get all actions for a specific CNPJ (by all players)
-   * Uses time field for timestamp (not created)
+   * Uses time field with Funifier relative dates
    */
   getActionsByCnpj(cnpj: string, month?: Date): Observable<ClienteActionItem[]> {
-    const targetMonth = month || new Date();
-    const startOfMonth = dayjs(targetMonth).startOf('month').valueOf();
-    const endOfMonth = dayjs(targetMonth).endOf('month').valueOf();
+    // Use Funifier's relative date syntax
+    const startDate = getRelativeDateExpression(month, 'start');
+    const endDate = getRelativeDateExpression(month, 'end');
 
     const aggregateBody = [
       {
         $match: {
           'attributes.cnpj': cnpj,
-          time: { $gte: startOfMonth, $lte: endOfMonth }
+          time: { $gte: startDate, $lte: endDate }
         }
       },
       { $sort: { time: -1 } },

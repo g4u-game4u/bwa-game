@@ -68,6 +68,30 @@ The `achievement` collection stores points earned by players.
 }
 ```
 
+### Funifier Relative Date Expressions
+
+Funifier supports relative date expressions in aggregate queries, avoiding manual timestamp calculations:
+
+**Syntax:**
+- `-0d-` / `-0d+` → start/end of current day
+- `-1d-` / `-1d+` → start/end of yesterday
+- `-0w-` / `-0w+` → start/end of current week
+- `-0M-` / `-0M+` → start/end of current month
+- `-1M-` / `-1M+` → start/end of previous month
+- `-0y-` / `-0y+` → start/end of current year
+
+**Usage in queries:**
+```json
+{
+  "$match": {
+    "time": {
+      "$gte": { "$date": "-0M-" },
+      "$lte": { "$date": "-0M+" }
+    }
+  }
+}
+```
+
 ## Requirements
 
 ### Requirement 1: Season Level Display
