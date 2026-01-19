@@ -96,6 +96,13 @@ export class ActionLogService {
   }
 
   /**
+   * Alias for getAtividadesFinalizadas for backward compatibility
+   */
+  getCompletedTasksCount(playerId: string): Observable<number> {
+    return this.getAtividadesFinalizadas(playerId);
+  }
+
+  /**
    * Get points from achievements for the month
    * Queries achievement collection for type=0 entries
    */

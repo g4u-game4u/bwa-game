@@ -295,7 +295,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
       this.actionLogService.getCompletedTasksCount(playerId)
         .pipe(takeUntil(this.destroy$))
         .subscribe({
-          next: (count) => {
+          next: (count: number) => {
             console.log('📊 Tarefas finalizadas count:', count);
             if (this.seasonProgress) {
               this.seasonProgress = {
@@ -305,8 +305,8 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
               this.cdr.markForCheck();
             }
           },
-          error: (error) => {
-            console.error('📊 Failed to load tarefas count:', error);
+          error: (err: Error) => {
+            console.error('📊 Failed to load tarefas count:', err);
           }
         });
     }
