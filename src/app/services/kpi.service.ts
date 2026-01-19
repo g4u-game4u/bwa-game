@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
-import { Observable, throwError, of } from 'rxjs';
-import { map, catchError, shareReplay } from 'rxjs/operators';
+import { Observable, throwError, of, forkJoin } from 'rxjs';
+import { map, catchError, shareReplay, switchMap } from 'rxjs/operators';
 import { FunifierApiService } from './funifier-api.service';
 import { KPIMapper } from './kpi-mapper.service';
 import { KPIData } from '@model/gamification-dashboard.model';
@@ -52,19 +52,17 @@ export class KPIService {
       aggregateBody
     ).pipe(
       map(response => {
-        console.log('📊 Metric targets loaded:', response);
-        return Array.isArray(response) ? response : [];
+        console.log('📊 Metric targets loaded from database:', response);
+        if (Array.isArray(response) && response.length > 0) {
+          return response;
+        }
+        console.warn('📊 No metric targets found in database, returning empty array');
+        return [];
       }),
       catchError(error => {
-        console.error('Error fetching metric targets:', error);
-        // Return default KPI structure if database call fails
-        return of([
-          { _id: 'nps', name: 'NPS', label: 'NPS', target: 10, order: 0 },
-          { _id: 'multas', name: 'Multas', label: 'Multas', target: 10, order: 1 },
-          { _id: 'eficiencia', name: 'Eficiência', label: 'Eficiência', target: 10, order: 2 },
-          { _id: 'extra', name: 'Extra', label: 'Extra', target: 10, order: 3 },
-          { _id: 'prazo', name: 'Prazo', label: 'Prazo', target: 10, order: 4 }
-        ]);
+        console.error('📊 Error fetching metric targets from database:', error);
+        // Return empty array - no hardcoded fallback
+        return of([]);
       }),
       shareReplay({ bufferSize: 1, refCount: true, windowTime: this.CACHE_DURATION })
     );
@@ -74,7 +72,7 @@ export class KPIService {
 
   /**
    * Get player KPIs by combining:
-   * 1. Default KPI labels (NPS, Multas, Eficiência, Extra, Prazo)
+   * 1. KPI definitions from metric_targets__c database (dynamic)
    * 2. Current values from player status extra.kpi (values in order, separated by ; or ,)
    */
   getPlayerKPIs(playerId: string): Observable<KPIData[]> {
@@ -83,28 +81,29 @@ export class KPIService {
       return cached;
     }
 
-    // Default KPI structure - used when metric_targets__c is not available
-    const defaultTargets: MetricTarget[] = [
-      { _id: 'nps', name: 'NPS', label: 'NPS', target: 10, order: 0 },
-      { _id: 'multas', name: 'Multas', label: 'Multas', target: 10, order: 1 },
-      { _id: 'eficiencia', name: 'Eficiência', label: 'Eficiência', target: 10, order: 2 },
-      { _id: 'extra', name: 'Extra', label: 'Extra', target: 10, order: 3 },
-      { _id: 'prazo', name: 'Prazo', label: 'Prazo', target: 10, order: 4 }
-    ];
-
-    // Just fetch player status - don't wait for metric_targets database
-    const request$ = this.funifierApi.get<any>(`/v3/player/${playerId}/status`).pipe(
-      map(playerStatus => {
+    // Fetch both metric targets and player status in parallel
+    const request$ = forkJoin({
+      metricTargets: this.getMetricTargets(),
+      playerStatus: this.funifierApi.get<any>(`/v3/player/${playerId}/status`)
+    }).pipe(
+      map(({ metricTargets, playerStatus }) => {
         const kpiString = playerStatus.extra?.kpi || '';
         
         // Parse KPI values from string (e.g., "9.3; 8; 10; 9; 8")
         const kpiValues = this.parseKpiValues(kpiString);
         
-        console.log('📊 KPI string:', kpiString);
-        console.log('📊 KPI values:', kpiValues);
+        console.log('📊 KPI string from player:', kpiString);
+        console.log('📊 KPI values parsed:', kpiValues);
+        console.log('📊 Metric targets from DB:', metricTargets);
         
-        // Combine default targets with current values
-        return defaultTargets.map((target, index) => ({
+        // If no metric targets from database, return empty array
+        if (!metricTargets || metricTargets.length === 0) {
+          console.warn('📊 No metric targets defined in database');
+          return [];
+        }
+        
+        // Combine database targets with current values
+        return metricTargets.map((target, index) => ({
           id: target._id || `kpi-${index}`,
           label: target.label || target.name || `KPI ${index + 1}`,
           current: kpiValues[index] || 0,
@@ -113,7 +112,7 @@ export class KPIService {
         }));
       }),
       catchError(error => {
-        console.error('Error fetching player KPIs:', error);
+        console.error('📊 Error fetching player KPIs:', error);
         // Return empty array instead of throwing - don't block the UI
         return of([]);
       }),

@@ -48,44 +48,23 @@ export class PlayerMapper {
 
   /**
    * Map Funifier API response to PointWallet model
-   * API fields: locked_points -> Bloqueados, points -> Desbloqueados, coins -> Moedas
-   * 
-   * The API response can have different structures:
-   * 1. pointCategories.locked_points, pointCategories.points, pointCategories.coins
-   * 2. point_categories.locked_points, point_categories.points, point_categories.coins
-   * 3. Direct fields: locked_points, points, coins
+   * API fields from point_categories:
+   * - locked_points -> Bloqueados
+   * - points -> Desbloqueados  
+   * - coins -> Moedas
    */
   toPointWallet(apiResponse: any): PointWallet {
     console.log('📊 Point wallet mapping - FULL API response keys:', Object.keys(apiResponse || {}));
     
-    // Try multiple possible locations for point data
-    const pointCategories = apiResponse?.pointCategories || apiResponse?.point_categories || {};
+    // Get point_categories from response (can be snake_case or camelCase)
+    const pointCategories = apiResponse?.point_categories || apiResponse?.pointCategories || {};
     
-    console.log('📊 Point wallet mapping - pointCategories:', JSON.stringify(pointCategories));
+    console.log('📊 Point wallet mapping - point_categories:', JSON.stringify(pointCategories));
     
-    // Check for nested structure first, then direct fields
-    let bloqueados = 0;
-    let desbloqueados = 0;
-    let moedas = 0;
-    
-    // Try pointCategories object
-    if (pointCategories && typeof pointCategories === 'object') {
-      bloqueados = Number(pointCategories.locked_points) || Number(pointCategories.lockedPoints) || 0;
-      desbloqueados = Number(pointCategories.points) || 0;
-      moedas = Number(pointCategories.coins) || 0;
-    }
-    
-    // If still zero, try direct fields on response
-    if (bloqueados === 0 && desbloqueados === 0 && moedas === 0) {
-      bloqueados = Number(apiResponse?.locked_points) || Number(apiResponse?.lockedPoints) || 0;
-      desbloqueados = Number(apiResponse?.points) || 0;
-      moedas = Number(apiResponse?.coins) || 0;
-    }
-    
-    // Also check for total_points as fallback for desbloqueados
-    if (desbloqueados === 0) {
-      desbloqueados = Number(apiResponse?.total_points) || Number(apiResponse?.totalPoints) || 0;
-    }
+    // Extract values from point_categories
+    const bloqueados = Number(pointCategories.locked_points) || Number(pointCategories.lockedPoints) || 0;
+    const desbloqueados = Number(pointCategories.points) || 0;
+    const moedas = Number(pointCategories.coins) || 0;
     
     console.log('📊 Point wallet FINAL result:', { bloqueados, desbloqueados, moedas });
     
@@ -98,23 +77,20 @@ export class PlayerMapper {
 
   /**
    * Map Funifier API response to SeasonProgress model
-   * - clientes: count of extra.companies (separated by ; or ,)
+   * Note: clientes count will be populated separately from action_log aggregate
    * - metas: will be populated separately from metric_targets__c
    * - tarefasFinalizadas: will be populated from action_log aggregate
    */
   toSeasonProgress(apiResponse: any, seasonDates: { start: Date; end: Date }): SeasonProgress {
-    const extra = apiResponse.extra || {};
-    
-    // Count companies from extra.companies string (separated by ; or ,)
-    const companiesStr = extra.companies || '';
-    const clientesCount = this.countSeparatedValues(companiesStr);
+    // Note: clientes is now calculated from unique CNPJs in action_log
+    // This will be populated by the component using ActionLogService.getUniqueClientesCount()
     
     return {
       metas: {
         current: 0, // Will be populated from KPI data
         target: 0   // Will be populated from metric_targets__c
       },
-      clientes: clientesCount,
+      clientes: 0, // Will be populated from action_log unique CNPJs
       tarefasFinalizadas: 0, // Will be populated from action_log aggregate
       seasonDates
     };
