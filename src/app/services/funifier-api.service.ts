@@ -2,6 +2,7 @@ import { Injectable } from '@angular/core';
 import { HttpClient, HttpErrorResponse, HttpHeaders } from '@angular/common/http';
 import { Observable, throwError } from 'rxjs';
 import { catchError, retry, tap } from 'rxjs/operators';
+import { environment } from '../../environments/environment';
 
 export interface AuthCredentials {
   apiKey: string;
@@ -20,9 +21,9 @@ export interface AuthToken {
   providedIn: 'root'
 })
 export class FunifierApiService {
-  private readonly baseUrl = 'https://service2.funifier.com';
-  private readonly apiKey = '68ffd888e179d46fce277c00';
-  private readonly basicToken = 'NjhmZmQ4ODhlMTc5ZDQ2ZmNlMjc3YzAwOjY3ZWM0ZTRhMjMyN2Y3NGYzYTJmOTZmNQ==';
+  private readonly baseUrl = environment.funifier_base_url || 'https://service2.funifier.com';
+  private readonly apiKey = environment.funifier_api_key;
+  private readonly basicToken = environment.funifier_basic_token;
   private authToken: string | null = null;
   private tokenExpiry: number | null = null;
 

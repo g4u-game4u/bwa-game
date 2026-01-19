@@ -7,8 +7,8 @@ import {firstValueFrom, Observable} from "rxjs";
   providedIn: 'root',
 })
 export class AuthProvider {
-  private readonly funifierBaseUrl = 'https://service2.funifier.com';
-  private readonly funifierApiKey = '68ffd888e179d46fce277c00';
+  private readonly funifierBaseUrl = environment.funifier_base_url || 'https://service2.funifier.com';
+  private readonly funifierApiKey = environment.funifier_api_key;
 
   constructor(private http: HttpClient) {
   }
