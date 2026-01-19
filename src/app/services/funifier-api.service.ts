@@ -148,8 +148,14 @@ export class FunifierApiService {
 
     if (isDatabaseEndpoint) {
       // Use Basic Auth for database operations
-      headers = headers.set('Authorization', `Basic ${this.basicToken}`);
-      console.log('Using Basic Auth for database endpoint:', endpoint);
+      if (this.basicToken) {
+        headers = headers.set('Authorization', `Basic ${this.basicToken}`);
+        console.log('🔐 Using Basic Auth for database endpoint:', endpoint);
+        console.log('🔐 Basic token present:', !!this.basicToken);
+      } else {
+        console.error('🔐 ERROR: Basic token is empty! Check funifier_basic_token env variable');
+        console.error('🔐 Environment funifier_basic_token:', environment.funifier_basic_token);
+      }
     }
     // For non-database endpoints, the AuthInterceptor will add the Bearer token
     // from the session storage, so we don't add it here to avoid conflicts

@@ -52,10 +52,15 @@ export class AuthInterceptor implements HttpInterceptor {
         // Check if this is a Funifier API request by URL
         const isFunifierRequest = WHITELISTED_URLS.some(item => requestUrl.includes(item));
         
+        // Check if this is a database endpoint (requires Basic Auth, not Bearer)
+        const isDatabaseEndpoint = requestUrl.includes('/database');
+        
         // For Funifier requests, add Bearer token if available (but don't add client_id)
         if (isFunifierRequest) {
             // Don't modify requests that already have Authorization header (e.g., Basic Auth for database)
-            if (request.headers.has('Authorization')) {
+            // Also explicitly skip database endpoints - they use Basic Auth set by the service
+            if (request.headers.has('Authorization') || isDatabaseEndpoint) {
+                console.log('🔐 Interceptor: Passing through request with existing auth or database endpoint:', requestUrl);
                 return next.handle(request);
             }
             
