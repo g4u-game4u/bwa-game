@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, OnInit, OnDestroy } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetectorRef, ChangeDetectionStrategy } from '@angular/core';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { ActionLogService, ClienteActionItem } from '@services/action-log.service';
@@ -11,7 +11,8 @@ interface CarteiraCliente {
 @Component({
   selector: 'modal-carteira',
   templateUrl: './modal-carteira.component.html',
-  styleUrls: ['./modal-carteira.component.scss']
+  styleUrls: ['./modal-carteira.component.scss'],
+  changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class ModalCarteiraComponent implements OnInit, OnDestroy {
   @Input() playerId = '';
@@ -26,7 +27,10 @@ export class ModalCarteiraComponent implements OnInit, OnDestroy {
   selectedClienteActions: ClienteActionItem[] = [];
   isLoadingActions = false;
 
-  constructor(private actionLogService: ActionLogService) {}
+  constructor(
+    private actionLogService: ActionLogService,
+    private cdr: ChangeDetectorRef
+  ) {}
 
   ngOnInit(): void {
     this.loadClientes();
@@ -39,6 +43,7 @@ export class ModalCarteiraComponent implements OnInit, OnDestroy {
 
   private loadClientes(): void {
     this.isLoading = true;
+    this.cdr.markForCheck();
     
     // Only fetch CNPJs with count - don't fetch all actions yet
     this.actionLogService.getPlayerCnpjListWithCount(this.playerId, this.month)
@@ -48,10 +53,12 @@ export class ModalCarteiraComponent implements OnInit, OnDestroy {
           console.log('📊 Carteira clientes loaded:', clientes);
           this.clientes = clientes;
           this.isLoading = false;
+          this.cdr.markForCheck();
         },
         error: (err: Error) => {
           console.error('Error loading carteira:', err);
           this.isLoading = false;
+          this.cdr.markForCheck();
         }
       });
   }
@@ -61,12 +68,14 @@ export class ModalCarteiraComponent implements OnInit, OnDestroy {
       // Collapse if already selected
       this.selectedCnpj = null;
       this.selectedClienteActions = [];
+      this.cdr.markForCheck();
       return;
     }
 
     this.selectedCnpj = cnpj;
     this.isLoadingActions = true;
     this.selectedClienteActions = [];
+    this.cdr.markForCheck();
 
     // Now fetch all actions for this CNPJ (from all players)
     this.actionLogService.getActionsByCnpj(cnpj, this.month)
@@ -76,10 +85,12 @@ export class ModalCarteiraComponent implements OnInit, OnDestroy {
           console.log('📊 Actions for CNPJ loaded:', actions);
           this.selectedClienteActions = actions;
           this.isLoadingActions = false;
+          this.cdr.markForCheck();
         },
         error: (err: Error) => {
           console.error('Error loading actions for CNPJ:', err);
           this.isLoadingActions = false;
+          this.cdr.markForCheck();
         }
       });
   }
@@ -88,9 +99,20 @@ export class ModalCarteiraComponent implements OnInit, OnDestroy {
     this.closed.emit();
   }
 
-  formatDate(timestamp: number): string {
+  formatDate(timestamp: number | { $date: string } | undefined): string {
     if (!timestamp) return '';
-    const date = new Date(timestamp);
+    
+    // Handle Funifier's $date object format
+    let dateValue: number | string;
+    if (typeof timestamp === 'object' && '$date' in timestamp) {
+      dateValue = timestamp.$date;
+    } else {
+      dateValue = timestamp;
+    }
+    
+    const date = new Date(dateValue);
+    if (isNaN(date.getTime())) return '';
+    
     return date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
   }
 }

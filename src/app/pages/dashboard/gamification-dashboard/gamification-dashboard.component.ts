@@ -68,6 +68,10 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   companies: Company[] = [];
   selectedCompany: Company | null = null;
   
+  // Carteira data from action_log (CNPJs with action counts)
+  carteiraClientes: { cnpj: string; actionCount: number }[] = [];
+  isLoadingCarteira = true;
+  
   // Month selection
   selectedMonth: Date = new Date();
   
@@ -178,6 +182,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   loadDashboardData(): void {
     this.loadPlayerData();
     this.loadCompanyData();
+    this.loadCarteiraData();
     this.loadKPIData();
     this.loadProgressData();
     this.lastRefreshTime = new Date();
@@ -358,6 +363,39 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
           console.error('📊 Failed to load companies:', error);
           this.toastService.error('Erro ao carregar carteira de empresas');
           this.isLoadingCompanies = false;
+          this.cdr.markForCheck();
+        }
+      });
+  }
+
+  /**
+   * Load carteira data from action_log (CNPJs with action counts)
+   */
+  private loadCarteiraData(): void {
+    this.isLoadingCarteira = true;
+    
+    const usuario = this.sessaoProvider.usuario as { _id?: string; email?: string } | null;
+    const playerId = usuario?._id || usuario?.email || '';
+    
+    if (!playerId) {
+      console.warn('📊 No player ID available for carteira data');
+      this.isLoadingCarteira = false;
+      this.cdr.markForCheck();
+      return;
+    }
+    
+    this.actionLogService.getPlayerCnpjListWithCount(playerId, this.selectedMonth)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (clientes) => {
+          console.log('📊 Carteira clientes loaded:', clientes);
+          this.carteiraClientes = clientes;
+          this.isLoadingCarteira = false;
+          this.cdr.markForCheck();
+        },
+        error: (error) => {
+          console.error('📊 Failed to load carteira data:', error);
+          this.isLoadingCarteira = false;
           this.cdr.markForCheck();
         }
       });

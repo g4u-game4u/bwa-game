@@ -392,6 +392,72 @@
           margin: 0;
         }
       }
+      
+      // Carteira list styles
+      .carteira-list {
+        display: flex;
+        flex-direction: column;
+        gap: $spacing-sm;
+        padding: $spacing-md;
+        
+        .carteira-item {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding: $spacing-sm $spacing-md;
+          background: rgba($primary-color, 0.05);
+          border-radius: $border-radius-sm;
+          transition: background-color 0.2s ease;
+          
+          &:hover {
+            background: rgba($primary-color, 0.1);
+          }
+          
+          .carteira-item-info {
+            display: flex;
+            align-items: center;
+            gap: $spacing-sm;
+            flex: 1;
+            min-width: 0;
+            
+            i {
+              color: $primary-color;
+              font-size: 1.25rem;
+              flex-shrink: 0;
+            }
+            
+            .carteira-cnpj {
+              font-size: 0.875rem;
+              color: $text-primary;
+              white-space: nowrap;
+              overflow: hidden;
+              text-overflow: ellipsis;
+            }
+          }
+          
+          .carteira-action-count {
+            font-size: 0.75rem;
+            color: $text-secondary;
+            background: rgba($primary-color, 0.1);
+            padding: 2px 8px;
+            border-radius: 12px;
+            flex-shrink: 0;
+            margin-left: $spacing-sm;
+          }
+        }
+        
+        .carteira-more {
+          text-align: center;
+          font-size: 0.875rem;
+          color: $primary-color;
+          padding: $spacing-sm;
+          cursor: pointer;
+          
+          &:hover {
+            text-decoration: underline;
+          }
+        }
+      }
     }
   }
 }

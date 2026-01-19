@@ -121,16 +121,24 @@
       </div>
       
       <c4u-card class="carteira-card">
-        <c4u-company-table
-          *ngIf="companies.length > 0"
-          [companies]="companies"
-          (companySelected)="onCompanySelected($event)">
-        </c4u-company-table>
+        <!-- Carteira list from action_log CNPJs -->
+        <div *ngIf="carteiraClientes.length > 0" class="carteira-list">
+          <div *ngFor="let cliente of carteiraClientes.slice(0, 5)" class="carteira-item">
+            <div class="carteira-item-info">
+              <i class="ri-building-2-line"></i>
+              <span class="carteira-cnpj">{{ cliente.cnpj }}</span>
+            </div>
+            <span class="carteira-action-count">{{ cliente.actionCount }} ações</span>
+          </div>
+          <div *ngIf="carteiraClientes.length > 5" class="carteira-more">
+            + {{ carteiraClientes.length - 5 }} clientes
+          </div>
+        </div>
         
-        <c4u-shimmer *ngIf="isLoadingCompanies"></c4u-shimmer>
+        <c4u-shimmer *ngIf="isLoadingCarteira"></c4u-shimmer>
         
-        <div *ngIf="!isLoadingCompanies && companies.length === 0" class="empty-state">
-          <p>Nenhuma empresa encontrada na carteira</p>
+        <div *ngIf="!isLoadingCarteira && carteiraClientes.length === 0" class="empty-state">
+          <p>Nenhum cliente encontrado na carteira</p>
         </div>
       </c4u-card>
     </section>

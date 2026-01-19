@@ -25,6 +25,27 @@
   opacity: 0.5;
 }
 
+.loading-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 16px;
+  color: #9ca3af;
+  font-size: 13px;
+  
+  .loading-icon {
+    font-size: 16px;
+  }
+}
+
+.no-actions {
+  padding: 16px;
+  text-align: center;
+  color: #6b7280;
+  font-size: 13px;
+}
+
 @keyframes spin {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
@@ -76,28 +97,36 @@
   display: flex;
   align-items: center;
   gap: 12px;
+  flex: 1;
+  min-width: 0;
 }
 
 .cliente-icon {
   font-size: 20px;
   color: #3b82f6;
+  flex-shrink: 0;
 }
 
 .cliente-cnpj {
   font-size: 14px;
   font-weight: 500;
   color: #eeeeee;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .cliente-meta {
   display: flex;
   align-items: center;
   gap: 12px;
+  flex-shrink: 0;
 }
 
 .action-count {
   font-size: 12px;
   color: #9ca3af;
+  white-space: nowrap;
 }
 
 .expand-icon {
@@ -113,6 +142,8 @@
 .cliente-actions {
   border-top: 1px solid rgba(255, 255, 255, 0.1);
   padding: 8px 0;
+  max-height: 300px;
+  overflow-y: auto;
 }
 
 .action-list {
@@ -124,21 +155,41 @@
 .action-item {
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  padding: 8px 16px 8px 48px;
+  align-items: flex-start;
+  padding: 10px 16px 10px 48px;
+  gap: 12px;
   transition: background 0.2s ease;
 
   &:hover {
     background: rgba(255, 255, 255, 0.03);
+  }
+  
+  .action-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex: 1;
+    min-width: 0;
   }
 }
 
 .action-title {
   font-size: 13px;
   color: #d1d5db;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+.action-player {
+  font-size: 11px;
+  color: #6b7280;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
 }
 
 .action-date {
   font-size: 11px;
   color: #6b7280;
+  white-space: nowrap;
+  flex-shrink: 0;
 }

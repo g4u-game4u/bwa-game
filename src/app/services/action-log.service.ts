@@ -68,6 +68,20 @@ interface CacheEntry<T> {
 }
 
 /**
+ * Helper to extract timestamp from Funifier's time field
+ * Funifier may return time as a number or as { $date: "ISO string" }
+ */
+function extractTimestamp(time: number | { $date: string } | undefined): number {
+  if (!time) return 0;
+  if (typeof time === 'number') return time;
+  if (typeof time === 'object' && '$date' in time) {
+    const date = new Date(time.$date);
+    return isNaN(date.getTime()) ? 0 : date.getTime();
+  }
+  return 0;
+}
+
+/**
  * Helper to generate Funifier relative date expressions
  * Funifier supports: -0d-, -0d+, -1d-, -0M-, -0M+, -0y-, etc.
  * - `-0M-` = start of current month
@@ -391,7 +405,7 @@ export class ActionLogService {
         id: a._id,
         title: a.attributes?.acao || a.action_title || a.actionId || 'Ação sem título',
         points: a.points || 0,
-        created: a.time || 0
+        created: extractTimestamp(a.time as number | { $date: string } | undefined)
       }))),
       catchError(error => {
         console.error('Error fetching activity list:', error);
@@ -582,7 +596,7 @@ export class ActionLogService {
           id: a._id,
           title: a.attributes?.acao || a.action_title || a.actionId || 'Ação sem título',
           player: a.userId || '',
-          created: a.time || 0
+          created: extractTimestamp(a.time as number | { $date: string } | undefined)
         }));
       }),
       catchError(error => {
