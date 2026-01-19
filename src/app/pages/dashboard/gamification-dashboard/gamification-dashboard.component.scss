@@ -405,12 +405,12 @@
           justify-content: space-between;
           align-items: center;
           padding: $spacing-sm $spacing-md;
-          background: rgba($primary-color, 0.05);
+          background: rgba($primary-electric-blue, 0.05);
           border-radius: $border-radius-sm;
           transition: background-color 0.2s ease;
           
           &:hover {
-            background: rgba($primary-color, 0.1);
+            background: rgba($primary-electric-blue, 0.1);
           }
           
           .carteira-item-info {
@@ -421,7 +421,7 @@
             min-width: 0;
             
             i {
-              color: $primary-color;
+              color: $primary-electric-blue;
               font-size: 1.25rem;
               flex-shrink: 0;
             }
@@ -438,7 +438,7 @@
           .carteira-action-count {
             font-size: 0.75rem;
             color: $text-secondary;
-            background: rgba($primary-color, 0.1);
+            background: rgba($primary-electric-blue, 0.1);
             padding: 2px 8px;
             border-radius: 12px;
             flex-shrink: 0;
@@ -449,7 +449,7 @@
         .carteira-more {
           text-align: center;
           font-size: 0.875rem;
-          color: $primary-color;
+          color: $primary-electric-blue;
           padding: $spacing-sm;
           cursor: pointer;
           
