@@ -312,9 +312,48 @@
   .dashboard-section {
     margin-bottom: $spacing-xl;
     
+    .section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: $spacing-md;
+    }
+    
     .section-title {
       @include text-heading-2;
       margin-bottom: $spacing-md;
+      
+      .section-header & {
+        margin-bottom: 0;
+      }
+    }
+    
+    .carteira-expand-btn {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 12px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 6px;
+      color: #9ca3af;
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      
+      &:hover {
+        background: rgba(255, 255, 255, 0.1);
+        color: #eeeeee;
+      }
+      
+      &:focus {
+        outline: 2px solid #3b82f6;
+        outline-offset: 2px;
+      }
+      
+      i {
+        font-size: 14px;
+      }
     }
   }
   

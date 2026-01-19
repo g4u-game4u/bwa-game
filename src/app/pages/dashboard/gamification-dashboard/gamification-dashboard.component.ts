@@ -18,6 +18,8 @@ import {
   ActivityMetrics,
   MacroMetrics
 } from '@model/gamification-dashboard.model';
+import { ProgressCardType } from '@components/c4u-activity-progress/c4u-activity-progress.component';
+import { ProgressListType } from '@modals/modal-progress-list/modal-progress-list.component';
 
 @Component({
   selector: 'app-gamification-dashboard',
@@ -71,6 +73,13 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   
   // Modal state
   isCompanyModalOpen = false;
+  
+  // Progress list modal state
+  isProgressModalOpen = false;
+  progressModalType: ProgressListType = 'atividades';
+  
+  // Carteira modal state
+  isCarteiraModalOpen = false;
   
   // Refresh state
   lastRefreshTime: Date | null = null;
@@ -479,6 +488,84 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
         this.focusedElementBeforeModal = null;
       }, 100);
     }
+  }
+  
+  /**
+   * Handle progress card click from c4u-activity-progress
+   */
+  onProgressCardClicked(cardType: ProgressCardType): void {
+    this.focusedElementBeforeModal = document.activeElement as HTMLElement;
+    
+    // Map card type to modal type
+    switch (cardType) {
+      case 'atividades-finalizadas':
+        this.progressModalType = 'atividades';
+        this.isProgressModalOpen = true;
+        this.announceToScreenReader('Abrindo lista de atividades finalizadas');
+        break;
+      case 'atividades-pontos':
+        this.progressModalType = 'pontos';
+        this.isProgressModalOpen = true;
+        this.announceToScreenReader('Abrindo lista de pontos');
+        break;
+      case 'macros-pendentes':
+        this.progressModalType = 'macros-pendentes';
+        this.isProgressModalOpen = true;
+        this.announceToScreenReader('Abrindo lista de macros pendentes');
+        break;
+      case 'macros-finalizadas':
+        this.progressModalType = 'macros-finalizadas';
+        this.isProgressModalOpen = true;
+        this.announceToScreenReader('Abrindo lista de macros finalizadas');
+        break;
+    }
+  }
+  
+  /**
+   * Handle progress modal close
+   */
+  onProgressModalClosed(): void {
+    this.isProgressModalOpen = false;
+    this.announceToScreenReader('Modal de progresso fechado');
+    
+    if (this.focusedElementBeforeModal) {
+      setTimeout(() => {
+        this.focusedElementBeforeModal?.focus();
+        this.focusedElementBeforeModal = null;
+      }, 100);
+    }
+  }
+  
+  /**
+   * Open carteira modal
+   */
+  openCarteiraModal(): void {
+    this.focusedElementBeforeModal = document.activeElement as HTMLElement;
+    this.isCarteiraModalOpen = true;
+    this.announceToScreenReader('Abrindo carteira de clientes');
+  }
+  
+  /**
+   * Handle carteira modal close
+   */
+  onCarteiraModalClosed(): void {
+    this.isCarteiraModalOpen = false;
+    this.announceToScreenReader('Modal de carteira fechado');
+    
+    if (this.focusedElementBeforeModal) {
+      setTimeout(() => {
+        this.focusedElementBeforeModal?.focus();
+        this.focusedElementBeforeModal = null;
+      }, 100);
+    }
+  }
+  
+  /**
+   * Get current player ID for modals (email-based)
+   */
+  get currentPlayerId(): string {
+    const usuario = this.sessaoProvider.usuario as { _id?: string; email?: string };
+    return usuario?._id || usuario?.email || '';
   }
   
   /**

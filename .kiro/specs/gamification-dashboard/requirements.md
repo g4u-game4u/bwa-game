@@ -20,6 +20,54 @@ The dashboard serves as the primary interface for players to track their seasona
 - **Funifier API**: The backend service providing gamification data and functionality
 - **Modal**: An overlay dialog displaying detailed information about a selected company
 
+## Data Schemas
+
+### action_log Collection
+
+The `action_log` collection stores all player actions in the gamification system.
+
+```json
+{
+  "_id": "6954183c5785ce669cc33a8f",
+  "actionId": "acessorias",           // Action type identifier (e.g., 'acessorias', 'desbloquear')
+  "userId": "user@example.com",       // User's email (NOT 'player')
+  "time": 1767118908877,              // Timestamp in milliseconds (NOT 'created')
+  "attributes": {
+    "delivery_title": "[DP] ADMISSÃO - GISELE",  // Macro title
+    "delivery_id": 463262,                        // Macro ID (number, NOT string)
+    "acao": "Conferir Documentação da Admissão", // Action title to display
+    "cnpj": "COMPANY NAME [10010|0001-76]",      // Client CNPJ
+    "integration_id": 2114667
+  },
+  "extra": {
+    "processed": true,
+    "processed_at": 1768832533529
+  }
+}
+```
+
+**Important Field Notes:**
+- Use `userId` field for player matching (NOT `player`)
+- Use `time` field for timestamps (NOT `created`)
+- `attributes.delivery_id` is a number (NOT string)
+- `attributes.acao` contains the action title to display
+- `attributes.delivery_title` contains the macro title
+- For "desbloquear" actions, `attributes.delivery` matches the `delivery_id` of the finalized macro
+
+### achievement Collection
+
+The `achievement` collection stores points earned by players.
+
+```json
+{
+  "_id": "...",
+  "player": "user@example.com",
+  "type": 0,                    // type 0 = points
+  "total": 100,                 // Points earned
+  "created": 1767118908877      // Timestamp
+}
+```
+
 ## Requirements
 
 ### Requirement 1: Season Level Display

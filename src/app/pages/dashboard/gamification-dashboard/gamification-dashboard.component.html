@@ -99,7 +99,8 @@
       <c4u-activity-progress
         *ngIf="activityMetrics && macroMetrics"
         [activities]="activityMetrics"
-        [macros]="macroMetrics">
+        [macros]="macroMetrics"
+        (cardClicked)="onProgressCardClicked($event)">
       </c4u-activity-progress>
       
       <c4u-shimmer *ngIf="isLoadingProgress"></c4u-shimmer>
@@ -107,7 +108,17 @@
     
     <!-- Company Portfolio Section -->
     <section class="dashboard-section carteira-section" aria-labelledby="company-section-title">
-      <h2 id="company-section-title" class="section-title">Carteira</h2>
+      <div class="section-header">
+        <h2 id="company-section-title" class="section-title">Carteira</h2>
+        <button 
+          type="button" 
+          class="carteira-expand-btn"
+          (click)="openCarteiraModal()"
+          aria-label="Ver todos os clientes">
+          <i class="ri-external-link-line"></i>
+          Ver todos
+        </button>
+      </div>
       
       <c4u-card class="carteira-card">
         <c4u-company-table
@@ -131,4 +142,21 @@
     [company]="selectedCompany"
     (closed)="onCompanyModalClosed()">
   </modal-company-detail>
+  
+  <!-- Progress List Modal -->
+  <modal-progress-list
+    *ngIf="isProgressModalOpen"
+    [playerId]="currentPlayerId"
+    [listType]="progressModalType"
+    [month]="selectedMonth"
+    (closed)="onProgressModalClosed()">
+  </modal-progress-list>
+  
+  <!-- Carteira Modal -->
+  <modal-carteira
+    *ngIf="isCarteiraModalOpen"
+    [playerId]="currentPlayerId"
+    [month]="selectedMonth"
+    (closed)="onCarteiraModalClosed()">
+  </modal-carteira>
 </div>

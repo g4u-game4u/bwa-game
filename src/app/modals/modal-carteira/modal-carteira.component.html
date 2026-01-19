@@ -1,0 +1,49 @@
+<c4u-modal modalTitle="Carteira de Clientes" (closed)="onClose()">
+  <div class="carteira-content">
+    <!-- Loading State -->
+    <div *ngIf="isLoading" class="loading-state">
+      <i class="ri-loader-4-line loading-icon"></i>
+      <span>Carregando...</span>
+    </div>
+
+    <!-- Empty State -->
+    <div *ngIf="!isLoading && clientes.length === 0" class="empty-state">
+      <i class="ri-building-line empty-icon"></i>
+      <span>Nenhum cliente encontrado</span>
+    </div>
+
+    <!-- Cliente List -->
+    <div *ngIf="!isLoading && clientes.length > 0" class="cliente-list">
+      <div 
+        *ngFor="let cliente of clientes" 
+        class="cliente-card"
+        [class.expanded]="selectedCnpj === cliente.cnpj">
+        
+        <button 
+          type="button" 
+          class="cliente-header"
+          (click)="selectCliente(cliente.cnpj)"
+          [attr.aria-expanded]="selectedCnpj === cliente.cnpj">
+          <div class="cliente-info">
+            <i class="ri-building-2-line cliente-icon"></i>
+            <span class="cliente-cnpj">{{ formatCnpj(cliente.cnpj) }}</span>
+          </div>
+          <div class="cliente-meta">
+            <span class="action-count">{{ cliente.actions.length }} ações</span>
+            <i class="ri-arrow-down-s-line expand-icon" 
+               [class.rotated]="selectedCnpj === cliente.cnpj"></i>
+          </div>
+        </button>
+
+        <div class="cliente-actions" *ngIf="selectedCnpj === cliente.cnpj">
+          <ul class="action-list">
+            <li *ngFor="let action of cliente.actions" class="action-item">
+              <span class="action-title">{{ action.title }}</span>
+              <span class="action-date">{{ formatDate(action.created) }}</span>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+</c4u-modal>

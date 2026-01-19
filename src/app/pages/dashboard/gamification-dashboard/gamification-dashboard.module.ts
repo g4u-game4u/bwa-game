@@ -17,6 +17,8 @@ import { C4uCompanyTableModule } from '@components/c4u-company-table/c4u-company
 import { C4uShimmerModule } from '@components/c4u-shimmer/c4u-shimmer.module';
 import { C4uErrorMessageModule } from '@components/c4u-error-message/c4u-error-message.module';
 import { ModalCompanyDetailModule } from '@modals/modal-company-detail/modal-company-detail.module';
+import { ModalProgressListModule } from '@modals/modal-progress-list/modal-progress-list.module';
+import { ModalCarteiraModule } from '@modals/modal-carteira/modal-carteira.module';
 
 const routes: Routes = [
   {
@@ -44,7 +46,9 @@ const routes: Routes = [
     C4uCompanyTableModule,
     C4uShimmerModule,
     C4uErrorMessageModule,
-    ModalCompanyDetailModule
+    ModalCompanyDetailModule,
+    ModalProgressListModule,
+    ModalCarteiraModule
   ],
   exports: [
     GamificationDashboardComponent

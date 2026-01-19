@@ -5,23 +5,61 @@ import { FunifierApiService } from './funifier-api.service';
 import { ActivityMetrics, MacroMetrics } from '@model/gamification-dashboard.model';
 import dayjs from 'dayjs';
 
-interface ActionLogEntry {
+export interface ActionLogEntry {
   _id: string;
-  player?: string;
-  userId?: string;
+  actionId: string; // Action type identifier (e.g., 'acessorias', 'desbloquear')
+  userId: string; // User's email
+  time: number; // Timestamp when action was logged (milliseconds)
+  attributes?: {
+    delivery_title?: string; // Macro title
+    delivery_id?: number; // Macro ID (number)
+    delivery?: number; // Used in desbloquear action to reference delivery_id
+    acao?: string; // Action title to display
+    cnpj?: string; // Client CNPJ
+    integration_id?: number;
+    [key: string]: unknown;
+  };
+  extra?: {
+    processed?: boolean;
+    processed_at?: number;
+    [key: string]: unknown;
+  };
+  // Legacy fields (may not exist in all entries)
   action?: string;
   action_title?: string;
   status?: string;
   points?: number;
-  created?: number;
+  player?: string; // Deprecated: use userId
+  created?: number; // Deprecated: use time
   updated?: number;
-  extra?: Record<string, any>;
-  attributes?: {
-    delivery?: string;
-    cnpj?: string;
-    [key: string]: any;
-  };
-  delivery_id?: string;
+  delivery_id?: string; // Deprecated: use attributes.delivery_id
+  delivery_title?: string; // Deprecated: use attributes.delivery_title
+}
+
+export interface ActivityListItem {
+  id: string;
+  title: string; // attributes.acao
+  points: number;
+  created: number;
+}
+
+export interface MacroListItem {
+  deliveryId: string;
+  title: string; // delivery_title
+  actionCount: number;
+  isFinalized: boolean;
+}
+
+export interface ClienteListItem {
+  cnpj: string;
+  actions: ClienteActionItem[];
+}
+
+export interface ClienteActionItem {
+  id: string;
+  title: string; // attributes.acao
+  player: string;
+  created: number;
 }
 
 interface CacheEntry<T> {
@@ -41,7 +79,8 @@ export class ActionLogService {
 
   /**
    * Get action log entries for a player for the current month
-   * Uses player field to match the user's email
+   * Uses userId field to match the user's email
+   * Note: action_log uses 'time' field for timestamp, not 'created'
    */
   getPlayerActionLogForMonth(playerId: string, month?: Date): Observable<ActionLogEntry[]> {
     const targetMonth = month || new Date();
@@ -55,14 +94,15 @@ export class ActionLogService {
     }
 
     // Aggregate query to get action log for this player in the current month
+    // Uses userId field and time field (not player/created)
     const aggregateBody = [
       { 
         $match: { 
-          player: playerId,
-          created: { $gte: startOfMonth, $lte: endOfMonth }
+          userId: playerId,
+          time: { $gte: startOfMonth, $lte: endOfMonth }
         } 
       },
-      { $sort: { created: -1 } }
+      { $sort: { time: -1 } }
     ];
 
     console.log('📊 Action log query for month:', JSON.stringify(aggregateBody));
@@ -158,8 +198,8 @@ export class ActionLogService {
     const aggregateBody = [
       {
         $match: {
-          player: playerId,
-          created: { $gte: startOfMonth, $lte: endOfMonth }
+          userId: playerId,
+          time: { $gte: startOfMonth, $lte: endOfMonth }
         }
       },
       {
@@ -179,7 +219,7 @@ export class ActionLogService {
 
     console.log('📊 Unique CNPJs query:', JSON.stringify(aggregateBody));
 
-    return this.funifierApi.post<any[]>(
+    return this.funifierApi.post<{ total: number }[]>(
       '/v3/database/action_log/aggregate?strict=true',
       aggregateBody
     ).pipe(
@@ -199,18 +239,18 @@ export class ActionLogService {
 
   /**
    * Get macro metrics for a player
-   * A Macro is identified by unique delivery_id in action_log
+   * A Macro is identified by unique attributes.delivery_id (number) in action_log
    * Macro is Finalizada if there's a "desbloquear" action with attributes.delivery = delivery_id
    * Otherwise it's Pendente/Incompleta
    */
   getMacroMetrics(playerId: string, month?: Date): Observable<MacroMetrics> {
     return this.getPlayerActionLogForMonth(playerId, month).pipe(
       switchMap(userActions => {
-        // Get unique delivery_ids from user's actions
+        // Get unique delivery_ids from user's actions (attributes.delivery_id is a number)
         const deliveryIds = [...new Set(
           userActions
-            .map(a => a.delivery_id || a.attributes?.delivery)
-            .filter(id => id != null && id !== '')
+            .map(a => a.attributes?.delivery_id)
+            .filter((id): id is number => id != null)
         )];
 
         console.log('📊 Unique delivery_ids found:', deliveryIds);
@@ -220,10 +260,11 @@ export class ActionLogService {
         }
 
         // Query action_log for "desbloquear" actions with matching delivery_ids
+        // Note: actionId field contains the action type, attributes.delivery matches delivery_id
         const aggregateBody = [
           {
             $match: {
-              action: 'desbloquear',
+              actionId: 'desbloquear',
               'attributes.delivery': { $in: deliveryIds }
             }
           },
@@ -236,7 +277,7 @@ export class ActionLogService {
 
         console.log('📊 Desbloquear query:', JSON.stringify(aggregateBody));
 
-        return this.funifierApi.post<any[]>(
+        return this.funifierApi.post<{ _id: number }[]>(
           '/v3/database/action_log/aggregate?strict=true',
           aggregateBody
         ).pipe(
@@ -309,6 +350,226 @@ export class ActionLogService {
 
     this.setCachedData(this.metricsCache, cacheKey, request$);
     return request$;
+  }
+
+  /**
+   * Get list of activities for modal display
+   * Returns list with attributes.acao as title
+   */
+  getActivityList(playerId: string, month?: Date): Observable<ActivityListItem[]> {
+    return this.getPlayerActionLogForMonth(playerId, month).pipe(
+      map(actions => actions.map(a => ({
+        id: a._id,
+        title: a.attributes?.acao || a.action_title || a.actionId || 'Ação sem título',
+        points: a.points || 0,
+        created: a.time || 0
+      }))),
+      catchError(error => {
+        console.error('Error fetching activity list:', error);
+        return of([]);
+      })
+    );
+  }
+
+  /**
+   * Get list of macros for modal display
+   * Groups by attributes.delivery_id (number), shows attributes.delivery_title and action count
+   * Note: delivery_id is a number in attributes, not a string
+   */
+  getMacroList(playerId: string, month?: Date): Observable<MacroListItem[]> {
+    return this.getPlayerActionLogForMonth(playerId, month).pipe(
+      switchMap(userActions => {
+        // Group actions by attributes.delivery_id (number)
+        const deliveryMap = new Map<number, { title: string; count: number }>();
+        
+        userActions.forEach(action => {
+          const deliveryId = action.attributes?.delivery_id;
+          if (deliveryId != null) {
+            const existing = deliveryMap.get(deliveryId);
+            if (existing) {
+              existing.count++;
+            } else {
+              deliveryMap.set(deliveryId, {
+                title: action.attributes?.delivery_title || `Macro ${deliveryId}`,
+                count: 1
+              });
+            }
+          }
+        });
+
+        const deliveryIds = [...deliveryMap.keys()];
+        
+        console.log('📊 Macro list - unique delivery_ids:', deliveryIds);
+
+        if (deliveryIds.length === 0) {
+          return of([]);
+        }
+
+        // Check which macros are finalized (have desbloquear action with matching attributes.delivery)
+        // Note: attributes.delivery in desbloquear action matches delivery_id
+        const aggregateBody = [
+          {
+            $match: {
+              actionId: 'desbloquear',
+              'attributes.delivery': { $in: deliveryIds }
+            }
+          },
+          {
+            $group: {
+              _id: '$attributes.delivery'
+            }
+          }
+        ];
+
+        console.log('📊 Macro finalization query:', JSON.stringify(aggregateBody));
+
+        return this.funifierApi.post<{ _id: number }[]>(
+          '/v3/database/action_log/aggregate?strict=true',
+          aggregateBody
+        ).pipe(
+          map(desbloqueados => {
+            const finalizedIds = new Set(desbloqueados.map(d => d._id));
+            
+            console.log('📊 Finalized delivery_ids:', [...finalizedIds]);
+
+            return deliveryIds.map(deliveryId => {
+              const info = deliveryMap.get(deliveryId)!;
+              return {
+                deliveryId: String(deliveryId),
+                title: info.title,
+                actionCount: info.count,
+                isFinalized: finalizedIds.has(deliveryId)
+              };
+            });
+          }),
+          catchError(() => {
+            // If desbloquear query fails, return all as not finalized
+            return of(deliveryIds.map(deliveryId => {
+              const info = deliveryMap.get(deliveryId)!;
+              return {
+                deliveryId: String(deliveryId),
+                title: info.title,
+                actionCount: info.count,
+                isFinalized: false
+              };
+            }));
+          })
+        );
+      }),
+      catchError(error => {
+        console.error('Error fetching macro list:', error);
+        return of([]);
+      })
+    );
+  }
+
+  /**
+   * Get list of unique CNPJs from player's action_log
+   * Uses userId field and time field (not player/created)
+   */
+  getPlayerCnpjList(playerId: string, month?: Date): Observable<string[]> {
+    const targetMonth = month || new Date();
+    const startOfMonth = dayjs(targetMonth).startOf('month').valueOf();
+    const endOfMonth = dayjs(targetMonth).endOf('month').valueOf();
+
+    const aggregateBody = [
+      {
+        $match: {
+          userId: playerId,
+          time: { $gte: startOfMonth, $lte: endOfMonth },
+          'attributes.cnpj': { $ne: null }
+        }
+      },
+      {
+        $group: {
+          _id: '$attributes.cnpj'
+        }
+      }
+    ];
+
+    console.log('📊 Player CNPJs query:', JSON.stringify(aggregateBody));
+
+    return this.funifierApi.post<{ _id: string }[]>(
+      '/v3/database/action_log/aggregate?strict=true',
+      aggregateBody
+    ).pipe(
+      map(response => {
+        console.log('📊 Player CNPJs response:', response);
+        return response.map(r => r._id).filter(cnpj => cnpj != null);
+      }),
+      catchError(error => {
+        console.error('Error fetching player CNPJs:', error);
+        return of([]);
+      })
+    );
+  }
+
+  /**
+   * Get all actions for a specific CNPJ (by all players)
+   * Uses time field for timestamp (not created)
+   */
+  getActionsByCnpj(cnpj: string, month?: Date): Observable<ClienteActionItem[]> {
+    const targetMonth = month || new Date();
+    const startOfMonth = dayjs(targetMonth).startOf('month').valueOf();
+    const endOfMonth = dayjs(targetMonth).endOf('month').valueOf();
+
+    const aggregateBody = [
+      {
+        $match: {
+          'attributes.cnpj': cnpj,
+          time: { $gte: startOfMonth, $lte: endOfMonth }
+        }
+      },
+      { $sort: { time: -1 } },
+      { $limit: 100 }
+    ];
+
+    console.log('📊 Actions by CNPJ query:', JSON.stringify(aggregateBody));
+
+    return this.funifierApi.post<ActionLogEntry[]>(
+      '/v3/database/action_log/aggregate?strict=true',
+      aggregateBody
+    ).pipe(
+      map(actions => {
+        console.log('📊 Actions by CNPJ response:', actions);
+        return actions.map(a => ({
+          id: a._id,
+          title: a.attributes?.acao || a.action_title || a.actionId || 'Ação sem título',
+          player: a.userId || '',
+          created: a.time || 0
+        }));
+      }),
+      catchError(error => {
+        console.error('Error fetching actions by CNPJ:', error);
+        return of([]);
+      })
+    );
+  }
+
+  /**
+   * Get cliente list with actions for carteira section
+   */
+  getCarteiraClientes(playerId: string, month?: Date): Observable<ClienteListItem[]> {
+    return this.getPlayerCnpjList(playerId, month).pipe(
+      switchMap(cnpjs => {
+        if (cnpjs.length === 0) {
+          return of([]);
+        }
+
+        // Fetch actions for each CNPJ
+        const requests = cnpjs.map(cnpj => 
+          this.getActionsByCnpj(cnpj, month).pipe(
+            map(actions => ({ cnpj, actions }))
+          )
+        );
+
+        return forkJoin(requests);
+      }),
+      catchError(error => {
+        console.error('Error fetching carteira clientes:', error);
+        return of([]);
+      })
+    );
   }
 
   /**

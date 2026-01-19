@@ -1,0 +1,51 @@
+<c4u-modal [modalTitle]="modalTitle" (closed)="onClose()">
+  <div class="progress-list-content">
+    <!-- Loading State -->
+    <div *ngIf="isLoading" class="loading-state">
+      <i class="ri-loader-4-line loading-icon"></i>
+      <span>Carregando...</span>
+    </div>
+
+    <!-- Activity List -->
+    <ng-container *ngIf="!isLoading && isActivityList">
+      <div *ngIf="activityItems.length === 0" class="empty-state">
+        <i class="ri-inbox-line empty-icon"></i>
+        <span>Nenhuma atividade encontrada</span>
+      </div>
+      
+      <ul class="item-list" *ngIf="activityItems.length > 0">
+        <li *ngFor="let item of activityItems" class="list-item">
+          <div class="item-main">
+            <span class="item-title">{{ item.title }}</span>
+            <span class="item-date">{{ formatDate(item.created) }}</span>
+          </div>
+          <div class="item-meta" *ngIf="listType === 'pontos'">
+            <span class="item-points">+{{ item.points }} pts</span>
+          </div>
+        </li>
+      </ul>
+    </ng-container>
+
+    <!-- Macro List -->
+    <ng-container *ngIf="!isLoading && isMacroList">
+      <div *ngIf="macroItems.length === 0" class="empty-state">
+        <i class="ri-inbox-line empty-icon"></i>
+        <span>Nenhuma macro encontrada</span>
+      </div>
+      
+      <ul class="item-list" *ngIf="macroItems.length > 0">
+        <li *ngFor="let item of macroItems" class="list-item macro-item">
+          <div class="item-main">
+            <span class="item-title">{{ item.title }}</span>
+            <span class="item-badge" [class.finalized]="item.isFinalized">
+              {{ item.isFinalized ? 'Finalizada' : 'Pendente' }}
+            </span>
+          </div>
+          <div class="item-meta">
+            <span class="action-count">{{ item.actionCount }} ações</span>
+          </div>
+        </li>
+      </ul>
+    </ng-container>
+  </div>
+</c4u-modal>

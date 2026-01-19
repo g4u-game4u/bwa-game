@@ -45,6 +45,21 @@
   }
 }
 
+.metric-button {
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  
+  &:focus {
+    outline: 2px solid #3b82f6;
+    outline-offset: 2px;
+  }
+  
+  &:active {
+    transform: scale(0.98);
+  }
+}
+
 .metric-icon {
   font-size: 24px;
   color: #9ca3af;

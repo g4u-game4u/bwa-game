@@ -2,54 +2,56 @@
   <div class="section">
     <h3 class="section-title">Atividades</h3>
     <div class="metrics-grid">
-      <div class="metric-item">
-        <i class="ri-time-line metric-icon"></i>
-        <div class="metric-content">
-          <div class="metric-label">Pendentes</div>
-          <div class="metric-value">{{ activities.pendentes }}</div>
-        </div>
-      </div>
-      <div class="metric-item">
-        <i class="ri-play-circle-line metric-icon"></i>
-        <div class="metric-content">
-          <div class="metric-label">Em execução</div>
-          <div class="metric-value">{{ activities.emExecucao }}</div>
-        </div>
-      </div>
-      <div class="metric-item">
+      <button 
+        class="metric-item metric-button" 
+        type="button"
+        (click)="onCardClick('atividades-finalizadas')"
+        aria-label="Ver atividades finalizadas">
         <i class="ri-checkbox-circle-line metric-icon"></i>
         <div class="metric-content">
           <div class="metric-label">Finalizadas</div>
           <div class="metric-value">{{ activities.finalizadas }}</div>
         </div>
-      </div>
-      <div class="metric-item">
+      </button>
+      <button 
+        class="metric-item metric-button" 
+        type="button"
+        (click)="onCardClick('atividades-pontos')"
+        aria-label="Ver pontos">
         <i class="ri-trophy-line metric-icon"></i>
         <div class="metric-content">
           <div class="metric-label">Pontos</div>
           <div class="metric-value">{{ activities.pontos }}</div>
         </div>
-      </div>
+      </button>
     </div>
   </div>
 
   <div class="section">
     <h3 class="section-title">Macros</h3>
     <div class="metrics-grid">
-      <div class="metric-item">
+      <button 
+        class="metric-item metric-button" 
+        type="button"
+        (click)="onCardClick('macros-pendentes')"
+        aria-label="Ver macros pendentes e incompletas">
         <i class="ri-file-list-line metric-icon"></i>
         <div class="metric-content">
           <div class="metric-label">Pendentes e Incompletas</div>
           <div class="metric-value">{{ macros.pendentes + macros.incompletas }}</div>
         </div>
-      </div>
-      <div class="metric-item">
+      </button>
+      <button 
+        class="metric-item metric-button" 
+        type="button"
+        (click)="onCardClick('macros-finalizadas')"
+        aria-label="Ver macros finalizadas">
         <i class="ri-checkbox-circle-line metric-icon"></i>
         <div class="metric-content">
           <div class="metric-label">Finalizadas</div>
           <div class="metric-value">{{ macros.finalizadas }}</div>
         </div>
-      </div>
+      </button>
     </div>
   </div>
 </div>
