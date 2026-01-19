@@ -60,11 +60,15 @@ The `achievement` collection stores points earned by players.
 
 ```json
 {
-  "_id": "...",
-  "player": "user@example.com",
+  "_id": "696e242a5785ce669ccc07e7",
+  "player": "Joyce.carla@bwa.global",
+  "total": 63,
   "type": 0,                    // type 0 = points
-  "total": 100,                 // Points earned
-  "created": 1767118908877      // Timestamp
+  "item": "locked_points",
+  "time": 1768825898626,        // Timestamp (use 'time', not 'created')
+  "extra": {
+    "acao": "ADMISSÃO"
+  }
 }
 ```
 

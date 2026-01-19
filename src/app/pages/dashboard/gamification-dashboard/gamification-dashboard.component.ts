@@ -283,42 +283,54 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   /**
    * Load additional season progress details:
    * - Metas: count of KPIs above target from metric_targets__c
-   * - Clientes: count of companies in player's carteira
+   * - Clientes: count of unique CNPJs from action_log aggregate
    * - Tarefas finalizadas: count of actions from action_log
    */
   private loadSeasonProgressDetails(): void {
     const usuario = this.sessaoProvider.usuario as any;
     const playerId = usuario?._id || usuario?.email || '';
     
-    // Update clientes count from companies loaded
-    if (this.seasonProgress && this.companies.length > 0) {
-      this.seasonProgress = {
-        ...this.seasonProgress,
-        clientes: this.companies.length
-      };
-      this.cdr.markForCheck();
+    if (!playerId) {
+      return;
     }
+
+    // Load clientes count from unique CNPJs in action_log
+    this.actionLogService.getUniqueClientesCount(playerId)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (count: number) => {
+          console.log('📊 Unique CNPJs (Clientes) count:', count);
+          if (this.seasonProgress) {
+            this.seasonProgress = {
+              ...this.seasonProgress,
+              clientes: count
+            };
+            this.cdr.markForCheck();
+          }
+        },
+        error: (err: Error) => {
+          console.error('📊 Failed to load clientes count:', err);
+        }
+      });
     
     // Load tarefas finalizadas from action_log
-    if (playerId) {
-      this.actionLogService.getCompletedTasksCount(playerId)
-        .pipe(takeUntil(this.destroy$))
-        .subscribe({
-          next: (count: number) => {
-            console.log('📊 Tarefas finalizadas count:', count);
-            if (this.seasonProgress) {
-              this.seasonProgress = {
-                ...this.seasonProgress,
-                tarefasFinalizadas: count
-              };
-              this.cdr.markForCheck();
-            }
-          },
-          error: (err: Error) => {
-            console.error('📊 Failed to load tarefas count:', err);
+    this.actionLogService.getCompletedTasksCount(playerId)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (count: number) => {
+          console.log('📊 Tarefas finalizadas count:', count);
+          if (this.seasonProgress) {
+            this.seasonProgress = {
+              ...this.seasonProgress,
+              tarefasFinalizadas: count
+            };
+            this.cdr.markForCheck();
           }
-        });
-    }
+        },
+        error: (err: Error) => {
+          console.error('📊 Failed to load tarefas count:', err);
+        }
+      });
   }
   
   /**
@@ -337,13 +349,8 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
           this.companies = companies;
           this.isLoadingCompanies = false;
           
-          // Update season progress clientes count
-          if (this.seasonProgress) {
-            this.seasonProgress = {
-              ...this.seasonProgress,
-              clientes: companies.length
-            };
-          }
+          // Note: clientes count is now loaded from action_log unique CNPJs
+          // in loadSeasonProgressDetails(), not from companies.length
           
           this.cdr.markForCheck();
         },

@@ -172,6 +172,7 @@ export class ActionLogService {
    * Get points from achievements for the month
    * Queries achievement collection for type=0 entries
    * Uses Funifier's relative date expressions
+   * Note: achievement collection uses 'time' field for timestamp
    */
   getPontosForMonth(playerId: string, month?: Date): Observable<number> {
     // Use Funifier's relative date syntax
@@ -183,7 +184,7 @@ export class ActionLogService {
         $match: {
           player: playerId,
           type: 0, // type 0 = points
-          created: { $gte: startDate, $lte: endDate }
+          time: { $gte: startDate, $lte: endDate }
         }
       },
       {
