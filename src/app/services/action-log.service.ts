@@ -493,10 +493,11 @@ export class ActionLogService {
   }
 
   /**
-   * Get list of unique CNPJs from player's action_log
+   * Get list of unique CNPJs from player's action_log WITH action count
+   * Returns CNPJ and the count of that player's actions for each CNPJ
    * Uses userId field and time field with Funifier relative dates
    */
-  getPlayerCnpjList(playerId: string, month?: Date): Observable<string[]> {
+  getPlayerCnpjListWithCount(playerId: string, month?: Date): Observable<{ cnpj: string; actionCount: number }[]> {
     // Use Funifier's relative date syntax
     const startDate = getRelativeDateExpression(month, 'start');
     const endDate = getRelativeDateExpression(month, 'end');
@@ -511,25 +512,41 @@ export class ActionLogService {
       },
       {
         $group: {
-          _id: '$attributes.cnpj'
+          _id: '$attributes.cnpj',
+          count: { $sum: 1 }
         }
+      },
+      {
+        $sort: { count: -1 }
       }
     ];
 
-    console.log('📊 Player CNPJs query:', JSON.stringify(aggregateBody));
+    console.log('📊 Player CNPJs with count query:', JSON.stringify(aggregateBody));
 
-    return this.funifierApi.post<{ _id: string }[]>(
+    return this.funifierApi.post<{ _id: string; count: number }[]>(
       '/v3/database/action_log/aggregate?strict=true',
       aggregateBody
     ).pipe(
       map(response => {
-        console.log('📊 Player CNPJs response:', response);
-        return response.map(r => r._id).filter(cnpj => cnpj != null);
+        console.log('📊 Player CNPJs with count response:', response);
+        return response
+          .filter(r => r._id != null)
+          .map(r => ({ cnpj: r._id, actionCount: r.count }));
       }),
       catchError(error => {
-        console.error('Error fetching player CNPJs:', error);
+        console.error('Error fetching player CNPJs with count:', error);
         return of([]);
       })
+    );
+  }
+
+  /**
+   * Get list of unique CNPJs from player's action_log
+   * Uses userId field and time field with Funifier relative dates
+   */
+  getPlayerCnpjList(playerId: string, month?: Date): Observable<string[]> {
+    return this.getPlayerCnpjListWithCount(playerId, month).pipe(
+      map(items => items.map(i => i.cnpj))
     );
   }
 

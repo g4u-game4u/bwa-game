@@ -1,7 +1,12 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy } from '@angular/core';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
-import { ActionLogService, ClienteListItem, ClienteActionItem } from '@services/action-log.service';
+import { ActionLogService, ClienteActionItem } from '@services/action-log.service';
+
+interface CarteiraCliente {
+  cnpj: string;
+  actionCount: number;
+}
 
 @Component({
   selector: 'modal-carteira',
@@ -16,9 +21,10 @@ export class ModalCarteiraComponent implements OnInit, OnDestroy {
   private destroy$ = new Subject<void>();
 
   isLoading = true;
-  clientes: ClienteListItem[] = [];
+  clientes: CarteiraCliente[] = [];
   selectedCnpj: string | null = null;
   selectedClienteActions: ClienteActionItem[] = [];
+  isLoadingActions = false;
 
   constructor(private actionLogService: ActionLogService) {}
 
@@ -34,10 +40,12 @@ export class ModalCarteiraComponent implements OnInit, OnDestroy {
   private loadClientes(): void {
     this.isLoading = true;
     
-    this.actionLogService.getCarteiraClientes(this.playerId, this.month)
+    // Only fetch CNPJs with count - don't fetch all actions yet
+    this.actionLogService.getPlayerCnpjListWithCount(this.playerId, this.month)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
-        next: (clientes: ClienteListItem[]) => {
+        next: (clientes) => {
+          console.log('📊 Carteira clientes loaded:', clientes);
           this.clientes = clientes;
           this.isLoading = false;
         },
@@ -50,14 +58,30 @@ export class ModalCarteiraComponent implements OnInit, OnDestroy {
 
   selectCliente(cnpj: string): void {
     if (this.selectedCnpj === cnpj) {
+      // Collapse if already selected
       this.selectedCnpj = null;
       this.selectedClienteActions = [];
       return;
     }
 
     this.selectedCnpj = cnpj;
-    const cliente = this.clientes.find(c => c.cnpj === cnpj);
-    this.selectedClienteActions = cliente?.actions || [];
+    this.isLoadingActions = true;
+    this.selectedClienteActions = [];
+
+    // Now fetch all actions for this CNPJ (from all players)
+    this.actionLogService.getActionsByCnpj(cnpj, this.month)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (actions) => {
+          console.log('📊 Actions for CNPJ loaded:', actions);
+          this.selectedClienteActions = actions;
+          this.isLoadingActions = false;
+        },
+        error: (err: Error) => {
+          console.error('Error loading actions for CNPJ:', err);
+          this.isLoadingActions = false;
+        }
+      });
   }
 
   onClose(): void {
@@ -68,10 +92,5 @@ export class ModalCarteiraComponent implements OnInit, OnDestroy {
     if (!timestamp) return '';
     const date = new Date(timestamp);
     return date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
-  }
-
-  formatCnpj(cnpj: string): string {
-    if (!cnpj || cnpj.length !== 14) return cnpj;
-    return cnpj.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5');
   }
 }
