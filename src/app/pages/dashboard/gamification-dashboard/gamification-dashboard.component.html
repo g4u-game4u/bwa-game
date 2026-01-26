@@ -135,7 +135,7 @@
             type="button"
             class="carteira-more"
             (click)="openCarteiraModal()"
-            aria-label="Ver todos os {{ carteiraClientes.length }} clientes">
+            [attr.aria-label]="'Ver todos os ' + carteiraClientes.length + ' clientes'">
             + {{ carteiraClientes.length - 5 }} clientes
           </button>
         </div>
