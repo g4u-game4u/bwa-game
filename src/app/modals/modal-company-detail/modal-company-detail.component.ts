@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, OnInit, ViewChild } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, ViewChild, ChangeDetectorRef } from '@angular/core';
 import { C4uModalComponent } from '@components/c4u-modal/c4u-modal.component';
 import { Company, CompanyDetails, Process, KPIData } from '@model/gamification-dashboard.model';
 import { CompanyService } from '@services/company.service';
@@ -28,7 +28,10 @@ export class ModalCompanyDetailComponent implements OnInit {
     'Macros que foram finalizadas completamente'
   ];
 
-  constructor(private companyService: CompanyService) {}
+  constructor(
+    private companyService: CompanyService,
+    private cdr: ChangeDetectorRef
+  ) {}
 
   ngOnInit(): void {
     if (this.company) {
@@ -44,10 +47,12 @@ export class ModalCompanyDetailComponent implements OnInit {
       next: (details) => {
         this.companyDetails = details;
         this.isLoading = false;
+        this.cdr.detectChanges();
       },
       error: (error) => {
         console.error('Error loading company details:', error);
         this.isLoading = false;
+        this.cdr.detectChanges();
       }
     });
   }

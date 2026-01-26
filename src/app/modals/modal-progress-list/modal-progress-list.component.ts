@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, OnInit, OnDestroy } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { ActionLogService, ActivityListItem, MacroListItem } from '@services/action-log.service';
@@ -22,7 +22,10 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
   activityItems: ActivityListItem[] = [];
   macroItems: MacroListItem[] = [];
 
-  constructor(private actionLogService: ActionLogService) {}
+  constructor(
+    private actionLogService: ActionLogService,
+    private cdr: ChangeDetectorRef
+  ) {}
 
   ngOnInit(): void {
     this.loadData();
@@ -66,10 +69,12 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
           next: (items: ActivityListItem[]) => {
             this.activityItems = items;
             this.isLoading = false;
+            this.cdr.detectChanges();
           },
           error: (err: Error) => {
             console.error('Error loading activity list:', err);
             this.isLoading = false;
+            this.cdr.detectChanges();
           }
         });
     } else if (this.isMacroList) {
@@ -84,10 +89,12 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
               this.macroItems = items.filter(m => !m.isFinalized);
             }
             this.isLoading = false;
+            this.cdr.detectChanges();
           },
           error: (err: Error) => {
             console.error('Error loading macro list:', err);
             this.isLoading = false;
+            this.cdr.detectChanges();
           }
         });
     }
