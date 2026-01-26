@@ -130,9 +130,14 @@
             </div>
             <span class="carteira-action-count">{{ cliente.actionCount }} ações</span>
           </div>
-          <div *ngIf="carteiraClientes.length > 5" class="carteira-more">
+          <button 
+            *ngIf="carteiraClientes.length > 5" 
+            type="button"
+            class="carteira-more"
+            (click)="openCarteiraModal()"
+            aria-label="Ver todos os {{ carteiraClientes.length }} clientes">
             + {{ carteiraClientes.length - 5 }} clientes
-          </div>
+          </button>
         </div>
         
         <c4u-shimmer *ngIf="isLoadingCarteira"></c4u-shimmer>
