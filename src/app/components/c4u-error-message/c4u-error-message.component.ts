@@ -1,8 +1,19 @@
-import { Component, Input } from '@angular/core';
+import { Component, Input, Output, EventEmitter } from '@angular/core';
 
 /**
- * Component to display error messages with consistent styling
- * Supports different error types and optional retry functionality
+ * Error Message Component
+ * 
+ * Displays error messages with optional retry functionality.
+ * Used throughout the team management dashboard to show
+ * user-friendly error states when data loading fails.
+ * 
+ * Features:
+ * - Customizable error message
+ * - Optional retry button
+ * - Icon-based visual feedback
+ * - Accessible design
+ * 
+ * Requirements: 14.2, 14.3
  */
 @Component({
   selector: 'c4u-error-message',
@@ -10,44 +21,32 @@ import { Component, Input } from '@angular/core';
   styleUrls: ['./c4u-error-message.component.scss']
 })
 export class C4uErrorMessageComponent {
-  @Input() message: string = 'Ocorreu um erro. Tente novamente.';
-  @Input() type: 'network' | 'auth' | 'notFound' | 'server' | 'generic' = 'generic';
+  /**
+   * Error message to display
+   */
+  @Input() message: string = 'Erro ao carregar dados';
+
+  /**
+   * Whether to show the retry button
+   */
   @Input() showRetry: boolean = true;
-  @Input() retryCallback?: () => void;
 
-  get errorIcon(): string {
-    switch (this.type) {
-      case 'network':
-        return 'ri-wifi-off-line';
-      case 'auth':
-        return 'ri-lock-line';
-      case 'notFound':
-        return 'ri-search-line';
-      case 'server':
-        return 'ri-server-line';
-      default:
-        return 'ri-error-warning-line';
-    }
-  }
+  /**
+   * Whether the retry operation is in progress
+   */
+  @Input() isRetrying: boolean = false;
 
-  get errorTitle(): string {
-    switch (this.type) {
-      case 'network':
-        return 'Erro de Conexão';
-      case 'auth':
-        return 'Erro de Autenticação';
-      case 'notFound':
-        return 'Não Encontrado';
-      case 'server':
-        return 'Erro no Servidor';
-      default:
-        return 'Erro';
-    }
-  }
+  /**
+   * Event emitted when retry button is clicked
+   */
+  @Output() retry = new EventEmitter<void>();
 
+  /**
+   * Handle retry button click
+   */
   onRetry(): void {
-    if (this.retryCallback) {
-      this.retryCallback();
+    if (!this.isRetrying) {
+      this.retry.emit();
     }
   }
 }

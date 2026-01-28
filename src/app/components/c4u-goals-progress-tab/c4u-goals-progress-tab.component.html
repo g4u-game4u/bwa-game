@@ -1,0 +1,35 @@
+<div class="goals-progress-tab" role="region" aria-label="Metas e progresso da equipe">
+  <div class="goals-header">
+    <h2 class="goals-title">Metas e Progresso</h2>
+  </div>
+
+  <div class="goals-content" *ngIf="!isLoading && goals.length > 0">
+    <div class="goals-grid" role="list" aria-label="Lista de metas">
+      <div 
+        *ngFor="let goal of goals; trackBy: trackByGoalId; let i = index"
+        class="goal-item"
+        role="listitem"
+        [attr.aria-label]="goal.label + ': ' + goal.current + ' de ' + goal.target">
+        <c4u-kpi-circular-progress
+          [label]="goal.label"
+          [current]="goal.current"
+          [target]="goal.target"
+          [colorIndex]="i"
+          [attr.aria-label]="goal.label + ' - ' + ((goal.current / goal.target) * 100 | number:'1.0-0') + '% completo'">
+        </c4u-kpi-circular-progress>
+      </div>
+    </div>
+  </div>
+
+  <div class="goals-loading" *ngIf="isLoading" role="status" aria-live="polite">
+    <div class="spinner-border text-primary" role="status" aria-hidden="true">
+      <span class="visually-hidden">Carregando...</span>
+    </div>
+    <p class="loading-text">Carregando metas...</p>
+  </div>
+
+  <div class="goals-empty" *ngIf="!isLoading && goals.length === 0" role="status" aria-live="polite">
+    <i class="ri-bar-chart-line empty-icon" aria-hidden="true"></i>
+    <p class="empty-text">Nenhuma meta disponível</p>
+  </div>
+</div>

@@ -1,0 +1,116 @@
+<div class="productivity-analysis-tab" role="region" aria-label="Análise de produtividade">
+  <!-- Header with controls -->
+  <div class="tab-header">
+    <div class="header-left">
+      <h3 class="tab-title">Análise de Produtividade</h3>
+    </div>
+    <div class="header-right">
+      <!-- Time Period Selector -->
+      <c4u-time-period-selector
+        [periods]="availablePeriods"
+        [selectedPeriod]="selectedPeriod"
+        (periodSelected)="onPeriodChange($event)"
+        aria-label="Selecionar período de análise"
+      ></c4u-time-period-selector>
+
+      <!-- Chart Type Toggle -->
+      <div class="chart-type-toggle" role="group" aria-label="Tipo de gráfico">
+        <button
+          type="button"
+          class="toggle-btn"
+          [class.active]="isLineChart"
+          (click)="toggleChartType()"
+          (keydown.enter)="toggleChartType()"
+          (keydown.space)="toggleChartType(); $event.preventDefault()"
+          [disabled]="isLoading"
+          [attr.aria-pressed]="isLineChart"
+          aria-label="Alternar para gráfico de linhas"
+          title="Gráfico de Linhas"
+        >
+          <i class="bi bi-graph-up" aria-hidden="true"></i>
+          <span class="sr-only">Gráfico de Linhas</span>
+        </button>
+        <button
+          type="button"
+          class="toggle-btn"
+          [class.active]="isBarChart"
+          (click)="toggleChartType()"
+          (keydown.enter)="toggleChartType()"
+          (keydown.space)="toggleChartType(); $event.preventDefault()"
+          [disabled]="isLoading"
+          [attr.aria-pressed]="isBarChart"
+          aria-label="Alternar para gráfico de barras"
+          title="Gráfico de Barras"
+        >
+          <i class="bi bi-bar-chart-fill" aria-hidden="true"></i>
+          <span class="sr-only">Gráfico de Barras</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Chart Container -->
+  <div class="chart-container" [class.loading]="isLoading" role="region" aria-label="Visualização de dados de produtividade">
+    <!-- Loading Indicator -->
+    <div *ngIf="isLoading" class="loading-overlay" role="status" aria-live="polite">
+      <div class="spinner-border text-primary" role="status" aria-hidden="true">
+        <span class="visually-hidden">Carregando dados...</span>
+      </div>
+      <p class="loading-text">Carregando dados do gráfico...</p>
+    </div>
+
+    <!-- Empty State -->
+    <div *ngIf="!isLoading && (!graphData || graphData.length === 0)" class="empty-state" role="status" aria-live="polite">
+      <i class="bi bi-graph-up empty-icon" aria-hidden="true"></i>
+      <p class="empty-text">Nenhum dado disponível para o período selecionado</p>
+    </div>
+
+    <!-- Line Chart -->
+    <div *ngIf="!isLoading && graphData && graphData.length > 0 && isLineChart" class="chart-wrapper">
+      <c4u-grafico-linhas
+        [labels]="chartLabels"
+        [datasets]="chartDatasets"
+        [showLegend]="true"
+        role="img"
+        [attr.aria-label]="'Gráfico de linhas mostrando produtividade dos últimos ' + selectedPeriod + ' dias'"
+      ></c4u-grafico-linhas>
+      <!-- Text alternative for screen readers -->
+      <div class="sr-only" role="region" aria-label="Descrição textual do gráfico">
+        <p>Gráfico de linhas mostrando dados de produtividade para os últimos {{ selectedPeriod }} dias.</p>
+        <p *ngIf="chartDatasets && chartDatasets.length > 0">
+          Métricas incluídas: {{ getDatasetLabels() }}.
+        </p>
+      </div>
+    </div>
+
+    <!-- Bar Chart -->
+    <div *ngIf="!isLoading && graphData && graphData.length > 0 && isBarChart" class="chart-wrapper">
+      <c4u-grafico-barras
+        [labels]="chartLabels"
+        [datasets]="chartDatasets"
+        [showLegend]="true"
+        role="img"
+        [attr.aria-label]="'Gráfico de barras mostrando produtividade dos últimos ' + selectedPeriod + ' dias'"
+      ></c4u-grafico-barras>
+      <!-- Text alternative for screen readers -->
+      <div class="sr-only" role="region" aria-label="Descrição textual do gráfico">
+        <p>Gráfico de barras mostrando dados de produtividade para os últimos {{ selectedPeriod }} dias.</p>
+        <p *ngIf="chartDatasets && chartDatasets.length > 0">
+          Métricas incluídas: {{ getDatasetLabels() }}.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Chart Info -->
+  <div *ngIf="!isLoading && graphData && graphData.length > 0" class="chart-info" role="status" aria-live="polite">
+    <div class="info-item">
+      <i class="bi bi-calendar-range" aria-hidden="true"></i>
+      <span>Período: Últimos {{ selectedPeriod }} dias</span>
+    </div>
+    <div class="info-item">
+      <i class="bi bi-graph-up" aria-hidden="true"></i>
+      <span>Tipo: {{ isLineChart ? 'Gráfico de Linhas' : 'Gráfico de Barras' }}</span>
+    </div>
+  </div>
+</div>

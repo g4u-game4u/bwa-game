@@ -1,0 +1,14 @@
+<div class="time-period-selector">
+  <label for="period-select" class="selector-label">Período</label>
+  <select
+    id="period-select"
+    class="form-select period-select"
+    [ngModel]="selectedPeriod"
+    (change)="onPeriodChange($event)"
+    [attr.aria-label]="'Selecionar período de tempo'"
+  >
+    <option *ngFor="let period of periods" [value]="period">
+      Mostrar os últimos {{ period }} dias
+    </option>
+  </select>
+</div>

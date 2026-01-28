@@ -89,14 +89,19 @@ describe('C4uCompanyTableComponent - Performance Tests', () => {
     });
 
     it('should return company ID for trackBy', () => {
+      const kpi1 = { id: 'kpi-1', label: 'KPI 1', current: 10, target: 20 };
+      const kpi2 = { id: 'kpi-2', label: 'KPI 2', current: 15, target: 25 };
+      const kpi3 = { id: 'kpi-3', label: 'KPI 3', current: 20, target: 30 };
+
       const mockCompany: Company = {
         id: 'company-123',
         name: 'Test Company',
         cnpj: '12.345.678/0001-90',
         healthScore: 85,
-        kpi1: { id: 'kpi-1', label: 'KPI 1', current: 10, target: 20 },
-        kpi2: { id: 'kpi-2', label: 'KPI 2', current: 15, target: 25 },
-        kpi3: { id: 'kpi-3', label: 'KPI 3', current: 20, target: 30 }
+        kpis: [kpi1, kpi2, kpi3],
+        kpi1,
+        kpi2,
+        kpi3
       };
 
       const result = component.trackByCompanyId(0, mockCompany);
@@ -104,14 +109,19 @@ describe('C4uCompanyTableComponent - Performance Tests', () => {
     });
 
     it('should return consistent values for same company', () => {
+      const kpi1 = { id: 'kpi-1', label: 'KPI 1', current: 10, target: 20 };
+      const kpi2 = { id: 'kpi-2', label: 'KPI 2', current: 15, target: 25 };
+      const kpi3 = { id: 'kpi-3', label: 'KPI 3', current: 20, target: 30 };
+
       const mockCompany: Company = {
         id: 'company-456',
         name: 'Test Company',
         cnpj: '12.345.678/0001-90',
         healthScore: 85,
-        kpi1: { id: 'kpi-1', label: 'KPI 1', current: 10, target: 20 },
-        kpi2: { id: 'kpi-2', label: 'KPI 2', current: 15, target: 25 },
-        kpi3: { id: 'kpi-3', label: 'KPI 3', current: 20, target: 30 }
+        kpis: [kpi1, kpi2, kpi3],
+        kpi1,
+        kpi2,
+        kpi3
       };
 
       const result1 = component.trackByCompanyId(0, mockCompany);

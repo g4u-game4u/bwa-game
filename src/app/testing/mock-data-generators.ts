@@ -113,20 +113,26 @@ export interface MockCompany {
   name: string;
   cnpj: string;
   healthScore: number;
+  kpis: MockKPIData[]; // Dynamic array of KPIs
   kpi1: MockKPIData;
   kpi2: MockKPIData;
   kpi3: MockKPIData;
 }
 
 export function createMockCompany(overrides?: Partial<MockCompany>): MockCompany {
+  const kpi1 = createMockKPIData({ id: 'kpi-1', label: 'KPI 1', current: 30, target: 50 });
+  const kpi2 = createMockKPIData({ id: 'kpi-2', label: 'KPI 2', current: 40, target: 50 });
+  const kpi3 = createMockKPIData({ id: 'kpi-3', label: 'KPI 3', current: 45, target: 50 });
+  
   return {
     id: 'company-1',
     name: 'Empresa Exemplo LTDA',
     cnpj: '12.345.678/0001-90',
     healthScore: 85,
-    kpi1: createMockKPIData({ id: 'kpi-1', label: 'KPI 1', current: 30, target: 50 }),
-    kpi2: createMockKPIData({ id: 'kpi-2', label: 'KPI 2', current: 40, target: 50 }),
-    kpi3: createMockKPIData({ id: 'kpi-3', label: 'KPI 3', current: 45, target: 50 }),
+    kpis: [kpi1, kpi2, kpi3], // Array of KPIs
+    kpi1,
+    kpi2,
+    kpi3,
     ...overrides
   };
 }

@@ -1,0 +1,254 @@
+@import '../../../styles/variables.scss';
+@import '../../../styles/mixins.scss';
+
+:host {
+  display: block;
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+}
+
+.goals-progress-tab {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  padding: $spacing-lg;
+  background-color: transparent;
+  border-radius: $border-radius-sm;
+  box-sizing: border-box;
+}
+
+.goals-header {
+  margin-bottom: $spacing-lg;
+  @include slide-up;
+}
+
+.goals-title {
+  @include text-heading-3;
+  margin: 0;
+  background: linear-gradient(135deg, $primary-electric-blue 0%, $success-green 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.goals-content {
+  flex: 1;
+  overflow-y: auto;
+  box-sizing: border-box;
+  
+  // Custom scrollbar
+  &::-webkit-scrollbar {
+    width: 8px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 4px;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: $border-color;
+    border-radius: 4px;
+    transition: background $transition-duration $transition-easing;
+
+    &:hover {
+      background: $primary-electric-blue;
+    }
+  }
+}
+
+.goals-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: $spacing-xl;
+  padding: $spacing-md;
+  box-sizing: border-box;
+  
+  @include scale-in;
+}
+
+.goal-item {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  box-sizing: border-box;
+  transition: transform $transition-duration $transition-easing;
+  
+  &:hover {
+    transform: scale(1.05);
+  }
+}
+
+.goals-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: $spacing-md;
+  padding: $spacing-xxl;
+  @include fade-in;
+  
+  .spinner-border {
+    width: 3rem;
+    height: 3rem;
+    border: 3px solid rgba($primary-electric-blue, 0.2);
+    border-top-color: $primary-electric-blue;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+  }
+}
+
+.loading-text {
+  @include text-secondary;
+  font-size: $font-size-body;
+  margin: 0;
+}
+
+.goals-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: $spacing-md;
+  padding: $spacing-xxl;
+  @include fade-in;
+}
+
+.empty-icon {
+  font-size: 64px;
+  color: $text-secondary;
+  opacity: 0.5;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+.empty-text {
+  @include text-secondary;
+  font-size: $font-size-body;
+  margin: 0;
+  text-align: center;
+}
+
+// Animations
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.5;
+  }
+  50% {
+    transform: scale(1.05);
+    opacity: 0.7;
+  }
+}
+
+// Responsive design
+// Large desktop (1920px+)
+@media (min-width: 1920px) {
+  .goals-progress-tab {
+    padding: $spacing-xl;
+  }
+
+  .goals-grid {
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 40px;
+    padding: $spacing-lg;
+  }
+
+  .goals-title {
+    font-size: 1.75rem;
+  }
+}
+
+// Desktop (1025px - 1919px)
+@media (min-width: 1025px) and (max-width: 1919px) {
+  .goals-progress-tab {
+    padding: $spacing-lg;
+  }
+
+  .goals-grid {
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: $spacing-xl;
+  }
+}
+
+// Tablet (768px - 1024px)
+@media (min-width: 768px) and (max-width: 1024px) {
+  .goals-progress-tab {
+    padding: $spacing-md;
+  }
+
+  .goals-grid {
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: $spacing-lg;
+    padding: $spacing-sm;
+  }
+
+  .goals-title {
+    font-size: 1.375rem;
+  }
+}
+
+// Mobile landscape (481px - 767px)
+@media (min-width: 481px) and (max-width: 767px) {
+  .goals-progress-tab {
+    padding: $spacing-md;
+  }
+
+  .goals-grid {
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: $spacing-lg;
+    padding: $spacing-sm;
+  }
+
+  .goals-title {
+    font-size: 1.25rem;
+  }
+
+  .goals-loading,
+  .goals-empty {
+    padding: $spacing-xl;
+  }
+}
+
+// Mobile portrait (320px - 480px)
+@media (max-width: 480px) {
+  .goals-progress-tab {
+    padding: $spacing-sm;
+  }
+
+  .goals-grid {
+    grid-template-columns: 1fr;
+    gap: $spacing-md;
+    padding: $spacing-sm;
+  }
+
+  .goals-title {
+    font-size: 1.125rem;
+  }
+
+  .goals-loading,
+  .goals-empty {
+    padding: $spacing-lg;
+  }
+
+  .empty-icon {
+    font-size: 48px;
+  }
+}
+
+// Accessibility
+@include reduced-motion {
+  .goals-grid,
+  .goal-item,
+  .empty-icon,
+  .spinner-border {
+    animation: none !important;
+    transition: none !important;
+  }
+}

@@ -50,29 +50,34 @@ describe('C4uCompanyTableComponent', () => {
           }),
           (companyData) => {
             // Create company object
+            const kpi1 = {
+              id: 'kpi-1',
+              label: 'KPI 1',
+              current: companyData.kpi1Current,
+              target: companyData.kpi1Target
+            };
+            const kpi2 = {
+              id: 'kpi-2',
+              label: 'KPI 2',
+              current: companyData.kpi2Current,
+              target: companyData.kpi2Target
+            };
+            const kpi3 = {
+              id: 'kpi-3',
+              label: 'KPI 3',
+              current: companyData.kpi3Current,
+              target: companyData.kpi3Target
+            };
+            
             const company: Company = {
               id: companyData.id,
               name: companyData.name,
               cnpj: companyData.cnpj,
               healthScore: companyData.healthScore,
-              kpi1: {
-                id: 'kpi-1',
-                label: 'KPI 1',
-                current: companyData.kpi1Current,
-                target: companyData.kpi1Target
-              },
-              kpi2: {
-                id: 'kpi-2',
-                label: 'KPI 2',
-                current: companyData.kpi2Current,
-                target: companyData.kpi2Target
-              },
-              kpi3: {
-                id: 'kpi-3',
-                label: 'KPI 3',
-                current: companyData.kpi3Current,
-                target: companyData.kpi3Target
-              }
+              kpis: [kpi1, kpi2, kpi3],
+              kpi1,
+              kpi2,
+              kpi3
             };
 
             // Set up component

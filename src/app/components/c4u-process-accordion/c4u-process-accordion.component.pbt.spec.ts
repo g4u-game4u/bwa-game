@@ -1,6 +1,6 @@
 import * as fc from 'fast-check';
 import { C4uProcessAccordionComponent } from './c4u-process-accordion.component';
-import { Process, Task, ProcessStatus, TaskStatus } from '@model/gamification-dashboard.model';
+import { Process, ProcessStatus, TaskStatus } from '@model/gamification-dashboard.model';
 
 /**
  * Property-Based Tests for Process Accordion Component
@@ -56,13 +56,14 @@ describe('C4uProcessAccordionComponent - Property-Based Tests', () => {
           processArb,
           (process: Process) => {
             const component = new C4uProcessAccordionComponent();
+            component.processes = [process];
             const initialState = process.expanded;
 
-            component.toggleProcess(process);
-            expect(process.expanded).toBe(!initialState);
+            component.toggleProcess(0);
+            expect(component.processes[0].expanded).toBe(!initialState);
 
-            component.toggleProcess(process);
-            expect(process.expanded).toBe(initialState);
+            component.toggleProcess(0);
+            expect(component.processes[0].expanded).toBe(initialState);
           }
         ),
         { numRuns: 100 }
@@ -81,15 +82,16 @@ describe('C4uProcessAccordionComponent - Property-Based Tests', () => {
             }
 
             const component = new C4uProcessAccordionComponent();
+            component.processes = processes;
             
             // Store initial states of all processes
             const initialStates = processes.map(p => p.expanded);
             
             // Toggle the target process
-            component.toggleProcess(processes[targetIndex]);
+            component.toggleProcess(targetIndex);
             
             // Verify only the target process changed
-            processes.forEach((process, index) => {
+            component.processes.forEach((process, index) => {
               if (index === targetIndex) {
                 expect(process.expanded).toBe(!initialStates[index]);
               } else {
@@ -108,15 +110,16 @@ describe('C4uProcessAccordionComponent - Property-Based Tests', () => {
           fc.array(processArb, { minLength: 2, maxLength: 10 }),
           (processes: Process[]) => {
             const component = new C4uProcessAccordionComponent();
+            component.processes = processes;
             
             // Set all processes to collapsed
-            processes.forEach(p => p.expanded = false);
+            component.processes.forEach(p => p.expanded = false);
             
             // Expand all processes
-            processes.forEach(p => component.toggleProcess(p));
+            component.processes.forEach((p, index) => component.toggleProcess(index));
             
             // Verify all are expanded
-            const allExpanded = processes.every(p => p.expanded === true);
+            const allExpanded = component.processes.every(p => p.expanded === true);
             expect(allExpanded).toBe(true);
           }
         ),
@@ -131,17 +134,18 @@ describe('C4uProcessAccordionComponent - Property-Based Tests', () => {
           fc.integer({ min: 0, max: 20 }),
           (process: Process, toggleCount: number) => {
             const component = new C4uProcessAccordionComponent();
+            component.processes = [process];
             const initialState = process.expanded;
             
             // Toggle multiple times
             for (let i = 0; i < toggleCount; i++) {
-              component.toggleProcess(process);
+              component.toggleProcess(0);
             }
             
             // After even number of toggles, should be back to initial state
             // After odd number of toggles, should be opposite of initial state
             const expectedState = toggleCount % 2 === 0 ? initialState : !initialState;
-            expect(process.expanded).toBe(expectedState);
+            expect(component.processes[0].expanded).toBe(expectedState);
           }
         ),
         { numRuns: 100 }
@@ -154,15 +158,16 @@ describe('C4uProcessAccordionComponent - Property-Based Tests', () => {
           fc.array(processArb, { minLength: 1, maxLength: 5 }),
           (processes: Process[]) => {
             const component = new C4uProcessAccordionComponent();
+            component.processes = processes;
             
             // Toggle each process and verify it works regardless of task count
-            processes.forEach(process => {
+            component.processes.forEach((process, index) => {
               const initialState = process.expanded;
-              component.toggleProcess(process);
-              expect(process.expanded).toBe(!initialState);
+              component.toggleProcess(index);
+              expect(component.processes[index].expanded).toBe(!initialState);
               
               // Verify tasks array is not affected
-              expect(Array.isArray(process.tasks)).toBe(true);
+              expect(Array.isArray(component.processes[index].tasks)).toBe(true);
             });
           }
         ),
@@ -176,6 +181,7 @@ describe('C4uProcessAccordionComponent - Property-Based Tests', () => {
           processArb,
           (process: Process) => {
             const component = new C4uProcessAccordionComponent();
+            component.processes = [process];
             
             // Store original data
             const originalId = process.id;
@@ -184,13 +190,13 @@ describe('C4uProcessAccordionComponent - Property-Based Tests', () => {
             const originalTaskCount = process.tasks.length;
             
             // Toggle expansion
-            component.toggleProcess(process);
+            component.toggleProcess(0);
             
             // Verify all other data remains unchanged
-            expect(process.id).toBe(originalId);
-            expect(process.name).toBe(originalName);
-            expect(process.status).toBe(originalStatus);
-            expect(process.tasks.length).toBe(originalTaskCount);
+            expect(component.processes[0].id).toBe(originalId);
+            expect(component.processes[0].name).toBe(originalName);
+            expect(component.processes[0].status).toBe(originalStatus);
+            expect(component.processes[0].tasks.length).toBe(originalTaskCount);
           }
         ),
         { numRuns: 100 }

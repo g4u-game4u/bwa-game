@@ -1,0 +1,254 @@
+@import '../../../styles/variables.scss';
+@import '../../../styles/mixins.scss';
+
+.team-sidebar {
+  @include card;
+  background-color: $surface;
+  border-radius: $border-radius;
+  padding: $spacing-lg;
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-lg;
+  height: 100%;
+  overflow-y: auto;
+  border: 1px solid $border-color;
+  transition: all $transition-duration $transition-easing;
+
+  &:hover {
+    border-color: $primary-electric-blue;
+    box-shadow: 0 0 20px rgba($primary-electric-blue, 0.2);
+  }
+
+  // Custom scrollbar
+  &::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 3px;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: $border-color;
+    border-radius: 3px;
+    transition: background $transition-duration $transition-easing;
+
+    &:hover {
+      background: $primary-electric-blue;
+    }
+  }
+
+  .sidebar-header {
+    border-bottom: 1px solid $border-color;
+    padding-bottom: $spacing-md;
+    @include slide-up;
+
+    .team-name {
+      @include text-heading-3;
+      margin: 0 0 $spacing-sm 0;
+      background: linear-gradient(135deg, $primary-electric-blue 0%, $success-green 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .season-dates {
+      display: flex;
+      flex-direction: column;
+      gap: $spacing-xs;
+
+      .date-label {
+        font-size: $font-size-caption;
+        font-weight: $font-weight-semibold;
+        color: $text-secondary;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+
+      .date-range {
+        font-size: $font-size-small;
+        color: $text-primary;
+        font-weight: $font-weight-medium;
+      }
+    }
+  }
+
+  .sidebar-section {
+    display: flex;
+    flex-direction: column;
+    gap: $spacing-sm;
+    @include scale-in;
+
+    .section-title {
+      @include text-body;
+      font-weight: $font-weight-semibold;
+      margin: 0;
+      display: flex;
+      align-items: center;
+      gap: $spacing-sm;
+
+      .metric-icon {
+        color: $primary-electric-blue;
+        font-size: 1.125rem;
+        transition: transform $transition-duration $transition-easing;
+      }
+
+      &:hover .metric-icon {
+        transform: scale(1.1);
+      }
+    }
+
+    .metric-card {
+      background-color: rgba($primary-electric-blue, 0.05);
+      border: 1px solid rgba($primary-electric-blue, 0.2);
+      border-radius: $border-radius-sm;
+      padding: $spacing-md;
+      transition: all $transition-duration $transition-easing;
+
+      &:hover {
+        border-color: $primary-electric-blue;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba($primary-electric-blue, 0.2);
+        background-color: rgba($primary-electric-blue, 0.08);
+      }
+
+      &:focus-within {
+        @include focus-visible;
+      }
+
+      .metric-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: $spacing-md;
+
+        .metric-label {
+          @include text-secondary;
+          font-size: $font-size-small;
+          display: flex;
+          align-items: center;
+          gap: $spacing-sm;
+
+          .metric-icon {
+            font-size: 1rem;
+            color: $text-secondary;
+            transition: color $transition-duration $transition-easing;
+          }
+        }
+
+        .metric-value {
+          font-size: 1.25rem;
+          font-weight: $font-weight-bold;
+          color: $text-primary;
+          transition: transform $transition-duration $transition-easing;
+        }
+
+        &:hover {
+          .metric-icon {
+            color: $primary-electric-blue;
+          }
+          
+          .metric-value {
+            transform: scale(1.05);
+          }
+        }
+      }
+    }
+  }
+
+  .season-points {
+    .metric-card:first-of-type {
+      background: linear-gradient(135deg, rgba($primary-electric-blue, 0.15) 0%, rgba($success-green, 0.1) 100%);
+      border-color: rgba($primary-electric-blue, 0.4);
+
+      .metric-value {
+        color: $primary-electric-blue;
+        font-size: 1.5rem;
+        text-shadow: 0 0 10px rgba($primary-electric-blue, 0.3);
+      }
+
+      &:hover {
+        box-shadow: 0 4px 20px rgba($primary-electric-blue, 0.3);
+      }
+    }
+  }
+}
+
+@media (max-width: 1024px) {
+  .team-sidebar {
+    padding: $spacing-md;
+    gap: $spacing-md;
+
+    .sidebar-header {
+      .team-name {
+        font-size: 1.25rem;
+      }
+    }
+
+    .sidebar-section {
+      .metric-card {
+        padding: $spacing-sm;
+
+        .metric-item {
+          .metric-value {
+            font-size: 1.125rem;
+          }
+        }
+      }
+    }
+  }
+}
+
+@media (max-width: 768px) {
+  .team-sidebar {
+    padding: $spacing-md;
+    gap: $spacing-md;
+    border-radius: $border-radius-sm;
+
+    .sidebar-header {
+      .team-name {
+        font-size: 1.125rem;
+      }
+
+      .season-dates {
+        .date-range {
+          font-size: 0.8125rem;
+        }
+      }
+    }
+
+    .sidebar-section {
+      gap: $spacing-xs;
+
+      .section-title {
+        font-size: 0.9375rem;
+      }
+
+      .metric-card {
+        padding: $spacing-sm;
+
+        .metric-item {
+          flex-direction: column;
+          align-items: flex-start;
+          gap: $spacing-xs;
+
+          .metric-value {
+            font-size: 1.125rem;
+          }
+        }
+      }
+    }
+  }
+}
+
+// Accessibility
+@include reduced-motion {
+  .team-sidebar,
+  .metric-card,
+  .metric-icon,
+  .metric-value {
+    transition: none !important;
+    animation: none !important;
+  }
+}

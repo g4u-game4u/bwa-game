@@ -7,6 +7,7 @@ A comprehensive Angular-based gamification dashboard for tracking KPIs, player p
 - **KPI Tracking**: Monitor key performance indicators with circular progress displays
 - **Player Management**: Track player progress, points, and seasonal achievements
 - **Company Analytics**: View company performance metrics and detailed analytics
+- **Team Management Dashboard**: Supervisory dashboard for managers with aggregate team metrics (GESTAO role required)
 - **Responsive Design**: Optimized for desktop, tablet, and mobile devices
 - **Accessibility**: WCAG 2.1 AA compliant with comprehensive accessibility features
 - **Performance Optimized**: Lazy loading, virtual scrolling, and performance monitoring
@@ -146,11 +147,24 @@ src/
 
 ## 🎨 Key Components
 
+### Personal Dashboard
 - **Gamification Dashboard**: Main dashboard page with KPI overview
 - **Company Table**: Sortable and filterable company data display
 - **Process Accordion**: Expandable process tracking interface
 - **Modal Components**: Detailed views for companies and processes
 - **Progress Components**: Various progress indicators and visualizations
+
+### Team Management Dashboard (GESTAO Role Required)
+- **Team Selector**: Choose teams/departments to monitor
+- **Collaborator Filter**: View individual team member performance
+- **Season Points Display**: Aggregate team points (total, blocked, unlocked)
+- **Progress Metrics**: Track incomplete processes, completed activities, and completed processes
+- **Goals Tab**: Monitor goal achievement with circular progress indicators
+- **Productivity Analysis Tab**: Visualize historical trends with interactive line and bar charts
+- **Time Period Selector**: Analyze data across different time ranges (7, 15, 30, 60, 90 days)
+- **Month Navigation**: Review historical data month by month
+
+For detailed information, see the [Team Management Dashboard Documentation](#team-management-dashboard-documentation).
 
 ## 🔧 Code Conventions
 
@@ -232,10 +246,43 @@ docker-compose up -d
 
 ## 📚 Additional Documentation
 
+### General Documentation
 - [API Integration Guide](docs/API_INTEGRATION.md)
 - [Deployment Guide](docs/DEPLOYMENT_GUIDE.md)
 - [Performance Optimizations](docs/PERFORMANCE_OPTIMIZATIONS.md)
 - [Final Integration Test Results](docs/FINAL_INTEGRATION_TEST_RESULTS.md)
+
+### Team Management Dashboard Documentation
+- [Manager Usage Guide](docs/TEAM_DASHBOARD_MANAGER_GUIDE.md) - How to use the team dashboard
+- [Role Configuration Guide](docs/TEAM_DASHBOARD_ROLE_CONFIGURATION.md) - How to assign GESTAO role
+- [Aggregate Query Patterns](docs/TEAM_DASHBOARD_AGGREGATE_QUERIES.md) - MongoDB aggregate query examples
+- [API Integration Patterns](docs/TEAM_DASHBOARD_API_INTEGRATION.md) - API integration and caching strategies
+- [Troubleshooting Guide](docs/TEAM_DASHBOARD_TROUBLESHOOTING.md) - Common issues and solutions
+
+### Accessing the Team Management Dashboard
+
+The Team Management Dashboard is accessible only to users with the **GESTAO** (management) role.
+
+**Prerequisites**:
+- GESTAO role assigned to your user account
+- Active login session
+
+**Access Methods**:
+1. Navigate to the main menu and select "Gestão de Equipe"
+2. Use the dashboard switcher in the header
+3. Direct URL: `https://your-domain.com/team-management`
+
+**Key Features**:
+- View aggregate team performance metrics
+- Filter by individual collaborators
+- Track goals and progress
+- Analyze productivity trends with interactive charts
+- Navigate historical data by month
+
+For detailed instructions, see the [Manager Usage Guide](docs/TEAM_DASHBOARD_MANAGER_GUIDE.md).
+
+**Role Configuration**:
+To assign the GESTAO role to a user, see the [Role Configuration Guide](docs/TEAM_DASHBOARD_ROLE_CONFIGURATION.md).
 
 ## 🤝 Contributing
 

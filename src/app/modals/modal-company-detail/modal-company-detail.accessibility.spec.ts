@@ -27,14 +27,19 @@ describe('ModalCompanyDetailComponent - Accessibility', () => {
     mockCompanyService = TestBed.inject(CompanyService) as jasmine.SpyObj<CompanyService>;
     
     // Set up test data
+    const kpi1 = { id: '1', label: 'KPI 1', current: 10, target: 20 };
+    const kpi2 = { id: '2', label: 'KPI 2', current: 15, target: 25 };
+    const kpi3 = { id: '3', label: 'KPI 3', current: 20, target: 30 };
+
     component.company = {
       id: '1',
       name: 'Test Company',
       cnpj: '12.345.678/0001-90',
       healthScore: 85,
-      kpi1: { id: '1', label: 'KPI 1', current: 10, target: 20 },
-      kpi2: { id: '2', label: 'KPI 2', current: 15, target: 25 },
-      kpi3: { id: '3', label: 'KPI 3', current: 20, target: 30 }
+      kpis: [kpi1, kpi2, kpi3],
+      kpi1,
+      kpi2,
+      kpi3
     };
 
     mockCompanyService.getCompanyDetails.and.returnValue(of({

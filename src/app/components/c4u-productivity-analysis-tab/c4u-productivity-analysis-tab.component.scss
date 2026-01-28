@@ -1,0 +1,587 @@
+@import '../../../styles/variables.scss';
+@import '../../../styles/mixins.scss';
+
+.productivity-analysis-tab {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-lg;
+  padding: $spacing-lg;
+  background: transparent;
+  border-radius: $border-radius-sm;
+  min-height: 500px;
+  box-sizing: border-box;
+
+  .tab-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: $spacing-md;
+    box-sizing: border-box;
+    @include slide-up;
+
+    .header-left {
+      .tab-title {
+        margin: 0;
+        @include text-heading-3;
+        background: linear-gradient(135deg, $primary-electric-blue 0%, $success-green 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+      }
+    }
+
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: $spacing-md;
+      flex-wrap: wrap;
+
+      .chart-type-toggle {
+        display: flex;
+        gap: $spacing-xs;
+        background: rgba($primary-electric-blue, 0.1);
+        padding: $spacing-xs;
+        border-radius: $border-radius-sm;
+        border: 1px solid rgba($primary-electric-blue, 0.2);
+
+        .toggle-btn {
+          @include button-base;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 40px;
+          height: 40px;
+          min-width: $min-touch-target;
+          min-height: $min-touch-target;
+          padding: 0;
+          border: none;
+          background: transparent;
+          color: $text-secondary;
+          border-radius: $border-radius-xs;
+          cursor: pointer;
+          transition: all $transition-duration $transition-easing;
+          font-size: 1.2rem;
+          box-sizing: border-box;
+
+          &:hover:not(:disabled):not(.active) {
+            background: rgba($primary-electric-blue, 0.15);
+            color: $primary-electric-blue;
+            transform: scale(1.05);
+          }
+
+          &.active {
+            background: linear-gradient(135deg, $primary-electric-blue 0%, $primary-deep-blue 100%);
+            color: $text-primary;
+            box-shadow: 0 2px 8px rgba($primary-electric-blue, 0.3);
+          }
+
+          &:disabled {
+            cursor: not-allowed;
+            opacity: 0.5;
+            transform: none;
+          }
+
+          &:focus-visible {
+            @include focus-visible;
+          }
+
+          i {
+            pointer-events: none;
+          }
+        }
+      }
+    }
+  }
+
+  .chart-container {
+    position: relative;
+    flex: 1;
+    min-height: 400px;
+    background: rgba($primary-electric-blue, 0.03);
+    border-radius: $border-radius-sm;
+    padding: $spacing-lg;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    border: 1px solid rgba($primary-electric-blue, 0.1);
+    transition: all $transition-duration $transition-easing;
+    @include scale-in;
+
+    &:hover {
+      border-color: rgba($primary-electric-blue, 0.3);
+      box-shadow: 0 4px 12px rgba($primary-electric-blue, 0.1);
+    }
+
+    &.loading {
+      pointer-events: none;
+    }
+
+    .loading-overlay {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: $spacing-md;
+      color: $text-primary;
+      @include fade-in;
+
+      .spinner-border {
+        width: 3rem;
+        height: 3rem;
+        border: 3px solid rgba($primary-electric-blue, 0.2);
+        border-top-color: $primary-electric-blue;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+      }
+
+      .loading-text {
+        margin: 0;
+        @include text-secondary;
+        font-size: $font-size-body;
+      }
+    }
+
+    .empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: $spacing-md;
+      color: $text-secondary;
+      text-align: center;
+      @include fade-in;
+
+      .empty-icon {
+        font-size: 4rem;
+        opacity: 0.5;
+        animation: pulse 2s ease-in-out infinite;
+      }
+
+      .empty-text {
+        margin: 0;
+        font-size: 1.1rem;
+        @include text-secondary;
+      }
+    }
+
+    .chart-wrapper {
+      width: 100%;
+      height: 100%;
+      min-height: 350px;
+      box-sizing: border-box;
+    }
+  }
+
+  .chart-info {
+    display: flex;
+    gap: $spacing-xl;
+    padding: $spacing-md;
+    background: rgba($primary-electric-blue, 0.05);
+    border-radius: $border-radius-sm;
+    flex-wrap: wrap;
+    box-sizing: border-box;
+    border: 1px solid rgba($primary-electric-blue, 0.1);
+
+    .info-item {
+      display: flex;
+      align-items: center;
+      gap: $spacing-sm;
+      @include text-secondary;
+      font-size: 0.9rem;
+      transition: color $transition-duration $transition-easing;
+
+      i {
+        font-size: 1.1rem;
+        color: $primary-electric-blue;
+        transition: transform $transition-duration $transition-easing;
+      }
+
+      &:hover {
+        color: $text-primary;
+        
+        i {
+          transform: scale(1.1);
+        }
+      }
+    }
+  }
+}
+
+// Animations
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.5;
+  }
+  50% {
+    transform: scale(1.05);
+    opacity: 0.7;
+  }
+}
+
+// Responsive Design
+// Large desktop (1920px+)
+@media (min-width: 1920px) {
+  .productivity-analysis-tab {
+    padding: 2rem;
+    min-height: 600px;
+
+    .tab-header {
+      .header-left .tab-title {
+        font-size: 1.75rem;
+      }
+    }
+
+    .chart-container {
+      min-height: 500px;
+      padding: 2rem;
+
+      .chart-wrapper {
+        min-height: 450px;
+      }
+    }
+  }
+}
+
+// Desktop (1025px - 1919px)
+@media (min-width: 1025px) and (max-width: 1919px) {
+  .productivity-analysis-tab {
+    padding: 1.5rem;
+    min-height: 500px;
+
+    .chart-container {
+      min-height: 400px;
+
+      .chart-wrapper {
+        min-height: 350px;
+      }
+    }
+  }
+}
+
+// Tablet (768px - 1024px)
+@media (min-width: 768px) and (max-width: 1024px) {
+  .productivity-analysis-tab {
+    padding: 1.25rem;
+    min-height: 450px;
+
+    .tab-header {
+      .header-left .tab-title {
+        font-size: 1.375rem;
+      }
+    }
+
+    .chart-container {
+      min-height: 350px;
+      padding: 1.25rem;
+
+      .chart-wrapper {
+        min-height: 300px;
+      }
+    }
+
+    .chart-info {
+      gap: 1.5rem;
+    }
+  }
+}
+
+// Mobile landscape (481px - 767px)
+@media (min-width: 481px) and (max-width: 767px) {
+  .productivity-analysis-tab {
+    padding: 1rem;
+    min-height: 400px;
+
+    .tab-header {
+      flex-direction: column;
+      align-items: flex-start;
+
+      .header-left .tab-title {
+        font-size: 1.25rem;
+      }
+
+      .header-right {
+        width: 100%;
+        justify-content: space-between;
+      }
+    }
+
+    .chart-container {
+      min-height: 300px;
+      padding: 1rem;
+
+      .chart-wrapper {
+        min-height: 250px;
+      }
+    }
+
+    .chart-info {
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+  }
+}
+
+// Mobile portrait (320px - 480px)
+@media (max-width: 480px) {
+  .productivity-analysis-tab {
+    padding: 0.875rem;
+    min-height: 350px;
+    gap: 1rem;
+
+    .tab-header {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 0.75rem;
+
+      .header-left .tab-title {
+        font-size: 1.125rem;
+      }
+
+      .header-right {
+        flex-direction: column;
+        align-items: flex-start;
+        width: 100%;
+        gap: 0.75rem;
+
+        .chart-type-toggle {
+          width: 100%;
+          justify-content: center;
+          padding: 0.375rem;
+
+          .toggle-btn {
+            flex: 1;
+            max-width: 60px;
+          }
+        }
+      }
+    }
+
+    .chart-container {
+      min-height: 250px;
+      padding: 0.75rem;
+
+      .chart-wrapper {
+        min-height: 200px;
+      }
+
+      .empty-state {
+        .empty-icon {
+          font-size: 3rem;
+        }
+
+        .empty-text {
+          font-size: 0.9375rem;
+        }
+      }
+    }
+
+    .chart-info {
+      flex-direction: column;
+      gap: 0.5rem;
+      padding: 0.75rem;
+
+      .info-item {
+        font-size: 0.8125rem;
+
+        i {
+          font-size: 1rem;
+        }
+      }
+    }
+  }
+}
+
+
+// Responsive Design
+// Large desktop (1920px+)
+@media (min-width: 1920px) {
+  .productivity-analysis-tab {
+    padding: $spacing-xl;
+    min-height: 600px;
+
+    .tab-header {
+      .header-left .tab-title {
+        font-size: 1.75rem;
+      }
+    }
+
+    .chart-container {
+      min-height: 500px;
+      padding: $spacing-xl;
+
+      .chart-wrapper {
+        min-height: 450px;
+      }
+    }
+  }
+}
+
+// Desktop (1025px - 1919px)
+@media (min-width: 1025px) and (max-width: 1919px) {
+  .productivity-analysis-tab {
+    padding: $spacing-lg;
+    min-height: 500px;
+
+    .chart-container {
+      min-height: 400px;
+
+      .chart-wrapper {
+        min-height: 350px;
+      }
+    }
+  }
+}
+
+// Tablet (768px - 1024px)
+@media (min-width: 768px) and (max-width: 1024px) {
+  .productivity-analysis-tab {
+    padding: $spacing-md;
+    min-height: 450px;
+
+    .tab-header {
+      .header-left .tab-title {
+        font-size: 1.375rem;
+      }
+    }
+
+    .chart-container {
+      min-height: 350px;
+      padding: $spacing-md;
+
+      .chart-wrapper {
+        min-height: 300px;
+      }
+    }
+
+    .chart-info {
+      gap: $spacing-lg;
+    }
+  }
+}
+
+// Mobile landscape (481px - 767px)
+@media (min-width: 481px) and (max-width: 767px) {
+  .productivity-analysis-tab {
+    padding: $spacing-md;
+    min-height: 400px;
+
+    .tab-header {
+      flex-direction: column;
+      align-items: flex-start;
+
+      .header-left .tab-title {
+        font-size: 1.25rem;
+      }
+
+      .header-right {
+        width: 100%;
+        justify-content: space-between;
+      }
+    }
+
+    .chart-container {
+      min-height: 300px;
+      padding: $spacing-md;
+
+      .chart-wrapper {
+        min-height: 250px;
+      }
+    }
+
+    .chart-info {
+      flex-direction: column;
+      gap: $spacing-sm;
+    }
+  }
+}
+
+// Mobile portrait (320px - 480px)
+@media (max-width: 480px) {
+  .productivity-analysis-tab {
+    padding: $spacing-sm;
+    min-height: 350px;
+    gap: $spacing-md;
+
+    .tab-header {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: $spacing-sm;
+
+      .header-left .tab-title {
+        font-size: 1.125rem;
+      }
+
+      .header-right {
+        flex-direction: column;
+        align-items: flex-start;
+        width: 100%;
+        gap: $spacing-sm;
+
+        .chart-type-toggle {
+          width: 100%;
+          justify-content: center;
+          padding: $spacing-xs;
+
+          .toggle-btn {
+            flex: 1;
+            max-width: 60px;
+          }
+        }
+      }
+    }
+
+    .chart-container {
+      min-height: 250px;
+      padding: $spacing-sm;
+
+      .chart-wrapper {
+        min-height: 200px;
+      }
+
+      .empty-state {
+        .empty-icon {
+          font-size: 3rem;
+        }
+
+        .empty-text {
+          font-size: 0.9375rem;
+        }
+      }
+    }
+
+    .chart-info {
+      flex-direction: column;
+      gap: $spacing-sm;
+      padding: $spacing-sm;
+
+      .info-item {
+        font-size: 0.8125rem;
+
+        i {
+          font-size: 1rem;
+        }
+      }
+    }
+  }
+}
+
+// Accessibility
+@include reduced-motion {
+  .tab-header,
+  .chart-container,
+  .toggle-btn,
+  .empty-icon,
+  .spinner-border,
+  .info-item i {
+    animation: none !important;
+    transition: none !important;
+  }
+}

@@ -56,8 +56,9 @@
   
   <!-- Main Content Area -->
   <main class="dashboard-main" id="main-content">
-    <!-- Header with Month Selector centered -->
+    <!-- Header with Dashboard Navigation and Month Selector -->
     <div class="dashboard-header" role="banner">
+      <c4u-dashboard-navigation></c4u-dashboard-navigation>
       <div class="header-spacer"></div>
       <c4u-seletor-mes (onSelectedMonth)="onMonthChange($event)"></c4u-seletor-mes>
       <button 

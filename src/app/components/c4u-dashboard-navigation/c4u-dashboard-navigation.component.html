@@ -1,0 +1,32 @@
+<div class="dashboard-navigation" *ngIf="hasMultipleDashboards">
+  <div class="dashboard-selector">
+    <button 
+      class="current-dashboard"
+      [attr.aria-label]="'Painel atual: ' + currentDashboardName"
+      type="button">
+      <i [class]="currentDashboard?.icon" aria-hidden="true"></i>
+      <span class="dashboard-name">{{ currentDashboardName }}</span>
+    </button>
+    
+    <div class="dashboard-dropdown">
+      <button
+        *ngFor="let dashboard of availableDashboards"
+        class="dashboard-option"
+        [class.active]="dashboard.route === currentDashboard?.route"
+        (click)="navigateToDashboard(dashboard)"
+        [attr.aria-label]="'Navegar para ' + dashboard.label"
+        [attr.aria-current]="dashboard.route === currentDashboard?.route ? 'page' : null"
+        type="button">
+        <i [class]="dashboard.icon" aria-hidden="true"></i>
+        <span>{{ dashboard.label }}</span>
+        <i class="ri-check-line check-icon" *ngIf="dashboard.route === currentDashboard?.route" aria-hidden="true"></i>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Breadcrumb for single dashboard or mobile view -->
+<div class="dashboard-breadcrumb" *ngIf="!hasMultipleDashboards || currentDashboard">
+  <i [class]="currentDashboard?.icon" aria-hidden="true"></i>
+  <span>{{ currentDashboardName }}</span>
+</div>

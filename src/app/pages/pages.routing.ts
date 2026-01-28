@@ -6,6 +6,10 @@ export const PagesRoutes: Routes = [
     loadChildren: () => import('./dashboard/gamification-dashboard/gamification-dashboard.module').then(m => m.GamificationDashboardModule)
   },
   {
+    path: 'team-management',
+    loadChildren: () => import('./dashboard/team-management-dashboard/team-management-dashboard.module').then(m => m.TeamManagementDashboardModule)
+  },
+  {
     path: 'rewards',
     loadChildren: () => import('./recompensas/rewards.module').then(m => m.RewardsModule)
   },

@@ -123,3 +123,68 @@ export interface Macro {
   status: ProcessStatus;
   completedDate?: Date;
 }
+
+// Team Management Models
+export interface Team {
+  id: string;
+  name: string;
+  memberCount: number;
+  department?: string;
+}
+
+export interface TeamSeasonPoints {
+  total: number;
+  bloqueados: number;
+  desbloqueados: number;
+}
+
+export interface TeamProgressMetrics {
+  processosIncompletos: number;
+  atividadesFinalizadas: number;
+  processosFinalizados: number;
+}
+
+export interface Collaborator {
+  userId: string;
+  name: string;
+  email: string;
+}
+
+export interface GoalMetric {
+  id: string;
+  label: string;
+  current: number;
+  target: number;
+  unit?: string;
+  percentage?: number;
+}
+
+export interface GraphDataPoint {
+  date: Date;
+  value: number;
+  label?: string;
+}
+
+export interface ChartDataset {
+  label: string;
+  data: number[];
+  borderColor: string;
+  backgroundColor: string;
+  fill?: boolean;
+}
+
+export interface GraphConfig {
+  type: 'line' | 'bar';
+  period: number;
+  metrics: string[];
+}
+
+export interface TeamDashboardState {
+  selectedTeam: string;
+  selectedCollaborator: string | null;
+  selectedMonth: Date;
+  activeTab: 'goals' | 'productivity';
+  graphConfig: GraphConfig;
+  isLoading: boolean;
+  lastRefresh: Date;
+}

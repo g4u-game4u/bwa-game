@@ -16,6 +16,7 @@ import { C4uActivityProgressModule } from '@components/c4u-activity-progress/c4u
 import { C4uCompanyTableModule } from '@components/c4u-company-table/c4u-company-table.module';
 import { C4uShimmerModule } from '@components/c4u-shimmer/c4u-shimmer.module';
 import { C4uErrorMessageModule } from '@components/c4u-error-message/c4u-error-message.module';
+import { C4uDashboardNavigationModule } from '@components/c4u-dashboard-navigation/c4u-dashboard-navigation.module';
 import { ModalCompanyDetailModule } from '@modals/modal-company-detail/modal-company-detail.module';
 import { ModalProgressListModule } from '@modals/modal-progress-list/modal-progress-list.module';
 import { ModalCarteiraModule } from '@modals/modal-carteira/modal-carteira.module';
@@ -46,6 +47,7 @@ const routes: Routes = [
     C4uCompanyTableModule,
     C4uShimmerModule,
     C4uErrorMessageModule,
+    C4uDashboardNavigationModule,
     ModalCompanyDetailModule,
     ModalProgressListModule,
     ModalCarteiraModule

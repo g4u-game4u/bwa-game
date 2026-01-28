@@ -1,0 +1,207 @@
+<div class="team-management-dashboard" role="main">
+  <!-- Header -->
+  <div class="dashboard-header" role="banner">
+    <div class="header-content">
+      <c4u-dashboard-navigation></c4u-dashboard-navigation>
+      <div class="header-actions">
+        <span class="last-refresh" *ngIf="!isLoading" aria-live="polite" aria-atomic="true">
+          Última atualização: {{ getLastRefreshTime() }}
+        </span>
+        <button 
+          class="btn btn-refresh" 
+          (click)="refreshData()"
+          [disabled]="isLoading"
+          [attr.aria-label]="isLoading ? 'Atualizando dados...' : 'Atualizar dados do dashboard'"
+          title="Atualizar dados">
+          <i class="fas fa-sync-alt" [class.fa-spin]="isLoading" aria-hidden="true"></i>
+          <span>Atualizar</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main Content -->
+  <div class="dashboard-content">
+    <!-- Sidebar -->
+    <aside class="dashboard-sidebar" role="complementary" aria-label="Filtros e métricas da equipe">
+      <!-- Team Selector -->
+      <div class="selector-section">
+        <label class="selector-label" for="team-selector">Equipe / Departamento</label>
+        <c4u-team-selector
+          id="team-selector"
+          [teams]="teams"
+          [selectedTeam]="selectedTeam"
+          (teamSelected)="onTeamChange($event)"
+          aria-label="Selecionar equipe ou departamento">
+        </c4u-team-selector>
+      </div>
+
+      <!-- Collaborator Selector -->
+      <div class="selector-section">
+        <label class="selector-label" for="collaborator-selector">Colaborador</label>
+        <c4u-collaborator-selector
+          id="collaborator-selector"
+          [collaborators]="collaborators"
+          [selectedCollaborator]="selectedCollaborator"
+          (collaboratorSelected)="onCollaboratorChange($event)"
+          aria-label="Filtrar por colaborador">
+        </c4u-collaborator-selector>
+      </div>
+
+      <!-- Month Selector -->
+      <div class="selector-section">
+        <label class="selector-label" for="month-selector">Período</label>
+        <c4u-seletor-mes
+          id="month-selector"
+          (onSelectedMonth)="onMonthChange($event)"
+          aria-label="Selecionar período">
+        </c4u-seletor-mes>
+      </div>
+
+      <!-- Team Sidebar with Metrics -->
+      <div class="sidebar-metrics" *ngIf="!isLoadingSidebar && !hasSidebarError; else sidebarLoadingOrError" role="region" aria-label="Métricas da equipe">
+        <c4u-team-sidebar
+          [teamName]="teamName"
+          [seasonPoints]="seasonPoints"
+          [progressMetrics]="progressMetrics"
+          [seasonDates]="seasonDates">
+        </c4u-team-sidebar>
+      </div>
+
+      <ng-template #sidebarLoadingOrError>
+        <div *ngIf="isLoadingSidebar" class="loading-section" role="status" aria-live="polite">
+          <div class="spinner-border text-primary" role="status" aria-hidden="true">
+            <span class="sr-only">Carregando...</span>
+          </div>
+          <p class="loading-text">Carregando métricas...</p>
+        </div>
+        
+        <div *ngIf="hasSidebarError && !isLoadingSidebar" role="alert" aria-live="assertive">
+          <c4u-error-message
+            [message]="sidebarErrorMessage"
+            [showRetry]="true"
+            [isRetrying]="isLoadingSidebar"
+            (retry)="retrySidebarData()">
+          </c4u-error-message>
+        </div>
+      </ng-template>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="dashboard-main" role="main">
+      <!-- Tab Navigation -->
+      <div class="tab-navigation" role="tablist" aria-label="Visualizações do dashboard">
+        <button 
+          class="tab-button"
+          role="tab"
+          [attr.aria-selected]="activeTab === 'goals'"
+          [attr.aria-controls]="'goals-panel'"
+          [attr.tabindex]="activeTab === 'goals' ? 0 : -1"
+          [class.active]="activeTab === 'goals'"
+          (click)="switchTab('goals')"
+          (keydown.enter)="switchTab('goals')"
+          (keydown.space)="switchTab('goals'); $event.preventDefault()"
+          aria-label="Visualizar metas e progresso">
+          <i class="fas fa-bullseye" aria-hidden="true"></i>
+          <span>Metas e Progresso</span>
+        </button>
+        <button 
+          class="tab-button"
+          role="tab"
+          [attr.aria-selected]="activeTab === 'productivity'"
+          [attr.aria-controls]="'productivity-panel'"
+          [attr.tabindex]="activeTab === 'productivity' ? 0 : -1"
+          [class.active]="activeTab === 'productivity'"
+          (click)="switchTab('productivity')"
+          (keydown.enter)="switchTab('productivity')"
+          (keydown.space)="switchTab('productivity'); $event.preventDefault()"
+          aria-label="Visualizar análise de produtividade">
+          <i class="fas fa-chart-line" aria-hidden="true"></i>
+          <span>Análise de Produtividade</span>
+        </button>
+      </div>
+
+      <!-- Tab Content -->
+      <div class="tab-content">
+        <!-- Goals Tab -->
+        <div 
+          class="tab-pane" 
+          *ngIf="activeTab === 'goals'" 
+          [@fadeIn]
+          role="tabpanel"
+          id="goals-panel"
+          [attr.aria-labelledby]="'goals-tab'"
+          aria-live="polite">
+          <div *ngIf="!isLoadingGoals && !hasGoalsError">
+            <c4u-goals-progress-tab
+              [goals]="goalMetrics"
+              [isLoading]="isLoadingGoals">
+            </c4u-goals-progress-tab>
+          </div>
+
+          <div *ngIf="isLoadingGoals" class="loading-section" role="status" aria-live="polite">
+            <div class="spinner-border text-primary" role="status" aria-hidden="true">
+              <span class="sr-only">Carregando...</span>
+            </div>
+            <p class="loading-text">Carregando metas...</p>
+          </div>
+
+          <div *ngIf="hasGoalsError && !isLoadingGoals" role="alert" aria-live="assertive">
+            <c4u-error-message
+              [message]="goalsErrorMessage"
+              [showRetry]="true"
+              [isRetrying]="isLoadingGoals"
+              (retry)="retryGoalsData()">
+            </c4u-error-message>
+          </div>
+        </div>
+
+        <!-- Productivity Tab -->
+        <div 
+          class="tab-pane" 
+          *ngIf="activeTab === 'productivity'" 
+          [@fadeIn]
+          role="tabpanel"
+          id="productivity-panel"
+          [attr.aria-labelledby]="'productivity-tab'"
+          aria-live="polite">
+          <div *ngIf="!isLoadingProductivity && !hasProductivityError">
+            <c4u-productivity-analysis-tab
+              [graphData]="graphData"
+              [selectedPeriod]="selectedPeriod"
+              [isLoading]="isLoadingProductivity"
+              (periodChanged)="onPeriodChange($event)"
+              (chartTypeChanged)="onChartTypeChange($event)">
+            </c4u-productivity-analysis-tab>
+          </div>
+
+          <div *ngIf="isLoadingProductivity" class="loading-section" role="status" aria-live="polite">
+            <div class="spinner-border text-primary" role="status" aria-hidden="true">
+              <span class="sr-only">Carregando...</span>
+            </div>
+            <p class="loading-text">Carregando análise de produtividade...</p>
+          </div>
+
+          <div *ngIf="hasProductivityError && !isLoadingProductivity" role="alert" aria-live="assertive">
+            <c4u-error-message
+              [message]="productivityErrorMessage"
+              [showRetry]="true"
+              [isRetrying]="isLoadingProductivity"
+              (retry)="retryProductivityData()">
+            </c4u-error-message>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Global Loading Overlay -->
+  <div class="loading-overlay" *ngIf="isLoading" role="status" aria-live="polite" aria-atomic="true">
+    <div class="loading-content">
+      <div class="spinner-border text-light" role="status" aria-hidden="true">
+        <span class="sr-only">Carregando...</span>
+      </div>
+      <p class="loading-text">Carregando dados...</p>
+    </div>
+  </div>
+</div>

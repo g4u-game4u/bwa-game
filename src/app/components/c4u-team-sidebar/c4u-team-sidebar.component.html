@@ -1,0 +1,97 @@
+<div class="team-sidebar">
+  <!-- Team Header -->
+  <div class="sidebar-header">
+    <h2 class="team-name">{{ teamName }}</h2>
+    <div class="season-dates">
+      <span class="date-label">Temporada:</span>
+      <span class="date-range">
+        {{ seasonDates.start | date: 'dd/MM/yyyy' }} - {{ seasonDates.end | date: 'dd/MM/yyyy' }}
+      </span>
+    </div>
+  </div>
+
+  <!-- Season Points Section -->
+  <div class="sidebar-section season-points">
+    <h3 class="section-title">
+      <i class="metric-icon bi bi-star-fill"></i>
+      Pontos da Temporada
+    </h3>
+    
+    <div class="metric-card">
+      <div class="metric-item">
+        <span class="metric-label">Total</span>
+        <span class="metric-value" data-testid="total-points">
+          {{ seasonPoints.total | numberFormat }}
+        </span>
+      </div>
+    </div>
+
+    <div class="metric-card">
+      <div class="metric-item">
+        <span class="metric-label">
+          <i class="metric-icon bi bi-lock-fill"></i>
+          Bloqueados
+        </span>
+        <span class="metric-value" data-testid="bloqueados-points">
+          {{ seasonPoints.bloqueados | numberFormat }}
+        </span>
+      </div>
+    </div>
+
+    <div class="metric-card">
+      <div class="metric-item">
+        <span class="metric-label">
+          <i class="metric-icon bi bi-unlock-fill"></i>
+          Desbloqueados
+        </span>
+        <span class="metric-value" data-testid="desbloqueados-points">
+          {{ seasonPoints.desbloqueados | numberFormat }}
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Progress Metrics Section -->
+  <div class="sidebar-section progress-metrics">
+    <h3 class="section-title">
+      <i class="metric-icon bi bi-graph-up"></i>
+      Métricas de Progresso
+    </h3>
+    
+    <div class="metric-card">
+      <div class="metric-item">
+        <span class="metric-label">
+          <i class="metric-icon bi bi-hourglass-split"></i>
+          Processos Incompletos
+        </span>
+        <span class="metric-value" data-testid="processos-incompletos">
+          {{ progressMetrics.processosIncompletos | numberFormat }}
+        </span>
+      </div>
+    </div>
+
+    <div class="metric-card">
+      <div class="metric-item">
+        <span class="metric-label">
+          <i class="metric-icon bi bi-check-circle-fill"></i>
+          Atividades Finalizadas
+        </span>
+        <span class="metric-value" data-testid="atividades-finalizadas">
+          {{ progressMetrics.atividadesFinalizadas | numberFormat }}
+        </span>
+      </div>
+    </div>
+
+    <div class="metric-card">
+      <div class="metric-item">
+        <span class="metric-label">
+          <i class="metric-icon bi bi-check-all"></i>
+          Processos Finalizados
+        </span>
+        <span class="metric-value" data-testid="processos-finalizados">
+          {{ progressMetrics.processosFinalizados | numberFormat }}
+        </span>
+      </div>
+    </div>
+  </div>
+</div>

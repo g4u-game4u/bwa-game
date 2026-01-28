@@ -266,14 +266,16 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
       companyService.getCompanies.calls.reset();
       kpiService.getPlayerKPIs.calls.reset();
 
-      const newMonth = new Date(2023, 4, 1); // May 2023
+      const monthsAgo = 1; // 1 month ago
 
       // Act
-      component.onMonthChange(newMonth);
+      component.onMonthChange(monthsAgo);
       tick();
 
       // Assert
-      expect(component.selectedMonth).toEqual(newMonth);
+      const expectedMonth = new Date();
+      expectedMonth.setMonth(expectedMonth.getMonth() - monthsAgo);
+      expect(component.selectedMonth.getMonth()).toEqual(expectedMonth.getMonth());
       expect(playerService.getPlayerStatus).toHaveBeenCalled();
       expect(companyService.getCompanies).toHaveBeenCalled();
       expect(kpiService.getPlayerKPIs).toHaveBeenCalled();
@@ -287,14 +289,16 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
       companyService.getCompanies.and.returnValue(of([]));
       kpiService.getPlayerKPIs.and.returnValue(of([]));
       
-      const newMonth = new Date(2023, 5, 1); // June 2023
+      const monthsAgo = 2; // 2 months ago
 
       // Act
-      component.onMonthChange(newMonth);
+      component.onMonthChange(monthsAgo);
       tick();
 
       // Assert
-      expect(component.selectedMonth).toEqual(newMonth);
+      const expectedMonth = new Date();
+      expectedMonth.setMonth(expectedMonth.getMonth() - monthsAgo);
+      expect(component.selectedMonth.getMonth()).toEqual(expectedMonth.getMonth());
     }));
   });
 

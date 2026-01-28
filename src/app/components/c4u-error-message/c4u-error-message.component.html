@@ -1,16 +1,15 @@
-<div class="c4u-error-message">
-  <div class="error-icon">
-    <i [class]="errorIcon"></i>
-  </div>
+<div class="error-message">
   <div class="error-content">
-    <h3 class="error-title">{{ errorTitle }}</h3>
-    <p class="error-message">{{ message }}</p>
+    <i class="bi bi-exclamation-triangle error-icon"></i>
+    <p class="error-text">{{ message }}</p>
     <button 
-      *ngIf="showRetry && retryCallback" 
-      class="btn btn-primary retry-button"
-      (click)="onRetry()">
-      <i class="ri-refresh-line"></i>
-      Tentar Novamente
+      *ngIf="showRetry"
+      class="btn btn-retry"
+      (click)="onRetry()"
+      [disabled]="isRetrying"
+      aria-label="Tentar novamente">
+      <i class="bi bi-arrow-clockwise" [class.spinning]="isRetrying"></i>
+      {{ isRetrying ? 'Tentando...' : 'Tentar Novamente' }}
     </button>
   </div>
 </div>

@@ -24,6 +24,7 @@
     "lib": ["ES2022", "dom"],
     "paths": {
       "@components/*": ["src/app/components/*"],
+      "@guards/*": ["src/app/guards/*"],
       "@modals/*": ["src/app/modals/*"],
       "@model/*": ["src/app/model/*"],
       "@providers/*": ["src/app/providers/*"],
