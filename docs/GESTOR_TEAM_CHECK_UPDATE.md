@@ -30,9 +30,7 @@ return user.teams.some((team: any) =>
 
 **After**:
 ```typescript
-return user.teams.some((team: any) => 
-  team && team._id === 'FkgMSNO'
-);
+return user.teams.includes('FkgMSNO');
 ```
 
 ### 2. `src/app/guards/team-role.guard.spec.ts`
@@ -70,14 +68,7 @@ return user.teams.some((team: any) =>
 {
   _id: "user@example.com",
   name: "User Name",
-  teams: [
-    {
-      _id: "FkgMSNO",     // ← This is what we check
-      name: "GESTAO",
-      area: "Management",
-      squad: "Leadership"
-    }
-  ]
+  teams: ["FkgMSNO", "other-team-id"]  // ← Array of team IDs
 }
 ```
 
@@ -141,5 +132,5 @@ To verify a user has GESTOR access:
 
 Example verification:
 ```javascript
-const hasGestorAccess = user.teams?.some(team => team._id === 'FkgMSNO');
+const hasGestorAccess = user.teams?.includes('FkgMSNO');
 ```
