@@ -180,46 +180,118 @@ describe('KPIService', () => {
     });
   });
 
-  describe('API Integration Tests', () => {
-    it('should fetch and cache player KPIs', (done) => {
-      const mockResponse = [
-        { id: '1', label: 'KPI 1', current: 50, target: 100 }
-      ];
-      const mockMappedData = [
-        { id: '1', label: 'KPI 1', current: 50, target: 100 }
-      ];
+  describe('New Metrics from Player Extra Info', () => {
+    it('should extract Número de Empresas from player extra.cnpj', (done) => {
+      const mockPlayerStatus = {
+        _id: 'test-player',
+        name: 'Test Player',
+        extra: {
+          cnpj: '10282,2368,10492,10004,330,1110', // 6 companies
+          entrega: '85'
+        }
+      };
 
-      funifierApiSpy.get.and.returnValue(of(mockResponse));
-      mapperSpy.toKPIDataArray.and.returnValue(mockMappedData);
+      funifierApiSpy.get.and.returnValue(of(mockPlayerStatus));
 
-      service.getPlayerKPIs('player123').subscribe(result => {
-        expect(result).toEqual(mockMappedData);
-        expect(funifierApiSpy.get).toHaveBeenCalledWith('/v3/player/player123/kpis');
-        expect(mapperSpy.toKPIDataArray).toHaveBeenCalledWith(mockResponse);
+      service.getPlayerKPIs('test-player').subscribe(result => {
+        const empresasKPI = result.find(kpi => kpi.id === 'numero-empresas');
+        
+        expect(empresasKPI).toBeDefined();
+        expect(empresasKPI!.label).toBe('Número de Empresas');
+        expect(empresasKPI!.current).toBe(6);
+        expect(empresasKPI!.target).toBe(10);
+        expect(empresasKPI!.superTarget).toBe(15);
+        expect(empresasKPI!.unit).toBe('empresas');
+        expect(empresasKPI!.color).toBe('red'); // 6 < 10 (below goal)
         done();
       });
     });
 
-    it('should use cached data on subsequent calls', (done) => {
-      const mockResponse = [
-        { id: '1', label: 'KPI 1', current: 50, target: 100 }
-      ];
-      const mockMappedData = [
-        { id: '1', label: 'KPI 1', current: 50, target: 100 }
-      ];
+    it('should extract Entregas no Prazo from player extra.entrega', (done) => {
+      const mockPlayerStatus = {
+        _id: 'test-player',
+        name: 'Test Player',
+        extra: {
+          cnpj: '10282,2368,10492',
+          entrega: '85' // 85%
+        }
+      };
 
-      funifierApiSpy.get.and.returnValue(of(mockResponse));
-      mapperSpy.toKPIDataArray.and.returnValue(mockMappedData);
+      funifierApiSpy.get.and.returnValue(of(mockPlayerStatus));
 
-      // First call
-      service.getPlayerKPIs('player123').subscribe(() => {
-        // Second call should use cache
-        service.getPlayerKPIs('player123').subscribe(result => {
-          expect(result).toEqual(mockMappedData);
-          expect(funifierApiSpy.get).toHaveBeenCalledTimes(1); // Only called once
-          done();
-        });
+      service.getPlayerKPIs('test-player').subscribe(result => {
+        const entregasKPI = result.find(kpi => kpi.id === 'entregas-prazo');
+        
+        expect(entregasKPI).toBeDefined();
+        expect(entregasKPI!.label).toBe('Entregas no Prazo');
+        expect(entregasKPI!.current).toBe(85);
+        expect(entregasKPI!.target).toBe(80);
+        expect(entregasKPI!.superTarget).toBe(90);
+        expect(entregasKPI!.unit).toBe('%');
+        expect(entregasKPI!.color).toBe('yellow'); // 80 <= 85 < 90 (above goal, below super goal)
+        done();
       });
+    });
+
+    it('should handle missing extra info gracefully', (done) => {
+      const mockPlayerStatus = {
+        _id: 'test-player',
+        name: 'Test Player'
+        // No extra field
+      };
+
+      funifierApiSpy.get.and.returnValue(of(mockPlayerStatus));
+
+      service.getPlayerKPIs('test-player').subscribe(result => {
+        expect(result).toEqual([]);
+        done();
+      });
+    });
+
+    it('should handle empty cnpj string', (done) => {
+      const mockPlayerStatus = {
+        _id: 'test-player',
+        name: 'Test Player',
+        extra: {
+          cnpj: '', // Empty string
+          entrega: '75'
+        }
+      };
+
+      funifierApiSpy.get.and.returnValue(of(mockPlayerStatus));
+
+      service.getPlayerKPIs('test-player').subscribe(result => {
+        const empresasKPI = result.find(kpi => kpi.id === 'numero-empresas');
+        expect(empresasKPI).toBeUndefined(); // Should not create KPI for empty cnpj
+        
+        const entregasKPI = result.find(kpi => kpi.id === 'entregas-prazo');
+        expect(entregasKPI).toBeDefined();
+        done();
+      });
+    });
+  });
+
+  describe('Goal-based Color System', () => {
+    it('should return green for values above super goal', () => {
+      expect(service.getKPIColorByGoals(95, 80, 90)).toBe('green'); // Above super goal
+      expect(service.getKPIColorByGoals(16, 10, 15)).toBe('green'); // Above super goal
+    });
+
+    it('should return yellow for values above goal but below super goal', () => {
+      expect(service.getKPIColorByGoals(85, 80, 90)).toBe('yellow'); // Above goal, below super goal
+      expect(service.getKPIColorByGoals(12, 10, 15)).toBe('yellow'); // Above goal, below super goal
+    });
+
+    it('should return red for values below goal', () => {
+      expect(service.getKPIColorByGoals(75, 80, 90)).toBe('red'); // Below goal
+      expect(service.getKPIColorByGoals(8, 10, 15)).toBe('red'); // Below goal
+    });
+
+    it('should handle edge cases correctly', () => {
+      expect(service.getKPIColorByGoals(80, 80, 90)).toBe('yellow'); // Exactly at goal
+      expect(service.getKPIColorByGoals(90, 80, 90)).toBe('green'); // Exactly at super goal
+      expect(service.getKPIColorByGoals(10, 10, 15)).toBe('yellow'); // Exactly at goal
+      expect(service.getKPIColorByGoals(15, 10, 15)).toBe('green'); // Exactly at super goal
     });
   });
 });

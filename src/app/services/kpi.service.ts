@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
-import { Observable, throwError, of, forkJoin } from 'rxjs';
-import { map, catchError, shareReplay, switchMap } from 'rxjs/operators';
+import { Observable, throwError, of } from 'rxjs';
+import { map, catchError, shareReplay } from 'rxjs/operators';
 import { FunifierApiService } from './funifier-api.service';
 import { KPIMapper } from './kpi-mapper.service';
 import { KPIData } from '@model/gamification-dashboard.model';
@@ -71,9 +71,9 @@ export class KPIService {
   }
 
   /**
-   * Get player KPIs by combining:
-   * 1. KPI definitions from metric_targets__c database (dynamic)
-   * 2. Current values from player status extra.kpi (values in order, separated by ; or ,)
+   * Get player KPIs from player's extra info:
+   * 1. Número de Empresas - count items in extra.cnpj (comma-separated)
+   * 2. Porcentagem de Entregas no Prazo - value from extra.entrega
    */
   getPlayerKPIs(playerId: string): Observable<KPIData[]> {
     const cached = this.getCachedData(this.playerKPICache, playerId);
@@ -81,35 +81,47 @@ export class KPIService {
       return cached;
     }
 
-    // Fetch both metric targets and player status in parallel
-    const request$ = forkJoin({
-      metricTargets: this.getMetricTargets(),
-      playerStatus: this.funifierApi.get<any>(`/v3/player/${playerId}/status`)
-    }).pipe(
-      map(({ metricTargets, playerStatus }) => {
-        const kpiString = playerStatus.extra?.kpi || '';
+    const request$ = this.funifierApi.get<any>(`/v3/player/${playerId}/status`).pipe(
+      map(playerStatus => {
+        console.log('📊 Player status received:', playerStatus);
         
-        // Parse KPI values from string (e.g., "9.3; 8; 10; 9; 8")
-        const kpiValues = this.parseKpiValues(kpiString);
-        
-        console.log('📊 KPI string from player:', kpiString);
-        console.log('📊 KPI values parsed:', kpiValues);
-        console.log('📊 Metric targets from DB:', metricTargets);
-        
-        // If no metric targets from database, return empty array
-        if (!metricTargets || metricTargets.length === 0) {
-          console.warn('📊 No metric targets defined in database');
-          return [];
+        const kpis: KPIData[] = [];
+
+        // Número de Empresas - count items in extra.cnpj
+        if (playerStatus.extra?.cnpj) {
+          const cnpjList = playerStatus.extra.cnpj.split(',').filter((item: string) => item.trim());
+          const companyCount = cnpjList.length;
+          
+          kpis.push({
+            id: 'numero-empresas',
+            label: 'Número de Empresas',
+            current: companyCount,
+            target: 10,
+            superTarget: 15,
+            unit: 'empresas',
+            color: this.getKPIColorByGoals(companyCount, 10, 15),
+            percentage: Math.min((companyCount / 15) * 100, 100)
+          });
         }
-        
-        // Combine database targets with current values
-        return metricTargets.map((target, index) => ({
-          id: target._id || `kpi-${index}`,
-          label: target.label || target.name || `KPI ${index + 1}`,
-          current: kpiValues[index] || 0,
-          target: target.target || 10,
-          unit: target.unit || ''
-        }));
+
+        // Porcentagem de Entregas no Prazo
+        if (playerStatus.extra?.entrega) {
+          const deliveryPercentage = parseFloat(playerStatus.extra.entrega);
+          
+          kpis.push({
+            id: 'entregas-prazo',
+            label: 'Entregas no Prazo',
+            current: deliveryPercentage,
+            target: 80,
+            superTarget: 90,
+            unit: '%',
+            color: this.getKPIColorByGoals(deliveryPercentage, 80, 90),
+            percentage: Math.min(deliveryPercentage, 100)
+          });
+        }
+
+        console.log('📊 Generated KPIs:', kpis);
+        return kpis;
       }),
       catchError(error => {
         console.error('📊 Error fetching player KPIs:', error);
@@ -189,7 +201,21 @@ export class KPIService {
   }
 
   /**
-   * Determine KPI color based on completion percentage
+   * Determine KPI color based on goal and super goal thresholds
+   * Below goal: red, Above goal: yellow, Above super goal: green
+   */
+  getKPIColorByGoals(current: number, goal: number, superGoal: number): 'red' | 'yellow' | 'green' {
+    if (current >= superGoal) {
+      return 'green';
+    } else if (current >= goal) {
+      return 'yellow';
+    } else {
+      return 'red';
+    }
+  }
+
+  /**
+   * Determine KPI color based on completion percentage (legacy method)
    */
   getKPIColor(current: number, target: number): 'red' | 'yellow' | 'green' {
     const percentage = this.calculateKPIProgress(current, target);

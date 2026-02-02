@@ -54,7 +54,10 @@ export interface KPIData {
   label: string;
   current: number;
   target: number;
+  superTarget?: number;
   unit?: string;
+  color?: 'red' | 'yellow' | 'green';
+  percentage?: number;
 }
 
 // Company Models

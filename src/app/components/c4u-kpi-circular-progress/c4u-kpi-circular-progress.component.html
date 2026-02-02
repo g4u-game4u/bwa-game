@@ -8,4 +8,6 @@
       [theme]="progressColor">
     </c4u-porcentagem-circular>
   </div>
+  <div class="kpi-value">{{ displayValue }}</div>
+  <div class="kpi-status" [class]="'status-' + color">{{ goalStatus }}</div>
 </div>
