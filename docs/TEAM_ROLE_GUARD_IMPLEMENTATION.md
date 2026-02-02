@@ -112,19 +112,12 @@ Added route for team management dashboard:
 
 **Important**: GESTOR is determined by **team membership** with the specific team ID "FkgMSNO" (GESTAO team).
 
-The player profile from `/v3/player/me/status` contains a `teams` array:
+The player profile from `/v3/player/me/status` contains a `teams` array with team IDs:
 ```typescript
 {
   _id: "user@example.com",
   name: "User Name",
-  teams: [
-    {
-      _id: "FkgMSNO",  // This is what we check
-      name: "GESTAO",
-      area: "Management",
-      squad: "Leadership"
-    }
-  ]
+  teams: ["FkgMSNO", "other-team-id"]  // Array of team IDs
 }
 ```
 
@@ -142,10 +135,8 @@ hasGestaoRole(): boolean {
     return false;
   }
 
-  // Check if any team has the ID "FkgMSNO" (GESTAO team)
-  return user.teams.some((team: any) => 
-    team && team._id === 'FkgMSNO'
-  );
+  // Check if teams array contains "FkgMSNO" (GESTAO team ID)
+  return user.teams.includes('FkgMSNO');
 }
 ```
 

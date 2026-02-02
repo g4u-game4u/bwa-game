@@ -35,10 +35,8 @@ export class TeamRoleGuardService {
       return false;
     }
 
-    // Check if any team has the ID "FkgMSNO" (GESTAO team)
-    return user.teams.some((team: any) => 
-      team && team._id === 'FkgMSNO'
-    );
+    // Check if teams array contains "FkgMSNO" (GESTAO team ID)
+    return user.teams.includes('FkgMSNO');
   }
 
   /**
