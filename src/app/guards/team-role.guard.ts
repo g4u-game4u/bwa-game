@@ -35,8 +35,28 @@ export class TeamRoleGuardService {
       return false;
     }
 
+    // Log team IDs for debugging
+    console.log('🔒 TeamRoleGuard: User team IDs:', user.teams);
+    console.log('🔒 TeamRoleGuard: User teams full data:', user.teams);
+
     // Check if teams array contains "FkgMSNO" (GESTAO team ID)
-    return user.teams.includes('FkgMSNO');
+    // Teams array is an array of strings from /status endpoint: ["FkgMSNO"]
+    // Support both formats: array of strings or array of objects
+    const hasGestaoTeam = (user.teams as any[]).some((team: any) => {
+      // If team is a string, check directly
+      if (typeof team === 'string') {
+        return team === 'FkgMSNO';
+      }
+      // If team is an object, check _id property
+      if (team && typeof team === 'object') {
+        return team._id === 'FkgMSNO';
+      }
+      return false;
+    });
+    
+    console.log('🔒 TeamRoleGuard: Has GESTAO team (FkgMSNO):', hasGestaoTeam);
+    
+    return hasGestaoTeam;
   }
 
   /**

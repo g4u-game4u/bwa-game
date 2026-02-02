@@ -2,283 +2,64 @@
 @import '../../../../styles/mixins.scss';
 
 .team-management-dashboard {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  gap: $spacing-lg;
+  padding: $spacing-lg;
   min-height: 100vh;
-  background-color: $bg-primary;
-  color: $text-primary;
+  height: 100vh;
   position: relative;
-  box-sizing: border-box;
-  overflow-x: hidden;
+  transition: grid-template-columns 0.3s ease;
+  overflow: hidden; // Prevent page scroll, each section scrolls independently
+  
   @include fade-in;
-
-  // Ensure all child elements use border-box
-  * {
-    box-sizing: border-box;
+  
+  @include tablet-only {
+    grid-template-columns: 280px 1fr;
+    gap: $spacing-md;
+  }
+  
+  @include mobile-only {
+    grid-template-columns: 1fr;
+    padding: $spacing-md;
+    height: auto;
+    min-height: 100vh;
+    overflow: visible;
   }
 
-  // Header
-  .dashboard-header {
-    background-color: $bg-secondary;
-    border-bottom: 1px solid $border-color;
-    padding: $spacing-lg $spacing-xl;
-    position: sticky;
-    top: 0;
-    z-index: 100;
-    box-sizing: border-box;
-    backdrop-filter: blur(10px);
-    @include slide-up;
-
-    .header-content {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      max-width: 1920px;
-      margin: 0 auto;
-      box-sizing: border-box;
-    }
-
-    .dashboard-title {
-      @include text-heading-2;
-      margin: 0;
-      background: linear-gradient(135deg, $primary-electric-blue 0%, $success-green 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
-    }
-
-    .header-actions {
-      display: flex;
-      align-items: center;
-      gap: $spacing-md;
-
-      .last-refresh {
-        font-size: $font-size-small;
-        color: $text-secondary;
-        @include text-secondary;
-      }
-
-      .btn-refresh {
-        @include button-primary;
-        display: flex;
-        align-items: center;
-        gap: $spacing-sm;
-        padding: 12px 20px;
-        min-height: $min-touch-target;
-        min-width: $min-touch-target;
-
-        &:hover:not(:disabled) {
-          transform: scale(1.02);
-          box-shadow: 0 4px 15px rgba($primary-electric-blue, 0.4);
-        }
-
-        &:disabled {
-          opacity: 0.6;
-          cursor: not-allowed;
-          transform: none;
-        }
-
-        &:focus-visible {
-          @include focus-visible;
-        }
-
-        i {
-          font-size: 1rem;
-          
-          &.spinning {
-            animation: spin 1s linear infinite;
-          }
-        }
-      }
-
-      .btn-logout {
-        @include button-secondary;
-        display: flex;
-        align-items: center;
-        gap: $spacing-sm;
-        padding: 12px 20px;
-        min-height: $min-touch-target;
-        min-width: $min-touch-target;
-        background: transparent;
-        border: 1px solid rgba($error-red, 0.3);
-        color: $error-red;
-
-        &:hover {
-          background: rgba($error-red, 0.1);
-          border-color: $error-red;
-          color: $error-red;
-          transform: scale(1.02);
-          box-shadow: 0 4px 15px rgba($error-red, 0.3);
-        }
-
-        &:focus-visible {
-          @include focus-visible;
-          outline-color: $error-red;
-        }
-
-        i {
-          font-size: 1rem;
-        }
-      }
-    }
-
-    // Tablet: reduce padding
-    @media (max-width: 1024px) {
-      padding: $spacing-md $spacing-lg;
-
-      .dashboard-title {
-        font-size: $font-size-h3;
-      }
-
-      .header-actions {
-        .btn-refresh {
-          padding: 10px 16px;
-        }
-
-        .btn-logout {
-          padding: 10px 16px;
-        }
-      }
-    }
-
-    // Mobile: stack header elements
-    @media (max-width: 767px) {
-      padding: $spacing-md;
-
-      .header-content {
-        flex-direction: column;
-        gap: $spacing-md;
-        align-items: flex-start;
-      }
-
-      .dashboard-title {
-        font-size: 1.25rem;
-      }
-
-      .header-actions {
-        width: 100%;
-        justify-content: space-between;
-
-        .last-refresh {
-          font-size: $font-size-caption;
-        }
-
-        .btn-refresh {
-          padding: 8px 14px;
-          font-size: $font-size-small;
-        }
-
-        .btn-logout {
-          padding: 8px 14px;
-          font-size: $font-size-small;
-        }
-      }
-    }
-
-    // Small mobile: further reduce sizes
-    @media (max-width: 375px) {
-      padding: $spacing-sm;
-
-      .dashboard-title {
-        font-size: 1.125rem;
-      }
-
-      .header-actions {
-        gap: $spacing-sm;
-
-        .last-refresh {
-          font-size: 0.6875rem;
-        }
-
-        .btn-refresh {
-          padding: 8px 12px;
-          font-size: 0.8125rem;
-          gap: $spacing-xs;
-
-          i {
-            font-size: 0.875rem;
-          }
-        }
-
-        .btn-logout {
-          padding: 8px 12px;
-          font-size: 0.8125rem;
-          gap: $spacing-xs;
-
-          i {
-            font-size: 0.875rem;
-          }
-        }
-      }
-    }
-  }
-
-  // Main Content Layout
-  .dashboard-content {
-    display: grid;
-    grid-template-columns: 320px 1fr;
-    gap: $spacing-xl;
-    max-width: 1920px;
-    margin: 0 auto;
-    padding: $spacing-xl;
-    min-height: calc(100vh - 100px);
-    box-sizing: border-box;
-    overflow-x: hidden;
-
-    // Large desktop (3840px - 4K)
-    @media (min-width: 3840px) {
-      max-width: 2560px;
-      padding: $spacing-xxl;
-    }
-
-    // Desktop (1920px+)
-    @media (min-width: 1920px) and (max-width: 3839px) {
-      grid-template-columns: 320px 1fr;
-      gap: $spacing-xl;
-      padding: $spacing-xl;
-    }
-
-    // Tablet landscape (1025px - 1919px)
-    @media (min-width: 1025px) and (max-width: 1919px) {
-      grid-template-columns: 280px 1fr;
-      gap: $spacing-lg;
-      padding: $spacing-lg;
-    }
-
-    // Tablet portrait (768px - 1024px)
-    @media (min-width: 768px) and (max-width: 1024px) {
-      grid-template-columns: 280px 1fr;
-      gap: $spacing-lg;
-      padding: $spacing-lg;
-    }
-
-    // Mobile landscape (668px - 767px)
-    @media (min-width: 668px) and (max-width: 767px) {
-      grid-template-columns: 1fr;
-      gap: $spacing-md;
-      padding: $spacing-md;
-    }
-
-    // Mobile portrait (376px - 667px)
-    @media (min-width: 376px) and (max-width: 667px) {
-      grid-template-columns: 1fr;
-      gap: $spacing-md;
-      padding: $spacing-md;
-    }
-
-    // Small mobile (320px - 375px)
-    @media (max-width: 375px) {
-      grid-template-columns: 1fr;
-      gap: $spacing-sm;
-      padding: $spacing-sm;
-    }
-  }
-
-  // Sidebar
+  // Dashboard Sidebar - Fixed position with independent scrolling
   .dashboard-sidebar {
-    display: flex;
-    flex-direction: column;
-    gap: $spacing-lg;
-    box-sizing: border-box;
-    @include scale-in(400ms);
+    position: relative;
+    height: calc(100vh - #{$spacing-lg * 2});
+    overflow-y: auto;
+    overflow-x: hidden;
+    transition: all 0.3s ease;
+    
+    // Custom scrollbar for sidebar
+    &::-webkit-scrollbar {
+      width: 4px;
+    }
+    
+    &::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    
+    &::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.2);
+      border-radius: 2px;
+      
+      &:hover {
+        background: rgba(255, 255, 255, 0.3);
+      }
+    }
+    
+    @include mobile-only {
+      position: static;
+      height: auto;
+      max-height: none;
+      order: -1;
+      overflow: visible;
+    }
 
     .selector-section {
       @include card;
@@ -288,6 +69,7 @@
       border: 1px solid $border-color;
       box-sizing: border-box;
       transition: all $transition-duration $transition-easing;
+      margin-bottom: $spacing-md;
 
       &:hover {
         border-color: $primary-electric-blue;
@@ -308,170 +90,261 @@
     .sidebar-metrics {
       flex: 1;
     }
-
-    // Mobile: sidebar appears after main content
-    @media (max-width: 767px) {
-      order: 2;
-      gap: $spacing-md;
-
-      .selector-section {
-        padding: $spacing-sm;
-      }
-    }
-
-    // Small mobile: reduce spacing further
-    @media (max-width: 375px) {
-      gap: $spacing-sm;
-
-      .selector-section {
-        padding: $spacing-sm;
-
-        .selector-label {
-          font-size: $font-size-caption;
-        }
-      }
-    }
   }
 
-  // Main Content Area
+  // Dashboard Main Content - Scrollable independently
   .dashboard-main {
-    display: flex;
-    flex-direction: column;
-    gap: $spacing-lg;
-    box-sizing: border-box;
-    @include scale-in(500ms);
-
-    // Mobile: main content appears first
-    @media (max-width: 767px) {
-      order: 1;
-      gap: $spacing-md;
+    min-width: 0; // Prevent grid blowout
+    height: calc(100vh - #{$spacing-lg * 2});
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding-right: $spacing-sm; // Space for scrollbar
+    
+    // Custom scrollbar for main content
+    &::-webkit-scrollbar {
+      width: 8px;
     }
-
-    // Small mobile: reduce spacing
-    @media (max-width: 375px) {
-      gap: $spacing-sm;
+    
+    &::-webkit-scrollbar-track {
+      background: rgba(0, 0, 0, 0.1);
+      border-radius: 4px;
     }
-  }
-
-  // Tab Navigation
-  .tab-navigation {
-    display: flex;
-    gap: $spacing-sm;
-    background-color: $surface;
-    border-radius: $border-radius;
-    padding: $spacing-sm;
-    border: 1px solid $border-color;
-    box-sizing: border-box;
-    @include card;
-
-    .tab-button {
-      flex: 1;
+    
+    &::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.2);
+      border-radius: 4px;
+      
+      &:hover {
+        background: rgba(255, 255, 255, 0.3);
+      }
+    }
+    
+    @include mobile-only {
+      height: auto;
+      overflow: visible;
+      padding-right: 0;
+    }
+    
+    .dashboard-header {
       display: flex;
-      align-items: center;
       justify-content: center;
-      gap: $spacing-sm;
-      padding: 12px $spacing-lg;
-      background-color: transparent;
-      color: $text-secondary;
-      border: none;
-      border-radius: $border-radius-sm;
-      font-weight: $font-weight-semibold;
-      font-family: $font-family;
-      cursor: pointer;
-      transition: all $transition-duration $transition-easing;
-      min-height: $min-touch-target;
-      font-size: $font-size-body;
-
-      i {
-        font-size: 1.125rem;
-        transition: transform $transition-duration $transition-easing;
+      align-items: center;
+      margin-bottom: $spacing-lg;
+      gap: $spacing-md;
+      position: relative;
+      
+      .header-content {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        width: 100%;
+        position: relative;
       }
-
-      &:hover:not(.active) {
-        background-color: rgba($primary-electric-blue, 0.1);
-        color: $primary-electric-blue;
-        transform: translateY(-1px);
+      
+      .header-actions {
+        position: absolute;
+        right: 0;
+        top: 50%;
+        transform: translateY(-50%);
+        display: flex;
+        align-items: center;
+        gap: $spacing-md;
         
-        i {
-          transform: scale(1.1);
+        .last-refresh {
+          font-size: $font-size-small;
+          color: $text-secondary;
+          @include text-secondary;
         }
-      }
-
-      &.active {
-        background: linear-gradient(135deg, $primary-electric-blue 0%, $primary-deep-blue 100%);
-        color: $text-primary;
-        box-shadow: 0 4px 15px rgba($primary-electric-blue, 0.3);
         
-        i {
-          animation: pulse 2s ease-in-out infinite;
+        .btn-refresh {
+          display: flex;
+          align-items: center;
+          gap: $spacing-xs;
+          padding: 8px 16px;
+          background: transparent;
+          border: 1px solid $border-color;
+          border-radius: $border-radius-sm;
+          color: $text-secondary;
+          cursor: pointer;
+          transition: all 0.2s ease;
+          white-space: nowrap;
+          
+          &:hover:not(:disabled) {
+            background: rgba($primary-electric-blue, 0.1);
+            border-color: $primary-electric-blue;
+            color: $primary-electric-blue;
+          }
+          
+          &:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+          }
+          
+          &:focus-visible {
+            @include focus-visible;
+          }
+          
+          i {
+            font-size: 1rem;
+            
+            &.fa-spin {
+              animation: spin 1s linear infinite;
+            }
+          }
+        }
+        
+        .btn-logout {
+          display: flex;
+          align-items: center;
+          gap: $spacing-xs;
+          padding: 8px 16px;
+          background: transparent;
+          border: 1px solid rgba($error-red, 0.3);
+          border-radius: $border-radius-sm;
+          color: $error-red;
+          cursor: pointer;
+          transition: all 0.2s ease;
+          white-space: nowrap;
+          
+          &:hover {
+            background: rgba($error-red, 0.1);
+            border-color: $error-red;
+            color: $error-red;
+          }
+          
+          &:focus-visible {
+            @include focus-visible;
+            outline-color: $error-red;
+          }
+          
+          i {
+            font-size: 1rem;
+          }
+          
+          span {
+            font-size: $font-size-small;
+            font-weight: 500;
+          }
+        }
+        
+        @include mobile-only {
+          position: static;
+          transform: none;
+          flex-direction: column;
+          width: 100%;
+          margin-top: $spacing-sm;
+          
+          .last-refresh {
+            display: none;
+          }
         }
       }
-
-      &:focus-visible {
-        @include focus-visible;
-      }
-
-      // Tablet: reduce padding
-      @media (max-width: 1024px) {
-        padding: 10px $spacing-md;
-        font-size: 0.9375rem;
-      }
-
-      // Mobile: smaller text and icons
-      @media (max-width: 767px) {
-        padding: $spacing-sm $spacing-md;
-        font-size: $font-size-small;
-        gap: $spacing-xs;
-
-        i {
-          font-size: 1rem;
-        }
-      }
-
-      // Small mobile: stack icon and text or hide text
-      @media (max-width: 375px) {
-        padding: $spacing-sm;
-        font-size: 0.8125rem;
+      
+      @include mobile-only {
         flex-direction: column;
-        gap: 2px;
+        align-items: center;
+      }
+    }
+
+    // Tab Navigation
+    .tab-navigation {
+      display: flex;
+      gap: $spacing-sm;
+      background-color: $surface;
+      border-radius: $border-radius;
+      padding: $spacing-sm;
+      border: 1px solid $border-color;
+      box-sizing: border-box;
+      @include card;
+      margin-bottom: $spacing-lg;
+
+      .tab-button {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: $spacing-sm;
+        padding: 12px $spacing-lg;
+        background-color: transparent;
+        color: $text-secondary;
+        border: none;
+        border-radius: $border-radius-sm;
+        font-weight: $font-weight-semibold;
+        font-family: $font-family;
+        cursor: pointer;
+        transition: all $transition-duration $transition-easing;
+        min-height: $min-touch-target;
+        font-size: $font-size-body;
 
         i {
+          font-size: 1.125rem;
+          transition: transform $transition-duration $transition-easing;
+        }
+
+        &:hover:not(.active) {
+          background-color: rgba($primary-electric-blue, 0.1);
+          color: $primary-electric-blue;
+          transform: translateY(-1px);
+          
+          i {
+            transform: scale(1.1);
+          }
+        }
+
+        &.active {
+          background: linear-gradient(135deg, $primary-electric-blue 0%, $primary-deep-blue 100%);
+          color: $text-primary;
+          box-shadow: 0 4px 15px rgba($primary-electric-blue, 0.3);
+          
+          i {
+            animation: pulse 2s ease-in-out infinite;
+          }
+        }
+
+        &:focus-visible {
+          @include focus-visible;
+        }
+
+        @include tablet-only {
+          padding: 10px $spacing-md;
           font-size: 0.9375rem;
         }
+
+        @include mobile-only {
+          padding: $spacing-sm $spacing-md;
+          font-size: $font-size-small;
+          gap: $spacing-xs;
+
+          i {
+            font-size: 1rem;
+          }
+        }
       }
     }
-  }
 
-  // Tab Content
-  .tab-content {
-    @include card;
-    background-color: $surface;
-    border-radius: $border-radius;
-    padding: $spacing-xl;
-    border: 1px solid $border-color;
-    min-height: 500px;
-    box-sizing: border-box;
+    // Tab Content
+    .tab-content {
+      @include card;
+      background-color: $surface;
+      border-radius: $border-radius;
+      padding: $spacing-xl;
+      border: 1px solid $border-color;
+      min-height: 500px;
+      box-sizing: border-box;
 
-    // Tablet: reduce padding and min-height
-    @media (max-width: 1024px) {
-      padding: $spacing-lg;
-      min-height: 400px;
-    }
+      @include tablet-only {
+        padding: $spacing-lg;
+        min-height: 400px;
+      }
 
-    // Mobile: further reduce padding and min-height
-    @media (max-width: 767px) {
-      padding: $spacing-md;
-      min-height: 350px;
-    }
+      @include mobile-only {
+        padding: $spacing-md;
+        min-height: 350px;
+      }
 
-    // Small mobile: minimal padding
-    @media (max-width: 375px) {
-      padding: $spacing-sm;
-      min-height: 300px;
-    }
-
-    .tab-pane {
-      animation: fadeIn $transition-duration $transition-easing;
+      .tab-pane {
+        animation: fadeIn $transition-duration $transition-easing;
+      }
     }
   }
 
@@ -543,43 +416,61 @@
       }
     }
   }
+}
 
-  // Animations
-  @keyframes fadeIn {
-    from {
-      opacity: 0;
-      transform: translateY(10px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
+// Animations
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
   }
-
-  @keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
+}
 
-  @keyframes pulse {
-    0%, 100% {
-      transform: scale(1);
-      opacity: 1;
-    }
-    50% {
-      transform: scale(1.05);
-      opacity: 0.8;
-    }
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
   }
+  50% {
+    transform: scale(1.05);
+    opacity: 0.8;
+  }
+}
 
-  // Accessibility
-  @include reduced-motion {
-    *,
-    *::before,
-    *::after {
-      animation-duration: 0.01ms !important;
-      animation-iteration-count: 1 !important;
-      transition-duration: 0.01ms !important;
-    }
+// Accessibility styles
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+.skip-link {
+  position: absolute;
+  top: -40px;
+  left: 0;
+  background: $primary-electric-blue;
+  color: $text-primary;
+  padding: $spacing-sm $spacing-md;
+  text-decoration: none;
+  z-index: 100;
+  border-radius: 0 0 $border-radius-sm 0;
+  
+  &:focus {
+    top: 0;
   }
 }

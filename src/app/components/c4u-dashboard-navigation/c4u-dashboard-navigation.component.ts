@@ -1,6 +1,7 @@
 import { Component, OnInit, ChangeDetectionStrategy, ChangeDetectorRef } from '@angular/core';
 import { Router, NavigationEnd } from '@angular/router';
 import { SessaoProvider } from '@providers/sessao/sessao.provider';
+import { TeamRoleGuardService } from '@guards/team-role.guard';
 import { ROLES_LIST } from '@utils/constants';
 import { filter } from 'rxjs/operators';
 
@@ -41,6 +42,7 @@ export class C4uDashboardNavigationComponent implements OnInit {
   constructor(
     private router: Router,
     private sessaoProvider: SessaoProvider,
+    private teamRoleGuard: TeamRoleGuardService,
     private cdr: ChangeDetectorRef
   ) {}
   
@@ -60,18 +62,24 @@ export class C4uDashboardNavigationComponent implements OnInit {
   }
   
   /**
-   * Check if user has GESTAO role
+   * Check if user has GESTAO team access
+   * Uses the same validation logic as TeamRoleGuard to ensure consistency
+   * Validates if user has team "FkgMSNO" in the teams array (array of strings)
    */
   private checkUserRole(): void {
     const usuario = this.sessaoProvider.usuario;
-    if (!usuario || !usuario.roles) {
-      this.hasGestaoRole = false;
-      return;
+    
+    // Log team IDs for debugging
+    if (usuario && usuario.teams && Array.isArray(usuario.teams)) {
+      console.log('👤 User logged in - Team IDs:', usuario.teams);
+      console.log('👤 User teams full data:', usuario.teams);
+    } else {
+      console.log('👤 User logged in - No teams found');
     }
     
-    this.hasGestaoRole = usuario.roles.some((role: string) => 
-      role && role.includes(ROLES_LIST.ACCESS_TEAM_MANAGEMENT)
-    );
+    // Use the same validation logic from TeamRoleGuard
+    // This ensures consistency between navigation visibility and route access
+    this.hasGestaoRole = this.teamRoleGuard.hasGestaoRole();
   }
   
   /**
