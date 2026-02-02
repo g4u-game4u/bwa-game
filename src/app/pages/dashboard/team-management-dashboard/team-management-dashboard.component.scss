@@ -88,6 +88,36 @@
           }
         }
       }
+
+      .btn-logout {
+        @include button-secondary;
+        display: flex;
+        align-items: center;
+        gap: $spacing-sm;
+        padding: 12px 20px;
+        min-height: $min-touch-target;
+        min-width: $min-touch-target;
+        background: transparent;
+        border: 1px solid rgba($error-red, 0.3);
+        color: $error-red;
+
+        &:hover {
+          background: rgba($error-red, 0.1);
+          border-color: $error-red;
+          color: $error-red;
+          transform: scale(1.02);
+          box-shadow: 0 4px 15px rgba($error-red, 0.3);
+        }
+
+        &:focus-visible {
+          @include focus-visible;
+          outline-color: $error-red;
+        }
+
+        i {
+          font-size: 1rem;
+        }
+      }
     }
 
     // Tablet: reduce padding
@@ -100,6 +130,10 @@
 
       .header-actions {
         .btn-refresh {
+          padding: 10px 16px;
+        }
+
+        .btn-logout {
           padding: 10px 16px;
         }
       }
@@ -131,6 +165,11 @@
           padding: 8px 14px;
           font-size: $font-size-small;
         }
+
+        .btn-logout {
+          padding: 8px 14px;
+          font-size: $font-size-small;
+        }
       }
     }
 
@@ -150,6 +189,16 @@
         }
 
         .btn-refresh {
+          padding: 8px 12px;
+          font-size: 0.8125rem;
+          gap: $spacing-xs;
+
+          i {
+            font-size: 0.875rem;
+          }
+        }
+
+        .btn-logout {
           padding: 8px 12px;
           font-size: 0.8125rem;
           gap: $spacing-xs;

@@ -1,160 +1,145 @@
 # GESTOR Team Check Update
 
 ## Overview
-Updated the team role guard to check for GESTOR as a **team name** in the player's profile, rather than as a role. This aligns with the actual Funifier API structure where GESTOR is a team that players belong to.
+Updated the team role guard to correctly identify GESTOR users by checking for membership in the specific GESTAO team (ID: FkgMSNO) instead of checking team names.
 
 ## Date
-January 27, 2026
+February 2, 2026
 
-## Changes Made
+## Problem
+The previous implementation was checking for team names "GESTOR" or "GESTAO", but the correct approach is to check if the user belongs to the specific team with ID "FkgMSNO" which represents the GESTAO team.
 
-### 1. Team Role Guard (`src/app/guards/team-role.guard.ts`)
+## Solution
+Updated the `hasGestaoRole()` method in `TeamRoleGuardService` to check for team ID instead of team name.
 
-**Before**: Checked `user.roles` array for GESTAO role
+## Files Modified
+
+### 1. `src/app/guards/team-role.guard.ts`
+**Changes**:
+- Updated `hasGestaoRole()` method to check `team._id === 'FkgMSNO'`
+- Updated comments to reflect team ID-based logic
+- Removed case-insensitive name checking
+
+**Before**:
 ```typescript
-hasGestaoRole(): boolean {
-  const user = this.sessao.usuario;
-  
-  if (!user || !user.roles || !Array.isArray(user.roles)) {
-    return false;
-  }
-
-  return user.roles.some(role => 
-    role && typeof role === 'string' && role.includes(ROLES_LIST.ACCESS_TEAM_MANAGEMENT)
-  );
-}
+return user.teams.some((team: any) => 
+  team && team.name && 
+  (team.name.toUpperCase() === 'GESTOR' || team.name.toUpperCase() === 'GESTAO')
+);
 ```
 
-**After**: Checks `user.teams` array for GESTOR team name
+**After**:
 ```typescript
-hasGestaoRole(): boolean {
-  const user = this.sessao.usuario;
-  
-  if (!user) {
-    return false;
-  }
-
-  // Check if user has teams array
-  if (!user.teams || !Array.isArray(user.teams)) {
-    return false;
-  }
-
-  // Check if any team has the name "GESTOR" or "GESTAO"
-  return user.teams.some((team: any) => 
-    team && team.name && 
-    (team.name.toUpperCase() === 'GESTOR' || team.name.toUpperCase() === 'GESTAO')
-  );
-}
+return user.teams.some((team: any) => 
+  team && team._id === 'FkgMSNO'
+);
 ```
 
-### 2. Usuario Model (`src/app/model/usuario.model.ts`)
+### 2. `src/app/guards/team-role.guard.spec.ts`
+**Changes**:
+- Updated all test cases to use team objects with `_id` property
+- Replaced role-based tests with team-based tests
+- Added tests for team ID "FkgMSNO" specifically
+- Removed ToastService dependency (no error messages for team-based access)
 
-Added `teams` array to support Funifier team structure:
+**Test Coverage**:
+- ✅ User with GESTAO team (FkgMSNO) → Access granted
+- ✅ User without GESTAO team → Access denied
+- ✅ User with multiple teams including GESTAO → Access granted
+- ✅ User with empty teams array → Access denied
+- ✅ User with malformed team objects → Access denied
+- ✅ Null/undefined user → Access denied
+
+### 3. `docs/TEAM_ROLE_GUARD_IMPLEMENTATION.md`
+**Changes**:
+- Updated documentation to reflect team ID-based logic
+- Corrected code examples to show `_id` checking
+- Updated security considerations
+- Removed references to case-insensitive checking
+
+## Logic Flow
+
+### New Team Verification Process
+1. Check if user is authenticated
+2. Check if user has `teams` array
+3. Check if any team has `_id === 'FkgMSNO'`
+4. Grant/deny access based on team membership
+
+### Team Structure Expected
 ```typescript
-export interface Usuario {
-  _id?: string;
-  user_id?: string;
-  created_at?: string;
-  email?: string;
-  avatar_url?: string;
-  full_name?: string;
-  name?: string;
-  deactivated_at?: string | null;
-  roles: string[];
-  team_id?: number;
-  extra?: Record<string, any>;
-  pointCategories?: Record<string, number>;
-  teams?: Array<{         // NEW: Funifier teams array
-    name: string;
-    _id?: string;
-    area?: string;
-    squad?: string;
-    [key: string]: any;
-  }>;
-}
-```
-
-### 3. Documentation Updates
-
-Updated `docs/TEAM_ROLE_GUARD_IMPLEMENTATION.md` to reflect:
-- GESTOR is a team name, not a role
-- Authentication flow includes `/v3/player/me/status` call
-- Team verification logic explanation
-- Data model updates
-- Security considerations
-
-## How It Works
-
-### API Response Structure
-
-When a player logs in, the system calls `/v3/player/me/status` with the bearer token. The response includes:
-
-```json
 {
-  "_id": "user@example.com",
-  "name": "User Name",
-  "teams": [
+  _id: "user@example.com",
+  name: "User Name",
+  teams: [
     {
-      "name": "GESTOR",
-      "_id": "team-id",
-      "area": "Sales",
-      "squad": "Squad 1"
+      _id: "FkgMSNO",     // ← This is what we check
+      name: "GESTAO",
+      area: "Management",
+      squad: "Leadership"
     }
-  ],
-  "extra": { ... },
-  "point_categories": { ... }
+  ]
 }
 ```
 
-### Authentication Flow
+## Testing Results
 
-1. User logs in with email/password
-2. System receives bearer token
-3. System calls `/v3/player/me/status` with bearer token
-4. Response includes player profile with `teams` array
-5. `SessaoProvider` stores user data including teams
-6. When user navigates to team management dashboard:
-   - `TeamRoleGuard` checks if user has teams array
-   - Looks for team with name "GESTOR" or "GESTAO" (case-insensitive)
-   - If found, allows access
-   - If not found, redirects to regular dashboard with error message
+### Unit Tests
+All tests pass with the new team ID-based logic:
+
+```
+✅ User with GESTAO team: true
+✅ User without GESTAO team: false
+✅ User with empty teams: false
+✅ User with no teams property: false
+✅ Null user: false
+✅ User with only GESTAO team: true
+```
+
+### TypeScript Compilation
+✅ No compilation errors
+✅ All diagnostics pass
 
 ## Benefits
 
-1. **Accurate Role Checking**: Aligns with actual Funifier API structure
-2. **Flexible Matching**: Accepts both "GESTOR" and "GESTAO" team names
-3. **Case-Insensitive**: Works regardless of team name casing
-4. **Type Safety**: Updated Usuario model provides proper TypeScript types
-5. **Clear Documentation**: Updated docs explain the team-based approach
+1. **Accuracy**: Checks the correct team identifier (FkgMSNO)
+2. **Security**: Uses exact ID matching instead of name-based checking
+3. **Reliability**: No case-sensitivity issues or name variations
+4. **Performance**: Simpler comparison logic
+5. **Maintainability**: Clear, specific team identification
 
-## Testing Considerations
+## Impact
 
-When testing the team management dashboard:
-- Ensure test users have a team with name "GESTOR" in their Funifier profile
-- The team must be present in the `/v3/player/me/status` response
-- Users without GESTOR team will be denied access
+### Positive Impact
+- GESTOR users are now correctly identified by team membership
+- More secure and reliable access control
+- Cleaner, more maintainable code
 
-## Migration Notes
+### No Breaking Changes
+- Same public API (`hasGestaoRole()` method)
+- Same routing behavior
+- Same user experience (silent redirection)
 
-No migration is needed for existing users. The change is purely in how we check for access:
-- **Before**: Looked for GESTAO in roles array
-- **After**: Looks for GESTOR in teams array
+## Deployment Notes
 
-Ensure that users who should have access to the team management dashboard have the GESTOR team assigned in Funifier.
+- No database changes required
+- No API changes required
+- Users must be assigned to team "FkgMSNO" in Funifier system
+- Existing users with GESTAO team membership will continue to work
 
-## Related Files
+## Future Considerations
 
-- `src/app/guards/team-role.guard.ts` - Updated guard logic
-- `src/app/model/usuario.model.ts` - Added teams array
-- `docs/TEAM_ROLE_GUARD_IMPLEMENTATION.md` - Updated documentation
-- `src/app/providers/sessao/sessao.provider.ts` - Stores user data with teams
-- `src/app/services/player-mapper.service.ts` - Maps player data including teams
+- Team ID "FkgMSNO" is now the canonical identifier for GESTAO team
+- Any future GESTOR-related features should use this same team ID
+- Consider adding constants for team IDs if more team-based features are added
 
 ## Verification
 
-To verify the implementation:
-1. Build completes successfully ✅
-2. No TypeScript diagnostics errors ✅
-3. Guard checks teams array instead of roles ✅
-4. Usuario model includes teams property ✅
-5. Documentation updated ✅
+To verify a user has GESTOR access:
+1. Check their profile from `/v3/player/me/status`
+2. Look for team with `_id: "FkgMSNO"` in the `teams` array
+3. If found, user has GESTOR access
+
+Example verification:
+```javascript
+const hasGestorAccess = user.teams?.some(team => team._id === 'FkgMSNO');
+```

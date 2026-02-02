@@ -258,7 +258,7 @@
     
     .refresh-button {
       position: absolute;
-      right: 0;
+      right: 80px; // Make room for logout button
       top: 50%;
       transform: translateY(-50%);
       display: flex;
@@ -296,12 +296,52 @@
         font-size: $font-size-small;
       }
     }
+
+    .logout-button {
+      position: absolute;
+      right: 0;
+      top: 50%;
+      transform: translateY(-50%);
+      display: flex;
+      align-items: center;
+      gap: $spacing-xs;
+      padding: 8px 16px;
+      background: transparent;
+      border: 1px solid rgba($error-red, 0.3);
+      border-radius: $border-radius-sm;
+      color: $error-red;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      white-space: nowrap;
+      
+      &:hover {
+        background: rgba($error-red, 0.1);
+        border-color: $error-red;
+        color: $error-red;
+      }
+      
+      i {
+        font-size: 1rem;
+      }
+      
+      span {
+        font-size: $font-size-small;
+        font-weight: 500;
+      }
+    }
     
     @include mobile-only {
       flex-direction: column;
       align-items: center;
       
       .refresh-button {
+        position: static;
+        transform: none;
+        margin-top: $spacing-sm;
+        margin-right: $spacing-sm;
+      }
+
+      .logout-button {
         position: static;
         transform: none;
         margin-top: $spacing-sm;
