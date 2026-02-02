@@ -11,11 +11,5 @@ export interface Usuario {
   team_id?: number;
   extra?: Record<string, any>;  // Funifier extra data
   pointCategories?: Record<string, number>;  // Funifier points
-  teams?: Array<{         // Funifier teams array
-    name: string;
-    _id?: string;
-    area?: string;
-    squad?: string;
-    [key: string]: any;
-  }>;
+  teams?: string[];       // Funifier teams array - contains team IDs as strings
 }
