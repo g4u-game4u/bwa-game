@@ -35,10 +35,7 @@ describe('TeamRoleGuardService', () => {
       const mockUser: any = {
         email: 'test@example.com',
         full_name: 'Test User',
-        teams: [
-          { _id: 'FkgMSNO', name: 'GESTAO' },
-          { _id: 'other-team', name: 'Other Team' }
-        ]
+        teams: ['FkgMSNO', 'other-team']
       };
       Object.defineProperty(mockSessaoProvider, 'usuario', {
         get: () => mockUser,
@@ -52,9 +49,7 @@ describe('TeamRoleGuardService', () => {
       const mockUser: any = {
         email: 'test@example.com',
         full_name: 'Test User',
-        teams: [
-          { _id: 'FkgMSNO', name: 'GESTAO' }
-        ]
+        teams: ['FkgMSNO']
       };
       Object.defineProperty(mockSessaoProvider, 'usuario', {
         get: () => mockUser,
@@ -68,10 +63,7 @@ describe('TeamRoleGuardService', () => {
       const mockUser: any = {
         email: 'test@example.com',
         full_name: 'Test User',
-        teams: [
-          { _id: 'other-team-1', name: 'Team 1' },
-          { _id: 'other-team-2', name: 'Team 2' }
-        ]
+        teams: ['other-team-1', 'other-team-2']
       };
       Object.defineProperty(mockSessaoProvider, 'usuario', {
         get: () => mockUser,
@@ -132,16 +124,11 @@ describe('TeamRoleGuardService', () => {
       expect(guard.hasGestaoRole()).toBe(false);
     });
 
-    it('should return false when team objects are malformed', () => {
+    it('should return false when teams array contains non-string values', () => {
       const mockUser: any = {
         email: 'test@example.com',
         full_name: 'Test User',
-        teams: [
-          null,
-          { name: 'GESTAO' }, // Missing _id
-          { _id: 'other-team' }, // Missing name
-          'invalid-team' // Not an object
-        ]
+        teams: [null, undefined, 123, { _id: 'FkgMSNO' }] // Invalid values
       };
       Object.defineProperty(mockSessaoProvider, 'usuario', {
         get: () => mockUser,
@@ -160,9 +147,7 @@ describe('TeamRoleGuardService', () => {
       const mockUser: any = {
         email: 'test@example.com',
         full_name: 'Test User',
-        teams: [
-          { _id: 'FkgMSNO', name: 'GESTAO' }
-        ]
+        teams: ['FkgMSNO']
       };
       Object.defineProperty(mockSessaoProvider, 'usuario', {
         get: () => mockUser,
@@ -179,9 +164,7 @@ describe('TeamRoleGuardService', () => {
       const mockUser: any = {
         email: 'test@example.com',
         full_name: 'Test User',
-        teams: [
-          { _id: 'other-team', name: 'Other Team' }
-        ]
+        teams: ['other-team']
       };
       Object.defineProperty(mockSessaoProvider, 'usuario', {
         get: () => mockUser,
@@ -227,11 +210,7 @@ describe('TeamRoleGuardService', () => {
       const mockUser: any = {
         email: 'admin@example.com',
         full_name: 'Admin User',
-        teams: [
-          { _id: 'team-1', name: 'Team 1' },
-          { _id: 'FkgMSNO', name: 'GESTAO' },
-          { _id: 'team-2', name: 'Team 2' }
-        ]
+        teams: ['team-1', 'FkgMSNO', 'team-2']
       };
       Object.defineProperty(mockSessaoProvider, 'usuario', {
         get: () => mockUser,
@@ -248,11 +227,7 @@ describe('TeamRoleGuardService', () => {
       const mockUser: any = {
         email: 'user@example.com',
         full_name: 'Regular User',
-        teams: [
-          { _id: 'team-a', name: 'Team A' },
-          { _id: 'team-b', name: 'Team B' },
-          { _id: 'team-c', name: 'Team C' }
-        ]
+        teams: ['team-a', 'team-b', 'team-c']
       };
       Object.defineProperty(mockSessaoProvider, 'usuario', {
         get: () => mockUser,
