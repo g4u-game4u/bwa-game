@@ -689,4 +689,11 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
     const dateRange = this.calculateDateRange();
     this.loadProductivityData(dateRange);
   }
+
+  /**
+   * Logout user and redirect to login page
+   */
+  logout(): void {
+    this.sessaoProvider.logout();
+  }
 }

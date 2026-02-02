@@ -4,11 +4,11 @@ import { SessaoProvider } from '@providers/sessao/sessao.provider';
 
 /**
  * Guard service to restrict access to team management dashboard
- * Only users with GESTOR team can access
+ * Only users with GESTOR team (ID: FkgMSNO) can access
  * 
- * Note: GESTOR is a team name in the player's profile, not a role.
+ * Note: GESTOR is determined by team membership, not a role.
  * The player profile from /v3/player/me/status contains a teams array,
- * and we check if any team has the name "GESTOR".
+ * and we check if any team has the ID "FkgMSNO" (GESTAO team).
  */
 @Injectable({
   providedIn: 'root'
@@ -21,7 +21,7 @@ export class TeamRoleGuardService {
 
   /**
    * Check if the current user has GESTOR team
-   * @returns true if user has GESTOR team, false otherwise
+   * @returns true if user has GESTOR team (FkgMSNO), false otherwise
    */
   hasGestaoRole(): boolean {
     const user = this.sessao.usuario;
@@ -35,10 +35,9 @@ export class TeamRoleGuardService {
       return false;
     }
 
-    // Check if any team has the name "GESTOR"
+    // Check if any team has the ID "FkgMSNO" (GESTAO team)
     return user.teams.some((team: any) => 
-      team && team.name && 
-      (team.name.toUpperCase() === 'GESTOR' || team.name.toUpperCase() === 'GESTAO')
+      team && team._id === 'FkgMSNO'
     );
   }
 
@@ -64,12 +63,12 @@ export class TeamRoleGuardService {
       return false;
     }
 
-    // Check if user has GESTAO role
+    // Check if user has GESTAO role (team ID: FkgMSNO)
     if (this.hasGestaoRole()) {
       return true;
     }
 
-    // User doesn't have GESTOR team - silently redirect to regular dashboard
+    // User doesn't have GESTOR team (FkgMSNO) - silently redirect to regular dashboard
     // No error message needed as this is a normal routing decision
     await this.router.navigate(['/dashboard']);
     return false;

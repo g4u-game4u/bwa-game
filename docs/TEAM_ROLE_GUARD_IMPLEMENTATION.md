@@ -1,27 +1,27 @@
 # Team Role Guard Implementation
 
 ## Overview
-This document describes the implementation of the role-based access control guard for the team management dashboard.
+This document describes the implementation of the team-based access control guard for the team management dashboard.
 
 ## Implementation Date
-January 26, 2026
+January 26, 2026 (Updated: February 2, 2026)
 
 ## Requirements Addressed
-- Requirement 1.1: Role-based access control for GESTAO users
-- Requirement 1.3: Role verification on every route navigation
-- Requirement 1.4: Error messaging for access denied scenarios
+- Requirement 1.1: Team-based access control for GESTAO users
+- Requirement 1.3: Team verification on every route navigation
+- Requirement 1.4: Silent redirection for unauthorized access
 
-## Files Created
+## Files Updated
 
 ### 1. TeamRoleGuardService (`src/app/guards/team-role.guard.ts`)
-**Purpose**: Route guard to restrict access to team management dashboard to users with GESTAO role only.
+**Purpose**: Route guard to restrict access to team management dashboard to users belonging to the GESTAO team (ID: FkgMSNO) only.
 
 **Key Features**:
-- `hasGestaoRole()`: Checks if current user has GESTAO role
+- `hasGestaoRole()`: Checks if current user belongs to GESTAO team (ID: FkgMSNO)
 - `canActivate()`: Implements Angular's CanActivate interface
 - Redirects unauthorized users to `/dashboard`
 - Redirects unauthenticated users to `/login`
-- Displays error toast message on access denied
+- Silent redirection (no error messages for team-based access control)
 
 **Usage**:
 ```typescript
@@ -38,16 +38,16 @@ const routes: Routes = [
 
 ### 2. Unit Tests (`src/app/guards/team-role.guard.spec.ts`)
 **Coverage**:
-- ✅ Returns true when user has GESTAO role
-- ✅ Returns true when user has GESTAO among multiple roles
-- ✅ Returns false when user lacks GESTAO role
-- ✅ Returns false when user has no roles
+- ✅ Returns true when user belongs to GESTAO team (FkgMSNO)
+- ✅ Returns true when user belongs to GESTAO among multiple teams
+- ✅ Returns false when user doesn't belong to GESTAO team
+- ✅ Returns false when user has no teams
 - ✅ Returns false when user is null
-- ✅ Returns false when roles is undefined
-- ✅ Returns false when roles is not an array
+- ✅ Returns false when teams is undefined
+- ✅ Returns false when teams is not an array
 - ✅ Redirects to /dashboard when unauthorized
 - ✅ Redirects to /login when not authenticated
-- ✅ Displays error message on access denied
+- ✅ Silent redirection (no error messages)
 
 ### 3. Team Management Dashboard Component
 **Files Created**:
@@ -98,19 +98,19 @@ Added route for team management dashboard:
 6. `TeamRoleGuard.canActivate()` is triggered
 7. Guard checks if user is authenticated via `SessaoProvider.usuario`
 8. If not authenticated → redirect to `/login`
-9. If authenticated → check if user has GESTOR team
-10. If has GESTOR team → allow access (return true)
-11. If no GESTOR team → silently redirect to `/dashboard` (no error message)
+9. If authenticated → check if user belongs to GESTAO team (ID: FkgMSNO)
+10. If belongs to GESTAO team → allow access (return true)
+11. If doesn't belong to GESTAO team → silently redirect to `/dashboard`
 
-**Note**: The guard does NOT show an error message when redirecting users without GESTOR team. This is intentional because:
+**Note**: The guard does NOT show an error message when redirecting users without GESTAO team. This is intentional because:
 - The guard is used for automatic routing decisions
-- Users without GESTOR team simply go to the regular dashboard
+- Users without GESTAO team simply go to the regular dashboard
 - Error messages should only appear for authentication failures or invalid credentials
-- Having GESTOR team determines which dashboard you see, not whether you can access the system
+- Having GESTAO team membership determines which dashboard you see, not whether you can access the system
 
-### Role Verification Logic
+### Team Verification Logic
 
-**Important**: GESTOR is a **team name** in the player's profile, not a role field.
+**Important**: GESTOR is determined by **team membership** with the specific team ID "FkgMSNO" (GESTAO team).
 
 The player profile from `/v3/player/me/status` contains a `teams` array:
 ```typescript
@@ -119,10 +119,10 @@ The player profile from `/v3/player/me/status` contains a `teams` array:
   name: "User Name",
   teams: [
     {
-      name: "GESTOR",  // This is what we check
-      _id: "team-id",
-      area: "Sales",
-      squad: "Squad 1"
+      _id: "FkgMSNO",  // This is what we check
+      name: "GESTAO",
+      area: "Management",
+      squad: "Leadership"
     }
   ]
 }
@@ -142,10 +142,9 @@ hasGestaoRole(): boolean {
     return false;
   }
 
-  // Check if any team has the name "GESTOR" or "GESTAO"
+  // Check if any team has the ID "FkgMSNO" (GESTAO team)
   return user.teams.some((team: any) => 
-    team && team.name && 
-    (team.name.toUpperCase() === 'GESTOR' || team.name.toUpperCase() === 'GESTAO')
+    team && team._id === 'FkgMSNO'
   );
 }
 ```
@@ -179,11 +178,11 @@ The guard has comprehensive unit tests covering:
 
 ## Security Considerations
 
-1. **Team Verification**: The guard checks teams array on every navigation attempt
-2. **Authentication Check**: Ensures user is logged in before checking teams
+1. **Team ID Verification**: The guard checks for specific team ID "FkgMSNO" on every navigation attempt
+2. **Authentication Check**: Ensures user is logged in before checking team membership
 3. **Graceful Degradation**: Handles missing or malformed user data safely
-4. **User Feedback**: Provides clear error messages when access is denied
-5. **Case-Insensitive Check**: Accepts both "GESTOR" and "GESTAO" team names
+4. **Silent Redirection**: No error messages for team-based access control (UX improvement)
+5. **Exact Match**: Uses exact team ID matching for security (no case-insensitive checks needed)
 
 ## Data Model Updates
 
@@ -224,9 +223,9 @@ Once deployed, users with GESTAO role can access the dashboard at:
 
 ## Notes
 
-- The GESTOR team must be assigned to users in the Funifier system
-- GESTOR is a **team name**, not a role - it appears in the `teams` array of the player profile
-- The guard checks the `/v3/player/me/status` response for teams with name "GESTOR" or "GESTAO"
-- Users without GESTOR team will see an error message and be redirected
+- Users must be assigned to the GESTAO team (ID: FkgMSNO) in the Funifier system
+- GESTOR is determined by **team membership**, not a role - it checks for team ID "FkgMSNO"
+- The guard checks the `/v3/player/me/status` response for teams with ID "FkgMSNO"
+- Users without GESTAO team membership will be silently redirected (no error message)
 - The guard is reusable and can be applied to other routes if needed
-- The check is case-insensitive for flexibility
+- The check uses exact team ID matching for security and reliability

@@ -2,15 +2,11 @@ import { TestBed } from '@angular/core/testing';
 import { Router } from '@angular/router';
 import { TeamRoleGuardService } from './team-role.guard';
 import { SessaoProvider } from '@providers/sessao/sessao.provider';
-import { ToastService } from '@services/toast.service';
-import { ROLES_LIST } from '@utils/constants';
-import { Usuario } from '@model/usuario.model';
 
 describe('TeamRoleGuardService', () => {
   let guard: TeamRoleGuardService;
   let mockSessaoProvider: jasmine.SpyObj<SessaoProvider>;
   let mockRouter: jasmine.SpyObj<Router>;
-  let mockToastService: jasmine.SpyObj<ToastService>;
 
   beforeEach(() => {
     // Create mock objects
@@ -18,14 +14,12 @@ describe('TeamRoleGuardService', () => {
       usuario: null
     });
     mockRouter = jasmine.createSpyObj('Router', ['navigate']);
-    mockToastService = jasmine.createSpyObj('ToastService', ['error']);
 
     TestBed.configureTestingModule({
       providers: [
         TeamRoleGuardService,
         { provide: SessaoProvider, useValue: mockSessaoProvider },
-        { provide: Router, useValue: mockRouter },
-        { provide: ToastService, useValue: mockToastService }
+        { provide: Router, useValue: mockRouter }
       ]
     });
 
@@ -37,28 +31,13 @@ describe('TeamRoleGuardService', () => {
   });
 
   describe('hasGestaoRole', () => {
-    it('should return true when user has GESTAO role', () => {
-      const mockUser: Usuario = {
+    it('should return true when user belongs to GESTAO team (FkgMSNO)', () => {
+      const mockUser: any = {
         email: 'test@example.com',
         full_name: 'Test User',
-        roles: [ROLES_LIST.ACCESS_TEAM_MANAGEMENT]
-      };
-      Object.defineProperty(mockSessaoProvider, 'usuario', {
-        get: () => mockUser,
-        configurable: true
-      });
-
-      expect(guard.hasGestaoRole()).toBe(true);
-    });
-
-    it('should return true when user has GESTAO role among other roles', () => {
-      const mockUser: Usuario = {
-        email: 'test@example.com',
-        full_name: 'Test User',
-        roles: [
-          ROLES_LIST.ACCESS_PLAYER_PANEL,
-          ROLES_LIST.ACCESS_TEAM_MANAGEMENT,
-          ROLES_LIST.ACCESS_MANAGER_PANEL
+        teams: [
+          { _id: 'FkgMSNO', name: 'GESTAO' },
+          { _id: 'other-team', name: 'Other Team' }
         ]
       };
       Object.defineProperty(mockSessaoProvider, 'usuario', {
@@ -69,11 +48,30 @@ describe('TeamRoleGuardService', () => {
       expect(guard.hasGestaoRole()).toBe(true);
     });
 
-    it('should return false when user does not have GESTAO role', () => {
-      const mockUser: Usuario = {
+    it('should return true when user belongs only to GESTAO team', () => {
+      const mockUser: any = {
         email: 'test@example.com',
         full_name: 'Test User',
-        roles: [ROLES_LIST.ACCESS_PLAYER_PANEL]
+        teams: [
+          { _id: 'FkgMSNO', name: 'GESTAO' }
+        ]
+      };
+      Object.defineProperty(mockSessaoProvider, 'usuario', {
+        get: () => mockUser,
+        configurable: true
+      });
+
+      expect(guard.hasGestaoRole()).toBe(true);
+    });
+
+    it('should return false when user does not belong to GESTAO team', () => {
+      const mockUser: any = {
+        email: 'test@example.com',
+        full_name: 'Test User',
+        teams: [
+          { _id: 'other-team-1', name: 'Team 1' },
+          { _id: 'other-team-2', name: 'Team 2' }
+        ]
       };
       Object.defineProperty(mockSessaoProvider, 'usuario', {
         get: () => mockUser,
@@ -83,11 +81,11 @@ describe('TeamRoleGuardService', () => {
       expect(guard.hasGestaoRole()).toBe(false);
     });
 
-    it('should return false when user has no roles', () => {
-      const mockUser: Usuario = {
+    it('should return false when user has no teams', () => {
+      const mockUser: any = {
         email: 'test@example.com',
         full_name: 'Test User',
-        roles: []
+        teams: []
       };
       Object.defineProperty(mockSessaoProvider, 'usuario', {
         get: () => mockUser,
@@ -106,11 +104,11 @@ describe('TeamRoleGuardService', () => {
       expect(guard.hasGestaoRole()).toBe(false);
     });
 
-    it('should return false when user roles is undefined', () => {
+    it('should return false when user teams is undefined', () => {
       const mockUser: any = {
         email: 'test@example.com',
         full_name: 'Test User',
-        roles: undefined
+        teams: undefined
       };
       Object.defineProperty(mockSessaoProvider, 'usuario', {
         get: () => mockUser,
@@ -120,11 +118,30 @@ describe('TeamRoleGuardService', () => {
       expect(guard.hasGestaoRole()).toBe(false);
     });
 
-    it('should return false when user roles is not an array', () => {
+    it('should return false when user teams is not an array', () => {
       const mockUser: any = {
         email: 'test@example.com',
         full_name: 'Test User',
-        roles: 'GESTAO' // Invalid: should be array
+        teams: 'FkgMSNO' // Invalid: should be array
+      };
+      Object.defineProperty(mockSessaoProvider, 'usuario', {
+        get: () => mockUser,
+        configurable: true
+      });
+
+      expect(guard.hasGestaoRole()).toBe(false);
+    });
+
+    it('should return false when team objects are malformed', () => {
+      const mockUser: any = {
+        email: 'test@example.com',
+        full_name: 'Test User',
+        teams: [
+          null,
+          { name: 'GESTAO' }, // Missing _id
+          { _id: 'other-team' }, // Missing name
+          'invalid-team' // Not an object
+        ]
       };
       Object.defineProperty(mockSessaoProvider, 'usuario', {
         get: () => mockUser,
@@ -139,11 +156,13 @@ describe('TeamRoleGuardService', () => {
     const mockRoute: any = {};
     const mockState: any = { url: '/dashboard/team-management' };
 
-    it('should return true and allow access when user has GESTAO role', async () => {
-      const mockUser: Usuario = {
+    it('should return true and allow access when user belongs to GESTAO team', async () => {
+      const mockUser: any = {
         email: 'test@example.com',
         full_name: 'Test User',
-        roles: [ROLES_LIST.ACCESS_TEAM_MANAGEMENT]
+        teams: [
+          { _id: 'FkgMSNO', name: 'GESTAO' }
+        ]
       };
       Object.defineProperty(mockSessaoProvider, 'usuario', {
         get: () => mockUser,
@@ -154,14 +173,15 @@ describe('TeamRoleGuardService', () => {
 
       expect(result).toBe(true);
       expect(mockRouter.navigate).not.toHaveBeenCalled();
-      expect(mockToastService.error).not.toHaveBeenCalled();
     });
 
-    it('should return false and redirect to /dashboard when user does not have GESTAO role', async () => {
-      const mockUser: Usuario = {
+    it('should return false and redirect to /dashboard when user does not belong to GESTAO team', async () => {
+      const mockUser: any = {
         email: 'test@example.com',
         full_name: 'Test User',
-        roles: [ROLES_LIST.ACCESS_PLAYER_PANEL]
+        teams: [
+          { _id: 'other-team', name: 'Other Team' }
+        ]
       };
       Object.defineProperty(mockSessaoProvider, 'usuario', {
         get: () => mockUser,
@@ -172,9 +192,6 @@ describe('TeamRoleGuardService', () => {
 
       expect(result).toBe(false);
       expect(mockRouter.navigate).toHaveBeenCalledWith(['/dashboard']);
-      expect(mockToastService.error).toHaveBeenCalledWith(
-        'Acesso negado. Você não tem permissão para acessar esta página.'
-      );
     });
 
     it('should return false and redirect to /login when user is not authenticated', async () => {
@@ -187,32 +204,13 @@ describe('TeamRoleGuardService', () => {
 
       expect(result).toBe(false);
       expect(mockRouter.navigate).toHaveBeenCalledWith(['/login']);
-      expect(mockToastService.error).not.toHaveBeenCalled();
     });
 
-    it('should display error message on access denied', async () => {
-      const mockUser: Usuario = {
+    it('should handle user with empty teams array', async () => {
+      const mockUser: any = {
         email: 'test@example.com',
         full_name: 'Test User',
-        roles: [ROLES_LIST.ACCESS_MANAGER_PANEL]
-      };
-      Object.defineProperty(mockSessaoProvider, 'usuario', {
-        get: () => mockUser,
-        configurable: true
-      });
-
-      await guard.canActivate(mockRoute, mockState);
-
-      expect(mockToastService.error).toHaveBeenCalledWith(
-        'Acesso negado. Você não tem permissão para acessar esta página.'
-      );
-    });
-
-    it('should handle user with empty roles array', async () => {
-      const mockUser: Usuario = {
-        email: 'test@example.com',
-        full_name: 'Test User',
-        roles: []
+        teams: []
       };
       Object.defineProperty(mockSessaoProvider, 'usuario', {
         get: () => mockUser,
@@ -223,17 +221,16 @@ describe('TeamRoleGuardService', () => {
 
       expect(result).toBe(false);
       expect(mockRouter.navigate).toHaveBeenCalledWith(['/dashboard']);
-      expect(mockToastService.error).toHaveBeenCalled();
     });
 
-    it('should handle user with multiple roles including GESTAO', async () => {
-      const mockUser: Usuario = {
+    it('should handle user with multiple teams including GESTAO', async () => {
+      const mockUser: any = {
         email: 'admin@example.com',
         full_name: 'Admin User',
-        roles: [
-          ROLES_LIST.ACCESS_ADMIN_PANEL,
-          ROLES_LIST.ACCESS_TEAM_MANAGEMENT,
-          ROLES_LIST.ACCESS_PLAYER_PANEL
+        teams: [
+          { _id: 'team-1', name: 'Team 1' },
+          { _id: 'FkgMSNO', name: 'GESTAO' },
+          { _id: 'team-2', name: 'Team 2' }
         ]
       };
       Object.defineProperty(mockSessaoProvider, 'usuario', {
@@ -245,7 +242,27 @@ describe('TeamRoleGuardService', () => {
 
       expect(result).toBe(true);
       expect(mockRouter.navigate).not.toHaveBeenCalled();
-      expect(mockToastService.error).not.toHaveBeenCalled();
+    });
+
+    it('should return false when user has teams but none is GESTAO', async () => {
+      const mockUser: any = {
+        email: 'user@example.com',
+        full_name: 'Regular User',
+        teams: [
+          { _id: 'team-a', name: 'Team A' },
+          { _id: 'team-b', name: 'Team B' },
+          { _id: 'team-c', name: 'Team C' }
+        ]
+      };
+      Object.defineProperty(mockSessaoProvider, 'usuario', {
+        get: () => mockUser,
+        configurable: true
+      });
+
+      const result = await guard.canActivate(mockRoute, mockState);
+
+      expect(result).toBe(false);
+      expect(mockRouter.navigate).toHaveBeenCalledWith(['/dashboard']);
     });
   });
 });

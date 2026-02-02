@@ -269,6 +269,74 @@ describe('KPIService', () => {
         done();
       });
     });
+
+    it('should calculate percentage based on super goal for companies', (done) => {
+      const mockPlayerStatus = {
+        _id: 'test-player',
+        name: 'Test Player',
+        extra: {
+          cnpj: '10282,2368,10492,10004,330,1110', // 6 companies
+          entrega: '85'
+        }
+      };
+
+      funifierApiSpy.get.and.returnValue(of(mockPlayerStatus));
+
+      service.getPlayerKPIs('test-player').subscribe(result => {
+        const empresasKPI = result.find(kpi => kpi.id === 'numero-empresas');
+        
+        expect(empresasKPI).toBeDefined();
+        expect(empresasKPI!.current).toBe(6);
+        expect(empresasKPI!.superTarget).toBe(15);
+        expect(empresasKPI!.percentage).toBe(40); // 6/15 * 100 = 40%
+        done();
+      });
+    });
+
+    it('should calculate percentage based on super goal for deliveries', (done) => {
+      const mockPlayerStatus = {
+        _id: 'test-player',
+        name: 'Test Player',
+        extra: {
+          cnpj: '10282,2368,10492',
+          entrega: '85' // 85%
+        }
+      };
+
+      funifierApiSpy.get.and.returnValue(of(mockPlayerStatus));
+
+      service.getPlayerKPIs('test-player').subscribe(result => {
+        const entregasKPI = result.find(kpi => kpi.id === 'entregas-prazo');
+        
+        expect(entregasKPI).toBeDefined();
+        expect(entregasKPI!.current).toBe(85);
+        expect(entregasKPI!.superTarget).toBe(90);
+        expect(entregasKPI!.percentage).toBeCloseTo(94.4, 1); // 85/90 * 100 = 94.44%
+        done();
+      });
+    });
+
+    it('should cap percentage at 100% when exceeding super goal', (done) => {
+      const mockPlayerStatus = {
+        _id: 'test-player',
+        name: 'Test Player',
+        extra: {
+          cnpj: '1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20', // 20 companies
+          entrega: '95' // 95%
+        }
+      };
+
+      funifierApiSpy.get.and.returnValue(of(mockPlayerStatus));
+
+      service.getPlayerKPIs('test-player').subscribe(result => {
+        const empresasKPI = result.find(kpi => kpi.id === 'numero-empresas');
+        const entregasKPI = result.find(kpi => kpi.id === 'entregas-prazo');
+        
+        expect(empresasKPI!.percentage).toBe(100); // Capped at 100% (20/15 = 133% -> 100%)
+        expect(entregasKPI!.percentage).toBe(100); // Capped at 100% (95/90 = 105% -> 100%)
+        done();
+      });
+    });
   });
 
   describe('Goal-based Color System', () => {

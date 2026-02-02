@@ -70,6 +70,14 @@
         <i class="ri-refresh-line" [class.spinning]="isLoading" aria-hidden="true"></i>
         <span class="refresh-time" *ngIf="lastRefreshTime">{{ formattedRefreshTime }}</span>
       </button>
+      <button 
+        class="logout-button"
+        (click)="logout()"
+        aria-label="Sair do sistema"
+        title="Sair">
+        <i class="ri-logout-box-line" aria-hidden="true"></i>
+        <span>Sair</span>
+      </button>
     </div>
     
     <!-- KPI Section -->

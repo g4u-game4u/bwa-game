@@ -640,8 +640,8 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   }
   
   /**
-   * Calculate the average KPI percentage across all player KPIs
-   * This is used for the level indicator in the sidebar
+   * Calculate the average KPI percentage across all player KPIs based on super goals
+   * Super goal = 100%, 0 = 0%. This is used for the level indicator in the sidebar
    */
   get kpiAveragePercent(): number {
     if (!this.playerKPIs || this.playerKPIs.length === 0) {
@@ -649,7 +649,9 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     }
     
     const totalPercent = this.playerKPIs.reduce((sum, kpi) => {
-      const percent = kpi.target > 0 ? (kpi.current / kpi.target) * 100 : 0;
+      // Calculate percentage based on super goal (super goal = 100%)
+      const superGoal = kpi.superTarget || kpi.target;
+      const percent = superGoal > 0 ? (kpi.current / superGoal) * 100 : 0;
       return sum + Math.min(100, percent); // Cap at 100%
     }, 0);
     
@@ -679,5 +681,13 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     if (minutes < 1) return 'Agora mesmo';
     if (minutes === 1) return 'Há 1 minuto';
     return `Há ${minutes} minutos`;
+  }
+
+  /**
+   * Logout user and redirect to login page
+   */
+  logout(): void {
+    this.announceToScreenReader('Saindo do sistema...');
+    this.sessaoProvider.logout();
   }
 }

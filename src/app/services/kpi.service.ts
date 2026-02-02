@@ -116,7 +116,7 @@ export class KPIService {
             superTarget: 90,
             unit: '%',
             color: this.getKPIColorByGoals(deliveryPercentage, 80, 90),
-            percentage: Math.min(deliveryPercentage, 100)
+            percentage: Math.min(deliveryPercentage / 90 * 100, 100)
           });
         }
 
