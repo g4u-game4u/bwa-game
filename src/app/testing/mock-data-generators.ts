@@ -205,15 +205,15 @@ export function createMockActivityMetrics(overrides?: Partial<MockActivityMetric
 }
 
 /**
- * Macro Metrics Mock Data
+ * Process Metrics Mock Data
  */
-export interface MockMacroMetrics {
+export interface MockProcessMetrics {
   pendentes: number;
   incompletas: number;
   finalizadas: number;
 }
 
-export function createMockMacroMetrics(overrides?: Partial<MockMacroMetrics>): MockMacroMetrics {
+export function createMockProcessMetrics(overrides?: Partial<MockProcessMetrics>): MockProcessMetrics {
   return {
     pendentes: 2,
     incompletas: 1,

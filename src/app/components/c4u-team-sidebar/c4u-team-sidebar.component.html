@@ -1,4 +1,6 @@
-<div class="team-sidebar">
+<div class="team-sidebar" 
+     [class.team-management-mode]="viewMode === 'team-management'"
+     [class.inside-card]="insideCard">
   <!-- Team Header -->
   <div class="sidebar-header">
     <h2 class="team-name">{{ teamName }}</h2>
@@ -46,6 +48,18 @@
         </span>
         <span class="metric-value" data-testid="desbloqueados-points">
           {{ seasonPoints.desbloqueados | numberFormat }}
+        </span>
+      </div>
+    </div>
+
+    <div class="metric-card" *ngIf="viewMode === 'team-management' && averagePoints > 0">
+      <div class="metric-item">
+        <span class="metric-label">
+          <i class="metric-icon bi bi-graph-up-arrow"></i>
+          Média de Pontos
+        </span>
+        <span class="metric-value" data-testid="average-points">
+          {{ averagePoints | numberFormat }}
         </span>
       </div>
     </div>

@@ -32,6 +32,12 @@ export class C4uProductivityAnalysisTabComponent implements OnInit, OnChanges {
   @Input() graphData: GraphDataPoint[] = [];
 
   /**
+   * Pre-configured chart datasets (for multiple lines, e.g., one per team member)
+   * If provided, this takes precedence over graphData
+   */
+  @Input() chartDatasetsInput: ChartDataset[] | null = null;
+
+  /**
    * Currently selected time period in days
    */
   @Input() selectedPeriod: number = 30;
@@ -117,7 +123,7 @@ export class C4uProductivityAnalysisTabComponent implements OnInit, OnChanges {
    * Requirement 8.5: Graph data updates
    */
   ngOnChanges(changes: SimpleChanges): void {
-    if (changes['graphData'] || changes['selectedPeriod']) {
+    if (changes['graphData'] || changes['selectedPeriod'] || changes['chartDatasetsInput']) {
       // Trigger debounced update
       this.chartDataUpdate$.next();
     }
@@ -128,8 +134,16 @@ export class C4uProductivityAnalysisTabComponent implements OnInit, OnChanges {
    * 
    * Converts GraphDataPoint array into labels and datasets
    * suitable for Chart.js components.
+   * If chartDatasetsInput is provided, uses that instead.
    */
   private updateChartData(): void {
+    // If pre-configured datasets are provided, use them
+    if (this.chartDatasetsInput && this.chartDatasetsInput.length > 0) {
+      this.chartLabels = this.graphDataProcessor.getDateLabels(this.selectedPeriod);
+      this.chartDatasets = this.chartDatasetsInput;
+      return;
+    }
+
     if (!this.graphData || this.graphData.length === 0) {
       this.chartLabels = [];
       this.chartDatasets = [];

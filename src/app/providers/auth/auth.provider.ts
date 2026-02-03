@@ -7,7 +7,7 @@ import {firstValueFrom, Observable} from "rxjs";
   providedIn: 'root',
 })
 export class AuthProvider {
-  private readonly funifierBaseUrl = environment.funifier_base_url || 'https://service2.funifier.com';
+  private readonly funifierBaseUrl = environment.funifier_base_url || 'https://service2.funifier.com/v3/';
   private readonly funifierApiKey = environment.funifier_api_key;
 
   constructor(private http: HttpClient) {
@@ -15,7 +15,9 @@ export class AuthProvider {
 
   async login(email: string, password: string) {
     console.log('🔐 AuthProvider.login called');
-    console.log('🔐 Funifier URL:', `${this.funifierBaseUrl}/v3/auth/token`);
+    // baseUrl already includes /v3/, so just use auth/token
+    const authUrl = `${this.funifierBaseUrl}auth/token`;
+    console.log('🔐 Funifier URL:', authUrl);
     console.log('🔐 API Key:', this.funifierApiKey);
     console.log('🔐 Username:', email);
     
@@ -32,14 +34,15 @@ export class AuthProvider {
     // Don't add custom headers - Funifier blocks them via CORS
     // The interceptor will recognize Funifier URLs by domain
     return firstValueFrom(
-      this.http.post<LoginResponse>(`${this.funifierBaseUrl}/v3/auth/token`, authBody)
+      this.http.post<LoginResponse>(authUrl, authBody)
     );
   }
 
   userInfo(): Observable<any> {
     // Get user info from Funifier player status
+    // baseUrl already includes /v3/, so just use player/me/status
     // The interceptor will add the Bearer token from sessionStorage
-    return this.http.get(`${this.funifierBaseUrl}/v3/player/me/status`);
+    return this.http.get(`${this.funifierBaseUrl}player/me/status`);
   }
 
   async requestPasswordReset(email: string) {

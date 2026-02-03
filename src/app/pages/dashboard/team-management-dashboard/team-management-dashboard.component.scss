@@ -61,21 +61,47 @@
       overflow: visible;
     }
 
-    .selector-section {
-      @include card;
-      background-color: $surface;
+    // Card wrapper for sidebar
+    .sidebar-card {
+      display: block;
+      width: 100%;
       border-radius: $border-radius;
-      padding: $spacing-md;
-      border: 1px solid $border-color;
+      transition: width 0.3s ease;
       box-sizing: border-box;
-      transition: all $transition-duration $transition-easing;
-      margin-bottom: $spacing-md;
-
-      &:hover {
-        border-color: $primary-electric-blue;
-        box-shadow: 0 0 20px rgba($primary-electric-blue, 0.2);
+      overflow: hidden; // Prevent content overflow
+      
+      ::ng-deep {
+        .content {
+          h1 {
+            display: none; // Hide the title since we don't use it
+          }
+          
+          // Ensure content respects card boundaries
+          width: 100%;
+          max-width: 100%;
+          box-sizing: border-box;
+          overflow: hidden;
+        }
       }
-
+    }
+    
+    .sidebar-content {
+      display: flex;
+      flex-direction: column;
+      gap: $spacing-md;
+      transition: opacity 0.3s ease;
+      width: 100%;
+      box-sizing: border-box;
+      overflow: hidden; // Prevent content overflow
+    }
+    
+    .sidebar-section {
+      min-height: 60px;
+      width: 100%;
+      max-width: 100%;
+      box-sizing: border-box;
+      overflow: hidden; // Prevent content overflow
+      
       .selector-label {
         display: block;
         font-size: $font-size-small;
@@ -85,10 +111,67 @@
         text-transform: uppercase;
         letter-spacing: 0.05em;
       }
-    }
-
-    .sidebar-metrics {
-      flex: 1;
+      
+      .team-display {
+        padding: $spacing-sm $spacing-md;
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: $border-radius-sm;
+        min-height: 40px;
+        display: flex;
+        align-items: center;
+        
+        .team-name {
+          font-size: $font-size-body;
+          font-weight: $font-weight-medium;
+          color: $text-primary;
+        }
+      }
+      
+      // Ensure child components don't overflow
+      ::ng-deep {
+        c4u-team-selector,
+        c4u-collaborator-selector {
+          width: 100% !important;
+          max-width: 100% !important;
+          box-sizing: border-box;
+          display: block;
+          overflow: hidden;
+          
+          .team-selector,
+          .collaborator-selector {
+            width: 100% !important;
+            max-width: 100% !important;
+            box-sizing: border-box;
+            overflow: hidden;
+            
+            .team-select,
+            .collaborator-select {
+              width: 100% !important;
+              max-width: 100% !important;
+              box-sizing: border-box;
+              overflow: hidden;
+              text-overflow: ellipsis;
+            }
+          }
+        }
+        
+        c4u-team-sidebar {
+          width: 100% !important;
+          max-width: 100% !important;
+          box-sizing: border-box;
+          display: block;
+          overflow: hidden;
+          
+          .team-sidebar {
+            width: 100% !important;
+            max-width: 100% !important;
+            box-sizing: border-box;
+            overflow: hidden;
+            padding: 0 !important; // Remove padding when inside card
+          }
+        }
+      }
     }
   }
 
@@ -133,116 +216,104 @@
       gap: $spacing-md;
       position: relative;
       
-      .header-content {
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        width: 100%;
-        position: relative;
+      .header-spacer {
+        display: none; // No longer needed since we're centering
       }
       
-      .header-actions {
+      c4u-seletor-mes {
+        flex: 0 0 auto;
+      }
+      
+      .refresh-button {
+        position: absolute;
+        right: 80px; // Make room for logout button
+        top: 50%;
+        transform: translateY(-50%);
+        display: flex;
+        align-items: center;
+        gap: $spacing-xs;
+        padding: 8px 16px;
+        background: transparent;
+        border: 1px solid $border-color;
+        border-radius: $border-radius-sm;
+        color: $text-secondary;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        white-space: nowrap;
+        
+        &:hover:not(:disabled) {
+          background: rgba($primary-electric-blue, 0.1);
+          border-color: $primary-electric-blue;
+          color: $primary-electric-blue;
+        }
+        
+        &:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
+        
+        i {
+          font-size: 1rem;
+          
+          &.spinning {
+            animation: spin 1s linear infinite;
+          }
+        }
+        
+        .refresh-time {
+          font-size: $font-size-small;
+        }
+      }
+
+      .logout-button {
         position: absolute;
         right: 0;
         top: 50%;
         transform: translateY(-50%);
         display: flex;
         align-items: center;
-        gap: $spacing-md;
+        gap: $spacing-xs;
+        padding: 8px 16px;
+        background: transparent;
+        border: 1px solid rgba($error-red, 0.3);
+        border-radius: $border-radius-sm;
+        color: $error-red;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        white-space: nowrap;
         
-        .last-refresh {
-          font-size: $font-size-small;
-          color: $text-secondary;
-          @include text-secondary;
-        }
-        
-        .btn-refresh {
-          display: flex;
-          align-items: center;
-          gap: $spacing-xs;
-          padding: 8px 16px;
-          background: transparent;
-          border: 1px solid $border-color;
-          border-radius: $border-radius-sm;
-          color: $text-secondary;
-          cursor: pointer;
-          transition: all 0.2s ease;
-          white-space: nowrap;
-          
-          &:hover:not(:disabled) {
-            background: rgba($primary-electric-blue, 0.1);
-            border-color: $primary-electric-blue;
-            color: $primary-electric-blue;
-          }
-          
-          &:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-          }
-          
-          &:focus-visible {
-            @include focus-visible;
-          }
-          
-          i {
-            font-size: 1rem;
-            
-            &.fa-spin {
-              animation: spin 1s linear infinite;
-            }
-          }
-        }
-        
-        .btn-logout {
-          display: flex;
-          align-items: center;
-          gap: $spacing-xs;
-          padding: 8px 16px;
-          background: transparent;
-          border: 1px solid rgba($error-red, 0.3);
-          border-radius: $border-radius-sm;
+        &:hover {
+          background: rgba($error-red, 0.1);
+          border-color: $error-red;
           color: $error-red;
-          cursor: pointer;
-          transition: all 0.2s ease;
-          white-space: nowrap;
-          
-          &:hover {
-            background: rgba($error-red, 0.1);
-            border-color: $error-red;
-            color: $error-red;
-          }
-          
-          &:focus-visible {
-            @include focus-visible;
-            outline-color: $error-red;
-          }
-          
-          i {
-            font-size: 1rem;
-          }
-          
-          span {
-            font-size: $font-size-small;
-            font-weight: 500;
-          }
         }
         
-        @include mobile-only {
-          position: static;
-          transform: none;
-          flex-direction: column;
-          width: 100%;
-          margin-top: $spacing-sm;
-          
-          .last-refresh {
-            display: none;
-          }
+        i {
+          font-size: 1rem;
+        }
+        
+        span {
+          font-size: $font-size-small;
+          font-weight: 500;
         }
       }
       
       @include mobile-only {
         flex-direction: column;
         align-items: center;
+        
+        .refresh-button {
+          position: static;
+          transform: none;
+          margin-top: $spacing-sm;
+          margin-right: $spacing-sm;
+        }
+
+        .logout-button {
+          position: static;
+          transform: none;
+          margin-top: $spacing-sm;
+        }
       }
     }
 
@@ -250,10 +321,11 @@
     .tab-navigation {
       display: flex;
       gap: $spacing-sm;
-      background-color: $surface;
+      background: linear-gradient(to bottom right, rgba(255, 255, 255, 0.2) 0%, rgba(255, 255, 255, 0) 100%);
+      backdrop-filter: blur(25px);
       border-radius: $border-radius;
       padding: $spacing-sm;
-      border: 1px solid $border-color;
+      border: 1px solid rgba(255, 255, 255, 0.1);
       box-sizing: border-box;
       @include card;
       margin-bottom: $spacing-lg;
@@ -292,8 +364,9 @@
         }
 
         &.active {
-          background: linear-gradient(135deg, $primary-electric-blue 0%, $primary-deep-blue 100%);
-          color: $text-primary;
+          background: rgba($primary-electric-blue, 0.2);
+          color: $primary-electric-blue;
+          border: 1px solid rgba($primary-electric-blue, 0.3);
           box-shadow: 0 4px 15px rgba($primary-electric-blue, 0.3);
           
           i {
@@ -325,10 +398,11 @@
     // Tab Content
     .tab-content {
       @include card;
-      background-color: $surface;
+      background: linear-gradient(to bottom right, rgba(255, 255, 255, 0.2) 0%, rgba(255, 255, 255, 0) 100%);
+      backdrop-filter: blur(25px);
       border-radius: $border-radius;
       padding: $spacing-xl;
-      border: 1px solid $border-color;
+      border: 1px solid rgba(255, 255, 255, 0.1);
       min-height: 500px;
       box-sizing: border-box;
 
@@ -344,6 +418,166 @@
 
       .tab-pane {
         animation: fadeIn $transition-duration $transition-easing;
+      }
+    }
+  }
+
+  // Dashboard Sections
+  .dashboard-section {
+    width: 100%;
+    margin-bottom: $spacing-lg;
+    box-sizing: border-box;
+
+    .section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: $spacing-md;
+      width: 100%;
+    }
+
+    .section-title {
+      @include text-heading-2;
+      margin-bottom: $spacing-md;
+      color: $text-primary;
+
+      .section-header & {
+        margin-bottom: 0;
+      }
+    }
+
+    .carteira-expand-btn {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 12px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 6px;
+      color: #9ca3af;
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+
+      &:hover {
+        background: rgba(255, 255, 255, 0.1);
+        color: #eeeeee;
+        border-color: rgba(255, 255, 255, 0.2);
+      }
+
+      &:focus-visible {
+        @include focus-visible;
+      }
+    }
+  }
+
+  // Carteira Section
+  .carteira-section {
+    width: 100%;
+    box-sizing: border-box;
+
+    .carteira-card {
+      display: block;
+      width: 100%;
+      border-radius: $border-radius;
+      box-sizing: border-box;
+
+      ::ng-deep {
+        .content {
+          width: 100%;
+          max-width: 100%;
+          box-sizing: border-box;
+          overflow: hidden;
+
+          h1 {
+            display: none; // Hide the title since we use our own
+          }
+        }
+      }
+
+      .empty-state {
+        padding: $spacing-xl;
+        text-align: center;
+        color: $text-secondary;
+      }
+
+      .carteira-list {
+        display: flex;
+        flex-direction: column;
+        gap: $spacing-sm;
+        padding: $spacing-md;
+        width: 100%;
+        box-sizing: border-box;
+
+        .carteira-item {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding: $spacing-sm $spacing-md;
+          background: rgba($primary-electric-blue, 0.05);
+          border-radius: $border-radius-sm;
+          transition: background-color 0.2s ease;
+          width: 100%;
+          box-sizing: border-box;
+
+          &:hover {
+            background: rgba($primary-electric-blue, 0.1);
+          }
+
+          .carteira-item-info {
+            display: flex;
+            align-items: center;
+            gap: $spacing-sm;
+            flex: 1;
+            min-width: 0;
+
+            i {
+              color: $primary-electric-blue;
+              font-size: 1.25rem;
+              flex-shrink: 0;
+            }
+
+            .carteira-cnpj {
+              font-size: 0.875rem;
+              color: $text-primary;
+              white-space: nowrap;
+              overflow: hidden;
+              text-overflow: ellipsis;
+            }
+          }
+
+          .carteira-action-count {
+            font-size: 0.75rem;
+            color: $text-secondary;
+            background: rgba($primary-electric-blue, 0.1);
+            padding: 2px 8px;
+            border-radius: 12px;
+            flex-shrink: 0;
+            margin-left: $spacing-sm;
+          }
+        }
+
+        .carteira-more {
+          text-align: center;
+          font-size: 0.875rem;
+          color: $primary-electric-blue;
+          padding: $spacing-sm;
+          background: transparent;
+          border: none;
+          width: 100%;
+          cursor: pointer;
+          transition: all 0.2s ease;
+          box-sizing: border-box;
+
+          &:hover {
+            text-decoration: underline;
+            background: rgba($primary-electric-blue, 0.05);
+          }
+
+          &:focus-visible {
+            @include focus-visible;
+          }
+        }
       }
     }
   }

@@ -1,101 +1,101 @@
 <div class="team-management-dashboard" role="main">
+  <!-- Screen reader announcements -->
+  <div aria-live="polite" aria-atomic="true" class="sr-only" id="dashboard-announcements">
+    {{ screenReaderAnnouncement }}
+  </div>
+
+  <!-- Skip link for keyboard navigation -->
+  <a href="#main-content" class="skip-link">
+    Pular para o conteúdo principal
+  </a>
+
   <!-- Sidebar -->
   <aside class="dashboard-sidebar" role="complementary" aria-label="Filtros e métricas da equipe">
-    <!-- Team Selector -->
-    <div class="selector-section">
-      <label class="selector-label" for="team-selector">Equipe / Departamento</label>
-      <c4u-team-selector
-        id="team-selector"
-        [teams]="teams"
-        [selectedTeam]="selectedTeam"
-        (teamSelected)="onTeamChange($event)"
-        aria-label="Selecionar equipe ou departamento">
-      </c4u-team-selector>
-    </div>
-
-    <!-- Collaborator Selector -->
-    <div class="selector-section">
-      <label class="selector-label" for="collaborator-selector">Colaborador</label>
-      <c4u-collaborator-selector
-        id="collaborator-selector"
-        [collaborators]="collaborators"
-        [selectedCollaborator]="selectedCollaborator"
-        (collaboratorSelected)="onCollaboratorChange($event)"
-        aria-label="Filtrar por colaborador">
-      </c4u-collaborator-selector>
-    </div>
-
-    <!-- Month Selector -->
-    <div class="selector-section">
-      <label class="selector-label" for="month-selector">Período</label>
-      <c4u-seletor-mes
-        id="month-selector"
-        (onSelectedMonth)="onMonthChange($event)"
-        aria-label="Selecionar período">
-      </c4u-seletor-mes>
-    </div>
-
-    <!-- Team Sidebar with Metrics -->
-    <div class="sidebar-metrics" *ngIf="!isLoadingSidebar && !hasSidebarError; else sidebarLoadingOrError" role="region" aria-label="Métricas da equipe">
-      <c4u-team-sidebar
-        [teamName]="teamName"
-        [seasonPoints]="seasonPoints"
-        [progressMetrics]="progressMetrics"
-        [seasonDates]="seasonDates">
-      </c4u-team-sidebar>
-    </div>
-
-    <ng-template #sidebarLoadingOrError>
-      <div *ngIf="isLoadingSidebar" class="loading-section" role="status" aria-live="polite">
-        <div class="spinner-border text-primary" role="status" aria-hidden="true">
-          <span class="sr-only">Carregando...</span>
+    <c4u-card class="sidebar-card">
+      <div class="sidebar-content">
+        <!-- Team Selector -->
+        <div class="sidebar-section">
+          <label class="selector-label" for="team-selector">Equipe / Departamento</label>
+          <c4u-team-selector
+            id="team-selector"
+            [teams]="teams"
+            [selectedTeam]="selectedTeamId"
+            (teamSelected)="onTeamChange($event)"
+            aria-label="Selecionar equipe ou departamento">
+          </c4u-team-selector>
         </div>
-        <p class="loading-text">Carregando métricas...</p>
+
+        <!-- Collaborator Selector -->
+        <div class="sidebar-section">
+          <label class="selector-label" for="collaborator-selector">Colaborador</label>
+          <c4u-collaborator-selector
+            id="collaborator-selector"
+            [collaborators]="collaborators"
+            [selectedCollaborator]="selectedCollaborator"
+            (collaboratorSelected)="onCollaboratorChange($event)"
+            aria-label="Filtrar por colaborador">
+          </c4u-collaborator-selector>
+        </div>
+
+        <!-- Team Sidebar with Metrics -->
+        <div class="sidebar-section" *ngIf="!isLoadingSidebar && !hasSidebarError; else sidebarLoadingOrError" role="region" aria-label="Métricas da equipe">
+          <c4u-team-sidebar
+            [teamName]="teamName"
+            [seasonPoints]="seasonPoints"
+            [progressMetrics]="progressMetrics"
+            [seasonDates]="seasonDates"
+            [viewMode]="'team-management'"
+            [insideCard]="true"
+            [averagePoints]="teamAveragePoints">
+          </c4u-team-sidebar>
+        </div>
+
+        <ng-template #sidebarLoadingOrError>
+          <div class="sidebar-section" *ngIf="isLoadingSidebar" role="status" aria-live="polite">
+            <c4u-shimmer></c4u-shimmer>
+          </div>
+          
+          <div class="sidebar-section" *ngIf="hasSidebarError && !isLoadingSidebar" role="alert" aria-live="assertive">
+            <c4u-error-message
+              [message]="sidebarErrorMessage"
+              [showRetry]="true"
+              [isRetrying]="isLoadingSidebar"
+              (retry)="retrySidebarData()">
+            </c4u-error-message>
+          </div>
+        </ng-template>
       </div>
-      
-      <div *ngIf="hasSidebarError && !isLoadingSidebar" role="alert" aria-live="assertive">
-        <c4u-error-message
-          [message]="sidebarErrorMessage"
-          [showRetry]="true"
-          [isRetrying]="isLoadingSidebar"
-          (retry)="retrySidebarData()">
-        </c4u-error-message>
-      </div>
-    </ng-template>
+    </c4u-card>
   </aside>
 
   <!-- Main Content Area -->
-  <main class="dashboard-main" role="main">
+  <main class="dashboard-main" id="main-content" role="main">
     <!-- Header -->
     <div class="dashboard-header" role="banner">
-      <div class="header-content">
-        <c4u-dashboard-navigation></c4u-dashboard-navigation>
-        <div class="header-actions">
-          <span class="last-refresh" *ngIf="!isLoading" aria-live="polite" aria-atomic="true">
-            Última atualização: {{ getLastRefreshTime() }}
-          </span>
-          <button 
-            class="btn btn-refresh" 
-            (click)="refreshData()"
-            [disabled]="isLoading"
-            [attr.aria-label]="isLoading ? 'Atualizando dados...' : 'Atualizar dados do dashboard'"
-            title="Atualizar dados">
-            <i class="fas fa-sync-alt" [class.fa-spin]="isLoading" aria-hidden="true"></i>
-            <span>Atualizar</span>
-          </button>
-          <button 
-            class="btn btn-logout" 
-            (click)="logout()"
-            aria-label="Sair do sistema"
-            title="Sair">
-            <i class="fas fa-sign-out-alt" aria-hidden="true"></i>
-            <span>Sair</span>
-          </button>
-        </div>
-      </div>
+      <c4u-dashboard-navigation></c4u-dashboard-navigation>
+      <div class="header-spacer"></div>
+      <c4u-seletor-mes (onSelectedMonth)="onMonthChange($event)"></c4u-seletor-mes>
+      <button 
+        class="refresh-button"
+        (click)="refreshData()"
+        [disabled]="isLoading"
+        [attr.aria-label]="isLoading ? 'Atualizando dados...' : 'Atualizar dados do dashboard'"
+        title="Atualizar dados">
+        <i class="ri-refresh-line" [class.spinning]="isLoading" aria-hidden="true"></i>
+        <span class="refresh-time" *ngIf="lastRefresh">{{ getLastRefreshTime() }}</span>
+      </button>
+      <button 
+        class="logout-button"
+        (click)="logout()"
+        aria-label="Sair do sistema"
+        title="Sair">
+        <i class="ri-logout-box-line" aria-hidden="true"></i>
+        <span>Sair</span>
+      </button>
     </div>
-      <!-- Tab Navigation -->
-      <div class="tab-navigation" role="tablist" aria-label="Visualizações do dashboard">
+    
+    <!-- Tab Navigation -->
+    <div class="tab-navigation" role="tablist" aria-label="Visualizações do dashboard">
         <button 
           class="tab-button"
           role="tab"
@@ -124,10 +124,10 @@
           <i class="fas fa-chart-line" aria-hidden="true"></i>
           <span>Análise de Produtividade</span>
         </button>
-      </div>
+    </div>
 
-      <!-- Tab Content -->
-      <div class="tab-content">
+    <!-- Tab Content -->
+    <div class="tab-content">
         <!-- Goals Tab -->
         <div 
           class="tab-pane" 
@@ -142,14 +142,65 @@
               [goals]="goalMetrics"
               [isLoading]="isLoadingGoals">
             </c4u-goals-progress-tab>
+            
+            <!-- Progress Section (Activities and Macros) -->
+            <section class="dashboard-section" aria-labelledby="progress-section-title">
+              <h2 id="progress-section-title" class="section-title">Progresso da Equipe</h2>
+              
+              <c4u-activity-progress
+                *ngIf="teamActivityMetrics && teamProcessMetrics"
+                [activities]="teamActivityMetrics"
+                [processos]="teamProcessMetrics"
+                (cardClicked)="onProgressCardClicked($event)">
+              </c4u-activity-progress>
+              
+              <c4u-shimmer *ngIf="isLoadingGoals"></c4u-shimmer>
+            </section>
+            
+            <!-- Company Portfolio Section -->
+            <section class="dashboard-section carteira-section" aria-labelledby="company-section-title">
+              <div class="section-header">
+                <h2 id="company-section-title" class="section-title">Carteira da Equipe</h2>
+                <button 
+                  type="button" 
+                  class="carteira-expand-btn"
+                  (click)="openCarteiraModal()"
+                  aria-label="Ver todos os clientes">
+                  <i class="ri-external-link-line"></i>
+                  Ver todos
+                </button>
+              </div>
+              
+              <c4u-card class="carteira-card">
+                <!-- Carteira list from action_log CNPJs -->
+                <div *ngIf="teamCarteiraClientes.length > 0" class="carteira-list">
+                  <div *ngFor="let cliente of teamCarteiraClientes.slice(0, 5)" class="carteira-item">
+                    <div class="carteira-item-info">
+                      <i class="ri-building-2-line"></i>
+                      <span class="carteira-cnpj">{{ cliente.cnpj }}</span>
+                    </div>
+                    <span class="carteira-action-count">{{ cliente.actionCount }} ações</span>
+                  </div>
+                  <button 
+                    *ngIf="teamCarteiraClientes.length > 5" 
+                    type="button"
+                    class="carteira-more"
+                    (click)="openCarteiraModal()"
+                    [attr.aria-label]="'Ver todos os ' + teamCarteiraClientes.length + ' clientes'">
+                    + {{ teamCarteiraClientes.length - 5 }} clientes
+                  </button>
+                </div>
+                
+                <c4u-shimmer *ngIf="isLoadingCarteira"></c4u-shimmer>
+                
+                <div *ngIf="!isLoadingCarteira && teamCarteiraClientes.length === 0" class="empty-state">
+                  <p>Nenhum cliente encontrado na carteira da equipe</p>
+                </div>
+              </c4u-card>
+            </section>
           </div>
 
-          <div *ngIf="isLoadingGoals" class="loading-section" role="status" aria-live="polite">
-            <div class="spinner-border text-primary" role="status" aria-hidden="true">
-              <span class="sr-only">Carregando...</span>
-            </div>
-            <p class="loading-text">Carregando metas...</p>
-          </div>
+          <c4u-shimmer *ngIf="isLoadingGoals"></c4u-shimmer>
 
           <div *ngIf="hasGoalsError && !isLoadingGoals" role="alert" aria-live="assertive">
             <c4u-error-message
@@ -173,6 +224,7 @@
           <div *ngIf="!isLoadingProductivity && !hasProductivityError">
             <c4u-productivity-analysis-tab
               [graphData]="graphData"
+              [chartDatasetsInput]="graphDatasets"
               [selectedPeriod]="selectedPeriod"
               [isLoading]="isLoadingProductivity"
               (periodChanged)="onPeriodChange($event)"
@@ -180,12 +232,7 @@
             </c4u-productivity-analysis-tab>
           </div>
 
-          <div *ngIf="isLoadingProductivity" class="loading-section" role="status" aria-live="polite">
-            <div class="spinner-border text-primary" role="status" aria-hidden="true">
-              <span class="sr-only">Carregando...</span>
-            </div>
-            <p class="loading-text">Carregando análise de produtividade...</p>
-          </div>
+          <c4u-shimmer *ngIf="isLoadingProductivity"></c4u-shimmer>
 
           <div *ngIf="hasProductivityError && !isLoadingProductivity" role="alert" aria-live="assertive">
             <c4u-error-message
@@ -196,8 +243,25 @@
             </c4u-error-message>
           </div>
         </div>
-      </div>
-    </main>
+    </div>
+  </main>
+
+  <!-- Progress List Modal -->
+  <modal-progress-list
+    *ngIf="isProgressModalOpen"
+    [playerId]="teamPlayerIdsForModal"
+    [listType]="progressModalType"
+    [month]="selectedMonth"
+    (closed)="onProgressModalClosed()">
+  </modal-progress-list>
+  
+  <!-- Carteira Modal -->
+  <modal-carteira
+    *ngIf="isCarteiraModalOpen"
+    [playerId]="teamPlayerIdsForModal"
+    [month]="selectedMonth"
+    (closed)="onCarteiraModalClosed()">
+  </modal-carteira>
 
   <!-- Global Loading Overlay -->
   <div class="loading-overlay" *ngIf="isLoading" role="status" aria-live="polite" aria-atomic="true">

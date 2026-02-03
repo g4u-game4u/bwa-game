@@ -17,6 +17,8 @@ export interface SeasonDates {
   end: Date;
 }
 
+export type TeamSidebarViewMode = 'player' | 'team-management';
+
 @Component({
   selector: 'c4u-team-sidebar',
   templateUrl: './c4u-team-sidebar.component.html',
@@ -39,4 +41,7 @@ export class C4uTeamSidebarComponent {
     start: new Date(),
     end: new Date()
   };
+  @Input() viewMode: TeamSidebarViewMode = 'player';
+  @Input() insideCard: boolean = false;
+  @Input() averagePoints: number = 0;
 }

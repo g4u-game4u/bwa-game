@@ -76,7 +76,7 @@ export interface Company {
 export interface CompanyDetails extends Company {
   processes: Process[];
   activities: Activity[];
-  macros: Macro[];
+  processos: Process[];
 }
 
 // Process and Task Models
@@ -84,8 +84,9 @@ export interface Process {
   id: string;
   name: string;
   status: ProcessStatus;
-  tasks: Task[];
+  tasks?: Task[];
   expanded?: boolean;
+  completedDate?: Date;
 }
 
 export interface Task {
@@ -114,17 +115,10 @@ export interface ActivityMetrics {
   pontos: number;
 }
 
-export interface MacroMetrics {
+export interface ProcessMetrics {
   pendentes: number;
   incompletas: number;
   finalizadas: number;
-}
-
-export interface Macro {
-  id: string;
-  name: string;
-  status: ProcessStatus;
-  completedDate?: Date;
 }
 
 // Team Management Models

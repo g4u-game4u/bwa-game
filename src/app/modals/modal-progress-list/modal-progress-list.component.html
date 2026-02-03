@@ -26,19 +26,19 @@
       </ul>
     </ng-container>
 
-    <!-- Macro List -->
-    <ng-container *ngIf="!isLoading && isMacroList">
-      <div *ngIf="macroItems.length === 0" class="empty-state">
+    <!-- Process List -->
+    <ng-container *ngIf="!isLoading && isProcessList">
+      <div *ngIf="processoItems.length === 0" class="empty-state">
         <i class="ri-inbox-line empty-icon"></i>
-        <span>Nenhuma macro encontrada</span>
+        <span>Nenhum processo encontrado</span>
       </div>
       
-      <ul class="item-list" *ngIf="macroItems.length > 0">
-        <li *ngFor="let item of macroItems" class="list-item macro-item">
+      <ul class="item-list" *ngIf="processoItems.length > 0">
+        <li *ngFor="let item of processoItems" class="list-item processo-item">
           <div class="item-main">
             <span class="item-title">{{ item.title }}</span>
             <span class="item-badge" [class.finalized]="item.isFinalized">
-              {{ item.isFinalized ? 'Finalizada' : 'Pendente' }}
+              {{ item.isFinalized ? 'Finalizado' : 'Pendente' }}
             </span>
           </div>
           <div class="item-meta">

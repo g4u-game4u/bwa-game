@@ -11,7 +11,7 @@ import {
   createMockTask,
   createMockProcess,
   createMockActivityMetrics,
-  createMockMacroMetrics,
+  createMockProcessMetrics,
   generateMockArray,
   randomInt,
   randomItem
@@ -100,9 +100,9 @@ describe('Mock Data Generators', () => {
     });
   });
 
-  describe('createMockMacroMetrics', () => {
-    it('should create default macro metrics', () => {
-      const metrics = createMockMacroMetrics();
+  describe('createMockProcessMetrics', () => {
+    it('should create default process metrics', () => {
+      const metrics = createMockProcessMetrics();
       expect(metrics.pendentes).toBe(2);
       expect(metrics.finalizadas).toBe(8);
     });

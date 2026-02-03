@@ -2,7 +2,7 @@ import { Injectable } from '@angular/core';
 import { Observable, of, forkJoin } from 'rxjs';
 import { map, catchError, shareReplay, switchMap } from 'rxjs/operators';
 import { FunifierApiService } from './funifier-api.service';
-import { ActivityMetrics, MacroMetrics } from '@model/gamification-dashboard.model';
+import { ActivityMetrics, ProcessMetrics } from '@model/gamification-dashboard.model';
 import dayjs from 'dayjs';
 
 export interface ActionLogEntry {
@@ -11,8 +11,8 @@ export interface ActionLogEntry {
   userId: string; // User's email
   time: number; // Timestamp when action was logged (milliseconds)
   attributes?: {
-    delivery_title?: string; // Macro title
-    delivery_id?: number; // Macro ID (number)
+    delivery_title?: string; // Process title
+    delivery_id?: number; // Process ID (number)
     delivery?: number; // Used in desbloquear action to reference delivery_id
     acao?: string; // Action title to display
     cnpj?: string; // Client CNPJ
@@ -43,7 +43,7 @@ export interface ActivityListItem {
   created: number;
 }
 
-export interface MacroListItem {
+export interface ProcessListItem {
   deliveryId: string;
   title: string; // delivery_title
   actionCount: number;
@@ -88,6 +88,8 @@ function extractTimestamp(time: number | { $date: string } | undefined): number 
  * - `-0M+` = end of current month
  * - `-1M-` = start of previous month
  * - `-1M+` = end of previous month
+ * 
+ * When February is selected (1 month ago), includes January as well.
  */
 function getRelativeDateExpression(month: Date | undefined, position: 'start' | 'end'): { $date: string } | number {
   const targetMonth = month || new Date();
@@ -100,6 +102,11 @@ function getRelativeDateExpression(month: Date | undefined, position: 'start' | 
   // Calculate month difference
   const monthDiff = (currentYear - targetYear) * 12 + (currentMonth - targetMonthNum);
   
+  // If February is selected (1 month ago) and we need the start date, go back one more month (January)
+  if (monthDiff === 1 && position === 'start') {
+    return { $date: `-${monthDiff + 1}M-` }; // Start of January
+  }
+  
   // Use Funifier relative date syntax
   const suffix = position === 'start' ? '-' : '+';
   return { $date: `-${monthDiff}M${suffix}` };
@@ -111,7 +118,7 @@ function getRelativeDateExpression(month: Date | undefined, position: 'start' | 
 export class ActionLogService {
   private readonly CACHE_DURATION = 3 * 60 * 1000; // 3 minutes
   private actionLogCache = new Map<string, CacheEntry<ActionLogEntry[]>>();
-  private metricsCache = new Map<string, CacheEntry<{ activity: ActivityMetrics; macro: MacroMetrics }>>();
+  private metricsCache = new Map<string, CacheEntry<{ activity: ActivityMetrics; processo: ProcessMetrics }>>();
 
   constructor(private funifierApi: FunifierApiService) {}
 
@@ -281,12 +288,12 @@ export class ActionLogService {
   }
 
   /**
-   * Get macro metrics for a player
-   * A Macro is identified by unique attributes.delivery_id (number) in action_log
-   * Macro is Finalizada if there's a "desbloquear" action with attributes.delivery = delivery_id
-   * Otherwise it's Pendente/Incompleta
+   * Get process metrics for a player
+   * A Process is identified by unique attributes.delivery_id (number) in action_log
+   * Process is Finalizado if there's a "desbloquear" action with attributes.delivery = delivery_id
+   * Otherwise it's Pendente/Incompleto
    */
-  getMacroMetrics(playerId: string, month?: Date): Observable<MacroMetrics> {
+  getProcessMetrics(playerId: string, month?: Date): Observable<ProcessMetrics> {
     return this.getPlayerActionLogForMonth(playerId, month).pipe(
       switchMap(userActions => {
         // Get unique delivery_ids from user's actions (attributes.delivery_id is a number)
@@ -348,19 +355,19 @@ export class ActionLogService {
         );
       }),
       catchError(error => {
-        console.error('Error calculating macro metrics:', error);
+        console.error('Error calculating process metrics:', error);
         return of({ pendentes: 0, incompletas: 0, finalizadas: 0 });
       })
     );
   }
 
   /**
-   * Get activity and macro metrics for a player
+   * Get activity and process metrics for a player
    * This provides data for "Meu Progresso" section
    * - Atividades: Finalizadas (count of action_log entries), Pontos (from achievement)
-   * - Macros: Finalizadas, Pendentes/Incompletas (based on desbloquear action)
+   * - Processos: Finalizados, Pendentes/Incompletos (based on desbloquear action)
    */
-  getProgressMetrics(playerId: string, month?: Date): Observable<{ activity: ActivityMetrics; macro: MacroMetrics }> {
+  getProgressMetrics(playerId: string, month?: Date): Observable<{ activity: ActivityMetrics; processo: ProcessMetrics }> {
     const cacheKey = `metrics_${playerId}_${dayjs(month || new Date()).format('YYYY-MM')}`;
     const cached = this.getCachedData(this.metricsCache, cacheKey);
     if (cached) {
@@ -370,22 +377,22 @@ export class ActionLogService {
     const request$ = forkJoin({
       finalizadas: this.getAtividadesFinalizadas(playerId, month),
       pontos: this.getPontosForMonth(playerId, month),
-      macro: this.getMacroMetrics(playerId, month)
+      processo: this.getProcessMetrics(playerId, month)
     }).pipe(
-      map(({ finalizadas, pontos, macro }) => ({
+      map(({ finalizadas, pontos, processo }) => ({
         activity: {
           pendentes: 0, // Not used anymore
           emExecucao: 0, // Not used anymore
           finalizadas,
           pontos
         },
-        macro
+        processo
       })),
       catchError(error => {
         console.error('Error calculating progress metrics:', error);
         return of({
           activity: { pendentes: 0, emExecucao: 0, finalizadas: 0, pontos: 0 },
-          macro: { pendentes: 0, incompletas: 0, finalizadas: 0 }
+          processo: { pendentes: 0, incompletas: 0, finalizadas: 0 }
         });
       }),
       shareReplay({ bufferSize: 1, refCount: true, windowTime: this.CACHE_DURATION })
@@ -415,11 +422,11 @@ export class ActionLogService {
   }
 
   /**
-   * Get list of macros for modal display
+   * Get list of processes for modal display
    * Groups by attributes.delivery_id (number), shows attributes.delivery_title and action count
    * Note: delivery_id is a number in attributes, not a string
    */
-  getMacroList(playerId: string, month?: Date): Observable<MacroListItem[]> {
+  getProcessList(playerId: string, month?: Date): Observable<ProcessListItem[]> {
     return this.getPlayerActionLogForMonth(playerId, month).pipe(
       switchMap(userActions => {
         // Group actions by attributes.delivery_id (number)
@@ -433,7 +440,7 @@ export class ActionLogService {
               existing.count++;
             } else {
               deliveryMap.set(deliveryId, {
-                title: action.attributes?.delivery_title || `Macro ${deliveryId}`,
+                title: action.attributes?.delivery_title || `Processo ${deliveryId}`,
                 count: 1
               });
             }
@@ -442,13 +449,13 @@ export class ActionLogService {
 
         const deliveryIds = [...deliveryMap.keys()];
         
-        console.log('📊 Macro list - unique delivery_ids:', deliveryIds);
+        console.log('📊 Process list - unique delivery_ids:', deliveryIds);
 
         if (deliveryIds.length === 0) {
           return of([]);
         }
 
-        // Check which macros are finalized (have desbloquear action with matching attributes.delivery)
+        // Check which processes are finalized (have desbloquear action with matching attributes.delivery)
         // Note: attributes.delivery in desbloquear action matches delivery_id
         const aggregateBody = [
           {
@@ -464,7 +471,7 @@ export class ActionLogService {
           }
         ];
 
-        console.log('📊 Macro finalization query:', JSON.stringify(aggregateBody));
+        console.log('📊 Process finalization query:', JSON.stringify(aggregateBody));
 
         return this.funifierApi.post<{ _id: number }[]>(
           '/v3/database/action_log/aggregate?strict=true',
@@ -500,7 +507,7 @@ export class ActionLogService {
         );
       }),
       catchError(error => {
-        console.error('Error fetching macro list:', error);
+        console.error('Error fetching process list:', error);
         return of([]);
       })
     );

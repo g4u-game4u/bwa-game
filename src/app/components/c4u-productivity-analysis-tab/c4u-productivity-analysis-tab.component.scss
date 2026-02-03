@@ -24,10 +24,7 @@
       .tab-title {
         margin: 0;
         @include text-heading-3;
-        background: linear-gradient(135deg, $primary-electric-blue 0%, $success-green 100%);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        background-clip: text;
+        color: $text-primary;
       }
     }
 

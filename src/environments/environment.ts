@@ -10,9 +10,9 @@ export const environment = {
   // backend_url_base: 'http://194.163.158.136:1935'
   
   // Funifier API Configuration
-  funifier_api_url: 'https://service2.funifier.com',
+  funifier_api_url: 'https://service2.funifier.com/v3/',
   funifier_api_key: '690a785ce179d46fce59ed65',
-  funifier_base_url: 'https://service2.funifier.com',
+  funifier_base_url: 'https://service2.funifier.com/v3/',
   funifier_basic_token: 'NjkwYTc4NWNlMTc5ZDQ2ZmNlNTllZDY1OjY3ZWM0ZTRhMjMyN2Y3NGYzYTJmOTZmNQ==',
   
   // Cache Configuration
