@@ -1,6 +1,8 @@
-import { Component, OnInit, OnDestroy, ChangeDetectionStrategy } from '@angular/core';
+import { Component, OnInit, OnDestroy, ChangeDetectionStrategy, ChangeDetectorRef } from '@angular/core';
+import { Router } from '@angular/router';
 import { Subject } from 'rxjs';
 import { takeUntil, finalize } from 'rxjs/operators';
+import { firstValueFrom } from 'rxjs';
 import * as dayjs from 'dayjs';
 import { trigger, transition, style, animate } from '@angular/animations';
 
@@ -10,16 +12,23 @@ import { GraphDataProcessorService } from '@services/graph-data-processor.servic
 import { SeasonDatesService } from '@services/season-dates.service';
 import { ToastService } from '@services/toast.service';
 import { SessaoProvider } from '@providers/sessao/sessao.provider';
+import { FunifierApiService } from '@services/funifier-api.service';
+import { PlayerService } from '@services/player.service';
+import { ActionLogService } from '@services/action-log.service';
+import { UserProfileService } from '@services/user-profile.service';
+import { UserProfile } from '@utils/user-profile';
 
 // Models
 import { Team } from '@components/c4u-team-selector/c4u-team-selector.component';
 import { GoalMetric } from '@components/c4u-goals-progress-tab/c4u-goals-progress-tab.component';
-import { GraphDataPoint } from '@app/model/gamification-dashboard.model';
+import { GraphDataPoint, ActivityMetrics, ProcessMetrics, ChartDataset } from '@app/model/gamification-dashboard.model';
+import { ProgressCardType } from '@components/c4u-activity-progress/c4u-activity-progress.component';
+import { ProgressListType } from '@modals/modal-progress-list/modal-progress-list.component';
 
 /**
  * Team Management Dashboard Component
  * Main container for the management dashboard view
- * Accessible only to users with GESTAO role
+ * Accessible only to users with management teams (GESTAO, SUPERVISÃO, or DIREÇÃO)
  * 
  * This component orchestrates all child components and manages the data flow
  * between team selection, collaborator filtering, month selection, and data display.
@@ -51,10 +60,12 @@ import { GraphDataPoint } from '@app/model/gamification-dashboard.model';
 export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
   // State management
   selectedTeam: string = '';
+  selectedTeamId: string = ''; // Funifier team ID (e.g., 'FkmdnFU')
   selectedCollaborator: string | null = null;
   selectedMonth: Date = new Date();
   selectedMonthsAgo: number = 0;
   activeTab: 'goals' | 'productivity' = 'goals';
+  productivityChartType: 'line' | 'bar' = 'line'; // Shared chart type for both productivity charts
   
   // Loading states
   isLoading: boolean = false;
@@ -85,11 +96,47 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
   };
   seasonDates: { start: Date; end: Date } = { start: new Date(), end: new Date() };
   goalMetrics: GoalMetric[] = [];
-  graphData: GraphDataPoint[] = [];
+  graphData: GraphDataPoint[] = []; // Activities data
+  graphDatasets: ChartDataset[] = []; // Multiple datasets for team members (one line per player) - Activities
+  pointsGraphData: GraphDataPoint[] = []; // Points data
+  pointsGraphDatasets: ChartDataset[] = []; // Multiple datasets for team members (one line per player) - Points
   selectedPeriod: number = 30;
+  
+  // Team aggregated data from members
+  teamTotalPoints: number = 0;
+  teamAveragePoints: number = 0;
+  teamTotalTasks: number = 0;
+  teamTotalBlockedPoints: number = 0; // Sum of blocked points from all team members
+  teamMemberIds: string[] = [];
+  teamMembersData: any[] = []; // Store full player data from aggregate (includes extra.cnpj)
+  
+  // Activity and Process metrics for team
+  teamActivityMetrics: ActivityMetrics = {
+    pendentes: 0,
+    emExecucao: 0,
+    finalizadas: 0,
+    pontos: 0
+  };
+  teamProcessMetrics: ProcessMetrics = {
+    pendentes: 0,
+    incompletas: 0,
+    finalizadas: 0
+  };
+  
+  // Company/Carteira data for team
+  teamCarteiraClientes: { cnpj: string; actionCount: number }[] = [];
+  isLoadingCarteira: boolean = false;
+  
+  // Modal states
+  isProgressModalOpen: boolean = false;
+  progressModalType: ProgressListType = 'atividades';
+  isCarteiraModalOpen: boolean = false;
   
   // Refresh tracking
   lastRefresh: Date = new Date();
+  
+  // Accessibility properties
+  screenReaderAnnouncement: string = '';
   
   // Cleanup
   private destroy$ = new Subject<void>();
@@ -99,7 +146,13 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
     private graphDataProcessor: GraphDataProcessorService,
     private seasonDatesService: SeasonDatesService,
     private toastService: ToastService,
-    private sessaoProvider: SessaoProvider
+    private sessaoProvider: SessaoProvider,
+    private funifierApi: FunifierApiService,
+    private playerService: PlayerService,
+    private actionLogService: ActionLogService,
+    private userProfileService: UserProfileService,
+    private router: Router,
+    private cdr: ChangeDetectorRef
   ) {}
 
   ngOnInit(): void {
@@ -112,13 +165,13 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Initialize dashboard by loading teams and season dates.
+   * Initialize dashboard by loading user's team and season dates.
    * 
    * This method is called on component initialization and performs the following:
    * 1. Loads season dates from the SeasonDatesService
-   * 2. Loads available teams (from hardcoded list or user metadata)
-   * 3. Selects the first team or previously selected team from localStorage
-   * 4. Loads all data for the selected team
+   * 2. Identifies the user's management team (GESTAO, SUPERVISÃO, or DIREÇÃO)
+   * 3. Fetches team information from Funifier to get the team name
+   * 4. Loads all data for the user's team
    * 
    * @private
    * @async
@@ -131,30 +184,38 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
   private async initializeDashboard(): Promise<void> {
     try {
       this.isLoading = true;
+      console.log('🚀 Initializing team management dashboard...');
       
       // Load season dates first
+      console.log('📅 Loading season dates...');
       await this.loadSeasonDates();
+      console.log('✅ Season dates loaded');
       
-      // Load available teams
-      await this.loadTeams();
+      // Load available teams that the user has access to
+      console.log('👥 Loading available teams...');
+      await this.loadAvailableTeams();
+      console.log('✅ Available teams loaded:', this.teams.length);
       
-      // If teams are available, load data for the first team
+      // Select the first available team or previously selected team
       if (this.teams.length > 0) {
-        // Check if there's a saved team selection
-        const savedTeam = localStorage.getItem('selectedTeamId');
-        if (savedTeam && this.teams.some(t => t.id === savedTeam)) {
-          this.selectedTeam = savedTeam;
-        } else {
-          this.selectedTeam = this.teams[0].id;
-        }
+        const savedTeamId = localStorage.getItem('selectedTeamId');
+        const teamToSelect = savedTeamId && this.teams.find(t => t.id === savedTeamId) 
+          ? savedTeamId 
+          : this.teams[0].id;
         
-        await this.loadTeamData();
+        await this.onTeamChange(teamToSelect);
+        console.log('✅ Initial team selected:', teamToSelect);
+      } else {
+        console.error('❌ No teams available for user');
+        this.toastService.error('Usuário não tem acesso a nenhum time');
       }
     } catch (error) {
-      console.error('Error initializing dashboard:', error);
+      console.error('❌ Error initializing dashboard:', error);
       this.toastService.error('Erro ao carregar dashboard');
     } finally {
       this.isLoading = false;
+      console.log('🏁 Dashboard initialization complete, isLoading:', this.isLoading);
+      this.cdr.markForCheck();
     }
   }
 
@@ -191,52 +252,290 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Load available teams for the current user.
+   * Get the management team ID that the current user belongs to.
    * 
-   * Currently uses hardcoded teams but can be extended to fetch from:
-   * - User metadata (extra.teams field)
-   * - Funifier API
-   * - Custom team management service
+   * Uses UserProfileService to get the user's own team ID based on their profile.
    * 
-   * Teams are stored in the component's teams array and displayed in the
-   * team selector dropdown.
+   * @private
+   * @returns The team ID if user belongs to a management team, null otherwise
+   * 
+   * @example
+   * const teamId = this.getUserManagementTeamId();
+   * // Returns: 'FkmdnFU' or 'Fkmdmko' or null (DIRETOR returns null as they can see all)
+   */
+  private getUserManagementTeamId(): string | null {
+    return this.userProfileService.getCurrentUserOwnTeamId();
+  }
+
+  /**
+   * Load all available teams from Funifier and filter by user profile.
+   * 
+   * Filtering logic based on profile:
+   * - JOGADOR: No teams (should not reach here)
+   * - SUPERVISOR: Only their own SUPERVISÃO team
+   * - GESTOR: Their GESTAO team and potentially other teams they manage
+   * - DIRETOR: All teams (no filtering)
    * 
    * @private
    * @async
    * @returns Promise that resolves when teams are loaded
-   * 
-   * @todo Replace hardcoded teams with API call
-   * 
-   * @example
-   * await this.loadTeams();
-   * console.log(this.teams); // [{ id: 'Team1', name: 'Team1', memberCount: 0 }]
    */
-  private async loadTeams(): Promise<void> {
+  private async loadAvailableTeams(): Promise<void> {
     try {
       this.isLoadingTeams = true;
       
-      // TODO: Replace with actual API call to fetch teams from Funifier or user metadata
-      // For now, using hardcoded teams based on the data schema examples
-      this.teams = [
-        { id: 'Departamento Pessoal', name: 'Departamento Pessoal', memberCount: 0 },
-        { id: 'Financeiro', name: 'Financeiro', memberCount: 0 },
-        { id: 'Comercial', name: 'Comercial', memberCount: 0 }
+      const profile = this.userProfileService.getCurrentUserProfile();
+      console.log('👤 User profile:', profile);
+      
+      // Fetch all teams from Funifier
+      const allTeams = await firstValueFrom(
+        this.funifierApi.get<any[]>(`/v3/team`).pipe(takeUntil(this.destroy$))
+      ).catch((error) => {
+        console.error('Error loading teams from Funifier:', error);
+        return [];
+      });
+      
+      console.log('📊 All teams from Funifier:', allTeams);
+      
+      let availableTeams: any[] = [];
+      
+      if (profile === UserProfile.DIRETOR) {
+        // DIRETOR can see all teams
+        availableTeams = allTeams.map((team: any) => ({
+          id: team._id || team.id,
+          name: team.name || team._id || team.id,
+          memberCount: 0 // Will be updated below
+        }));
+        console.log('✅ DIRETOR: Showing all teams:', availableTeams.length);
+      } else {
+        // Get accessible team IDs based on profile
+        const accessibleTeamIds = this.userProfileService.getAccessibleTeamIds();
+        console.log('👤 Accessible team IDs for profile:', accessibleTeamIds);
+        
+        if (accessibleTeamIds.length === 0) {
+          // For SUPERVISOR and GESTOR, if no accessible teams found, try to get their own team
+          const ownTeamId = this.userProfileService.getCurrentUserOwnTeamId();
+          if (ownTeamId) {
+            accessibleTeamIds.push(ownTeamId);
+            console.log('👤 Using own team ID:', ownTeamId);
+          }
+        }
+        
+        // Filter teams to show only those the user has access to
+        availableTeams = allTeams
+          .filter((team: any) => {
+            const teamId = team._id || team.id;
+            return accessibleTeamIds.includes(teamId);
+          })
+          .map((team: any) => ({
+            id: team._id || team.id,
+            name: team.name || team._id || team.id,
+            memberCount: 0 // Will be updated below
+          }));
+        
+        console.log('✅ Available teams for profile:', profile, availableTeams.length);
+      }
+      
+      // Load member count for each team using aggregate queries
+      const memberCountPromises = availableTeams.map(async (team) => {
+        try {
+          const aggregatePayload = [
+            {
+              $match: {
+                teams: team.id
+              }
+            },
+            {
+              $count: 'total'
+            }
+          ];
+          
+          const result = await firstValueFrom(
+            this.funifierApi.post<any[]>(
+              `/database/player/aggregate?strict=true`,
+              aggregatePayload
+            ).pipe(takeUntil(this.destroy$))
+          ).catch((error) => {
+            console.error(`Error loading member count for team ${team.id}:`, error);
+            return [];
+          });
+          
+          // Extract count from result
+          const count = result && result.length > 0 && result[0].total ? result[0].total : 0;
+          return { ...team, memberCount: count };
+        } catch (error) {
+          console.error(`Error processing member count for team ${team.id}:`, error);
+          return { ...team, memberCount: 0 };
+        }
+      });
+      
+      // Wait for all member counts to be loaded
+      const teamsWithCounts = await Promise.all(memberCountPromises);
+      
+      this.teams = teamsWithCounts;
+      console.log('✅ Available teams loaded with member counts:', this.teams);
+      
+      this.isLoadingTeams = false;
+    } catch (error) {
+      console.error('Error in loadAvailableTeams:', error);
+      this.teams = [];
+      this.isLoadingTeams = false;
+      this.toastService.error('Erro ao carregar equipes');
+    }
+  }
+
+  /**
+   * Load team members data (member IDs, points, tasks) from Funifier.
+   * 
+   * Uses POST aggregate query to /database/player/aggregate?strict=true
+   * to filter players by team membership, then fetches status data and points for each member.
+   * 
+   * Points are calculated for the selected month using achievement collection.
+   * Tasks are taken from extra.tarefas_finalizadas in player status.
+   * Blocked points are taken from point_categories.locked_points in player status.
+   * 
+   * @private
+   * @async
+   * @param teamId - The Funifier team ID (e.g., 'FkmdnFU')
+   * @returns Promise that resolves when team members data is loaded
+   */
+  private async loadTeamMembersData(teamId: string): Promise<void> {
+    try {
+      console.log('👥 Loading team members data for team:', teamId);
+      
+      // Step 1: Get member IDs using aggregate query
+      // Filter players by team membership using $match
+      const aggregatePayload = [
+        {
+          $match: {
+            teams: teamId
+          }
+        }
       ];
       
-      // Try to get teams from user metadata if available
-      const user = this.sessaoProvider.usuario;
-      if (user?.extra?.['teams'] && Array.isArray(user.extra['teams'])) {
-        this.teams = user.extra['teams'].map((teamName: string) => ({
-          id: teamName,
-          name: teamName,
-          memberCount: 0
-        }));
+      const players = await firstValueFrom(
+        this.funifierApi.post<any[]>(
+          `/database/player/aggregate?strict=true`,
+          aggregatePayload
+        ).pipe(takeUntil(this.destroy$))
+      ).catch((error) => {
+        console.error('Error loading team members via aggregate:', error);
+        return [];
+      });
+      
+      // Store full player data from aggregate (includes extra.cnpj, name, email, etc.)
+      this.teamMembersData = players;
+      
+      // Extract member IDs from aggregate result
+      // The result should contain player documents with _id field
+      const memberIds = players
+        .map((player: any) => player._id)
+        .filter((id: any) => id != null) as string[];
+      
+      this.teamMemberIds = memberIds;
+      console.log('✅ Team member IDs loaded via aggregate:', memberIds.length, 'members');
+      console.log('✅ Team members data stored:', this.teamMembersData.length, 'players with full data');
+      
+      if (memberIds.length === 0) {
+        console.warn('⚠️ No members found in team');
+        this.teamTotalPoints = 0;
+        this.teamAveragePoints = 0;
+        this.teamTotalTasks = 0;
+        this.teamTotalBlockedPoints = 0;
+        this.cdr.markForCheck();
+        return;
       }
+      
+      // Step 2: Fetch raw status data and points for selected month for each member in parallel
+      // We need the raw data to access extra fields and calculate points for the selected period
+      const memberDataPromises = memberIds.map(async (memberId) => {
+        try {
+          // Fetch status and points in parallel for each member
+          const [status, pointsForMonth] = await Promise.all([
+            firstValueFrom(
+              this.funifierApi.get<any>(`/v3/player/${memberId}/status`).pipe(takeUntil(this.destroy$))
+            ).catch((error) => {
+              console.error(`Error loading status for member ${memberId}:`, error);
+              return null;
+            }),
+            firstValueFrom(
+              this.actionLogService.getPontosForMonth(memberId, this.selectedMonth).pipe(takeUntil(this.destroy$))
+            ).catch((error) => {
+              console.error(`Error loading points for member ${memberId}:`, error);
+              return 0;
+            })
+          ]);
+          
+          return { status, pointsForMonth, memberId };
+        } catch (error) {
+          console.error(`Error loading data for member ${memberId}:`, error);
+          return { status: null, pointsForMonth: 0, memberId };
+        }
+      });
+      
+      const memberDataResults = await Promise.all(memberDataPromises);
+      
+      // Step 3: Aggregate data from all members
+      let totalPoints = 0;
+      let totalTasks = 0;
+      let totalBlockedPoints = 0;
+      let validMembers = 0;
+      
+      memberDataResults.forEach(({ status, pointsForMonth, memberId }) => {
+        if (status) {
+          // Use points for the selected month (from achievement collection)
+          totalPoints += pointsForMonth;
+          
+          // Get tasks completed from extra.tarefas_finalizadas
+          const tasks = status.extra?.tarefas_finalizadas || 0;
+          totalTasks += tasks;
+          
+          // Get blocked points from status (if available)
+          // Blocked points can be in different formats:
+          // - point_categories.locked_points.total
+          // - point_categories.locked_points
+          // - point_wallet.bloqueados (Portuguese)
+          let blockedPoints = 0;
+          if (status.point_categories?.locked_points) {
+            if (typeof status.point_categories.locked_points === 'object' && status.point_categories.locked_points.total) {
+              blockedPoints = status.point_categories.locked_points.total;
+            } else if (typeof status.point_categories.locked_points === 'number') {
+              blockedPoints = status.point_categories.locked_points;
+            }
+          } else if (status.point_wallet?.bloqueados) {
+            blockedPoints = status.point_wallet.bloqueados;
+          }
+          totalBlockedPoints += blockedPoints;
+          
+          validMembers++;
+          console.log(`📊 Member ${memberId}: ${pointsForMonth} points (month), ${tasks} tasks, ${blockedPoints} blocked points`);
+        }
+      });
+      
+      // Calculate aggregated metrics
+      // Round down all values to remove decimals
+      this.teamTotalPoints = Math.floor(totalPoints);
+      this.teamAveragePoints = validMembers > 0 ? Math.floor(totalPoints / validMembers) : 0;
+      this.teamTotalTasks = Math.floor(totalTasks);
+      this.teamTotalBlockedPoints = Math.floor(totalBlockedPoints);
+      
+      console.log('✅ Team aggregated data from members:', {
+        totalPoints: this.teamTotalPoints,
+        averagePoints: this.teamAveragePoints,
+        totalTasks: this.teamTotalTasks,
+        totalBlockedPoints: this.teamTotalBlockedPoints,
+        validMembers,
+        selectedMonth: this.selectedMonth
+      });
+      
+      this.cdr.markForCheck();
     } catch (error) {
-      console.error('Error loading teams:', error);
-      this.toastService.error('Erro ao carregar equipes');
-    } finally {
-      this.isLoadingTeams = false;
+      console.error('Error in loadTeamMembersData:', error);
+      this.teamTotalPoints = 0;
+      this.teamAveragePoints = 0;
+      this.teamTotalTasks = 0;
+      this.teamTotalBlockedPoints = 0;
+      this.cdr.markForCheck();
     }
   }
 
@@ -266,7 +565,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
    * @see {@link loadProductivityData}
    */
   async loadTeamData(): Promise<void> {
-    if (!this.selectedTeam) {
+    if (!this.selectedTeam || !this.selectedTeamId) {
       return;
     }
     
@@ -276,13 +575,29 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       // Calculate date range based on selected month
       const dateRange = this.calculateDateRange();
       
-      // Load data in parallel
-      await Promise.all([
-        this.loadSidebarData(dateRange),
-        this.loadCollaborators(),
-        this.loadGoalsData(dateRange),
-        this.loadProductivityData(dateRange)
-      ]);
+      // If a collaborator is selected, load only that collaborator's data
+      if (this.selectedCollaborator) {
+        console.log('👤 Loading data for selected collaborator:', this.selectedCollaborator);
+        await this.loadCollaboratorData(this.selectedCollaborator, dateRange);
+      } else {
+        // Otherwise, load team aggregated data
+        console.log('👥 Loading team aggregated data');
+        // First, reload team members data to recalculate points for the selected month
+        // This is important when the month changes, as points need to be recalculated
+        await this.loadTeamMembersData(this.selectedTeamId);
+        
+        // Then, load team activity and macro data (needed for sidebar aggregation)
+        await this.loadTeamActivityAndMacroData(dateRange);
+        
+        // Finally, load other data in parallel
+        await Promise.all([
+          this.loadSidebarData(dateRange),
+          this.loadCollaborators(),
+          this.loadGoalsData(dateRange),
+          this.loadProductivityData(dateRange),
+          this.loadTeamCarteiraData(dateRange)
+        ]);
+      }
       
       this.lastRefresh = new Date();
     } catch (error) {
@@ -290,34 +605,212 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       this.toastService.error('Erro ao carregar dados da equipe');
     } finally {
       this.isLoading = false;
+      this.cdr.markForCheck();
+    }
+  }
+
+  /**
+   * Load data for a specific collaborator (instead of team aggregated data)
+   * 
+   * @private
+   * @async
+   * @param collaboratorId - The user ID (email) of the collaborator
+   * @param dateRange - Date range for filtering data
+   * @returns Promise that resolves when collaborator data is loaded
+   */
+  private async loadCollaboratorData(collaboratorId: string, dateRange: { start: Date; end: Date }): Promise<void> {
+    try {
+      console.log('👤 Loading data for collaborator:', collaboratorId);
+      
+      // Load all collaborator-specific data in parallel
+      await Promise.all([
+        this.loadCollaboratorSidebarData(collaboratorId, dateRange),
+        this.loadCollaborators(), // Still load collaborators list
+        this.loadCollaboratorGoalsData(collaboratorId, dateRange),
+        this.loadCollaboratorProductivityData(collaboratorId, dateRange),
+        this.loadCollaboratorCarteiraData(collaboratorId, dateRange)
+      ]);
+      
+      console.log('✅ Collaborator data loaded for:', collaboratorId);
+    } catch (error) {
+      console.error('Error loading collaborator data:', error);
+      this.toastService.error('Erro ao carregar dados do colaborador');
     }
   }
 
   /**
    * Calculate date range based on selected month.
    * 
-   * Uses the selectedMonthsAgo property to calculate the start and end dates
-   * of the target month. For example:
-   * - selectedMonthsAgo = 0: Current month
-   * - selectedMonthsAgo = 1: Previous month
-   * - selectedMonthsAgo = 2: Two months ago
+   * Uses the selectedMonthsAgo property to calculate the start and end dates.
+   * Ensures data is pulled from 01/01/2026 onwards.
+   * 
+   * Logic:
+   * - When February is selected (selectedMonthsAgo = 0, if current month is February):
+   *   Includes both January and February (01/01/2026 to end of February)
+   * - When January is selected (selectedMonthsAgo = 1, if current month is February):
+   *   Returns only January (01/01/2026 to 31/01/2026)
+   * - For other months: Returns only the selected month
+   * 
+   * Minimum date is always 01/01/2026.
    * 
    * @private
-   * @returns Object containing start and end dates of the selected month
+   * @returns Object containing start and end dates
    * 
    * @example
-   * this.selectedMonthsAgo = 1; // Previous month
+   * // February selected (current month)
+   * this.selectedMonthsAgo = 0;
    * const range = this.calculateDateRange();
-   * // Returns: { start: Date(2023-12-01), end: Date(2023-12-31) }
+   * // Returns: { start: Date(2026-01-01), end: Date(2026-02-28) }
+   * 
+   * // January selected
+   * this.selectedMonthsAgo = 1;
+   * const range = this.calculateDateRange();
+   * // Returns: { start: Date(2026-01-01), end: Date(2026-01-31) }
    */
   private calculateDateRange(): { start: Date; end: Date } {
     const now = dayjs();
     const targetMonth = now.subtract(this.selectedMonthsAgo, 'month');
+    const seasonStartDate = dayjs('2026-01-01');
+    
+    // Check if the target month is January or February 2026
+    const targetYear = targetMonth.year();
+    const targetMonthNum = targetMonth.month(); // 0-indexed: 0 = January, 1 = February
+    const isJanuary2026 = targetYear === 2026 && targetMonthNum === 0;
+    const isFebruary2026 = targetYear === 2026 && targetMonthNum === 1;
+    
+    // If February 2026 is selected, include January as well
+    if (isFebruary2026) {
+      return {
+        start: seasonStartDate.toDate(), // 01/01/2026
+        end: targetMonth.endOf('month').toDate() // End of February 2026
+      };
+    }
+    
+    // If January 2026 is selected, return only January
+    if (isJanuary2026) {
+      return {
+        start: seasonStartDate.toDate(), // 01/01/2026
+        end: targetMonth.endOf('month').toDate() // 31/01/2026
+      };
+    }
+    
+    // For other months, return only the selected month
+    // But ensure start date is not before season start
+    const monthStart = targetMonth.startOf('month');
+    const startDate = monthStart.isBefore(seasonStartDate) ? seasonStartDate : monthStart;
     
     return {
-      start: targetMonth.startOf('month').toDate(),
+      start: startDate.toDate(),
       end: targetMonth.endOf('month').toDate()
     };
+  }
+
+  /**
+   * Load sidebar data for a specific collaborator
+   * 
+   * @private
+   * @async
+   * @param collaboratorId - The user ID (email) of the collaborator
+   * @param dateRange - Date range for filtering data
+   * @returns Promise that resolves when sidebar data is loaded
+   */
+  private async loadCollaboratorSidebarData(collaboratorId: string, dateRange: { start: Date; end: Date }): Promise<void> {
+    try {
+      this.isLoadingSidebar = true;
+      this.hasSidebarError = false;
+      this.sidebarErrorMessage = '';
+      
+      console.log('📊 Loading sidebar data for collaborator:', collaboratorId);
+      
+      // Get progress metrics and points for the collaborator
+      const metrics = await firstValueFrom(
+        this.actionLogService.getProgressMetrics(collaboratorId, this.selectedMonth)
+          .pipe(takeUntil(this.destroy$))
+      ).catch((error) => {
+        console.error('Error loading collaborator progress metrics:', error);
+        this.hasSidebarError = true;
+        this.sidebarErrorMessage = 'Erro ao carregar métricas de progresso';
+        return {
+          activity: { pendentes: 0, emExecucao: 0, finalizadas: 0, pontos: 0 },
+          processo: { pendentes: 0, incompletas: 0, finalizadas: 0 }
+        };
+      });
+      
+      // Get player status to get blocked points
+      const status = await firstValueFrom(
+        this.funifierApi.get<any>(`/v3/player/${collaboratorId}/status`).pipe(takeUntil(this.destroy$))
+      ).catch((error) => {
+        console.error('Error loading collaborator status:', error);
+        return null;
+      });
+      
+      // Calculate blocked points from status
+      let blockedPoints = 0;
+      if (status) {
+        if (status.point_categories?.locked_points) {
+          if (typeof status.point_categories.locked_points === 'object' && status.point_categories.locked_points.total) {
+            blockedPoints = status.point_categories.locked_points.total;
+          } else if (typeof status.point_categories.locked_points === 'number') {
+            blockedPoints = status.point_categories.locked_points;
+          }
+        } else if (status.point_wallet?.bloqueados) {
+          blockedPoints = status.point_wallet.bloqueados;
+        }
+      }
+      
+      const totalPoints = metrics.activity.pontos;
+      const unlockedPoints = Math.max(0, totalPoints - blockedPoints);
+      
+      // Set sidebar data for collaborator
+      // Round down all values to remove decimals
+      this.seasonPoints = {
+        total: Math.floor(totalPoints),
+        bloqueados: Math.floor(blockedPoints),
+        desbloqueados: Math.floor(unlockedPoints)
+      };
+      
+      this.progressMetrics = {
+        processosIncompletos: Math.floor(metrics.processo.incompletas),
+        atividadesFinalizadas: Math.floor(metrics.activity.finalizadas),
+        processosFinalizados: Math.floor(metrics.processo.finalizadas)
+      };
+      
+      // Set team metrics to match collaborator metrics for display consistency
+      this.teamActivityMetrics = {
+        pendentes: metrics.activity.pendentes,
+        emExecucao: metrics.activity.emExecucao,
+        finalizadas: metrics.activity.finalizadas,
+        pontos: metrics.activity.pontos
+      };
+      
+      this.teamProcessMetrics = {
+        pendentes: metrics.processo.pendentes,
+        incompletas: metrics.processo.incompletas,
+        finalizadas: metrics.processo.finalizadas
+      };
+      
+      // Set team totals to collaborator values
+      // Round down all values to remove decimals
+      this.teamTotalPoints = Math.floor(totalPoints);
+      this.teamAveragePoints = Math.floor(totalPoints); // For single collaborator, average = total
+      this.teamTotalTasks = Math.floor(metrics.activity.finalizadas);
+      this.teamTotalBlockedPoints = Math.floor(blockedPoints);
+      
+      this.isLoadingSidebar = false;
+      
+      console.log('✅ Collaborator sidebar data loaded:', {
+        points: this.seasonPoints,
+        metrics: this.progressMetrics,
+        collaboratorId
+      });
+      this.cdr.markForCheck();
+    } catch (error) {
+      console.error('Error in loadCollaboratorSidebarData:', error);
+      this.hasSidebarError = true;
+      this.sidebarErrorMessage = 'Erro ao carregar dados da barra lateral';
+      this.isLoadingSidebar = false;
+      this.cdr.markForCheck();
+    }
   }
 
   /**
@@ -329,79 +822,197 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       this.hasSidebarError = false;
       this.sidebarErrorMessage = '';
       
-      // Load season points
-      this.teamAggregateService
-        .getTeamSeasonPoints(this.selectedTeam, dateRange.start, dateRange.end)
-        .pipe(
-          takeUntil(this.destroy$),
-          finalize(() => this.isLoadingSidebar = false)
-        )
-        .subscribe({
-          next: (points) => {
-            this.seasonPoints = points;
-            this.hasSidebarError = false;
-          },
-          error: (error) => {
-            console.error('Error loading season points:', error);
-            this.seasonPoints = { total: 0, bloqueados: 0, desbloqueados: 0 };
-            this.hasSidebarError = true;
-            this.sidebarErrorMessage = 'Erro ao carregar pontos da temporada';
-            this.toastService.error('Erro ao carregar pontos da temporada');
-          }
-        });
+      console.log('📊 Loading sidebar data for team:', this.selectedTeam);
       
-      // Load progress metrics
-      this.teamAggregateService
-        .getTeamProgressMetrics(this.selectedTeam, dateRange.start, dateRange.end)
-        .pipe(takeUntil(this.destroy$))
-        .subscribe({
-          next: (metrics) => {
-            this.progressMetrics = metrics;
-            this.hasSidebarError = false;
-          },
-          error: (error) => {
-            console.error('Error loading progress metrics:', error);
-            this.progressMetrics = {
-              processosIncompletos: 0,
-              atividadesFinalizadas: 0,
-              processosFinalizados: 0
-            };
-            this.hasSidebarError = true;
-            this.sidebarErrorMessage = 'Erro ao carregar métricas de progresso';
-            this.toastService.error('Erro ao carregar métricas de progresso');
-          }
-        });
+      // Load season points and progress metrics in parallel
+      const [points, metrics] = await Promise.all([
+        firstValueFrom(
+          this.teamAggregateService
+            .getTeamSeasonPoints(this.selectedTeam, dateRange.start, dateRange.end)
+            .pipe(takeUntil(this.destroy$))
+        ).catch((error) => {
+          console.error('Error loading season points:', error);
+          this.hasSidebarError = true;
+          this.sidebarErrorMessage = 'Erro ao carregar pontos da temporada';
+          this.toastService.error('Erro ao carregar pontos da temporada');
+          return { total: 0, bloqueados: 0, desbloqueados: 0 };
+        }),
+        firstValueFrom(
+          this.teamAggregateService
+            .getTeamProgressMetrics(this.selectedTeam, dateRange.start, dateRange.end)
+            .pipe(takeUntil(this.destroy$))
+        ).catch((error) => {
+          console.error('Error loading progress metrics:', error);
+          this.hasSidebarError = true;
+          this.sidebarErrorMessage = 'Erro ao carregar métricas de progresso';
+          this.toastService.error('Erro ao carregar métricas de progresso');
+          return {
+            processosIncompletos: 0,
+            atividadesFinalizadas: 0,
+            processosFinalizados: 0
+          };
+        })
+      ]);
+      
+      // Use aggregated data from team members (from loadTeamMembersData and loadTeamActivityAndMacroData)
+      // All data should be aggregated directly from team members, not from aggregate queries
+      // Points: Sum from all team members' points for the selected month
+      // Blocked points: Sum from all team members' locked_points
+      // Unlocked points: Total points minus blocked points
+      // Round down all values to remove decimals
+      const unlockedPoints = Math.max(0, this.teamTotalPoints - this.teamTotalBlockedPoints);
+      
+      this.seasonPoints = {
+        total: Math.floor(this.teamTotalPoints), // Always use aggregated points from members (for selected month)
+        bloqueados: Math.floor(this.teamTotalBlockedPoints > 0 ? this.teamTotalBlockedPoints : points.bloqueados), // Use aggregated blocked points or fallback
+        desbloqueados: Math.floor(unlockedPoints > 0 ? unlockedPoints : this.teamTotalPoints) // Unlocked = total - blocked
+      };
+      
+      // Progress metrics: Use aggregated data from team members
+      // Atividades finalizadas: Sum from teamActivityMetrics.finalizadas (from loadTeamActivityAndMacroData)
+      // Processos: Use aggregated from teamProcessMetrics (from loadTeamActivityAndMacroData)
+      // Round down all values to remove decimals
+      this.progressMetrics = {
+        processosIncompletos: Math.floor(this.teamProcessMetrics.incompletas || metrics.processosIncompletos),
+        atividadesFinalizadas: Math.floor(this.teamActivityMetrics.finalizadas || this.teamTotalTasks || metrics.atividadesFinalizadas),
+        processosFinalizados: Math.floor(this.teamProcessMetrics.finalizadas || metrics.processosFinalizados)
+      };
+      
+      this.isLoadingSidebar = false;
+      
+      console.log('✅ Sidebar data loaded (aggregated from team members):', { 
+        points: this.seasonPoints, 
+        metrics: this.progressMetrics,
+        teamTotalPoints: this.teamTotalPoints,
+        teamTotalBlockedPoints: this.teamTotalBlockedPoints,
+        teamAveragePoints: this.teamAveragePoints,
+        teamTotalTasks: this.teamTotalTasks,
+        teamActivityMetrics: this.teamActivityMetrics,
+        teamProcessMetrics: this.teamProcessMetrics
+      });
+      this.cdr.markForCheck();
     } catch (error) {
       console.error('Error in loadSidebarData:', error);
       this.hasSidebarError = true;
       this.sidebarErrorMessage = 'Erro ao carregar dados da barra lateral';
+      this.isLoadingSidebar = false;
     }
   }
 
   /**
    * Load collaborators for selected team
+   * 
+   * Uses the member IDs already loaded from loadTeamMembersData to fetch
+   * collaborator information (name, email) from player status.
    */
   private async loadCollaborators(): Promise<void> {
     try {
       this.isLoadingCollaborators = true;
+      console.log('👥 Loading collaborators for team:', this.selectedTeam);
       
-      this.teamAggregateService
-        .getTeamMembers(this.selectedTeam)
-        .pipe(
-          takeUntil(this.destroy$),
-          finalize(() => this.isLoadingCollaborators = false)
-        )
-        .subscribe({
-          next: (members) => {
-            this.collaborators = members;
-          },
-          error: (error) => {
-            console.error('Error loading collaborators:', error);
-            this.collaborators = [];
-          }
+      // Use member IDs already loaded from loadTeamMembersData
+      if (this.teamMemberIds.length === 0) {
+        console.warn('⚠️ No member IDs available, trying to load from aggregate query');
+        // Fallback: try to load from aggregate query
+        const members = await firstValueFrom(
+          this.teamAggregateService
+            .getTeamMembers(this.selectedTeam)
+            .pipe(takeUntil(this.destroy$))
+        ).catch((error) => {
+          console.error('Error loading collaborators:', error);
+          return [];
         });
+        
+        this.collaborators = members;
+      } else {
+        // Fetch player info for each member ID to get name and email
+        const collaboratorPromises = this.teamMemberIds.map(memberId =>
+          firstValueFrom(
+            this.funifierApi.get<any>(`/v3/player/${memberId}/status`).pipe(takeUntil(this.destroy$))
+          ).then((status) => ({
+            userId: memberId,
+            name: status.name || memberId,
+            email: status._id || memberId
+          })).catch((error) => {
+            console.error(`Error loading collaborator info for ${memberId}:`, error);
+            return {
+              userId: memberId,
+              name: memberId,
+              email: memberId
+            };
+          })
+        );
+        
+        this.collaborators = await Promise.all(collaboratorPromises);
+      }
+      
+      this.isLoadingCollaborators = false;
+      console.log('✅ Collaborators loaded:', this.collaborators.length);
+      this.cdr.markForCheck();
     } catch (error) {
       console.error('Error in loadCollaborators:', error);
+      this.collaborators = [];
+      this.isLoadingCollaborators = false;
+    }
+  }
+
+  /**
+   * Load goals data for a specific collaborator
+   * 
+   * @private
+   * @async
+   * @param collaboratorId - The user ID (email) of the collaborator
+   * @param dateRange - Date range for filtering data
+   * @returns Promise that resolves when goals data is loaded
+   */
+  private async loadCollaboratorGoalsData(collaboratorId: string, dateRange: { start: Date; end: Date }): Promise<void> {
+    try {
+      this.isLoadingGoals = true;
+      this.hasGoalsError = false;
+      this.goalsErrorMessage = '';
+      
+      console.log('📊 Loading goals data for collaborator:', collaboratorId);
+      
+      // Get progress metrics for the collaborator
+      const metrics = await firstValueFrom(
+        this.actionLogService.getProgressMetrics(collaboratorId, this.selectedMonth)
+          .pipe(takeUntil(this.destroy$))
+      ).catch((error) => {
+        console.error('Error loading collaborator progress metrics for goals:', error);
+        return {
+          activity: { pendentes: 0, emExecucao: 0, finalizadas: 0, pontos: 0 },
+          processo: { pendentes: 0, incompletas: 0, finalizadas: 0 }
+        };
+      });
+      
+      // Create goal metrics from collaborator's progress metrics
+      this.goalMetrics = [
+        {
+          id: 'processos-finalizados',
+          label: 'Processos Finalizados',
+          current: metrics.processo.finalizadas,
+          target: 100, // TODO: Get from configuration
+          unit: ''
+        },
+        {
+          id: 'atividades-finalizadas',
+          label: 'Atividades Finalizadas',
+          current: metrics.activity.finalizadas,
+          target: 500, // TODO: Get from configuration
+          unit: ''
+        }
+      ];
+      
+      this.isLoadingGoals = false;
+      console.log('✅ Collaborator goals data loaded:', this.goalMetrics);
+      this.cdr.markForCheck();
+    } catch (error) {
+      console.error('Error loading collaborator goals data:', error);
+      this.goalMetrics = [];
+      this.isLoadingGoals = false;
+      this.hasGoalsError = true;
+      this.goalsErrorMessage = 'Erro ao carregar dados de metas';
+      this.toastService.error('Erro ao carregar dados de metas');
     }
   }
 
@@ -445,7 +1056,224 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Load productivity graph data
+   * Load productivity graph data for a specific collaborator
+   * 
+   * @private
+   * @async
+   * @param collaboratorId - The user ID (email) of the collaborator
+   * @param dateRange - Date range for filtering data
+   * @returns Promise that resolves when productivity data is loaded
+   */
+  private async loadCollaboratorProductivityData(collaboratorId: string, dateRange: { start: Date; end: Date }): Promise<void> {
+    try {
+      this.isLoadingProductivity = true;
+      this.hasProductivityError = false;
+      this.productivityErrorMessage = '';
+      
+      console.log('📈 Loading productivity data for collaborator:', collaboratorId);
+      
+      // Get collaborator name for the label
+      const collaborator = this.collaborators.find(c => c.userId === collaboratorId);
+      const memberName = collaborator?.name || collaboratorId;
+      
+      // For productivity tab, use the selected period instead of month range
+      const endDate = dayjs();
+      const startDate = endDate.subtract(this.selectedPeriod, 'day');
+      
+      // Query action_log for daily completed tasks count for this collaborator
+      const aggregateBody = [
+        {
+          $match: {
+            userId: collaboratorId,
+            time: {
+              $gte: { $date: startDate.toISOString() },
+              $lte: { $date: endDate.toISOString() }
+            }
+          }
+        },
+        {
+          $group: {
+            _id: {
+              $dateToString: {
+                format: '%Y-%m-%d',
+                date: { $toDate: '$time' }
+              }
+            },
+            count: { $sum: 1 }
+          }
+        },
+        {
+          $sort: { _id: 1 }
+        }
+      ];
+      
+      const dailyData = await firstValueFrom(
+        this.funifierApi.post<any[]>(
+          '/v3/database/action_log/aggregate?strict=true',
+          aggregateBody
+        ).pipe(takeUntil(this.destroy$))
+      ).catch((error) => {
+        console.error(`Error loading productivity for collaborator ${collaboratorId}:`, error);
+        return [];
+      });
+      
+      // Convert to GraphDataPoint format
+      const dataPoints: GraphDataPoint[] = [];
+      const dataMap = new Map<string, number>();
+      
+      dailyData.forEach((item: any) => {
+        const dateStr = item._id;
+        const count = item.count || 0;
+        dataMap.set(dateStr, count);
+      });
+      
+      // Fill all dates in range
+      let currentDate = startDate;
+      while (currentDate.isBefore(endDate) || currentDate.isSame(endDate, 'day')) {
+        const dateStr = currentDate.format('YYYY-MM-DD');
+        dataPoints.push({
+          date: currentDate.toDate(),
+          value: dataMap.get(dateStr) || 0
+        });
+        currentDate = currentDate.add(1, 'day');
+      }
+      
+      // Create a single dataset for the collaborator (activities)
+      this.graphData = dataPoints;
+      this.graphDatasets = [
+        {
+          label: memberName,
+          data: dataPoints.map(p => p.value),
+          borderColor: '#4F46E5',
+          backgroundColor: 'rgba(79, 70, 229, 0.1)',
+          fill: true
+        }
+      ];
+      
+      // Load points data for the same period
+      await this.loadCollaboratorPointsData(collaboratorId, startDate, endDate, memberName);
+      
+      this.isLoadingProductivity = false;
+      console.log('✅ Collaborator productivity data loaded:', {
+        dataPoints: dataPoints.length,
+        totalActions: dataPoints.reduce((sum, p) => sum + p.value, 0)
+      });
+      this.cdr.markForCheck();
+    } catch (error) {
+      console.error('Error loading collaborator productivity data:', error);
+      this.graphData = [];
+      this.graphDatasets = [];
+      this.pointsGraphData = [];
+      this.pointsGraphDatasets = [];
+      this.hasProductivityError = true;
+      this.productivityErrorMessage = 'Erro ao carregar dados de produtividade';
+      this.isLoadingProductivity = false;
+      this.cdr.markForCheck();
+    }
+  }
+
+  /**
+   * Load daily points data for a specific collaborator
+   * 
+   * @private
+   * @async
+   * @param collaboratorId - The user ID (email) of the collaborator
+   * @param startDate - Start date for the period
+   * @param endDate - End date for the period
+   * @param memberName - Name of the collaborator for the label
+   * @returns Promise that resolves when points data is loaded
+   */
+  private async loadCollaboratorPointsData(
+    collaboratorId: string, 
+    startDate: dayjs.Dayjs, 
+    endDate: dayjs.Dayjs,
+    memberName: string
+  ): Promise<void> {
+    try {
+      // Query achievement collection for daily points earned
+      const aggregateBody = [
+        {
+          $match: {
+            player: collaboratorId,
+            type: 0, // type 0 = points
+            time: {
+              $gte: { $date: startDate.toISOString() },
+              $lte: { $date: endDate.toISOString() }
+            }
+          }
+        },
+        {
+          $group: {
+            _id: {
+              $dateToString: {
+                format: '%Y-%m-%d',
+                date: { $toDate: '$time' }
+              }
+            },
+            total: { $sum: '$total' }
+          }
+        },
+        {
+          $sort: { _id: 1 }
+        }
+      ];
+      
+      const dailyPointsData = await firstValueFrom(
+        this.funifierApi.post<any[]>(
+          '/v3/database/achievement/aggregate?strict=true',
+          aggregateBody
+        ).pipe(takeUntil(this.destroy$))
+      ).catch((error) => {
+        console.error(`Error loading points for collaborator ${collaboratorId}:`, error);
+        return [];
+      });
+      
+      // Convert to GraphDataPoint format
+      const pointsDataPoints: GraphDataPoint[] = [];
+      const pointsDataMap = new Map<string, number>();
+      
+      dailyPointsData.forEach((item: any) => {
+        const dateStr = item._id;
+        const points = item.total || 0;
+        pointsDataMap.set(dateStr, points);
+      });
+      
+      // Fill all dates in range
+      let currentDate = startDate;
+      while (currentDate.isBefore(endDate) || currentDate.isSame(endDate, 'day')) {
+        const dateStr = currentDate.format('YYYY-MM-DD');
+        pointsDataPoints.push({
+          date: currentDate.toDate(),
+          value: Math.floor(pointsDataMap.get(dateStr) || 0) // Round down points
+        });
+        currentDate = currentDate.add(1, 'day');
+      }
+      
+      // Create a single dataset for the collaborator (points)
+      this.pointsGraphData = pointsDataPoints;
+      this.pointsGraphDatasets = [
+        {
+          label: memberName,
+          data: pointsDataPoints.map(p => p.value),
+          borderColor: '#10B981',
+          backgroundColor: 'rgba(16, 185, 129, 0.1)',
+          fill: true
+        }
+      ];
+      
+      console.log('✅ Collaborator points data loaded:', {
+        dataPoints: pointsDataPoints.length,
+        totalPoints: pointsDataPoints.reduce((sum, p) => sum + p.value, 0)
+      });
+    } catch (error) {
+      console.error('Error loading collaborator points data:', error);
+      this.pointsGraphData = [];
+      this.pointsGraphDatasets = [];
+    }
+  }
+
+  /**
+   * Load productivity graph data with one line per team member
    */
   private async loadProductivityData(dateRange: { start: Date; end: Date }): Promise<void> {
     try {
@@ -453,35 +1281,461 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       this.hasProductivityError = false;
       this.productivityErrorMessage = '';
       
+      console.log('📈 Loading productivity data for team members...');
+      
+      if (this.teamMemberIds.length === 0) {
+        console.warn('⚠️ No team members to load productivity data for');
+        this.graphData = [];
+        this.graphDatasets = [];
+        this.pointsGraphData = [];
+        this.pointsGraphDatasets = [];
+        this.isLoadingProductivity = false;
+        return;
+      }
+      
       // For productivity tab, use the selected period instead of month range
       const endDate = dayjs();
       const startDate = endDate.subtract(this.selectedPeriod, 'day');
       
-      this.teamAggregateService
-        .getTeamProgressMetrics(this.selectedTeam, startDate.toDate(), endDate.toDate())
-        .pipe(
-          takeUntil(this.destroy$),
-          finalize(() => this.isLoadingProductivity = false)
-        )
-        .subscribe({
-          next: (metrics) => {
-            // Convert metrics to graph data points
-            // This is a simplified version - in production, you'd query for daily data
-            this.graphData = this.graphDataProcessor.processGraphData([], this.selectedPeriod);
-            this.hasProductivityError = false;
-          },
-          error: (error) => {
-            console.error('Error loading productivity data:', error);
-            this.graphData = [];
-            this.hasProductivityError = true;
-            this.productivityErrorMessage = 'Erro ao carregar dados de produtividade';
-            this.toastService.error('Erro ao carregar dados de produtividade');
+      try {
+        // Load daily productivity data (activities and points) for each team member
+        const memberProductivityPromises = this.teamMemberIds.map(async (memberId) => {
+          try {
+            // Get collaborator name for the label
+            const collaborator = this.collaborators.find(c => c.userId === memberId);
+            const memberName = collaborator?.name || memberId;
+            
+            // Query action_log for daily completed tasks count for this member
+            const activitiesAggregateBody = [
+              {
+                $match: {
+                  userId: memberId,
+                  time: {
+                    $gte: { $date: startDate.toISOString() },
+                    $lte: { $date: endDate.toISOString() }
+                  }
+                }
+              },
+              {
+                $group: {
+                  _id: {
+                    $dateToString: {
+                      format: '%Y-%m-%d',
+                      date: { $toDate: '$time' }
+                    }
+                  },
+                  count: { $sum: 1 }
+                }
+              },
+              {
+                $sort: { _id: 1 }
+              }
+            ];
+            
+            // Query achievement for daily points earned for this member
+            const pointsAggregateBody = [
+              {
+                $match: {
+                  player: memberId,
+                  type: 0, // type 0 = points
+                  time: {
+                    $gte: { $date: startDate.toISOString() },
+                    $lte: { $date: endDate.toISOString() }
+                  }
+                }
+              },
+              {
+                $group: {
+                  _id: {
+                    $dateToString: {
+                      format: '%Y-%m-%d',
+                      date: { $toDate: '$time' }
+                    }
+                  },
+                  total: { $sum: '$total' }
+                }
+              },
+              {
+                $sort: { _id: 1 }
+              }
+            ];
+            
+            // Load both activities and points in parallel
+            const [dailyActivitiesData, dailyPointsData] = await Promise.all([
+              firstValueFrom(
+                this.funifierApi.post<any[]>(
+                  '/v3/database/action_log/aggregate?strict=true',
+                  activitiesAggregateBody
+                ).pipe(takeUntil(this.destroy$))
+              ).catch((error) => {
+                console.error(`Error loading activities for member ${memberId}:`, error);
+                return [];
+              }),
+              firstValueFrom(
+                this.funifierApi.post<any[]>(
+                  '/v3/database/achievement/aggregate?strict=true',
+                  pointsAggregateBody
+                ).pipe(takeUntil(this.destroy$))
+              ).catch((error) => {
+                console.error(`Error loading points for member ${memberId}:`, error);
+                return [];
+              })
+            ]);
+            
+            // Convert activities to GraphDataPoint format
+            const activitiesDataPoints: GraphDataPoint[] = [];
+            const activitiesDataMap = new Map<string, number>();
+            
+            dailyActivitiesData.forEach((item: any) => {
+              const dateStr = item._id;
+              const count = item.count || 0;
+              activitiesDataMap.set(dateStr, count);
+            });
+            
+            // Convert points to GraphDataPoint format
+            const pointsDataPoints: GraphDataPoint[] = [];
+            const pointsDataMap = new Map<string, number>();
+            
+            dailyPointsData.forEach((item: any) => {
+              const dateStr = item._id;
+              const points = item.total || 0;
+              pointsDataMap.set(dateStr, points);
+            });
+            
+            // Fill all dates in range for both activities and points
+            let currentDate = startDate;
+            while (currentDate.isBefore(endDate) || currentDate.isSame(endDate, 'day')) {
+              const dateStr = currentDate.format('YYYY-MM-DD');
+              activitiesDataPoints.push({
+                date: currentDate.toDate(),
+                value: activitiesDataMap.get(dateStr) || 0
+              });
+              pointsDataPoints.push({
+                date: currentDate.toDate(),
+                value: Math.floor(pointsDataMap.get(dateStr) || 0) // Round down points
+              });
+              currentDate = currentDate.add(1, 'day');
+            }
+            
+            return {
+              memberId,
+              memberName,
+              activitiesDataPoints,
+              pointsDataPoints
+            };
+          } catch (error) {
+            console.error(`Error processing productivity for member ${memberId}:`, error);
+            return null;
           }
         });
+        
+        const allMemberData = await Promise.all(memberProductivityPromises);
+        const validMemberData = allMemberData.filter(d => d !== null) as Array<{ 
+          memberId: string; 
+          memberName: string; 
+          activitiesDataPoints: GraphDataPoint[]; 
+          pointsDataPoints: GraphDataPoint[] 
+        }>;
+        
+        // Create multiple datasets (one per member) for activities and points
+        if (validMemberData.length > 0) {
+          // Generate date labels
+          const dateLabels = this.graphDataProcessor.getDateLabels(this.selectedPeriod);
+          
+          // Create datasets for activities (one per member)
+          this.graphDatasets = validMemberData.map((memberData, index) => {
+            const colors = this.getColorForIndex(index);
+            return {
+              label: memberData.memberName,
+              data: memberData.activitiesDataPoints.map(point => point.value),
+              borderColor: colors.border,
+              backgroundColor: colors.background,
+              fill: false
+            };
+          });
+          
+          // Create datasets for points (one per member)
+          this.pointsGraphDatasets = validMemberData.map((memberData, index) => {
+            const colors = this.getColorForIndex(index);
+            return {
+              label: memberData.memberName,
+              data: memberData.pointsDataPoints.map(point => point.value),
+              borderColor: colors.border,
+              backgroundColor: colors.background,
+              fill: false
+            };
+          });
+          
+          // Also set graphData for backward compatibility (aggregated activities)
+          const aggregatedActivitiesMap = new Map<string, number>();
+          validMemberData.forEach(memberData => {
+            memberData.activitiesDataPoints.forEach(point => {
+              const dateStr = dayjs(point.date).format('YYYY-MM-DD');
+              aggregatedActivitiesMap.set(dateStr, (aggregatedActivitiesMap.get(dateStr) || 0) + point.value);
+            });
+          });
+          
+          // Aggregate points data
+          const aggregatedPointsMap = new Map<string, number>();
+          validMemberData.forEach(memberData => {
+            memberData.pointsDataPoints.forEach(point => {
+              const dateStr = dayjs(point.date).format('YYYY-MM-DD');
+              aggregatedPointsMap.set(dateStr, (aggregatedPointsMap.get(dateStr) || 0) + point.value);
+            });
+          });
+          
+          const aggregatedActivities: GraphDataPoint[] = [];
+          const aggregatedPoints: GraphDataPoint[] = [];
+          let currentDate = startDate;
+          while (currentDate.isBefore(endDate) || currentDate.isSame(endDate, 'day')) {
+            const dateStr = currentDate.format('YYYY-MM-DD');
+            aggregatedActivities.push({
+              date: currentDate.toDate(),
+              value: aggregatedActivitiesMap.get(dateStr) || 0
+            });
+            aggregatedPoints.push({
+              date: currentDate.toDate(),
+              value: Math.floor(aggregatedPointsMap.get(dateStr) || 0) // Round down points
+            });
+            currentDate = currentDate.add(1, 'day');
+          }
+          
+          this.graphData = aggregatedActivities;
+          this.pointsGraphData = aggregatedPoints;
+        } else {
+          this.graphData = [];
+          this.graphDatasets = [];
+          this.pointsGraphData = [];
+          this.pointsGraphDatasets = [];
+        }
+        
+        this.hasProductivityError = false;
+        console.log('✅ Productivity data loaded for', validMemberData.length, 'members');
+        this.cdr.markForCheck();
+      } catch (error) {
+        console.error('Error loading productivity data:', error);
+        this.graphData = [];
+        this.graphDatasets = [];
+        this.pointsGraphData = [];
+        this.pointsGraphDatasets = [];
+        this.hasProductivityError = true;
+        this.productivityErrorMessage = 'Erro ao carregar dados de produtividade';
+        this.toastService.error('Erro ao carregar dados de produtividade');
+      } finally {
+        this.isLoadingProductivity = false;
+      }
     } catch (error) {
       console.error('Error in loadProductivityData:', error);
+      this.graphData = [];
+      this.graphDatasets = [];
+      this.pointsGraphData = [];
+      this.pointsGraphDatasets = [];
       this.hasProductivityError = true;
       this.productivityErrorMessage = 'Erro ao carregar dados de produtividade';
+      this.isLoadingProductivity = false;
+    }
+  }
+
+  /**
+   * Get color for dataset by index (cycling through palette)
+   */
+  private getColorForIndex(index: number): { border: string; background: string } {
+    const colorPalette = [
+      { border: 'rgba(75, 192, 192, 1)', background: 'rgba(75, 192, 192, 0.2)' },
+      { border: 'rgba(255, 99, 132, 1)', background: 'rgba(255, 99, 132, 0.2)' },
+      { border: 'rgba(54, 162, 235, 1)', background: 'rgba(54, 162, 235, 0.2)' },
+      { border: 'rgba(255, 206, 86, 1)', background: 'rgba(255, 206, 86, 0.2)' },
+      { border: 'rgba(153, 102, 255, 1)', background: 'rgba(153, 102, 255, 0.2)' },
+      { border: 'rgba(255, 159, 64, 1)', background: 'rgba(255, 159, 64, 0.2)' }
+    ];
+    return colorPalette[index % colorPalette.length];
+  }
+
+  /**
+   * Load team activity and process metrics aggregated from all team members
+   */
+  private async loadTeamActivityAndMacroData(dateRange: { start: Date; end: Date }): Promise<void> {
+    try {
+      console.log('📊 Loading team activity and process data...');
+      
+      if (this.teamMemberIds.length === 0) {
+        console.warn('⚠️ No team members to aggregate data from');
+        return;
+      }
+      
+      // Load metrics for each team member in parallel
+      const memberMetricsPromises = this.teamMemberIds.map(memberId =>
+        firstValueFrom(
+          this.actionLogService.getProgressMetrics(memberId, this.selectedMonth)
+            .pipe(takeUntil(this.destroy$))
+        ).catch((error) => {
+          console.error(`Error loading metrics for member ${memberId}:`, error);
+          return {
+            activity: { pendentes: 0, emExecucao: 0, finalizadas: 0, pontos: 0 },
+            processo: { pendentes: 0, incompletas: 0, finalizadas: 0 }
+          };
+        })
+      );
+      
+      const allMetrics = await Promise.all(memberMetricsPromises);
+      
+      // Aggregate metrics from all members
+      let totalPendentes = 0;
+      let totalEmExecucao = 0;
+      let totalFinalizadas = 0;
+      let totalPontos = 0;
+      let totalProcessPendentes = 0;
+      let totalProcessIncompletas = 0;
+      let totalProcessFinalizadas = 0;
+      
+      // Sum metrics from all team members
+      allMetrics.forEach((metrics, index) => {
+        const memberId = this.teamMemberIds[index];
+        totalPendentes += metrics.activity.pendentes;
+        totalEmExecucao += metrics.activity.emExecucao;
+        totalFinalizadas += metrics.activity.finalizadas;
+        totalPontos += metrics.activity.pontos;
+        totalProcessPendentes += metrics.processo.pendentes;
+        totalProcessIncompletas += metrics.processo.incompletas;
+        totalProcessFinalizadas += metrics.processo.finalizadas;
+        
+        console.log(`📊 Member ${memberId} metrics:`, {
+          atividades: metrics.activity,
+          processos: metrics.processo
+        });
+      });
+      
+      // Set aggregated team metrics
+      this.teamActivityMetrics = {
+        pendentes: totalPendentes,
+        emExecucao: totalEmExecucao,
+        finalizadas: totalFinalizadas,
+        pontos: totalPontos
+      };
+      
+      this.teamProcessMetrics = {
+        pendentes: totalProcessPendentes,
+        incompletas: totalProcessIncompletas,
+        finalizadas: totalProcessFinalizadas
+      };
+      
+      console.log('✅ Team activity and process data aggregated from', this.teamMemberIds.length, 'members:', {
+        activities: this.teamActivityMetrics,
+        processos: this.teamProcessMetrics,
+        selectedMonth: this.selectedMonth
+      });
+      
+      this.cdr.markForCheck();
+    } catch (error) {
+      console.error('Error loading team activity and process data:', error);
+    }
+  }
+
+  /**
+   * Load carteira data for a specific collaborator
+   * 
+   * @private
+   * @async
+   * @param collaboratorId - The user ID (email) of the collaborator
+   * @param dateRange - Date range for filtering data
+   * @returns Promise that resolves when carteira data is loaded
+   */
+  private async loadCollaboratorCarteiraData(collaboratorId: string, dateRange: { start: Date; end: Date }): Promise<void> {
+    try {
+      this.isLoadingCarteira = true;
+      console.log('📊 Loading carteira data for collaborator:', collaboratorId);
+      
+      // Get CNPJ list with action counts for the collaborator
+      const carteiraData = await firstValueFrom(
+        this.actionLogService.getPlayerCnpjListWithCount(collaboratorId, this.selectedMonth)
+          .pipe(takeUntil(this.destroy$))
+      ).catch((error) => {
+        console.error(`Error loading carteira for collaborator ${collaboratorId}:`, error);
+        return [];
+      });
+      
+      this.teamCarteiraClientes = carteiraData;
+      
+      console.log('✅ Collaborator carteira data loaded:', this.teamCarteiraClientes.length, 'unique CNPJs');
+      console.log('✅ Total actions across all CNPJs:', 
+        this.teamCarteiraClientes.reduce((sum, item) => sum + item.actionCount, 0));
+      
+      this.isLoadingCarteira = false;
+      this.cdr.markForCheck();
+    } catch (error) {
+      console.error('Error loading collaborator carteira data:', error);
+      this.teamCarteiraClientes = [];
+      this.isLoadingCarteira = false;
+      this.cdr.markForCheck();
+    }
+  }
+
+  /**
+   * Load team carteira (companies/CNPJs) data aggregated from all team members
+   * 
+   * Aggregates CNPJs and action counts from all team members' action_log entries
+   * for the selected month. Sums action counts per CNPJ across all team members.
+   * 
+   * @private
+   * @async
+   * @param dateRange - Date range for filtering actions (currently not used, uses selectedMonth)
+   * @returns Promise that resolves when carteira data is loaded
+   */
+  private async loadTeamCarteiraData(dateRange: { start: Date; end: Date }): Promise<void> {
+    try {
+      this.isLoadingCarteira = true;
+      console.log('📊 Loading team carteira data from team members...');
+      
+      if (this.teamMemberIds.length === 0) {
+        console.warn('⚠️ No team members to aggregate carteira data from');
+        this.teamCarteiraClientes = [];
+        this.isLoadingCarteira = false;
+        this.cdr.markForCheck();
+        return;
+      }
+      
+      // Load CNPJ list with action counts for each team member in parallel
+      const memberCarteiraPromises = this.teamMemberIds.map(memberId =>
+        firstValueFrom(
+          this.actionLogService.getPlayerCnpjListWithCount(memberId, this.selectedMonth)
+            .pipe(takeUntil(this.destroy$))
+        ).catch((error) => {
+          console.error(`Error loading carteira for member ${memberId}:`, error);
+          return [];
+        })
+      );
+      
+      const allMemberCarteiras = await Promise.all(memberCarteiraPromises);
+      
+      // Aggregate CNPJs and sum action counts across all members
+      const cnpjMap = new Map<string, number>();
+      
+      allMemberCarteiras.forEach((memberCarteira) => {
+        memberCarteira.forEach(({ cnpj, actionCount }) => {
+          if (cnpj) {
+            const currentCount = cnpjMap.get(cnpj) || 0;
+            cnpjMap.set(cnpj, currentCount + actionCount);
+          }
+        });
+      });
+      
+      // Convert map to array and sort by count (descending)
+      this.teamCarteiraClientes = Array.from(cnpjMap.entries())
+        .map(([cnpj, actionCount]) => ({ cnpj, actionCount }))
+        .sort((a, b) => b.actionCount - a.actionCount);
+      
+      console.log('✅ Team carteira data loaded (aggregated from', this.teamMemberIds.length, 'members):', 
+        this.teamCarteiraClientes.length, 'unique CNPJs');
+      console.log('✅ Total actions across all CNPJs:', 
+        this.teamCarteiraClientes.reduce((sum, item) => sum + item.actionCount, 0));
+      
+      this.isLoadingCarteira = false;
+      this.cdr.markForCheck();
+    } catch (error) {
+      console.error('Error loading team carteira data:', error);
+      this.teamCarteiraClientes = [];
+      this.isLoadingCarteira = false;
+      this.cdr.markForCheck();
     }
   }
 
@@ -489,49 +1743,90 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
    * Handle team selection change event.
    * 
    * When a user selects a different team from the dropdown:
-   * 1. Updates the selectedTeam property
+   * 1. Updates the selectedTeamId (Funifier team ID) and selectedTeam (team name)
    * 2. Resets the collaborator filter to null (show all team members)
-   * 3. Reloads all team data for the new team
-   * 4. Saves the selection to localStorage for persistence
+   * 3. Loads team members data for the selected team
+   * 4. Reloads all team data for the new team
+   * 5. Saves the selection to localStorage for persistence
    * 
-   * @param teamId - The ID of the newly selected team
+   * @param teamId - The Funifier team ID (e.g., 'FkmdnFU')
    * 
    * @example
    * // Called from template when team selector changes
-   * onTeamChange('Departamento Pessoal');
+   * await this.onTeamChange('FkmdnFU');
    * 
+   * @see {@link loadTeamMembersData}
    * @see {@link loadTeamData}
    */
-  onTeamChange(teamId: string): void {
-    this.selectedTeam = teamId;
-    this.selectedCollaborator = null; // Reset collaborator filter
-    this.loadTeamData();
+  async onTeamChange(teamId: string): Promise<void> {
+    try {
+      console.log('🔄 Team changed to:', teamId);
+      
+      // Find the team in the teams array to get the name
+      const team = this.teams.find(t => t.id === teamId);
+      if (!team) {
+        console.error('Team not found:', teamId);
+        return;
+      }
+      
+      // Set selected team ID and name
+      this.selectedTeamId = teamId;
+      this.selectedTeam = team.name;
+      
+      // Reset collaborator filter
+      this.selectedCollaborator = null;
+      
+      // Save selection to localStorage
+      localStorage.setItem('selectedTeamId', teamId);
+      
+      // Load team members data first (this sets teamTotalPoints, etc.)
+      await this.loadTeamMembersData(teamId);
+      
+      // Then load all other team data
+      await this.loadTeamData();
+      
+      this.cdr.markForCheck();
+    } catch (error) {
+      console.error('Error in onTeamChange:', error);
+      this.toastService.error('Erro ao carregar dados do time');
+    }
   }
 
   /**
    * Handle collaborator selection change event.
    * 
-   * When a user selects a specific collaborator or "All":
+   * When a user selects a specific collaborator:
    * 1. Updates the selectedCollaborator property
-   * 2. Reloads all team data filtered by the selected collaborator
+   * 2. Reloads all data filtered to that collaborator only
    * 
-   * If null is passed, shows aggregate data for all team members.
-   * If a userId is passed, shows data only for that specific collaborator.
+   * When null is passed (deselecting):
+   * 1. Clears the selectedCollaborator property
+   * 2. Reloads all team data
    * 
-   * @param userId - The user ID of the selected collaborator, or null for all
+   * @param userId - The user ID (email) of the selected collaborator, or null to show team data
    * 
    * @example
-   * // Show all team members
-   * onCollaboratorChange(null);
-   * 
-   * // Show specific collaborator
+   * // Show data for specific collaborator
    * onCollaboratorChange('user@example.com');
+   * // Shows only that collaborator's data
    * 
-   * @see {@link loadTeamData}
+   * // Show team data
+   * onCollaboratorChange(null);
+   * // Shows aggregated team data
    */
-  onCollaboratorChange(userId: string | null): void {
+  async onCollaboratorChange(userId: string | null): Promise<void> {
     this.selectedCollaborator = userId;
-    this.loadTeamData();
+    
+    if (userId) {
+      console.log('👤 Filtering data for collaborator:', userId);
+    } else {
+      console.log('👥 Showing team data (no collaborator selected)');
+    }
+    
+    // Reload data with the new filter
+    if (this.selectedTeamId) {
+      await this.loadTeamData();
+    }
   }
 
   /**
@@ -577,10 +1872,11 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
 
   /**
    * Handle chart type change from productivity tab
+   * Updates the shared chart type for both productivity charts
    */
   onChartTypeChange(chartType: 'line' | 'bar'): void {
-    // Chart type is managed by the child component
-    // No action needed here
+    this.productivityChartType = chartType;
+    this.cdr.markForCheck();
   }
 
   /**
@@ -639,19 +1935,35 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
   /**
    * Get the display name of the currently selected team.
    * 
-   * Looks up the team name from the teams array based on the selectedTeam ID.
-   * Returns empty string if no team is selected or team is not found.
+   * Looks up the team name from the teams array based on the selectedTeamId.
+   * Returns the selectedTeam name directly if available, or looks it up from teams array.
    * 
    * @returns Team display name or empty string
    * 
    * @example
-   * this.selectedTeam = 'dept-pessoal';
+   * this.selectedTeamId = 'FkmdnFU';
    * const name = this.teamName;
-   * // Returns: "Departamento Pessoal"
+   * // Returns: "GESTAO" or the team name from Funifier
    */
   get teamName(): string {
-    const team = this.teams.find(t => t.id === this.selectedTeam);
-    return team ? team.name : '';
+    // If a collaborator is selected, show their name
+    if (this.selectedCollaborator) {
+      const collaborator = this.collaborators.find(c => c.userId === this.selectedCollaborator);
+      return collaborator?.name || this.selectedCollaborator;
+    }
+    
+    // If selectedTeam is already set (team name), return it
+    if (this.selectedTeam) {
+      return this.selectedTeam;
+    }
+    
+    // Otherwise, look it up from teams array using selectedTeamId
+    if (this.selectedTeamId) {
+      const team = this.teams.find(t => t.id === this.selectedTeamId);
+      return team ? team.name : this.selectedTeamId;
+    }
+    
+    return '';
   }
 
   /**
@@ -688,6 +2000,59 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
   retryProductivityData(): void {
     const dateRange = this.calculateDateRange();
     this.loadProductivityData(dateRange);
+  }
+
+  /**
+   * Handle progress card click to open modal
+   */
+  onProgressCardClicked(type: ProgressCardType): void {
+    // Map ProgressCardType to ProgressListType
+    switch (type) {
+      case 'atividades-finalizadas':
+        this.progressModalType = 'atividades';
+        break;
+      case 'atividades-pontos':
+        this.progressModalType = 'pontos';
+        break;
+      case 'processos-pendentes':
+        this.progressModalType = 'processos-pendentes';
+        break;
+      case 'processos-finalizados':
+        this.progressModalType = 'processos-finalizados';
+        break;
+      default:
+        this.progressModalType = 'atividades';
+    }
+    this.isProgressModalOpen = true;
+  }
+
+  /**
+   * Close progress modal
+   */
+  onProgressModalClosed(): void {
+    this.isProgressModalOpen = false;
+  }
+
+  /**
+   * Open carteira modal
+   */
+  openCarteiraModal(): void {
+    this.isCarteiraModalOpen = true;
+  }
+
+  /**
+   * Close carteira modal
+   */
+  onCarteiraModalClosed(): void {
+    this.isCarteiraModalOpen = false;
+  }
+
+  /**
+   * Get team player IDs as comma-separated string for modal
+   * The modal expects a single playerId, but we'll pass all team member IDs
+   */
+  get teamPlayerIdsForModal(): string {
+    return this.teamMemberIds.join(',');
   }
 
   /**

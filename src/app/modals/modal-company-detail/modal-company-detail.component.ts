@@ -76,10 +76,10 @@ export class ModalCompanyDetailComponent implements OnInit {
       case 1: // Atividades finalizadas
         // For activities, we'll show completed processes with their completed tasks
         return this.companyDetails.processes.filter(
-          p => p.tasks.some(t => t.status === 'completed')
+          p => p.tasks?.some(t => t.status === 'completed') ?? false
         ).map(p => ({
           ...p,
-          tasks: p.tasks.filter(t => t.status === 'completed')
+          tasks: p.tasks?.filter(t => t.status === 'completed') ?? []
         }));
       case 2: // Macros finalizadas
         return this.companyDetails.processes.filter(

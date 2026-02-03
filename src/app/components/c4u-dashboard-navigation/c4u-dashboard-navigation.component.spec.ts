@@ -5,6 +5,7 @@ import { Subject } from 'rxjs';
 
 import { C4uDashboardNavigationComponent } from './c4u-dashboard-navigation.component';
 import { SessaoProvider } from '@providers/sessao/sessao.provider';
+import { TeamRoleGuardService } from '@guards/team-role.guard';
 import { ROLES_LIST } from '@utils/constants';
 
 describe('C4uDashboardNavigationComponent', () => {
@@ -12,6 +13,7 @@ describe('C4uDashboardNavigationComponent', () => {
   let fixture: ComponentFixture<C4uDashboardNavigationComponent>;
   let mockRouter: jasmine.SpyObj<Router>;
   let mockSessaoProvider: jasmine.SpyObj<SessaoProvider>;
+  let mockTeamRoleGuard: jasmine.SpyObj<TeamRoleGuardService>;
   let mockChangeDetectorRef: jasmine.SpyObj<ChangeDetectorRef>;
   let routerEventsSubject: Subject<any>;
 
@@ -26,9 +28,13 @@ describe('C4uDashboardNavigationComponent', () => {
     mockSessaoProvider = jasmine.createSpyObj('SessaoProvider', [], {
       usuario: {
         email: 'test@example.com',
-        roles: [ROLES_LIST.ACCESS_PLAYER_PANEL]
+        roles: [ROLES_LIST.ACCESS_PLAYER_PANEL],
+        teams: []
       }
     });
+    
+    mockTeamRoleGuard = jasmine.createSpyObj('TeamRoleGuardService', ['hasGestaoRole']);
+    mockTeamRoleGuard.hasGestaoRole.and.returnValue(false);
     
     mockChangeDetectorRef = jasmine.createSpyObj('ChangeDetectorRef', ['markForCheck']);
 
@@ -37,6 +43,7 @@ describe('C4uDashboardNavigationComponent', () => {
       providers: [
         { provide: Router, useValue: mockRouter },
         { provide: SessaoProvider, useValue: mockSessaoProvider },
+        { provide: TeamRoleGuardService, useValue: mockTeamRoleGuard },
         { provide: ChangeDetectorRef, useValue: mockChangeDetectorRef }
       ]
     }).compileComponents();
@@ -67,14 +74,8 @@ describe('C4uDashboardNavigationComponent', () => {
      * Validates: Requirements 18.1, 18.2
      */
     it('should display navigation menu for GESTAO users', () => {
-      // Arrange: User with GESTAO role
-      Object.defineProperty(mockSessaoProvider, 'usuario', {
-        get: () => ({
-          email: 'manager@example.com',
-          roles: [ROLES_LIST.ACCESS_PLAYER_PANEL, ROLES_LIST.ACCESS_TEAM_MANAGEMENT]
-        }),
-        configurable: true
-      });
+      // Arrange: User with GESTAO team (FkgMSNO)
+      mockTeamRoleGuard.hasGestaoRole.and.returnValue(true);
 
       // Act
       fixture.detectChanges();
@@ -86,14 +87,8 @@ describe('C4uDashboardNavigationComponent', () => {
     });
 
     it('should include team management dashboard in available dashboards for GESTAO users', () => {
-      // Arrange
-      Object.defineProperty(mockSessaoProvider, 'usuario', {
-        get: () => ({
-          email: 'manager@example.com',
-          roles: [ROLES_LIST.ACCESS_TEAM_MANAGEMENT]
-        }),
-        configurable: true
-      });
+      // Arrange: User with GESTAO team (FkgMSNO)
+      mockTeamRoleGuard.hasGestaoRole.and.returnValue(true);
 
       // Act
       fixture.detectChanges();
@@ -113,14 +108,8 @@ describe('C4uDashboardNavigationComponent', () => {
      * Validates: Requirements 18.1, 18.2
      */
     it('should hide navigation menu for non-GESTAO users', () => {
-      // Arrange: User without GESTAO role
-      Object.defineProperty(mockSessaoProvider, 'usuario', {
-        get: () => ({
-          email: 'user@example.com',
-          roles: [ROLES_LIST.ACCESS_PLAYER_PANEL]
-        }),
-        configurable: true
-      });
+      // Arrange: User without GESTAO team
+      mockTeamRoleGuard.hasGestaoRole.and.returnValue(false);
 
       // Act
       fixture.detectChanges();
@@ -132,14 +121,8 @@ describe('C4uDashboardNavigationComponent', () => {
     });
 
     it('should only show personal dashboard for non-GESTAO users', () => {
-      // Arrange
-      Object.defineProperty(mockSessaoProvider, 'usuario', {
-        get: () => ({
-          email: 'user@example.com',
-          roles: [ROLES_LIST.ACCESS_PLAYER_PANEL]
-        }),
-        configurable: true
-      });
+      // Arrange: User without GESTAO team
+      mockTeamRoleGuard.hasGestaoRole.and.returnValue(false);
 
       // Act
       fixture.detectChanges();
@@ -150,15 +133,9 @@ describe('C4uDashboardNavigationComponent', () => {
       expect(component.availableDashboards[0].label).toBe('Meu Painel');
     });
 
-    it('should handle user with no roles', () => {
-      // Arrange
-      Object.defineProperty(mockSessaoProvider, 'usuario', {
-        get: () => ({
-          email: 'user@example.com',
-          roles: []
-        }),
-        configurable: true
-      });
+    it('should handle user with no teams', () => {
+      // Arrange: User without teams
+      mockTeamRoleGuard.hasGestaoRole.and.returnValue(false);
 
       // Act
       fixture.detectChanges();
@@ -169,11 +146,8 @@ describe('C4uDashboardNavigationComponent', () => {
     });
 
     it('should handle null user', () => {
-      // Arrange
-      Object.defineProperty(mockSessaoProvider, 'usuario', {
-        get: () => null,
-        configurable: true
-      });
+      // Arrange: Null user
+      mockTeamRoleGuard.hasGestaoRole.and.returnValue(false);
 
       // Act
       fixture.detectChanges();
@@ -190,14 +164,8 @@ describe('C4uDashboardNavigationComponent', () => {
      * Validates: Requirements 18.4
      */
     it('should navigate to selected dashboard', () => {
-      // Arrange
-      Object.defineProperty(mockSessaoProvider, 'usuario', {
-        get: () => ({
-          email: 'manager@example.com',
-          roles: [ROLES_LIST.ACCESS_TEAM_MANAGEMENT]
-        }),
-        configurable: true
-      });
+      // Arrange: User with GESTAO team
+      mockTeamRoleGuard.hasGestaoRole.and.returnValue(true);
       fixture.detectChanges();
 
       const teamDashboard = component.availableDashboards.find(
@@ -212,14 +180,8 @@ describe('C4uDashboardNavigationComponent', () => {
     });
 
     it('should not navigate if already on selected dashboard', () => {
-      // Arrange
-      Object.defineProperty(mockSessaoProvider, 'usuario', {
-        get: () => ({
-          email: 'manager@example.com',
-          roles: [ROLES_LIST.ACCESS_TEAM_MANAGEMENT]
-        }),
-        configurable: true
-      });
+      // Arrange: User with GESTAO team
+      mockTeamRoleGuard.hasGestaoRole.and.returnValue(true);
       Object.defineProperty(mockRouter, 'url', {
         get: () => '/dashboard',
         configurable: true
@@ -239,16 +201,10 @@ describe('C4uDashboardNavigationComponent', () => {
     });
 
     it('should detect current dashboard from URL', () => {
-      // Arrange
+      // Arrange: User with GESTAO team
+      mockTeamRoleGuard.hasGestaoRole.and.returnValue(true);
       Object.defineProperty(mockRouter, 'url', {
         get: () => '/dashboard/team-management',
-        configurable: true
-      });
-      Object.defineProperty(mockSessaoProvider, 'usuario', {
-        get: () => ({
-          email: 'manager@example.com',
-          roles: [ROLES_LIST.ACCESS_TEAM_MANAGEMENT]
-        }),
         configurable: true
       });
 
@@ -261,14 +217,8 @@ describe('C4uDashboardNavigationComponent', () => {
     });
 
     it('should update current dashboard on route change', () => {
-      // Arrange
-      Object.defineProperty(mockSessaoProvider, 'usuario', {
-        get: () => ({
-          email: 'manager@example.com',
-          roles: [ROLES_LIST.ACCESS_TEAM_MANAGEMENT]
-        }),
-        configurable: true
-      });
+      // Arrange: User with GESTAO team
+      mockTeamRoleGuard.hasGestaoRole.and.returnValue(true);
       fixture.detectChanges();
 
       // Act: Simulate navigation event
@@ -290,14 +240,8 @@ describe('C4uDashboardNavigationComponent', () => {
      * Validates: Requirements 18.5
      */
     it('should save last visited dashboard to session storage', () => {
-      // Arrange
-      Object.defineProperty(mockSessaoProvider, 'usuario', {
-        get: () => ({
-          email: 'manager@example.com',
-          roles: [ROLES_LIST.ACCESS_TEAM_MANAGEMENT]
-        }),
-        configurable: true
-      });
+      // Arrange: User with GESTAO team
+      mockTeamRoleGuard.hasGestaoRole.and.returnValue(true);
       fixture.detectChanges();
 
       const teamDashboard = component.availableDashboards.find(
@@ -313,17 +257,11 @@ describe('C4uDashboardNavigationComponent', () => {
     });
 
     it('should restore last visited dashboard on initialization', () => {
-      // Arrange
+      // Arrange: User with GESTAO team
+      mockTeamRoleGuard.hasGestaoRole.and.returnValue(true);
       sessionStorage.setItem('lastVisitedDashboard', '/dashboard/team-management');
       Object.defineProperty(mockRouter, 'url', {
         get: () => '/dashboard',
-        configurable: true
-      });
-      Object.defineProperty(mockSessaoProvider, 'usuario', {
-        get: () => ({
-          email: 'manager@example.com',
-          roles: [ROLES_LIST.ACCESS_TEAM_MANAGEMENT]
-        }),
         configurable: true
       });
 
@@ -335,17 +273,11 @@ describe('C4uDashboardNavigationComponent', () => {
     });
 
     it('should not restore last visited dashboard if not on default route', () => {
-      // Arrange
+      // Arrange: User with GESTAO team
+      mockTeamRoleGuard.hasGestaoRole.and.returnValue(true);
       sessionStorage.setItem('lastVisitedDashboard', '/dashboard/team-management');
       Object.defineProperty(mockRouter, 'url', {
         get: () => '/dashboard/team-management',
-        configurable: true
-      });
-      Object.defineProperty(mockSessaoProvider, 'usuario', {
-        get: () => ({
-          email: 'manager@example.com',
-          roles: [ROLES_LIST.ACCESS_TEAM_MANAGEMENT]
-        }),
         configurable: true
       });
 
@@ -357,17 +289,11 @@ describe('C4uDashboardNavigationComponent', () => {
     });
 
     it('should not restore dashboard if user does not have access', () => {
-      // Arrange
+      // Arrange: User without GESTAO team
+      mockTeamRoleGuard.hasGestaoRole.and.returnValue(false);
       sessionStorage.setItem('lastVisitedDashboard', '/dashboard/team-management');
       Object.defineProperty(mockRouter, 'url', {
         get: () => '/dashboard',
-        configurable: true
-      });
-      Object.defineProperty(mockSessaoProvider, 'usuario', {
-        get: () => ({
-          email: 'user@example.com',
-          roles: [ROLES_LIST.ACCESS_PLAYER_PANEL] // No GESTAO role
-        }),
         configurable: true
       });
 
@@ -379,15 +305,9 @@ describe('C4uDashboardNavigationComponent', () => {
     });
 
     it('should handle session storage errors gracefully', () => {
-      // Arrange
+      // Arrange: User with GESTAO team
+      mockTeamRoleGuard.hasGestaoRole.and.returnValue(true);
       spyOn(sessionStorage, 'setItem').and.throwError('Storage error');
-      Object.defineProperty(mockSessaoProvider, 'usuario', {
-        get: () => ({
-          email: 'manager@example.com',
-          roles: [ROLES_LIST.ACCESS_TEAM_MANAGEMENT]
-        }),
-        configurable: true
-      });
       fixture.detectChanges();
 
       const teamDashboard = component.availableDashboards.find(
@@ -405,16 +325,10 @@ describe('C4uDashboardNavigationComponent', () => {
      * Validates: Requirements 18.3
      */
     it('should display current dashboard name', () => {
-      // Arrange
+      // Arrange: User without GESTAO team
+      mockTeamRoleGuard.hasGestaoRole.and.returnValue(false);
       Object.defineProperty(mockRouter, 'url', {
         get: () => '/dashboard',
-        configurable: true
-      });
-      Object.defineProperty(mockSessaoProvider, 'usuario', {
-        get: () => ({
-          email: 'user@example.com',
-          roles: [ROLES_LIST.ACCESS_PLAYER_PANEL]
-        }),
         configurable: true
       });
 
@@ -426,14 +340,8 @@ describe('C4uDashboardNavigationComponent', () => {
     });
 
     it('should update dashboard name when navigating', () => {
-      // Arrange
-      Object.defineProperty(mockSessaoProvider, 'usuario', {
-        get: () => ({
-          email: 'manager@example.com',
-          roles: [ROLES_LIST.ACCESS_TEAM_MANAGEMENT]
-        }),
-        configurable: true
-      });
+      // Arrange: User with GESTAO team
+      mockTeamRoleGuard.hasGestaoRole.and.returnValue(true);
       fixture.detectChanges();
 
       // Act
@@ -460,32 +368,21 @@ describe('C4uDashboardNavigationComponent', () => {
   });
 
   describe('Edge Cases', () => {
-    it('should handle role with partial match', () => {
-      // Arrange
-      Object.defineProperty(mockSessaoProvider, 'usuario', {
-        get: () => ({
-          email: 'manager@example.com',
-          roles: ['GESTAO_ADMIN'] // Contains GESTAO
-        }),
-        configurable: true
-      });
+    it('should handle user with GESTAO team', () => {
+      // Arrange: User with GESTAO team (FkgMSNO)
+      mockTeamRoleGuard.hasGestaoRole.and.returnValue(true);
 
       // Act
       fixture.detectChanges();
 
       // Assert
       expect(component.hasGestaoRole).toBe(true);
+      expect(component.availableDashboards.length).toBe(2);
     });
 
-    it('should handle empty roles array', () => {
-      // Arrange
-      Object.defineProperty(mockSessaoProvider, 'usuario', {
-        get: () => ({
-          email: 'user@example.com',
-          roles: []
-        }),
-        configurable: true
-      });
+    it('should handle user without teams', () => {
+      // Arrange: User without teams
+      mockTeamRoleGuard.hasGestaoRole.and.returnValue(false);
 
       // Act
       fixture.detectChanges();
@@ -496,16 +393,10 @@ describe('C4uDashboardNavigationComponent', () => {
     });
 
     it('should match longest route first for nested routes', () => {
-      // Arrange
+      // Arrange: User with GESTAO team
+      mockTeamRoleGuard.hasGestaoRole.and.returnValue(true);
       Object.defineProperty(mockRouter, 'url', {
         get: () => '/dashboard/team-management/details',
-        configurable: true
-      });
-      Object.defineProperty(mockSessaoProvider, 'usuario', {
-        get: () => ({
-          email: 'manager@example.com',
-          roles: [ROLES_LIST.ACCESS_TEAM_MANAGEMENT]
-        }),
         configurable: true
       });
 

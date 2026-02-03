@@ -1,9 +1,9 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
-import { ActionLogService, ActivityListItem, MacroListItem } from '@services/action-log.service';
+import { ActionLogService, ActivityListItem, ProcessListItem } from '@services/action-log.service';
 
-export type ProgressListType = 'atividades' | 'pontos' | 'macros-pendentes' | 'macros-finalizadas';
+export type ProgressListType = 'atividades' | 'pontos' | 'processos-pendentes' | 'processos-finalizados';
 
 @Component({
   selector: 'modal-progress-list',
@@ -20,7 +20,7 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
 
   isLoading = true;
   activityItems: ActivityListItem[] = [];
-  macroItems: MacroListItem[] = [];
+  processoItems: ProcessListItem[] = [];
 
   constructor(
     private actionLogService: ActionLogService,
@@ -42,10 +42,10 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
         return 'Atividades Finalizadas';
       case 'pontos':
         return 'Pontos Obtidos';
-      case 'macros-pendentes':
-        return 'Macros Pendentes e Incompletas';
-      case 'macros-finalizadas':
-        return 'Macros Finalizadas';
+      case 'processos-pendentes':
+        return 'Processos Pendentes e Incompletos';
+      case 'processos-finalizados':
+        return 'Processos Finalizados';
       default:
         return 'Lista';
     }
@@ -55,8 +55,8 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
     return this.listType === 'atividades' || this.listType === 'pontos';
   }
 
-  get isMacroList(): boolean {
-    return this.listType === 'macros-pendentes' || this.listType === 'macros-finalizadas';
+  get isProcessList(): boolean {
+    return this.listType === 'processos-pendentes' || this.listType === 'processos-finalizados';
   }
 
   private loadData(): void {
@@ -77,22 +77,22 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
             this.cdr.detectChanges();
           }
         });
-    } else if (this.isMacroList) {
-      this.actionLogService.getMacroList(this.playerId, this.month)
+    } else if (this.isProcessList) {
+      this.actionLogService.getProcessList(this.playerId, this.month)
         .pipe(takeUntil(this.destroy$))
         .subscribe({
-          next: (items: MacroListItem[]) => {
+          next: (items: ProcessListItem[]) => {
             // Filter based on list type
-            if (this.listType === 'macros-finalizadas') {
-              this.macroItems = items.filter(m => m.isFinalized);
+            if (this.listType === 'processos-finalizados') {
+              this.processoItems = items.filter(p => p.isFinalized);
             } else {
-              this.macroItems = items.filter(m => !m.isFinalized);
+              this.processoItems = items.filter(p => !p.isFinalized);
             }
             this.isLoading = false;
             this.cdr.detectChanges();
           },
           error: (err: Error) => {
-            console.error('Error loading macro list:', err);
+            console.error('Error loading process list:', err);
             this.isLoading = false;
             this.cdr.detectChanges();
           }

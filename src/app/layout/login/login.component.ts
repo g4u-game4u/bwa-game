@@ -145,22 +145,39 @@ export class LoginComponent implements OnInit {
     
     if (this.username && this.password) {
       this.isLoading = true;
+      this.form.disable(); // Disable form controls
       this.startLoadingTextAnimation();
       try {
         console.log('🔐 Calling sessao.login...');
         let user = await this.sessao.login(this.username, this.password);
         console.log('🔐 Login response:', user);
+        console.log('🔐 User object:', this.sessao.usuario);
         if (user) {
-          this.router.navigate(['/']);
+          // Wait a bit to ensure state is fully updated
+          await new Promise(resolve => setTimeout(resolve, 100));
+          console.log('🔐 Navigating to dashboard...');
+          const navigationResult = await this.router.navigate(['/']);
+          console.log('🔐 Navigation result:', navigationResult);
         } else {
           this.toastService.error("Usuário ou senha incorretos");
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error('🔐 Login error:', error);
-        this.toastService.error("Erro ao fazer login. Tente novamente.");
+        
+        // Check if it's a timeout error
+        if (error?.name === 'TimeoutError' || error?.message?.includes('timeout')) {
+          this.toastService.error("Tempo de conexão esgotado. Verifique sua conexão e tente novamente.");
+        } else if (error?.status === 401 || error?.status === 403) {
+          this.toastService.error("Usuário ou senha incorretos");
+        } else if (error?.status === 0 || error?.message?.includes('Network')) {
+          this.toastService.error("Erro de conexão. Verifique sua internet e tente novamente.");
+        } else {
+          this.toastService.error("Erro ao fazer login. Tente novamente.");
+        }
       } finally {
         this.stopLoadingTextAnimation();
         this.isLoading = false;
+        this.form.enable(); // Re-enable form controls
       }
     } else {
       console.warn('🔐 Form invalid or missing credentials');
@@ -186,12 +203,16 @@ export class LoginComponent implements OnInit {
   startPasswordReset() {
     this.resetFlow = 'reset-request';
     this.resetRequestForm.reset();
+    this.resetRequestForm.enable(); // Ensure form is enabled
   }
 
   backToLogin() {
     this.resetFlow = 'login';
+    this.form.enable(); // Ensure form is enabled
     this.resetRequestForm.reset();
+    this.resetRequestForm.enable(); // Ensure form is enabled
     this.resetConfirmForm.reset();
+    this.resetConfirmForm.enable(); // Ensure form is enabled
     this.resetEmail = '';
   }
 
@@ -199,6 +220,7 @@ export class LoginComponent implements OnInit {
     if (this.resetRequestForm.valid && this.resetRequestEmail) {
       console.log('Enviando código de redefinição para:', this.resetRequestEmail);
       this.isLoading = true;
+      this.resetRequestForm.disable(); // Disable form controls
       this.loadingText = this.translate.instant('LOADING_SENDING_CODE');
       try {
         await this.authProvider.requestPasswordReset(this.resetRequestEmail);
@@ -211,6 +233,7 @@ export class LoginComponent implements OnInit {
         this.toastService.error(errorMessage);
       } finally {
         this.isLoading = false;
+        this.resetRequestForm.enable(); // Re-enable form controls
       }
     }
   }
@@ -218,6 +241,7 @@ export class LoginComponent implements OnInit {
   async confirmResetPassword() {
     if (this.resetConfirmForm.valid && !this.resetConfirmForm.hasError('passwordMismatch')) {
       this.isLoading = true;
+      this.resetConfirmForm.disable(); // Disable form controls
       this.loadingText = this.translate.instant('LOADING_RESETTING_PASSWORD');
       try {
         await this.authProvider.resetPassword(
@@ -232,6 +256,7 @@ export class LoginComponent implements OnInit {
         this.toastService.error(errorMessage);
       } finally {
         this.isLoading = false;
+        this.resetConfirmForm.enable(); // Re-enable form controls
       }
     }
   }

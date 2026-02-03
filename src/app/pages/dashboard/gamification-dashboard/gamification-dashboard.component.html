@@ -109,9 +109,9 @@
       <h2 id="progress-section-title" class="section-title">Meu Progresso</h2>
       
       <c4u-activity-progress
-        *ngIf="activityMetrics && macroMetrics"
+        *ngIf="activityMetrics && processMetrics"
         [activities]="activityMetrics"
-        [macros]="macroMetrics"
+        [processos]="processMetrics"
         (cardClicked)="onProgressCardClicked($event)">
       </c4u-activity-progress>
       

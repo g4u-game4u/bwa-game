@@ -21,7 +21,7 @@ export interface AuthToken {
   providedIn: 'root'
 })
 export class FunifierApiService {
-  private readonly baseUrl = environment.funifier_base_url || 'https://service2.funifier.com';
+  private readonly baseUrl = environment.funifier_base_url || 'https://service2.funifier.com/v3/';
   private readonly apiKey = environment.funifier_api_key;
   private readonly basicToken = environment.funifier_basic_token;
   private authToken: string | null = null;
@@ -53,7 +53,8 @@ export class FunifierApiService {
 
   /**
    * Authenticate with Funifier API using username and password
-   * POST /v3/auth/token
+   * POST /auth/token
+   * baseUrl already includes /v3/, so just use auth/token
    */
   authenticate(credentials: AuthCredentials): Observable<AuthToken> {
     const authBody = {
@@ -63,7 +64,13 @@ export class FunifierApiService {
       password: credentials.password
     };
 
-    return this.http.post<AuthToken>(`${this.baseUrl}/v3/auth/token`, authBody).pipe(
+    // Ensure baseUrl ends with / and endpoint doesn't start with /
+    const cleanBaseUrl = this.baseUrl.endsWith('/') ? this.baseUrl : `${this.baseUrl}/`;
+    const authUrl = `${cleanBaseUrl}auth/token`;
+    
+    console.log('🔐 FunifierAPI authenticate URL:', authUrl);
+    
+    return this.http.post<AuthToken>(authUrl, authBody).pipe(
       tap(response => {
         this.authToken = response.access_token;
         this.tokenExpiry = response.expires_in;
@@ -99,10 +106,17 @@ export class FunifierApiService {
 
   /**
    * GET request to Funifier API
+   * Endpoint should not include /v3/ prefix as it's already in baseUrl
    */
   get<T>(endpoint: string, params?: any): Observable<T> {
     const headers = this.getHeaders(endpoint);
-    const url = `${this.baseUrl}${endpoint}`;
+    // Remove leading /v3/ if present to avoid duplication
+    let cleanEndpoint = endpoint.startsWith('/v3/') ? endpoint.substring(4) : endpoint;
+    // Remove leading / if present to avoid double slashes
+    cleanEndpoint = cleanEndpoint.startsWith('/') ? cleanEndpoint.substring(1) : cleanEndpoint;
+    // Ensure baseUrl ends with /
+    const cleanBaseUrl = this.baseUrl.endsWith('/') ? this.baseUrl : `${this.baseUrl}/`;
+    const url = `${cleanBaseUrl}${cleanEndpoint}`;
     
     console.log('🌐 FunifierAPI GET:', url);
     console.log('🌐 Headers (before interceptor):', headers.keys());
@@ -119,10 +133,19 @@ export class FunifierApiService {
 
   /**
    * POST request to Funifier API
+   * Endpoint should not include /v3/ prefix as it's already in baseUrl
    */
   post<T>(endpoint: string, body: any): Observable<T> {
     const headers = this.getHeaders(endpoint);
-    const url = `${this.baseUrl}${endpoint}`;
+    // Remove leading /v3/ if present to avoid duplication
+    let cleanEndpoint = endpoint.startsWith('/v3/') ? endpoint.substring(4) : endpoint;
+    // Remove leading / if present to avoid double slashes
+    cleanEndpoint = cleanEndpoint.startsWith('/') ? cleanEndpoint.substring(1) : cleanEndpoint;
+    // Ensure baseUrl ends with /
+    const cleanBaseUrl = this.baseUrl.endsWith('/') ? this.baseUrl : `${this.baseUrl}/`;
+    const url = `${cleanBaseUrl}${cleanEndpoint}`;
+    
+    console.log('🌐 FunifierAPI POST:', url);
     
     return this.http.post<T>(url, body, { headers }).pipe(
       retry({ count: 3, delay: 1000 }),

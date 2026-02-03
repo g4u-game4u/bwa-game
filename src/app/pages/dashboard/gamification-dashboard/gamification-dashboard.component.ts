@@ -1,4 +1,5 @@
 import { Component, OnInit, OnDestroy, HostListener, ChangeDetectionStrategy, ChangeDetectorRef, AfterViewInit } from '@angular/core';
+import { ActivatedRoute, Router } from '@angular/router';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 
@@ -16,7 +17,7 @@ import {
   Company, 
   KPIData,
   ActivityMetrics,
-  MacroMetrics
+  ProcessMetrics
 } from '@model/gamification-dashboard.model';
 import { ProgressCardType } from '@components/c4u-activity-progress/c4u-activity-progress.component';
 import { ProgressListType } from '@modals/modal-progress-list/modal-progress-list.component';
@@ -60,9 +61,9 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   // KPI data
   playerKPIs: KPIData[] = [];
   
-  // Activity and Macro data
+  // Activity and Process data
   activityMetrics: ActivityMetrics | null = null;
-  macroMetrics: MacroMetrics | null = null;
+  processMetrics: ProcessMetrics | null = null;
   
   // Company data
   companies: Company[] = [];
@@ -106,24 +107,60 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     private cdr: ChangeDetectorRef,
     private performanceMonitor: PerformanceMonitorService,
     private actionLogService: ActionLogService,
-    private sessaoProvider: SessaoProvider
+    private sessaoProvider: SessaoProvider,
+    private route: ActivatedRoute,
+    private router: Router
   ) {
     // Start measuring render time
     this.endRenderMeasurement = this.performanceMonitor.measureRenderTime('GamificationDashboardComponent');
   }
   
   /**
-   * Get current player ID from session or use 'me' for Funifier API
+   * Get current player ID from query params, session, or use 'me' for Funifier API
+   * 
+   * Priority:
+   * 1. Query parameter 'playerId' (when viewing another player's dashboard)
+   * 2. Current user from session
+   * 3. 'me' as fallback
    */
   private getPlayerId(): string {
-    // Funifier API supports 'me' as a special identifier for the current authenticated user
-    // This is the preferred approach as it doesn't require knowing the player ID upfront
+    // Check for playerId in query params (when viewing another player's dashboard)
+    const playerIdParam = this.route.snapshot.queryParams['playerId'];
+    if (playerIdParam && typeof playerIdParam === 'string') {
+      console.log('📊 Using player ID from query params:', playerIdParam);
+      return playerIdParam;
+    }
+    
+    // Try to get from current user session
+    const usuario = this.sessaoProvider.usuario;
+    if (usuario) {
+      const sessionPlayerId = usuario._id || usuario.email;
+      if (sessionPlayerId && typeof sessionPlayerId === 'string') {
+        console.log('📊 Using player ID from session:', sessionPlayerId);
+        return sessionPlayerId;
+      }
+    }
+    
+    // Fallback to 'me' (current authenticated user)
+    console.log('📊 Using default player ID: me');
     return 'me';
   }
   
   ngOnInit(): void {
     console.log('🎮 GamificationDashboardComponent ngOnInit STARTED');
     this.checkResponsiveBreakpoints();
+    
+    // Listen for query param changes (when viewing different players)
+    this.route.queryParams
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(params => {
+        const playerId = params['playerId'];
+        if (playerId) {
+          console.log('📊 Player ID changed via query params:', playerId);
+          this.loadDashboardData();
+        }
+      });
+    
     console.log('🎮 About to call loadDashboardData...');
     this.loadDashboardData();
     console.log('🎮 loadDashboardData called');
@@ -292,8 +329,8 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
    * - Tarefas finalizadas: count of actions from action_log
    */
   private loadSeasonProgressDetails(): void {
-    const usuario = this.sessaoProvider.usuario as any;
-    const playerId = usuario?._id || usuario?.email || '';
+    const usuario = this.sessaoProvider.usuario as { _id?: string; email?: string } | null;
+    const playerId: string = (usuario?._id || usuario?.email || '') as string;
     
     if (!playerId) {
       return;
@@ -375,7 +412,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     this.isLoadingCarteira = true;
     
     const usuario = this.sessaoProvider.usuario as { _id?: string; email?: string } | null;
-    const playerId = usuario?._id || usuario?.email || '';
+    const playerId: string = (usuario?._id || usuario?.email || '') as string;
     
     if (!playerId) {
       console.warn('📊 No player ID available for carteira data');
@@ -460,26 +497,26 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     
     // Get player email/id for action log query
     // Funifier uses email as the player ID
-    const usuario = this.sessaoProvider.usuario as any;
-    const playerId = usuario?._id || usuario?.email || '';
+    const usuario = this.sessaoProvider.usuario as { _id?: string; email?: string } | null;
+    const playerId: string = (usuario?._id || usuario?.email || '') as string;
     
     if (!playerId) {
       console.warn('📊 No player ID available for progress data');
       // Use default values if no player ID
       this.activityMetrics = { pendentes: 0, emExecucao: 0, finalizadas: 0, pontos: 0 };
-      this.macroMetrics = { pendentes: 0, incompletas: 0, finalizadas: 0 };
+      this.processMetrics = { pendentes: 0, incompletas: 0, finalizadas: 0 };
       this.isLoadingProgress = false;
       this.cdr.markForCheck();
       return;
     }
 
-    this.actionLogService.getProgressMetrics(playerId)
+    this.actionLogService.getProgressMetrics(playerId, this.selectedMonth)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (metrics) => {
           console.log('📊 Progress metrics loaded:', metrics);
           this.activityMetrics = metrics.activity;
-          this.macroMetrics = metrics.macro;
+          this.processMetrics = metrics.processo;
           this.isLoadingProgress = false;
           this.cdr.markForCheck();
         },
@@ -487,7 +524,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
           console.error('📊 Failed to load progress metrics:', error);
           // Use default values on error
           this.activityMetrics = { pendentes: 0, emExecucao: 0, finalizadas: 0, pontos: 0 };
-          this.macroMetrics = { pendentes: 0, incompletas: 0, finalizadas: 0 };
+          this.processMetrics = { pendentes: 0, incompletas: 0, finalizadas: 0 };
           this.isLoadingProgress = false;
           this.cdr.markForCheck();
         }
@@ -553,15 +590,15 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
         this.isProgressModalOpen = true;
         this.announceToScreenReader('Abrindo lista de pontos');
         break;
-      case 'macros-pendentes':
-        this.progressModalType = 'macros-pendentes';
+      case 'processos-pendentes':
+        this.progressModalType = 'processos-pendentes';
         this.isProgressModalOpen = true;
-        this.announceToScreenReader('Abrindo lista de macros pendentes');
+        this.announceToScreenReader('Abrindo lista de processos pendentes');
         break;
-      case 'macros-finalizadas':
-        this.progressModalType = 'macros-finalizadas';
+      case 'processos-finalizados':
+        this.progressModalType = 'processos-finalizados';
         this.isProgressModalOpen = true;
-        this.announceToScreenReader('Abrindo lista de macros finalizadas');
+        this.announceToScreenReader('Abrindo lista de processos finalizados');
         break;
     }
   }
@@ -609,8 +646,11 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
    * Get current player ID for modals (email-based)
    */
   get currentPlayerId(): string {
-    const usuario = this.sessaoProvider.usuario as { _id?: string; email?: string };
-    return usuario?._id || usuario?.email || '';
+    const usuario = this.sessaoProvider.usuario as { _id?: string; email?: string } | null;
+    if (!usuario) {
+      return '';
+    }
+    return (usuario._id || usuario.email || '') as string;
   }
   
   /**

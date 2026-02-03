@@ -1,7 +1,7 @@
 import { Component, Input, Output, EventEmitter } from '@angular/core';
-import { ActivityMetrics, MacroMetrics } from '@model/gamification-dashboard.model';
+import { ActivityMetrics, ProcessMetrics } from '@model/gamification-dashboard.model';
 
-export type ProgressCardType = 'atividades-finalizadas' | 'atividades-pontos' | 'macros-pendentes' | 'macros-finalizadas';
+export type ProgressCardType = 'atividades-finalizadas' | 'atividades-pontos' | 'processos-pendentes' | 'processos-finalizados';
 
 @Component({
   selector: 'c4u-activity-progress',
@@ -16,7 +16,7 @@ export class C4uActivityProgressComponent {
     pontos: 0
   };
 
-  @Input() macros: MacroMetrics = {
+  @Input() processos: ProcessMetrics = {
     pendentes: 0,
     incompletas: 0,
     finalizadas: 0

@@ -1,14 +1,16 @@
 import { inject, Injectable } from '@angular/core';
 import { ActivatedRouteSnapshot, CanActivateFn, Router, RouterStateSnapshot } from '@angular/router';
 import { SessaoProvider } from '@providers/sessao/sessao.provider';
+import { UserProfileService } from '@services/user-profile.service';
 
 /**
  * Guard service to restrict access to team management dashboard
- * Only users with GESTOR team (ID: FkgMSNO) can access
+ * Only users with management profiles can access:
+ * - SUPERVISOR (Fkmdmko - SUPERVISÃO)
+ * - GESTOR (FkmdnFU - GESTAO)
+ * - DIRETOR (FkmdhZ9 - DIREÇÃO)
  * 
- * Note: GESTOR is determined by team membership, not a role.
- * The player profile from /v3/player/me/status contains a teams array,
- * and we check if any team has the ID "FkgMSNO" (GESTAO team).
+ * JOGADOR users are redirected to their own dashboard.
  */
 @Injectable({
   providedIn: 'root'
@@ -16,37 +18,25 @@ import { SessaoProvider } from '@providers/sessao/sessao.provider';
 export class TeamRoleGuardService {
   constructor(
     private sessao: SessaoProvider,
-    private router: Router
+    private router: Router,
+    private userProfileService: UserProfileService
   ) {}
 
   /**
-   * Check if the current user has GESTOR team
-   * @returns true if user has GESTOR team (FkgMSNO), false otherwise
+   * Check if the current user has access to team management dashboard
+   * @returns true if user is SUPERVISOR, GESTOR, or DIRETOR, false otherwise
    */
   hasGestaoRole(): boolean {
-    const user = this.sessao.usuario;
-    
-    if (!user) {
-      return false;
-    }
-
-    // Check if user has teams array
-    if (!user.teams || !Array.isArray(user.teams)) {
-      return false;
-    }
-
-    // Check if teams array contains "FkgMSNO" (GESTAO team ID)
-    return user.teams.includes('FkgMSNO');
+    return this.userProfileService.canAccessTeamManagement();
   }
 
   /**
    * CanActivate implementation for route guard
-   * Verifies user has GESTOR team before allowing access
-   * Silently redirects to /dashboard if user doesn't have GESTOR team
+   * Verifies user has management profile (SUPERVISOR, GESTOR, or DIRETOR) before allowing access
+   * Silently redirects to /dashboard if user is JOGADOR
    * 
    * Note: No error message is shown because this is used for automatic
-   * routing decisions. Users without GESTOR team simply go to the regular
-   * dashboard instead.
+   * routing decisions. JOGADOR users simply go to the regular dashboard instead.
    */
   async canActivate(
     route: ActivatedRouteSnapshot,
@@ -61,12 +51,12 @@ export class TeamRoleGuardService {
       return false;
     }
 
-    // Check if user has GESTAO role (team ID: FkgMSNO)
+    // Check if user has management profile (SUPERVISOR, GESTOR, or DIRETOR)
     if (this.hasGestaoRole()) {
       return true;
     }
 
-    // User doesn't have GESTOR team (FkgMSNO) - silently redirect to regular dashboard
+    // User is JOGADOR - silently redirect to regular dashboard
     // No error message needed as this is a normal routing decision
     await this.router.navigate(['/dashboard']);
     return false;

@@ -25,9 +25,18 @@ export class PermissaoAcessoProvider {
         // This happens when the page is refreshed
         if (token) {
             try {
-                return await this.sessao.init(true);
-            } catch (error) {
-                console.error('Error initializing session:', error);
+                const result = await this.sessao.init(true);
+                // If init failed, token was likely invalid - clear it
+                if (!result) {
+                    console.warn('🔐 Session initialization failed, token may be invalid');
+                }
+                return result;
+            } catch (error: any) {
+                console.error('🔐 Error initializing session in guard:', error);
+                // If it's a timeout or network error, token is likely invalid
+                if (error?.name === 'TimeoutError' || error?.message?.includes('timeout') || error?.status === 0) {
+                    console.warn('🔐 Timeout/network error, treating as invalid session');
+                }
                 return false;
             }
         }

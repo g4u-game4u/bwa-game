@@ -1,6 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { C4uActivityProgressComponent } from './c4u-activity-progress.component';
-import { ActivityMetrics, MacroMetrics } from '@model/gamification-dashboard.model';
+import { ActivityMetrics, ProcessMetrics } from '@model/gamification-dashboard.model';
 
 describe('C4uActivityProgressComponent', () => {
   let component: C4uActivityProgressComponent;
@@ -70,14 +70,14 @@ describe('C4uActivityProgressComponent', () => {
     });
   });
 
-  describe('macro metrics display', () => {
-    it('should display all macro metrics', () => {
-      const macros: MacroMetrics = {
+  describe('process metrics display', () => {
+    it('should display all process metrics', () => {
+      const processos: ProcessMetrics = {
         pendentes: 2,
         incompletas: 3,
         finalizadas: 8
       };
-      component.macros = macros;
+      component.processos = processos;
       fixture.detectChanges();
 
       const compiled = fixture.nativeElement;
@@ -88,12 +88,12 @@ describe('C4uActivityProgressComponent', () => {
     });
 
     it('should sum pendentes and incompletas correctly', () => {
-      const macros: MacroMetrics = {
+      const processos: ProcessMetrics = {
         pendentes: 7,
         incompletas: 4,
         finalizadas: 12
       };
-      component.macros = macros;
+      component.processos = processos;
       fixture.detectChanges();
 
       const compiled = fixture.nativeElement;
@@ -103,12 +103,12 @@ describe('C4uActivityProgressComponent', () => {
     });
 
     it('should display zero values correctly', () => {
-      const macros: MacroMetrics = {
+      const processos: ProcessMetrics = {
         pendentes: 0,
         incompletas: 0,
         finalizadas: 0
       };
-      component.macros = macros;
+      component.processos = processos;
       fixture.detectChanges();
 
       const compiled = fixture.nativeElement;
@@ -118,13 +118,13 @@ describe('C4uActivityProgressComponent', () => {
       expect(metricValues[1].textContent.trim()).toBe('0');
     });
 
-    it('should display macro labels correctly', () => {
+    it('should display process labels correctly', () => {
       fixture.detectChanges();
       const compiled = fixture.nativeElement;
       const labels = compiled.querySelectorAll('.section:last-child .metric-label');
       
-      expect(labels[0].textContent.trim()).toBe('Pendentes e Incompletas');
-      expect(labels[1].textContent.trim()).toBe('Finalizadas');
+      expect(labels[0].textContent.trim()).toBe('Pendentes e Incompletos');
+      expect(labels[1].textContent.trim()).toBe('Finalizados');
     });
   });
 
@@ -135,7 +135,7 @@ describe('C4uActivityProgressComponent', () => {
       const titles = compiled.querySelectorAll('.section-title');
       
       expect(titles[0].textContent.trim()).toBe('Atividades');
-      expect(titles[1].textContent.trim()).toBe('Macros');
+      expect(titles[1].textContent.trim()).toBe('Processos');
     });
   });
 
@@ -147,10 +147,10 @@ describe('C4uActivityProgressComponent', () => {
       expect(component.activities.pontos).toBe(0);
     });
 
-    it('should have default macro values of 0', () => {
-      expect(component.macros.pendentes).toBe(0);
-      expect(component.macros.incompletas).toBe(0);
-      expect(component.macros.finalizadas).toBe(0);
+    it('should have default process values of 0', () => {
+      expect(component.processos.pendentes).toBe(0);
+      expect(component.processos.incompletas).toBe(0);
+      expect(component.processos.finalizadas).toBe(0);
     });
   });
 });

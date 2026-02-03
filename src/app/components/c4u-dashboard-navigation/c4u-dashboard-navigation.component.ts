@@ -1,6 +1,7 @@
 import { Component, OnInit, ChangeDetectionStrategy, ChangeDetectorRef } from '@angular/core';
 import { Router, NavigationEnd } from '@angular/router';
 import { SessaoProvider } from '@providers/sessao/sessao.provider';
+import { UserProfileService } from '@services/user-profile.service';
 import { ROLES_LIST } from '@utils/constants';
 import { filter } from 'rxjs/operators';
 
@@ -41,6 +42,7 @@ export class C4uDashboardNavigationComponent implements OnInit {
   constructor(
     private router: Router,
     private sessaoProvider: SessaoProvider,
+    private userProfileService: UserProfileService,
     private cdr: ChangeDetectorRef
   ) {}
   
@@ -60,29 +62,47 @@ export class C4uDashboardNavigationComponent implements OnInit {
   }
   
   /**
-   * Check if user has GESTAO role
+   * Check if user has management profile (SUPERVISOR, GESTOR, or DIRETOR)
+   * Uses UserProfileService to determine access
    */
   private checkUserRole(): void {
     const usuario = this.sessaoProvider.usuario;
-    if (!usuario || !usuario.roles) {
-      this.hasGestaoRole = false;
-      return;
+    const profile = this.userProfileService.getCurrentUserProfile();
+    
+    // Log profile for debugging
+    if (usuario && usuario.teams && Array.isArray(usuario.teams)) {
+      console.log('👤 User logged in - Profile:', profile);
+      console.log('👤 User logged in - Team IDs:', usuario.teams);
+    } else {
+      console.log('👤 User logged in - No teams found, Profile:', profile);
     }
     
-    this.hasGestaoRole = usuario.roles.some((role: string) => 
-      role && role.includes(ROLES_LIST.ACCESS_TEAM_MANAGEMENT)
-    );
+    // Check if user can access team management (not JOGADOR)
+    this.hasGestaoRole = this.userProfileService.canAccessTeamManagement();
   }
   
   /**
    * Filter dashboards based on user role
+   * - "Meu Painel" is only available for JOGADOR profile
+   * - "Gestão de Equipe" is only available for management profiles (SUPERVISOR, GESTOR, DIRETOR)
    */
   private filterAvailableDashboards(): void {
+    const userProfile = this.userProfileService.getCurrentUserProfile();
+    const isJogador = this.userProfileService.isJogador();
+    
     this.availableDashboards = this.dashboards.filter(dashboard => {
-      if (!dashboard.requiresRole) {
-        return true; // Always show dashboards without role requirement
+      // "Meu Painel" should only be shown to JOGADOR
+      if (dashboard.route === '/dashboard' && dashboard.label === 'Meu Painel') {
+        return isJogador;
       }
-      return this.hasGestaoRole;
+      
+      // Dashboards with role requirement (e.g., "Gestão de Equipe")
+      if (dashboard.requiresRole) {
+        return this.hasGestaoRole;
+      }
+      
+      // Other dashboards without specific requirements
+      return true;
     });
   }
   

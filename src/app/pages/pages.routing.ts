@@ -1,9 +1,11 @@
 import {Routes} from '@angular/router';
+import { DashboardRedirectGuard } from '@guards/dashboard-redirect.guard';
 
 export const PagesRoutes: Routes = [
   {
     path: '',
-    loadChildren: () => import('./dashboard/gamification-dashboard/gamification-dashboard.module').then(m => m.GamificationDashboardModule)
+    loadChildren: () => import('./dashboard/gamification-dashboard/gamification-dashboard.module').then(m => m.GamificationDashboardModule),
+    canActivate: [DashboardRedirectGuard]
   },
   {
     path: 'team-management',

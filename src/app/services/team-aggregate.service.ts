@@ -266,23 +266,30 @@ export class TeamAggregateService {
     collection: string,
     query: AggregateQuery
   ): Observable<T[]> {
-    const endpoint = `/v3/database/${collection}/aggregate`;
+    const endpoint = `/v3/database/${collection}/aggregate?strict=true`;
     
     // Start performance monitoring
     const endMeasure = this.performanceMonitor.measureRenderTime(`aggregate_${collection}`);
     const startTime = performance.now();
     
-    return this.funifierApi.post<{ result: T[] }>(endpoint, query).pipe(
+    // Funifier API expects the aggregate pipeline array directly, not wrapped in an object
+    // Send query.aggregate (the array of stages) instead of the whole query object
+    const aggregatePipeline = query.aggregate;
+    
+    console.log(`🔍 Executing aggregate query on ${collection}:`, JSON.stringify(aggregatePipeline));
+    
+    return this.funifierApi.post<T[] | { result: T[] }>(endpoint, aggregatePipeline).pipe(
       map(response => {
-        // Funifier returns results in a 'result' property
-        if (response && Array.isArray(response.result)) {
-          return response.result;
-        }
-        // Handle case where response is already an array
-        if (Array.isArray(response)) {
+        // Funifier may return results in a 'result' property or directly as an array
+        if (response && Array.isArray(response)) {
           return response;
         }
+        // Handle case where response has a 'result' property
+        if (response && typeof response === 'object' && 'result' in response && Array.isArray((response as any).result)) {
+          return (response as any).result;
+        }
         // Return empty array if no valid result
+        console.warn('Unexpected aggregate response format:', response);
         return [];
       }),
       tap(() => {

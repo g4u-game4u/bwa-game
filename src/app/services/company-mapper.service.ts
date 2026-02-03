@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { Company, CompanyDetails, Process, Task, Activity, Macro, ProcessStatus, TaskStatus } from '@model/gamification-dashboard.model';
+import { Company, CompanyDetails, Process, Task, Activity, ProcessStatus, TaskStatus } from '@model/gamification-dashboard.model';
 import { KPIMapper } from './kpi-mapper.service';
 
 @Injectable({
@@ -50,7 +50,7 @@ export class CompanyMapper {
       ...company,
       processes: this.mapProcesses(apiResponse.processes || []),
       activities: this.mapActivities(apiResponse.activities || []),
-      macros: this.mapMacros(apiResponse.macros || [])
+      processos: this.mapMacros(apiResponse.macros || [])
     };
   }
 
@@ -93,9 +93,9 @@ export class CompanyMapper {
   }
 
   /**
-   * Map macros from API response
+   * Map macros from API response (now called processos)
    */
-  private mapMacros(macros: any[]): Macro[] {
+  private mapMacros(macros: any[]): Process[] {
     return macros.map(macro => ({
       id: macro._id || macro.id || '',
       name: macro.name || '',
