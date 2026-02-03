@@ -29,6 +29,19 @@
   background: url("/assets/images/game4u_logo.png") no-repeat;
 }
 
+.bwa-logo {
+  width: auto;
+  max-width: 120px;
+  height: auto;
+  margin-bottom: 1.5rem;
+  margin-top: 1rem;
+  
+  @screen md {
+    max-width: 200px;
+    margin-bottom: 2rem;
+  }
+}
+
 .login-content {
 
   @apply flex flex-col md:flex-row gap-6 items-center justify-center md:justify-between size-full p-4 md:p-20 max-w-[1600px] mx-auto;

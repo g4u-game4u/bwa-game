@@ -6,9 +6,9 @@ import { UserProfileService } from '@services/user-profile.service';
 /**
  * Guard service to restrict access to team management dashboard
  * Only users with management profiles can access:
- * - SUPERVISOR (Fkku5tB - SUPERVISÃO)
- * - GESTOR (FkgMSNO - GESTAO)
- * - DIRETOR (Fkku7Gd - DIREÇÃO)
+ * - SUPERVISOR (Fkmdmko - SUPERVISÃO)
+ * - GESTOR (FkmdnFU - GESTAO)
+ * - DIRETOR (FkmdhZ9 - DIREÇÃO)
  * 
  * JOGADOR users are redirected to their own dashboard.
  */

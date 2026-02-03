@@ -32,12 +32,12 @@
       role="region"
       [attr.aria-labelledby]="'process-header-' + i"
     >
-      <div *ngIf="process.tasks.length === 0" class="no-tasks">
+      <div *ngIf="!process.tasks || process.tasks.length === 0" class="no-tasks">
         Nenhuma tarefa disponível
       </div>
       
       <div 
-        *ngFor="let task of process.tasks" 
+        *ngFor="let task of process.tasks || []" 
         class="task-item"
       >
         <div class="task-info">

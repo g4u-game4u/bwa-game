@@ -138,10 +138,13 @@
           [attr.aria-labelledby]="'goals-tab'"
           aria-live="polite">
           <div *ngIf="!isLoadingGoals && !hasGoalsError">
+            <!-- Temporarily commented out while resolving team KPI data assembly -->
+            <!--
             <c4u-goals-progress-tab
               [goals]="goalMetrics"
               [isLoading]="isLoadingGoals">
             </c4u-goals-progress-tab>
+            -->
             
             <!-- Progress Section (Activities and Macros) -->
             <section class="dashboard-section" aria-labelledby="progress-section-title">
@@ -221,15 +224,69 @@
           id="productivity-panel"
           [attr.aria-labelledby]="'productivity-tab'"
           aria-live="polite">
-          <div *ngIf="!isLoadingProductivity && !hasProductivityError">
-            <c4u-productivity-analysis-tab
-              [graphData]="graphData"
-              [chartDatasetsInput]="graphDatasets"
-              [selectedPeriod]="selectedPeriod"
-              [isLoading]="isLoadingProductivity"
-              (periodChanged)="onPeriodChange($event)"
-              (chartTypeChanged)="onChartTypeChange($event)">
-            </c4u-productivity-analysis-tab>
+          <div *ngIf="!isLoadingProductivity && !hasProductivityError" class="productivity-charts-container">
+            <!-- Shared Controls -->
+            <div class="productivity-shared-controls">
+              <c4u-time-period-selector
+                [periods]="[7, 15, 30, 60, 90]"
+                [selectedPeriod]="selectedPeriod"
+                (periodSelected)="onPeriodChange($event)"
+                aria-label="Selecionar período de análise">
+              </c4u-time-period-selector>
+              
+              <div class="chart-type-toggle" role="group" aria-label="Tipo de gráfico">
+                <button
+                  type="button"
+                  class="toggle-btn"
+                  [class.active]="productivityChartType === 'line'"
+                  (click)="onChartTypeChange('line')"
+                  [disabled]="isLoadingProductivity"
+                  [attr.aria-pressed]="productivityChartType === 'line'"
+                  aria-label="Alternar para gráfico de linhas"
+                  title="Gráfico de Linhas">
+                  <i class="bi bi-graph-up" aria-hidden="true"></i>
+                  <span class="sr-only">Gráfico de Linhas</span>
+                </button>
+                <button
+                  type="button"
+                  class="toggle-btn"
+                  [class.active]="productivityChartType === 'bar'"
+                  (click)="onChartTypeChange('bar')"
+                  [disabled]="isLoadingProductivity"
+                  [attr.aria-pressed]="productivityChartType === 'bar'"
+                  aria-label="Alternar para gráfico de barras"
+                  title="Gráfico de Barras">
+                  <i class="bi bi-bar-chart-fill" aria-hidden="true"></i>
+                  <span class="sr-only">Gráfico de Barras</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Activities Chart -->
+            <section class="dashboard-section" aria-labelledby="activities-chart-title">
+              <h2 id="activities-chart-title" class="section-title">Volume de Atividades por Dia</h2>
+              <c4u-productivity-analysis-tab
+                [graphData]="graphData"
+                [chartDatasetsInput]="graphDatasets"
+                [selectedPeriod]="selectedPeriod"
+                [isLoading]="isLoadingProductivity"
+                [externalChartType]="productivityChartType"
+                [hideHeader]="true">
+              </c4u-productivity-analysis-tab>
+            </section>
+
+            <!-- Points Chart -->
+            <section class="dashboard-section" aria-labelledby="points-chart-title">
+              <h2 id="points-chart-title" class="section-title">Volume de Pontos por Dia</h2>
+              <c4u-productivity-analysis-tab
+                [graphData]="pointsGraphData"
+                [chartDatasetsInput]="pointsGraphDatasets"
+                [selectedPeriod]="selectedPeriod"
+                [isLoading]="isLoadingProductivity"
+                [externalChartType]="productivityChartType"
+                [hideHeader]="true">
+              </c4u-productivity-analysis-tab>
+            </section>
           </div>
 
           <c4u-shimmer *ngIf="isLoadingProductivity"></c4u-shimmer>

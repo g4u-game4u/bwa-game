@@ -18,18 +18,18 @@ export enum UserProfile {
  * Team IDs that correspond to management roles
  */
 export const MANAGEMENT_TEAM_IDS = {
-  GESTAO: 'FkgMSNO',
-  SUPERVISAO: 'Fkku5tB',
-  DIRECAO: 'Fkku7Gd'
+  GESTAO: 'FkmdnFU',
+  SUPERVISAO: 'Fkmdmko',
+  DIRECAO: 'FkmdhZ9'
 } as const;
 
 /**
  * Determine user profile based on team membership
  * 
  * Priority order (highest to lowest):
- * 1. DIRETOR - Has DIREÇÃO team (Fkku7Gd)
- * 2. GESTOR - Has GESTAO team (FkgMSNO)
- * 3. SUPERVISOR - Has SUPERVISÃO team (Fkku5tB)
+ * 1. DIRETOR - Has DIREÇÃO team (FkmdhZ9)
+ * 2. GESTOR - Has GESTAO team (FkmdnFU)
+ * 3. SUPERVISOR - Has SUPERVISÃO team (Fkmdmko)
  * 4. JOGADOR - No management teams
  * 
  * @param teams - User's teams array (can be strings or objects with _id)

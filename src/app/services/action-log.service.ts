@@ -82,14 +82,19 @@ function extractTimestamp(time: number | { $date: string } | undefined): number 
 }
 
 /**
- * Helper to generate Funifier relative date expressions
+ * Helper to generate Funifier date expressions (relative or absolute)
  * Funifier supports: -0d-, -0d+, -1d-, -0M-, -0M+, -0y-, etc.
  * - `-0M-` = start of current month
  * - `-0M+` = end of current month
  * - `-1M-` = start of previous month
  * - `-1M+` = end of previous month
  * 
- * When February is selected (1 month ago), includes January as well.
+ * Also supports absolute dates: { $date: "2026-01-01T00:00:00.000Z" }
+ * 
+ * Logic:
+ * - When February 2026 is selected (current month), start date includes January (01/01/2026)
+ * - When January 2026 is selected, returns only January (01/01/2026 to 31/01/2026)
+ * - Minimum date is always 01/01/2026
  */
 function getRelativeDateExpression(month: Date | undefined, position: 'start' | 'end'): { $date: string } | number {
   const targetMonth = month || new Date();
@@ -99,17 +104,59 @@ function getRelativeDateExpression(month: Date | undefined, position: 'start' | 
   const targetMonthNum = targetMonth.getMonth();
   const targetYear = targetMonth.getFullYear();
   
-  // Calculate month difference
+  // Season start date: 01/01/2026
+  const seasonStartDate = new Date('2026-01-01T00:00:00.000Z');
+  const seasonStartYear = 2026;
+  const seasonStartMonth = 0; // January (0-indexed)
+  
+  // Calculate month difference from current month
   const monthDiff = (currentYear - targetYear) * 12 + (currentMonth - targetMonthNum);
   
-  // If February is selected (1 month ago) and we need the start date, go back one more month (January)
-  if (monthDiff === 1 && position === 'start') {
-    return { $date: `-${monthDiff + 1}M-` }; // Start of January
+  // Check if we're dealing with January or February 2026
+  const isJanuary2026 = targetYear === seasonStartYear && targetMonthNum === seasonStartMonth;
+  const isFebruary2026 = targetYear === seasonStartYear && targetMonthNum === 1; // February (1-indexed)
+  
+  // If February 2026 is selected (current month) and we need the start date, include January
+  if (isFebruary2026 && monthDiff === 0 && position === 'start') {
+    // Return absolute date for 01/01/2026
+    return { $date: seasonStartDate.toISOString() };
   }
   
-  // Use Funifier relative date syntax
+  // If January 2026 is selected and we need the start date, return 01/01/2026
+  if (isJanuary2026 && position === 'start') {
+    return { $date: seasonStartDate.toISOString() };
+  }
+  
+  // If January 2026 is selected and we need the end date, return end of January
+  if (isJanuary2026 && position === 'end') {
+    const januaryEnd = new Date('2026-01-31T23:59:59.999Z');
+    return { $date: januaryEnd.toISOString() };
+  }
+  
+  // For other months, use Funifier relative date syntax
+  // But ensure we don't go before season start
   const suffix = position === 'start' ? '-' : '+';
-  return { $date: `-${monthDiff}M${suffix}` };
+  const relativeExpression = { $date: `-${monthDiff}M${suffix}` };
+  
+  // If using relative dates might go before season start, use absolute date
+  // Calculate what the relative date would be
+  const calculatedDate = new Date(now);
+  calculatedDate.setMonth(calculatedDate.getMonth() - monthDiff);
+  if (position === 'start') {
+    calculatedDate.setDate(1);
+    calculatedDate.setHours(0, 0, 0, 0);
+  } else {
+    // End of month
+    calculatedDate.setMonth(calculatedDate.getMonth() + 1, 0);
+    calculatedDate.setHours(23, 59, 59, 999);
+  }
+  
+  // If calculated date is before season start, use season start for start position
+  if (position === 'start' && calculatedDate < seasonStartDate) {
+    return { $date: seasonStartDate.toISOString() };
+  }
+  
+  return relativeExpression;
 }
 
 @Injectable({

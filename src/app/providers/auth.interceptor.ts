@@ -87,9 +87,15 @@ export class AuthInterceptor implements HttpInterceptor {
 
         const token = this.sessao.token;
         if (!token) {
-            return from(this.router.navigate(['/login'])).pipe(
-                concatMap(() => throwError(() => "Session expired, please log in")),
-            );
+            // Only redirect if not already on login page to avoid infinite loops
+            const currentUrl = this.router.url;
+            if (!currentUrl.includes('/login')) {
+                return from(this.router.navigate(['/login'])).pipe(
+                    concatMap(() => throwError(() => "Session expired, please log in")),
+                );
+            }
+            // If already on login page, just throw error without redirect
+            return throwError(() => "Session expired, please log in");
         }
 
         if (this.isTokenExpired(token))

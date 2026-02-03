@@ -102,7 +102,7 @@ export class UserProfileService {
 
   /**
    * Check if current user is a SUPERVISOR
-   * SUPERVISOR belongs to team Fkku5tB (SUPERVISÃO)
+   * SUPERVISOR belongs to team Fkmdmko (SUPERVISÃO)
    * 
    * @returns true if user is SUPERVISOR
    */
@@ -112,7 +112,7 @@ export class UserProfileService {
 
   /**
    * Check if current user is a GESTOR
-   * GESTOR belongs to team FkgMSNO (GESTAO)
+   * GESTOR belongs to team FkmdnFU (GESTAO)
    * 
    * @returns true if user is GESTOR
    */
@@ -122,7 +122,7 @@ export class UserProfileService {
 
   /**
    * Check if current user is a DIRETOR
-   * DIRETOR belongs to team Fkku7Gd (DIREÇÃO)
+   * DIRETOR belongs to team FkmdhZ9 (DIREÇÃO)
    * 
    * @returns true if user is DIRETOR
    */

@@ -170,7 +170,7 @@ export class CompanyService {
           case 'atividades-finalizadas':
             // Return processes with completed tasks
             return details.processes.filter(p => 
-              p.tasks.some(t => t.status === 'completed')
+              p.tasks?.some(t => t.status === 'completed') ?? false
             );
           
           case 'macros-finalizadas':

@@ -11,7 +11,9 @@
       <div *ngIf="!clientLogoUrl" class="default-logo"></div>
     </div>
 
-    <h2 class="text-center md:text-left">Bem-vindo de Volta ao {{clientName}}!</h2>
+    <img src="/assets/images/logo-bwa-white-inteira-full.png" alt="BWA Global" class="bwa-logo" draggable="false">
+
+    <h2 class="text-center md:text-left">Bem-vindo de volta ao {{clientName}}!</h2>
 
     <h1 class="hidden md:!block">Ligando o Modo Turbo.</h1>
   </div>
@@ -20,8 +22,8 @@
   <c4u-card *ngIf="resetFlow === 'login'" [title]="'LABEL_LOGIN_SUBTITLE' | translate" align="center">
     <div class="login-form-container">
       <form class="login-form" (ngSubmit)="submit()" [formGroup]="form">
-        <input type="text" placeholder="Login" formControlName="username" [disabled]="isLoading" />
-        <input type="password" placeholder="Senha" formControlName="password" [disabled]="isLoading" />
+        <input type="text" placeholder="Login" formControlName="username" />
+        <input type="password" placeholder="Senha" formControlName="password" />
         <div *ngIf="isLoading" class="loading-content">
           <c4u-spinner></c4u-spinner>
           <span>{{loadingText}}</span>
@@ -43,7 +45,7 @@
     <div class="login-form-container">
       <form class="login-form" (ngSubmit)="requestResetCode()" [formGroup]="resetRequestForm">
         <p class="reset-instructions">{{ 'LABEL_PASSWORD_RESET_INSTRUCTIONS' | translate }}</p>
-        <input type="email" [placeholder]="'LABEL_EMAIL_PLACEHOLDER' | translate" formControlName="email" [disabled]="isLoading" />
+        <input type="email" [placeholder]="'LABEL_EMAIL_PLACEHOLDER' | translate" formControlName="email" />
         <div *ngIf="resetRequestForm.get('email')?.invalid && resetRequestForm.get('email')?.touched" class="error-message">
           <span *ngIf="resetRequestForm.get('email')?.errors?.['required']">{{ 'LABEL_EMAIL_REQUIRED' | translate }}</span>
           <span *ngIf="resetRequestForm.get('email')?.errors?.['email']">{{ 'LABEL_EMAIL_INVALID' | translate }}</span>
@@ -69,17 +71,17 @@
     <div class="login-form-container">
       <form class="login-form" (ngSubmit)="confirmResetPassword()" [formGroup]="resetConfirmForm">
         <p class="reset-instructions">{{ 'LABEL_CODE_SENT_TO' | translate }}: <strong>{{resetEmail}}</strong></p>
-        <input type="text" [placeholder]="'LABEL_CODE_PLACEHOLDER' | translate" formControlName="code" [disabled]="isLoading" maxlength="6" />
+        <input type="text" [placeholder]="'LABEL_CODE_PLACEHOLDER' | translate" formControlName="code" maxlength="6" />
         <div *ngIf="resetConfirmForm.get('code')?.invalid && resetConfirmForm.get('code')?.touched" class="error-message">
           <span *ngIf="resetConfirmForm.get('code')?.errors?.['required']">{{ 'LABEL_CODE_REQUIRED' | translate }}</span>
           <span *ngIf="resetConfirmForm.get('code')?.errors?.['minlength']">{{ 'LABEL_CODE_MIN_LENGTH' | translate }}</span>
         </div>
-        <input type="password" [placeholder]="'LABEL_NEW_PASSWORD_PLACEHOLDER' | translate" formControlName="newPassword" [disabled]="isLoading" />
+        <input type="password" [placeholder]="'LABEL_NEW_PASSWORD_PLACEHOLDER' | translate" formControlName="newPassword" />
         <div *ngIf="resetConfirmForm.get('newPassword')?.invalid && resetConfirmForm.get('newPassword')?.touched" class="error-message">
           <span *ngIf="resetConfirmForm.get('newPassword')?.errors?.['required']">{{ 'LABEL_PASSWORD_REQUIRED' | translate }}</span>
           <span *ngIf="resetConfirmForm.get('newPassword')?.errors?.['minlength']">{{ 'LABEL_PASSWORD_MIN_LENGTH' | translate }}</span>
         </div>
-        <input type="password" [placeholder]="'LABEL_CONFIRM_PASSWORD_PLACEHOLDER' | translate" formControlName="confirmPassword" [disabled]="isLoading" />
+        <input type="password" [placeholder]="'LABEL_CONFIRM_PASSWORD_PLACEHOLDER' | translate" formControlName="confirmPassword" />
         <div *ngIf="resetConfirmForm.get('confirmPassword')?.touched && resetConfirmForm.hasError('passwordMismatch')" class="error-message">
           {{ 'LABEL_PASSWORDS_DONT_MATCH' | translate }}
         </div>

@@ -48,6 +48,18 @@ export class C4uProductivityAnalysisTabComponent implements OnInit, OnChanges {
   @Input() isLoading: boolean = false;
 
   /**
+   * External chart type control (optional)
+   * If provided, this component will use this value instead of internal state
+   */
+  @Input() externalChartType: 'line' | 'bar' | null = null;
+
+  /**
+   * Hide header controls (period selector and chart type toggle)
+   * Useful when multiple charts share the same controls
+   */
+  @Input() hideHeader: boolean = false;
+
+  /**
    * Event emitted when time period changes
    */
   @Output() periodChanged = new EventEmitter<number>();
@@ -60,8 +72,13 @@ export class C4uProductivityAnalysisTabComponent implements OnInit, OnChanges {
   /**
    * Current chart type (line or bar)
    * Requirement 8.3: Chart type toggle
+   * Uses externalChartType if provided, otherwise uses internal state
    */
-  chartType: 'line' | 'bar' = 'line';
+  get chartType(): 'line' | 'bar' {
+    return this.externalChartType || this._internalChartType;
+  }
+
+  private _internalChartType: 'line' | 'bar' = 'line';
 
   /**
    * Available time periods in days
@@ -114,8 +131,12 @@ export class C4uProductivityAnalysisTabComponent implements OnInit, OnChanges {
    * Property 7: Chart Type Toggle Preservation
    */
   toggleChartType(): void {
-    this.chartType = this.chartType === 'line' ? 'bar' : 'line';
-    this.chartTypeChanged.emit(this.chartType);
+    const newType = this.chartType === 'line' ? 'bar' : 'line';
+    if (this.externalChartType === null) {
+      // Only update internal state if not controlled externally
+      this._internalChartType = newType;
+    }
+    this.chartTypeChanged.emit(newType);
   }
 
   /**
@@ -123,7 +144,7 @@ export class C4uProductivityAnalysisTabComponent implements OnInit, OnChanges {
    * Requirement 8.5: Graph data updates
    */
   ngOnChanges(changes: SimpleChanges): void {
-    if (changes['graphData'] || changes['selectedPeriod'] || changes['chartDatasetsInput']) {
+    if (changes['graphData'] || changes['selectedPeriod'] || changes['chartDatasetsInput'] || changes['externalChartType']) {
       // Trigger debounced update
       this.chartDataUpdate$.next();
     }
