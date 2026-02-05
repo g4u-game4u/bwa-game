@@ -1,6 +1,12 @@
-<div class="kpi-circular-progress">
-  <div class="kpi-label">{{ label }}</div>
-  <div class="kpi-progress-wrapper">
+<div class="kpi-circular-progress"
+     role="progressbar"
+     [attr.aria-label]="ariaLabel"
+     [attr.aria-valuenow]="current"
+     [attr.aria-valuemin]="0"
+     [attr.aria-valuemax]="target"
+     [attr.aria-valuetext]="ariaValueText">
+  <div class="kpi-label" aria-hidden="true">{{ label }}</div>
+  <div class="kpi-progress-wrapper" aria-hidden="true">
     <c4u-porcentagem-circular
       [valor]="current"
       [total]="target"
@@ -8,6 +14,6 @@
       [theme]="progressColor">
     </c4u-porcentagem-circular>
   </div>
-  <div class="kpi-value">{{ displayValue }}</div>
-  <div class="kpi-status" [class]="'status-' + color">{{ goalStatus }}</div>
+  <div class="kpi-value" aria-hidden="true">{{ displayValue }}</div>
+  <div class="kpi-status" [class]="'status-' + color" aria-hidden="true">{{ goalStatus }}</div>
 </div>

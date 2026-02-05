@@ -1,4 +1,4 @@
-import { Component, Input } from '@angular/core';
+import { Component, Input, HostBinding } from '@angular/core';
 
 @Component({
   selector: 'c4u-kpi-circular-progress',
@@ -13,6 +13,12 @@ export class C4uKpiCircularProgressComponent {
   @Input() colorIndex: number = 0;
   @Input() color?: 'red' | 'yellow' | 'green';
   @Input() unit?: string = '';
+  @Input() size: 'small' | 'medium' | 'large' = 'medium';
+  
+  @HostBinding('class')
+  get hostClasses(): string {
+    return `size-${this.size}`;
+  }
 
   // Color palette for different KPIs (fallback)
   private readonly colorPalette: Array<'green' | 'gold' | 'red' | 'blue' | 'purple'> = [
@@ -57,5 +63,20 @@ export class C4uKpiCircularProgressComponent {
     } else {
       return 'Abaixo da meta';
     }
+  }
+
+  /**
+   * Generate accessible ARIA label for screen readers
+   */
+  get ariaLabel(): string {
+    const unitText = this.unit ? ` ${this.unit}` : '';
+    return `${this.label}: ${this.current}${unitText} de ${this.target}${unitText}, ${this.percentage}% completo. ${this.goalStatus}`;
+  }
+
+  /**
+   * Generate ARIA value text for screen readers
+   */
+  get ariaValueText(): string {
+    return `${this.current} de ${this.target}, ${this.percentage} por cento`;
   }
 }

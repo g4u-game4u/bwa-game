@@ -1,7 +1,7 @@
 import { Component, OnInit, OnDestroy, HostListener, ChangeDetectionStrategy, ChangeDetectorRef, AfterViewInit } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { Subject } from 'rxjs';
-import { takeUntil } from 'rxjs/operators';
+import { takeUntil, switchMap } from 'rxjs/operators';
 
 import { PlayerService } from '@services/player.service';
 import { CompanyService } from '@services/company.service';
@@ -9,6 +9,7 @@ import { KPIService } from '@services/kpi.service';
 import { ToastService } from '@services/toast.service';
 import { PerformanceMonitorService } from '@services/performance-monitor.service';
 import { ActionLogService } from '@services/action-log.service';
+import { CompanyKpiService } from '@services/company-kpi.service';
 import { SessaoProvider } from '@providers/sessao/sessao.provider';
 import { 
   PlayerStatus, 
@@ -19,6 +20,7 @@ import {
   ActivityMetrics,
   ProcessMetrics
 } from '@model/gamification-dashboard.model';
+import { CompanyDisplay } from '@services/company-kpi.service';
 import { ProgressCardType } from '@components/c4u-activity-progress/c4u-activity-progress.component';
 import { ProgressListType } from '@modals/modal-progress-list/modal-progress-list.component';
 
@@ -69,8 +71,8 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   companies: Company[] = [];
   selectedCompany: Company | null = null;
   
-  // Carteira data from action_log (CNPJs with action counts)
-  carteiraClientes: { cnpj: string; actionCount: number }[] = [];
+  // Carteira data from action_log (CNPJs with action counts and KPI data)
+  carteiraClientes: CompanyDisplay[] = [];
   isLoadingCarteira = true;
   
   // Month selection
@@ -107,6 +109,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     private cdr: ChangeDetectorRef,
     private performanceMonitor: PerformanceMonitorService,
     private actionLogService: ActionLogService,
+    private companyKpiService: CompanyKpiService,
     private sessaoProvider: SessaoProvider,
     private route: ActivatedRoute,
     private router: Router
@@ -407,6 +410,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
 
   /**
    * Load carteira data from action_log (CNPJs with action counts)
+   * and enrich with KPI data from cnpj__c collection
    */
   private loadCarteiraData(): void {
     this.isLoadingCarteira = true;
@@ -422,11 +426,18 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     }
     
     this.actionLogService.getPlayerCnpjListWithCount(playerId, this.selectedMonth)
-      .pipe(takeUntil(this.destroy$))
+      .pipe(
+        switchMap(clientes => {
+          console.log('📊 Carteira clientes loaded, enriching with KPI data:', clientes);
+          // Enrich companies with KPI data from cnpj__c collection
+          return this.companyKpiService.enrichCompaniesWithKpis(clientes);
+        }),
+        takeUntil(this.destroy$)
+      )
       .subscribe({
-        next: (clientes) => {
-          console.log('📊 Carteira clientes loaded:', clientes);
-          this.carteiraClientes = clientes;
+        next: (enrichedClientes) => {
+          console.log('📊 Carteira clientes enriched with KPI data:', enrichedClientes);
+          this.carteiraClientes = enrichedClientes;
           this.isLoadingCarteira = false;
           this.cdr.markForCheck();
         },
@@ -677,6 +688,20 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
    */
   trackByKpiId(_index: number, kpi: KPIData): string {
     return kpi.id;
+  }
+  
+  /**
+   * Extract company name from CNPJ string
+   * Format: "COMPANY NAME l CODE [ID|SUFFIX]"
+   * Returns: Company name without the code and ID parts
+   */
+  getCompanyDisplayName(cnpj: string): string {
+    if (!cnpj) {
+      return '';
+    }
+    // Extract text before " l " separator
+    const match = cnpj.match(/^([^l]+)/);
+    return match ? match[1].trim() : cnpj;
   }
   
   /**

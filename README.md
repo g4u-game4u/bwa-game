@@ -7,6 +7,7 @@ A comprehensive Angular-based gamification dashboard for tracking KPIs, player p
 - **KPI Tracking**: Monitor key performance indicators with circular progress displays
 - **Player Management**: Track player progress, points, and seasonal achievements
 - **Company Analytics**: View company performance metrics and detailed analytics
+- **Company KPI Indicators**: Display delivery performance metrics for companies in player carteira
 - **Team Management Dashboard**: Supervisory dashboard for managers with aggregate team metrics (GESTAO role required)
 - **Responsive Design**: Optimized for desktop, tablet, and mobile devices
 - **Accessibility**: WCAG 2.1 AA compliant with comprehensive accessibility features
@@ -251,6 +252,9 @@ docker-compose up -d
 - [Deployment Guide](docs/DEPLOYMENT_GUIDE.md)
 - [Performance Optimizations](docs/PERFORMANCE_OPTIMIZATIONS.md)
 - [Final Integration Test Results](docs/FINAL_INTEGRATION_TEST_RESULTS.md)
+
+### Feature Documentation
+- [Company KPI Indicators](docs/COMPANY_KPI_INDICATORS.md) - Developer guide for company KPI feature
 
 ### Team Management Dashboard Documentation
 - [Manager Usage Guide](docs/TEAM_DASHBOARD_MANAGER_GUIDE.md) - How to use the team dashboard
