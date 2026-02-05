@@ -2,18 +2,7 @@
 
 :host {
   display: block;
-  
-  // Default size (medium)
   width: 200px;
-  
-  // Size variants
-  &.size-small {
-    width: 80px;
-  }
-  
-  &.size-large {
-    width: 240px;
-  }
 }
 
 .kpi-circular-progress {
@@ -22,24 +11,6 @@
   align-items: center;
   gap: 8px;
   width: 100%;
-  
-  // Focus indicator for accessibility
-  &:focus-visible {
-    outline: 2px solid #3b82f6;
-    outline-offset: 4px;
-    border-radius: 8px;
-  }
-  
-  // Ensure focus is visible
-  &:focus {
-    outline: none;
-  }
-  
-  &:focus-visible {
-    outline: 2px solid #3b82f6;
-    outline-offset: 4px;
-    border-radius: 8px;
-  }
 }
 
 .kpi-label {
@@ -53,17 +24,6 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  
-  // Size variants
-  :host.size-small & {
-    font-size: 11px; // Increased from 10px for better readability
-    letter-spacing: 0.22px;
-  }
-  
-  :host.size-large & {
-    font-size: 20px;
-    letter-spacing: 0.4px;
-  }
 }
 
 .kpi-progress-wrapper {
@@ -72,17 +32,6 @@
   justify-content: center;
   width: 120px;
   height: 120px;
-  
-  // Size variants
-  :host.size-small & {
-    width: 60px;
-    height: 60px;
-  }
-  
-  :host.size-large & {
-    width: 160px;
-    height: 160px;
-  }
 }
 
 .kpi-value {
@@ -91,15 +40,6 @@
   font-size: 24px;
   color: #ffffff;
   text-align: center;
-  
-  // Size variants
-  :host.size-small & {
-    font-size: 14px;
-  }
-  
-  :host.size-large & {
-    font-size: 28px;
-  }
 }
 
 .kpi-status {
@@ -110,30 +50,18 @@
   padding: 4px 8px;
   border-radius: 12px;
   
-  // Size variants
-  :host.size-small & {
-    font-size: 9px;
-    padding: 2px 6px;
-  }
-  
-  :host.size-large & {
-    font-size: 14px;
-    padding: 6px 10px;
-  }
-  
-  // Use design system colors for consistency
   &.status-green {
-    color: #4caf50; // $success-green from design system
-    background-color: rgba(76, 175, 80, 0.1);
+    color: #22c55e;
+    background-color: rgba(34, 197, 94, 0.1);
   }
   
   &.status-yellow {
-    color: #ff9800; // $warning-orange from design system
-    background-color: rgba(255, 152, 0, 0.1);
+    color: #eab308;
+    background-color: rgba(234, 179, 8, 0.1);
   }
   
   &.status-red {
-    color: #f44336; // $error-red from design system
-    background-color: rgba(244, 67, 54, 0.1);
+    color: #ef4444;
+    background-color: rgba(239, 68, 68, 0.1);
   }
 }

@@ -453,19 +453,6 @@
             background: rgba($primary-electric-blue, 0.1);
           }
           
-          // Tablet responsive
-          @include tablet-only {
-            padding: $spacing-sm;
-          }
-          
-          // Mobile responsive
-          @include mobile-only {
-            flex-direction: column;
-            align-items: stretch;
-            gap: $spacing-xs;
-            padding: $spacing-sm;
-          }
-          
           .carteira-item-info {
             display: flex;
             align-items: center;
@@ -477,11 +464,6 @@
               color: $primary-electric-blue;
               font-size: 1.25rem;
               flex-shrink: 0;
-              
-              // Mobile responsive
-              @include mobile-only {
-                font-size: 1.125rem;
-              }
             }
             
             .carteira-cnpj {
@@ -490,38 +472,6 @@
               white-space: nowrap;
               overflow: hidden;
               text-overflow: ellipsis;
-              
-              // Tablet responsive
-              @include tablet-only {
-                font-size: 0.8125rem;
-              }
-              
-              // Mobile responsive
-              @include mobile-only {
-                font-size: 0.8125rem;
-                white-space: normal; // Allow wrapping on mobile
-                overflow: visible;
-                text-overflow: clip;
-              }
-            }
-          }
-          
-          .carteira-item-meta {
-            display: flex;
-            align-items: center;
-            gap: $spacing-sm;
-            flex-shrink: 0;
-            
-            // Tablet responsive (768px - 1024px)
-            @include tablet-only {
-              gap: 6px;
-            }
-            
-            // Mobile responsive (< 768px)
-            @include mobile-only {
-              flex-direction: column;
-              align-items: flex-end;
-              gap: 4px;
             }
           }
           
@@ -532,73 +482,7 @@
             padding: 2px 8px;
             border-radius: 12px;
             flex-shrink: 0;
-            white-space: nowrap;
-            
-            // Mobile responsive
-            @include mobile-only {
-              font-size: 0.6875rem; // Slightly smaller on mobile
-              padding: 2px 6px;
-            }
-          }
-          
-          .carteira-kpi {
-            display: flex;
-            align-items: center;
-            justify-content: center;
             margin-left: $spacing-sm;
-            flex-shrink: 0;
-            
-            // Tablet responsive
-            @include tablet-only {
-              margin-left: 6px;
-            }
-            
-            // Mobile responsive
-            @include mobile-only {
-              margin-left: 0;
-              margin-top: 2px;
-            }
-            
-            // Ensure KPI component scales properly
-            ::ng-deep c4u-kpi-circular-progress {
-              // Desktop (default size maintained)
-              @include desktop-up {
-                // Default size from component
-              }
-              
-              // Tablet - slightly smaller
-              @include tablet-only {
-                transform: scale(0.95);
-              }
-              
-              // Mobile - adjusted for better visibility (was 0.9, now 0.95)
-              @include mobile-only {
-                transform: scale(0.95);
-              }
-            }
-          }
-          
-          .kpi-na {
-            font-size: 0.75rem;
-            color: rgba($text-secondary, 0.7);
-            font-style: italic;
-            opacity: 0.7;
-            flex-shrink: 0;
-            white-space: nowrap;
-            margin-left: $spacing-sm;
-            
-            // Tablet responsive
-            @include tablet-only {
-              font-size: 0.6875rem;
-              margin-left: 6px;
-            }
-            
-            // Mobile responsive
-            @include mobile-only {
-              font-size: 0.625rem;
-              margin-left: 0;
-              margin-top: 2px;
-            }
           }
         }
         

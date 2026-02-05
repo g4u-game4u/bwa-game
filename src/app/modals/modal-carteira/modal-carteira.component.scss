@@ -121,40 +121,12 @@
   align-items: center;
   gap: 12px;
   flex-shrink: 0;
-  
-  @media (max-width: 767px) {
-    gap: 8px;
-  }
 }
 
 .action-count {
   font-size: 12px;
   color: #9ca3af;
   white-space: nowrap;
-}
-
-.cliente-kpi {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  
-  @media (max-width: 767px) {
-    transform: scale(0.95); // Improved from 0.9 for better visibility
-  }
-}
-
-.kpi-na {
-  font-size: 12px;
-  color: rgba(156, 163, 175, 0.7);
-  font-style: italic;
-  opacity: 0.7;
-  flex-shrink: 0;
-  white-space: nowrap;
-  
-  @media (max-width: 767px) {
-    font-size: 11px;
-  }
 }
 
 .expand-icon {
