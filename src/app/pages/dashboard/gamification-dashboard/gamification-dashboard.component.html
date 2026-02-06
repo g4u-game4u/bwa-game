@@ -138,9 +138,21 @@
           <div *ngFor="let cliente of carteiraClientes.slice(0, 5)" class="carteira-item">
             <div class="carteira-item-info">
               <i class="ri-building-2-line"></i>
-              <span class="carteira-cnpj">{{ cliente.cnpj }}</span>
+              <span class="carteira-cnpj">{{ getCompanyDisplayName(cliente.cnpj) }}</span>
             </div>
-            <span class="carteira-action-count">{{ cliente.actionCount }} ações</span>
+            <div class="carteira-item-meta">
+              <span class="carteira-action-count">{{ cliente.actionCount }} ações</span>
+              <!-- KPI Indicator -->
+              <c4u-kpi-circular-progress
+                *ngIf="cliente.deliveryKpi"
+                [label]="cliente.deliveryKpi.label"
+                [current]="cliente.deliveryKpi.current"
+                [target]="cliente.deliveryKpi.target"
+                [size]="'small'"
+                class="carteira-kpi">
+              </c4u-kpi-circular-progress>
+              <span *ngIf="!cliente.deliveryKpi" class="kpi-na">N/A</span>
+            </div>
           </div>
           <button 
             *ngIf="carteiraClientes.length > 5" 

@@ -3,6 +3,9 @@
  * Utilities for generating test data for the gamification dashboard
  */
 
+import { CompanyDisplay, CnpjKpiData } from '@services/company-kpi.service';
+import { KPIData } from '@model/gamification-dashboard.model';
+
 /**
  * Player Status Mock Data
  */
@@ -277,3 +280,274 @@ export const generatePointWallet = createMockPointWallet;
 export const generateSeasonProgress = createMockSeasonProgress;
 export const generateMockCompanies = createMockCompanies;
 export const generateMockPlayerStatus = createMockPlayerStatus;
+
+/**
+ * Company KPI Indicators - Mock Data Generators
+ * Added for Task 13: Update Testing Utilities
+ */
+
+/**
+ * Generate a mock CNPJ string in action_log format
+ * 
+ * Format: "COMPANY NAME l CODE [ID|SUFFIX]"
+ * 
+ * Example: "RODOPRIMA LOGISTICA LTDA l 0001 [2000|0001-60]"
+ * 
+ * @param overrides - Optional overrides for specific parts
+ * @returns CNPJ string in action_log format
+ * 
+ * @example
+ * ```typescript
+ * // Generate with defaults
+ * const cnpj = generateMockCnpjString();
+ * // Result: "EMPRESA EXEMPLO LTDA l 0001 [1000|0001-00]"
+ * 
+ * // Generate with custom values
+ * const cnpj = generateMockCnpjString({
+ *   companyName: 'ACME CORP',
+ *   cnpjId: '5000',
+ *   code: '0002'
+ * });
+ * // Result: "ACME CORP l 0002 [5000|0002-00]"
+ * ```
+ */
+export function generateMockCnpjString(overrides?: {
+  companyName?: string;
+  code?: string;
+  cnpjId?: string;
+  suffix?: string;
+}): string {
+  const companyName = overrides?.companyName || 'EMPRESA EXEMPLO LTDA';
+  const code = overrides?.code || '0001';
+  const cnpjId = overrides?.cnpjId || '1000';
+  const suffix = overrides?.suffix || `${code}-00`;
+  
+  return `${companyName} l ${code} [${cnpjId}|${suffix}]`;
+}
+
+/**
+ * Generate mock CNPJ KPI data from cnpj__c collection
+ * 
+ * This represents the raw data structure returned by the Funifier API
+ * from the cnpj__c collection.
+ * 
+ * @param overrides - Optional overrides for specific fields
+ * @returns Mock CNPJ KPI data
+ * 
+ * @example
+ * ```typescript
+ * // Generate with defaults
+ * const kpiData = generateMockCnpjKpiData();
+ * // Result: { _id: '1000', entrega: 75 }
+ * 
+ * // Generate with custom values
+ * const kpiData = generateMockCnpjKpiData({ _id: '2000', entrega: 95 });
+ * // Result: { _id: '2000', entrega: 95 }
+ * ```
+ */
+export function generateMockCnpjKpiData(overrides?: Partial<CnpjKpiData>): CnpjKpiData {
+  return {
+    _id: '1000',
+    entrega: 75,
+    ...overrides
+  };
+}
+
+/**
+ * Generate mock CompanyDisplay data with KPI information
+ * 
+ * This represents the enriched company data structure used in the UI,
+ * combining action_log CNPJ data with KPI data from cnpj__c.
+ * 
+ * @param overrides - Optional overrides for specific fields
+ * @returns Mock CompanyDisplay data
+ * 
+ * @example
+ * ```typescript
+ * // Generate with defaults (includes KPI data)
+ * const company = generateMockCompanyDisplay();
+ * // Result: {
+ * //   cnpj: 'EMPRESA EXEMPLO LTDA l 0001 [1000|0001-00]',
+ * //   cnpjId: '1000',
+ * //   actionCount: 10,
+ * //   deliveryKpi: { id: 'delivery', label: 'Entregas', current: 75, target: 100, ... }
+ * // }
+ * 
+ * // Generate without KPI data
+ * const company = generateMockCompanyDisplay({ deliveryKpi: undefined });
+ * 
+ * // Generate with custom values
+ * const company = generateMockCompanyDisplay({
+ *   cnpj: generateMockCnpjString({ companyName: 'ACME CORP', cnpjId: '5000' }),
+ *   cnpjId: '5000',
+ *   actionCount: 25,
+ *   deliveryKpi: {
+ *     id: 'delivery',
+ *     label: 'Entregas',
+ *     current: 95,
+ *     target: 100,
+ *     unit: 'entregas',
+ *     percentage: 95,
+ *     color: 'green'
+ *   }
+ * });
+ * ```
+ */
+export function generateMockCompanyDisplay(overrides?: Partial<CompanyDisplay>): CompanyDisplay {
+  const cnpjId = overrides?.cnpjId || '1000';
+  const cnpj = overrides?.cnpj || generateMockCnpjString({ cnpjId });
+  const actionCount = overrides?.actionCount ?? 10;
+  
+  // Default: include KPI data unless explicitly set to undefined
+  const includeKpi = overrides?.deliveryKpi !== undefined ? overrides.deliveryKpi : true;
+  
+  const deliveryKpi: KPIData | undefined = includeKpi ? {
+    id: 'delivery',
+    label: 'Entregas',
+    current: 75,
+    target: 100,
+    unit: 'entregas',
+    percentage: 75,
+    color: 'yellow'
+  } : undefined;
+  
+  return {
+    cnpj,
+    cnpjId,
+    actionCount,
+    deliveryKpi: overrides?.deliveryKpi === undefined ? deliveryKpi : overrides.deliveryKpi,
+    ...overrides
+  };
+}
+
+/**
+ * Generate multiple mock CompanyDisplay items
+ * 
+ * Useful for testing lists and tables with multiple companies.
+ * Each company gets a unique CNPJ ID and varying KPI values.
+ * 
+ * @param count - Number of companies to generate
+ * @param options - Optional configuration
+ * @returns Array of mock CompanyDisplay data
+ * 
+ * @example
+ * ```typescript
+ * // Generate 5 companies with default settings
+ * const companies = generateMockCompanyDisplayList(5);
+ * 
+ * // Generate 10 companies, some without KPI data
+ * const companies = generateMockCompanyDisplayList(10, {
+ *   includeKpiForAll: false
+ * });
+ * 
+ * // Generate companies with custom base values
+ * const companies = generateMockCompanyDisplayList(3, {
+ *   baseActionCount: 20,
+ *   includeKpiForAll: true
+ * });
+ * ```
+ */
+export function generateMockCompanyDisplayList(
+  count: number,
+  options?: {
+    includeKpiForAll?: boolean;
+    baseActionCount?: number;
+  }
+): CompanyDisplay[] {
+  const includeKpiForAll = options?.includeKpiForAll ?? true;
+  const baseActionCount = options?.baseActionCount ?? 5;
+  
+  return generateMockArray((index) => {
+    const cnpjId = String(1000 + index);
+    const companyName = `EMPRESA ${index + 1} LTDA`;
+    const actionCount = baseActionCount + randomInt(0, 20);
+    
+    // Vary KPI values for realism
+    const hasKpi = includeKpiForAll || Math.random() > 0.3; // 70% have KPI if not all
+    const entregaValue = randomInt(30, 120);
+    const percentage = Math.min((entregaValue / 100) * 100, 100);
+    
+    let color: 'red' | 'yellow' | 'green' = 'red';
+    if (percentage >= 80) {
+      color = 'green';
+    } else if (percentage >= 50) {
+      color = 'yellow';
+    }
+    
+    return generateMockCompanyDisplay({
+      cnpj: generateMockCnpjString({ companyName, cnpjId, code: String(index + 1).padStart(4, '0') }),
+      cnpjId,
+      actionCount,
+      deliveryKpi: hasKpi ? {
+        id: 'delivery',
+        label: 'Entregas',
+        current: entregaValue,
+        target: 100,
+        unit: 'entregas',
+        percentage,
+        color
+      } : undefined
+    });
+  }, count);
+}
+
+/**
+ * Generate mock CNPJ list response from action_log aggregate query
+ * 
+ * This represents the raw response from ActionLogService.getPlayerCnpjListWithCount()
+ * before enrichment with KPI data.
+ * 
+ * @param count - Number of companies to generate
+ * @returns Array of objects with cnpj and actionCount
+ * 
+ * @example
+ * ```typescript
+ * // Generate 5 companies from action_log
+ * const cnpjList = generateMockCnpjListFromActionLog(5);
+ * // Result: [
+ * //   { cnpj: 'EMPRESA 1 LTDA l 0001 [1000|0001-00]', actionCount: 15 },
+ * //   { cnpj: 'EMPRESA 2 LTDA l 0002 [1001|0002-00]', actionCount: 8 },
+ * //   ...
+ * // ]
+ * ```
+ */
+export function generateMockCnpjListFromActionLog(count: number): Array<{ cnpj: string; actionCount: number }> {
+  return generateMockArray((index) => {
+    const cnpjId = String(1000 + index);
+    const companyName = `EMPRESA ${index + 1} LTDA`;
+    const code = String(index + 1).padStart(4, '0');
+    
+    return {
+      cnpj: generateMockCnpjString({ companyName, cnpjId, code }),
+      actionCount: randomInt(5, 50)
+    };
+  }, count);
+}
+
+/**
+ * Generate mock cnpj__c aggregate API response
+ * 
+ * This represents the raw API response from Funifier's cnpj__c collection
+ * aggregate endpoint.
+ * 
+ * @param cnpjIds - Array of CNPJ IDs to generate data for
+ * @returns Array of CnpjKpiData
+ * 
+ * @example
+ * ```typescript
+ * // Generate KPI data for specific IDs
+ * const kpiResponse = generateMockCnpjKpiResponse(['1000', '1001', '1002']);
+ * // Result: [
+ * //   { _id: '1000', entrega: 75 },
+ * //   { _id: '1001', entrega: 92 },
+ * //   { _id: '1002', entrega: 58 }
+ * // ]
+ * ```
+ */
+export function generateMockCnpjKpiResponse(cnpjIds: string[]): CnpjKpiData[] {
+  return cnpjIds.map(id => ({
+    _id: id,
+    entrega: randomInt(30, 120)
+  }));
+}
+
