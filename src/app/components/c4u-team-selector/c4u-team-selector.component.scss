@@ -17,11 +17,11 @@
   }
 
   .team-select {
-    background-color: rgba($primary-electric-blue, 0.05);
+    background-color: $bg-secondary;
     border: 1px solid rgba($primary-electric-blue, 0.2);
     border-radius: $border-radius-sm;
     color: $text-primary;
-    padding: 12px $spacing-md;
+    padding: 12px 40px 12px $spacing-md;
     font-size: $font-size-small;
     font-family: $font-family;
     transition: all $transition-duration $transition-easing;
@@ -29,10 +29,15 @@
     cursor: pointer;
     box-sizing: border-box;
     width: 100%;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23ffffff' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 16px center;
+    background-size: 12px;
 
     &:hover {
       border-color: $primary-electric-blue;
-      background-color: rgba($primary-electric-blue, 0.08);
+      background-color: rgba($bg-secondary, 0.9);
       transform: translateY(-1px);
     }
 
@@ -40,7 +45,7 @@
       outline: none;
       border-color: $primary-electric-blue;
       box-shadow: 0 0 0 3px rgba($primary-electric-blue, 0.2);
-      background-color: rgba($primary-electric-blue, 0.1);
+      background-color: $bg-secondary;
     }
 
     &:focus-visible {
@@ -48,7 +53,7 @@
     }
 
     option {
-      background-color: $surface;
+      background-color: $bg-secondary;
       color: $text-primary;
       padding: $spacing-sm;
     }
@@ -59,7 +64,7 @@
 @media (max-width: 1024px) {
   .team-selector {
     .team-select {
-      padding: 13px $spacing-md;
+      padding: 13px 40px 13px $spacing-md;
       min-height: 46px;
     }
   }
@@ -70,7 +75,7 @@
   .team-selector {
     .team-select {
       font-size: $font-size-body;
-      padding: 14px $spacing-md;
+      padding: 14px 40px 14px $spacing-md;
       min-height: 48px;
     }
   }
@@ -85,7 +90,7 @@
 
     .team-select {
       font-size: 0.9375rem;
-      padding: 14px $spacing-sm;
+      padding: 14px 40px 14px $spacing-sm;
       min-height: 48px;
     }
   }

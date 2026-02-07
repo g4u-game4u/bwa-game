@@ -165,9 +165,10 @@ export interface GraphDataPoint {
 export interface ChartDataset {
   label: string;
   data: number[];
-  borderColor: string;
-  backgroundColor: string;
+  borderColor: string | string[];
+  backgroundColor: string | string[];
   fill?: boolean;
+  borderWidth?: number;
 }
 
 export interface GraphConfig {

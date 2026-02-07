@@ -1,9 +1,11 @@
 import { Injectable } from '@angular/core';
 import { Observable, throwError, of } from 'rxjs';
-import { map, catchError, shareReplay } from 'rxjs/operators';
+import { map, catchError, shareReplay, switchMap } from 'rxjs/operators';
 import { FunifierApiService } from './funifier-api.service';
 import { KPIMapper } from './kpi-mapper.service';
 import { KPIData } from '@model/gamification-dashboard.model';
+import { ActionLogService } from './action-log.service';
+import { PlayerService } from './player.service';
 
 interface CacheEntry<T> {
   data: Observable<T>;
@@ -30,7 +32,8 @@ export class KPIService {
 
   constructor(
     private funifierApi: FunifierApiService,
-    private mapper: KPIMapper
+    private mapper: KPIMapper,
+    private playerService: PlayerService
   ) {}
 
   /**
@@ -72,29 +75,113 @@ export class KPIService {
 
   /**
    * Get player KPIs from player's extra info:
-   * 1. Número de Empresas - count items in extra.cnpj (comma-separated)
-   * 2. Porcentagem de Entregas no Prazo - value from extra.entrega
+   * 1. Clientes na Carteira - count from action_log filtered by selected month
+   * 2. Porcentagem de Entregas no Prazo - value from extra.entrega (only for current month)
+   * 
+   * @param playerId - Player ID
+   * @param selectedMonth - Selected month for filtering (optional, defaults to current month)
+   * @param actionLogService - ActionLogService instance (passed to avoid circular dependency)
    */
-  getPlayerKPIs(playerId: string): Observable<KPIData[]> {
-    const cached = this.getCachedData(this.playerKPICache, playerId);
+  getPlayerKPIs(playerId: string, selectedMonth?: Date, actionLogService?: any): Observable<KPIData[]> {
+    // Create cache key that includes month to avoid cache conflicts
+    const monthKey = selectedMonth ? `_${selectedMonth.getFullYear()}-${selectedMonth.getMonth()}` : '_current';
+    const cacheKey = `${playerId}${monthKey}`;
+    const cached = this.getCachedData(this.playerKPICache, cacheKey);
     if (cached) {
       return cached;
     }
 
-    const request$ = this.funifierApi.get<any>(`/v3/player/${playerId}/status`).pipe(
-      map(playerStatus => {
+    // Use PlayerService to get raw player data (shared cache)
+    const request$: Observable<KPIData[]> = this.playerService.getRawPlayerData(playerId).pipe(
+      switchMap((playerStatus): Observable<KPIData[]> => {
         console.log('📊 Player status received:', playerStatus);
         
         const kpis: KPIData[] = [];
+        const now = new Date();
+        const isCurrentMonth = !selectedMonth || 
+          (selectedMonth.getFullYear() === now.getFullYear() && 
+           selectedMonth.getMonth() === now.getMonth());
 
-        // Número de Empresas - count items in extra.cnpj
-        if (playerStatus.extra?.cnpj) {
-          const cnpjList = playerStatus.extra.cnpj.split(',').filter((item: string) => item.trim());
-          const companyCount = cnpjList.length;
-          
-          kpis.push({
-            id: 'numero-empresas',
-            label: 'Número de Empresas',
+        // Clientes na Carteira - count from action_log filtered by selected month
+        if (actionLogService && selectedMonth) {
+          // Use action_log to count companies for the selected month
+          return actionLogService.getPlayerCnpjListWithCount(playerId, selectedMonth).pipe(
+            map((cnpjList: { cnpj: string; actionCount: number }[]) => {
+              const companyCount = Array.isArray(cnpjList) ? cnpjList.length : 0;
+              
+              // Always add Clientes na Carteira KPI, even if count is 0
+              kpis.push({
+                id: 'numero-empresas',
+                label: 'Clientes na Carteira',
+                current: companyCount,
+                target: 10,
+                superTarget: 15,
+                unit: 'clientes',
+                color: this.getKPIColorByGoals(companyCount, 10, 15),
+                percentage: Math.min((companyCount / 15) * 100, 100)
+              });
+
+              // Porcentagem de Entregas no Prazo - only for current month
+              if (isCurrentMonth && playerStatus.extra?.entrega) {
+                const deliveryPercentage = parseFloat(playerStatus.extra.entrega);
+                
+                kpis.push({
+                  id: 'entregas-prazo',
+                  label: 'Entregas no Prazo',
+                  current: deliveryPercentage,
+                  target: 80,
+                  superTarget: 90,
+                  unit: '%',
+                  color: this.getKPIColorByGoals(deliveryPercentage, 80, 90),
+                  percentage: Math.min(deliveryPercentage / 90 * 100, 100)
+                });
+              }
+
+              console.log('📊 Generated KPIs:', kpis, `(${kpis.length} KPIs)`, isCurrentMonth ? '(current month)' : '(previous month)');
+              return kpis;
+            }),
+            catchError(error => {
+              console.error('📊 Error loading companies from action_log:', error);
+              // Return at least the empresas KPI with 0 count on error
+               const errorKpis: KPIData[] = [{
+                 id: 'numero-empresas',
+                 label: 'Clientes na Carteira',
+                current: 0,
+                target: 10,
+                superTarget: 15,
+                unit: 'clientes',
+                color: 'red' as const,
+                percentage: 0
+              }];
+              
+              // Add entregas KPI only for current month if available
+              if (isCurrentMonth && playerStatus.extra?.entrega) {
+                const deliveryPercentage = parseFloat(playerStatus.extra.entrega);
+                errorKpis.push({
+                  id: 'entregas-prazo',
+                  label: 'Entregas no Prazo',
+                  current: deliveryPercentage,
+                  target: 80,
+                  superTarget: 90,
+                  unit: '%',
+                  color: this.getKPIColorByGoals(deliveryPercentage, 80, 90),
+                  percentage: Math.min(deliveryPercentage / 90 * 100, 100)
+                });
+              }
+              
+              return of(errorKpis);
+            })
+          );
+        } else {
+          // Fallback: use extra.cnpj if actionLogService not available
+                 // Always add Clientes na Carteira KPI, even if count is 0
+                 const companyCount = playerStatus.extra?.cnpj 
+                   ? playerStatus.extra.cnpj.split(',').filter((item: string) => item.trim()).length 
+                   : 0;
+                 
+                 kpis.push({
+                   id: 'numero-empresas',
+                   label: 'Clientes na Carteira',
             current: companyCount,
             target: 10,
             superTarget: 15,
@@ -102,26 +189,26 @@ export class KPIService {
             color: this.getKPIColorByGoals(companyCount, 10, 15),
             percentage: Math.min((companyCount / 15) * 100, 100)
           });
-        }
 
-        // Porcentagem de Entregas no Prazo
-        if (playerStatus.extra?.entrega) {
-          const deliveryPercentage = parseFloat(playerStatus.extra.entrega);
-          
-          kpis.push({
-            id: 'entregas-prazo',
-            label: 'Entregas no Prazo',
-            current: deliveryPercentage,
-            target: 80,
-            superTarget: 90,
-            unit: '%',
-            color: this.getKPIColorByGoals(deliveryPercentage, 80, 90),
-            percentage: Math.min(deliveryPercentage / 90 * 100, 100)
-          });
-        }
+          // Porcentagem de Entregas no Prazo - only for current month
+          if (isCurrentMonth && playerStatus.extra?.entrega) {
+            const deliveryPercentage = parseFloat(playerStatus.extra.entrega);
+            
+            kpis.push({
+              id: 'entregas-prazo',
+              label: 'Entregas no Prazo',
+              current: deliveryPercentage,
+              target: 80,
+              superTarget: 90,
+              unit: '%',
+              color: this.getKPIColorByGoals(deliveryPercentage, 80, 90),
+              percentage: Math.min(deliveryPercentage / 90 * 100, 100)
+            });
+          }
 
-        console.log('📊 Generated KPIs:', kpis);
-        return kpis;
+          console.log('📊 Generated KPIs (fallback):', kpis, `(${kpis.length} KPIs)`, isCurrentMonth ? '(current month)' : '(previous month)');
+          return of(kpis);
+        }
       }),
       catchError(error => {
         console.error('📊 Error fetching player KPIs:', error);
@@ -131,7 +218,7 @@ export class KPIService {
       shareReplay({ bufferSize: 1, refCount: true, windowTime: this.CACHE_DURATION })
     );
 
-    this.setCachedData(this.playerKPICache, playerId, request$);
+    this.setCachedData(this.playerKPICache, cacheKey, request$);
     return request$;
   }
 

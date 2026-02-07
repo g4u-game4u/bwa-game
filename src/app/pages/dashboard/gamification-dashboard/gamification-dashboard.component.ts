@@ -1,7 +1,7 @@
 import { Component, OnInit, OnDestroy, HostListener, ChangeDetectionStrategy, ChangeDetectorRef, AfterViewInit } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { Subject } from 'rxjs';
-import { takeUntil } from 'rxjs/operators';
+import { takeUntil, switchMap } from 'rxjs/operators';
 
 import { PlayerService } from '@services/player.service';
 import { CompanyService } from '@services/company.service';
@@ -9,6 +9,7 @@ import { KPIService } from '@services/kpi.service';
 import { ToastService } from '@services/toast.service';
 import { PerformanceMonitorService } from '@services/performance-monitor.service';
 import { ActionLogService } from '@services/action-log.service';
+import { CompanyKpiService } from '@services/company-kpi.service';
 import { SessaoProvider } from '@providers/sessao/sessao.provider';
 import { 
   PlayerStatus, 
@@ -19,6 +20,7 @@ import {
   ActivityMetrics,
   ProcessMetrics
 } from '@model/gamification-dashboard.model';
+import { CompanyDisplay } from '@services/company-kpi.service';
 import { ProgressCardType } from '@components/c4u-activity-progress/c4u-activity-progress.component';
 import { ProgressListType } from '@modals/modal-progress-list/modal-progress-list.component';
 
@@ -64,13 +66,14 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   // Activity and Process data
   activityMetrics: ActivityMetrics | null = null;
   processMetrics: ProcessMetrics | null = null;
+  monthlyPointsBreakdown: { bloqueados: number; desbloqueados: number } | null = null;
   
   // Company data
   companies: Company[] = [];
   selectedCompany: Company | null = null;
   
-  // Carteira data from action_log (CNPJs with action counts)
-  carteiraClientes: { cnpj: string; actionCount: number }[] = [];
+  // Carteira data from action_log (CNPJs with action counts and KPI data)
+  carteiraClientes: CompanyDisplay[] = [];
   isLoadingCarteira = true;
   
   // Month selection
@@ -85,6 +88,10 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   
   // Carteira modal state
   isCarteiraModalOpen = false;
+  
+  // Company carteira detail modal state
+  isCompanyCarteiraDetailModalOpen = false;
+  selectedCarteiraCompany: CompanyDisplay | null = null;
   
   // Refresh state
   lastRefreshTime: Date | null = null;
@@ -107,6 +114,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     private cdr: ChangeDetectorRef,
     private performanceMonitor: PerformanceMonitorService,
     private actionLogService: ActionLogService,
+    private companyKpiService: CompanyKpiService,
     private sessaoProvider: SessaoProvider,
     private route: ActivatedRoute,
     private router: Router
@@ -123,7 +131,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
    * 2. Current user from session
    * 3. 'me' as fallback
    */
-  private getPlayerId(): string {
+  getPlayerId(): string {
     // Check for playerId in query params (when viewing another player's dashboard)
     const playerIdParam = this.route.snapshot.queryParams['playerId'];
     if (playerIdParam && typeof playerIdParam === 'string') {
@@ -214,15 +222,20 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   }
   
   /**
-   * Load all dashboard data
+   * Load all dashboard data asynchronously
+   * All data loads in parallel to avoid blocking the UI
    */
   loadDashboardData(): void {
+    // Set refresh time immediately
+    this.lastRefreshTime = new Date();
+    
+    // Load all data in parallel - UI will update as data arrives
+    // This allows the page to render immediately while data loads
     this.loadPlayerData();
     this.loadCompanyData();
     this.loadCarteiraData();
     this.loadKPIData();
     this.loadProgressData();
-    this.lastRefreshTime = new Date();
   }
   
   /**
@@ -407,6 +420,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
 
   /**
    * Load carteira data from action_log (CNPJs with action counts)
+   * and enrich with KPI data from cnpj__c collection
    */
   private loadCarteiraData(): void {
     this.isLoadingCarteira = true;
@@ -422,11 +436,18 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     }
     
     this.actionLogService.getPlayerCnpjListWithCount(playerId, this.selectedMonth)
-      .pipe(takeUntil(this.destroy$))
+      .pipe(
+        switchMap(clientes => {
+          console.log('📊 Carteira clientes loaded, enriching with KPI data:', clientes);
+          // Enrich companies with KPI data from cnpj__c collection
+          return this.companyKpiService.enrichCompaniesWithKpis(clientes);
+        }),
+        takeUntil(this.destroy$)
+      )
       .subscribe({
-        next: (clientes) => {
-          console.log('📊 Carteira clientes loaded:', clientes);
-          this.carteiraClientes = clientes;
+        next: (enrichedClientes) => {
+          console.log('📊 Carteira clientes enriched with KPI data:', enrichedClientes);
+          this.carteiraClientes = enrichedClientes;
           this.isLoadingCarteira = false;
           this.cdr.markForCheck();
         },
@@ -446,16 +467,22 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     
     const playerId = this.getPlayerId();
     
-    this.kpiService.getPlayerKPIs(playerId)
+    // Pass selectedMonth and actionLogService to getPlayerKPIs
+    this.kpiService.getPlayerKPIs(playerId, this.selectedMonth, this.actionLogService)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (kpis) => {
-          console.log('📊 KPIs loaded:', kpis);
-          this.playerKPIs = kpis;
+          console.log('📊 KPIs loaded:', kpis, `(${kpis?.length || 0} KPIs)`);
+          this.playerKPIs = kpis || [];
           this.isLoadingKPIs = false;
           
-          // Update metas in season progress (count of KPIs above target)
-          this.updateMetasFromKPIs(kpis);
+          // Always update metas if we have KPIs (even if empty, to show 0/0)
+          // But preserve existing values if KPIs array is null/undefined (error case)
+          if (kpis !== null && kpis !== undefined) {
+            this.updateMetasFromKPIs(kpis);
+          } else {
+            console.log('📊 KPIs is null/undefined, skipping metas update to preserve existing values');
+          }
           
           this.cdr.markForCheck();
         },
@@ -463,6 +490,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
           console.error('📊 Failed to load KPIs:', error);
           this.toastService.error('Erro ao carregar KPIs');
           this.isLoadingKPIs = false;
+          // Don't update metas on error - preserve existing values
           this.cdr.markForCheck();
         }
       });
@@ -471,13 +499,22 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   /**
    * Update metas count based on KPIs that are above their target
    * Metas = count of KPIs where current >= target
+   * Only updates if there are KPIs available, otherwise preserves existing values
+   * This method assumes kpis array is not empty (checked before calling)
    */
   private updateMetasFromKPIs(kpis: KPIData[]): void {
-    if (!this.seasonProgress) return;
+    if (!this.seasonProgress) {
+      console.warn('📊 updateMetasFromKPIs called but seasonProgress is null');
+      return;
+    }
     
-    const totalKPIs = kpis.length;
-    const metasAchieved = kpis.filter(kpi => kpi.current >= kpi.target).length;
+    // Allow empty array - this means 0/0 (no KPIs available)
+    const totalKPIs = kpis ? kpis.length : 0;
+    const metasAchieved = kpis ? kpis.filter(kpi => kpi.current >= kpi.target).length : 0;
     
+    // Update with KPI-based values
+    // Note: metasAchieved can be 0 if no KPIs meet their target
+    // totalKPIs can be 0 if no KPIs are available (should show 0/0)
     this.seasonProgress = {
       ...this.seasonProgress,
       metas: {
@@ -486,7 +523,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
       }
     };
     
-    console.log('📊 Metas updated:', this.seasonProgress.metas);
+    console.log('📊 Metas updated from KPIs:', this.seasonProgress.metas, `(${metasAchieved}/${totalKPIs})`, `from ${totalKPIs} KPIs`);
   }
   
   /**
@@ -529,6 +566,22 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
           this.cdr.markForCheck();
         }
       });
+
+    // Load monthly points breakdown
+    this.actionLogService.getMonthlyPointsBreakdown(playerId, this.selectedMonth)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (breakdown) => {
+          console.log('📊 Monthly points breakdown loaded:', breakdown);
+          this.monthlyPointsBreakdown = breakdown;
+          this.cdr.markForCheck();
+        },
+        error: (error) => {
+          console.error('📊 Failed to load monthly points breakdown:', error);
+          this.monthlyPointsBreakdown = { bloqueados: 0, desbloqueados: 0 };
+          this.cdr.markForCheck();
+        }
+      });
   }
   
   /**
@@ -552,6 +605,37 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     this.isCompanyModalOpen = true;
     this.focusedElementBeforeModal = document.activeElement as HTMLElement;
     this.announceToScreenReader(`Abrindo detalhes de ${company.name}`);
+  }
+
+  /**
+   * Handle company selection from carteira list
+   */
+  openCompanyDetailModal(company: CompanyDisplay): void {
+    this.selectedCarteiraCompany = company;
+    this.isCompanyCarteiraDetailModalOpen = true;
+    this.focusedElementBeforeModal = document.activeElement as HTMLElement;
+    const companyName = this.getCompanyDisplayName(company.cnpj);
+    this.announceToScreenReader(`Abrindo detalhes de ${companyName}`);
+  }
+
+  /**
+   * Handle company carteira detail modal close
+   */
+  onCompanyCarteiraDetailModalClosed(): void {
+    const companyName = this.selectedCarteiraCompany 
+      ? this.getCompanyDisplayName(this.selectedCarteiraCompany.cnpj) 
+      : 'empresa';
+    this.isCompanyCarteiraDetailModalOpen = false;
+    this.selectedCarteiraCompany = null;
+    this.announceToScreenReader(`Modal de ${companyName} fechado`);
+    
+    // Restore focus to the element that was focused before the modal opened
+    if (this.focusedElementBeforeModal) {
+      setTimeout(() => {
+        this.focusedElementBeforeModal?.focus();
+        this.focusedElementBeforeModal = null;
+      }, 100);
+    }
   }
   
   /**
@@ -677,6 +761,43 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
    */
   trackByKpiId(_index: number, kpi: KPIData): string {
     return kpi.id;
+  }
+
+  /**
+   * Round a number to remove decimal places
+   */
+  roundValue(value: number): number {
+    return Math.round(value);
+  }
+
+  /**
+   * Format KPI value as integer with percentage symbol for compact display
+   */
+  formatKpiValue(value: number): string {
+    return `${Math.round(value)}%`;
+  }
+
+  /**
+   * Get tooltip text showing current value vs target
+   */
+  getKpiTooltip(kpi: KPIData): string {
+    const current = Math.round(kpi.current);
+    const target = Math.round(kpi.target);
+    return `${current}% de ${target}%`;
+  }
+  
+  /**
+   * Extract company name from CNPJ string
+   * Format: "COMPANY NAME l CODE [ID|SUFFIX]"
+   * Returns: Company name without the code and ID parts
+   */
+  getCompanyDisplayName(cnpj: string): string {
+    if (!cnpj) {
+      return '';
+    }
+    // Extract text before " l " separator
+    const match = cnpj.match(/^([^l]+)/);
+    return match ? match[1].trim() : cnpj;
   }
   
   /**

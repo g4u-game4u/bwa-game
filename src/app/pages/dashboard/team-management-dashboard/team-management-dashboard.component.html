@@ -1,4 +1,4 @@
-<div class="team-management-dashboard" role="main">
+<div class="team-management-dashboard" [class.sidebar-collapsed]="sidebarCollapsed" role="main">
   <!-- Screen reader announcements -->
   <div aria-live="polite" aria-atomic="true" class="sr-only" id="dashboard-announcements">
     {{ screenReaderAnnouncement }}
@@ -10,7 +10,7 @@
   </a>
 
   <!-- Sidebar -->
-  <aside class="dashboard-sidebar" role="complementary" aria-label="Filtros e métricas da equipe">
+  <aside class="dashboard-sidebar" [class.collapsed]="sidebarCollapsed" role="complementary" aria-label="Filtros e métricas da equipe">
     <c4u-card class="sidebar-card">
       <div class="sidebar-content">
         <!-- Team Selector -->
@@ -37,18 +37,28 @@
           </c4u-collaborator-selector>
         </div>
 
-        <!-- Team Sidebar with Metrics -->
-        <div class="sidebar-section" *ngIf="!isLoadingSidebar && !hasSidebarError; else sidebarLoadingOrError" role="region" aria-label="Métricas da equipe">
-          <c4u-team-sidebar
-            [teamName]="teamName"
-            [seasonPoints]="seasonPoints"
-            [progressMetrics]="progressMetrics"
-            [seasonDates]="seasonDates"
-            [viewMode]="'team-management'"
-            [insideCard]="true"
-            [averagePoints]="teamAveragePoints">
-          </c4u-team-sidebar>
+        <!-- Point Wallet -->
+        <div class="sidebar-section" *ngIf="!isLoadingSidebar && !hasSidebarError; else sidebarLoadingOrError" role="region" aria-label="Carteira de pontos da equipe">
+          <c4u-point-wallet
+            *ngIf="teamPointWallet"
+            [points]="teamPointWallet"
+            [mediaPontos]="teamAveragePoints">
+          </c4u-point-wallet>
+          
+          <c4u-shimmer *ngIf="isLoadingSidebar && !teamPointWallet"></c4u-shimmer>
         </div>
+        
+        <!-- Season Progress -->
+        <div class="sidebar-section" *ngIf="!isLoadingSidebar && !hasSidebarError; else sidebarLoadingOrError" role="region" aria-label="Progresso da temporada da equipe">
+          <c4u-season-progress
+            *ngIf="teamSeasonProgress"
+            [progress]="teamSeasonProgress"
+            [processosFinalizados]="progressMetrics.processosFinalizados">
+          </c4u-season-progress>
+          
+          <c4u-shimmer *ngIf="isLoadingSidebar && !teamSeasonProgress"></c4u-shimmer>
+        </div>
+        
 
         <ng-template #sidebarLoadingOrError>
           <div class="sidebar-section" *ngIf="isLoadingSidebar" role="status" aria-live="polite">
@@ -65,7 +75,45 @@
           </div>
         </ng-template>
       </div>
+      
+      <!-- Collapsed Sidebar - Compact View -->
+      <div class="sidebar-compact" *ngIf="sidebarCollapsed">
+        <!-- Point Wallet Compact -->
+        <div class="compact-item" *ngIf="teamPointWallet">
+          <i class="ri-lock-fill compact-icon bloqueados"></i>
+          <span class="compact-value">{{ teamPointWallet.bloqueados | number:'1.0-0':'pt-BR' }}</span>
+        </div>
+        <div class="compact-item" *ngIf="teamPointWallet">
+          <i class="ri-lock-unlock-fill compact-icon desbloqueados"></i>
+          <span class="compact-value">{{ teamPointWallet.desbloqueados | number:'1.0-0':'pt-BR' }}</span>
+        </div>
+        
+        <!-- Season Progress Compact -->
+        <div class="compact-item" *ngIf="teamSeasonProgress">
+          <i class="ri-building-line compact-icon clientes"></i>
+          <span class="compact-value">{{ teamSeasonProgress.clientes | number:'1.0-0':'pt-BR' }}</span>
+        </div>
+        <div class="compact-item" *ngIf="teamSeasonProgress">
+          <i class="ri-checkbox-circle-line compact-icon tarefas"></i>
+          <span class="compact-value">{{ teamSeasonProgress.tarefasFinalizadas | number:'1.0-0':'pt-BR' }}</span>
+        </div>
+        
+        <!-- Additional Metrics Compact -->
+        <div class="compact-item" *ngIf="teamAveragePoints > 0">
+          <i class="ri-graph-up-line compact-icon media"></i>
+          <span class="compact-value">{{ teamAveragePoints | number:'1.0-0':'pt-BR' }}</span>
+        </div>
+        <div class="compact-item" *ngIf="progressMetrics">
+          <i class="ri-check-double-line compact-icon processos"></i>
+          <span class="compact-value">{{ progressMetrics.processosFinalizados | number:'1.0-0':'pt-BR' }}</span>
+        </div>
+      </div>
     </c4u-card>
+    
+    <!-- Sidebar Toggle Button - Outside the card -->
+    <button class="sidebar-toggle" (click)="toggleSidebar()" [attr.aria-label]="sidebarCollapsed ? 'Expandir menu' : 'Recolher menu'">
+      <i [class]="sidebarCollapsed ? 'ri-arrow-right-line' : 'ri-arrow-left-line'" class="toggle-icon"></i>
+    </button>
   </aside>
 
   <!-- Main Content Area -->
@@ -138,13 +186,28 @@
           [attr.aria-labelledby]="'goals-tab'"
           aria-live="polite">
           <div *ngIf="!isLoadingGoals && !hasGoalsError">
-            <!-- Temporarily commented out while resolving team KPI data assembly -->
-            <!--
-            <c4u-goals-progress-tab
-              [goals]="goalMetrics"
-              [isLoading]="isLoadingGoals">
-            </c4u-goals-progress-tab>
-            -->
+            <!-- KPI Section -->
+            <section class="dashboard-section" aria-labelledby="kpi-section-title">
+              <h2 id="kpi-section-title" class="section-title">Carteira da Equipe</h2>
+              
+              <div class="kpi-grid" *ngIf="teamKPIs.length > 0" role="group" aria-labelledby="kpi-section-title">
+                <c4u-kpi-circular-progress
+                  *ngFor="let kpi of teamKPIs; let i = index; trackBy: trackByKpiId"
+                  [label]="kpi.label"
+                  [current]="roundValue(kpi.current)"
+                  [target]="roundValue(kpi.target)"
+                  [superTarget]="kpi.superTarget ? roundValue(kpi.superTarget) : undefined"
+                  [color]="kpi.color"
+                  [unit]="kpi.unit"
+                  [colorIndex]="i">
+                </c4u-kpi-circular-progress>
+              </div>
+              
+              <div class="kpi-grid" *ngIf="isLoadingKPIs">
+                <c4u-shimmer></c4u-shimmer>
+                <c4u-shimmer></c4u-shimmer>
+              </div>
+            </section>
             
             <!-- Progress Section (Activities and Macros) -->
             <section class="dashboard-section" aria-labelledby="progress-section-title">
@@ -154,6 +217,7 @@
                 *ngIf="teamActivityMetrics && teamProcessMetrics"
                 [activities]="teamActivityMetrics"
                 [processos]="teamProcessMetrics"
+                [monthlyPointsBreakdown]="monthlyPointsBreakdown"
                 (cardClicked)="onProgressCardClicked($event)">
               </c4u-activity-progress>
               
@@ -163,35 +227,46 @@
             <!-- Company Portfolio Section -->
             <section class="dashboard-section carteira-section" aria-labelledby="company-section-title">
               <div class="section-header">
-                <h2 id="company-section-title" class="section-title">Carteira da Equipe</h2>
-                <button 
+                <h2 id="company-section-title" class="section-title">Clientes</h2>
+                <!-- <button 
                   type="button" 
                   class="carteira-expand-btn"
                   (click)="openCarteiraModal()"
                   aria-label="Ver todos os clientes">
                   <i class="ri-external-link-line"></i>
                   Ver todos
-                </button>
+                </button> -->
               </div>
               
               <c4u-card class="carteira-card">
                 <!-- Carteira list from action_log CNPJs -->
                 <div *ngIf="teamCarteiraClientes.length > 0" class="carteira-list">
-                  <div *ngFor="let cliente of teamCarteiraClientes.slice(0, 5)" class="carteira-item">
+                  <div *ngFor="let cliente of teamCarteiraClientes" 
+                       class="carteira-item"
+                       (click)="openCompanyDetailModal(cliente)"
+                       role="button"
+                       tabindex="0"
+                       [attr.aria-label]="'Ver detalhes de ' + getCompanyDisplayName(cliente.cnpj)"
+                       (keydown.enter)="openCompanyDetailModal(cliente)"
+                       (keydown.space)="openCompanyDetailModal(cliente); $event.preventDefault()">
                     <div class="carteira-item-info">
-                      <i class="ri-building-2-line"></i>
-                      <span class="carteira-cnpj">{{ cliente.cnpj }}</span>
+                      <i class="ri-building-line"></i>
+                      <span class="carteira-cnpj">{{ getCompanyDisplayName(cliente.cnpj) }}</span>
                     </div>
-                    <span class="carteira-action-count">{{ cliente.actionCount }} ações</span>
+                    <div class="carteira-item-meta">
+                      <!-- KPI Indicator - Compact Display -->
+                      <div *ngIf="cliente.deliveryKpi" 
+                           class="carteira-kpi-compact" 
+                           [ngClass]="'kpi-' + (cliente.deliveryKpi.color || 'default')"
+                           [title]="getKpiTooltip(cliente.deliveryKpi)">
+                        <span class="kpi-value">{{ formatKpiValue(cliente.deliveryKpi.current) }}</span>
+                        <i class="ri-time-line kpi-icon" aria-hidden="true"></i>
+                      </div>
+                      <span *ngIf="!cliente.deliveryKpi" class="kpi-na">N/A</span>
+                      <span class="carteira-action-count">{{ cliente.actionCount }} tarefas</span>
+                      <span class="carteira-process-count">{{ cliente.processCount }} processos</span>
+                    </div>
                   </div>
-                  <button 
-                    *ngIf="teamCarteiraClientes.length > 5" 
-                    type="button"
-                    class="carteira-more"
-                    (click)="openCarteiraModal()"
-                    [attr.aria-label]="'Ver todos os ' + teamCarteiraClientes.length + ' clientes'">
-                    + {{ teamCarteiraClientes.length - 5 }} clientes
-                  </button>
                 </div>
                 
                 <c4u-shimmer *ngIf="isLoadingCarteira"></c4u-shimmer>
@@ -233,33 +308,6 @@
                 (periodSelected)="onPeriodChange($event)"
                 aria-label="Selecionar período de análise">
               </c4u-time-period-selector>
-              
-              <div class="chart-type-toggle" role="group" aria-label="Tipo de gráfico">
-                <button
-                  type="button"
-                  class="toggle-btn"
-                  [class.active]="productivityChartType === 'line'"
-                  (click)="onChartTypeChange('line')"
-                  [disabled]="isLoadingProductivity"
-                  [attr.aria-pressed]="productivityChartType === 'line'"
-                  aria-label="Alternar para gráfico de linhas"
-                  title="Gráfico de Linhas">
-                  <i class="bi bi-graph-up" aria-hidden="true"></i>
-                  <span class="sr-only">Gráfico de Linhas</span>
-                </button>
-                <button
-                  type="button"
-                  class="toggle-btn"
-                  [class.active]="productivityChartType === 'bar'"
-                  (click)="onChartTypeChange('bar')"
-                  [disabled]="isLoadingProductivity"
-                  [attr.aria-pressed]="productivityChartType === 'bar'"
-                  aria-label="Alternar para gráfico de barras"
-                  title="Gráfico de Barras">
-                  <i class="bi bi-bar-chart-fill" aria-hidden="true"></i>
-                  <span class="sr-only">Gráfico de Barras</span>
-                </button>
-              </div>
             </div>
 
             <!-- Activities Chart -->
@@ -270,7 +318,7 @@
                 [chartDatasetsInput]="graphDatasets"
                 [selectedPeriod]="selectedPeriod"
                 [isLoading]="isLoadingProductivity"
-                [externalChartType]="productivityChartType"
+                [externalChartType]="'line'"
                 [hideHeader]="true">
               </c4u-productivity-analysis-tab>
             </section>
@@ -283,9 +331,59 @@
                 [chartDatasetsInput]="pointsGraphDatasets"
                 [selectedPeriod]="selectedPeriod"
                 [isLoading]="isLoadingProductivity"
-                [externalChartType]="productivityChartType"
+                [externalChartType]="'line'"
                 [hideHeader]="true">
               </c4u-productivity-analysis-tab>
+            </section>
+
+            <!-- Activities by Collaborator Chart -->
+            <section class="dashboard-section" aria-labelledby="activities-by-collaborator-chart-title">
+              <h2 id="activities-by-collaborator-chart-title" class="section-title">Total de Atividades por Colaborador</h2>
+              <div class="chart-container" [class.loading]="isLoadingProductivity">
+                <div *ngIf="isLoadingProductivity" class="loading-overlay" role="status" aria-live="polite">
+                  <div class="spinner-border text-primary" role="status" aria-hidden="true">
+                    <span class="visually-hidden">Carregando dados...</span>
+                  </div>
+                  <p class="loading-text">Carregando dados do gráfico...</p>
+                </div>
+                <div *ngIf="!isLoadingProductivity && activitiesByCollaboratorDatasets.length > 0" class="chart-wrapper">
+                  <c4u-grafico-barras
+                    [labels]="activitiesByCollaboratorLabels"
+                    [datasets]="activitiesByCollaboratorDatasets"
+                    [showLegend]="false"
+                    role="img"
+                    [attr.aria-label]="'Gráfico de barras mostrando total de atividades por colaborador'">
+                  </c4u-grafico-barras>
+                </div>
+                <div *ngIf="!isLoadingProductivity && activitiesByCollaboratorDatasets.length === 0" class="empty-state" role="status" aria-live="polite">
+                  <p class="empty-text">Nenhum dado disponível</p>
+                </div>
+              </div>
+            </section>
+
+            <!-- Points by Collaborator Chart -->
+            <section class="dashboard-section" aria-labelledby="points-by-collaborator-chart-title">
+              <h2 id="points-by-collaborator-chart-title" class="section-title">Total de Pontos por Colaborador</h2>
+              <div class="chart-container" [class.loading]="isLoadingProductivity">
+                <div *ngIf="isLoadingProductivity" class="loading-overlay" role="status" aria-live="polite">
+                  <div class="spinner-border text-primary" role="status" aria-hidden="true">
+                    <span class="visually-hidden">Carregando dados...</span>
+                  </div>
+                  <p class="loading-text">Carregando dados do gráfico...</p>
+                </div>
+                <div *ngIf="!isLoadingProductivity && pointsByCollaboratorDatasets.length > 0" class="chart-wrapper">
+                  <c4u-grafico-barras
+                    [labels]="pointsByCollaboratorLabels"
+                    [datasets]="pointsByCollaboratorDatasets"
+                    [showLegend]="false"
+                    role="img"
+                    [attr.aria-label]="'Gráfico de barras mostrando total de pontos por colaborador'">
+                  </c4u-grafico-barras>
+                </div>
+                <div *ngIf="!isLoadingProductivity && pointsByCollaboratorDatasets.length === 0" class="empty-state" role="status" aria-live="polite">
+                  <p class="empty-text">Nenhum dado disponível</p>
+                </div>
+              </div>
             </section>
           </div>
 
@@ -311,6 +409,14 @@
     [month]="selectedMonth"
     (closed)="onProgressModalClosed()">
   </modal-progress-list>
+  
+  <!-- Company Carteira Detail Modal -->
+  <modal-company-carteira-detail
+    *ngIf="isCompanyCarteiraDetailModalOpen && selectedCarteiraCompany"
+    [company]="selectedCarteiraCompany"
+    [month]="selectedMonth"
+    (closed)="onCompanyCarteiraDetailModalClosed()">
+  </modal-company-carteira-detail>
   
   <!-- Carteira Modal -->
   <modal-carteira

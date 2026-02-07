@@ -26,10 +26,23 @@
           [attr.aria-expanded]="selectedCnpj === cliente.cnpj">
           <div class="cliente-info">
             <i class="ri-building-2-line cliente-icon"></i>
-            <span class="cliente-cnpj">{{ cliente.cnpj }}</span>
+            <span class="cliente-cnpj">{{ getCompanyDisplayName(cliente.cnpj) }}</span>
           </div>
           <div class="cliente-meta">
             <span class="action-count">{{ cliente.actionCount }} ações</span>
+            <!-- KPI Indicator -->
+            <c4u-kpi-circular-progress
+              *ngIf="cliente.deliveryKpi"
+              [label]="cliente.deliveryKpi.label"
+              [current]="cliente.deliveryKpi.current"
+              [target]="cliente.deliveryKpi.target"
+              [superTarget]="cliente.deliveryKpi.superTarget"
+              [color]="cliente.deliveryKpi.color"
+              [unit]="cliente.deliveryKpi.unit"
+              [size]="'small'"
+              class="cliente-kpi">
+            </c4u-kpi-circular-progress>
+            <span *ngIf="!cliente.deliveryKpi" class="kpi-na">N/A</span>
             <i class="ri-arrow-down-s-line expand-icon" 
                [class.rotated]="selectedCnpj === cliente.cnpj"></i>
           </div>

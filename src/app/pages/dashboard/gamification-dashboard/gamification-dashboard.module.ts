@@ -20,6 +20,7 @@ import { C4uDashboardNavigationModule } from '@components/c4u-dashboard-navigati
 import { ModalCompanyDetailModule } from '@modals/modal-company-detail/modal-company-detail.module';
 import { ModalProgressListModule } from '@modals/modal-progress-list/modal-progress-list.module';
 import { ModalCarteiraModule } from '@modals/modal-carteira/modal-carteira.module';
+import { ModalCompanyCarteiraDetailModule } from '@modals/modal-company-carteira-detail/modal-company-carteira-detail.module';
 
 const routes: Routes = [
   {
@@ -50,7 +51,8 @@ const routes: Routes = [
     C4uDashboardNavigationModule,
     ModalCompanyDetailModule,
     ModalProgressListModule,
-    ModalCarteiraModule
+    ModalCarteiraModule,
+    ModalCompanyCarteiraDetailModule
   ],
   exports: [
     GamificationDashboardComponent

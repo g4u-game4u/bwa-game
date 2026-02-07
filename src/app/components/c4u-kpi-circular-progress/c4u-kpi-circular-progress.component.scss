@@ -2,7 +2,18 @@
 
 :host {
   display: block;
-  width: 200px;
+  
+  // Default size (medium) - increased to accommodate longer titles
+  width: 280px;
+  
+  // Size variants
+  &.size-small {
+    width: 80px;
+  }
+  
+  &.size-large {
+    width: 320px;
+  }
 }
 
 .kpi-circular-progress {
@@ -11,19 +22,91 @@
   align-items: center;
   gap: 8px;
   width: 100%;
+  
+  // Focus indicator for accessibility
+  &:focus-visible {
+    outline: 2px solid #3b82f6;
+    outline-offset: 4px;
+    border-radius: 8px;
+  }
+  
+  // Ensure focus is visible
+  &:focus {
+    outline: none;
+  }
+  
+  &:focus-visible {
+    outline: 2px solid #3b82f6;
+    outline-offset: 4px;
+    border-radius: 8px;
+  }
 }
 
-.kpi-label {
-  font-family: 'Urbanist', sans-serif;
-  font-weight: 700;
-  font-size: 18px;
-  color: #eeeeee;
-  text-align: center;
-  letter-spacing: 0.36px;
-  width: 100%;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+.kpi-label-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  
+  .kpi-icon {
+    font-size: 1.125rem;
+    color: #9ca3af; // Golden color like in the prototype
+    opacity: 0.9;
+    flex-shrink: 0;
+    margin-right: 2px; // Small additional spacing after icon
+    
+    // Size variants
+    :host.size-small & {
+      font-size: 0.75rem;
+      margin-right: 1px;
+    }
+    
+    :host.size-large & {
+      font-size: 1.25rem;
+      margin-right: 3px;
+    }
+  }
+  
+  .kpi-label {
+    font-family: 'Urbanist', sans-serif;
+    font-weight: 700;
+    font-size: 18px;
+    color: #eeeeee;
+    text-align: center;
+    letter-spacing: 0.36px;
+    flex: 1;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: visible;
+    margin: 0 4px; // Additional spacing around label
+    
+    // Size variants
+    :host.size-small & {
+      font-size: 11px; // Increased from 10px for better readability
+      letter-spacing: 0.22px;
+      margin: 0 2px;
+    }
+    
+    :host.size-large & {
+      font-size: 20px;
+      letter-spacing: 0.4px;
+      margin: 0 6px;
+    }
+  }
+  
+  c4u-info-button {
+    flex-shrink: 0;
+    margin-left: 2px; // Small additional spacing before info button
+  }
+  
+  // Size variants for wrapper gap
+  :host.size-small & {
+    gap: 6px; // Increased from 4px
+  }
+  
+  :host.size-large & {
+    gap: 14px; // Increased from 10px
+  }
 }
 
 .kpi-progress-wrapper {
@@ -32,6 +115,17 @@
   justify-content: center;
   width: 120px;
   height: 120px;
+  
+  // Size variants
+  :host.size-small & {
+    width: 60px;
+    height: 60px;
+  }
+  
+  :host.size-large & {
+    width: 160px;
+    height: 160px;
+  }
 }
 
 .kpi-value {
@@ -40,7 +134,17 @@
   font-size: 24px;
   color: #ffffff;
   text-align: center;
+  
+  // Size variants
+  :host.size-small & {
+    font-size: 14px;
+  }
+  
+  :host.size-large & {
+    font-size: 28px;
+  }
 }
+
 
 .kpi-status {
   font-family: 'Urbanist', sans-serif;
@@ -50,18 +154,37 @@
   padding: 4px 8px;
   border-radius: 12px;
   
+  // Size variants
+  :host.size-small & {
+    font-size: 9px;
+    padding: 2px 6px;
+  }
+  
+  :host.size-large & {
+    font-size: 14px;
+    padding: 6px 10px;
+  }
+  
+  // Use design system colors for consistency
   &.status-green {
-    color: #22c55e;
-    background-color: rgba(34, 197, 94, 0.1);
+    color: #4caf50; // $success-green from design system
+    background-color: rgba(76, 175, 80, 0.1);
   }
   
   &.status-yellow {
-    color: #eab308;
-    background-color: rgba(234, 179, 8, 0.1);
+    color: #ff9800; // $warning-orange from design system
+    background-color: rgba(255, 152, 0, 0.1);
   }
   
   &.status-red {
-    color: #ef4444;
-    background-color: rgba(239, 68, 68, 0.1);
+    color: #f44336; // $error-red from design system
+    background-color: rgba(244, 67, 54, 0.1);
+  }
+
+  // Golden color for achieved goals (especially in modals)
+  &.status-goal-achieved {
+    color: #d4af37; // Golden color like in the prototype
+    background-color: rgba(212, 175, 55, 0.15);
+    border: 1px solid rgba(212, 175, 55, 0.3);
   }
 }

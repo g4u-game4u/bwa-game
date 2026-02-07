@@ -1,4 +1,4 @@
-<c4u-modal [modalTitle]="modalTitle" (closed)="onClose()">
+<c4u-modal [modalTitle]="modalTitle" [icon]="modalIcon" (closed)="onClose()">
   <div class="progress-list-content">
     <!-- Loading State -->
     <div *ngIf="isLoading" class="loading-state">
@@ -6,46 +6,179 @@
       <span>Carregando...</span>
     </div>
 
-    <!-- Activity List -->
-    <ng-container *ngIf="!isLoading && isActivityList">
-      <div *ngIf="activityItems.length === 0" class="empty-state">
-        <i class="ri-inbox-line empty-icon"></i>
-        <span>Nenhuma atividade encontrada</span>
+    <!-- Content -->
+    <div *ngIf="!isLoading" class="content-wrapper">
+      <!-- Chart Section (only for activities) -->
+      <div *ngIf="isActivityList" class="chart-section">
+        <h3 class="section-title">
+          <i class="ri-bar-chart-line section-icon" aria-hidden="true"></i>
+          Volume de Tarefas por Dia
+        </h3>
+        <div *ngIf="isLoadingChart" class="loading-chart">
+          <i class="ri-loader-4-line loading-icon"></i>
+          <span>Carregando gráfico...</span>
+        </div>
+        <div *ngIf="!isLoadingChart && chartLabels.length > 0 && chartDatasets.length > 0" class="chart-container">
+          <c4u-grafico-barras
+            [labels]="chartLabels"
+            [datasets]="chartDatasets"
+            [showLegend]="false">
+          </c4u-grafico-barras>
+        </div>
+        <div *ngIf="!isLoadingChart && chartLabels.length === 0" class="empty-chart">
+          <i class="ri-bar-chart-line empty-icon"></i>
+          <span>Nenhum dado disponível para o gráfico</span>
+        </div>
       </div>
-      
-      <ul class="item-list" *ngIf="activityItems.length > 0">
-        <li *ngFor="let item of activityItems" class="list-item">
-          <div class="item-main">
-            <span class="item-title">{{ item.title }}</span>
-            <span class="item-date">{{ formatDate(item.created) }}</span>
-          </div>
-          <div class="item-meta" *ngIf="listType === 'pontos'">
-            <span class="item-points">+{{ item.points }} pts</span>
-          </div>
-        </li>
-      </ul>
-    </ng-container>
 
-    <!-- Process List -->
-    <ng-container *ngIf="!isLoading && isProcessList">
-      <div *ngIf="processoItems.length === 0" class="empty-state">
-        <i class="ri-inbox-line empty-icon"></i>
-        <span>Nenhum processo encontrado</span>
-      </div>
-      
-      <ul class="item-list" *ngIf="processoItems.length > 0">
-        <li *ngFor="let item of processoItems" class="list-item processo-item">
-          <div class="item-main">
-            <span class="item-title">{{ item.title }}</span>
-            <span class="item-badge" [class.finalized]="item.isFinalized">
-              {{ item.isFinalized ? 'Finalizado' : 'Pendente' }}
-            </span>
+      <!-- Activity List -->
+      <ng-container *ngIf="isActivityList">
+        <div class="table-section">
+          <h3 class="section-title">
+            <i class="ri-task-line section-icon" aria-hidden="true"></i>
+            Tarefas
+          </h3>
+          
+          <div *ngIf="activityItems.length === 0" class="empty-state">
+            <i class="ri-inbox-line empty-icon"></i>
+            <span>Nenhuma tarefa encontrada</span>
           </div>
-          <div class="item-meta">
-            <span class="action-count">{{ item.actionCount }} ações</span>
+          
+          <div *ngIf="activityItems.length > 0" class="tasks-table">
+            <div class="task-header" [class.with-points]="listType === 'pontos'">
+              <div class="task-col-title">Tarefa</div>
+              <div class="task-col-executor">Executor</div>
+              <div class="task-col-date">Data</div>
+              <div class="task-col-status">Status</div>
+              <div class="task-col-points" *ngIf="listType === 'pontos'">Pontos</div>
+            </div>
+            <div class="tasks-list">
+              <div *ngFor="let item of activityItems" class="task-row" [class.with-points]="listType === 'pontos'">
+                <div class="task-col-title">
+                  <span class="task-title">{{ item.title }}</span>
+                </div>
+                <div class="task-col-executor">
+                  <span class="task-executor">{{ formatEmailToName(item.player) }}</span>
+                </div>
+                <div class="task-col-date">
+                  <span class="task-date">{{ formatDate(item.created) }}</span>
+                </div>
+                <div class="task-col-status">
+                  <span class="task-status" [ngClass]="getStatusClass(item)">
+                    {{ getStatusLabel(item) }}
+                  </span>
+                </div>
+                <div class="task-col-points" *ngIf="listType === 'pontos'">
+                  <span class="task-points">+{{ item.points }} pts</span>
+                </div>
+              </div>
+            </div>
           </div>
-        </li>
-      </ul>
-    </ng-container>
+        </div>
+      </ng-container>
+
+      <!-- Process List -->
+      <ng-container *ngIf="isProcessList">
+        <div class="table-section">
+          <h3 class="section-title">
+            <i class="ri-folder-line section-icon" aria-hidden="true"></i>
+            Processos
+          </h3>
+          
+          <div *ngIf="processoItems.length === 0" class="empty-state">
+            <i class="ri-inbox-line empty-icon"></i>
+            <span>Nenhum processo encontrado</span>
+          </div>
+          
+          <div *ngIf="processoItems.length > 0" class="process-accordion">
+            <div *ngFor="let item of processoItems" class="process-accordion-item">
+              <!-- Process Header (Clickable) -->
+              <div 
+                class="process-header" 
+                (click)="toggleProcess(item.deliveryId)"
+                [class.expanded]="isProcessExpanded(item.deliveryId)"
+                tabindex="0"
+                (keydown.enter)="toggleProcess(item.deliveryId)"
+                (keydown.space)="toggleProcess(item.deliveryId); $event.preventDefault()">
+                <div class="process-header-content process-grid">
+                  <div class="task-col-title">
+                    <i class="ri-arrow-down-s-line accordion-icon" [class.expanded]="isProcessExpanded(item.deliveryId)"></i>
+                    <span class="task-title">{{ item.title }}</span>
+                  </div>
+                  <div class="task-col-delivery-id" [class.copied]="copiedDeliveryId === item.deliveryId">
+                    <span class="delivery-id-label">ID:</span>
+                    <span class="delivery-id-value">{{ item.deliveryId }}</span>
+                    <span *ngIf="item.cnpj" class="company-name">{{ getCompanyDisplayName(item.cnpj) }}</span>
+                    <button 
+                      type="button"
+                      class="copy-button"
+                      (click)="copyDeliveryId(item.deliveryId, $event)"
+                      [attr.aria-label]="'Copiar ID do processo ' + item.deliveryId"
+                      [title]="copiedDeliveryId === item.deliveryId ? 'Copiado!' : 'Copiar ID'">
+                      <i [class]="copiedDeliveryId === item.deliveryId ? 'ri-check-line' : 'ri-file-copy-line'"></i>
+                    </button>
+                  </div>
+                  <div class="task-col-status">
+                    <span class="task-status" [ngClass]="item.isFinalized ? 'status-finalizado' : 'status-pendente'">
+                      {{ item.isFinalized ? 'Finalizado' : 'Pendente' }}
+                    </span>
+                  </div>
+                  <div class="task-col-actions">
+                    <span class="action-count">{{ item.actionCount }} ações</span>
+                  </div>
+                </div>
+              </div>
+              
+              <!-- Process Activities (Accordion Content) -->
+              <div 
+                class="process-content" 
+                *ngIf="isProcessExpanded(item.deliveryId)"
+                [@slideDown]>
+                <!-- Loading State -->
+                <div *ngIf="isLoadingProcessActivities(item.deliveryId)" class="loading-activities">
+                  <i class="ri-loader-4-line loading-icon"></i>
+                  <span>Carregando tarefas...</span>
+                </div>
+                
+                <!-- Activities List -->
+                <div *ngIf="!isLoadingProcessActivities(item.deliveryId)" class="activities-list">
+                  <div *ngIf="getProcessActivities(item.deliveryId).length === 0" class="empty-activities">
+                    <i class="ri-inbox-line empty-icon"></i>
+                    <span>Nenhuma tarefa encontrada</span>
+                  </div>
+                  
+                  <div *ngIf="getProcessActivities(item.deliveryId).length > 0" class="activities-table">
+                    <div class="activity-header">
+                      <div class="activity-col-title">Tarefa</div>
+                      <div class="activity-col-executor">Executor</div>
+                      <div class="activity-col-date">Data</div>
+                      <div class="activity-col-status">Status</div>
+                    </div>
+                    <div class="activity-rows">
+                      <div *ngFor="let activity of getProcessActivities(item.deliveryId)" class="activity-row">
+                        <div class="activity-col-title">
+                          <span class="activity-title">{{ activity.title }}</span>
+                        </div>
+                        <div class="activity-col-executor">
+                          <span class="activity-executor">{{ formatEmailToName(activity.player) }}</span>
+                        </div>
+                        <div class="activity-col-date">
+                          <span class="activity-date">{{ formatDate(activity.created) }}</span>
+                        </div>
+                        <div class="activity-col-status">
+                          <span class="activity-status" [ngClass]="getStatusClass(activity)">
+                            {{ getStatusLabel(activity) }}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </ng-container>
+    </div>
   </div>
 </c4u-modal>

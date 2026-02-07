@@ -3,7 +3,7 @@
 
 .gamification-dashboard {
   display: grid;
-  grid-template-columns: 320px 1fr;
+  grid-template-columns: 380px 1fr;
   gap: $spacing-lg;
   padding: $spacing-lg;
   min-height: 100vh;
@@ -24,7 +24,7 @@
       .sidebar-card {
         width: 56px;
         min-width: 56px;
-        overflow: hidden;
+        overflow: visible;
       }
       
       .sidebar-content {
@@ -35,6 +35,11 @@
         overflow: hidden;
       }
       
+      .sidebar-compact {
+        opacity: 1;
+        visibility: visible;
+      }
+      
       .sidebar-toggle {
         right: -8px;
       }
@@ -42,7 +47,7 @@
   }
   
   @include tablet-only {
-    grid-template-columns: 280px 1fr;
+    grid-template-columns: 320px 1fr;
     gap: $spacing-md;
     
     &.sidebar-collapsed {
@@ -138,6 +143,7 @@
     width: 100%;
     border-radius: $border-radius;
     transition: width 0.3s ease;
+    position: relative;
     
     ::ng-deep {
       .content {
@@ -157,6 +163,79 @@
   
   .sidebar-section {
     min-height: 60px;
+  }
+  
+  // Collapsed sidebar compact view
+  .sidebar-compact {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    display: flex;
+    flex-direction: column;
+    gap: $spacing-sm;
+    padding: $spacing-md $spacing-xs;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s ease, visibility 0.3s ease;
+    pointer-events: none;
+    
+    .compact-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      padding: $spacing-xs;
+      border-radius: $border-radius-sm;
+      transition: background 0.2s ease;
+      pointer-events: auto;
+      
+      &:hover {
+        background: rgba(255, 255, 255, 0.05);
+      }
+      
+      .compact-icon {
+        font-size: 20px;
+        flex-shrink: 0;
+        
+        &.bloqueados {
+          color: #ef4444; // Red
+        }
+        
+        &.desbloqueados {
+          color: #22c55e; // Green
+        }
+        
+        &.moedas {
+          color: #eab308; // Yellow
+        }
+        
+        &.metas {
+          color: #a855f7; // Purple
+        }
+        
+        &.clientes {
+          color: $primary-electric-blue; // Blue
+        }
+        
+        &.tarefas {
+          color: #22c55e; // Green
+        }
+      }
+      
+      .compact-value {
+        font-size: 10px;
+        font-weight: 600;
+        color: $text-primary;
+        text-align: center;
+        line-height: 1.2;
+        word-break: break-word;
+        max-width: 100%;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+    }
   }
   
   // Sidebar toggle button - positioned outside the card
@@ -179,15 +258,11 @@
     justify-content: center;
     transition: all 0.3s ease;
     
-    .icon-arrow_forward_ios {
+    .toggle-icon {
       color: rgba(255, 255, 255, 0.9);
-      font-size: 14px;
+      font-size: 16px;
       opacity: 1;
       transition: all 0.3s ease;
-      
-      &.invert {
-        transform: rotate(180deg);
-      }
     }
     
     &:hover {
@@ -258,7 +333,7 @@
     
     .refresh-button {
       position: absolute;
-      right: 80px; // Make room for logout button
+      right: 120px; // Increased from 80px to add more spacing between buttons
       top: 50%;
       transform: translateY(-50%);
       display: flex;
@@ -400,11 +475,20 @@
   .kpi-grid {
     display: flex;
     flex-wrap: wrap;
-    gap: $spacing-md;
+    gap: $spacing-xxl; // Increased spacing between KPIs for better horizontal distribution
     justify-content: center; // Center the KPI circles
     
     c4u-kpi-circular-progress {
       flex: 0 0 auto;
+    }
+    
+    // Responsive spacing adjustments
+    @include tablet-only {
+      gap: $spacing-xl;
+    }
+    
+    @include mobile-only {
+      gap: $spacing-md;
     }
   }
   
@@ -438,19 +522,39 @@
         display: flex;
         flex-direction: column;
         gap: $spacing-sm;
-        padding: $spacing-md;
         
         .carteira-item {
           display: flex;
           justify-content: space-between;
           align-items: center;
           padding: $spacing-sm $spacing-md;
-          background: rgba($primary-electric-blue, 0.05);
+          background: rgb(225,225,225, 0.05);
           border-radius: $border-radius-sm;
-          transition: background-color 0.2s ease;
+          transition: all 0.2s ease;
+          cursor: pointer;
           
           &:hover {
-            background: rgba($primary-electric-blue, 0.1);
+            background: rgb(225,225,225, 0.1);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+          }
+          
+          &:focus {
+            outline: 2px solid $primary-electric-blue;
+            outline-offset: 2px;
+          }
+          
+          // Tablet responsive
+          @include tablet-only {
+            padding: $spacing-sm;
+          }
+          
+          // Mobile responsive
+          @include mobile-only {
+            flex-direction: column;
+            align-items: stretch;
+            gap: $spacing-xs;
+            padding: $spacing-sm;
           }
           
           .carteira-item-info {
@@ -464,6 +568,11 @@
               color: $primary-electric-blue;
               font-size: 1.25rem;
               flex-shrink: 0;
+              
+              // Mobile responsive
+              @include mobile-only {
+                font-size: 1.125rem;
+              }
             }
             
             .carteira-cnpj {
@@ -472,6 +581,38 @@
               white-space: nowrap;
               overflow: hidden;
               text-overflow: ellipsis;
+              
+              // Tablet responsive
+              @include tablet-only {
+                font-size: 0.8125rem;
+              }
+              
+              // Mobile responsive
+              @include mobile-only {
+                font-size: 0.8125rem;
+                white-space: normal; // Allow wrapping on mobile
+                overflow: visible;
+                text-overflow: clip;
+              }
+            }
+          }
+          
+          .carteira-item-meta {
+            display: flex;
+            align-items: center;
+            gap: $spacing-sm;
+            flex-shrink: 0;
+            
+            // Tablet responsive (768px - 1024px)
+            @include tablet-only {
+              gap: 6px;
+            }
+            
+            // Mobile responsive (< 768px)
+            @include mobile-only {
+              flex-direction: column;
+              align-items: flex-end;
+              gap: 4px;
             }
           }
           
@@ -482,7 +623,151 @@
             padding: 2px 8px;
             border-radius: 12px;
             flex-shrink: 0;
+            white-space: nowrap;
+            
+            // Mobile responsive
+            @include mobile-only {
+              font-size: 0.6875rem; // Slightly smaller on mobile
+              padding: 2px 6px;
+            }
+          }
+          
+          .carteira-process-count {
+            font-size: 0.75rem;
+            color: $text-secondary;
+            background: rgba($primary-electric-blue, 0.1);
+            padding: 2px 8px;
+            border-radius: 12px;
+            flex-shrink: 0;
+            white-space: nowrap;
+            
+            // Mobile responsive
+            @include mobile-only {
+              font-size: 0.6875rem; // Slightly smaller on mobile
+              padding: 2px 6px;
+            }
+          }
+          
+          .carteira-kpi-compact {
+            display: flex;
+            align-items: center;
+            gap: 6px;
             margin-left: $spacing-sm;
+            flex-shrink: 0;
+            padding: 4px 8px;
+            border-radius: 6px;
+            background: rgba(255, 255, 255, 0.03);
+            transition: all 0.2s ease;
+            cursor: help;
+            position: relative;
+            
+            &:hover {
+              background: rgba(255, 255, 255, 0.08);
+              transform: translateY(-1px);
+              box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+            }
+            
+            .kpi-value {
+              font-size: 0.875rem;
+              font-weight: 600;
+              color: $text-primary;
+              font-family: 'Urbanist', sans-serif;
+              white-space: nowrap;
+            }
+            
+            .kpi-icon {
+              font-size: 0.875rem;
+              color: #d4af37; // Golden color like in the prototype
+              flex-shrink: 0;
+            }
+            
+            // Color variants based on KPI status
+            &.kpi-green {
+              background: rgba(34, 197, 94, 0.1);
+              border: 1px solid rgba(34, 197, 94, 0.2);
+              
+              .kpi-value {
+                color: #22c55e;
+              }
+            }
+            
+            &.kpi-yellow {
+              background: rgba(234, 179, 8, 0.1);
+              border: 1px solid rgba(234, 179, 8, 0.2);
+              
+              .kpi-value {
+                color: #eab308;
+              }
+            }
+            
+            &.kpi-red {
+              background: rgba(239, 68, 68, 0.1);
+              border: 1px solid rgba(239, 68, 68, 0.2);
+              
+              .kpi-value {
+                color: #ef4444;
+              }
+            }
+            
+            &.kpi-default {
+              .kpi-value {
+                color: $text-primary;
+              }
+            }
+            
+            // Tablet responsive
+            @include tablet-only {
+              margin-left: 6px;
+              gap: 4px;
+              padding: 3px 6px;
+              
+              .kpi-value {
+                font-size: 0.8125rem;
+              }
+              
+              .kpi-icon {
+                font-size: 0.8125rem;
+              }
+            }
+            
+            // Mobile responsive
+            @include mobile-only {
+              margin-left: 0;
+              margin-top: 4px;
+              gap: 4px;
+              padding: 3px 6px;
+              
+              .kpi-value {
+                font-size: 0.75rem;
+              }
+              
+              .kpi-icon {
+                font-size: 0.75rem;
+              }
+            }
+          }
+          
+          .kpi-na {
+            font-size: 0.75rem;
+            color: rgba($text-secondary, 0.7);
+            font-style: italic;
+            opacity: 0.7;
+            flex-shrink: 0;
+            white-space: nowrap;
+            margin-left: $spacing-sm;
+            
+            // Tablet responsive
+            @include tablet-only {
+              font-size: 0.6875rem;
+              margin-left: 6px;
+            }
+            
+            // Mobile responsive
+            @include mobile-only {
+              font-size: 0.625rem;
+              margin-left: 0;
+              margin-top: 2px;
+            }
           }
         }
         

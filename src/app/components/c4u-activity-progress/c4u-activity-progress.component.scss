@@ -60,6 +60,18 @@
   }
 }
 
+.metric-static {
+  cursor: default;
+  text-align: left;
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  
+  // Add space for info button
+  padding-right: 32px;
+}
+
 .metric-icon {
   font-size: 24px;
   color: #9ca3af;

@@ -1,0 +1,25 @@
+<div 
+  class="info-button-wrapper" 
+  #buttonWrapper
+  (mouseenter)="onMouseEnter()" 
+  (mouseleave)="onMouseLeave()" 
+  (click)="onClick($event)">
+  <button 
+    type="button"
+    class="info-button"
+    [attr.aria-label]="'Informações sobre ' + infoKey"
+    [attr.aria-describedby]="'tooltip-' + infoKey">
+    <i class="ri-information-line" aria-hidden="true"></i>
+  </button>
+  
+  <div 
+    *ngIf="showTooltip && helpText"
+    class="info-tooltip"
+    [class]="'tooltip-' + computedPosition"
+    [id]="'tooltip-' + infoKey"
+    [ngStyle]="tooltipStyle"
+    role="tooltip">
+    <p>{{ helpText }}</p>
+  </div>
+</div>
+

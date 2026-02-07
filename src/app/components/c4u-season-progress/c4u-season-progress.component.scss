@@ -34,7 +34,11 @@
     .row-left {
       display: flex;
       align-items: center;
-      gap: 10px;
+      gap: 8px;
+      
+      c4u-info-button {
+        margin-left: 2px;
+      }
     }
 
     .icon {
@@ -52,6 +56,10 @@
 
       &.tarefas {
         color: #34d399; // Green for completed tasks
+      }
+
+      &.processos {
+        color: #34d399; // Green for completed processes
       }
     }
 

@@ -14,12 +14,18 @@ import { C4uSeletorMesModule } from '@components/c4u-seletor-mes/c4u-seletor-mes
 import { C4uGoalsProgressTabModule } from '@components/c4u-goals-progress-tab/c4u-goals-progress-tab.module';
 import { C4uProductivityAnalysisTabModule } from '@components/c4u-productivity-analysis-tab/c4u-productivity-analysis-tab.module';
 import { C4uTimePeriodSelectorModule } from '@components/c4u-time-period-selector/c4u-time-period-selector.module';
+import { C4uGraficoBarrasModule } from '@components/c4u-grafico-barras/c4u-grafico-barras.module';
 import { C4uDashboardNavigationModule } from '@components/c4u-dashboard-navigation/c4u-dashboard-navigation.module';
 import { C4uCardModule } from '@components/c4u-card/c4u-card.module';
 import { C4uShimmerModule } from '@components/c4u-shimmer/c4u-shimmer.module';
 import { C4uActivityProgressModule } from '@components/c4u-activity-progress/c4u-activity-progress.module';
+import { C4uInfoButtonModule } from '@components/c4u-info-button/c4u-info-button.module';
+import { C4uPointWalletModule } from '@components/c4u-point-wallet/c4u-point-wallet.module';
+import { C4uSeasonProgressModule } from '@components/c4u-season-progress/c4u-season-progress.module';
+import { C4uKpiCircularProgressModule } from '@components/c4u-kpi-circular-progress/c4u-kpi-circular-progress.module';
 import { ModalProgressListModule } from '@modals/modal-progress-list/modal-progress-list.module';
 import { ModalCarteiraModule } from '@modals/modal-carteira/modal-carteira.module';
+import { ModalCompanyCarteiraDetailModule } from '@modals/modal-company-carteira-detail/modal-company-carteira-detail.module';
 
 // Shared modules
 import { SharedModule } from '../../../shared.module';
@@ -49,13 +55,19 @@ const routes: Routes = [
     C4uGoalsProgressTabModule,
     C4uProductivityAnalysisTabModule,
     C4uTimePeriodSelectorModule,
+    C4uGraficoBarrasModule,
     C4uDashboardNavigationModule,
     C4uErrorMessageModule,
     C4uCardModule,
     C4uShimmerModule,
     C4uActivityProgressModule,
+    C4uInfoButtonModule,
+    C4uPointWalletModule,
+    C4uSeasonProgressModule,
+    C4uKpiCircularProgressModule,
     ModalProgressListModule,
-    ModalCarteiraModule
+    ModalCarteiraModule,
+    ModalCompanyCarteiraDetailModule
   ]
 })
 export class TeamManagementDashboardModule { }

@@ -1,0 +1,283 @@
+@import '../../../styles/variables.scss';
+@import '../../../styles/mixins.scss';
+
+.company-detail-content {
+  padding: $spacing-lg;
+  min-height: 400px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+
+  .loading-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: $spacing-xxl;
+    gap: $spacing-md;
+
+    .loading-icon {
+      font-size: 2rem;
+      color: $primary-electric-blue;
+      animation: spin 1s linear infinite;
+    }
+
+    span {
+      color: $text-secondary;
+      font-size: 0.875rem;
+    }
+  }
+
+  .content-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: $spacing-xl;
+    height: 100%;
+    min-height: 0; // Important for flexbox scrolling
+  }
+
+  .section-title {
+    font-family: 'Urbanist', sans-serif;
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: $text-primary;
+    margin-bottom: $spacing-lg;
+  }
+
+  // KPIs Section
+  .kpis-section {
+    .kpis-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: $spacing-lg;
+      justify-content: center;
+    }
+  }
+
+  // Tasks Section
+  .tasks-section {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0; // Important for flexbox scrolling
+
+    .loading-tasks {
+      display: flex;
+      align-items: center;
+      gap: $spacing-md;
+      padding: $spacing-lg;
+      justify-content: center;
+
+      .loading-icon {
+        font-size: 1.5rem;
+        color: $primary-electric-blue;
+        animation: spin 1s linear infinite;
+      }
+
+      span {
+        color: $text-secondary;
+      }
+    }
+
+    .empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: $spacing-xxl;
+      gap: $spacing-md;
+      color: $text-secondary;
+
+      .empty-icon {
+        font-size: 3rem;
+        opacity: 0.5;
+      }
+    }
+
+    .tasks-list {
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      min-height: 0; // Important for flexbox scrolling
+      overflow-y: auto; // Enable vertical scrolling
+      max-height: 500px; // Limit height to enable scrolling
+      border-radius: 8px;
+      
+      // Custom scrollbar styling
+      &::-webkit-scrollbar {
+        width: 8px;
+      }
+      
+      &::-webkit-scrollbar-track {
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 4px;
+      }
+      
+      &::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.2);
+        border-radius: 4px;
+        
+        &:hover {
+          background: rgba(255, 255, 255, 0.3);
+        }
+      }
+    }
+
+    .tasks-table {
+      display: flex;
+      flex-direction: column;
+      gap: $spacing-xs;
+      background: rgba(255, 255, 255, 0.02);
+      border-radius: 8px;
+
+      .task-header {
+        display: grid;
+        grid-template-columns: 2fr 1.5fr 1.5fr 1fr;
+        gap: $spacing-md;
+        padding: $spacing-md $spacing-lg;
+        background: #323339;
+        font-weight: 600;
+        font-size: 0.875rem;
+        color: $text-secondary;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        border-radius: 8px 8px 0 0;
+        margin-bottom: $spacing-xs;
+      }
+
+      .task-row {
+        display: grid;
+        grid-template-columns: 2fr 1.5fr 1.5fr 1fr;
+        gap: $spacing-md;
+        padding: $spacing-md $spacing-lg;
+        background: rgba(255, 255, 255, 0.02);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        transition: background 0.2s ease;
+
+        &:hover {
+          background: rgba(255, 255, 255, 0.05);
+        }
+
+        &:last-child {
+          border-bottom: none;
+        }
+
+        .task-col-title {
+          .task-title {
+            color: $text-primary;
+            font-weight: 500;
+          }
+        }
+
+        .task-col-executor {
+          .task-executor {
+            color: $text-secondary;
+            font-size: 0.875rem;
+          }
+        }
+
+        .task-col-date {
+          .task-date {
+            color: $text-secondary;
+            font-size: 0.875rem;
+          }
+        }
+
+        .task-col-status {
+          .task-status {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+
+            &.status-finalizado {
+              background: rgba(34, 197, 94, 0.2);
+              color: #22c55e;
+              border: 1px solid rgba(34, 197, 94, 0.3);
+            }
+
+            &.status-pendente {
+              background: rgba(234, 179, 8, 0.2);
+              color: #eab308;
+              border: 1px solid rgba(234, 179, 8, 0.3);
+            }
+
+            &.status-dispensado {
+              background: rgba(239, 68, 68, 0.2);
+              color: #ef4444;
+              border: 1px solid rgba(239, 68, 68, 0.3);
+            }
+
+            &.status-unknown {
+              background: rgba(255, 255, 255, 0.1);
+              color: $text-secondary;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  @include mobile-only {
+    padding: $spacing-md;
+
+    .tasks-table {
+      .task-header,
+      .task-row {
+        grid-template-columns: 1fr;
+        gap: $spacing-xs;
+      }
+
+      .task-header {
+        display: none; // Hide header on mobile
+      }
+
+      .task-row {
+        padding: $spacing-md;
+        border-radius: 8px;
+        margin-bottom: $spacing-sm;
+
+        .task-col-title::before {
+          content: 'Tarefa: ';
+          font-weight: 600;
+          color: $text-secondary;
+        }
+
+        .task-col-executor::before {
+          content: 'Executor: ';
+          font-weight: 600;
+          color: $text-secondary;
+        }
+
+        .task-col-date::before {
+          content: 'Data: ';
+          font-weight: 600;
+          color: $text-secondary;
+        }
+
+        .task-col-status::before {
+          content: 'Status: ';
+          font-weight: 600;
+          color: $text-secondary;
+        }
+      }
+    }
+  }
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+

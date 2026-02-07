@@ -155,6 +155,11 @@
             color: $text-secondary;
             transition: color $transition-duration $transition-easing;
           }
+
+          c4u-info-button {
+            flex-shrink: 0;
+            margin-left: 2px;
+          }
         }
 
         .metric-value {

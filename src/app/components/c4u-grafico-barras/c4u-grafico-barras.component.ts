@@ -154,19 +154,33 @@ export class C4uGraficoBarrasComponent implements AfterViewInit, OnChanges, OnDe
     if (this.datasets && this.datasets.length > 0) {
       const max = this.getMaxValue(this.datasets);
       
-      return this.datasets.map((dataset, index) => ({
-        label: dataset.label,
-        data: dataset.data,
-        borderWidth: 1,
-        borderColor: "transparent",
-        backgroundColor: (context: any) => {
-          return this.createGradient(context, max, dataset.borderColor, dataset.backgroundColor, index);
-        },
-        borderRadius: {
-          topLeft: 4,
-          topRight: 4
-        }
-      }));
+      return this.datasets.map((dataset, index) => {
+        // Check if backgroundColor is an array (for per-bar colors)
+        const isBackgroundColorArray = Array.isArray(dataset.backgroundColor);
+        const isBorderColorArray = Array.isArray(dataset.borderColor);
+        
+        return {
+          label: dataset.label,
+          data: dataset.data,
+          borderWidth: dataset.borderWidth || 1,
+          borderColor: isBorderColorArray ? dataset.borderColor : "transparent",
+          backgroundColor: isBackgroundColorArray 
+            ? dataset.backgroundColor 
+            : (context: any) => {
+                return this.createGradient(
+                  context, 
+                  max, 
+                  typeof dataset.borderColor === 'string' ? dataset.borderColor : "transparent",
+                  typeof dataset.backgroundColor === 'string' ? dataset.backgroundColor : "transparent",
+                  index
+                );
+              },
+          borderRadius: {
+            topLeft: 4,
+            topRight: 4
+          }
+        };
+      });
     }
 
     // Fall back to legacy values format
