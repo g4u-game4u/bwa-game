@@ -375,7 +375,7 @@ Use color picker tool to verify exact colors:
 - [ ] Error Red: #f44336
 - [ ] Text Primary: #ffffff
 - [ ] Text Secondary: #b0bec5
-- [ ] Primary Electric Blue: #3f51b5
+- [ ] Primary Electric Blue: #60a5fa
 
 ---
 

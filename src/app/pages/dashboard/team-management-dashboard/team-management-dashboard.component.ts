@@ -17,11 +17,14 @@ import { PlayerService } from '@services/player.service';
 import { ActionLogService } from '@services/action-log.service';
 import { UserProfileService } from '@services/user-profile.service';
 import { UserProfile } from '@utils/user-profile';
+import { CompanyDisplay, CompanyKpiService } from '@services/company-kpi.service';
+import { KPIData } from '@app/model/gamification-dashboard.model';
+import { KPIService } from '@services/kpi.service';
 
 // Models
 import { Team } from '@components/c4u-team-selector/c4u-team-selector.component';
 import { GoalMetric } from '@components/c4u-goals-progress-tab/c4u-goals-progress-tab.component';
-import { GraphDataPoint, ActivityMetrics, ProcessMetrics, ChartDataset } from '@app/model/gamification-dashboard.model';
+import { GraphDataPoint, ActivityMetrics, ProcessMetrics, ChartDataset, PointWallet, SeasonProgress } from '@app/model/gamification-dashboard.model';
 import { ProgressCardType } from '@components/c4u-activity-progress/c4u-activity-progress.component';
 import { ProgressListType } from '@modals/modal-progress-list/modal-progress-list.component';
 
@@ -65,7 +68,6 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
   selectedMonth: Date = new Date();
   selectedMonthsAgo: number = 0;
   activeTab: 'goals' | 'productivity' = 'goals';
-  productivityChartType: 'line' | 'bar' = 'line'; // Shared chart type for both productivity charts
   
   // Loading states
   isLoading: boolean = false;
@@ -88,6 +90,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
   // Data
   teams: Team[] = [];
   collaborators: Collaborator[] = [];
+  displayTeamName: string = ''; // Explicit property for team name display (for OnPush change detection)
   seasonPoints: TeamSeasonPoints = { total: 0, bloqueados: 0, desbloqueados: 0 };
   progressMetrics: TeamProgressMetrics = {
     processosIncompletos: 0,
@@ -95,12 +98,26 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
     processosFinalizados: 0
   };
   seasonDates: { start: Date; end: Date } = { start: new Date(), end: new Date() };
+  
+  // Formatted data for gamification dashboard components
+  teamPointWallet: PointWallet | null = null;
+  teamSeasonProgress: SeasonProgress | null = null;
+  teamKPIs: KPIData[] = [];
+  isLoadingKPIs: boolean = false;
   goalMetrics: GoalMetric[] = [];
   graphData: GraphDataPoint[] = []; // Activities data
   graphDatasets: ChartDataset[] = []; // Multiple datasets for team members (one line per player) - Activities
   pointsGraphData: GraphDataPoint[] = []; // Points data
   pointsGraphDatasets: ChartDataset[] = []; // Multiple datasets for team members (one line per player) - Points
   selectedPeriod: number = 30;
+  
+  // Bar charts data for collaborator comparison
+  activitiesByCollaboratorGraphData: GraphDataPoint[] = [];
+  activitiesByCollaboratorDatasets: ChartDataset[] = [];
+  activitiesByCollaboratorLabels: string[] = [];
+  pointsByCollaboratorGraphData: GraphDataPoint[] = [];
+  pointsByCollaboratorDatasets: ChartDataset[] = [];
+  pointsByCollaboratorLabels: string[] = [];
   
   // Team aggregated data from members
   teamTotalPoints: number = 0;
@@ -124,8 +141,15 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
   };
   
   // Company/Carteira data for team
-  teamCarteiraClientes: { cnpj: string; actionCount: number }[] = [];
+  teamCarteiraClientes: CompanyDisplay[] = [];
   isLoadingCarteira: boolean = false;
+  
+  // Monthly points breakdown
+  monthlyPointsBreakdown: { bloqueados: number; desbloqueados: number } | null = null;
+  
+  // Company detail modal state
+  isCompanyCarteiraDetailModalOpen: boolean = false;
+  selectedCarteiraCompany: CompanyDisplay | null = null;
   
   // Modal states
   isProgressModalOpen: boolean = false;
@@ -137,6 +161,10 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
   
   // Accessibility properties
   screenReaderAnnouncement: string = '';
+  private focusedElementBeforeModal: HTMLElement | null = null;
+  
+  // Sidebar collapse state
+  sidebarCollapsed: boolean = false;
   
   // Cleanup
   private destroy$ = new Subject<void>();
@@ -151,6 +179,8 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
     private playerService: PlayerService,
     private actionLogService: ActionLogService,
     private userProfileService: UserProfileService,
+    private companyKpiService: CompanyKpiService,
+    private kpiService: KPIService,
     private router: Router,
     private cdr: ChangeDetectorRef
   ) {}
@@ -589,14 +619,21 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
         // Then, load team activity and macro data (needed for sidebar aggregation)
         await this.loadTeamActivityAndMacroData(dateRange);
         
-        // Finally, load other data in parallel
+        // Load data in parallel, but KPIs need carteira data first
         await Promise.all([
           this.loadSidebarData(dateRange),
           this.loadCollaborators(),
           this.loadGoalsData(dateRange),
           this.loadProductivityData(dateRange),
-          this.loadTeamCarteiraData(dateRange)
+          this.loadMonthlyPointsBreakdown()
         ]);
+        
+        // Load carteira data first, then KPIs (which depend on carteira)
+        await this.loadTeamCarteiraData(dateRange);
+        await this.loadTeamKPIs();
+        
+        // Update team name display after loading collaborators
+        this.updateTeamNameDisplay();
       }
       
       this.lastRefresh = new Date();
@@ -622,14 +659,21 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
     try {
       console.log('👤 Loading data for collaborator:', collaboratorId);
       
-      // Load all collaborator-specific data in parallel
+      // Load collaborator-specific data in parallel
       await Promise.all([
         this.loadCollaboratorSidebarData(collaboratorId, dateRange),
         this.loadCollaborators(), // Still load collaborators list
         this.loadCollaboratorGoalsData(collaboratorId, dateRange),
         this.loadCollaboratorProductivityData(collaboratorId, dateRange),
-        this.loadCollaboratorCarteiraData(collaboratorId, dateRange)
+        this.loadMonthlyPointsBreakdown(collaboratorId)
       ]);
+      
+      // Load carteira data first, then KPIs (which depend on carteira)
+      await this.loadCollaboratorCarteiraData(collaboratorId, dateRange);
+      await this.loadTeamKPIs(collaboratorId);
+      
+      // Update team name display after loading collaborators
+      this.updateTeamNameDisplay();
       
       console.log('✅ Collaborator data loaded for:', collaboratorId);
     } catch (error) {
@@ -796,6 +840,9 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       this.teamTotalTasks = Math.floor(metrics.activity.finalizadas);
       this.teamTotalBlockedPoints = Math.floor(blockedPoints);
       
+      // Update formatted data for gamification dashboard components
+      this.updateFormattedSidebarData();
+      
       this.isLoadingSidebar = false;
       
       console.log('✅ Collaborator sidebar data loaded:', {
@@ -877,6 +924,9 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
         atividadesFinalizadas: Math.floor(this.teamActivityMetrics.finalizadas || this.teamTotalTasks || metrics.atividadesFinalizadas),
         processosFinalizados: Math.floor(this.teamProcessMetrics.finalizadas || metrics.processosFinalizados)
       };
+      
+      // Update formatted data for gamification dashboard components
+      this.updateFormattedSidebarData();
       
       this.isLoadingSidebar = false;
       
@@ -1150,6 +1200,18 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
         }
       ];
       
+      // Calculate totals for single collaborator bar charts
+      const activitiesTotal = dataPoints.reduce((sum, point) => sum + point.value, 0);
+      this.activitiesByCollaboratorGraphData = [{ date: new Date(), value: activitiesTotal }];
+      this.activitiesByCollaboratorDatasets = [{
+        label: 'Total de Atividades',
+        data: [activitiesTotal],
+        backgroundColor: ['rgba(79, 70, 229, 0.6)'],
+        borderColor: ['rgba(79, 70, 229, 1)'],
+        borderWidth: 1
+      }];
+      this.activitiesByCollaboratorLabels = [memberName];
+      
       // Load points data for the same period
       await this.loadCollaboratorPointsData(collaboratorId, startDate, endDate, memberName);
       
@@ -1165,6 +1227,12 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       this.graphDatasets = [];
       this.pointsGraphData = [];
       this.pointsGraphDatasets = [];
+      this.activitiesByCollaboratorGraphData = [];
+      this.activitiesByCollaboratorDatasets = [];
+      this.activitiesByCollaboratorLabels = [];
+      this.pointsByCollaboratorGraphData = [];
+      this.pointsByCollaboratorDatasets = [];
+      this.pointsByCollaboratorLabels = [];
       this.hasProductivityError = true;
       this.productivityErrorMessage = 'Erro ao carregar dados de produtividade';
       this.isLoadingProductivity = false;
@@ -1261,6 +1329,18 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
         }
       ];
       
+      // Calculate totals for single collaborator points bar chart
+      const pointsTotal = Math.floor(pointsDataPoints.reduce((sum, point) => sum + point.value, 0));
+      this.pointsByCollaboratorGraphData = [{ date: new Date(), value: pointsTotal }];
+      this.pointsByCollaboratorDatasets = [{
+        label: 'Total de Pontos',
+        data: [pointsTotal],
+        backgroundColor: ['rgba(16, 185, 129, 0.6)'],
+        borderColor: ['rgba(16, 185, 129, 1)'],
+        borderWidth: 1
+      }];
+      this.pointsByCollaboratorLabels = [memberName];
+      
       console.log('✅ Collaborator points data loaded:', {
         dataPoints: pointsDataPoints.length,
         totalPoints: pointsDataPoints.reduce((sum, p) => sum + p.value, 0)
@@ -1289,6 +1369,12 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
         this.graphDatasets = [];
         this.pointsGraphData = [];
         this.pointsGraphDatasets = [];
+        this.activitiesByCollaboratorGraphData = [];
+        this.activitiesByCollaboratorDatasets = [];
+        this.activitiesByCollaboratorLabels = [];
+        this.pointsByCollaboratorGraphData = [];
+        this.pointsByCollaboratorDatasets = [];
+        this.pointsByCollaboratorLabels = [];
         this.isLoadingProductivity = false;
         return;
       }
@@ -1502,11 +1588,18 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
           
           this.graphData = aggregatedActivities;
           this.pointsGraphData = aggregatedPoints;
+          
+          // Calculate totals by collaborator for bar charts
+          this.calculateCollaboratorTotals(validMemberData);
         } else {
           this.graphData = [];
           this.graphDatasets = [];
           this.pointsGraphData = [];
           this.pointsGraphDatasets = [];
+          this.activitiesByCollaboratorGraphData = [];
+          this.activitiesByCollaboratorDatasets = [];
+          this.pointsByCollaboratorGraphData = [];
+          this.pointsByCollaboratorDatasets = [];
         }
         
         this.hasProductivityError = false;
@@ -1514,27 +1607,119 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
         this.cdr.markForCheck();
       } catch (error) {
         console.error('Error loading productivity data:', error);
-        this.graphData = [];
-        this.graphDatasets = [];
-        this.pointsGraphData = [];
-        this.pointsGraphDatasets = [];
-        this.hasProductivityError = true;
-        this.productivityErrorMessage = 'Erro ao carregar dados de produtividade';
-        this.toastService.error('Erro ao carregar dados de produtividade');
-      } finally {
-        this.isLoadingProductivity = false;
-      }
-    } catch (error) {
-      console.error('Error in loadProductivityData:', error);
       this.graphData = [];
       this.graphDatasets = [];
       this.pointsGraphData = [];
       this.pointsGraphDatasets = [];
+      this.activitiesByCollaboratorGraphData = [];
+      this.activitiesByCollaboratorDatasets = [];
+      this.pointsByCollaboratorGraphData = [];
+      this.pointsByCollaboratorDatasets = [];
       this.hasProductivityError = true;
       this.productivityErrorMessage = 'Erro ao carregar dados de produtividade';
+      this.toastService.error('Erro ao carregar dados de produtividade');
+    } finally {
       this.isLoadingProductivity = false;
     }
+  } catch (error) {
+    console.error('Error in loadProductivityData:', error);
+    this.graphData = [];
+    this.graphDatasets = [];
+    this.pointsGraphData = [];
+    this.pointsGraphDatasets = [];
+    this.activitiesByCollaboratorGraphData = [];
+    this.activitiesByCollaboratorDatasets = [];
+    this.pointsByCollaboratorGraphData = [];
+    this.pointsByCollaboratorDatasets = [];
+    this.hasProductivityError = true;
+    this.productivityErrorMessage = 'Erro ao carregar dados de produtividade';
+    this.isLoadingProductivity = false;
   }
+}
+
+/**
+ * Calculate total activities and points by collaborator for bar charts
+ */
+private calculateCollaboratorTotals(memberData: Array<{ 
+  memberId: string; 
+  memberName: string; 
+  activitiesDataPoints: GraphDataPoint[]; 
+  pointsDataPoints: GraphDataPoint[] 
+}>): void {
+  // Calculate totals for each collaborator
+  const activitiesTotals: Array<{ name: string; total: number }> = [];
+  const pointsTotals: Array<{ name: string; total: number }> = [];
+  
+  memberData.forEach(member => {
+    const activitiesTotal = member.activitiesDataPoints.reduce((sum, point) => sum + point.value, 0);
+    const pointsTotal = member.pointsDataPoints.reduce((sum, point) => sum + point.value, 0);
+    
+    activitiesTotals.push({
+      name: member.memberName,
+      total: activitiesTotal
+    });
+    
+    pointsTotals.push({
+      name: member.memberName,
+      total: Math.floor(pointsTotal) // Round down points
+    });
+  });
+  
+  // Sort by total (descending) for better visualization
+  activitiesTotals.sort((a, b) => b.total - a.total);
+  pointsTotals.sort((a, b) => b.total - a.total);
+  
+  // Create graph data and datasets for activities by collaborator
+  this.activitiesByCollaboratorGraphData = activitiesTotals.map((item, index) => ({
+    date: new Date(2024, 0, index + 1), // Dummy date, not used in bar chart
+    value: item.total
+  }));
+  
+  this.activitiesByCollaboratorDatasets = [{
+    label: 'Total de Atividades',
+    data: activitiesTotals.map(item => item.total),
+    backgroundColor: activitiesTotals.map((_, index) => {
+      const colors = this.getColorForIndex(index);
+      return colors.background;
+    }),
+    borderColor: activitiesTotals.map((_, index) => {
+      const colors = this.getColorForIndex(index);
+      return colors.border;
+    }),
+    borderWidth: 1
+  }];
+  
+  // Create graph data and datasets for points by collaborator
+  this.pointsByCollaboratorGraphData = pointsTotals.map((item, index) => ({
+    date: new Date(2024, 0, index + 1), // Dummy date, not used in bar chart
+    value: item.total
+  }));
+  
+  this.pointsByCollaboratorDatasets = [{
+    label: 'Total de Pontos',
+    data: pointsTotals.map(item => item.total),
+    backgroundColor: pointsTotals.map((_, index) => {
+      const colors = this.getColorForIndex(index);
+      return colors.background;
+    }),
+    borderColor: pointsTotals.map((_, index) => {
+      const colors = this.getColorForIndex(index);
+      return colors.border;
+    }),
+    borderWidth: 1
+  }];
+  
+  // Store collaborator names for chart labels
+  this.activitiesByCollaboratorLabels = activitiesTotals.map(item => item.name);
+  this.pointsByCollaboratorLabels = pointsTotals.map(item => item.name);
+  
+  console.log('✅ Collaborator totals calculated:', {
+    activities: activitiesTotals,
+    points: pointsTotals,
+    activitiesLabels: this.activitiesByCollaboratorLabels,
+    pointsLabels: this.pointsByCollaboratorLabels
+  });
+}
 
   /**
    * Get color for dataset by index (cycling through palette)
@@ -1645,7 +1830,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       this.isLoadingCarteira = true;
       console.log('📊 Loading carteira data for collaborator:', collaboratorId);
       
-      // Get CNPJ list with action counts for the collaborator
+      // Get CNPJ list with action counts and process counts for the collaborator
       const carteiraData = await firstValueFrom(
         this.actionLogService.getPlayerCnpjListWithCount(collaboratorId, this.selectedMonth)
           .pipe(takeUntil(this.destroy$))
@@ -1654,7 +1839,24 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
         return [];
       });
       
-      this.teamCarteiraClientes = carteiraData;
+      // Enrich with KPI data
+      const enrichedClientes = await firstValueFrom(
+        this.companyKpiService.enrichCompaniesWithKpis(carteiraData)
+          .pipe(takeUntil(this.destroy$))
+      ).catch((error) => {
+        console.error(`Error enriching carteira data for collaborator ${collaboratorId}:`, error);
+        // Return data without KPI enrichment on error
+        return carteiraData.map(item => ({
+          cnpj: item.cnpj,
+          actionCount: item.actionCount,
+          processCount: item.processCount
+        } as CompanyDisplay));
+      });
+      
+      this.teamCarteiraClientes = enrichedClientes;
+      
+      // Update formatted sidebar data after carteira is loaded (for clientes count)
+      this.updateFormattedSidebarData();
       
       console.log('✅ Collaborator carteira data loaded:', this.teamCarteiraClientes.length, 'unique CNPJs');
       console.log('✅ Total actions across all CNPJs:', 
@@ -1707,22 +1909,50 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       
       const allMemberCarteiras = await Promise.all(memberCarteiraPromises);
       
-      // Aggregate CNPJs and sum action counts across all members
-      const cnpjMap = new Map<string, number>();
+      // Aggregate CNPJs and sum action counts and process counts across all members
+      const cnpjMap = new Map<string, { actionCount: number; processCount: number }>();
       
       allMemberCarteiras.forEach((memberCarteira) => {
-        memberCarteira.forEach(({ cnpj, actionCount }) => {
+        memberCarteira.forEach(({ cnpj, actionCount, processCount }) => {
           if (cnpj) {
-            const currentCount = cnpjMap.get(cnpj) || 0;
-            cnpjMap.set(cnpj, currentCount + actionCount);
+            const existing = cnpjMap.get(cnpj);
+            if (existing) {
+              existing.actionCount += actionCount;
+              existing.processCount += processCount;
+            } else {
+              cnpjMap.set(cnpj, { actionCount, processCount });
+            }
           }
         });
       });
       
-      // Convert map to array and sort by count (descending)
-      this.teamCarteiraClientes = Array.from(cnpjMap.entries())
-        .map(([cnpj, actionCount]) => ({ cnpj, actionCount }))
+      // Convert map to array format for enrichCompaniesWithKpis
+      const aggregatedCarteira = Array.from(cnpjMap.entries())
+        .map(([cnpj, counts]) => ({ 
+          cnpj, 
+          actionCount: counts.actionCount,
+          processCount: counts.processCount
+        }))
         .sort((a, b) => b.actionCount - a.actionCount);
+      
+      // Enrich with KPI data
+      const enrichedClientes = await firstValueFrom(
+        this.companyKpiService.enrichCompaniesWithKpis(aggregatedCarteira)
+          .pipe(takeUntil(this.destroy$))
+      ).catch((error) => {
+        console.error('Error enriching team carteira data:', error);
+        // Return data without KPI enrichment on error
+        return aggregatedCarteira.map(item => ({
+          cnpj: item.cnpj,
+          actionCount: item.actionCount,
+          processCount: item.processCount
+        } as CompanyDisplay));
+      });
+      
+      this.teamCarteiraClientes = enrichedClientes;
+      
+      // Update formatted sidebar data after carteira is loaded (for clientes count)
+      this.updateFormattedSidebarData();
       
       console.log('✅ Team carteira data loaded (aggregated from', this.teamMemberIds.length, 'members):', 
         this.teamCarteiraClientes.length, 'unique CNPJs');
@@ -1772,6 +2002,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       // Set selected team ID and name
       this.selectedTeamId = teamId;
       this.selectedTeam = team.name;
+      this.displayTeamName = team.name; // Update display name
       
       // Reset collaborator filter
       this.selectedCollaborator = null;
@@ -1817,6 +2048,9 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
   async onCollaboratorChange(userId: string | null): Promise<void> {
     this.selectedCollaborator = userId;
     
+    // Update team name display immediately
+    this.updateTeamNameDisplay();
+    
     if (userId) {
       console.log('👤 Filtering data for collaborator:', userId);
     } else {
@@ -1827,6 +2061,35 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
     if (this.selectedTeamId) {
       await this.loadTeamData();
     }
+  }
+
+  /**
+   * Update team name display based on current selection
+   * This ensures the team name is correctly displayed when switching between collaborator and team view
+   */
+  private updateTeamNameDisplay(): void {
+    // Calculate and update displayTeamName explicitly
+    if (this.selectedCollaborator) {
+      const collaborator = this.collaborators.find(c => c.userId === this.selectedCollaborator);
+      this.displayTeamName = collaborator?.name || this.selectedCollaborator || '';
+    } else {
+      // Show team name
+      if (this.selectedTeam && this.selectedTeam.trim().length > 0) {
+        this.displayTeamName = this.selectedTeam;
+      } else if (this.selectedTeamId) {
+        const team = this.teams.find(t => t.id === this.selectedTeamId);
+        if (team && team.name) {
+          this.selectedTeam = team.name;
+          this.displayTeamName = team.name;
+        } else {
+          this.displayTeamName = this.selectedTeamId;
+        }
+      } else {
+        this.displayTeamName = '';
+      }
+    }
+    // Force change detection
+    this.cdr.markForCheck();
   }
 
   /**
@@ -1870,14 +2133,6 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
     this.loadProductivityData(dateRange);
   }
 
-  /**
-   * Handle chart type change from productivity tab
-   * Updates the shared chart type for both productivity charts
-   */
-  onChartTypeChange(chartType: 'line' | 'bar'): void {
-    this.productivityChartType = chartType;
-    this.cdr.markForCheck();
-  }
 
   /**
    * Switch active tab
@@ -1949,18 +2204,23 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
     // If a collaborator is selected, show their name
     if (this.selectedCollaborator) {
       const collaborator = this.collaborators.find(c => c.userId === this.selectedCollaborator);
-      return collaborator?.name || this.selectedCollaborator;
+      return collaborator?.name || this.selectedCollaborator || '';
     }
     
     // If selectedTeam is already set (team name), return it
-    if (this.selectedTeam) {
+    if (this.selectedTeam && this.selectedTeam.trim().length > 0) {
       return this.selectedTeam;
     }
     
     // Otherwise, look it up from teams array using selectedTeamId
     if (this.selectedTeamId) {
       const team = this.teams.find(t => t.id === this.selectedTeamId);
-      return team ? team.name : this.selectedTeamId;
+      if (team && team.name) {
+        // Update selectedTeam for consistency
+        this.selectedTeam = team.name;
+        return team.name;
+      }
+      return this.selectedTeamId;
     }
     
     return '';
@@ -2048,11 +2308,312 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
   }
 
   /**
+   * Load monthly points breakdown (bloqueados and desbloqueados)
+   * For team: aggregates breakdown from all team members
+   * For collaborator: fetches breakdown for specific collaborator
+   * 
+   * @private
+   * @async
+   * @param collaboratorId - Optional collaborator ID. If provided, loads for that collaborator only. Otherwise, aggregates for team.
+   * @returns Promise that resolves when monthly points breakdown is loaded
+   */
+  private async loadMonthlyPointsBreakdown(collaboratorId?: string): Promise<void> {
+    try {
+      if (collaboratorId) {
+        // Load for specific collaborator
+        const breakdown = await firstValueFrom(
+          this.actionLogService.getMonthlyPointsBreakdown(collaboratorId, this.selectedMonth)
+            .pipe(takeUntil(this.destroy$))
+        ).catch((error) => {
+          console.error(`Error loading monthly points breakdown for collaborator ${collaboratorId}:`, error);
+          return { bloqueados: 0, desbloqueados: 0 };
+        });
+        
+        this.monthlyPointsBreakdown = breakdown;
+      } else {
+        // Aggregate for all team members
+        if (this.teamMemberIds.length === 0) {
+          this.monthlyPointsBreakdown = { bloqueados: 0, desbloqueados: 0 };
+          return;
+        }
+        
+        const memberBreakdownPromises = this.teamMemberIds.map(memberId =>
+          firstValueFrom(
+            this.actionLogService.getMonthlyPointsBreakdown(memberId, this.selectedMonth)
+              .pipe(takeUntil(this.destroy$))
+          ).catch((error) => {
+            console.error(`Error loading monthly points breakdown for member ${memberId}:`, error);
+            return { bloqueados: 0, desbloqueados: 0 };
+          })
+        );
+        
+        const allBreakdowns = await Promise.all(memberBreakdownPromises);
+        
+        // Aggregate breakdowns
+        const totalBloqueados = allBreakdowns.reduce((sum, breakdown) => sum + breakdown.bloqueados, 0);
+        const totalDesbloqueados = allBreakdowns.reduce((sum, breakdown) => sum + breakdown.desbloqueados, 0);
+        
+        this.monthlyPointsBreakdown = {
+          bloqueados: Math.floor(totalBloqueados),
+          desbloqueados: Math.floor(totalDesbloqueados)
+        };
+      }
+      
+      console.log('✅ Monthly points breakdown loaded:', this.monthlyPointsBreakdown);
+      this.cdr.markForCheck();
+    } catch (error) {
+      console.error('Error loading monthly points breakdown:', error);
+      this.monthlyPointsBreakdown = { bloqueados: 0, desbloqueados: 0 };
+      this.cdr.markForCheck();
+    }
+  }
+
+  /**
    * Get team player IDs as comma-separated string for modal
    * The modal expects a single playerId, but we'll pass all team member IDs
    */
   get teamPlayerIdsForModal(): string {
     return this.teamMemberIds.join(',');
+  }
+
+  /**
+   * Toggle sidebar collapsed state
+   */
+  toggleSidebar(): void {
+    this.sidebarCollapsed = !this.sidebarCollapsed;
+    this.announceToScreenReader(this.sidebarCollapsed ? 'Menu recolhido' : 'Menu expandido');
+  }
+
+  /**
+   * Format KPI value as integer with percentage sign
+   */
+  formatKpiValue(value: number): string {
+    return `${Math.round(value)}%`;
+  }
+
+  /**
+   * Get tooltip text showing current value vs target
+   */
+  getKpiTooltip(kpi: KPIData): string {
+    const current = Math.round(kpi.current);
+    const target = Math.round(kpi.target);
+    return `${current}% de ${target}%`;
+  }
+
+  /**
+   * Extract company name from CNPJ string
+   * Format: "COMPANY NAME l CODE [ID|SUFFIX]"
+   * Returns: Company name without the code and ID parts
+   */
+  getCompanyDisplayName(cnpj: string): string {
+    if (!cnpj) {
+      return '';
+    }
+    // Extract text before " l " separator
+    const match = cnpj.match(/^([^l]+)/);
+    return match ? match[1].trim() : cnpj;
+  }
+
+  /**
+   * Open company detail modal
+   */
+  openCompanyDetailModal(company: CompanyDisplay): void {
+    this.selectedCarteiraCompany = company;
+    this.isCompanyCarteiraDetailModalOpen = true;
+    this.focusedElementBeforeModal = document.activeElement as HTMLElement;
+    const companyName = this.getCompanyDisplayName(company.cnpj);
+    this.announceToScreenReader(`Abrindo detalhes de ${companyName}`);
+  }
+
+  /**
+   * Handle company carteira detail modal close
+   */
+  onCompanyCarteiraDetailModalClosed(): void {
+    const companyName = this.selectedCarteiraCompany 
+      ? this.getCompanyDisplayName(this.selectedCarteiraCompany.cnpj) 
+      : 'empresa';
+    this.isCompanyCarteiraDetailModalOpen = false;
+    this.selectedCarteiraCompany = null;
+    this.announceToScreenReader(`Modal de ${companyName} fechado`);
+    
+    // Restore focus to the element that was focused before the modal opened
+    if (this.focusedElementBeforeModal) {
+      setTimeout(() => {
+        this.focusedElementBeforeModal?.focus();
+        this.focusedElementBeforeModal = null;
+      }, 100);
+    }
+  }
+
+  /**
+   * Announce message to screen reader
+   */
+  private announceToScreenReader(message: string): void {
+    this.screenReaderAnnouncement = message;
+    this.cdr.markForCheck();
+    // Clear after announcement
+    setTimeout(() => {
+      this.screenReaderAnnouncement = '';
+      this.cdr.markForCheck();
+    }, 1000);
+  }
+
+  /**
+   * Load team KPIs
+   * Calculates:
+   * 1. Total de empresas da carteira (atual) vs soma das metas dos colaboradores (target)
+   * 2. KPI de processos no prazo: média dos processos no prazo de todos os usuários no time
+   */
+  private async loadTeamKPIs(collaboratorId?: string): Promise<void> {
+    try {
+      this.isLoadingKPIs = true;
+      
+      if (collaboratorId) {
+        // For single collaborator, use their KPIs
+        const kpis = await firstValueFrom(
+          this.kpiService.getPlayerKPIs(collaboratorId, this.selectedMonth, this.actionLogService)
+            .pipe(takeUntil(this.destroy$))
+        );
+        this.teamKPIs = kpis || [];
+      } else {
+        // For team, aggregate KPIs from all members
+        const teamKPIs: KPIData[] = [];
+        
+        if (this.teamMemberIds.length === 0) {
+          this.teamKPIs = [];
+          this.isLoadingKPIs = false;
+          this.cdr.markForCheck();
+          return;
+        }
+        
+        // Load KPIs for all team members in parallel
+        const kpiPromises = this.teamMemberIds.map(memberId =>
+          firstValueFrom(
+            this.kpiService.getPlayerKPIs(memberId, this.selectedMonth, this.actionLogService)
+              .pipe(takeUntil(this.destroy$))
+          ).catch(error => {
+            console.error(`Error loading KPIs for member ${memberId}:`, error);
+            return [];
+          })
+        );
+        
+        const allMemberKPIs = await Promise.all(kpiPromises);
+        
+        // Aggregate KPIs
+        // 1. Clientes na Carteira: total atual vs soma das metas
+        const empresasKPIs = allMemberKPIs
+          .flat()
+          .filter(kpi => kpi.id === 'numero-empresas');
+        
+        const totalEmpresasAtual = this.teamCarteiraClientes.length;
+        const somaMetasEmpresas = empresasKPIs.reduce((sum, kpi) => sum + (kpi.target || 0), 0);
+        
+        if (empresasKPIs.length > 0 || totalEmpresasAtual > 0) {
+          teamKPIs.push({
+            id: 'numero-empresas',
+            label: 'Clientes na Carteira',
+            current: totalEmpresasAtual,
+            target: somaMetasEmpresas || 10, // Fallback to 10 if no targets
+            superTarget: Math.max(somaMetasEmpresas * 1.5, 15), // 1.5x target as super target
+            unit: 'clientes',
+            color: this.getKPIColorByGoals(totalEmpresasAtual, somaMetasEmpresas || 10, Math.max(somaMetasEmpresas * 1.5, 15)),
+            percentage: Math.min((totalEmpresasAtual / Math.max(somaMetasEmpresas * 1.5, 15)) * 100, 100)
+          });
+        }
+        
+        // 2. Entregas no Prazo: média dos processos no prazo de todos os usuários
+        const entregasKPIs = allMemberKPIs
+          .flat()
+          .filter(kpi => kpi.id === 'entregas-prazo');
+        
+        if (entregasKPIs.length > 0) {
+          const mediaEntregas = entregasKPIs.reduce((sum, kpi) => sum + kpi.current, 0) / entregasKPIs.length;
+          const targetEntregas = entregasKPIs[0]?.target || 80;
+          const superTargetEntregas = entregasKPIs[0]?.superTarget || 90;
+          
+          teamKPIs.push({
+            id: 'entregas-prazo',
+            label: 'Entregas no Prazo',
+            current: Math.round(mediaEntregas * 100) / 100, // Round to 2 decimals
+            target: targetEntregas,
+            superTarget: superTargetEntregas,
+            unit: '%',
+            color: this.getKPIColorByGoals(mediaEntregas, targetEntregas, superTargetEntregas),
+            percentage: Math.min((mediaEntregas / superTargetEntregas) * 100, 100)
+          });
+        }
+        
+        this.teamKPIs = teamKPIs;
+      }
+      
+      this.isLoadingKPIs = false;
+      this.cdr.markForCheck();
+    } catch (error) {
+      console.error('Error loading team KPIs:', error);
+      this.teamKPIs = [];
+      this.isLoadingKPIs = false;
+      this.cdr.markForCheck();
+    }
+  }
+
+  /**
+   * Get KPI color based on goals (red/yellow/green)
+   */
+  private getKPIColorByGoals(current: number, target: number, superTarget: number): 'red' | 'yellow' | 'green' {
+    if (current >= superTarget) {
+      return 'green';
+    } else if (current >= target) {
+      return 'yellow';
+    } else {
+      return 'red';
+    }
+  }
+
+  /**
+   * Round value for KPI display
+   */
+  roundValue(value: number): number {
+    return Math.round(value);
+  }
+
+  /**
+   * Track by function for KPI list
+   */
+  trackByKpiId(index: number, kpi: KPIData): string {
+    return kpi.id;
+  }
+
+  /**
+   * Update formatted sidebar data for gamification dashboard components
+   * Converts team data to PointWallet and SeasonProgress formats
+   */
+  private updateFormattedSidebarData(): void {
+    // Convert seasonPoints to PointWallet format
+    // Note: moedas is not available for teams, so we set it to 0
+    this.teamPointWallet = {
+      bloqueados: this.seasonPoints?.bloqueados || 0,
+      desbloqueados: this.seasonPoints?.desbloqueados || 0,
+      moedas: 0 // Teams don't have moedas, only individual players
+    };
+    
+    // Convert progressMetrics to SeasonProgress format
+    // For teams, we use:
+    // - metas: Not applicable for teams, so we use 0/0
+    // - clientes: Count of unique CNPJs from teamCarteiraClientes
+    // - tarefasFinalizadas: atividadesFinalizadas from progressMetrics
+    const uniqueClientes = this.teamCarteiraClientes?.length || 0;
+    
+    this.teamSeasonProgress = {
+      metas: {
+        current: 0, // Not applicable for teams
+        target: 0  // Not applicable for teams
+      },
+      clientes: uniqueClientes,
+      tarefasFinalizadas: this.progressMetrics?.atividadesFinalizadas || 0,
+      seasonDates: this.seasonDates
+    };
+    
+    this.cdr.markForCheck();
   }
 
   /**

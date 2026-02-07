@@ -9,6 +9,7 @@
       <div class="row-left">
         <i class="ri-focus-3-line icon metas"></i>
         <span class="label">Metas</span>
+        <c4u-info-button infoKey="metas" position="top"></c4u-info-button>
       </div>
       <span class="value">{{ progress.metas.current }} / {{ progress.metas.target }}</span>
     </div>
@@ -17,6 +18,7 @@
       <div class="row-left">
         <i class="ri-building-line icon clientes"></i>
         <span class="label">Clientes</span>
+        <c4u-info-button infoKey="clientes" position="top"></c4u-info-button>
       </div>
       <span class="value">{{ progress.clientes | number:'1.0-0':'pt-BR' }}</span>
     </div>
@@ -25,8 +27,18 @@
       <div class="row-left">
         <i class="ri-checkbox-circle-line icon tarefas"></i>
         <span class="label">Tarefas Finalizadas</span>
+        <c4u-info-button infoKey="tarefas-finalizadas" position="top"></c4u-info-button>
       </div>
       <span class="value">{{ progress.tarefasFinalizadas | number:'1.0-0':'pt-BR' }}</span>
+    </div>
+
+    <div class="progress-row" *ngIf="processosFinalizados !== undefined">
+      <div class="row-left">
+        <i class="ri-check-double-line icon processos"></i>
+        <span class="label">Processos Finalizados</span>
+        <c4u-info-button infoKey="processos-finalizados" position="top"></c4u-info-button>
+      </div>
+      <span class="value">{{ processosFinalizados | number:'1.0-0':'pt-BR' }}</span>
     </div>
   </div>
 </div>

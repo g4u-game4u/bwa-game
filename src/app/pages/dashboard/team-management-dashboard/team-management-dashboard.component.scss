@@ -3,7 +3,7 @@
 
 .team-management-dashboard {
   display: grid;
-  grid-template-columns: 320px 1fr;
+  grid-template-columns: 380px 1fr;
   gap: $spacing-lg;
   padding: $spacing-lg;
   min-height: 100vh;
@@ -15,7 +15,7 @@
   @include fade-in;
   
   @include tablet-only {
-    grid-template-columns: 280px 1fr;
+    grid-template-columns: 320px 1fr;
     gap: $spacing-md;
   }
   
@@ -25,6 +25,50 @@
     height: auto;
     min-height: 100vh;
     overflow: visible;
+    
+    &.sidebar-collapsed {
+      grid-template-columns: 1fr;
+    }
+  }
+  
+  // Collapsed sidebar state
+  &.sidebar-collapsed {
+    grid-template-columns: 56px 1fr;
+    
+    .dashboard-sidebar {
+      overflow: visible;
+      
+      .sidebar-card {
+        width: 56px;
+        min-width: 56px;
+        overflow: visible;
+      }
+      
+      .sidebar-content {
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+        width: 0;
+        overflow: hidden;
+        position: absolute;
+      }
+      
+      .sidebar-compact {
+        opacity: 1;
+        visibility: visible;
+        pointer-events: auto;
+      }
+      
+      .sidebar-toggle {
+        right: -8px;
+      }
+    }
+  }
+  
+  @include tablet-only {
+    &.sidebar-collapsed {
+      grid-template-columns: 56px 1fr;
+    }
   }
 
   // Dashboard Sidebar - Fixed position with independent scrolling
@@ -89,10 +133,125 @@
       display: flex;
       flex-direction: column;
       gap: $spacing-md;
-      transition: opacity 0.3s ease;
+      transition: opacity 0.3s ease, visibility 0.3s ease;
       width: 100%;
       box-sizing: border-box;
       overflow: hidden; // Prevent content overflow
+    }
+    
+    // Collapsed sidebar compact view
+    .sidebar-compact {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      display: flex;
+      flex-direction: column;
+      gap: $spacing-sm;
+      padding: $spacing-md $spacing-xs;
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.3s ease, visibility 0.3s ease;
+      pointer-events: none;
+      
+      .compact-item {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 4px;
+        padding: $spacing-xs;
+        border-radius: $border-radius-sm;
+        transition: background 0.2s ease;
+        pointer-events: auto;
+        
+        &:hover {
+          background: rgba(255, 255, 255, 0.05);
+        }
+        
+        .compact-icon {
+          font-size: 20px;
+          flex-shrink: 0;
+          
+          &.bloqueados {
+            color: #ef4444; // Red
+          }
+          
+          &.desbloqueados {
+            color: #22c55e; // Green
+          }
+          
+          &.clientes {
+            color: $primary-electric-blue; // Blue
+          }
+          
+          &.tarefas {
+            color: #22c55e; // Green
+          }
+          
+          &.media {
+            color: #a855f7; // Purple
+          }
+          
+          &.processos {
+            color: #10b981; // Green
+          }
+        }
+        
+        .compact-value {
+          font-size: 10px;
+          font-weight: 600;
+          color: $text-primary;
+          text-align: center;
+          line-height: 1.2;
+          word-break: break-word;
+          max-width: 100%;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+      }
+    }
+    
+    // Sidebar toggle button - positioned outside the card
+    .sidebar-toggle {
+      cursor: pointer;
+      position: absolute;
+      top: 120px;
+      right: -12px;
+      width: 24px;
+      height: 40px;
+      padding: 0;
+      border: none;
+      outline: none;
+      background: rgba(82, 84, 87, 0.8);
+      box-shadow: 0 4px 4px rgba(0, 0, 0, 0.25);
+      border-radius: 0 8px 8px 0;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.3s ease;
+      
+      .toggle-icon {
+        color: rgba(255, 255, 255, 0.9);
+        font-size: 16px;
+        opacity: 1;
+        transition: all 0.3s ease;
+      }
+      
+      &:hover {
+        width: 28px;
+        background: rgba(82, 84, 87, 1);
+      }
+      
+      &:focus-visible {
+        outline: 2px solid $primary-electric-blue;
+        outline-offset: 2px;
+      }
+      
+      @include mobile-only {
+        display: none;
+      }
     }
     
     .sidebar-section {
@@ -101,6 +260,54 @@
       max-width: 100%;
       box-sizing: border-box;
       overflow: hidden; // Prevent content overflow
+      
+      .team-metrics {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        padding: 16px;
+        
+        .metric-row {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          
+          .row-left {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            
+            c4u-info-button {
+              margin-left: 2px;
+            }
+          }
+          
+          .icon {
+            font-size: 16px;
+            width: 20px;
+            text-align: center;
+            
+            &.media {
+              color: #a855f7; // Purple for average
+            }
+            
+            &.processos {
+              color: #10b981; // Green for completed processes
+            }
+          }
+          
+          .label {
+            font-size: 13px;
+            color: #e0e0e0;
+          }
+          
+          .value {
+            font-size: 14px;
+            font-weight: 600;
+            color: #ffffff;
+          }
+        }
+      }
       
       .selector-label {
         display: block;
@@ -396,6 +603,26 @@
       }
     }
 
+    .kpi-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: $spacing-xxl; // Increased spacing between KPIs for better horizontal distribution
+      justify-content: center; // Center the KPI circles
+      
+      c4u-kpi-circular-progress {
+        flex: 0 0 auto;
+      }
+      
+      // Responsive spacing adjustments
+      @include tablet-only {
+        gap: $spacing-xl;
+      }
+      
+      @include mobile-only {
+        gap: $spacing-md;
+      }
+    }
+
     // Tab Content
     .tab-content {
       @include card;
@@ -602,7 +829,6 @@
         display: flex;
         flex-direction: column;
         gap: $spacing-sm;
-        padding: $spacing-md;
         width: 100%;
         box-sizing: border-box;
 
@@ -611,14 +837,22 @@
           justify-content: space-between;
           align-items: center;
           padding: $spacing-sm $spacing-md;
-          background: rgba($primary-electric-blue, 0.05);
+          background: rgb(225,225,225, 0.05);
           border-radius: $border-radius-sm;
-          transition: background-color 0.2s ease;
+          transition: all 0.2s ease;
           width: 100%;
           box-sizing: border-box;
+          cursor: pointer;
 
           &:hover {
-            background: rgba($primary-electric-blue, 0.1);
+            background: rgb(225,225,225, 0.1);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+          }
+          
+          &:focus {
+            outline: 2px solid $primary-electric-blue;
+            outline-offset: 2px;
           }
 
           .carteira-item-info {
@@ -643,6 +877,25 @@
             }
           }
 
+          .carteira-item-meta {
+            display: flex;
+            align-items: center;
+            gap: $spacing-sm;
+            flex-shrink: 0;
+            
+            // Tablet responsive
+            @include tablet-only {
+              gap: 6px;
+            }
+            
+            // Mobile responsive
+            @include mobile-only {
+              flex-direction: column;
+              align-items: flex-end;
+              gap: 4px;
+            }
+          }
+          
           .carteira-action-count {
             font-size: 0.75rem;
             color: $text-secondary;
@@ -650,7 +903,143 @@
             padding: 2px 8px;
             border-radius: 12px;
             flex-shrink: 0;
+            white-space: nowrap;
+            
+            // Mobile responsive
+            @include mobile-only {
+              font-size: 0.6875rem;
+              padding: 2px 6px;
+            }
+          }
+          
+          .carteira-process-count {
+            font-size: 0.75rem;
+            color: $text-secondary;
+            background: rgba($primary-electric-blue, 0.1);
+            padding: 2px 8px;
+            border-radius: 12px;
+            flex-shrink: 0;
+            white-space: nowrap;
+            
+            // Mobile responsive
+            @include mobile-only {
+              font-size: 0.6875rem;
+              padding: 2px 6px;
+            }
+          }
+          
+          .carteira-kpi-compact {
+            display: flex;
+            align-items: center;
+            gap: 6px;
             margin-left: $spacing-sm;
+            flex-shrink: 0;
+            padding: 4px 8px;
+            border-radius: 6px;
+            background: rgba(255, 255, 255, 0.03);
+            transition: all 0.2s ease;
+            cursor: help;
+            position: relative;
+            
+            &:hover {
+              background: rgba(255, 255, 255, 0.08);
+              transform: translateY(-1px);
+              box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+            }
+            
+            .kpi-value {
+              font-size: 0.875rem;
+              font-weight: 600;
+              color: $text-primary;
+              font-family: 'Urbanist', sans-serif;
+              white-space: nowrap;
+            }
+            
+            .kpi-icon {
+              font-size: 0.875rem;
+              color: #d4af37;
+              flex-shrink: 0;
+            }
+            
+            // Color variants based on KPI status
+            &.kpi-green {
+              background: rgba(34, 197, 94, 0.1);
+              border: 1px solid rgba(34, 197, 94, 0.2);
+              
+              .kpi-value {
+                color: #22c55e;
+              }
+            }
+            
+            &.kpi-yellow {
+              background: rgba(234, 179, 8, 0.1);
+              border: 1px solid rgba(234, 179, 8, 0.2);
+              
+              .kpi-value {
+                color: #eab308;
+              }
+            }
+            
+            &.kpi-red {
+              background: rgba(239, 68, 68, 0.1);
+              border: 1px solid rgba(239, 68, 68, 0.2);
+              
+              .kpi-value {
+                color: #ef4444;
+              }
+            }
+            
+            &.kpi-default {
+              .kpi-value {
+                color: $text-primary;
+              }
+            }
+            
+            // Tablet responsive
+            @include tablet-only {
+              margin-left: 6px;
+              gap: 4px;
+              padding: 3px 6px;
+              
+              .kpi-value {
+                font-size: 0.8125rem;
+              }
+              
+              .kpi-icon {
+                font-size: 0.8125rem;
+              }
+            }
+            
+            // Mobile responsive
+            @include mobile-only {
+              margin-left: 0;
+              margin-top: 4px;
+              gap: 4px;
+              padding: 3px 6px;
+              
+              .kpi-value {
+                font-size: 0.75rem;
+              }
+              
+              .kpi-icon {
+                font-size: 0.75rem;
+              }
+            }
+          }
+          
+          .kpi-na {
+            font-size: 0.75rem;
+            color: $text-secondary;
+            padding: 2px 8px;
+            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.05);
+            flex-shrink: 0;
+            white-space: nowrap;
+            
+            @include mobile-only {
+              font-size: 0.6875rem;
+              padding: 2px 6px;
+            }
           }
         }
 

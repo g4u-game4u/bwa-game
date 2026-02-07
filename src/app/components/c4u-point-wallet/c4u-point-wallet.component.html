@@ -6,6 +6,7 @@
       <div class="row-left">
         <i class="ri-lock-fill icon bloqueados"></i>
         <span class="label">Bloqueados</span>
+        <c4u-info-button infoKey="bloqueados" position="top"></c4u-info-button>
       </div>
       <span class="value">{{ points.bloqueados | number:'1.0-0':'pt-BR' }}</span>
     </div>
@@ -14,6 +15,7 @@
       <div class="row-left">
         <i class="ri-lock-unlock-fill icon desbloqueados"></i>
         <span class="label">Desbloqueados</span>
+        <c4u-info-button infoKey="desbloqueados" position="top"></c4u-info-button>
       </div>
       <span class="value">{{ points.desbloqueados | number:'1.0-0':'pt-BR' }}</span>
     </div>
@@ -22,8 +24,18 @@
       <div class="row-left">
         <i class="ri-coin-fill icon moedas"></i>
         <span class="label">Moedas</span>
+        <c4u-info-button infoKey="moedas" position="top"></c4u-info-button>
       </div>
       <span class="value">{{ points.moedas | number:'1.0-0':'pt-BR' }}</span>
+    </div>
+
+    <div class="point-row" *ngIf="mediaPontos !== undefined">
+      <div class="row-left">
+        <i class="ri-star-fill icon media"></i>
+        <span class="label">Média de Pontos</span>
+        <c4u-info-button infoKey="media-pontos" position="top"></c4u-info-button>
+      </div>
+      <span class="value">{{ mediaPontos | number:'1.0-0':'pt-BR' }}</span>
     </div>
   </div>
 </div>

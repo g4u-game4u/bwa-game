@@ -1,29 +1,33 @@
 <div class="activity-progress">
   <div class="section">
-    <h3 class="section-title">Atividades</h3>
+    <h3 class="section-title">Tarefas</h3>
     <div class="metrics-grid">
       <button 
         class="metric-item metric-button" 
         type="button"
         (click)="onCardClick('atividades-finalizadas')"
-        aria-label="Ver atividades finalizadas">
+        aria-label="Ver tarefas finalizadas">
         <i class="ri-checkbox-circle-line metric-icon"></i>
         <div class="metric-content">
           <div class="metric-label">Finalizadas</div>
-          <div class="metric-value">{{ activities.finalizadas }}</div>
+          <div class="metric-value">{{ formatNumber(activities.finalizadas) }}</div>
         </div>
       </button>
-      <button 
-        class="metric-item metric-button" 
-        type="button"
-        (click)="onCardClick('atividades-pontos')"
-        aria-label="Ver pontos">
+      <div 
+        class="metric-item metric-static" 
+        aria-label="Pontos">
         <i class="ri-trophy-line metric-icon"></i>
         <div class="metric-content">
           <div class="metric-label">Pontos</div>
-          <div class="metric-value">{{ activities.pontos }}</div>
+          <div class="metric-value">{{ formatNumber(activities.pontos) }}</div>
         </div>
-      </button>
+        <c4u-info-button 
+          *ngIf="monthlyPointsBreakdown"
+          [infoKey]="''"
+          [customText]="monthlyPointsText"
+          position="bottom">
+        </c4u-info-button>
+      </div>
     </div>
   </div>
 
@@ -38,7 +42,7 @@
         <i class="ri-file-list-line metric-icon"></i>
         <div class="metric-content">
           <div class="metric-label">Pendentes e Incompletos</div>
-          <div class="metric-value">{{ processos.pendentes + processos.incompletas }}</div>
+          <div class="metric-value">{{ formatNumber(processos.pendentes + processos.incompletas) }}</div>
         </div>
       </button>
       <button 
@@ -49,7 +53,7 @@
         <i class="ri-checkbox-circle-line metric-icon"></i>
         <div class="metric-content">
           <div class="metric-label">Finalizados</div>
-          <div class="metric-value">{{ processos.finalizadas }}</div>
+          <div class="metric-value">{{ formatNumber(processos.finalizadas) }}</div>
         </div>
       </button>
     </div>

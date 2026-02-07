@@ -15,13 +15,17 @@
   <!-- Season Points Section -->
   <div class="sidebar-section season-points">
     <h3 class="section-title">
-      <i class="metric-icon bi bi-star-fill"></i>
+      <i class="metric-icon ri-star-fill"></i>
       Pontos da Temporada
     </h3>
     
     <div class="metric-card">
       <div class="metric-item">
-        <span class="metric-label">Total</span>
+        <span class="metric-label">
+          <i class="metric-icon ri-star-fill"></i>
+          Total
+          <c4u-info-button infoKey="pontos-total" position="top"></c4u-info-button>
+        </span>
         <span class="metric-value" data-testid="total-points">
           {{ seasonPoints.total | numberFormat }}
         </span>
@@ -31,8 +35,9 @@
     <div class="metric-card">
       <div class="metric-item">
         <span class="metric-label">
-          <i class="metric-icon bi bi-lock-fill"></i>
+          <i class="metric-icon ri-lock-fill"></i>
           Bloqueados
+          <c4u-info-button infoKey="bloqueados" position="top"></c4u-info-button>
         </span>
         <span class="metric-value" data-testid="bloqueados-points">
           {{ seasonPoints.bloqueados | numberFormat }}
@@ -43,8 +48,9 @@
     <div class="metric-card">
       <div class="metric-item">
         <span class="metric-label">
-          <i class="metric-icon bi bi-unlock-fill"></i>
+          <i class="metric-icon ri-lock-unlock-fill"></i>
           Desbloqueados
+          <c4u-info-button infoKey="desbloqueados" position="top"></c4u-info-button>
         </span>
         <span class="metric-value" data-testid="desbloqueados-points">
           {{ seasonPoints.desbloqueados | numberFormat }}
@@ -55,8 +61,9 @@
     <div class="metric-card" *ngIf="viewMode === 'team-management' && averagePoints > 0">
       <div class="metric-item">
         <span class="metric-label">
-          <i class="metric-icon bi bi-graph-up-arrow"></i>
+          <i class="metric-icon ri-graph-up-line"></i>
           Média de Pontos
+          <c4u-info-button infoKey="media-pontos" position="top"></c4u-info-button>
         </span>
         <span class="metric-value" data-testid="average-points">
           {{ averagePoints | numberFormat }}
@@ -68,15 +75,16 @@
   <!-- Progress Metrics Section -->
   <div class="sidebar-section progress-metrics">
     <h3 class="section-title">
-      <i class="metric-icon bi bi-graph-up"></i>
+      <i class="metric-icon ri-graph-up-line"></i>
       Métricas de Progresso
     </h3>
     
     <div class="metric-card">
       <div class="metric-item">
         <span class="metric-label">
-          <i class="metric-icon bi bi-hourglass-split"></i>
+          <i class="metric-icon ri-hourglass-line"></i>
           Processos Incompletos
+          <c4u-info-button infoKey="processos-incompletos" position="top"></c4u-info-button>
         </span>
         <span class="metric-value" data-testid="processos-incompletos">
           {{ progressMetrics.processosIncompletos | numberFormat }}
@@ -87,8 +95,9 @@
     <div class="metric-card">
       <div class="metric-item">
         <span class="metric-label">
-          <i class="metric-icon bi bi-check-circle-fill"></i>
+          <i class="metric-icon ri-checkbox-circle-line"></i>
           Atividades Finalizadas
+          <c4u-info-button infoKey="tarefas-finalizadas" position="top"></c4u-info-button>
         </span>
         <span class="metric-value" data-testid="atividades-finalizadas">
           {{ progressMetrics.atividadesFinalizadas | numberFormat }}
@@ -99,8 +108,9 @@
     <div class="metric-card">
       <div class="metric-item">
         <span class="metric-label">
-          <i class="metric-icon bi bi-check-all"></i>
+          <i class="metric-icon ri-check-double-line"></i>
           Processos Finalizados
+          <c4u-info-button infoKey="processos-finalizados" position="top"></c4u-info-button>
         </span>
         <span class="metric-value" data-testid="processos-finalizados">
           {{ progressMetrics.processosFinalizados | numberFormat }}

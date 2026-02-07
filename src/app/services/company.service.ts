@@ -1,9 +1,10 @@
 import { Injectable } from '@angular/core';
 import { Observable, of, throwError } from 'rxjs';
-import { map, catchError, shareReplay } from 'rxjs/operators';
+import { map, catchError, shareReplay, switchMap } from 'rxjs/operators';
 import { FunifierApiService } from './funifier-api.service';
 import { CompanyMapper } from './company-mapper.service';
 import { Company, CompanyDetails, Process } from '@model/gamification-dashboard.model';
+import { PlayerService } from './player.service';
 
 interface CacheEntry<T> {
   data: Observable<T>;
@@ -20,7 +21,8 @@ export class CompanyService {
 
   constructor(
     private funifierApi: FunifierApiService,
-    private mapper: CompanyMapper
+    private mapper: CompanyMapper,
+    private playerService: PlayerService
   ) {}
 
   /**
@@ -34,76 +36,68 @@ export class CompanyService {
       return cached;
     }
 
-    // Fetch player status, get company IDs, then fetch company data from cnpj_performance__c
-    const request$ = new Observable<Company[]>(subscriber => {
-      this.funifierApi.get<any>(`/v3/player/${playerId}/status`).subscribe({
-        next: (playerResponse) => {
-          const companiesStr = playerResponse?.extra?.companies || '';
-          const companyIds = companiesStr.split(/[;,]/)
-            .map((id: string) => id.trim())
-            .filter((id: string) => id.length > 0);
-          
-          console.log('📊 Player company IDs from extra.companies:', companyIds);
-          
-          if (companyIds.length === 0) {
-            subscriber.next([]);
-            subscriber.complete();
-            return;
-          }
-          
-          // Fetch company data from cnpj_performance__c using aggregate
-          // Query format: [{"$match":{"_id":{"$in":["1218","9654","1456"]}}}]
-          const aggregateBody = [
-            { $match: { _id: { $in: companyIds } } }
-          ];
-          
-          console.log('📊 Company aggregate query:', JSON.stringify(aggregateBody));
-          
-          this.funifierApi.post<any[]>(
-            `/v3/database/cnpj_performance__c/aggregate?strict=true`,
-            aggregateBody
-          ).subscribe({
-            next: (response) => {
-              console.log('📊 Companies from cnpj_performance__c:', response);
-              
-              if (!response || !Array.isArray(response)) {
-                subscriber.next([]);
-                subscriber.complete();
-                return;
-              }
-              
-              let companies = response.map((companyData: any) => this.mapper.toCompany(companyData));
-              
-              // Apply filters
-              if (filter) {
-                if (filter.search) {
-                  const searchLower = filter.search.toLowerCase();
-                  companies = companies.filter(c => 
-                    c.name.toLowerCase().includes(searchLower) ||
-                    c.cnpj.includes(filter.search!)
-                  );
-                }
-                
-                if (filter.minHealth !== undefined) {
-                  companies = companies.filter(c => c.healthScore >= filter.minHealth!);
-                }
-              }
-              
-              subscriber.next(companies);
-              subscriber.complete();
-            },
-            error: (error) => {
-              console.error('Error fetching companies from cnpj_performance__c:', error);
-              subscriber.error(error);
-            }
-          });
-        },
-        error: (error) => {
-          console.error('Error fetching player status:', error);
-          subscriber.error(error);
+    // Use PlayerService to get raw player data (shared cache), then fetch company data
+    const request$ = this.playerService.getRawPlayerData(playerId).pipe(
+      switchMap((playerResponse) => {
+        const companiesStr = playerResponse?.extra?.companies || '';
+        const companyIds = companiesStr.split(/[;,]/)
+          .map((id: string) => id.trim())
+          .filter((id: string) => id.length > 0);
+        
+        console.log('📊 Player company IDs from extra.companies:', companyIds);
+        
+        if (companyIds.length === 0) {
+          return of([]);
         }
-      });
-    }).pipe(
+        
+        // Fetch company data from cnpj_performance__c using aggregate
+        // Query format: [{"$match":{"_id":{"$in":["1218","9654","1456"]}}}]
+        const aggregateBody = [
+          { $match: { _id: { $in: companyIds } } }
+        ];
+        
+        console.log('📊 Company aggregate query:', JSON.stringify(aggregateBody));
+        
+        return this.funifierApi.post<any[]>(
+          `/v3/database/cnpj_performance__c/aggregate?strict=true`,
+          aggregateBody
+        ).pipe(
+          map((response) => {
+            console.log('📊 Companies from cnpj_performance__c:', response);
+            
+            if (!response || !Array.isArray(response)) {
+              return [];
+            }
+            
+            let companies = response.map((companyData: any) => this.mapper.toCompany(companyData));
+            
+            // Apply filters
+            if (filter) {
+              if (filter.search) {
+                const searchLower = filter.search.toLowerCase();
+                companies = companies.filter(c => 
+                  c.name.toLowerCase().includes(searchLower) ||
+                  c.cnpj.includes(filter.search!)
+                );
+              }
+              
+              if (filter.minHealth !== undefined) {
+                companies = companies.filter(c => c.healthScore >= filter.minHealth!);
+              }
+            }
+            
+            return companies;
+          }),
+          catchError((error) => {
+            console.error('Error fetching companies from cnpj_performance__c:', error);
+            return throwError(() => error);
+          })
+        );
+      }),
+      catchError((error) => {
+        console.error('Error fetching player status:', error);
+        return throwError(() => error);
+      }),
       shareReplay({ bufferSize: 1, refCount: true, windowTime: this.CACHE_DURATION })
     );
 

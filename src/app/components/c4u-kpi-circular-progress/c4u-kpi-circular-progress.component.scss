@@ -3,8 +3,8 @@
 :host {
   display: block;
   
-  // Default size (medium)
-  width: 200px;
+  // Default size (medium) - increased to accommodate longer titles
+  width: 280px;
   
   // Size variants
   &.size-small {
@@ -12,7 +12,7 @@
   }
   
   &.size-large {
-    width: 240px;
+    width: 320px;
   }
 }
 
@@ -42,27 +42,70 @@
   }
 }
 
-.kpi-label {
-  font-family: 'Urbanist', sans-serif;
-  font-weight: 700;
-  font-size: 18px;
-  color: #eeeeee;
-  text-align: center;
-  letter-spacing: 0.36px;
-  width: 100%;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+.kpi-label-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
   
-  // Size variants
+  .kpi-icon {
+    font-size: 1.125rem;
+    color: #9ca3af; // Golden color like in the prototype
+    opacity: 0.9;
+    flex-shrink: 0;
+    margin-right: 2px; // Small additional spacing after icon
+    
+    // Size variants
+    :host.size-small & {
+      font-size: 0.75rem;
+      margin-right: 1px;
+    }
+    
+    :host.size-large & {
+      font-size: 1.25rem;
+      margin-right: 3px;
+    }
+  }
+  
+  .kpi-label {
+    font-family: 'Urbanist', sans-serif;
+    font-weight: 700;
+    font-size: 18px;
+    color: #eeeeee;
+    text-align: center;
+    letter-spacing: 0.36px;
+    flex: 1;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: visible;
+    margin: 0 4px; // Additional spacing around label
+    
+    // Size variants
+    :host.size-small & {
+      font-size: 11px; // Increased from 10px for better readability
+      letter-spacing: 0.22px;
+      margin: 0 2px;
+    }
+    
+    :host.size-large & {
+      font-size: 20px;
+      letter-spacing: 0.4px;
+      margin: 0 6px;
+    }
+  }
+  
+  c4u-info-button {
+    flex-shrink: 0;
+    margin-left: 2px; // Small additional spacing before info button
+  }
+  
+  // Size variants for wrapper gap
   :host.size-small & {
-    font-size: 11px; // Increased from 10px for better readability
-    letter-spacing: 0.22px;
+    gap: 6px; // Increased from 4px
   }
   
   :host.size-large & {
-    font-size: 20px;
-    letter-spacing: 0.4px;
+    gap: 14px; // Increased from 10px
   }
 }
 
@@ -102,6 +145,7 @@
   }
 }
 
+
 .kpi-status {
   font-family: 'Urbanist', sans-serif;
   font-weight: 500;
@@ -135,5 +179,12 @@
   &.status-red {
     color: #f44336; // $error-red from design system
     background-color: rgba(244, 67, 54, 0.1);
+  }
+
+  // Golden color for achieved goals (especially in modals)
+  &.status-goal-achieved {
+    color: #d4af37; // Golden color like in the prototype
+    background-color: rgba(212, 175, 55, 0.15);
+    border: 1px solid rgba(212, 175, 55, 0.3);
   }
 }

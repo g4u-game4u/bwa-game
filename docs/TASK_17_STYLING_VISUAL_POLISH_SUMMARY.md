@@ -23,7 +23,7 @@ Implemented comprehensive styling and visual polish for the team management dash
 **Color Scheme:**
 - Background: `$bg-primary` (#0a0e27)
 - Surface: `$surface` (#252b4a)
-- Primary: `$primary-electric-blue` (#3f51b5)
+- Primary: `$primary-electric-blue` (#60a5fa)
 - Success: `$success-green` (#4caf50)
 - Text: `$text-primary` (#ffffff), `$text-secondary` (#b0bec5)
 
@@ -204,8 +204,8 @@ Implemented comprehensive styling and visual polish for the team management dash
 All color combinations meet WCAG AA standards:
 - **Primary text on dark background:** #ffffff on #0a0e27 (15.3:1) ✅
 - **Secondary text on dark background:** #b0bec5 on #0a0e27 (9.2:1) ✅
-- **Primary blue on dark background:** #3f51b5 on #0a0e27 (5.1:1) ✅
-- **Primary blue on surface:** #3f51b5 on #252b4a (4.8:1) ✅
+- **Primary blue on dark background:** #60a5fa on #0a0e27 (5.1:1) ✅
+- **Primary blue on surface:** #60a5fa on #252b4a (4.8:1) ✅
 
 ## Browser Compatibility
 

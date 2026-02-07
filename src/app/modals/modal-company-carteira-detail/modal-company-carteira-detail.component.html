@@ -1,0 +1,76 @@
+<c4u-modal 
+  [modalTitle]="company ? getCompanyDisplayName(company.cnpj) : 'Detalhes da Empresa'" 
+  (closed)="onClose()">
+  <div class="company-detail-content">
+    <!-- Loading State -->
+    <div *ngIf="isLoading" class="loading-state">
+      <i class="ri-loader-4-line loading-icon"></i>
+      <span>Carregando dados da empresa...</span>
+    </div>
+
+    <!-- Content -->
+    <div *ngIf="!isLoading" class="content-wrapper">
+      <!-- KPIs Section -->
+      <div *ngIf="companyKPIs.length > 0" class="kpis-section">
+        <h3 class="section-title">KPIs da Empresa</h3>
+        <div class="kpis-grid">
+          <c4u-kpi-circular-progress
+            *ngFor="let kpi of companyKPIs; let i = index"
+            [label]="kpi.label"
+            [current]="kpi.current"
+            [target]="kpi.target"
+            [superTarget]="kpi.superTarget"
+            [color]="kpi.color"
+            [unit]="kpi.unit"
+            [colorIndex]="i">
+          </c4u-kpi-circular-progress>
+        </div>
+      </div>
+
+      <!-- Tasks Section -->
+      <div class="tasks-section">
+        <h3 class="section-title">Tarefas</h3>
+        
+        <!-- Loading Tasks -->
+        <div *ngIf="isLoadingTasks" class="loading-tasks">
+          <i class="ri-loader-4-line loading-icon"></i>
+          <span>Carregando tarefas...</span>
+        </div>
+
+        <!-- Tasks List -->
+        <div *ngIf="!isLoadingTasks" class="tasks-list">
+          <div *ngIf="tasks.length === 0" class="empty-state">
+            <i class="ri-file-list-line empty-icon"></i>
+            <span>Nenhuma tarefa encontrada</span>
+          </div>
+
+          <div *ngIf="tasks.length > 0" class="tasks-table">
+            <div class="task-header">
+              <div class="task-col-title">Tarefa</div>
+              <div class="task-col-executor">Executor</div>
+              <div class="task-col-date">Data</div>
+              <div class="task-col-status">Status</div>
+            </div>
+            <div *ngFor="let task of tasks" class="task-row">
+              <div class="task-col-title">
+                <span class="task-title">{{ task.title }}</span>
+              </div>
+              <div class="task-col-executor">
+                <span class="task-executor">{{ formatEmailToName(task.player) }}</span>
+              </div>
+              <div class="task-col-date">
+                <span class="task-date">{{ formatDate(task.created) }}</span>
+              </div>
+              <div class="task-col-status">
+                <span class="task-status" [ngClass]="getStatusClass(task.status)">
+                  {{ getStatusLabel(task.status) }}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</c4u-modal>
+

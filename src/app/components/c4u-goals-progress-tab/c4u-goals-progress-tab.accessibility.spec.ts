@@ -41,7 +41,7 @@ describe('C4uGoalsProgressTabComponent - Accessibility', () => {
     it('should have accessible goal items', () => {
       component.goals = [
         { id: 'goal1', label: 'Processos Finalizados', current: 50, target: 100 },
-        { id: 'goal2', label: 'Atividades Finalizadas', current: 200, target: 500 }
+        { id: 'goal2', label: 'Tarefas Finalizadas', current: 200, target: 500 }
       ];
       fixture.detectChanges();
       
@@ -180,7 +180,7 @@ describe('C4uGoalsProgressTabComponent - Accessibility', () => {
     it('should present goal data in accessible format', () => {
       component.goals = [
         { id: 'goal1', label: 'Processos Finalizados', current: 50, target: 100 },
-        { id: 'goal2', label: 'Atividades Finalizadas', current: 200, target: 500 }
+        { id: 'goal2', label: 'Tarefas Finalizadas', current: 200, target: 500 }
       ];
       fixture.detectChanges();
       

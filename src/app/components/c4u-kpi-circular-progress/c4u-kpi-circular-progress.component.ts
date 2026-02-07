@@ -33,7 +33,18 @@ export class C4uKpiCircularProgressComponent {
   }
 
   get progressColor(): 'green' | 'blue' | 'purple' | 'gold' | 'red' {
+    // If current is below target, always show red
+    if (this.target > 0 && this.current < this.target) {
+      return 'red';
+    }
+    
+    // If goal is achieved, use gold color (especially for modals)
+    if (this.isGoalAchieved) {
+      return 'gold';
+    }
+    
     // Use explicit color if provided (new goal-based system)
+    // Only use provided color if current >= target (already checked above)
     if (this.color) {
       switch (this.color) {
         case 'green': return 'green';
@@ -48,7 +59,30 @@ export class C4uKpiCircularProgressComponent {
   }
 
   get displayValue(): string {
-    return `${this.current}${this.unit || ''}`;
+    return this.unit ? `${this.current} ${this.unit}` : `${this.current}`;
+  }
+
+  /**
+   * Get icon class based on KPI label
+   * - "Entregas no Prazo" or "Entregas" -> ri-time-line (delivery deadline)
+   * - "Clientes na Carteira" or "Clientes" -> ri-building-line (clients - same as sidebar)
+   * - Default -> ri-bar-chart-line (generic KPI)
+   */
+  get kpiIcon(): string {
+    const labelLower = this.label.toLowerCase();
+    
+    // Check for delivery/deadline related labels
+    if (labelLower.includes('entregas') || labelLower.includes('prazo')) {
+      return 'ri-time-line';
+    }
+    
+    // Check for clients/clientes related labels (using same icon as sidebar)
+    if (labelLower.includes('clientes') || labelLower.includes('carteira') || labelLower.includes('empresas')) {
+      return 'ri-building-line';
+    }
+    
+    // Default icon for other KPIs
+    return 'ri-bar-chart-line';
   }
 
   get goalStatus(): string {
@@ -63,6 +97,29 @@ export class C4uKpiCircularProgressComponent {
     } else {
       return 'Abaixo da meta';
     }
+  }
+
+  /**
+   * Check if goal is achieved (current >= target)
+   */
+  get isGoalAchieved(): boolean {
+    return this.current >= this.target;
+  }
+
+  /**
+   * Get help text key based on KPI label
+   */
+  get helpTextKey(): string {
+    const labelLower = this.label.toLowerCase();
+    
+    if ((labelLower.includes('clientes') || labelLower.includes('empresas')) && labelLower.includes('carteira')) {
+      return 'clientes-na-carteira';
+    } else if (labelLower.includes('entregas') && labelLower.includes('prazo')) {
+      return 'entregas-no-prazo';
+    }
+    
+    // Default fallback
+    return 'clientes-na-carteira';
   }
 
   /**

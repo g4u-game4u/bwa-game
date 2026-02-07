@@ -19,6 +19,7 @@ export interface CompanyDisplay {
   cnpj: string; // Full CNPJ string from action_log
   cnpjId?: string; // Extracted ID for KPI lookup
   actionCount: number; // Number of actions for this company
+  processCount: number; // Number of unique processes (delivery_id) for this company
   deliveryKpi?: KPIData; // Delivery KPI from cnpj__c
 }
 
@@ -139,7 +140,7 @@ export class CompanyKpiService {
    * @returns Observable of enriched company display data with KPI information
    */
   enrichCompaniesWithKpis(
-    companies: { cnpj: string; actionCount: number }[]
+    companies: { cnpj: string; actionCount: number; processCount: number }[]
   ): Observable<CompanyDisplay[]> {
     if (!companies || companies.length === 0) {
       return of([]);
@@ -165,7 +166,8 @@ export class CompanyKpiService {
       return of(companiesWithIds.map(c => ({
         cnpj: c.cnpj,
         cnpjId: c.cnpjId || undefined,
-        actionCount: c.actionCount
+        actionCount: c.actionCount,
+        processCount: c.processCount || 0
       })));
     }
 
@@ -177,7 +179,8 @@ export class CompanyKpiService {
           const result: CompanyDisplay = {
             cnpj: company.cnpj,
             cnpjId: company.cnpjId || undefined,
-            actionCount: company.actionCount
+            actionCount: company.actionCount,
+            processCount: company.processCount || 0
           };
 
           // Add KPI data if available
@@ -195,7 +198,8 @@ export class CompanyKpiService {
         return of(companiesWithIds.map(c => ({
           cnpj: c.cnpj,
           cnpjId: c.cnpjId || undefined,
-          actionCount: c.actionCount
+          actionCount: c.actionCount,
+          processCount: c.processCount || 0
         })));
       })
     );
@@ -209,7 +213,7 @@ export class CompanyKpiService {
    */
   private mapToKpiData(cnpjKpi: CnpjKpiData): KPIData {
     const current = cnpjKpi.entrega || 0;
-    const target = 100; // Default target, could be configurable
+    const target = 80; // Target matches the circular KPI progress (80%)
     const percentage = Math.min((current / target) * 100, 100);
 
     return {
@@ -217,7 +221,7 @@ export class CompanyKpiService {
       label: 'Entregas',
       current,
       target,
-      unit: 'entregas',
+      unit: '%',
       percentage,
       color: this.getKpiColor(current, target)
     };
@@ -226,12 +230,20 @@ export class CompanyKpiService {
   /**
    * Determine KPI color based on completion percentage
    * 
+   * If current is below target, always return red.
+   * Otherwise, use percentage-based color logic.
+   * 
    * @param current - Current value
    * @param target - Target value
    * @returns Color indicator (red, yellow, or green)
    */
   private getKpiColor(current: number, target: number): 'red' | 'yellow' | 'green' {
     if (target === 0) {
+      return 'red';
+    }
+
+    // If current is below target, always show red
+    if (current < target) {
       return 'red';
     }
 

@@ -46,11 +46,42 @@
           <c4u-shimmer *ngIf="isLoadingPlayer && !seasonProgress"></c4u-shimmer>
         </div>
       </div>
+      
+      <!-- Collapsed Sidebar - Compact View -->
+      <div class="sidebar-compact" *ngIf="sidebarCollapsed">
+        <!-- Point Wallet Compact -->
+        <div class="compact-item" *ngIf="pointWallet">
+          <i class="ri-lock-fill compact-icon bloqueados"></i>
+          <span class="compact-value">{{ pointWallet.bloqueados | number:'1.0-0':'pt-BR' }}</span>
+        </div>
+        <div class="compact-item" *ngIf="pointWallet">
+          <i class="ri-lock-unlock-fill compact-icon desbloqueados"></i>
+          <span class="compact-value">{{ pointWallet.desbloqueados | number:'1.0-0':'pt-BR' }}</span>
+        </div>
+        <div class="compact-item" *ngIf="pointWallet">
+          <i class="ri-coin-fill compact-icon moedas"></i>
+          <span class="compact-value">{{ pointWallet.moedas | number:'1.0-0':'pt-BR' }}</span>
+        </div>
+        
+        <!-- Season Progress Compact -->
+        <div class="compact-item" *ngIf="seasonProgress">
+          <i class="ri-focus-3-line compact-icon metas"></i>
+          <span class="compact-value">{{ seasonProgress.metas.current }}/{{ seasonProgress.metas.target }}</span>
+        </div>
+        <div class="compact-item" *ngIf="seasonProgress">
+          <i class="ri-building-line compact-icon clientes"></i>
+          <span class="compact-value">{{ seasonProgress.clientes | number:'1.0-0':'pt-BR' }}</span>
+        </div>
+        <div class="compact-item" *ngIf="seasonProgress">
+          <i class="ri-checkbox-circle-line compact-icon tarefas"></i>
+          <span class="compact-value">{{ seasonProgress.tarefasFinalizadas | number:'1.0-0':'pt-BR' }}</span>
+        </div>
+      </div>
     </c4u-card>
     
     <!-- Sidebar Toggle Button - Outside the card -->
     <button class="sidebar-toggle" (click)="toggleSidebar()" [attr.aria-label]="sidebarCollapsed ? 'Expandir menu' : 'Recolher menu'">
-      <i class="icon-arrow_forward_ios" [class.invert]="!sidebarCollapsed"></i>
+      <i [class]="sidebarCollapsed ? 'ri-arrow-right-line' : 'ri-arrow-left-line'" class="toggle-icon"></i>
     </button>
   </aside>
   
@@ -60,7 +91,10 @@
     <div class="dashboard-header" role="banner">
       <c4u-dashboard-navigation></c4u-dashboard-navigation>
       <div class="header-spacer"></div>
-      <c4u-seletor-mes (onSelectedMonth)="onMonthChange($event)"></c4u-seletor-mes>
+      <c4u-seletor-mes 
+        [playerId]="getPlayerId()" 
+        (onSelectedMonth)="onMonthChange($event)">
+      </c4u-seletor-mes>
       <button 
         class="refresh-button"
         (click)="refreshData()"
@@ -88,9 +122,9 @@
         <c4u-kpi-circular-progress
           *ngFor="let kpi of playerKPIs; let i = index; trackBy: trackByKpiId"
           [label]="kpi.label"
-          [current]="kpi.current"
-          [target]="kpi.target"
-          [superTarget]="kpi.superTarget"
+          [current]="roundValue(kpi.current)"
+          [target]="roundValue(kpi.target)"
+          [superTarget]="kpi.superTarget ? roundValue(kpi.superTarget) : undefined"
           [color]="kpi.color"
           [unit]="kpi.unit"
           [colorIndex]="i">
@@ -112,6 +146,7 @@
         *ngIf="activityMetrics && processMetrics"
         [activities]="activityMetrics"
         [processos]="processMetrics"
+        [monthlyPointsBreakdown]="monthlyPointsBreakdown"
         (cardClicked)="onProgressCardClicked($event)">
       </c4u-activity-progress>
       
@@ -121,47 +156,46 @@
     <!-- Company Portfolio Section -->
     <section class="dashboard-section carteira-section" aria-labelledby="company-section-title">
       <div class="section-header">
-        <h2 id="company-section-title" class="section-title">Carteira</h2>
-        <button 
+        <h2 id="company-section-title" class="section-title">Clientes</h2>
+        <!-- <button 
           type="button" 
           class="carteira-expand-btn"
           (click)="openCarteiraModal()"
           aria-label="Ver todos os clientes">
           <i class="ri-external-link-line"></i>
           Ver todos
-        </button>
+        </button> -->
       </div>
       
       <c4u-card class="carteira-card">
         <!-- Carteira list from action_log CNPJs -->
         <div *ngIf="carteiraClientes.length > 0" class="carteira-list">
-          <div *ngFor="let cliente of carteiraClientes.slice(0, 5)" class="carteira-item">
+          <div *ngFor="let cliente of carteiraClientes" 
+               class="carteira-item"
+               (click)="openCompanyDetailModal(cliente)"
+               role="button"
+               tabindex="0"
+               [attr.aria-label]="'Ver detalhes de ' + getCompanyDisplayName(cliente.cnpj)"
+               (keydown.enter)="openCompanyDetailModal(cliente)"
+               (keydown.space)="openCompanyDetailModal(cliente); $event.preventDefault()">
             <div class="carteira-item-info">
-              <i class="ri-building-2-line"></i>
+              <i class="ri-building-line"></i>
               <span class="carteira-cnpj">{{ getCompanyDisplayName(cliente.cnpj) }}</span>
             </div>
             <div class="carteira-item-meta">
-              <span class="carteira-action-count">{{ cliente.actionCount }} ações</span>
-              <!-- KPI Indicator -->
-              <c4u-kpi-circular-progress
-                *ngIf="cliente.deliveryKpi"
-                [label]="cliente.deliveryKpi.label"
-                [current]="cliente.deliveryKpi.current"
-                [target]="cliente.deliveryKpi.target"
-                [size]="'small'"
-                class="carteira-kpi">
-              </c4u-kpi-circular-progress>
+              <!-- KPI Indicator - Compact Display -->
+              <div *ngIf="cliente.deliveryKpi" 
+                   class="carteira-kpi-compact" 
+                   [ngClass]="'kpi-' + (cliente.deliveryKpi.color || 'default')"
+                   [title]="getKpiTooltip(cliente.deliveryKpi)">
+                <span class="kpi-value">{{ formatKpiValue(cliente.deliveryKpi.current) }}</span>
+                <i class="ri-time-line kpi-icon" aria-hidden="true"></i>
+              </div>
               <span *ngIf="!cliente.deliveryKpi" class="kpi-na">N/A</span>
+              <span class="carteira-action-count">{{ cliente.actionCount }} tarefas</span>
+              <span class="carteira-process-count">{{ cliente.processCount }} processos</span>
             </div>
           </div>
-          <button 
-            *ngIf="carteiraClientes.length > 5" 
-            type="button"
-            class="carteira-more"
-            (click)="openCarteiraModal()"
-            [attr.aria-label]="'Ver todos os ' + carteiraClientes.length + ' clientes'">
-            + {{ carteiraClientes.length - 5 }} clientes
-          </button>
         </div>
         
         <c4u-shimmer *ngIf="isLoadingCarteira"></c4u-shimmer>
@@ -188,6 +222,14 @@
     [month]="selectedMonth"
     (closed)="onProgressModalClosed()">
   </modal-progress-list>
+  
+  <!-- Company Carteira Detail Modal -->
+  <modal-company-carteira-detail
+    *ngIf="isCompanyCarteiraDetailModalOpen && selectedCarteiraCompany"
+    [company]="selectedCarteiraCompany"
+    [month]="selectedMonth"
+    (closed)="onCompanyCarteiraDetailModalClosed()">
+  </modal-company-carteira-detail>
   
   <!-- Carteira Modal -->
   <modal-carteira

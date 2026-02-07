@@ -1,19 +1,24 @@
 import { Injectable } from '@angular/core';
-import { Observable, of, throwError, ReplaySubject } from 'rxjs';
-import { map, catchError, tap, timeout, take } from 'rxjs/operators';
+import { Observable, of, throwError } from 'rxjs';
+import { map, catchError, tap, timeout, shareReplay } from 'rxjs/operators';
 import { FunifierApiService } from './funifier-api.service';
 import { PlayerMapper } from './player-mapper.service';
 import { PlayerStatus, PointWallet, SeasonProgress } from '@model/gamification-dashboard.model';
+
+interface CacheEntry {
+  data$: Observable<any>;
+  timestamp: number;
+}
 
 @Injectable({
   providedIn: 'root'
 })
 export class PlayerService {
   private readonly REQUEST_TIMEOUT = 15000; // 15 seconds timeout
+  private readonly CACHE_DURATION = 3 * 60 * 1000; // 3 minutes cache
   
-  // Cache the raw response data
-  private cachedRawData: { [playerId: string]: { data: any; timestamp: number } } = {};
-  private readonly CACHE_DURATION = 60000; // 1 minute cache
+  // Cache the raw response Observable with shareReplay
+  private cachedRawData: Map<string, CacheEntry> = new Map();
 
   constructor(
     private funifierApi: FunifierApiService,
@@ -21,33 +26,51 @@ export class PlayerService {
   ) {}
 
   /**
-   * Get raw player data - fetches fresh or returns cached
+   * Get raw player data - fetches fresh or returns cached Observable
+   * Uses shareReplay to ensure only one HTTP request is made per player
    */
-  private fetchPlayerData(playerId: string): Observable<any> {
-    // Check cache first
-    const cached = this.cachedRawData[playerId];
-    if (cached && (Date.now() - cached.timestamp) < this.CACHE_DURATION) {
-      console.log('📊 Using cached data for:', playerId);
-      return of(cached.data);
+  getRawPlayerData(playerId: string, forceRefresh: boolean = false): Observable<any> {
+    const cached = this.cachedRawData.get(playerId);
+    const now = Date.now();
+    
+    // Return cached Observable if valid and not forcing refresh
+    if (!forceRefresh && cached && (now - cached.timestamp) < this.CACHE_DURATION) {
+      console.log('📊 Using cached Observable for:', playerId);
+      return cached.data$;
     }
 
     console.log('📊 Fetching fresh player data for:', playerId);
     
-    return this.funifierApi.get<any>(`/v3/player/${playerId}/status`).pipe(
+    // Create new Observable with shareReplay to share the request
+    const request$ = this.funifierApi.get<any>(`/v3/player/${playerId}/status`).pipe(
       timeout(this.REQUEST_TIMEOUT),
       tap(response => {
         console.log('📊 Raw player data received:', response);
-        // Cache the response
-        this.cachedRawData[playerId] = {
-          data: response,
-          timestamp: Date.now()
-        };
       }),
+      shareReplay({ bufferSize: 1, refCount: true, windowTime: this.CACHE_DURATION }),
       catchError(error => {
         console.error('📊 Error fetching player data:', error);
+        // Remove from cache on error
+        this.cachedRawData.delete(playerId);
         return throwError(() => error);
       })
     );
+
+    // Cache the Observable
+    this.cachedRawData.set(playerId, {
+      data$: request$,
+      timestamp: now
+    });
+
+    return request$;
+  }
+
+  /**
+   * Get raw player data - fetches fresh or returns cached (backward compatibility)
+   * @deprecated Use getRawPlayerData instead
+   */
+  private fetchPlayerData(playerId: string): Observable<any> {
+    return this.getRawPlayerData(playerId);
   }
 
   /**
@@ -105,13 +128,13 @@ export class PlayerService {
    * Clear cache
    */
   clearCache(): void {
-    this.cachedRawData = {};
+    this.cachedRawData.clear();
   }
 
   /**
    * Clear cache for specific player
    */
   clearPlayerCache(playerId: string): void {
-    delete this.cachedRawData[playerId];
+    this.cachedRawData.delete(playerId);
   }
 }

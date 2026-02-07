@@ -110,7 +110,7 @@ KPI status badge colors were not using design system variables. Updated to align
 - Error Red: `#f44336`
 - Text Primary: `#ffffff`
 - Text Secondary: `#b0bec5`
-- Primary Electric Blue: `#3f51b5`
+- Primary Electric Blue: `#60a5fa`
 
 **Color Contrast Verification**:
 - Label text (#eeeeee): ~13:1 ratio ✅ WCAG AAA

@@ -16,7 +16,7 @@ src/styles/
 
 ### Primary Colors
 - **Deep Blue**: `#1a237e` - Primary actions, headers
-- **Electric Blue**: `#3f51b5` - Accents, progress bars
+- **Electric Blue**: `#60a5fa` - Accents, progress bars
 - **Success Green**: `#4caf50` - Completed states, positive metrics
 - **Warning Orange**: `#ff9800` - Alerts, pending states
 - **Error Red**: `#f44336` - Errors, critical alerts

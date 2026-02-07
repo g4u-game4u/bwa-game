@@ -12,4 +12,6 @@ export class C4uPointWalletComponent {
     desbloqueados: 0,
     moedas: 0
   };
+  
+  @Input() mediaPontos?: number;
 }

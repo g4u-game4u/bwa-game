@@ -16,6 +16,8 @@ export class C4uSeasonProgressComponent {
       end: new Date()
     }
   };
+  
+  @Input() processosFinalizados?: number;
 
   formatDate(date: Date): string {
     const day = date.getDate();

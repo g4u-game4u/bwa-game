@@ -5,7 +5,11 @@
      [attr.aria-valuemin]="0"
      [attr.aria-valuemax]="target"
      [attr.aria-valuetext]="ariaValueText">
-  <div class="kpi-label" aria-hidden="true">{{ label }}</div>
+  <div class="kpi-label-wrapper">
+    <i [class]="kpiIcon + ' kpi-icon'" aria-hidden="true"></i>
+    <div class="kpi-label" aria-hidden="true">{{ label }}</div>
+    <c4u-info-button [infoKey]="helpTextKey" position="top"></c4u-info-button>
+  </div>
   <div class="kpi-progress-wrapper" aria-hidden="true">
     <c4u-porcentagem-circular
       [valor]="current"
@@ -15,5 +19,5 @@
     </c4u-porcentagem-circular>
   </div>
   <div class="kpi-value" aria-hidden="true">{{ displayValue }}</div>
-  <div class="kpi-status" [class]="'status-' + color" aria-hidden="true">{{ goalStatus }}</div>
+  <div class="kpi-status" [class]="'status-' + color" [class.status-goal-achieved]="isGoalAchieved" aria-hidden="true">{{ goalStatus }}</div>
 </div>

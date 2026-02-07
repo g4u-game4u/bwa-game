@@ -83,7 +83,7 @@ This document tracks the visual polish and refinement work for the Company KPI I
 **From `variables.scss`**:
 ```scss
 $primary-deep-blue: #1a237e;
-$primary-electric-blue: #3f51b5;
+$primary-electric-blue: #60a5fa;
 $success-green: #4caf50;
 $warning-orange: #ff9800;
 $error-red: #f44336;

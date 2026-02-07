@@ -699,19 +699,38 @@ describe('CompanyKpiService', () => {
       });
     });
 
-    it('should assign yellow color for 50-79% completion', (done) => {
+    it('should assign red color when current is below target (even if percentage would be 50-79%)', (done) => {
       const companies = [
         { cnpj: 'COMPANY A l 0001 [2000|0001-60]', actionCount: 5 }
       ];
 
       const mockKpiResponse: CnpjKpiData[] = [
-        { _id: '2000', entrega: 65 }
+        { _id: '2000', entrega: 65 } // 65 < 80 (target), so should be red
       ];
 
       funifierApiSpy.post.and.returnValue(of(mockKpiResponse));
 
       service.enrichCompaniesWithKpis(companies).subscribe(result => {
-        expect(result[0].deliveryKpi?.color).toBe('yellow');
+        expect(result[0].deliveryKpi?.color).toBe('red');
+        done();
+      });
+    });
+
+    it('should assign red color when current is exactly at target but below 80% threshold', (done) => {
+      const companies = [
+        { cnpj: 'COMPANY A l 0001 [2000|0001-60]', actionCount: 5 }
+      ];
+
+      // Target is 80, so 80 >= 80 means it's at target
+      // But percentage is 100%, which is >= 80%, so should be green
+      const mockKpiResponse: CnpjKpiData[] = [
+        { _id: '2000', entrega: 80 } // 80 >= 80 (target), 100% so should be green
+      ];
+
+      funifierApiSpy.post.and.returnValue(of(mockKpiResponse));
+
+      service.enrichCompaniesWithKpis(companies).subscribe(result => {
+        expect(result[0].deliveryKpi?.color).toBe('green');
         done();
       });
     });
