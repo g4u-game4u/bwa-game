@@ -53,6 +53,8 @@
   [role="document"] {
     flex: 1;
     min-height: 0;
+    overflow-y: auto; // Enable scrolling for entire modal content
+    overflow-x: hidden; // Prevent horizontal scrolling
     
     // Custom scrollbar styling
     &::-webkit-scrollbar {

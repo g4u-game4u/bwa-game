@@ -732,7 +732,7 @@
     // Shared controls for both charts
     .productivity-shared-controls {
       display: flex;
-      justify-content: flex-end;
+      justify-content: flex-start;
       align-items: center;
       gap: $spacing-md;
       margin-bottom: $spacing-lg;
@@ -1147,7 +1147,7 @@
     left: 0;
     right: 0;
     bottom: 0;
-    background-color: rgba($bg-primary, 0.9);
+    background-color: rgba(0,0,0,0.5);
     display: flex;
     align-items: center;
     justify-content: center;

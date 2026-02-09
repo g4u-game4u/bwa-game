@@ -233,13 +233,6 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
           ? savedTeamId 
           : this.teams[0].id;
         
-        // Restore collaborator selection from localStorage before loading team
-        const savedCollaboratorId = localStorage.getItem('selectedCollaboratorId');
-        if (savedCollaboratorId) {
-          this.selectedCollaborator = savedCollaboratorId;
-          console.log('💾 Restored collaborator selection from localStorage during init:', savedCollaboratorId);
-        }
-        
         await this.onTeamChange(teamToSelect);
         console.log('✅ Initial team selected:', teamToSelect);
       } else {
@@ -647,29 +640,6 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       }
       
       this.lastRefresh = new Date();
-      
-      // After loading data, ensure selectedCollaborator is restored from localStorage
-      // This is important because it might have been reset during loading
-      const savedCollaboratorId = localStorage.getItem('selectedCollaboratorId');
-      if (savedCollaboratorId) {
-        // Always restore from localStorage to ensure persistence
-        const collaboratorExists = this.collaborators.find(c => c.userId === savedCollaboratorId);
-        if (collaboratorExists) {
-          if (this.selectedCollaborator !== savedCollaboratorId) {
-            this.selectedCollaborator = savedCollaboratorId;
-            console.log('💾 Restored collaborator selection from localStorage after loadTeamData:', savedCollaboratorId);
-            // Update team name display to reflect the restored selection
-            this.updateTeamNameDisplay();
-          }
-        } else {
-          // Collaborator no longer exists, clear selection
-          if (this.selectedCollaborator === savedCollaboratorId) {
-            this.selectedCollaborator = null;
-            localStorage.removeItem('selectedCollaboratorId');
-            this.updateTeamNameDisplay();
-          }
-        }
-      }
     } catch (error) {
       console.error('Error loading team data:', error);
       this.toastService.error('Erro ao carregar dados da equipe');
@@ -692,9 +662,6 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
     try {
       console.log('👤 Loading data for collaborator:', collaboratorId);
       
-      // Preserve the selectedCollaborator before loading
-      const preservedCollaboratorId = this.selectedCollaborator || collaboratorId;
-      
       // Load collaborator-specific data in parallel
       await Promise.all([
         this.loadCollaboratorSidebarData(collaboratorId, dateRange),
@@ -704,21 +671,6 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
         this.loadMonthlyPointsBreakdown(collaboratorId)
       ]);
       
-      // Restore selectedCollaborator after loading collaborators
-      // This ensures it persists even if it was reset during loading
-      if (preservedCollaboratorId && !this.selectedCollaborator) {
-        this.selectedCollaborator = preservedCollaboratorId;
-        localStorage.setItem('selectedCollaboratorId', preservedCollaboratorId);
-        console.log('💾 Restored collaborator selection after loading:', preservedCollaboratorId);
-      }
-      
-      // Also check localStorage to ensure selection is preserved
-      const savedCollaboratorId = localStorage.getItem('selectedCollaboratorId');
-      if (savedCollaboratorId && !this.selectedCollaborator) {
-        this.selectedCollaborator = savedCollaboratorId;
-        console.log('💾 Restored collaborator selection from localStorage in loadCollaboratorData:', savedCollaboratorId);
-      }
-      
       // Load carteira data first, then KPIs (which depend on carteira)
       await this.loadCollaboratorCarteiraData(collaboratorId, dateRange);
       await this.loadTeamKPIs(collaboratorId);
@@ -727,10 +679,8 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       this.updateFormattedSidebarData();
       
       // Update team name display after loading collaborators
-      // This will also check localStorage and restore selection if needed
       this.updateTeamNameDisplay();
       
-      // Ensure selection is preserved
       this.cdr.markForCheck();
       
       console.log('✅ Collaborator data loaded for:', collaboratorId);
@@ -1018,6 +968,9 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       this.isLoadingCollaborators = true;
       console.log('👥 Loading collaborators for team:', this.selectedTeam);
       
+      // Preservar o selectedCollaborator ANTES de carregar
+      const preservedCollaboratorId = this.selectedCollaborator || localStorage.getItem('selectedCollaboratorId');
+      
       // Use member IDs already loaded from loadTeamMembersData
       if (this.teamMemberIds.length === 0) {
         console.warn('⚠️ No member IDs available, trying to load from aggregate query');
@@ -1054,40 +1007,17 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
         this.collaborators = await Promise.all(collaboratorPromises);
       }
       
-      // Always check localStorage to ensure selection is preserved
-      // This is important because selectedCollaborator might be reset during data loading
-      const savedCollaboratorId = localStorage.getItem('selectedCollaboratorId');
-      
-      // If we have a saved collaborator ID, use it (it takes precedence over current selection)
-      // This ensures the selection persists even if it was reset during loading
-      if (savedCollaboratorId) {
-        const collaboratorExists = this.collaborators.find(c => c.userId === savedCollaboratorId);
-        if (collaboratorExists) {
-          this.selectedCollaborator = savedCollaboratorId;
-          console.log('💾 Restored collaborator selection from localStorage:', savedCollaboratorId);
-        } else {
-          // Collaborator no longer exists, clear from localStorage
-          console.warn('⚠️ Saved collaborator not found in list, clearing selection');
-          this.selectedCollaborator = null;
-          localStorage.removeItem('selectedCollaboratorId');
-        }
-      } else if (this.selectedCollaborator) {
-        // If we have a current selection but no saved one, validate it exists
+      // Validate current selection exists in the list
+      if (this.selectedCollaborator) {
         const collaboratorExists = this.collaborators.find(c => c.userId === this.selectedCollaborator);
         if (!collaboratorExists) {
           console.warn('⚠️ Selected collaborator not found in list, resetting to team view');
           this.selectedCollaborator = null;
-        } else {
-          // Save valid selection to localStorage
-          localStorage.setItem('selectedCollaboratorId', this.selectedCollaborator);
         }
       }
       
       this.isLoadingCollaborators = false;
       console.log('✅ Collaborators loaded:', this.collaborators.length);
-      
-      // Update team name display after loading collaborators to ensure title is correct
-      this.updateTeamNameDisplay();
       
       this.cdr.markForCheck();
     } catch (error) {
@@ -2101,20 +2031,12 @@ private calculateCollaboratorTotals(memberData: Array<{
       this.selectedTeam = team.name;
       this.displayTeamName = team.name; // Update display name
       
-      // Only reset collaborator filter if team is actually changing
-      // Otherwise, restore from localStorage to maintain selection
+      // Reset collaborator filter when team changes
       if (isTeamChanging) {
         this.selectedCollaborator = null;
-        localStorage.removeItem('selectedCollaboratorId');
-      } else {
-        // Restore collaborator selection from localStorage
-        const savedCollaboratorId = localStorage.getItem('selectedCollaboratorId');
-        if (savedCollaboratorId) {
-          this.selectedCollaborator = savedCollaboratorId;
-        }
       }
       
-      // Save selection to localStorage
+      // Save team selection to localStorage
       localStorage.setItem('selectedTeamId', teamId);
       
       // Load team members data first (this sets teamTotalPoints, etc.)
@@ -2123,14 +2045,13 @@ private calculateCollaboratorTotals(memberData: Array<{
       // Then load all other team data
       await this.loadTeamData();
       
-      // After loading collaborators, validate and restore selection
-      if (!isTeamChanging && this.selectedCollaborator) {
+      // After loading collaborators, validate current selection
+      if (this.selectedCollaborator) {
         const collaboratorExists = this.collaborators.some(
           c => c.userId === this.selectedCollaborator
         );
         if (!collaboratorExists) {
           this.selectedCollaborator = null;
-          localStorage.removeItem('selectedCollaboratorId');
         }
       }
       
@@ -2164,20 +2085,8 @@ private calculateCollaboratorTotals(memberData: Array<{
    * // Shows aggregated team data
    */
   async onCollaboratorChange(userId: string | null): Promise<void> {
-    // Update selectedCollaborator immediately
+    // Update the selected collaborator
     this.selectedCollaborator = userId;
-    
-    // Save or clear selection in localStorage immediately
-    if (userId) {
-      localStorage.setItem('selectedCollaboratorId', userId);
-      console.log('💾 Saved collaborator selection to localStorage:', userId);
-    } else {
-      localStorage.removeItem('selectedCollaboratorId');
-      console.log('💾 Cleared collaborator selection from localStorage');
-    }
-    
-    // Force change detection to update the selector immediately
-    this.cdr.markForCheck();
     
     // When a specific collaborator is selected, switch to goals tab
     // When no collaborator is selected (showing all), switch back to team view
@@ -2185,7 +2094,7 @@ private calculateCollaboratorTotals(memberData: Array<{
       this.activeTab = 'goals';
       console.log('👤 Filtering data for collaborator:', userId);
     } else {
-      // Reset to team view when "Todos os colaboradores" is selected
+      // Reset to team view when "Redefinir seleção" is selected
       this.activeTab = 'goals'; // Keep on goals tab to show team KPIs and progress
       console.log('👥 Showing team data (no collaborator selected)');
     }
@@ -2198,30 +2107,14 @@ private calculateCollaboratorTotals(memberData: Array<{
       await this.loadTeamData();
     }
     
-    // Ensure selection is preserved after data loading
     this.cdr.markForCheck();
   }
 
   /**
    * Update team name display based on current selection
    * This ensures the team name is correctly displayed when switching between collaborator and team view
-   * Also checks localStorage to ensure selection persists
    */
   private updateTeamNameDisplay(): void {
-    // First, check localStorage to restore selectedCollaborator if it was reset
-    const savedCollaboratorId = localStorage.getItem('selectedCollaboratorId');
-    if (!this.selectedCollaborator && savedCollaboratorId) {
-      // Restore from localStorage if available
-      const collaboratorExists = this.collaborators.find(c => c.userId === savedCollaboratorId);
-      if (collaboratorExists) {
-        this.selectedCollaborator = savedCollaboratorId;
-        console.log('💾 Restored collaborator selection in updateTeamNameDisplay:', savedCollaboratorId);
-      } else {
-        // Collaborator no longer exists, clear from localStorage
-        localStorage.removeItem('selectedCollaboratorId');
-      }
-    }
-    
     // Calculate and update displayTeamName explicitly
     if (this.selectedCollaborator) {
       const collaborator = this.collaborators.find(c => c.userId === this.selectedCollaborator);
@@ -2245,6 +2138,7 @@ private calculateCollaboratorTotals(memberData: Array<{
     // Force change detection
     this.cdr.markForCheck();
   }
+
 
   /**
    * Handle month selection change event.

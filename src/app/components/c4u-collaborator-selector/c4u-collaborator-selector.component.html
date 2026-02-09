@@ -1,14 +1,22 @@
 <div class="collaborator-selector">
   <select
+    #collaboratorSelect
     id="collaborator-select"
     class="form-select collaborator-select"
-    [ngModel]="selectedCollaborator || ''"
+    [ngModel]="getSelectValue()"
     (change)="onCollaboratorChange($any($event.target).value)"
     [attr.aria-label]="'Filtrar por colaborador'"
   >
-    <option value="">Todos os colaboradores</option>
+    <option value="">Escolha um colaborador</option>
+    <option value="RESET">Redefinir seleção</option>
     <option *ngFor="let collaborator of collaborators" [value]="collaborator.userId">
       {{ collaborator.name }}
     </option>
   </select>
+  
+  <!-- Display selected collaborator name below selector -->
+  <div *ngIf="selectedCollaborator && getSelectedCollaboratorName()" class="selected-collaborator-name">
+    <i class="ri-user-line" aria-hidden="true"></i>
+    <span>{{ getSelectedCollaboratorName() }}</span>
+  </div>
 </div>
