@@ -108,7 +108,7 @@
         
         <!-- Additional Metrics Compact -->
         <div class="compact-item" *ngIf="teamAveragePoints > 0">
-          <i class="ri-graph-up-line compact-icon media"></i>
+          <i class="ri-star-fill compact-icon media"></i>
           <span class="compact-value">{{ teamAveragePoints | number:'1.0-0':'pt-BR' }}</span>
         </div>
         <div class="compact-item" *ngIf="progressMetrics">
@@ -130,7 +130,10 @@
     <div class="dashboard-header" role="banner">
       <c4u-dashboard-navigation></c4u-dashboard-navigation>
       <div class="header-spacer"></div>
-      <c4u-seletor-mes (onSelectedMonth)="onMonthChange($event)"></c4u-seletor-mes>
+      <c4u-seletor-mes 
+        [playerId]="getTeamPlayerIdForMonthSelector()" 
+        (onSelectedMonth)="onMonthChange($event)">
+      </c4u-seletor-mes>
       <button 
         class="refresh-button"
         (click)="refreshData()"
@@ -196,7 +199,7 @@
           <div *ngIf="!isLoadingGoals && !hasGoalsError">
             <!-- KPI Section -->
             <section class="dashboard-section" aria-labelledby="kpi-section-title">
-              <h2 id="kpi-section-title" class="section-title">Carteira da Equipe</h2>
+              <h3 id="kpi-section-title" class="section-title">Carteira da Equipe</h3>
               
               <div class="kpi-grid" *ngIf="teamKPIs.length > 0" role="group" aria-labelledby="kpi-section-title">
                 <c4u-kpi-circular-progress
@@ -219,7 +222,7 @@
             
             <!-- Progress Section (Activities and Macros) -->
             <section class="dashboard-section" aria-labelledby="progress-section-title">
-              <h2 id="progress-section-title" class="section-title">Progresso da Equipe</h2>
+              <h3 id="progress-section-title" class="section-title">Progresso da Equipe</h3>
               
               <c4u-activity-progress
                 *ngIf="teamActivityMetrics && teamProcessMetrics"
@@ -235,7 +238,7 @@
             <!-- Company Portfolio Section -->
             <section class="dashboard-section carteira-section" aria-labelledby="company-section-title">
               <div class="section-header">
-                <h2 id="company-section-title" class="section-title">Clientes</h2>
+                <h3 id="company-section-title" class="section-title">Clientes</h3>
                 <!-- <button 
                   type="button" 
                   class="carteira-expand-btn"
@@ -320,7 +323,7 @@
 
             <!-- Activities Chart -->
             <section class="dashboard-section" aria-labelledby="activities-chart-title">
-              <h2 id="activities-chart-title" class="section-title">Volume de Atividades por Dia</h2>
+              <h3 id="activities-chart-title" class="section-title">Volume de Atividades por Dia</h3>
               <c4u-productivity-analysis-tab
                 [graphData]="graphData"
                 [chartDatasetsInput]="graphDatasets"
@@ -333,7 +336,7 @@
 
             <!-- Points Chart -->
             <section class="dashboard-section" aria-labelledby="points-chart-title">
-              <h2 id="points-chart-title" class="section-title">Volume de Pontos por Dia</h2>
+              <h3 id="points-chart-title" class="section-title">Volume de Pontos por Dia</h3>
               <c4u-productivity-analysis-tab
                 [graphData]="pointsGraphData"
                 [chartDatasetsInput]="pointsGraphDatasets"
@@ -346,7 +349,7 @@
 
             <!-- Activities by Collaborator Chart -->
             <section class="dashboard-section" aria-labelledby="activities-by-collaborator-chart-title">
-              <h2 id="activities-by-collaborator-chart-title" class="section-title">Total de Atividades por Colaborador</h2>
+              <h3 id="activities-by-collaborator-chart-title" class="section-title">Total de Atividades por Colaborador</h3>
               <div class="chart-container" [class.loading]="isLoadingProductivity">
                 <div *ngIf="isLoadingProductivity" class="loading-overlay" role="status" aria-live="polite">
                   <div class="spinner-border text-primary" role="status" aria-hidden="true">
@@ -371,7 +374,7 @@
 
             <!-- Points by Collaborator Chart -->
             <section class="dashboard-section" aria-labelledby="points-by-collaborator-chart-title">
-              <h2 id="points-by-collaborator-chart-title" class="section-title">Total de Pontos por Colaborador</h2>
+              <h3 id="points-by-collaborator-chart-title" class="section-title">Total de Pontos por Colaborador</h3>
               <div class="chart-container" [class.loading]="isLoadingProductivity">
                 <div *ngIf="isLoadingProductivity" class="loading-overlay" role="status" aria-live="polite">
                   <div class="spinner-border text-primary" role="status" aria-hidden="true">

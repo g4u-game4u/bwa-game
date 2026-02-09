@@ -1,4 +1,4 @@
-import { Component, Input, OnInit, OnDestroy, ElementRef, ViewChild } from '@angular/core';
+import { Component, Input, OnInit, OnDestroy, OnChanges, SimpleChanges, ElementRef, ViewChild } from '@angular/core';
 import { HelpTextsService } from '@services/help-texts.service';
 import { Subscription } from 'rxjs';
 
@@ -7,7 +7,7 @@ import { Subscription } from 'rxjs';
   templateUrl: './c4u-info-button.component.html',
   styleUrls: ['./c4u-info-button.component.scss']
 })
-export class C4uInfoButtonComponent implements OnInit, OnDestroy {
+export class C4uInfoButtonComponent implements OnInit, OnDestroy, OnChanges {
   @Input() infoKey: string = '';
   @Input() customText: string = ''; // Optional custom text that overrides help-texts
   @Input() position: 'top' | 'bottom' | 'left' | 'right' = 'bottom'; // Changed default to 'bottom'
@@ -23,12 +23,13 @@ export class C4uInfoButtonComponent implements OnInit, OnDestroy {
   constructor(private helpTextsService: HelpTextsService) {}
 
   ngOnInit(): void {
-    if (this.customText) {
-      // Use custom text if provided
-      this.helpText = this.customText;
-    } else {
-      // Load from help-texts service
-      this.loadHelpText();
+    this.updateHelpText();
+  }
+
+  ngOnChanges(changes: SimpleChanges): void {
+    // Update help text when customText or infoKey changes
+    if (changes['customText'] || changes['infoKey']) {
+      this.updateHelpText();
     }
   }
 
@@ -38,7 +39,26 @@ export class C4uInfoButtonComponent implements OnInit, OnDestroy {
     }
   }
 
+  /**
+   * Update help text based on customText or infoKey
+   */
+  private updateHelpText(): void {
+    if (this.customText) {
+      // If customText is provided, load default text and prepend customText
+      this.subscription?.unsubscribe();
+      this.subscription = this.helpTextsService.getHelpText(this.infoKey)
+        .subscribe(text => {
+          // Combine custom text (e.g., "100 de 10") with default help text
+          this.helpText = `${this.customText}. ${text}`;
+        });
+    } else {
+      // Load from help-texts service only
+      this.loadHelpText();
+    }
+  }
+
   private loadHelpText(): void {
+    this.subscription?.unsubscribe();
     this.subscription = this.helpTextsService.getHelpText(this.infoKey)
       .subscribe(text => {
         this.helpText = text;

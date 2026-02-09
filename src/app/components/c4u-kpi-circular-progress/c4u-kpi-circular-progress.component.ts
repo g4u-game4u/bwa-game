@@ -58,8 +58,27 @@ export class C4uKpiCircularProgressComponent {
     return this.colorPalette[this.colorIndex % this.colorPalette.length];
   }
 
+  /**
+   * Get display value showing percentage above target
+   * Instead of showing "100 de 10", shows "1000%" (percentage above target)
+   */
   get displayValue(): string {
-    return this.unit ? `${this.current} ${this.unit}` : `${this.current}`;
+    if (this.target === 0) {
+      return '0%';
+    }
+    const percentage = Math.round((this.current / this.target) * 100);
+    return `${percentage}%`;
+  }
+
+  /**
+   * Get target value display showing "Meta: X unit"
+   * This replaces the old displayValue that showed current value
+   */
+  get targetDisplayValue(): string {
+    if (this.unit) {
+      return `Meta: ${this.target} ${this.unit}`;
+    }
+    return `Meta: ${this.target}`;
   }
 
   /**
@@ -123,17 +142,35 @@ export class C4uKpiCircularProgressComponent {
   }
 
   /**
+   * Get custom help text with current and target values
+   * Format: "100 de 10" (current de target)
+   * Only for "clientes-na-carteira" and "entregas-no-prazo" KPIs
+   */
+  get customHelpText(): string {
+    const key = this.helpTextKey;
+    
+    // Only add custom text for these specific KPIs
+    if (key === 'clientes-na-carteira' || key === 'entregas-no-prazo') {
+      const unitText = this.unit ? ` ${this.unit}` : '';
+      return `${this.current}${unitText} de ${this.target}${unitText}`;
+    }
+    
+    // Return empty string to use default help text from service
+    return '';
+  }
+
+  /**
    * Generate accessible ARIA label for screen readers
    */
   get ariaLabel(): string {
     const unitText = this.unit ? ` ${this.unit}` : '';
-    return `${this.label}: ${this.current}${unitText} de ${this.target}${unitText}, ${this.percentage}% completo. ${this.goalStatus}`;
+    return `${this.label}: ${this.percentage}% da meta (${this.current}${unitText} de ${this.target}${unitText}). ${this.goalStatus}`;
   }
 
   /**
    * Generate ARIA value text for screen readers
    */
   get ariaValueText(): string {
-    return `${this.current} de ${this.target}, ${this.percentage} por cento`;
+    return `${this.percentage}% da meta`;
   }
 }

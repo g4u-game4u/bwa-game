@@ -65,8 +65,19 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
   selectedTeam: string = '';
   selectedTeamId: string = ''; // Funifier team ID (e.g., 'FkmdnFU')
   selectedCollaborator: string | null = null;
-  selectedMonth: Date = new Date();
-  selectedMonthsAgo: number = 0;
+  // Initialize to February 2026 by default (similar to gamification-dashboard)
+  // Calculate months ago from current date to February 2026
+  selectedMonthsAgo: number = (() => {
+    const now = dayjs();
+    const feb2026 = dayjs('2026-02-01');
+    // Calculate how many months ago February 2026 is from now
+    // If we're in February 2026, monthsAgo = 0
+    // If we're in March 2026, monthsAgo = 1 (one month ago)
+    // If we're in January 2026, monthsAgo = -1, but we'll use 0 as minimum
+    const monthsDiff = now.diff(feb2026, 'month', true); // Use true for fractional months
+    return Math.max(0, Math.round(monthsDiff));
+  })();
+  selectedMonth: Date = new Date(2026, 1, 1); // February 2026 (month is 0-indexed: 1 = February)
   activeTab: 'goals' | 'productivity' = 'goals';
   
   // Loading states
@@ -1231,7 +1242,8 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
         borderColor: ['rgba(79, 70, 229, 1)'],
         borderWidth: 1
       }];
-      this.activitiesByCollaboratorLabels = [memberName];
+      // For single collaborator, percentage is always 100%
+      this.activitiesByCollaboratorLabels = [`${memberName} - ${activitiesTotal} (100%)`];
       
       // Load points data for the same period
       await this.loadCollaboratorPointsData(collaboratorId, startDate, endDate, memberName);
@@ -1360,7 +1372,8 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
         borderColor: ['rgba(16, 185, 129, 1)'],
         borderWidth: 1
       }];
-      this.pointsByCollaboratorLabels = [memberName];
+      // For single collaborator, percentage is always 100%
+      this.pointsByCollaboratorLabels = [`${memberName} - ${pointsTotal} (100%)`];
       
       console.log('✅ Collaborator points data loaded:', {
         dataPoints: pointsDataPoints.length,
@@ -1693,6 +1706,10 @@ private calculateCollaboratorTotals(memberData: Array<{
   activitiesTotals.sort((a, b) => b.total - a.total);
   pointsTotals.sort((a, b) => b.total - a.total);
   
+  // Calculate total for percentage calculation
+  const totalActivities = activitiesTotals.reduce((sum, item) => sum + item.total, 0);
+  const totalPoints = pointsTotals.reduce((sum, item) => sum + item.total, 0);
+  
   // Create graph data and datasets for activities by collaborator
   this.activitiesByCollaboratorGraphData = activitiesTotals.map((item, index) => ({
     date: new Date(2024, 0, index + 1), // Dummy date, not used in bar chart
@@ -1733,9 +1750,16 @@ private calculateCollaboratorTotals(memberData: Array<{
     borderWidth: 1
   }];
   
-  // Store collaborator names for chart labels
-  this.activitiesByCollaboratorLabels = activitiesTotals.map(item => item.name);
-  this.pointsByCollaboratorLabels = pointsTotals.map(item => item.name);
+  // Store collaborator names with percentage for chart labels
+  // Format: "Nome - Valor (Porcentagem%)"
+  this.activitiesByCollaboratorLabels = activitiesTotals.map(item => {
+    const percentage = totalActivities > 0 ? Math.round((item.total / totalActivities) * 100) : 0;
+    return `${item.name} - ${item.total} (${percentage}%)`;
+  });
+  this.pointsByCollaboratorLabels = pointsTotals.map(item => {
+    const percentage = totalPoints > 0 ? Math.round((item.total / totalPoints) * 100) : 0;
+    return `${item.name} - ${item.total} (${percentage}%)`;
+  });
   
   console.log('✅ Collaborator totals calculated:', {
     activities: activitiesTotals,
@@ -2163,9 +2187,36 @@ private calculateCollaboratorTotals(memberData: Array<{
    * @see {@link loadTeamData}
    * @see {@link calculateDateRange}
    */
+  /**
+   * Handle month selection change event.
+   * 
+   * When a user navigates to a different month:
+   * 1. Updates the selectedMonthsAgo property
+   * 2. Updates the selectedMonth Date object
+   * 3. Reloads all team data for the new month
+   * 
+   * Similar to gamification-dashboard implementation.
+   * 
+   * @param monthsAgo - Number of months before current month (0 = current, 1 = previous, etc.)
+   * 
+   * @example
+   * // Current month (February 2026)
+   * onMonthChange(0);
+   * 
+   * // Previous month (January 2026)
+   * onMonthChange(1);
+   * 
+   * @see {@link loadTeamData}
+   * @see {@link calculateDateRange}
+   */
   onMonthChange(monthsAgo: number): void {
     this.selectedMonthsAgo = monthsAgo;
-    this.selectedMonth = dayjs().subtract(monthsAgo, 'month').toDate();
+    // Calculate the target month date (similar to gamification-dashboard)
+    const date = new Date();
+    date.setMonth(date.getMonth() - monthsAgo);
+    this.selectedMonth = date;
+    const monthName = date.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+    this.announceToScreenReader(`Mês alterado para ${monthName}`);
     this.loadTeamData();
   }
 
@@ -2422,6 +2473,27 @@ private calculateCollaboratorTotals(memberData: Array<{
    */
   get teamPlayerIdsForModal(): string {
     return this.teamMemberIds.join(',');
+  }
+
+  /**
+   * Get player ID for month selector component
+   * Uses the first team member ID if available, otherwise uses current user ID
+   * Similar to gamification-dashboard implementation
+   */
+  getTeamPlayerIdForMonthSelector(): string {
+    // If we have team members, use the first one
+    if (this.teamMemberIds.length > 0) {
+      return this.teamMemberIds[0];
+    }
+    
+    // Otherwise, use current user ID from session
+    const usuario = this.sessaoProvider.usuario as { _id?: string; email?: string } | null;
+    if (usuario) {
+      return (usuario._id || usuario.email || '') as string;
+    }
+    
+    // Fallback to empty string
+    return '';
   }
 
   /**

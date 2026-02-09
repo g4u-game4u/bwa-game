@@ -22,10 +22,15 @@ export class C4uPorcentagemCircularComponent {
 
     @Input()
     set percent(val: number) {
-        if (this.circle && val < 100) {
-            this.circle.nativeElement.style.strokeDashoffset = 380 - (val / 100) * (380 - 8);
-        } else if (val >= 100) {
-            this.circle.nativeElement.style.strokeDashoffset = 0;
+        if (this.circle) {
+            // Cap the visual progress at 100% for the circle (full circle)
+            // But allow displaying percentages above 100% in the text
+            const visualPercent = Math.min(val, 100);
+            if (visualPercent < 100) {
+                this.circle.nativeElement.style.strokeDashoffset = 380 - (visualPercent / 100) * (380 - 8);
+            } else {
+                this.circle.nativeElement.style.strokeDashoffset = 0;
+            }
         }
 
         this._percent = val;
