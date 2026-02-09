@@ -1,4 +1,4 @@
-import { Component, EventEmitter, Input, Output, ChangeDetectionStrategy } from '@angular/core';
+import { Component, EventEmitter, Input, Output, ChangeDetectionStrategy, ChangeDetectorRef, OnChanges, SimpleChanges } from '@angular/core';
 
 export interface Collaborator {
   userId: string;
@@ -12,10 +12,21 @@ export interface Collaborator {
   styleUrls: ['./c4u-collaborator-selector.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush
 })
-export class C4uCollaboratorSelectorComponent {
+export class C4uCollaboratorSelectorComponent implements OnChanges {
   @Input() collaborators: Collaborator[] = [];
   @Input() selectedCollaborator: string | null = null;
   @Output() collaboratorSelected = new EventEmitter<string | null>();
+
+  constructor(private cdr: ChangeDetectorRef) {}
+
+  ngOnChanges(changes: SimpleChanges): void {
+    // Detect changes when selectedCollaborator or collaborators are updated
+    // Don't reset selectedCollaborator here - let the parent component handle validation
+    // This ensures the selection persists during data loading
+    if (changes['selectedCollaborator'] || changes['collaborators']) {
+      this.cdr.markForCheck();
+    }
+  }
 
   onCollaboratorChange(userId: string): void {
     if (userId === '') {
@@ -25,5 +36,6 @@ export class C4uCollaboratorSelectorComponent {
       this.selectedCollaborator = userId;
       this.collaboratorSelected.emit(userId);
     }
+    this.cdr.markForCheck();
   }
 }

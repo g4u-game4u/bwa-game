@@ -233,6 +233,13 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
           ? savedTeamId 
           : this.teams[0].id;
         
+        // Restore collaborator selection from localStorage before loading team
+        const savedCollaboratorId = localStorage.getItem('selectedCollaboratorId');
+        if (savedCollaboratorId) {
+          this.selectedCollaborator = savedCollaboratorId;
+          console.log('💾 Restored collaborator selection from localStorage during init:', savedCollaboratorId);
+        }
+        
         await this.onTeamChange(teamToSelect);
         console.log('✅ Initial team selected:', teamToSelect);
       } else {
@@ -640,6 +647,29 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       }
       
       this.lastRefresh = new Date();
+      
+      // After loading data, ensure selectedCollaborator is restored from localStorage
+      // This is important because it might have been reset during loading
+      const savedCollaboratorId = localStorage.getItem('selectedCollaboratorId');
+      if (savedCollaboratorId) {
+        // Always restore from localStorage to ensure persistence
+        const collaboratorExists = this.collaborators.find(c => c.userId === savedCollaboratorId);
+        if (collaboratorExists) {
+          if (this.selectedCollaborator !== savedCollaboratorId) {
+            this.selectedCollaborator = savedCollaboratorId;
+            console.log('💾 Restored collaborator selection from localStorage after loadTeamData:', savedCollaboratorId);
+            // Update team name display to reflect the restored selection
+            this.updateTeamNameDisplay();
+          }
+        } else {
+          // Collaborator no longer exists, clear selection
+          if (this.selectedCollaborator === savedCollaboratorId) {
+            this.selectedCollaborator = null;
+            localStorage.removeItem('selectedCollaboratorId');
+            this.updateTeamNameDisplay();
+          }
+        }
+      }
     } catch (error) {
       console.error('Error loading team data:', error);
       this.toastService.error('Erro ao carregar dados da equipe');
@@ -662,6 +692,9 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
     try {
       console.log('👤 Loading data for collaborator:', collaboratorId);
       
+      // Preserve the selectedCollaborator before loading
+      const preservedCollaboratorId = this.selectedCollaborator || collaboratorId;
+      
       // Load collaborator-specific data in parallel
       await Promise.all([
         this.loadCollaboratorSidebarData(collaboratorId, dateRange),
@@ -671,6 +704,21 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
         this.loadMonthlyPointsBreakdown(collaboratorId)
       ]);
       
+      // Restore selectedCollaborator after loading collaborators
+      // This ensures it persists even if it was reset during loading
+      if (preservedCollaboratorId && !this.selectedCollaborator) {
+        this.selectedCollaborator = preservedCollaboratorId;
+        localStorage.setItem('selectedCollaboratorId', preservedCollaboratorId);
+        console.log('💾 Restored collaborator selection after loading:', preservedCollaboratorId);
+      }
+      
+      // Also check localStorage to ensure selection is preserved
+      const savedCollaboratorId = localStorage.getItem('selectedCollaboratorId');
+      if (savedCollaboratorId && !this.selectedCollaborator) {
+        this.selectedCollaborator = savedCollaboratorId;
+        console.log('💾 Restored collaborator selection from localStorage in loadCollaboratorData:', savedCollaboratorId);
+      }
+      
       // Load carteira data first, then KPIs (which depend on carteira)
       await this.loadCollaboratorCarteiraData(collaboratorId, dateRange);
       await this.loadTeamKPIs(collaboratorId);
@@ -679,7 +727,11 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       this.updateFormattedSidebarData();
       
       // Update team name display after loading collaborators
+      // This will also check localStorage and restore selection if needed
       this.updateTeamNameDisplay();
+      
+      // Ensure selection is preserved
+      this.cdr.markForCheck();
       
       console.log('✅ Collaborator data loaded for:', collaboratorId);
     } catch (error) {
@@ -1002,8 +1054,41 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
         this.collaborators = await Promise.all(collaboratorPromises);
       }
       
+      // Always check localStorage to ensure selection is preserved
+      // This is important because selectedCollaborator might be reset during data loading
+      const savedCollaboratorId = localStorage.getItem('selectedCollaboratorId');
+      
+      // If we have a saved collaborator ID, use it (it takes precedence over current selection)
+      // This ensures the selection persists even if it was reset during loading
+      if (savedCollaboratorId) {
+        const collaboratorExists = this.collaborators.find(c => c.userId === savedCollaboratorId);
+        if (collaboratorExists) {
+          this.selectedCollaborator = savedCollaboratorId;
+          console.log('💾 Restored collaborator selection from localStorage:', savedCollaboratorId);
+        } else {
+          // Collaborator no longer exists, clear from localStorage
+          console.warn('⚠️ Saved collaborator not found in list, clearing selection');
+          this.selectedCollaborator = null;
+          localStorage.removeItem('selectedCollaboratorId');
+        }
+      } else if (this.selectedCollaborator) {
+        // If we have a current selection but no saved one, validate it exists
+        const collaboratorExists = this.collaborators.find(c => c.userId === this.selectedCollaborator);
+        if (!collaboratorExists) {
+          console.warn('⚠️ Selected collaborator not found in list, resetting to team view');
+          this.selectedCollaborator = null;
+        } else {
+          // Save valid selection to localStorage
+          localStorage.setItem('selectedCollaboratorId', this.selectedCollaborator);
+        }
+      }
+      
       this.isLoadingCollaborators = false;
       console.log('✅ Collaborators loaded:', this.collaborators.length);
+      
+      // Update team name display after loading collaborators to ensure title is correct
+      this.updateTeamNameDisplay();
+      
       this.cdr.markForCheck();
     } catch (error) {
       console.error('Error in loadCollaborators:', error);
@@ -1130,7 +1215,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       
       // Get collaborator name for the label
       const collaborator = this.collaborators.find(c => c.userId === collaboratorId);
-      const memberName = collaborator?.name || collaboratorId;
+      const memberName = this.formatCollaboratorName(collaboratorId, collaborator?.name);
       
       // For productivity tab, use the selected period instead of month range
       const endDate = dayjs();
@@ -1395,7 +1480,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
           try {
             // Get collaborator name for the label
             const collaborator = this.collaborators.find(c => c.userId === memberId);
-            const memberName = collaborator?.name || memberId;
+            const memberName = this.formatCollaboratorName(memberId, collaborator?.name);
             
             // Query action_log for daily completed tasks count for this member
             const activitiesAggregateBody = [
@@ -1660,13 +1745,16 @@ private calculateCollaboratorTotals(memberData: Array<{
     const activitiesTotal = member.activitiesDataPoints.reduce((sum, point) => sum + point.value, 0);
     const pointsTotal = member.pointsDataPoints.reduce((sum, point) => sum + point.value, 0);
     
+    // Format the member name (already formatted in loadProductivityData, but ensure consistency)
+    const formattedName = this.formatCollaboratorName(member.memberId, member.memberName);
+    
     activitiesTotals.push({
-      name: member.memberName,
+      name: formattedName,
       total: activitiesTotal
     });
     
     pointsTotals.push({
-      name: member.memberName,
+      name: formattedName,
       total: Math.floor(pointsTotal) // Round down points
     });
   });
@@ -2005,13 +2093,26 @@ private calculateCollaboratorTotals(memberData: Array<{
         return;
       }
       
+      // Check if team is actually changing
+      const isTeamChanging = this.selectedTeamId !== teamId;
+      
       // Set selected team ID and name
       this.selectedTeamId = teamId;
       this.selectedTeam = team.name;
       this.displayTeamName = team.name; // Update display name
       
-      // Reset collaborator filter
-      this.selectedCollaborator = null;
+      // Only reset collaborator filter if team is actually changing
+      // Otherwise, restore from localStorage to maintain selection
+      if (isTeamChanging) {
+        this.selectedCollaborator = null;
+        localStorage.removeItem('selectedCollaboratorId');
+      } else {
+        // Restore collaborator selection from localStorage
+        const savedCollaboratorId = localStorage.getItem('selectedCollaboratorId');
+        if (savedCollaboratorId) {
+          this.selectedCollaborator = savedCollaboratorId;
+        }
+      }
       
       // Save selection to localStorage
       localStorage.setItem('selectedTeamId', teamId);
@@ -2021,6 +2122,17 @@ private calculateCollaboratorTotals(memberData: Array<{
       
       // Then load all other team data
       await this.loadTeamData();
+      
+      // After loading collaborators, validate and restore selection
+      if (!isTeamChanging && this.selectedCollaborator) {
+        const collaboratorExists = this.collaborators.some(
+          c => c.userId === this.selectedCollaborator
+        );
+        if (!collaboratorExists) {
+          this.selectedCollaborator = null;
+          localStorage.removeItem('selectedCollaboratorId');
+        }
+      }
       
       this.cdr.markForCheck();
     } catch (error) {
@@ -2052,32 +2164,68 @@ private calculateCollaboratorTotals(memberData: Array<{
    * // Shows aggregated team data
    */
   async onCollaboratorChange(userId: string | null): Promise<void> {
+    // Update selectedCollaborator immediately
     this.selectedCollaborator = userId;
+    
+    // Save or clear selection in localStorage immediately
+    if (userId) {
+      localStorage.setItem('selectedCollaboratorId', userId);
+      console.log('💾 Saved collaborator selection to localStorage:', userId);
+    } else {
+      localStorage.removeItem('selectedCollaboratorId');
+      console.log('💾 Cleared collaborator selection from localStorage');
+    }
+    
+    // Force change detection to update the selector immediately
+    this.cdr.markForCheck();
+    
+    // When a specific collaborator is selected, switch to goals tab
+    // When no collaborator is selected (showing all), switch back to team view
+    if (userId) {
+      this.activeTab = 'goals';
+      console.log('👤 Filtering data for collaborator:', userId);
+    } else {
+      // Reset to team view when "Todos os colaboradores" is selected
+      this.activeTab = 'goals'; // Keep on goals tab to show team KPIs and progress
+      console.log('👥 Showing team data (no collaborator selected)');
+    }
     
     // Update team name display immediately
     this.updateTeamNameDisplay();
-    
-    if (userId) {
-      console.log('👤 Filtering data for collaborator:', userId);
-    } else {
-      console.log('👥 Showing team data (no collaborator selected)');
-    }
     
     // Reload data with the new filter
     if (this.selectedTeamId) {
       await this.loadTeamData();
     }
+    
+    // Ensure selection is preserved after data loading
+    this.cdr.markForCheck();
   }
 
   /**
    * Update team name display based on current selection
    * This ensures the team name is correctly displayed when switching between collaborator and team view
+   * Also checks localStorage to ensure selection persists
    */
   private updateTeamNameDisplay(): void {
+    // First, check localStorage to restore selectedCollaborator if it was reset
+    const savedCollaboratorId = localStorage.getItem('selectedCollaboratorId');
+    if (!this.selectedCollaborator && savedCollaboratorId) {
+      // Restore from localStorage if available
+      const collaboratorExists = this.collaborators.find(c => c.userId === savedCollaboratorId);
+      if (collaboratorExists) {
+        this.selectedCollaborator = savedCollaboratorId;
+        console.log('💾 Restored collaborator selection in updateTeamNameDisplay:', savedCollaboratorId);
+      } else {
+        // Collaborator no longer exists, clear from localStorage
+        localStorage.removeItem('selectedCollaboratorId');
+      }
+    }
+    
     // Calculate and update displayTeamName explicitly
     if (this.selectedCollaborator) {
       const collaborator = this.collaborators.find(c => c.userId === this.selectedCollaborator);
-      this.displayTeamName = collaborator?.name || this.selectedCollaborator || '';
+      this.displayTeamName = collaborator?.name || this.formatCollaboratorName(this.selectedCollaborator) || '';
     } else {
       // Show team name
       if (this.selectedTeam && this.selectedTeam.trim().length > 0) {
@@ -2630,9 +2778,55 @@ private calculateCollaboratorTotals(memberData: Array<{
   }
 
   /**
+   * Format collaborator name from email or use provided name
+   * Converts email like "joyce.carla@bwa.global" to "Joyce Carla"
+   * 
+   * @param userId - The user ID (email) or collaborator ID
+   * @param collaboratorName - Optional name from collaborator object
+   * @returns Formatted name for display
+   */
+  private formatCollaboratorName(userId: string, collaboratorName?: string): string {
+    // If we have a name from the collaborator object, use it
+    if (collaboratorName && collaboratorName.trim()) {
+      return collaboratorName.trim();
+    }
+    
+    // Otherwise, extract and format from email
+    if (userId && userId.includes('@')) {
+      // Get the part before @
+      const emailPrefix = userId.split('@')[0];
+      // Replace dots with spaces and split into words
+      const words = emailPrefix.split('.');
+      // Capitalize each word
+      const formattedWords = words.map(word => {
+        if (word.length === 0) return '';
+        return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+      });
+      return formattedWords.join(' ');
+    }
+    
+    // Fallback: return userId as-is if it's not an email
+    return userId;
+  }
+
+  /**
    * Logout user and redirect to login page
+   * Includes double confirmation to prevent accidental logout
    */
   logout(): void {
+    // First confirmation
+    const firstConfirm = window.confirm('Tem certeza que deseja sair do sistema?');
+    if (!firstConfirm) {
+      return;
+    }
+    
+    // Second confirmation (double validation)
+    const secondConfirm = window.confirm('Esta ação irá desconectar você do sistema. Deseja continuar?');
+    if (!secondConfirm) {
+      return;
+    }
+    
+    // If both confirmations are accepted, proceed with logout
     this.sessaoProvider.logout();
   }
 }

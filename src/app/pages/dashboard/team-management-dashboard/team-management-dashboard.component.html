@@ -42,7 +42,7 @@
           <c4u-point-wallet
             *ngIf="teamPointWallet"
             [points]="teamPointWallet"
-            [mediaPontos]="teamAveragePoints">
+            [mediaPontos]="selectedCollaborator ? undefined : teamAveragePoints">
           </c4u-point-wallet>
           
           <c4u-shimmer *ngIf="isLoadingSidebar && !teamPointWallet"></c4u-shimmer>
@@ -150,8 +150,8 @@
       </button>
     </div>
     
-    <!-- Tab Navigation -->
-    <div class="tab-navigation" role="tablist" aria-label="Visualizações do dashboard">
+    <!-- Tab Navigation - Only show when no specific collaborator is selected -->
+    <div class="tab-navigation" *ngIf="!selectedCollaborator" role="tablist" aria-label="Visualizações do dashboard">
         <button 
           class="tab-button"
           role="tab"
@@ -184,10 +184,10 @@
 
     <!-- Tab Content -->
     <div class="tab-content">
-        <!-- Goals Tab -->
+        <!-- Goals Tab - Show when activeTab is 'goals' OR when a specific collaborator is selected -->
         <div 
           class="tab-pane" 
-          *ngIf="activeTab === 'goals'" 
+          *ngIf="activeTab === 'goals' || selectedCollaborator" 
           [@fadeIn]
           role="tabpanel"
           id="goals-panel"
@@ -298,10 +298,10 @@
           </div>
         </div>
 
-        <!-- Productivity Tab -->
+        <!-- Productivity Tab - Only show when no specific collaborator is selected -->
         <div 
           class="tab-pane" 
-          *ngIf="activeTab === 'productivity'" 
+          *ngIf="activeTab === 'productivity' && !selectedCollaborator" 
           [@fadeIn]
           role="tabpanel"
           id="productivity-panel"

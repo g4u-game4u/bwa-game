@@ -484,7 +484,7 @@
       
       .refresh-button {
         position: absolute;
-        right: 80px; // Make room for logout button
+        right: 120px; // Increased from 80px to add more spacing between buttons
         top: 50%;
         transform: translateY(-50%);
         display: flex;
@@ -580,8 +580,6 @@
       display: flex;
       gap: $spacing-sm;
       @include card;
-      background: linear-gradient(to bottom right, rgba(255, 255, 255, 0.2) 0%, rgba(255, 255, 255, 0) 100%);
-      backdrop-filter: blur(25px);
       border: 1px solid rgba(255, 255, 255, 0.1);
       padding: $spacing-sm;
       margin-bottom: $spacing-lg;
@@ -621,10 +619,9 @@
         }
 
         &.active {
-          background: rgba($primary-electric-blue, 0.35);
+          background: rgba($primary-electric-blue, 0.05);
           color: $text-primary;
           border: 1px solid rgba($primary-electric-blue, 0.5);
-          box-shadow: 0 4px 20px rgba($primary-electric-blue, 0.4);
           font-weight: $font-weight-bold;
           
           i {
@@ -677,8 +674,6 @@
     // Tab Content
     .tab-content {
       @include card;
-      background: linear-gradient(to bottom right, rgba(255, 255, 255, 0.2) 0%, rgba(255, 255, 255, 0) 100%);
-      backdrop-filter: blur(25px);
       border-radius: $border-radius;
       padding: $spacing-xl;
       border: 1px solid rgba(255, 255, 255, 0.1);
