@@ -1,8 +1,9 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetectorRef, ChangeDetectionStrategy } from '@angular/core';
-import { Subject } from 'rxjs';
-import { takeUntil, switchMap } from 'rxjs/operators';
+import { Subject, forkJoin } from 'rxjs';
+import { takeUntil, switchMap, map } from 'rxjs/operators';
 import { ActionLogService, ClienteActionItem } from '@services/action-log.service';
 import { CompanyKpiService, CompanyDisplay } from '@services/company-kpi.service';
+import { CnpjLookupService } from '@services/cnpj-lookup.service';
 
 @Component({
   selector: 'modal-carteira',
@@ -22,10 +23,12 @@ export class ModalCarteiraComponent implements OnInit, OnDestroy {
   selectedCnpj: string | null = null;
   selectedClienteActions: ClienteActionItem[] = [];
   isLoadingActions = false;
+  cnpjNameMap = new Map<string, string>(); // Map of original CNPJ → clean empresa name
 
   constructor(
     private actionLogService: ActionLogService,
     private companyKpiService: CompanyKpiService,
+    private cnpjLookupService: CnpjLookupService,
     private cdr: ChangeDetectorRef
   ) {}
 
@@ -47,14 +50,30 @@ export class ModalCarteiraComponent implements OnInit, OnDestroy {
       .pipe(
         switchMap(clientes => {
           console.log('📊 Modal carteira clientes loaded, enriching with KPI data:', clientes);
-          // Enrich companies with KPI data from cnpj__c collection
-          return this.companyKpiService.enrichCompaniesWithKpis(clientes);
+          
+          // Extract all CNPJ strings for lookup
+          const cnpjList = clientes.map(c => c.cnpj);
+          
+          // Enrich CNPJs with clean company names and KPI data in parallel
+          return forkJoin({
+            enrichedClientes: this.companyKpiService.enrichCompaniesWithKpis(clientes),
+            cnpjNames: this.cnpjLookupService.enrichCnpjList(cnpjList)
+          });
+        }),
+        map(({ enrichedClientes, cnpjNames }) => {
+          // Store the CNPJ name map for display
+          console.log('📊 Modal: Received CNPJ name map with', cnpjNames.size, 'entries');
+          console.log('📊 Modal: CNPJ name map entries:', Array.from(cnpjNames.entries()));
+          this.cnpjNameMap = cnpjNames;
+          console.log('📊 Modal: Stored cnpjNameMap:', this.cnpjNameMap);
+          return enrichedClientes;
         }),
         takeUntil(this.destroy$)
       )
       .subscribe({
         next: (enrichedClientes) => {
           console.log('📊 Modal carteira clientes enriched with KPI data:', enrichedClientes);
+          console.log('📊 CNPJ name map:', this.cnpjNameMap);
           this.clientes = enrichedClientes;
           this.isLoading = false;
           this.cdr.markForCheck();
@@ -121,16 +140,16 @@ export class ModalCarteiraComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Extract company name from CNPJ string
-   * Format: "COMPANY NAME l CODE [ID|SUFFIX]"
-   * Returns: Company name without the code and ID parts
+   * Get clean company display name from CNPJ
+   * Uses the enriched CNPJ name map from the lookup service
    */
   getCompanyDisplayName(cnpj: string): string {
     if (!cnpj) {
       return '';
     }
-    // Extract text before " l " separator
-    const match = cnpj.match(/^([^l]+)/);
-    return match ? match[1].trim() : cnpj;
+    // Use the enriched name from the map, fallback to original
+    const displayName = this.cnpjNameMap.get(cnpj);
+    console.log('📊 getCompanyDisplayName called:', { cnpj, displayName, hasInMap: this.cnpjNameMap.has(cnpj), mapSize: this.cnpjNameMap.size });
+    return displayName || cnpj;
   }
 }

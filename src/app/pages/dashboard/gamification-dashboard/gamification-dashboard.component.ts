@@ -10,6 +10,7 @@ import { ToastService } from '@services/toast.service';
 import { PerformanceMonitorService } from '@services/performance-monitor.service';
 import { ActionLogService } from '@services/action-log.service';
 import { CompanyKpiService } from '@services/company-kpi.service';
+import { CnpjLookupService } from '@services/cnpj-lookup.service';
 import { SessaoProvider } from '@providers/sessao/sessao.provider';
 import { 
   PlayerStatus, 
@@ -75,6 +76,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   // Carteira data from action_log (CNPJs with action counts and KPI data)
   carteiraClientes: CompanyDisplay[] = [];
   isLoadingCarteira = true;
+  cnpjNameMap = new Map<string, string>(); // Map of original CNPJ → clean empresa name
   
   // Month selection
   selectedMonth: Date = new Date();
@@ -115,6 +117,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     private performanceMonitor: PerformanceMonitorService,
     private actionLogService: ActionLogService,
     private companyKpiService: CompanyKpiService,
+    private cnpjLookupService: CnpjLookupService,
     private sessaoProvider: SessaoProvider,
     private route: ActivatedRoute,
     private router: Router
@@ -439,14 +442,26 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
       .pipe(
         switchMap(clientes => {
           console.log('📊 Carteira clientes loaded, enriching with KPI data:', clientes);
-          // Enrich companies with KPI data from cnpj__c collection
-          return this.companyKpiService.enrichCompaniesWithKpis(clientes);
+          
+          // Extract all CNPJ strings for lookup
+          const cnpjList = clientes.map(c => c.cnpj);
+          
+          // Enrich CNPJs with clean company names and KPI data in parallel
+          return this.cnpjLookupService.enrichCnpjList(cnpjList).pipe(
+            switchMap(cnpjNames => {
+              // Store the CNPJ name map for display
+              this.cnpjNameMap = cnpjNames;
+              // Enrich companies with KPI data from cnpj__c collection
+              return this.companyKpiService.enrichCompaniesWithKpis(clientes);
+            })
+          );
         }),
         takeUntil(this.destroy$)
       )
       .subscribe({
         next: (enrichedClientes) => {
           console.log('📊 Carteira clientes enriched with KPI data:', enrichedClientes);
+          console.log('📊 CNPJ name map:', this.cnpjNameMap);
           this.carteiraClientes = enrichedClientes;
           this.isLoadingCarteira = false;
           this.cdr.markForCheck();
@@ -796,17 +811,17 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   }
   
   /**
-   * Extract company name from CNPJ string
-   * Format: "COMPANY NAME l CODE [ID|SUFFIX]"
-   * Returns: Company name without the code and ID parts
+   * Get clean company display name from CNPJ
+   * Uses the enriched CNPJ name map from the lookup service
    */
   getCompanyDisplayName(cnpj: string): string {
     if (!cnpj) {
       return '';
     }
-    // Extract text before " l " separator
-    const match = cnpj.match(/^([^l]+)/);
-    return match ? match[1].trim() : cnpj;
+    // Use the enriched name from the map, fallback to original
+    const displayName = this.cnpjNameMap.get(cnpj);
+    console.log('📊 getCompanyDisplayName called:', { cnpj, displayName, hasInMap: this.cnpjNameMap.has(cnpj), mapSize: this.cnpjNameMap.size });
+    return displayName || cnpj;
   }
   
   /**

@@ -119,13 +119,17 @@ export class FunifierApiService {
     const url = `${cleanBaseUrl}${cleanEndpoint}`;
     
     console.log('🌐 FunifierAPI GET:', url);
-    console.log('🌐 Headers (before interceptor):', headers.keys());
+    console.log('🌐 Headers keys:', headers.keys());
+    console.log('🌐 Authorization header:', headers.get('Authorization'));
+    console.log('🌐 Is database endpoint:', endpoint.includes('/database'));
     
     return this.http.get<T>(url, { headers, params }).pipe(
       tap(response => console.log('🌐 FunifierAPI Response:', response)),
       retry({ count: 2, delay: 1000 }), // Reduced retries
       catchError(error => {
         console.error('🌐 FunifierAPI Error after retries:', error);
+        console.error('🌐 Error status:', error.status);
+        console.error('🌐 Error message:', error.message);
         return this.handleError(error);
       })
     );
