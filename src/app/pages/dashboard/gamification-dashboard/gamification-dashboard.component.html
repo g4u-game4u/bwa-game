@@ -45,6 +45,14 @@
           
           <c4u-shimmer *ngIf="isLoadingPlayer && !seasonProgress"></c4u-shimmer>
         </div>
+        
+        <!-- Sidebar Toggle Button - At the end of sidebar content -->
+        <div class="sidebar-section sidebar-toggle-section">
+          <button class="sidebar-toggle" (click)="toggleSidebar()" [attr.aria-label]="sidebarCollapsed ? 'Expandir menu' : 'Recolher menu'">
+            <i [class]="sidebarCollapsed ? 'ri-arrow-right-line' : 'ri-arrow-left-line'" class="toggle-icon"></i>
+            <span class="toggle-text">{{ sidebarCollapsed ? 'Expandir' : 'Recolher' }}</span>
+          </button>
+        </div>
       </div>
       
       <!-- Collapsed Sidebar - Compact View -->
@@ -76,13 +84,13 @@
           <i class="ri-checkbox-circle-line compact-icon tarefas"></i>
           <span class="compact-value">{{ seasonProgress.tarefasFinalizadas | number:'1.0-0':'pt-BR' }}</span>
         </div>
+        
+        <!-- Sidebar Toggle Button - Compact View -->
+        <div class="compact-item compact-toggle" (click)="toggleSidebar()" role="button" tabindex="0" aria-label="Expandir menu" (keydown.enter)="toggleSidebar()" (keydown.space)="toggleSidebar(); $event.preventDefault()">
+          <i class="ri-arrow-right-line compact-icon"></i>
+        </div>
       </div>
     </c4u-card>
-    
-    <!-- Sidebar Toggle Button - Outside the card -->
-    <button class="sidebar-toggle" (click)="toggleSidebar()" [attr.aria-label]="sidebarCollapsed ? 'Expandir menu' : 'Recolher menu'">
-      <i [class]="sidebarCollapsed ? 'ri-arrow-right-line' : 'ri-arrow-left-line'" class="toggle-icon"></i>
-    </button>
   </aside>
   
   <!-- Main Content Area -->

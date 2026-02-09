@@ -42,6 +42,37 @@
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
+  overflow: hidden; // Prevent container from scrolling
+  
+  // Header section (title and close button) - fixed
+  > div:first-child {
+    flex-shrink: 0; // Prevent header from shrinking
+  }
+  
+  // Content area - scrollable
+  [role="document"] {
+    flex: 1;
+    min-height: 0;
+    
+    // Custom scrollbar styling
+    &::-webkit-scrollbar {
+      width: 10px;
+    }
+    
+    &::-webkit-scrollbar-track {
+      background: rgba(0, 0, 0, 0.1);
+      border-radius: 4px;
+    }
+    
+    &::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.2);
+      border-radius: 4px;
+      
+      &:hover {
+        background: rgba(255, 255, 255, 0.3);
+      }
+    }
+  }
 }
 
 .btnClose {

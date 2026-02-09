@@ -632,6 +632,9 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
         await this.loadTeamCarteiraData(dateRange);
         await this.loadTeamKPIs();
         
+        // Update formatted sidebar data after KPIs are loaded (includes metas calculation)
+        this.updateFormattedSidebarData();
+        
         // Update team name display after loading collaborators
         this.updateTeamNameDisplay();
       }
@@ -671,6 +674,9 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       // Load carteira data first, then KPIs (which depend on carteira)
       await this.loadCollaboratorCarteiraData(collaboratorId, dateRange);
       await this.loadTeamKPIs(collaboratorId);
+      
+      // Update formatted sidebar data after KPIs are loaded (includes metas calculation)
+      this.updateFormattedSidebarData();
       
       // Update team name display after loading collaborators
       this.updateTeamNameDisplay();
@@ -2596,22 +2602,29 @@ private calculateCollaboratorTotals(memberData: Array<{
       moedas: 0 // Teams don't have moedas, only individual players
     };
     
+    // Calculate metas from team KPIs
+    // Metas = count of KPIs where current >= target
+    const totalKPIs = this.teamKPIs ? this.teamKPIs.length : 0;
+    const metasAchieved = this.teamKPIs ? this.teamKPIs.filter(kpi => kpi.current >= kpi.target).length : 0;
+    
     // Convert progressMetrics to SeasonProgress format
     // For teams, we use:
-    // - metas: Not applicable for teams, so we use 0/0
+    // - metas: Calculated from teamKPIs (number of KPIs achieved / total KPIs)
     // - clientes: Count of unique CNPJs from teamCarteiraClientes
     // - tarefasFinalizadas: atividadesFinalizadas from progressMetrics
     const uniqueClientes = this.teamCarteiraClientes?.length || 0;
     
     this.teamSeasonProgress = {
       metas: {
-        current: 0, // Not applicable for teams
-        target: 0  // Not applicable for teams
+        current: metasAchieved,
+        target: totalKPIs
       },
       clientes: uniqueClientes,
       tarefasFinalizadas: this.progressMetrics?.atividadesFinalizadas || 0,
       seasonDates: this.seasonDates
     };
+    
+    console.log('📊 Team metas updated from KPIs:', this.teamSeasonProgress.metas, `(${metasAchieved}/${totalKPIs})`, `from ${totalKPIs} KPIs`);
     
     this.cdr.markForCheck();
   }
