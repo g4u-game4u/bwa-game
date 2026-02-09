@@ -1,9 +1,10 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
 import { trigger, transition, style, animate } from '@angular/animations';
-import { Subject, forkJoin, of } from 'rxjs';
+import { Subject, forkJoin, of, firstValueFrom } from 'rxjs';
 import { takeUntil, map, catchError } from 'rxjs/operators';
 import { ActionLogService, ActivityListItem, ProcessListItem, ActionLogEntry } from '@services/action-log.service';
 import { ChartDataset } from '@model/gamification-dashboard.model';
+import { CnpjLookupService } from '@services/cnpj-lookup.service';
 
 export type ProgressListType = 'atividades' | 'pontos' | 'processos-pendentes' | 'processos-finalizados';
 
@@ -47,9 +48,11 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
   
   // Copy state
   copiedDeliveryId: string | null = null;
+  cnpjNameMap = new Map<string, string>(); // Map of original CNPJ → clean empresa name
 
   constructor(
     private actionLogService: ActionLogService,
+    private cnpjLookupService: CnpjLookupService,
     private cdr: ChangeDetectorRef
   ) {}
 
@@ -139,11 +142,15 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
       forkJoin(activityRequests)
         .pipe(takeUntil(this.destroy$))
         .subscribe({
-          next: (results: ActivityListItem[][]) => {
+          next: async (results: ActivityListItem[][]) => {
             // Aggregate all activities from all players
             this.activityItems = results.flat();
             // Sort by created date (newest first)
             this.activityItems.sort((a, b) => b.created - a.created);
+            
+            // Enrich CNPJ names
+            await this.enrichCnpjNames(this.activityItems.map(item => item.cnpj).filter(cnpj => cnpj));
+            
             this.isLoading = false;
             this.cdr.markForCheck();
           },
@@ -171,7 +178,7 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
       forkJoin(processRequests)
         .pipe(takeUntil(this.destroy$))
         .subscribe({
-          next: (results: ProcessListItem[][]) => {
+          next: async (results: ProcessListItem[][]) => {
             // Aggregate all processes from all players
             // Use a Map to deduplicate by deliveryId
             const processMap = new Map<string, ProcessListItem>();
@@ -205,6 +212,9 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
             
             // Sort by action count (descending)
             this.processoItems.sort((a, b) => b.actionCount - a.actionCount);
+            
+            // Enrich CNPJ names
+            await this.enrichCnpjNames(this.processoItems.map(item => item.cnpj).filter(cnpj => cnpj));
             
             this.isLoading = false;
             this.cdr.markForCheck();
@@ -527,14 +537,32 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
   }
 
   /**
+   * Enrich CNPJ names from empid_cnpj__c collection
+   */
+  private async enrichCnpjNames(cnpjList: (string | undefined)[]): Promise<void> {
+    try {
+      const validCnpjs = cnpjList.filter((cnpj): cnpj is string => !!cnpj);
+      if (validCnpjs.length === 0) return;
+      
+      const cnpjNames = await firstValueFrom(
+        this.cnpjLookupService.enrichCnpjList(validCnpjs)
+      );
+      this.cnpjNameMap = cnpjNames;
+      console.log('📊 Modal progress list: CNPJ name map loaded with', this.cnpjNameMap.size, 'entries');
+    } catch (error) {
+      console.error('Error enriching CNPJ names:', error);
+    }
+  }
+
+  /**
    * Get company display name from CNPJ
-   * Extracts the company name part before " l " separator
+   * Uses the enriched CNPJ name map from the lookup service
    */
   getCompanyDisplayName(cnpj: string | undefined): string {
     if (!cnpj) return '';
-    // Extract text before " l " separator (e.g., "SAFETEC INFORMATICA LTDA [299|0001-69]" -> "SAFETEC INFORMATICA LTDA")
-    const match = cnpj.match(/^([^l]+)/);
-    return match ? match[1].trim() : cnpj;
+    // Use the enriched name from the map, fallback to original
+    const displayName = this.cnpjNameMap.get(cnpj);
+    return displayName || cnpj;
   }
 
   /**

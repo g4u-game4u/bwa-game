@@ -43,6 +43,7 @@ export interface ActivityListItem {
   created: number;
   player?: string; // userId (email do executor)
   status?: 'finalizado' | 'pendente' | 'dispensado'; // Status da atividade
+  cnpj?: string; // CNPJ da empresa associada à atividade
 }
 
 export interface ProcessListItem {
@@ -615,7 +616,8 @@ export class ActionLogService {
           points: a.points || 0,
           created: extractTimestamp(a.time as number | { $date: string } | undefined),
           player: a.userId || '',
-          status
+          status,
+          cnpj: a.attributes?.cnpj || undefined
         };
       })),
       catchError(error => {
@@ -938,7 +940,8 @@ export class ActionLogService {
             title: a.attributes?.acao || a.action_title || a.actionId || 'Ação sem título',
             player: a.userId || '',
             created: extractTimestamp(a.time as number | { $date: string } | undefined),
-            status
+            status,
+            cnpj: a.attributes?.cnpj || undefined
           };
         });
       }),
@@ -1043,7 +1046,8 @@ export class ActionLogService {
             points: a.points || 0,
             created: extractTimestamp(a.time as number | { $date: string } | undefined),
             player: a.userId || '',
-            status
+            status,
+            cnpj: a.attributes?.cnpj || undefined
           };
         });
       }),
@@ -1154,6 +1158,394 @@ export class ActionLogService {
     this.processMetricsCache.clear();
     this.pontosForMonthCache.clear();
     this.monthlyPointsBreakdownCache.clear();
+    this.teamMetricsCache.clear();
+    this.teamCnpjCache.clear();
+    this.teamPointsBreakdownCache.clear();
+  }
+
+  // ============================================
+  // TEAM AGGREGATE METHODS (OPTIMIZED)
+  // These methods use $lookup to fetch data for all team members in a single query
+  // ============================================
+
+  private teamMetricsCache = new Map<string, CacheEntry<any>>();
+  private teamCnpjCache = new Map<string, CacheEntry<any>>();
+  private teamPointsBreakdownCache = new Map<string, CacheEntry<any>>();
+
+  /**
+   * Get progress metrics for all team members in a single aggregate query.
+   * Uses $lookup to join player data and filter by team.
+   * 
+   * @param teamId - Team ID (e.g., 'pessoal--rn--andreza-soares')
+   * @param month - Target month for filtering
+   * @returns Observable of aggregated metrics for the team
+   */
+  getTeamProgressMetrics(teamId: string, month?: Date): Observable<{ activity: ActivityMetrics; processo: ProcessMetrics }> {
+    const targetMonth = month || new Date();
+    const cacheKey = `team_metrics_${teamId}_${dayjs(targetMonth).format('YYYY-MM')}`;
+    const cached = this.getCachedData(this.teamMetricsCache, cacheKey);
+    if (cached) {
+      return cached;
+    }
+
+    const startDate = getRelativeDateExpression(targetMonth, 'start');
+    const endDate = getRelativeDateExpression(targetMonth, 'end');
+
+    // Single aggregate query to get all action counts for the team
+    const activityAggregateBody = [
+      {
+        $lookup: {
+          from: 'player',
+          localField: 'userId',
+          foreignField: '_id',
+          as: 'playerData'
+        }
+      },
+      {
+        $unwind: '$playerData'
+      },
+      {
+        $match: {
+          'playerData.teams': teamId,
+          time: { $gte: startDate, $lte: endDate }
+        }
+      },
+      {
+        $count: 'total'
+      }
+    ];
+
+    // Query for process metrics (desbloquear actions = finalized processes)
+    const processAggregateBody = [
+      {
+        $lookup: {
+          from: 'player',
+          localField: 'userId',
+          foreignField: '_id',
+          as: 'playerData'
+        }
+      },
+      {
+        $unwind: '$playerData'
+      },
+      {
+        $match: {
+          'playerData.teams': teamId,
+          time: { $gte: startDate, $lte: endDate },
+          actionId: 'desbloquear'
+        }
+      },
+      {
+        $group: {
+          _id: '$attributes.delivery'
+        }
+      },
+      {
+        $count: 'finalizados'
+      }
+    ];
+
+    // Query for unique processes (delivery_id) to calculate incomplete
+    const uniqueProcessesBody = [
+      {
+        $lookup: {
+          from: 'player',
+          localField: 'userId',
+          foreignField: '_id',
+          as: 'playerData'
+        }
+      },
+      {
+        $unwind: '$playerData'
+      },
+      {
+        $match: {
+          'playerData.teams': teamId,
+          time: { $gte: startDate, $lte: endDate },
+          'attributes.delivery_id': { $ne: null }
+        }
+      },
+      {
+        $group: {
+          _id: '$attributes.delivery_id'
+        }
+      },
+      {
+        $count: 'total'
+      }
+    ];
+
+    console.log('📊 Team progress metrics query for team:', teamId);
+
+    const request$ = forkJoin([
+      this.funifierApi.post<any[]>('/v3/database/action_log/aggregate?strict=true', activityAggregateBody),
+      this.funifierApi.post<any[]>('/v3/database/action_log/aggregate?strict=true', processAggregateBody),
+      this.funifierApi.post<any[]>('/v3/database/action_log/aggregate?strict=true', uniqueProcessesBody)
+    ]).pipe(
+      map(([activityResult, processResult, uniqueProcessResult]) => {
+        const finalizadas = activityResult[0]?.total || 0;
+        const processosFinalizados = processResult[0]?.finalizados || 0;
+        const totalProcessos = uniqueProcessResult[0]?.total || 0;
+        const processosIncompletos = Math.max(0, totalProcessos - processosFinalizados);
+
+        console.log('✅ Team progress metrics loaded (OPTIMIZED):', {
+          finalizadas,
+          processosFinalizados,
+          totalProcessos,
+          processosIncompletos,
+          apiCalls: 3 // Instead of 3*N calls
+        });
+
+        return {
+          activity: {
+            pendentes: 0,
+            emExecucao: 0,
+            finalizadas,
+            pontos: 0 // Points are loaded separately
+          },
+          processo: {
+            pendentes: 0,
+            incompletas: processosIncompletos,
+            finalizadas: processosFinalizados
+          }
+        };
+      }),
+      catchError(error => {
+        console.error('Error fetching team progress metrics:', error);
+        return of({
+          activity: { pendentes: 0, emExecucao: 0, finalizadas: 0, pontos: 0 },
+          processo: { pendentes: 0, incompletas: 0, finalizadas: 0 }
+        });
+      }),
+      shareReplay({ bufferSize: 1, refCount: true, windowTime: this.CACHE_DURATION })
+    );
+
+    this.setCachedData(this.teamMetricsCache, cacheKey, request$);
+    return request$;
+  }
+
+  /**
+   * Get CNPJ list with action counts for all team members in a single aggregate query.
+   * Uses $lookup to join player data and filter by team.
+   * 
+   * @param teamId - Team ID (e.g., 'pessoal--rn--andreza-soares')
+   * @param month - Target month for filtering
+   * @returns Observable of CNPJ list with action and process counts
+   */
+  getTeamCnpjListWithCount(teamId: string, month?: Date): Observable<{ cnpj: string; actionCount: number; processCount: number }[]> {
+    const targetMonth = month || new Date();
+    const cacheKey = `team_cnpj_${teamId}_${dayjs(targetMonth).format('YYYY-MM')}`;
+    const cached = this.getCachedData(this.teamCnpjCache, cacheKey);
+    if (cached) {
+      return cached;
+    }
+
+    const startDate = getRelativeDateExpression(targetMonth, 'start');
+    const endDate = getRelativeDateExpression(targetMonth, 'end');
+
+    // Single aggregate query to get action count per CNPJ for the team
+    const actionCountBody = [
+      {
+        $lookup: {
+          from: 'player',
+          localField: 'userId',
+          foreignField: '_id',
+          as: 'playerData'
+        }
+      },
+      {
+        $unwind: '$playerData'
+      },
+      {
+        $match: {
+          'playerData.teams': teamId,
+          time: { $gte: startDate, $lte: endDate },
+          'attributes.cnpj': { $ne: null }
+        }
+      },
+      {
+        $group: {
+          _id: '$attributes.cnpj',
+          count: { $sum: 1 }
+        }
+      }
+    ];
+
+    // Single aggregate query to get unique process count per CNPJ for the team
+    const processCountBody = [
+      {
+        $lookup: {
+          from: 'player',
+          localField: 'userId',
+          foreignField: '_id',
+          as: 'playerData'
+        }
+      },
+      {
+        $unwind: '$playerData'
+      },
+      {
+        $match: {
+          'playerData.teams': teamId,
+          time: { $gte: startDate, $lte: endDate },
+          'attributes.cnpj': { $ne: null },
+          'attributes.delivery_id': { $ne: null }
+        }
+      },
+      {
+        $group: {
+          _id: {
+            cnpj: '$attributes.cnpj',
+            delivery_id: '$attributes.delivery_id'
+          }
+        }
+      },
+      {
+        $group: {
+          _id: '$_id.cnpj',
+          processCount: { $sum: 1 }
+        }
+      }
+    ];
+
+    console.log('📊 Team CNPJ list query for team:', teamId);
+
+    const request$ = forkJoin([
+      this.funifierApi.post<{ _id: string; count: number }[]>('/v3/database/action_log/aggregate?strict=true', actionCountBody),
+      this.funifierApi.post<{ _id: string; processCount: number }[]>('/v3/database/action_log/aggregate?strict=true', processCountBody)
+    ]).pipe(
+      map(([actionResponse, processResponse]) => {
+        // Create a map of CNPJ to process count
+        const processCountMap = new Map<string, number>();
+        processResponse
+          .filter(r => r._id != null)
+          .forEach(r => processCountMap.set(r._id, r.processCount));
+
+        // Combine action count with process count
+        const result = actionResponse
+          .filter(r => r._id != null)
+          .map(r => ({
+            cnpj: r._id,
+            actionCount: r.count,
+            processCount: processCountMap.get(r._id) || 0
+          }));
+
+        console.log('✅ Team CNPJ list loaded (OPTIMIZED):', result.length, 'unique CNPJs, apiCalls: 2');
+        return result;
+      }),
+      catchError(error => {
+        console.error('Error fetching team CNPJ list:', error);
+        return of([]);
+      }),
+      shareReplay({ bufferSize: 1, refCount: true, windowTime: this.CACHE_DURATION })
+    );
+
+    this.setCachedData(this.teamCnpjCache, cacheKey, request$);
+    return request$;
+  }
+
+  /**
+   * Get monthly points breakdown (bloqueados and desbloqueados) for all team members.
+   * Uses aggregate query on achievement collection with player lookup.
+   * 
+   * @param teamId - Team ID (e.g., 'pessoal--rn--andreza-soares')
+   * @param month - Target month for filtering
+   * @returns Observable of points breakdown
+   */
+  getTeamMonthlyPointsBreakdown(teamId: string, month?: Date): Observable<{ bloqueados: number; desbloqueados: number }> {
+    const targetMonth = month || new Date();
+    const cacheKey = `team_points_breakdown_${teamId}_${dayjs(targetMonth).format('YYYY-MM')}`;
+    const cached = this.getCachedData(this.teamPointsBreakdownCache, cacheKey);
+    if (cached) {
+      return cached;
+    }
+
+    const startDate = getRelativeDateExpression(targetMonth, 'start');
+    const endDate = getRelativeDateExpression(targetMonth, 'end');
+
+    // Query for bloqueados (locked points) - actions that are NOT desbloquear
+    const bloqueadosBody = [
+      {
+        $lookup: {
+          from: 'player',
+          localField: 'userId',
+          foreignField: '_id',
+          as: 'playerData'
+        }
+      },
+      {
+        $unwind: '$playerData'
+      },
+      {
+        $match: {
+          'playerData.teams': teamId,
+          time: { $gte: startDate, $lte: endDate },
+          actionId: { $ne: 'desbloquear' }
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          total: { $sum: { $ifNull: ['$points', 0] } }
+        }
+      }
+    ];
+
+    // Query for desbloqueados (unlocked points) - desbloquear actions
+    const desbloqueadosBody = [
+      {
+        $lookup: {
+          from: 'player',
+          localField: 'userId',
+          foreignField: '_id',
+          as: 'playerData'
+        }
+      },
+      {
+        $unwind: '$playerData'
+      },
+      {
+        $match: {
+          'playerData.teams': teamId,
+          time: { $gte: startDate, $lte: endDate },
+          actionId: 'desbloquear'
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          total: { $sum: { $ifNull: ['$points', 0] } }
+        }
+      }
+    ];
+
+    console.log('📊 Team monthly points breakdown query for team:', teamId);
+
+    const request$ = forkJoin([
+      this.funifierApi.post<any[]>('/v3/database/action_log/aggregate?strict=true', bloqueadosBody),
+      this.funifierApi.post<any[]>('/v3/database/action_log/aggregate?strict=true', desbloqueadosBody)
+    ]).pipe(
+      map(([bloqueadosResult, desbloqueadosResult]) => {
+        const bloqueados = Math.floor(bloqueadosResult[0]?.total || 0);
+        const desbloqueados = Math.floor(desbloqueadosResult[0]?.total || 0);
+
+        console.log('✅ Team monthly points breakdown loaded (OPTIMIZED):', {
+          bloqueados,
+          desbloqueados,
+          apiCalls: 2 // Instead of 2*N calls
+        });
+
+        return { bloqueados, desbloqueados };
+      }),
+      catchError(error => {
+        console.error('Error fetching team monthly points breakdown:', error);
+        return of({ bloqueados: 0, desbloqueados: 0 });
+      }),
+      shareReplay({ bufferSize: 1, refCount: true, windowTime: this.CACHE_DURATION })
+    );
+
+    this.setCachedData(this.teamPointsBreakdownCache, cacheKey, request$);
+    return request$;
   }
 
   /**

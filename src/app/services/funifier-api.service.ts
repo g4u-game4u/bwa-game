@@ -138,9 +138,20 @@ export class FunifierApiService {
   /**
    * POST request to Funifier API
    * Endpoint should not include /v3/ prefix as it's already in baseUrl
+   * @param endpoint - API endpoint
+   * @param body - Request body
+   * @param options - Optional request options (e.g., custom headers)
    */
-  post<T>(endpoint: string, body: any): Observable<T> {
-    const headers = this.getHeaders(endpoint);
+  post<T>(endpoint: string, body: any, options?: { headers?: { [key: string]: string } }): Observable<T> {
+    let headers = this.getHeaders(endpoint);
+    
+    // Merge custom headers if provided
+    if (options?.headers) {
+      Object.entries(options.headers).forEach(([key, value]) => {
+        headers = headers.set(key, value);
+      });
+    }
+    
     // Remove leading /v3/ if present to avoid duplication
     let cleanEndpoint = endpoint.startsWith('/v3/') ? endpoint.substring(4) : endpoint;
     // Remove leading / if present to avoid double slashes

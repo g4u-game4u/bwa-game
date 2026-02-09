@@ -136,18 +136,22 @@ export function getAccessibleTeamIds(teams: any[] | undefined | null, profile: U
     return null;
   }).filter(Boolean) as string[];
 
+  console.log('👤 getAccessibleTeamIds: extracted teamIds:', teamIds, 'for profile:', profile);
+
   if (profile === UserProfile.SUPERVISOR) {
-    // Supervisor can only see their own SUPERVISÃO team
-    const supervisorTeam = teamIds.find(id => id === MANAGEMENT_TEAM_IDS.SUPERVISAO);
-    return supervisorTeam ? [supervisorTeam] : [];
+    // Supervisor can see their managed team (the non-SUPERVISAO team)
+    // They have 2 teams: SUPERVISAO team + the team they manage
+    const managedTeams = teamIds.filter(id => id !== MANAGEMENT_TEAM_IDS.SUPERVISAO);
+    console.log('👤 SUPERVISOR: managedTeams:', managedTeams);
+    return managedTeams.length > 0 ? managedTeams : [];
   }
 
   if (profile === UserProfile.GESTOR) {
-    // Gestor can see their GESTAO team and potentially other teams they manage
-    // For now, return their GESTAO team. In the future, this could be expanded
-    // to include other teams they manage
-    const gestorTeam = teamIds.find(id => id === MANAGEMENT_TEAM_IDS.GESTAO);
-    return gestorTeam ? [gestorTeam] : [];
+    // Gestor can see ALL their teams EXCEPT the GESTAO team itself
+    // They have multiple teams: GESTAO team + all teams they manage
+    const managedTeams = teamIds.filter(id => id !== MANAGEMENT_TEAM_IDS.GESTAO);
+    console.log('👤 GESTOR: managedTeams:', managedTeams);
+    return managedTeams;
   }
 
   return [];

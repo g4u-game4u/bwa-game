@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { Observable, of, throwError } from 'rxjs';
-import { map, catchError, tap } from 'rxjs/operators';
+import { map, catchError, tap, switchMap } from 'rxjs/operators';
 import { FunifierApiService } from './funifier-api.service';
 import { AggregateQueryBuilderService, AggregateQuery } from './aggregate-query-builder.service';
 import { PerformanceMonitorService } from './performance-monitor.service';
@@ -174,6 +174,116 @@ export class TeamAggregateService {
   }
 
   /**
+   * Get all player status data for a team using aggregate query.
+   * This replaces individual player status requests with a single optimized query.
+   * 
+   * @param teamId - Team ID (e.g., 'pessoal--rn--andreza-soares')
+   * @param batchSize - Number of items per batch (default: 100)
+   * @returns Observable of player status array
+   * 
+   * @example
+   * getTeamPlayersStatus('pessoal--rn--andreza-soares')
+   *   .subscribe(players => console.log(players.length));
+   */
+  getTeamPlayersStatus(teamId: string, batchSize: number = 100): Observable<any[]> {
+    const cacheKey = `players_status_${teamId}`;
+    
+    // Check cache first
+    const cached = this.getFromCache<any[]>(cacheKey);
+    if (cached) {
+      return of(cached);
+    }
+    
+    // Build aggregate query to match players by team
+    const aggregateQuery = [
+      {
+        $match: {
+          teams: teamId
+        }
+      }
+    ];
+    
+    // Execute with pagination support
+    return this.executeAggregateQueryWithPagination<any>('player_status', aggregateQuery, batchSize).pipe(
+      tap(data => this.setCache(cacheKey, data)),
+      catchError(error => this.handleAggregateError('getTeamPlayersStatus', error))
+    );
+  }
+
+  /**
+   * Get all action logs for a team using aggregate query with $lookup.
+   * This replaces individual action log requests with a single optimized query.
+   * 
+   * @param teamId - Team ID (e.g., 'pessoal--rn--andreza-soares')
+   * @param startDate - Optional start date filter
+   * @param endDate - Optional end date filter
+   * @param batchSize - Number of items per batch (default: 100)
+   * @returns Observable of action log array with player data
+   * 
+   * @example
+   * getTeamActionLogs('pessoal--rn--andreza-soares', startDate, endDate)
+   *   .subscribe(logs => console.log(logs.length));
+   */
+  getTeamActionLogs(
+    teamId: string,
+    startDate?: Date,
+    endDate?: Date,
+    batchSize: number = 100
+  ): Observable<any[]> {
+    const cacheKey = `action_logs_${teamId}_${startDate?.getTime()}_${endDate?.getTime()}`;
+    
+    // Check cache first
+    const cached = this.getFromCache<any[]>(cacheKey);
+    if (cached) {
+      return of(cached);
+    }
+    
+    // Build aggregate query with $lookup to join player data
+    const aggregateQuery: any[] = [
+      {
+        $lookup: {
+          from: 'player',
+          localField: 'userId',
+          foreignField: '_id',
+          as: 'playerData'
+        }
+      },
+      {
+        $unwind: '$playerData'
+      },
+      {
+        $match: {
+          'playerData.teams': teamId
+        }
+      }
+    ];
+    
+    // Add date filter if provided
+    if (startDate || endDate) {
+      const dateMatch: any = {};
+      if (startDate) {
+        dateMatch.$gte = { $date: startDate.toISOString() };
+      }
+      if (endDate) {
+        dateMatch.$lte = { $date: endDate.toISOString() };
+      }
+      
+      // Insert date match after the team match
+      aggregateQuery.push({
+        $match: {
+          time: dateMatch
+        }
+      });
+    }
+    
+    // Execute with pagination support
+    return this.executeAggregateQueryWithPagination<any>('action_log', aggregateQuery, batchSize).pipe(
+      tap(data => this.setCache(cacheKey, data)),
+      catchError(error => this.handleAggregateError('getTeamActionLogs', error))
+    );
+  }
+
+  /**
    * Get collaborator-specific data.
    * 
    * Fetches aggregate data for a specific user within a date range.
@@ -302,6 +412,101 @@ export class TeamAggregateService {
         if (duration > 1000) {
           console.warn(`Slow aggregate query on ${collection}: ${duration.toFixed(2)}ms`);
         }
+      })
+    );
+  }
+
+  /**
+   * Execute an aggregate query with pagination support using Range header.
+   * Automatically fetches all pages and combines results.
+   * 
+   * @param collection - Collection name (e.g., 'player_status', 'action_log')
+   * @param aggregatePipeline - Aggregate pipeline array
+   * @param batchSize - Number of items per batch (default: 100)
+   * @returns Observable of complete aggregate result array
+   */
+  private executeAggregateQueryWithPagination<T>(
+    collection: string,
+    aggregatePipeline: any[],
+    batchSize: number = 100
+  ): Observable<T[]> {
+    const endpoint = `/database/${collection}/aggregate?strict=true`;
+    
+    console.log(`🔍 Executing paginated aggregate query on ${collection} with batch size ${batchSize}`);
+    
+    // Start with first batch
+    return this.fetchBatch<T>(endpoint, aggregatePipeline, 0, batchSize).pipe(
+      map(allResults => {
+        console.log(`✅ Fetched ${allResults.length} total items from ${collection}`);
+        return allResults;
+      })
+    );
+  }
+
+  /**
+   * Recursively fetch batches until all data is retrieved.
+   * 
+   * @param endpoint - API endpoint
+   * @param aggregatePipeline - Aggregate pipeline array
+   * @param startIndex - Starting index for this batch
+   * @param batchSize - Number of items per batch
+   * @param accumulatedResults - Results accumulated so far
+   * @returns Observable of all results
+   */
+  private fetchBatch<T>(
+    endpoint: string,
+    aggregatePipeline: any[],
+    startIndex: number,
+    batchSize: number,
+    accumulatedResults: T[] = []
+  ): Observable<T[]> {
+    // Set Range header: "items=startIndex-batchSize"
+    // Example: "items=0-100" for first 100, "items=100-100" for next 100
+    const rangeHeader = `items=${startIndex}-${batchSize}`;
+    
+    console.log(`📦 Fetching batch: ${rangeHeader}`);
+    
+    return this.funifierApi.post<T[]>(
+      endpoint,
+      aggregatePipeline,
+      { headers: { 'Range': rangeHeader } }
+    ).pipe(
+      map(response => {
+        // Handle response format
+        let batchResults: T[] = [];
+        if (response && Array.isArray(response)) {
+          batchResults = response;
+        } else if (response && typeof response === 'object' && 'result' in response && Array.isArray((response as any).result)) {
+          batchResults = (response as any).result;
+        }
+        
+        return batchResults;
+      }),
+      switchMap(batchResults => {
+        // Accumulate results
+        const allResults = [...accumulatedResults, ...batchResults];
+        
+        // If we got a full batch, there might be more data
+        if (batchResults.length === batchSize) {
+          console.log(`📦 Batch complete (${batchResults.length} items), fetching next batch...`);
+          // Fetch next batch
+          return this.fetchBatch<T>(
+            endpoint,
+            aggregatePipeline,
+            startIndex + batchSize,
+            batchSize,
+            allResults
+          );
+        } else {
+          // Last batch (partial or empty), return all accumulated results
+          console.log(`✅ Final batch (${batchResults.length} items), total: ${allResults.length}`);
+          return of(allResults);
+        }
+      }),
+      catchError(error => {
+        console.error(`Error fetching batch at index ${startIndex}:`, error);
+        // Return accumulated results so far on error
+        return of(accumulatedResults);
       })
     );
   }
@@ -444,5 +649,318 @@ export class TeamAggregateService {
     }
     
     return throwError(() => new Error(errorMessage));
+  }
+
+  /**
+   * OPTIMIZED: Get activity metrics for all team members in a single aggregate query.
+   * Replaces individual getProgressMetrics calls per member.
+   * 
+   * @param teamId - Team ID (e.g., 'pessoal--rn--andreza-soares')
+   * @param startDate - Start date for filtering
+   * @param endDate - End date for filtering
+   * @returns Observable of aggregated activity metrics
+   */
+  getTeamActivityMetrics(
+    teamId: string,
+    startDate: Date,
+    endDate: Date
+  ): Observable<{ finalizadas: number; pontos: number; processosFinalizados: number; processosIncompletos: number }> {
+    const cacheKey = `team_activity_${teamId}_${startDate.getTime()}_${endDate.getTime()}`;
+    
+    const cached = this.getFromCache<any>(cacheKey);
+    if (cached) {
+      return of(cached);
+    }
+
+    // Single aggregate query with $lookup to get all action logs for team members
+    const aggregateQuery = [
+      {
+        $lookup: {
+          from: 'player',
+          localField: 'userId',
+          foreignField: '_id',
+          as: 'playerData'
+        }
+      },
+      {
+        $unwind: '$playerData'
+      },
+      {
+        $match: {
+          'playerData.teams': teamId,
+          time: {
+            $gte: { $date: startDate.toISOString() },
+            $lte: { $date: endDate.toISOString() }
+          }
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          totalActions: { $sum: 1 },
+          uniqueProcesses: { $addToSet: '$attributes.delivery_id' },
+          desbloqueados: {
+            $sum: {
+              $cond: [{ $eq: ['$actionId', 'desbloquear'] }, 1, 0]
+            }
+          }
+        }
+      }
+    ];
+
+    console.log('🔍 Team activity metrics aggregate query');
+
+    return this.funifierApi.post<any[]>(
+      '/database/action_log/aggregate?strict=true',
+      aggregateQuery
+    ).pipe(
+      map(response => {
+        const result = Array.isArray(response) && response.length > 0 ? response[0] : {};
+        const metrics = {
+          finalizadas: result.totalActions || 0,
+          pontos: 0, // Will be fetched separately from achievement
+          processosFinalizados: result.desbloqueados || 0,
+          processosIncompletos: (result.uniqueProcesses?.length || 0) - (result.desbloqueados || 0)
+        };
+        console.log('✅ Team activity metrics (OPTIMIZED):', metrics);
+        return metrics;
+      }),
+      tap(data => this.setCache(cacheKey, data)),
+      catchError(error => {
+        console.error('Error in getTeamActivityMetrics:', error);
+        return of({ finalizadas: 0, pontos: 0, processosFinalizados: 0, processosIncompletos: 0 });
+      })
+    );
+  }
+
+  /**
+   * OPTIMIZED: Get CNPJ list with action counts for all team members in a single aggregate query.
+   * Replaces individual getPlayerCnpjListWithCount calls per member.
+   * 
+   * @param teamId - Team ID (e.g., 'pessoal--rn--andreza-soares')
+   * @param startDate - Start date for filtering
+   * @param endDate - End date for filtering
+   * @returns Observable of CNPJ list with aggregated counts
+   */
+  getTeamCnpjListWithCount(
+    teamId: string,
+    startDate: Date,
+    endDate: Date
+  ): Observable<{ cnpj: string; actionCount: number; processCount: number }[]> {
+    const cacheKey = `team_cnpj_${teamId}_${startDate.getTime()}_${endDate.getTime()}`;
+    
+    const cached = this.getFromCache<any[]>(cacheKey);
+    if (cached) {
+      return of(cached);
+    }
+
+    // Single aggregate query with $lookup to get all CNPJs for team members
+    const actionCountQuery = [
+      {
+        $lookup: {
+          from: 'player',
+          localField: 'userId',
+          foreignField: '_id',
+          as: 'playerData'
+        }
+      },
+      {
+        $unwind: '$playerData'
+      },
+      {
+        $match: {
+          'playerData.teams': teamId,
+          time: {
+            $gte: { $date: startDate.toISOString() },
+            $lte: { $date: endDate.toISOString() }
+          },
+          'attributes.cnpj': { $ne: null }
+        }
+      },
+      {
+        $group: {
+          _id: '$attributes.cnpj',
+          actionCount: { $sum: 1 },
+          uniqueProcesses: { $addToSet: '$attributes.delivery_id' }
+        }
+      },
+      {
+        $project: {
+          _id: 1,
+          actionCount: 1,
+          processCount: { $size: '$uniqueProcesses' }
+        }
+      },
+      {
+        $sort: { actionCount: -1 }
+      }
+    ];
+
+    console.log('🔍 Team CNPJ list aggregate query');
+
+    return this.funifierApi.post<any[]>(
+      '/database/action_log/aggregate?strict=true',
+      actionCountQuery
+    ).pipe(
+      map(response => {
+        const result = Array.isArray(response) ? response : [];
+        const cnpjList = result
+          .filter(item => item._id != null)
+          .map(item => ({
+            cnpj: item._id,
+            actionCount: item.actionCount || 0,
+            processCount: item.processCount || 0
+          }));
+        console.log('✅ Team CNPJ list (OPTIMIZED):', cnpjList.length, 'unique CNPJs');
+        return cnpjList;
+      }),
+      tap(data => this.setCache(cacheKey, data)),
+      catchError(error => {
+        console.error('Error in getTeamCnpjListWithCount:', error);
+        return of([]);
+      })
+    );
+  }
+
+  /**
+   * OPTIMIZED: Get monthly points breakdown for all team members in a single aggregate query.
+   * Replaces individual getMonthlyPointsBreakdown calls per member.
+   * 
+   * @param memberIds - Array of team member IDs
+   * @param startDate - Start date for filtering
+   * @param endDate - End date for filtering
+   * @returns Observable of aggregated points breakdown
+   */
+  getTeamMonthlyPointsBreakdown(
+    memberIds: string[],
+    startDate: Date,
+    endDate: Date
+  ): Observable<{ bloqueados: number; desbloqueados: number }> {
+    const cacheKey = `team_points_breakdown_${memberIds.join('_')}_${startDate.getTime()}_${endDate.getTime()}`;
+    
+    const cached = this.getFromCache<any>(cacheKey);
+    if (cached) {
+      return of(cached);
+    }
+
+    if (memberIds.length === 0) {
+      return of({ bloqueados: 0, desbloqueados: 0 });
+    }
+
+    // Single aggregate query to get points breakdown for all team members
+    const aggregateQuery = [
+      {
+        $match: {
+          player: { $in: memberIds },
+          type: 0, // type 0 = points
+          time: {
+            $gte: { $date: startDate.toISOString() },
+            $lte: { $date: endDate.toISOString() }
+          }
+        }
+      },
+      {
+        $group: {
+          _id: '$item',
+          total: { $sum: '$total' }
+        }
+      }
+    ];
+
+    console.log('🔍 Team monthly points breakdown aggregate query');
+
+    return this.funifierApi.post<any[]>(
+      '/database/achievement/aggregate?strict=true',
+      aggregateQuery
+    ).pipe(
+      map(response => {
+        let bloqueados = 0;
+        let desbloqueados = 0;
+
+        if (Array.isArray(response)) {
+          response.forEach(item => {
+            if (item._id === 'locked_points' || item._id === 'bloqueados') {
+              bloqueados = Math.floor(item.total || 0);
+            } else if (item._id === 'points' || item._id === 'unlocked_points' || item._id === 'desbloqueados') {
+              desbloqueados = Math.floor(item.total || 0);
+            }
+          });
+        }
+
+        const result = { bloqueados, desbloqueados };
+        console.log('✅ Team monthly points breakdown (OPTIMIZED):', result);
+        return result;
+      }),
+      tap(data => this.setCache(cacheKey, data)),
+      catchError(error => {
+        console.error('Error in getTeamMonthlyPointsBreakdown:', error);
+        return of({ bloqueados: 0, desbloqueados: 0 });
+      })
+    );
+  }
+
+  /**
+   * OPTIMIZED: Get total points for all team members in a single aggregate query.
+   * 
+   * @param memberIds - Array of team member IDs
+   * @param startDate - Start date for filtering
+   * @param endDate - End date for filtering
+   * @returns Observable of total points
+   */
+  getTeamTotalPoints(
+    memberIds: string[],
+    startDate: Date,
+    endDate: Date
+  ): Observable<number> {
+    const cacheKey = `team_total_points_${memberIds.join('_')}_${startDate.getTime()}_${endDate.getTime()}`;
+    
+    const cached = this.getFromCache<number>(cacheKey);
+    if (cached !== null) {
+      return of(cached);
+    }
+
+    if (memberIds.length === 0) {
+      return of(0);
+    }
+
+    // Single aggregate query to get total points for all team members
+    const aggregateQuery = [
+      {
+        $match: {
+          player: { $in: memberIds },
+          type: 0, // type 0 = points
+          time: {
+            $gte: { $date: startDate.toISOString() },
+            $lte: { $date: endDate.toISOString() }
+          }
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          total: { $sum: '$total' }
+        }
+      }
+    ];
+
+    console.log('🔍 Team total points aggregate query');
+
+    return this.funifierApi.post<any[]>(
+      '/database/achievement/aggregate?strict=true',
+      aggregateQuery
+    ).pipe(
+      map(response => {
+        const total = Array.isArray(response) && response.length > 0 
+          ? Math.floor(response[0].total || 0) 
+          : 0;
+        console.log('✅ Team total points (OPTIMIZED):', total);
+        return total;
+      }),
+      tap(data => this.setCache(cacheKey, data)),
+      catchError(error => {
+        console.error('Error in getTeamTotalPoints:', error);
+        return of(0);
+      })
+    );
   }
 }

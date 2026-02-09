@@ -5,6 +5,8 @@ import { ActionLogService, ClienteActionItem } from '@services/action-log.servic
 import { CompanyKpiService, CompanyDisplay } from '@services/company-kpi.service';
 import { KPIService } from '@services/kpi.service';
 import { KPIData } from '@model/gamification-dashboard.model';
+import { CnpjLookupService } from '@services/cnpj-lookup.service';
+import { firstValueFrom } from 'rxjs';
 
 @Component({
   selector: 'modal-company-carteira-detail',
@@ -23,16 +25,20 @@ export class ModalCompanyCarteiraDetailComponent implements OnInit, OnDestroy {
   isLoadingTasks = false;
   companyKPIs: KPIData[] = [];
   tasks: ClienteActionItem[] = [];
+  cnpjNameMap = new Map<string, string>(); // Map of original CNPJ → clean empresa name
 
   constructor(
     private actionLogService: ActionLogService,
     private companyKpiService: CompanyKpiService,
     private kpiService: KPIService,
+    private cnpjLookupService: CnpjLookupService,
     private cdr: ChangeDetectorRef
   ) {}
 
   ngOnInit(): void {
     if (this.company) {
+      // Enrich company name from CNPJ
+      this.enrichCompanyName();
       this.loadCompanyData();
     }
   }
@@ -40,6 +46,22 @@ export class ModalCompanyCarteiraDetailComponent implements OnInit, OnDestroy {
   ngOnDestroy(): void {
     this.destroy$.next();
     this.destroy$.complete();
+  }
+
+  private async enrichCompanyName(): Promise<void> {
+    if (!this.company) return;
+    
+    try {
+      const cnpjNames = await firstValueFrom(
+        this.cnpjLookupService.enrichCnpjList([this.company.cnpj])
+          .pipe(takeUntil(this.destroy$))
+      );
+      this.cnpjNameMap = cnpjNames;
+      console.log('📊 Modal detail: CNPJ name map loaded with', this.cnpjNameMap.size, 'entries');
+      this.cdr.markForCheck();
+    } catch (error) {
+      console.error('Error enriching company name:', error);
+    }
   }
 
   private loadCompanyData(): void {
@@ -114,8 +136,13 @@ export class ModalCompanyCarteiraDetailComponent implements OnInit, OnDestroy {
   }
 
   getCompanyDisplayName(cnpj: string): string {
-    const match = cnpj.match(/^([^l]+)/);
-    return match ? match[1].trim() : cnpj;
+    if (!cnpj) {
+      return '';
+    }
+    // Use the enriched name from the map, fallback to original
+    const displayName = this.cnpjNameMap.get(cnpj);
+    console.log('📊 Modal detail getCompanyDisplayName called:', { cnpj, displayName, hasInMap: this.cnpjNameMap.has(cnpj), mapSize: this.cnpjNameMap.size });
+    return displayName || cnpj;
   }
 
   formatDate(timestamp: number): string {

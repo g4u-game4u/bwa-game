@@ -20,6 +20,7 @@ import { UserProfile } from '@utils/user-profile';
 import { CompanyDisplay, CompanyKpiService } from '@services/company-kpi.service';
 import { KPIData } from '@app/model/gamification-dashboard.model';
 import { KPIService } from '@services/kpi.service';
+import { CnpjLookupService } from '@services/cnpj-lookup.service';
 
 // Models
 import { Team } from '@components/c4u-team-selector/c4u-team-selector.component';
@@ -154,6 +155,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
   // Company/Carteira data for team
   teamCarteiraClientes: CompanyDisplay[] = [];
   isLoadingCarteira: boolean = false;
+  cnpjNameMap = new Map<string, string>(); // Map of original CNPJ → clean empresa name
   
   // Monthly points breakdown
   monthlyPointsBreakdown: { bloqueados: number; desbloqueados: number } | null = null;
@@ -192,6 +194,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
     private userProfileService: UserProfileService,
     private companyKpiService: CompanyKpiService,
     private kpiService: KPIService,
+    private cnpjLookupService: CnpjLookupService,
     private router: Router,
     private cdr: ChangeDetectorRef
   ) {}
@@ -328,6 +331,10 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       const profile = this.userProfileService.getCurrentUserProfile();
       console.log('👤 User profile:', profile);
       
+      // Debug: Log user's teams from session
+      const userTeams = this.sessaoProvider.usuario?.teams;
+      console.log('👤 User teams from session:', userTeams);
+      
       // Fetch all teams from Funifier
       const allTeams = await firstValueFrom(
         this.funifierApi.get<any[]>(`/v3/team`).pipe(takeUntil(this.destroy$))
@@ -336,7 +343,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
         return [];
       });
       
-      console.log('📊 All teams from Funifier:', allTeams);
+      console.log('📊 All teams from Funifier:', allTeams.length, 'teams');
       
       let availableTeams: any[] = [];
       
@@ -350,15 +357,38 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
         console.log('✅ DIRETOR: Showing all teams:', availableTeams.length);
       } else {
         // Get accessible team IDs based on profile
-        const accessibleTeamIds = this.userProfileService.getAccessibleTeamIds();
-        console.log('👤 Accessible team IDs for profile:', accessibleTeamIds);
+        let accessibleTeamIds = this.userProfileService.getAccessibleTeamIds();
+        console.log('👤 Accessible team IDs from service:', accessibleTeamIds);
         
+        // If no accessible teams found, use ALL user's teams (except management team)
+        if (accessibleTeamIds.length === 0 && userTeams && Array.isArray(userTeams)) {
+          // Extract team IDs from user's teams
+          const userTeamIds = userTeams.map((team: any) => {
+            if (typeof team === 'string') return team;
+            if (team && typeof team === 'object' && team._id) return team._id;
+            return null;
+          }).filter(Boolean) as string[];
+          
+          console.log('👤 User team IDs extracted:', userTeamIds);
+          
+          // For GESTOR, filter out the GESTAO team
+          if (profile === UserProfile.GESTOR) {
+            accessibleTeamIds = userTeamIds.filter(id => id !== 'FkmdnFU');
+          } else if (profile === UserProfile.SUPERVISOR) {
+            accessibleTeamIds = userTeamIds.filter(id => id !== 'Fkmdmko');
+          } else {
+            accessibleTeamIds = userTeamIds;
+          }
+          
+          console.log('👤 Accessible team IDs after filtering:', accessibleTeamIds);
+        }
+        
+        // If still no accessible teams, try to get their own team
         if (accessibleTeamIds.length === 0) {
-          // For SUPERVISOR and GESTOR, if no accessible teams found, try to get their own team
           const ownTeamId = this.userProfileService.getCurrentUserOwnTeamId();
           if (ownTeamId) {
             accessibleTeamIds.push(ownTeamId);
-            console.log('👤 Using own team ID:', ownTeamId);
+            console.log('👤 Using own team ID as fallback:', ownTeamId);
           }
         }
         
@@ -374,7 +404,8 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
             memberCount: 0 // Will be updated below
           }));
         
-        console.log('✅ Available teams for profile:', profile, availableTeams.length);
+        console.log('✅ Available teams for profile:', profile, availableTeams.length, 'teams');
+        console.log('✅ Available team IDs:', availableTeams.map(t => t.id));
       }
       
       // Load member count for each team using aggregate queries
@@ -444,8 +475,8 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
     try {
       console.log('👥 Loading team members data for team:', teamId);
       
-      // Step 1: Get member IDs using aggregate query
-      // Filter players by team membership using $match
+      // OPTIMIZED: Use single aggregate query on player_status to get all team members' data
+      // This replaces individual player status requests with one batched request
       const aggregatePayload = [
         {
           $match: {
@@ -454,28 +485,25 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
         }
       ];
       
-      const players = await firstValueFrom(
-        this.funifierApi.post<any[]>(
-          `/database/player/aggregate?strict=true`,
-          aggregatePayload
-        ).pipe(takeUntil(this.destroy$))
-      ).catch((error) => {
-        console.error('Error loading team members via aggregate:', error);
-        return [];
-      });
+      // Fetch all player status data in batches using pagination
+      const allPlayersStatus = await this.fetchAllPaginatedData<any>(
+        '/database/player_status/aggregate?strict=true',
+        aggregatePayload,
+        100 // batch size
+      );
       
-      // Store full player data from aggregate (includes extra.cnpj, name, email, etc.)
-      this.teamMembersData = players;
+      console.log('✅ Player status aggregate returned:', allPlayersStatus.length, 'players');
+      
+      // Store full player data from aggregate (includes extra.cnpj, name, email, point_categories, etc.)
+      this.teamMembersData = allPlayersStatus;
       
       // Extract member IDs from aggregate result
-      // The result should contain player documents with _id field
-      const memberIds = players
+      const memberIds = allPlayersStatus
         .map((player: any) => player._id)
         .filter((id: any) => id != null) as string[];
       
       this.teamMemberIds = memberIds;
       console.log('✅ Team member IDs loaded via aggregate:', memberIds.length, 'members');
-      console.log('✅ Team members data stored:', this.teamMembersData.length, 'players with full data');
       
       if (memberIds.length === 0) {
         console.warn('⚠️ No members found in team');
@@ -487,86 +515,96 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
         return;
       }
       
-      // Step 2: Fetch raw status data and points for selected month for each member in parallel
-      // We need the raw data to access extra fields and calculate points for the selected period
-      const memberDataPromises = memberIds.map(async (memberId) => {
-        try {
-          // Fetch status and points in parallel for each member
-          const [status, pointsForMonth] = await Promise.all([
-            firstValueFrom(
-              this.funifierApi.get<any>(`/v3/player/${memberId}/status`).pipe(takeUntil(this.destroy$))
-            ).catch((error) => {
-              console.error(`Error loading status for member ${memberId}:`, error);
-              return null;
-            }),
-            firstValueFrom(
-              this.actionLogService.getPontosForMonth(memberId, this.selectedMonth).pipe(takeUntil(this.destroy$))
-            ).catch((error) => {
-              console.error(`Error loading points for member ${memberId}:`, error);
-              return 0;
-            })
-          ]);
-          
-          return { status, pointsForMonth, memberId };
-        } catch (error) {
-          console.error(`Error loading data for member ${memberId}:`, error);
-          return { status: null, pointsForMonth: 0, memberId };
-        }
-      });
-      
-      const memberDataResults = await Promise.all(memberDataPromises);
-      
-      // Step 3: Aggregate data from all members
+      // Process player status data directly from aggregate result
+      // No need for individual requests - all data is already in allPlayersStatus
       let totalPoints = 0;
       let totalTasks = 0;
       let totalBlockedPoints = 0;
       let validMembers = 0;
       
-      memberDataResults.forEach(({ status, pointsForMonth, memberId }) => {
-        if (status) {
-          // Use points for the selected month (from achievement collection)
-          totalPoints += pointsForMonth;
-          
-          // Get tasks completed from extra.tarefas_finalizadas
-          const tasks = status.extra?.tarefas_finalizadas || 0;
-          totalTasks += tasks;
-          
-          // Get blocked points from status (if available)
-          // Blocked points can be in different formats:
-          // - point_categories.locked_points.total
-          // - point_categories.locked_points
-          // - point_wallet.bloqueados (Portuguese)
-          let blockedPoints = 0;
-          if (status.point_categories?.locked_points) {
-            if (typeof status.point_categories.locked_points === 'object' && status.point_categories.locked_points.total) {
-              blockedPoints = status.point_categories.locked_points.total;
-            } else if (typeof status.point_categories.locked_points === 'number') {
-              blockedPoints = status.point_categories.locked_points;
+      // Calculate points for the selected month using achievement aggregate
+      const monthStart = dayjs(this.selectedMonth).startOf('month');
+      const monthEnd = dayjs(this.selectedMonth).endOf('month');
+      
+      // Fetch points for all team members in one aggregate query
+      const pointsAggregatePayload = [
+        {
+          $match: {
+            player: { $in: memberIds },
+            type: 0, // type 0 = points
+            time: {
+              $gte: { $date: monthStart.toISOString() },
+              $lte: { $date: monthEnd.toISOString() }
             }
-          } else if (status.point_wallet?.bloqueados) {
-            blockedPoints = status.point_wallet.bloqueados;
           }
-          totalBlockedPoints += blockedPoints;
-          
-          validMembers++;
-          console.log(`📊 Member ${memberId}: ${pointsForMonth} points (month), ${tasks} tasks, ${blockedPoints} blocked points`);
+        },
+        {
+          $group: {
+            _id: '$player',
+            totalPoints: { $sum: '$total' }
+          }
         }
+      ];
+      
+      const pointsByPlayer = await firstValueFrom(
+        this.funifierApi.post<any[]>(
+          '/database/achievement/aggregate?strict=true',
+          pointsAggregatePayload
+        ).pipe(takeUntil(this.destroy$))
+      ).catch((error) => {
+        console.error('Error loading points aggregate:', error);
+        return [];
       });
       
-      // Calculate aggregated metrics
-      // Round down all values to remove decimals
+      // Create a map of player -> points for quick lookup
+      const pointsMap = new Map<string, number>();
+      pointsByPlayer.forEach((item: any) => {
+        pointsMap.set(item._id, item.totalPoints || 0);
+      });
+      
+      // Process each player's data from the aggregate result
+      allPlayersStatus.forEach((status: any) => {
+        const memberId = status._id;
+        
+        // Get points for this player from the points aggregate
+        const pointsForMonth = pointsMap.get(memberId) || 0;
+        totalPoints += pointsForMonth;
+        
+        // Get tasks completed from extra.tarefas_finalizadas
+        const tasks = status.extra?.tarefas_finalizadas || 0;
+        totalTasks += tasks;
+        
+        // Get blocked points from status
+        let blockedPoints = 0;
+        if (status.point_categories?.locked_points) {
+          if (typeof status.point_categories.locked_points === 'object' && status.point_categories.locked_points.total) {
+            blockedPoints = status.point_categories.locked_points.total;
+          } else if (typeof status.point_categories.locked_points === 'number') {
+            blockedPoints = status.point_categories.locked_points;
+          }
+        } else if (status.point_wallet?.bloqueados) {
+          blockedPoints = status.point_wallet.bloqueados;
+        }
+        totalBlockedPoints += blockedPoints;
+        
+        validMembers++;
+        console.log(`📊 Member ${memberId}: ${pointsForMonth} points (month), ${tasks} tasks, ${blockedPoints} blocked points`);
+      });
+      
+      // Calculate aggregated metrics (round down all values)
       this.teamTotalPoints = Math.floor(totalPoints);
       this.teamAveragePoints = validMembers > 0 ? Math.floor(totalPoints / validMembers) : 0;
       this.teamTotalTasks = Math.floor(totalTasks);
       this.teamTotalBlockedPoints = Math.floor(totalBlockedPoints);
       
-      console.log('✅ Team aggregated data from members:', {
+      console.log('✅ Team aggregated data from members (OPTIMIZED):', {
         totalPoints: this.teamTotalPoints,
         averagePoints: this.teamAveragePoints,
         totalTasks: this.teamTotalTasks,
         totalBlockedPoints: this.teamTotalBlockedPoints,
         validMembers,
-        selectedMonth: this.selectedMonth
+        selectedMonth: this.selectedMonth,
+        apiCalls: 2 // Only 2 aggregate calls instead of N individual calls
       });
       
       this.cdr.markForCheck();
@@ -578,6 +616,59 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       this.teamTotalBlockedPoints = 0;
       this.cdr.markForCheck();
     }
+  }
+
+  /**
+   * Fetch all data using pagination with Range header.
+   * Automatically fetches all pages until complete.
+   * 
+   * @param endpoint - API endpoint
+   * @param aggregatePayload - Aggregate pipeline array
+   * @param batchSize - Number of items per batch
+   * @returns Promise of all items
+   */
+  private async fetchAllPaginatedData<T>(
+    endpoint: string,
+    aggregatePayload: any[],
+    batchSize: number = 100
+  ): Promise<T[]> {
+    const allResults: T[] = [];
+    let startIndex = 0;
+    let hasMore = true;
+    
+    while (hasMore) {
+      const rangeHeader = `items=${startIndex}-${batchSize}`;
+      console.log(`📦 Fetching batch: ${rangeHeader}`);
+      
+      try {
+        const batchResults = await firstValueFrom(
+          this.funifierApi.post<T[]>(
+            endpoint,
+            aggregatePayload,
+            { headers: { 'Range': rangeHeader } }
+          ).pipe(takeUntil(this.destroy$))
+        );
+        
+        if (batchResults && Array.isArray(batchResults)) {
+          allResults.push(...batchResults);
+          
+          // If we got a full batch, there might be more
+          if (batchResults.length === batchSize) {
+            startIndex += batchSize;
+          } else {
+            hasMore = false;
+          }
+        } else {
+          hasMore = false;
+        }
+      } catch (error) {
+        console.error(`Error fetching batch at index ${startIndex}:`, error);
+        hasMore = false;
+      }
+    }
+    
+    console.log(`✅ Total items fetched: ${allResults.length}`);
+    return allResults;
   }
 
   /**
@@ -971,8 +1062,8 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
   /**
    * Load collaborators for selected team
    * 
-   * Uses the member IDs already loaded from loadTeamMembersData to fetch
-   * collaborator information (name, email) from player status.
+   * OPTIMIZED: Uses the data already loaded from loadTeamMembersData aggregate query
+   * instead of making individual player status requests.
    */
   private async loadCollaborators(): Promise<void> {
     try {
@@ -982,9 +1073,19 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       // Preservar o selectedCollaborator ANTES de carregar
       const preservedCollaboratorId = this.selectedCollaborator || localStorage.getItem('selectedCollaboratorId');
       
-      // Use member IDs already loaded from loadTeamMembersData
-      if (this.teamMemberIds.length === 0) {
-        console.warn('⚠️ No member IDs available, trying to load from aggregate query');
+      // OPTIMIZED: Use data already loaded from loadTeamMembersData aggregate query
+      // No need for individual requests - all data is already in teamMembersData
+      if (this.teamMembersData.length > 0) {
+        // Extract collaborator info directly from the aggregate result
+        this.collaborators = this.teamMembersData.map((playerStatus: any) => ({
+          userId: playerStatus._id,
+          name: playerStatus.name || playerStatus._id,
+          email: playerStatus._id
+        }));
+        
+        console.log('✅ Collaborators loaded from aggregate data (OPTIMIZED):', this.collaborators.length, 'no additional API calls');
+      } else if (this.teamMemberIds.length === 0) {
+        console.warn('⚠️ No member data available, trying to load from aggregate query');
         // Fallback: try to load from aggregate query
         const members = await firstValueFrom(
           this.teamAggregateService
@@ -997,25 +1098,14 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
         
         this.collaborators = members;
       } else {
-        // Fetch player info for each member ID to get name and email
-        const collaboratorPromises = this.teamMemberIds.map(memberId =>
-          firstValueFrom(
-            this.funifierApi.get<any>(`/v3/player/${memberId}/status`).pipe(takeUntil(this.destroy$))
-          ).then((status) => ({
-            userId: memberId,
-            name: status.name || memberId,
-            email: status._id || memberId
-          })).catch((error) => {
-            console.error(`Error loading collaborator info for ${memberId}:`, error);
-            return {
-              userId: memberId,
-              name: memberId,
-              email: memberId
-            };
-          })
-        );
-        
-        this.collaborators = await Promise.all(collaboratorPromises);
+        // Fallback: Use member IDs if teamMembersData is empty but memberIds exist
+        // This shouldn't happen normally, but provides a safety net
+        this.collaborators = this.teamMemberIds.map(memberId => ({
+          userId: memberId,
+          name: memberId,
+          email: memberId
+        }));
+        console.log('⚠️ Using fallback collaborator data from member IDs');
       }
       
       // Validate current selection exists in the list
@@ -1388,6 +1478,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
 
   /**
    * Load productivity graph data with one line per team member
+   * OPTIMIZED: Uses single aggregate query with $lookup to get all action logs for the team
    */
   private async loadProductivityData(dateRange: { start: Date; end: Date }): Promise<void> {
     try {
@@ -1395,7 +1486,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       this.hasProductivityError = false;
       this.productivityErrorMessage = '';
       
-      console.log('📈 Loading productivity data for team members...');
+      console.log('📈 Loading productivity data for team members (OPTIMIZED)...');
       
       if (this.teamMemberIds.length === 0) {
         console.warn('⚠️ No team members to load productivity data for');
@@ -1418,144 +1509,170 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       const startDate = endDate.subtract(this.selectedPeriod, 'day');
       
       try {
-        // Load daily productivity data (activities and points) for each team member
-        const memberProductivityPromises = this.teamMemberIds.map(async (memberId) => {
-          try {
-            // Get collaborator name for the label
-            const collaborator = this.collaborators.find(c => c.userId === memberId);
-            const memberName = this.formatCollaboratorName(memberId, collaborator?.name);
-            
-            // Query action_log for daily completed tasks count for this member
-            const activitiesAggregateBody = [
-              {
-                $match: {
-                  userId: memberId,
-                  time: {
-                    $gte: { $date: startDate.toISOString() },
-                    $lte: { $date: endDate.toISOString() }
-                  }
-                }
-              },
-              {
-                $group: {
-                  _id: {
-                    $dateToString: {
-                      format: '%Y-%m-%d',
-                      date: { $toDate: '$time' }
-                    }
-                  },
-                  count: { $sum: 1 }
-                }
-              },
-              {
-                $sort: { _id: 1 }
-              }
-            ];
-            
-            // Query achievement for daily points earned for this member
-            const pointsAggregateBody = [
-              {
-                $match: {
-                  player: memberId,
-                  type: 0, // type 0 = points
-                  time: {
-                    $gte: { $date: startDate.toISOString() },
-                    $lte: { $date: endDate.toISOString() }
-                  }
-                }
-              },
-              {
-                $group: {
-                  _id: {
-                    $dateToString: {
-                      format: '%Y-%m-%d',
-                      date: { $toDate: '$time' }
-                    }
-                  },
-                  total: { $sum: '$total' }
-                }
-              },
-              {
-                $sort: { _id: 1 }
-              }
-            ];
-            
-            // Load both activities and points in parallel
-            const [dailyActivitiesData, dailyPointsData] = await Promise.all([
-              firstValueFrom(
-                this.funifierApi.post<any[]>(
-                  '/v3/database/action_log/aggregate?strict=true',
-                  activitiesAggregateBody
-                ).pipe(takeUntil(this.destroy$))
-              ).catch((error) => {
-                console.error(`Error loading activities for member ${memberId}:`, error);
-                return [];
-              }),
-              firstValueFrom(
-                this.funifierApi.post<any[]>(
-                  '/v3/database/achievement/aggregate?strict=true',
-                  pointsAggregateBody
-                ).pipe(takeUntil(this.destroy$))
-              ).catch((error) => {
-                console.error(`Error loading points for member ${memberId}:`, error);
-                return [];
-              })
-            ]);
-            
-            // Convert activities to GraphDataPoint format
-            const activitiesDataPoints: GraphDataPoint[] = [];
-            const activitiesDataMap = new Map<string, number>();
-            
-            dailyActivitiesData.forEach((item: any) => {
-              const dateStr = item._id;
-              const count = item.count || 0;
-              activitiesDataMap.set(dateStr, count);
-            });
-            
-            // Convert points to GraphDataPoint format
-            const pointsDataPoints: GraphDataPoint[] = [];
-            const pointsDataMap = new Map<string, number>();
-            
-            dailyPointsData.forEach((item: any) => {
-              const dateStr = item._id;
-              const points = item.total || 0;
-              pointsDataMap.set(dateStr, points);
-            });
-            
-            // Fill all dates in range for both activities and points
-            let currentDate = startDate;
-            while (currentDate.isBefore(endDate) || currentDate.isSame(endDate, 'day')) {
-              const dateStr = currentDate.format('YYYY-MM-DD');
-              activitiesDataPoints.push({
-                date: currentDate.toDate(),
-                value: activitiesDataMap.get(dateStr) || 0
-              });
-              pointsDataPoints.push({
-                date: currentDate.toDate(),
-                value: Math.floor(pointsDataMap.get(dateStr) || 0) // Round down points
-              });
-              currentDate = currentDate.add(1, 'day');
+        // OPTIMIZED: Single aggregate query with $lookup to get all action logs for the team
+        // This replaces N individual requests with 1 aggregate request
+        const actionLogsAggregateBody = [
+          {
+            $lookup: {
+              from: 'player',
+              localField: 'userId',
+              foreignField: '_id',
+              as: 'playerData'
             }
-            
-            return {
-              memberId,
-              memberName,
-              activitiesDataPoints,
-              pointsDataPoints
-            };
-          } catch (error) {
-            console.error(`Error processing productivity for member ${memberId}:`, error);
-            return null;
+          },
+          {
+            $unwind: '$playerData'
+          },
+          {
+            $match: {
+              'playerData.teams': this.selectedTeamId,
+              time: {
+                $gte: { $date: startDate.toISOString() },
+                $lte: { $date: endDate.toISOString() }
+              }
+            }
+          },
+          {
+            $group: {
+              _id: {
+                userId: '$userId',
+                date: {
+                  $dateToString: {
+                    format: '%Y-%m-%d',
+                    date: { $toDate: '$time' }
+                  }
+                }
+              },
+              count: { $sum: 1 }
+            }
+          },
+          {
+            $sort: { '_id.date': 1 }
+          }
+        ];
+        
+        // OPTIMIZED: Single aggregate query for points
+        const pointsAggregateBody = [
+          {
+            $match: {
+              player: { $in: this.teamMemberIds },
+              type: 0, // type 0 = points
+              time: {
+                $gte: { $date: startDate.toISOString() },
+                $lte: { $date: endDate.toISOString() }
+              }
+            }
+          },
+          {
+            $group: {
+              _id: {
+                player: '$player',
+                date: {
+                  $dateToString: {
+                    format: '%Y-%m-%d',
+                    date: { $toDate: '$time' }
+                  }
+                }
+              },
+              total: { $sum: '$total' }
+            }
+          },
+          {
+            $sort: { '_id.date': 1 }
+          }
+        ];
+        
+        // Fetch both activities and points in parallel (2 requests instead of 2*N)
+        const [allActionLogs, allPointsData] = await Promise.all([
+          this.fetchAllPaginatedData<any>(
+            '/database/action_log/aggregate?strict=true',
+            actionLogsAggregateBody,
+            100
+          ),
+          firstValueFrom(
+            this.funifierApi.post<any[]>(
+              '/database/achievement/aggregate?strict=true',
+              pointsAggregateBody
+            ).pipe(takeUntil(this.destroy$))
+          ).catch((error) => {
+            console.error('Error loading points aggregate:', error);
+            return [];
+          })
+        ]);
+        
+        console.log('✅ Action logs aggregate returned:', allActionLogs.length, 'records');
+        console.log('✅ Points aggregate returned:', allPointsData.length, 'records');
+        
+        // Process action logs into per-member data
+        const memberActivitiesMap = new Map<string, Map<string, number>>();
+        allActionLogs.forEach((item: any) => {
+          const userId = item._id?.userId;
+          const dateStr = item._id?.date;
+          const count = item.count || 0;
+          
+          if (userId && dateStr) {
+            if (!memberActivitiesMap.has(userId)) {
+              memberActivitiesMap.set(userId, new Map());
+            }
+            memberActivitiesMap.get(userId)!.set(dateStr, count);
           }
         });
         
-        const allMemberData = await Promise.all(memberProductivityPromises);
-        const validMemberData = allMemberData.filter(d => d !== null) as Array<{ 
+        // Process points into per-member data
+        const memberPointsMap = new Map<string, Map<string, number>>();
+        allPointsData.forEach((item: any) => {
+          const player = item._id?.player;
+          const dateStr = item._id?.date;
+          const total = item.total || 0;
+          
+          if (player && dateStr) {
+            if (!memberPointsMap.has(player)) {
+              memberPointsMap.set(player, new Map());
+            }
+            memberPointsMap.get(player)!.set(dateStr, total);
+          }
+        });
+        
+        // Build member data from the aggregated results
+        const validMemberData: Array<{ 
           memberId: string; 
           memberName: string; 
           activitiesDataPoints: GraphDataPoint[]; 
           pointsDataPoints: GraphDataPoint[] 
-        }>;
+        }> = [];
+        
+        this.teamMemberIds.forEach(memberId => {
+          const collaborator = this.collaborators.find(c => c.userId === memberId);
+          const memberName = this.formatCollaboratorName(memberId, collaborator?.name);
+          
+          const activitiesMap = memberActivitiesMap.get(memberId) || new Map();
+          const pointsMap = memberPointsMap.get(memberId) || new Map();
+          
+          const activitiesDataPoints: GraphDataPoint[] = [];
+          const pointsDataPoints: GraphDataPoint[] = [];
+          
+          // Fill all dates in range
+          let currentDate = startDate;
+          while (currentDate.isBefore(endDate) || currentDate.isSame(endDate, 'day')) {
+            const dateStr = currentDate.format('YYYY-MM-DD');
+            activitiesDataPoints.push({
+              date: currentDate.toDate(),
+              value: activitiesMap.get(dateStr) || 0
+            });
+            pointsDataPoints.push({
+              date: currentDate.toDate(),
+              value: Math.floor(pointsMap.get(dateStr) || 0)
+            });
+            currentDate = currentDate.add(1, 'day');
+          }
+          
+          validMemberData.push({
+            memberId,
+            memberName,
+            activitiesDataPoints,
+            pointsDataPoints
+          });
+        });
         
         // Create multiple datasets (one per member) for activities and points
         if (validMemberData.length > 0) {
@@ -1625,6 +1742,13 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
           
           // Calculate totals by collaborator for bar charts
           this.calculateCollaboratorTotals(validMemberData);
+          
+          console.log('✅ Productivity data loaded (OPTIMIZED):', {
+            members: validMemberData.length,
+            apiCalls: 2, // Only 2 aggregate calls instead of 2*N individual calls
+            totalActionLogs: allActionLogs.length,
+            totalPointsRecords: allPointsData.length
+          });
         } else {
           this.graphData = [];
           this.graphDatasets = [];
@@ -1786,73 +1910,56 @@ private calculateCollaboratorTotals(memberData: Array<{
 
   /**
    * Load team activity and process metrics aggregated from all team members
+   * OPTIMIZED: Uses single aggregate query instead of N individual requests
    */
   private async loadTeamActivityAndMacroData(dateRange: { start: Date; end: Date }): Promise<void> {
     try {
-      console.log('📊 Loading team activity and process data...');
+      console.log('📊 Loading team activity and process data (OPTIMIZED)...');
       
       if (this.teamMemberIds.length === 0) {
         console.warn('⚠️ No team members to aggregate data from');
         return;
       }
       
-      // Load metrics for each team member in parallel
-      const memberMetricsPromises = this.teamMemberIds.map(memberId =>
-        firstValueFrom(
-          this.actionLogService.getProgressMetrics(memberId, this.selectedMonth)
-            .pipe(takeUntil(this.destroy$))
-        ).catch((error) => {
-          console.error(`Error loading metrics for member ${memberId}:`, error);
-          return {
-            activity: { pendentes: 0, emExecucao: 0, finalizadas: 0, pontos: 0 },
-            processo: { pendentes: 0, incompletas: 0, finalizadas: 0 }
-          };
-        })
-      );
+      // OPTIMIZED: Single aggregate query for all team members
+      const metrics = await firstValueFrom(
+        this.teamAggregateService.getTeamActivityMetrics(
+          this.selectedTeamId,
+          dateRange.start,
+          dateRange.end
+        ).pipe(takeUntil(this.destroy$))
+      ).catch((error) => {
+        console.error('Error loading team activity metrics:', error);
+        return { finalizadas: 0, pontos: 0, processosFinalizados: 0, processosIncompletos: 0 };
+      });
       
-      const allMetrics = await Promise.all(memberMetricsPromises);
-      
-      // Aggregate metrics from all members
-      let totalPendentes = 0;
-      let totalEmExecucao = 0;
-      let totalFinalizadas = 0;
-      let totalPontos = 0;
-      let totalProcessPendentes = 0;
-      let totalProcessIncompletas = 0;
-      let totalProcessFinalizadas = 0;
-      
-      // Sum metrics from all team members
-      allMetrics.forEach((metrics, index) => {
-        const memberId = this.teamMemberIds[index];
-        totalPendentes += metrics.activity.pendentes;
-        totalEmExecucao += metrics.activity.emExecucao;
-        totalFinalizadas += metrics.activity.finalizadas;
-        totalPontos += metrics.activity.pontos;
-        totalProcessPendentes += metrics.processo.pendentes;
-        totalProcessIncompletas += metrics.processo.incompletas;
-        totalProcessFinalizadas += metrics.processo.finalizadas;
-        
-        console.log(`📊 Member ${memberId} metrics:`, {
-          atividades: metrics.activity,
-          processos: metrics.processo
-        });
+      // Get total points from achievement aggregate
+      const totalPoints = await firstValueFrom(
+        this.teamAggregateService.getTeamTotalPoints(
+          this.teamMemberIds,
+          dateRange.start,
+          dateRange.end
+        ).pipe(takeUntil(this.destroy$))
+      ).catch((error) => {
+        console.error('Error loading team total points:', error);
+        return 0;
       });
       
       // Set aggregated team metrics
       this.teamActivityMetrics = {
-        pendentes: totalPendentes,
-        emExecucao: totalEmExecucao,
-        finalizadas: totalFinalizadas,
-        pontos: totalPontos
+        pendentes: 0,
+        emExecucao: 0,
+        finalizadas: metrics.finalizadas,
+        pontos: totalPoints
       };
       
       this.teamProcessMetrics = {
-        pendentes: totalProcessPendentes,
-        incompletas: totalProcessIncompletas,
-        finalizadas: totalProcessFinalizadas
+        pendentes: 0,
+        incompletas: Math.max(0, metrics.processosIncompletos),
+        finalizadas: metrics.processosFinalizados
       };
       
-      console.log('✅ Team activity and process data aggregated from', this.teamMemberIds.length, 'members:', {
+      console.log('✅ Team activity and process data (OPTIMIZED - 2 API calls instead of', this.teamMemberIds.length, '):', {
         activities: this.teamActivityMetrics,
         processos: this.teamProcessMetrics,
         selectedMonth: this.selectedMonth
@@ -1886,6 +1993,20 @@ private calculateCollaboratorTotals(memberData: Array<{
         console.error(`Error loading carteira for collaborator ${collaboratorId}:`, error);
         return [];
       });
+      
+      // Extract all CNPJ strings for lookup
+      const cnpjList = carteiraData.map(c => c.cnpj);
+      
+      // Enrich CNPJs with clean company names
+      const cnpjNames = await firstValueFrom(
+        this.cnpjLookupService.enrichCnpjList(cnpjList)
+          .pipe(takeUntil(this.destroy$))
+      ).catch((error) => {
+        console.error('Error enriching CNPJ names:', error);
+        return new Map<string, string>();
+      });
+      this.cnpjNameMap = cnpjNames;
+      console.log('📊 Collaborator: CNPJ name map loaded with', this.cnpjNameMap.size, 'entries');
       
       // Enrich with KPI data
       const enrichedClientes = await firstValueFrom(
@@ -1921,76 +2042,76 @@ private calculateCollaboratorTotals(memberData: Array<{
   }
 
   /**
-   * Load team carteira (companies/CNPJs) data aggregated from all team members
+   * Load team carteira (companies/CNPJs) data using OPTIMIZED single aggregate query
    * 
-   * Aggregates CNPJs and action counts from all team members' action_log entries
-   * for the selected month. Sums action counts per CNPJ across all team members.
+   * Uses $lookup aggregate query to get all CNPJs and action counts for team members
+   * in a single API call instead of N individual calls per member.
    * 
    * @private
    * @async
-   * @param dateRange - Date range for filtering actions (currently not used, uses selectedMonth)
+   * @param dateRange - Date range for filtering actions
    * @returns Promise that resolves when carteira data is loaded
    */
   private async loadTeamCarteiraData(dateRange: { start: Date; end: Date }): Promise<void> {
     try {
       this.isLoadingCarteira = true;
-      console.log('📊 Loading team carteira data from team members...');
+      console.log('📊 Loading team carteira data (OPTIMIZED)...');
       
-      if (this.teamMemberIds.length === 0) {
-        console.warn('⚠️ No team members to aggregate carteira data from');
+      if (!this.selectedTeamId) {
+        console.warn('⚠️ No team selected for carteira data');
         this.teamCarteiraClientes = [];
         this.isLoadingCarteira = false;
         this.cdr.markForCheck();
         return;
       }
       
-      // Load CNPJ list with action counts for each team member in parallel
-      const memberCarteiraPromises = this.teamMemberIds.map(memberId =>
-        firstValueFrom(
-          this.actionLogService.getPlayerCnpjListWithCount(memberId, this.selectedMonth)
-            .pipe(takeUntil(this.destroy$))
-        ).catch((error) => {
-          console.error(`Error loading carteira for member ${memberId}:`, error);
-          return [];
-        })
-      );
+      // Calculate date range for the selected month
+      const monthStart = dayjs(this.selectedMonth).startOf('month').toDate();
+      const monthEnd = dayjs(this.selectedMonth).endOf('month').toDate();
       
-      const allMemberCarteiras = await Promise.all(memberCarteiraPromises);
-      
-      // Aggregate CNPJs and sum action counts and process counts across all members
-      const cnpjMap = new Map<string, { actionCount: number; processCount: number }>();
-      
-      allMemberCarteiras.forEach((memberCarteira) => {
-        memberCarteira.forEach(({ cnpj, actionCount, processCount }) => {
-          if (cnpj) {
-            const existing = cnpjMap.get(cnpj);
-            if (existing) {
-              existing.actionCount += actionCount;
-              existing.processCount += processCount;
-            } else {
-              cnpjMap.set(cnpj, { actionCount, processCount });
-            }
-          }
-        });
+      // OPTIMIZED: Use single aggregate query with $lookup - 1 API call instead of N
+      const cnpjListWithCounts = await firstValueFrom(
+        this.teamAggregateService.getTeamCnpjListWithCount(
+          this.selectedTeamId,
+          monthStart,
+          monthEnd
+        ).pipe(takeUntil(this.destroy$))
+      ).catch((error) => {
+        console.error('Error loading team carteira data (optimized):', error);
+        return [];
       });
       
-      // Convert map to array format for enrichCompaniesWithKpis
-      const aggregatedCarteira = Array.from(cnpjMap.entries())
-        .map(([cnpj, counts]) => ({ 
-          cnpj, 
-          actionCount: counts.actionCount,
-          processCount: counts.processCount
-        }))
-        .sort((a, b) => b.actionCount - a.actionCount);
+      console.log('✅ Team CNPJ list loaded (OPTIMIZED - 1 API call):', cnpjListWithCounts.length, 'unique CNPJs');
+      
+      if (cnpjListWithCounts.length === 0) {
+        this.teamCarteiraClientes = [];
+        this.isLoadingCarteira = false;
+        this.cdr.markForCheck();
+        return;
+      }
+      
+      // Extract all CNPJ strings for lookup
+      const cnpjList = cnpjListWithCounts.map(c => c.cnpj);
+      
+      // Enrich CNPJs with clean company names
+      const cnpjNames = await firstValueFrom(
+        this.cnpjLookupService.enrichCnpjList(cnpjList)
+          .pipe(takeUntil(this.destroy$))
+      ).catch((error) => {
+        console.error('Error enriching CNPJ names:', error);
+        return new Map<string, string>();
+      });
+      this.cnpjNameMap = cnpjNames;
+      console.log('📊 Team: CNPJ name map loaded with', this.cnpjNameMap.size, 'entries');
       
       // Enrich with KPI data
       const enrichedClientes = await firstValueFrom(
-        this.companyKpiService.enrichCompaniesWithKpis(aggregatedCarteira)
+        this.companyKpiService.enrichCompaniesWithKpis(cnpjListWithCounts)
           .pipe(takeUntil(this.destroy$))
       ).catch((error) => {
         console.error('Error enriching team carteira data:', error);
         // Return data without KPI enrichment on error
-        return aggregatedCarteira.map(item => ({
+        return cnpjListWithCounts.map(item => ({
           cnpj: item.cnpj,
           actionCount: item.actionCount,
           processCount: item.processCount
@@ -2002,7 +2123,7 @@ private calculateCollaboratorTotals(memberData: Array<{
       // Update formatted sidebar data after carteira is loaded (for clientes count)
       this.updateFormattedSidebarData();
       
-      console.log('✅ Team carteira data loaded (aggregated from', this.teamMemberIds.length, 'members):', 
+      console.log('✅ Team carteira data loaded (OPTIMIZED - 1 API call instead of', this.teamMemberIds.length, 'members):', 
         this.teamCarteiraClientes.length, 'unique CNPJs');
       console.log('✅ Total actions across all CNPJs:', 
         this.teamCarteiraClientes.reduce((sum, item) => sum + item.actionCount, 0));
@@ -2408,7 +2529,7 @@ private calculateCollaboratorTotals(memberData: Array<{
 
   /**
    * Load monthly points breakdown (bloqueados and desbloqueados)
-   * For team: aggregates breakdown from all team members
+   * For team: uses OPTIMIZED single aggregate query for all team members
    * For collaborator: fetches breakdown for specific collaborator
    * 
    * @private
@@ -2419,7 +2540,7 @@ private calculateCollaboratorTotals(memberData: Array<{
   private async loadMonthlyPointsBreakdown(collaboratorId?: string): Promise<void> {
     try {
       if (collaboratorId) {
-        // Load for specific collaborator
+        // Load for specific collaborator (single request)
         const breakdown = await firstValueFrom(
           this.actionLogService.getMonthlyPointsBreakdown(collaboratorId, this.selectedMonth)
             .pipe(takeUntil(this.destroy$))
@@ -2430,35 +2551,32 @@ private calculateCollaboratorTotals(memberData: Array<{
         
         this.monthlyPointsBreakdown = breakdown;
       } else {
-        // Aggregate for all team members
+        // OPTIMIZED: Use single aggregate query for all team members
         if (this.teamMemberIds.length === 0) {
           this.monthlyPointsBreakdown = { bloqueados: 0, desbloqueados: 0 };
           return;
         }
         
-        const memberBreakdownPromises = this.teamMemberIds.map(memberId =>
-          firstValueFrom(
-            this.actionLogService.getMonthlyPointsBreakdown(memberId, this.selectedMonth)
-              .pipe(takeUntil(this.destroy$))
-          ).catch((error) => {
-            console.error(`Error loading monthly points breakdown for member ${memberId}:`, error);
-            return { bloqueados: 0, desbloqueados: 0 };
-          })
-        );
+        // Calculate date range for the selected month
+        const monthStart = dayjs(this.selectedMonth).startOf('month').toDate();
+        const monthEnd = dayjs(this.selectedMonth).endOf('month').toDate();
         
-        const allBreakdowns = await Promise.all(memberBreakdownPromises);
+        // Use optimized team aggregate service - single API call instead of N calls
+        const breakdown = await firstValueFrom(
+          this.teamAggregateService.getTeamMonthlyPointsBreakdown(
+            this.teamMemberIds,
+            monthStart,
+            monthEnd
+          ).pipe(takeUntil(this.destroy$))
+        ).catch((error) => {
+          console.error('Error loading team monthly points breakdown (optimized):', error);
+          return { bloqueados: 0, desbloqueados: 0 };
+        });
         
-        // Aggregate breakdowns
-        const totalBloqueados = allBreakdowns.reduce((sum, breakdown) => sum + breakdown.bloqueados, 0);
-        const totalDesbloqueados = allBreakdowns.reduce((sum, breakdown) => sum + breakdown.desbloqueados, 0);
-        
-        this.monthlyPointsBreakdown = {
-          bloqueados: Math.floor(totalBloqueados),
-          desbloqueados: Math.floor(totalDesbloqueados)
-        };
+        this.monthlyPointsBreakdown = breakdown;
+        console.log('✅ Monthly points breakdown loaded (OPTIMIZED - 1 API call instead of', this.teamMemberIds.length, '):', this.monthlyPointsBreakdown);
       }
       
-      console.log('✅ Monthly points breakdown loaded:', this.monthlyPointsBreakdown);
       this.cdr.markForCheck();
     } catch (error) {
       console.error('Error loading monthly points breakdown:', error);
@@ -2530,17 +2648,19 @@ private calculateCollaboratorTotals(memberData: Array<{
   }
 
   /**
-   * Extract company name from CNPJ string
+   * Get clean company display name from CNPJ
+   * Uses the enriched CNPJ name map from the lookup service
    * Format: "COMPANY NAME l CODE [ID|SUFFIX]"
-   * Returns: Company name without the code and ID parts
+   * Returns: Clean company name from empid_cnpj__c collection
    */
   getCompanyDisplayName(cnpj: string): string {
     if (!cnpj) {
       return '';
     }
-    // Extract text before " l " separator
-    const match = cnpj.match(/^([^l]+)/);
-    return match ? match[1].trim() : cnpj;
+    // Use the enriched name from the map, fallback to original
+    const displayName = this.cnpjNameMap.get(cnpj);
+    console.log('📊 Team getCompanyDisplayName called:', { cnpj, displayName, hasInMap: this.cnpjNameMap.has(cnpj), mapSize: this.cnpjNameMap.size });
+    return displayName || cnpj;
   }
 
   /**
@@ -2589,6 +2709,9 @@ private calculateCollaboratorTotals(memberData: Array<{
 
   /**
    * Load team KPIs
+   * OPTIMIZED: Uses already-loaded teamCarteiraClientes for company count
+   * and single aggregate query for delivery percentage
+   * 
    * Calculates:
    * 1. Total de empresas da carteira (atual) vs soma das metas dos colaboradores (target)
    * 2. KPI de processos no prazo: média dos processos no prazo de todos os usuários no time
@@ -2605,7 +2728,7 @@ private calculateCollaboratorTotals(memberData: Array<{
         );
         this.teamKPIs = kpis || [];
       } else {
-        // For team, aggregate KPIs from all members
+        // OPTIMIZED: For team, use already-loaded data instead of N individual calls
         const teamKPIs: KPIData[] = [];
         
         if (this.teamMemberIds.length === 0) {
@@ -2615,61 +2738,83 @@ private calculateCollaboratorTotals(memberData: Array<{
           return;
         }
         
-        // Load KPIs for all team members in parallel
-        const kpiPromises = this.teamMemberIds.map(memberId =>
-          firstValueFrom(
-            this.kpiService.getPlayerKPIs(memberId, this.selectedMonth, this.actionLogService)
-              .pipe(takeUntil(this.destroy$))
-          ).catch(error => {
-            console.error(`Error loading KPIs for member ${memberId}:`, error);
-            return [];
-          })
-        );
-        
-        const allMemberKPIs = await Promise.all(kpiPromises);
-        
-        // Aggregate KPIs
-        // 1. Clientes na Carteira: total atual vs soma das metas
-        const empresasKPIs = allMemberKPIs
-          .flat()
-          .filter(kpi => kpi.id === 'numero-empresas');
-        
+        // 1. Clientes na Carteira: use already-loaded teamCarteiraClientes
+        // This data was loaded by loadTeamCarteiraData() using optimized aggregate query
         const totalEmpresasAtual = this.teamCarteiraClientes.length;
-        const somaMetasEmpresas = empresasKPIs.reduce((sum, kpi) => sum + (kpi.target || 0), 0);
+        const defaultTargetPerMember = 10;
+        const somaMetasEmpresas = this.teamMemberIds.length * defaultTargetPerMember;
         
-        if (empresasKPIs.length > 0 || totalEmpresasAtual > 0) {
-          teamKPIs.push({
-            id: 'numero-empresas',
-            label: 'Clientes na Carteira',
-            current: totalEmpresasAtual,
-            target: somaMetasEmpresas || 10, // Fallback to 10 if no targets
-            superTarget: Math.max(somaMetasEmpresas * 1.5, 15), // 1.5x target as super target
-            unit: 'clientes',
-            color: this.getKPIColorByGoals(totalEmpresasAtual, somaMetasEmpresas || 10, Math.max(somaMetasEmpresas * 1.5, 15)),
-            percentage: Math.min((totalEmpresasAtual / Math.max(somaMetasEmpresas * 1.5, 15)) * 100, 100)
-          });
-        }
+        teamKPIs.push({
+          id: 'numero-empresas',
+          label: 'Clientes na Carteira',
+          current: totalEmpresasAtual,
+          target: somaMetasEmpresas || 10,
+          superTarget: Math.max(somaMetasEmpresas * 1.5, 15),
+          unit: 'clientes',
+          color: this.getKPIColorByGoals(totalEmpresasAtual, somaMetasEmpresas || 10, Math.max(somaMetasEmpresas * 1.5, 15)),
+          percentage: Math.min((totalEmpresasAtual / Math.max(somaMetasEmpresas * 1.5, 15)) * 100, 100)
+        });
         
-        // 2. Entregas no Prazo: média dos processos no prazo de todos os usuários
-        const entregasKPIs = allMemberKPIs
-          .flat()
-          .filter(kpi => kpi.id === 'entregas-prazo');
+        // 2. Entregas no Prazo: fetch from player data using single aggregate query
+        // Only fetch if we're looking at current month (entrega is only valid for current month)
+        const now = new Date();
+        const isCurrentMonth = this.selectedMonth.getFullYear() === now.getFullYear() && 
+                               this.selectedMonth.getMonth() === now.getMonth();
         
-        if (entregasKPIs.length > 0) {
-          const mediaEntregas = entregasKPIs.reduce((sum, kpi) => sum + kpi.current, 0) / entregasKPIs.length;
-          const targetEntregas = entregasKPIs[0]?.target || 80;
-          const superTargetEntregas = entregasKPIs[0]?.superTarget || 90;
-          
-          teamKPIs.push({
-            id: 'entregas-prazo',
-            label: 'Entregas no Prazo',
-            current: Math.round(mediaEntregas * 100) / 100, // Round to 2 decimals
-            target: targetEntregas,
-            superTarget: superTargetEntregas,
-            unit: '%',
-            color: this.getKPIColorByGoals(mediaEntregas, targetEntregas, superTargetEntregas),
-            percentage: Math.min((mediaEntregas / superTargetEntregas) * 100, 100)
-          });
+        if (isCurrentMonth) {
+          try {
+            // Use single aggregate query to get all team members' entrega values
+            const aggregateQuery = [
+              {
+                $match: {
+                  _id: { $in: this.teamMemberIds }
+                }
+              },
+              {
+                $project: {
+                  _id: 1,
+                  entrega: '$extra.entrega'
+                }
+              }
+            ];
+            
+            const playerEntregas = await firstValueFrom(
+              this.funifierApi.post<{ _id: string; entrega?: string }[]>(
+                '/database/player_status/aggregate?strict=true',
+                aggregateQuery
+              ).pipe(takeUntil(this.destroy$))
+            ).catch(error => {
+              console.error('Error fetching team entrega data:', error);
+              return [];
+            });
+            
+            // Calculate average entrega percentage
+            const validEntregas = playerEntregas
+              .filter(p => p.entrega != null && p.entrega !== '')
+              .map(p => parseFloat(p.entrega || '0'))
+              .filter(v => !isNaN(v));
+            
+            if (validEntregas.length > 0) {
+              const mediaEntregas = validEntregas.reduce((sum, v) => sum + v, 0) / validEntregas.length;
+              const targetEntregas = 80;
+              const superTargetEntregas = 90;
+              
+              teamKPIs.push({
+                id: 'entregas-prazo',
+                label: 'Entregas no Prazo',
+                current: Math.round(mediaEntregas * 100) / 100,
+                target: targetEntregas,
+                superTarget: superTargetEntregas,
+                unit: '%',
+                color: this.getKPIColorByGoals(mediaEntregas, targetEntregas, superTargetEntregas),
+                percentage: Math.min((mediaEntregas / superTargetEntregas) * 100, 100)
+              });
+            }
+            
+            console.log('✅ Team KPIs loaded (OPTIMIZED - 1 API call instead of', this.teamMemberIds.length, ')');
+          } catch (error) {
+            console.error('Error loading team entrega KPI:', error);
+          }
         }
         
         this.teamKPIs = teamKPIs;
