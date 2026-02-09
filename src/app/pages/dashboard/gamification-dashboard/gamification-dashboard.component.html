@@ -196,7 +196,7 @@
                    class="carteira-kpi-compact" 
                    [ngClass]="'kpi-' + (cliente.deliveryKpi.color || 'default')"
                    [title]="getKpiTooltip(cliente.deliveryKpi)">
-                <span class="kpi-value">{{ formatKpiValue(cliente.deliveryKpi.current) }}</span>
+                <span class="kpi-value">{{ formatKpiValue(cliente.deliveryKpi) }}</span>
                 <i class="ri-time-line kpi-icon" aria-hidden="true"></i>
               </div>
               <span *ngIf="!cliente.deliveryKpi" class="kpi-na">N/A</span>
