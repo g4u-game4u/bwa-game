@@ -846,8 +846,22 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
 
   /**
    * Logout user and redirect to login page
+   * Includes double confirmation to prevent accidental logout
    */
   logout(): void {
+    // First confirmation
+    const firstConfirm = window.confirm('Tem certeza que deseja sair do sistema?');
+    if (!firstConfirm) {
+      return;
+    }
+    
+    // Second confirmation (double validation)
+    const secondConfirm = window.confirm('Esta ação irá desconectar você do sistema. Deseja continuar?');
+    if (!secondConfirm) {
+      return;
+    }
+    
+    // If both confirmations are accepted, proceed with logout
     this.announceToScreenReader('Saindo do sistema...');
     this.sessaoProvider.logout();
   }

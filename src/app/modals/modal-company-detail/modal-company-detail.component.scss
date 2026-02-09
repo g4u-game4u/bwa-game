@@ -18,7 +18,7 @@
   .kpi-item {
     flex: 0 1 auto;
     min-width: 100px;
-    max-width: 150px;
+    max-width: 200px; // Increased from 150px to accommodate longer labels like "Entregas no Prazo"
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -96,26 +96,8 @@
   flex-direction: column;
   flex: 1;
   min-height: 300px;
-  overflow-y: auto;
+  overflow-y: visible; // Remove scroll from content area
   padding: 0 8px;
-
-  &::-webkit-scrollbar {
-    width: 10px;
-  }
-
-  &::-webkit-scrollbar-track {
-    background: #2b2e31;
-    border-radius: 4px;
-  }
-
-  &::-webkit-scrollbar-thumb {
-    background: #4a4d50;
-    border-radius: 4px;
-
-    &:hover {
-      background: lighten(#4a4d50, 10%);
-    }
-  }
 }
 
 // Tab Description Box - Figma Design

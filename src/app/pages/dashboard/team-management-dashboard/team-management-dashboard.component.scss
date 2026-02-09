@@ -58,10 +58,6 @@
         visibility: visible;
         pointer-events: auto;
       }
-      
-      .sidebar-toggle {
-        right: -8px;
-      }
     }
   }
   
@@ -137,6 +133,7 @@
       width: 100%;
       box-sizing: border-box;
       overflow: hidden; // Prevent content overflow
+      min-height: 100%;
     }
     
     // Collapsed sidebar compact view
@@ -145,6 +142,7 @@
       top: 0;
       left: 0;
       right: 0;
+      bottom: 0;
       display: flex;
       flex-direction: column;
       gap: $spacing-sm;
@@ -212,36 +210,43 @@
       }
     }
     
-    // Sidebar toggle button - positioned outside the card
+    // Sidebar toggle button - subtle button at the end of sidebar
     .sidebar-toggle {
       cursor: pointer;
-      position: absolute;
-      top: 120px;
-      right: -12px;
-      width: 24px;
-      height: 40px;
-      padding: 0;
-      border: none;
+      width: 100%;
+      padding: $spacing-sm $spacing-md;
+      border: 1px solid rgba(255, 255, 255, 0.1);
       outline: none;
-      background: rgba(82, 84, 87, 0.8);
-      box-shadow: 0 4px 4px rgba(0, 0, 0, 0.25);
-      border-radius: 0 8px 8px 0;
-      z-index: 100;
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: $border-radius-sm;
       display: flex;
       align-items: center;
       justify-content: center;
-      transition: all 0.3s ease;
+      gap: $spacing-xs;
+      transition: all 0.2s ease;
+      color: $text-secondary;
+      font-size: $font-size-small;
+      font-weight: $font-weight-medium;
       
       .toggle-icon {
-        color: rgba(255, 255, 255, 0.9);
+        color: $text-secondary;
         font-size: 16px;
-        opacity: 1;
-        transition: all 0.3s ease;
+        transition: all 0.2s ease;
+      }
+      
+      .toggle-text {
+        font-size: $font-size-small;
+        transition: all 0.2s ease;
       }
       
       &:hover {
-        width: 28px;
-        background: rgba(82, 84, 87, 1);
+        background: rgba(255, 255, 255, 0.1);
+        border-color: rgba(255, 255, 255, 0.2);
+        color: $text-primary;
+        
+        .toggle-icon {
+          color: $text-primary;
+        }
       }
       
       &:focus-visible {
@@ -254,12 +259,58 @@
       }
     }
     
+    // Compact toggle button in collapsed sidebar
+    .compact-toggle {
+      margin-top: auto;
+      padding: $spacing-sm;
+      padding-top: $spacing-md;
+      border-top: 1px solid rgba(255, 255, 255, 0.15);
+      cursor: pointer;
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: $border-radius-sm;
+      transition: all 0.2s ease;
+      
+      .compact-icon {
+        color: $primary-electric-blue;
+        font-size: 24px;
+        transition: all 0.2s ease;
+        font-weight: 600;
+      }
+      
+      &:hover {
+        background: rgba($primary-electric-blue, 0.15);
+        border-top-color: rgba($primary-electric-blue, 0.3);
+        transform: translateX(2px);
+        
+        .compact-icon {
+          color: $primary-electric-blue;
+          transform: scale(1.1);
+        }
+      }
+      
+      &:active {
+        transform: translateX(1px);
+      }
+      
+      &:focus-visible {
+        outline: 2px solid $primary-electric-blue;
+        outline-offset: 2px;
+      }
+    }
+    
     .sidebar-section {
       min-height: 60px;
       width: 100%;
       max-width: 100%;
       box-sizing: border-box;
       overflow: hidden; // Prevent content overflow
+      
+      &.sidebar-toggle-section {
+        margin-top: auto;
+        padding-top: $spacing-md;
+        border-top: 1px solid rgba(255, 255, 255, 0.1);
+        min-height: auto;
+      }
       
       .team-metrics {
         display: flex;
@@ -433,7 +484,7 @@
       
       .refresh-button {
         position: absolute;
-        right: 80px; // Make room for logout button
+        right: 120px; // Increased from 80px to add more spacing between buttons
         top: 50%;
         transform: translateY(-50%);
         display: flex;
@@ -529,8 +580,6 @@
       display: flex;
       gap: $spacing-sm;
       @include card;
-      background: linear-gradient(to bottom right, rgba(255, 255, 255, 0.2) 0%, rgba(255, 255, 255, 0) 100%);
-      backdrop-filter: blur(25px);
       border: 1px solid rgba(255, 255, 255, 0.1);
       padding: $spacing-sm;
       margin-bottom: $spacing-lg;
@@ -570,10 +619,9 @@
         }
 
         &.active {
-          background: rgba($primary-electric-blue, 0.35);
+          background: rgba($primary-electric-blue, 0.05);
           color: $text-primary;
           border: 1px solid rgba($primary-electric-blue, 0.5);
-          box-shadow: 0 4px 20px rgba($primary-electric-blue, 0.4);
           font-weight: $font-weight-bold;
           
           i {
@@ -626,8 +674,6 @@
     // Tab Content
     .tab-content {
       @include card;
-      background: linear-gradient(to bottom right, rgba(255, 255, 255, 0.2) 0%, rgba(255, 255, 255, 0) 100%);
-      backdrop-filter: blur(25px);
       border-radius: $border-radius;
       padding: $spacing-xl;
       border: 1px solid rgba(255, 255, 255, 0.1);
@@ -686,7 +732,7 @@
     // Shared controls for both charts
     .productivity-shared-controls {
       display: flex;
-      justify-content: flex-end;
+      justify-content: flex-start;
       align-items: center;
       gap: $spacing-md;
       margin-bottom: $spacing-lg;
@@ -1101,7 +1147,7 @@
     left: 0;
     right: 0;
     bottom: 0;
-    background-color: rgba($bg-primary, 0.9);
+    background-color: rgba(0,0,0,0.5);
     display: flex;
     align-items: center;
     justify-content: center;

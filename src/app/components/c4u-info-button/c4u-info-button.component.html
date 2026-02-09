@@ -5,6 +5,7 @@
   (mouseleave)="onMouseLeave()" 
   (click)="onClick($event)">
   <button 
+    #infoButton
     type="button"
     class="info-button"
     [attr.aria-label]="'Informações sobre ' + infoKey"

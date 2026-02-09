@@ -44,6 +44,12 @@
     </circle>
 </svg>
 
+<!-- Show percentage only when total is null -->
+<div class="centro {{theme}}" *ngIf="valor != null && total == null" flex direction="column" vAlign="center">
+    <div [h]="34" class="valor">{{valor}}%</div>
+</div>
+
+<!-- Show "valor de total" when both are provided (legacy mode) -->
 <div class="centro {{theme}}" *ngIf="valor != null && total != null" flex direction="column" vAlign="center">
     <div [h]="34" class="valor">{{valor}}</div>
     <div class="total">de {{total}}</div>

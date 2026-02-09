@@ -5,6 +5,7 @@
   
   // Default size (medium) - increased to accommodate longer titles
   width: 280px;
+  max-width: 100%; // Allow component to shrink if needed in modals
   
   // Size variants
   &.size-small {
@@ -47,6 +48,7 @@
   align-items: center;
   justify-content: center;
   gap: 0.25rem;
+  flex-wrap: wrap; // Allow wrapping if label is too long
   
   .kpi-icon {
     font-size: 1.125rem;
@@ -76,9 +78,12 @@
     letter-spacing: 0.36px;
     flex: 1;
     min-width: 0;
-    white-space: nowrap;
+    white-space: normal; // Changed from nowrap to allow wrapping for long labels
     overflow: visible;
+    word-wrap: break-word; // Allow breaking long words if needed
+    hyphens: auto; // Add hyphens for better text breaking
     margin: 0 4px; // Additional spacing around label
+    line-height: 1.3; // Better line height for multi-line labels
     
     // Size variants
     :host.size-small & {

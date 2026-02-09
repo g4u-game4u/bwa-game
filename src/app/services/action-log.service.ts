@@ -164,6 +164,7 @@ export class ActionLogService {
 
     // Aggregate query to get action log for this player in the target month
     // Uses userId field and time field with Funifier $date expressions
+    // Add $limit with high value to avoid MongoDB default limit of 100 documents
     const aggregateBody = [
       { 
         $match: { 
@@ -171,7 +172,8 @@ export class ActionLogService {
           time: { $gte: startDate, $lte: endDate }
         } 
       },
-      { $sort: { time: -1 } }
+      { $sort: { time: -1 } },
+      { $limit: 10000 } // High limit to get all documents (MongoDB default is 100)
     ];
 
     console.log('📊 Action log query for month:', JSON.stringify(aggregateBody));

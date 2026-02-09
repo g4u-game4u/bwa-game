@@ -218,7 +218,7 @@ export class CompanyKpiService {
 
     return {
       id: 'delivery',
-      label: 'Entregas',
+      label: 'Entregas no Prazo', // Full label instead of just "Entregas"
       current,
       target,
       unit: '%',

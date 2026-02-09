@@ -58,6 +58,29 @@
       padding: $spacing-sm;
     }
   }
+
+  .selected-collaborator-name {
+    display: flex;
+    align-items: center;
+    gap: $spacing-xs;
+    padding: $spacing-sm $spacing-md;
+    margin-top: $spacing-xs;
+    background: rgba($primary-electric-blue, 0.1);
+    border: 1px solid rgba($primary-electric-blue, 0.2);
+    border-radius: $border-radius-sm;
+    color: $text-primary;
+    font-size: $font-size-small;
+    font-weight: $font-weight-medium;
+
+    i {
+      color: $primary-electric-blue;
+      font-size: 1rem;
+    }
+
+    span {
+      flex: 1;
+    }
+  }
 }
 
 // Tablet: slightly larger touch targets

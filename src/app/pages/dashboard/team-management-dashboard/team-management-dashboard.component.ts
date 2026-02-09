@@ -65,8 +65,19 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
   selectedTeam: string = '';
   selectedTeamId: string = ''; // Funifier team ID (e.g., 'FkmdnFU')
   selectedCollaborator: string | null = null;
-  selectedMonth: Date = new Date();
-  selectedMonthsAgo: number = 0;
+  // Initialize to February 2026 by default (similar to gamification-dashboard)
+  // Calculate months ago from current date to February 2026
+  selectedMonthsAgo: number = (() => {
+    const now = dayjs();
+    const feb2026 = dayjs('2026-02-01');
+    // Calculate how many months ago February 2026 is from now
+    // If we're in February 2026, monthsAgo = 0
+    // If we're in March 2026, monthsAgo = 1 (one month ago)
+    // If we're in January 2026, monthsAgo = -1, but we'll use 0 as minimum
+    const monthsDiff = now.diff(feb2026, 'month', true); // Use true for fractional months
+    return Math.max(0, Math.round(monthsDiff));
+  })();
+  selectedMonth: Date = new Date(2026, 1, 1); // February 2026 (month is 0-indexed: 1 = February)
   activeTab: 'goals' | 'productivity' = 'goals';
   
   // Loading states
@@ -632,6 +643,9 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
         await this.loadTeamCarteiraData(dateRange);
         await this.loadTeamKPIs();
         
+        // Update formatted sidebar data after KPIs are loaded (includes metas calculation)
+        this.updateFormattedSidebarData();
+        
         // Update team name display after loading collaborators
         this.updateTeamNameDisplay();
       }
@@ -672,8 +686,13 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       await this.loadCollaboratorCarteiraData(collaboratorId, dateRange);
       await this.loadTeamKPIs(collaboratorId);
       
+      // Update formatted sidebar data after KPIs are loaded (includes metas calculation)
+      this.updateFormattedSidebarData();
+      
       // Update team name display after loading collaborators
       this.updateTeamNameDisplay();
+      
+      this.cdr.markForCheck();
       
       console.log('✅ Collaborator data loaded for:', collaboratorId);
     } catch (error) {
@@ -960,6 +979,9 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       this.isLoadingCollaborators = true;
       console.log('👥 Loading collaborators for team:', this.selectedTeam);
       
+      // Preservar o selectedCollaborator ANTES de carregar
+      const preservedCollaboratorId = this.selectedCollaborator || localStorage.getItem('selectedCollaboratorId');
+      
       // Use member IDs already loaded from loadTeamMembersData
       if (this.teamMemberIds.length === 0) {
         console.warn('⚠️ No member IDs available, trying to load from aggregate query');
@@ -996,8 +1018,18 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
         this.collaborators = await Promise.all(collaboratorPromises);
       }
       
+      // Validate current selection exists in the list
+      if (this.selectedCollaborator) {
+        const collaboratorExists = this.collaborators.find(c => c.userId === this.selectedCollaborator);
+        if (!collaboratorExists) {
+          console.warn('⚠️ Selected collaborator not found in list, resetting to team view');
+          this.selectedCollaborator = null;
+        }
+      }
+      
       this.isLoadingCollaborators = false;
       console.log('✅ Collaborators loaded:', this.collaborators.length);
+      
       this.cdr.markForCheck();
     } catch (error) {
       console.error('Error in loadCollaborators:', error);
@@ -1124,7 +1156,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       
       // Get collaborator name for the label
       const collaborator = this.collaborators.find(c => c.userId === collaboratorId);
-      const memberName = collaborator?.name || collaboratorId;
+      const memberName = this.formatCollaboratorName(collaboratorId, collaborator?.name);
       
       // For productivity tab, use the selected period instead of month range
       const endDate = dayjs();
@@ -1210,7 +1242,8 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
         borderColor: ['rgba(79, 70, 229, 1)'],
         borderWidth: 1
       }];
-      this.activitiesByCollaboratorLabels = [memberName];
+      // For single collaborator, percentage is always 100%
+      this.activitiesByCollaboratorLabels = [`${memberName} - ${activitiesTotal} (100%)`];
       
       // Load points data for the same period
       await this.loadCollaboratorPointsData(collaboratorId, startDate, endDate, memberName);
@@ -1339,7 +1372,8 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
         borderColor: ['rgba(16, 185, 129, 1)'],
         borderWidth: 1
       }];
-      this.pointsByCollaboratorLabels = [memberName];
+      // For single collaborator, percentage is always 100%
+      this.pointsByCollaboratorLabels = [`${memberName} - ${pointsTotal} (100%)`];
       
       console.log('✅ Collaborator points data loaded:', {
         dataPoints: pointsDataPoints.length,
@@ -1389,7 +1423,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
           try {
             // Get collaborator name for the label
             const collaborator = this.collaborators.find(c => c.userId === memberId);
-            const memberName = collaborator?.name || memberId;
+            const memberName = this.formatCollaboratorName(memberId, collaborator?.name);
             
             // Query action_log for daily completed tasks count for this member
             const activitiesAggregateBody = [
@@ -1654,13 +1688,16 @@ private calculateCollaboratorTotals(memberData: Array<{
     const activitiesTotal = member.activitiesDataPoints.reduce((sum, point) => sum + point.value, 0);
     const pointsTotal = member.pointsDataPoints.reduce((sum, point) => sum + point.value, 0);
     
+    // Format the member name (already formatted in loadProductivityData, but ensure consistency)
+    const formattedName = this.formatCollaboratorName(member.memberId, member.memberName);
+    
     activitiesTotals.push({
-      name: member.memberName,
+      name: formattedName,
       total: activitiesTotal
     });
     
     pointsTotals.push({
-      name: member.memberName,
+      name: formattedName,
       total: Math.floor(pointsTotal) // Round down points
     });
   });
@@ -1668,6 +1705,10 @@ private calculateCollaboratorTotals(memberData: Array<{
   // Sort by total (descending) for better visualization
   activitiesTotals.sort((a, b) => b.total - a.total);
   pointsTotals.sort((a, b) => b.total - a.total);
+  
+  // Calculate total for percentage calculation
+  const totalActivities = activitiesTotals.reduce((sum, item) => sum + item.total, 0);
+  const totalPoints = pointsTotals.reduce((sum, item) => sum + item.total, 0);
   
   // Create graph data and datasets for activities by collaborator
   this.activitiesByCollaboratorGraphData = activitiesTotals.map((item, index) => ({
@@ -1709,9 +1750,16 @@ private calculateCollaboratorTotals(memberData: Array<{
     borderWidth: 1
   }];
   
-  // Store collaborator names for chart labels
-  this.activitiesByCollaboratorLabels = activitiesTotals.map(item => item.name);
-  this.pointsByCollaboratorLabels = pointsTotals.map(item => item.name);
+  // Store collaborator names with percentage for chart labels
+  // Format: "Nome - Valor (Porcentagem%)"
+  this.activitiesByCollaboratorLabels = activitiesTotals.map(item => {
+    const percentage = totalActivities > 0 ? Math.round((item.total / totalActivities) * 100) : 0;
+    return `${item.name} - ${item.total} (${percentage}%)`;
+  });
+  this.pointsByCollaboratorLabels = pointsTotals.map(item => {
+    const percentage = totalPoints > 0 ? Math.round((item.total / totalPoints) * 100) : 0;
+    return `${item.name} - ${item.total} (${percentage}%)`;
+  });
   
   console.log('✅ Collaborator totals calculated:', {
     activities: activitiesTotals,
@@ -1999,15 +2047,20 @@ private calculateCollaboratorTotals(memberData: Array<{
         return;
       }
       
+      // Check if team is actually changing
+      const isTeamChanging = this.selectedTeamId !== teamId;
+      
       // Set selected team ID and name
       this.selectedTeamId = teamId;
       this.selectedTeam = team.name;
       this.displayTeamName = team.name; // Update display name
       
-      // Reset collaborator filter
-      this.selectedCollaborator = null;
+      // Reset collaborator filter when team changes
+      if (isTeamChanging) {
+        this.selectedCollaborator = null;
+      }
       
-      // Save selection to localStorage
+      // Save team selection to localStorage
       localStorage.setItem('selectedTeamId', teamId);
       
       // Load team members data first (this sets teamTotalPoints, etc.)
@@ -2015,6 +2068,16 @@ private calculateCollaboratorTotals(memberData: Array<{
       
       // Then load all other team data
       await this.loadTeamData();
+      
+      // After loading collaborators, validate current selection
+      if (this.selectedCollaborator) {
+        const collaboratorExists = this.collaborators.some(
+          c => c.userId === this.selectedCollaborator
+        );
+        if (!collaboratorExists) {
+          this.selectedCollaborator = null;
+        }
+      }
       
       this.cdr.markForCheck();
     } catch (error) {
@@ -2046,21 +2109,29 @@ private calculateCollaboratorTotals(memberData: Array<{
    * // Shows aggregated team data
    */
   async onCollaboratorChange(userId: string | null): Promise<void> {
+    // Update the selected collaborator
     this.selectedCollaborator = userId;
+    
+    // When a specific collaborator is selected, switch to goals tab
+    // When no collaborator is selected (showing all), switch back to team view
+    if (userId) {
+      this.activeTab = 'goals';
+      console.log('👤 Filtering data for collaborator:', userId);
+    } else {
+      // Reset to team view when "Redefinir seleção" is selected
+      this.activeTab = 'goals'; // Keep on goals tab to show team KPIs and progress
+      console.log('👥 Showing team data (no collaborator selected)');
+    }
     
     // Update team name display immediately
     this.updateTeamNameDisplay();
-    
-    if (userId) {
-      console.log('👤 Filtering data for collaborator:', userId);
-    } else {
-      console.log('👥 Showing team data (no collaborator selected)');
-    }
     
     // Reload data with the new filter
     if (this.selectedTeamId) {
       await this.loadTeamData();
     }
+    
+    this.cdr.markForCheck();
   }
 
   /**
@@ -2071,7 +2142,7 @@ private calculateCollaboratorTotals(memberData: Array<{
     // Calculate and update displayTeamName explicitly
     if (this.selectedCollaborator) {
       const collaborator = this.collaborators.find(c => c.userId === this.selectedCollaborator);
-      this.displayTeamName = collaborator?.name || this.selectedCollaborator || '';
+      this.displayTeamName = collaborator?.name || this.formatCollaboratorName(this.selectedCollaborator) || '';
     } else {
       // Show team name
       if (this.selectedTeam && this.selectedTeam.trim().length > 0) {
@@ -2091,6 +2162,7 @@ private calculateCollaboratorTotals(memberData: Array<{
     // Force change detection
     this.cdr.markForCheck();
   }
+
 
   /**
    * Handle month selection change event.
@@ -2115,9 +2187,36 @@ private calculateCollaboratorTotals(memberData: Array<{
    * @see {@link loadTeamData}
    * @see {@link calculateDateRange}
    */
+  /**
+   * Handle month selection change event.
+   * 
+   * When a user navigates to a different month:
+   * 1. Updates the selectedMonthsAgo property
+   * 2. Updates the selectedMonth Date object
+   * 3. Reloads all team data for the new month
+   * 
+   * Similar to gamification-dashboard implementation.
+   * 
+   * @param monthsAgo - Number of months before current month (0 = current, 1 = previous, etc.)
+   * 
+   * @example
+   * // Current month (February 2026)
+   * onMonthChange(0);
+   * 
+   * // Previous month (January 2026)
+   * onMonthChange(1);
+   * 
+   * @see {@link loadTeamData}
+   * @see {@link calculateDateRange}
+   */
   onMonthChange(monthsAgo: number): void {
     this.selectedMonthsAgo = monthsAgo;
-    this.selectedMonth = dayjs().subtract(monthsAgo, 'month').toDate();
+    // Calculate the target month date (similar to gamification-dashboard)
+    const date = new Date();
+    date.setMonth(date.getMonth() - monthsAgo);
+    this.selectedMonth = date;
+    const monthName = date.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+    this.announceToScreenReader(`Mês alterado para ${monthName}`);
     this.loadTeamData();
   }
 
@@ -2377,6 +2476,27 @@ private calculateCollaboratorTotals(memberData: Array<{
   }
 
   /**
+   * Get player ID for month selector component
+   * Uses the first team member ID if available, otherwise uses current user ID
+   * Similar to gamification-dashboard implementation
+   */
+  getTeamPlayerIdForMonthSelector(): string {
+    // If we have team members, use the first one
+    if (this.teamMemberIds.length > 0) {
+      return this.teamMemberIds[0];
+    }
+    
+    // Otherwise, use current user ID from session
+    const usuario = this.sessaoProvider.usuario as { _id?: string; email?: string } | null;
+    if (usuario) {
+      return (usuario._id || usuario.email || '') as string;
+    }
+    
+    // Fallback to empty string
+    return '';
+  }
+
+  /**
    * Toggle sidebar collapsed state
    */
   toggleSidebar(): void {
@@ -2596,30 +2716,83 @@ private calculateCollaboratorTotals(memberData: Array<{
       moedas: 0 // Teams don't have moedas, only individual players
     };
     
+    // Calculate metas from team KPIs
+    // Metas = count of KPIs where current >= target
+    const totalKPIs = this.teamKPIs ? this.teamKPIs.length : 0;
+    const metasAchieved = this.teamKPIs ? this.teamKPIs.filter(kpi => kpi.current >= kpi.target).length : 0;
+    
     // Convert progressMetrics to SeasonProgress format
     // For teams, we use:
-    // - metas: Not applicable for teams, so we use 0/0
+    // - metas: Calculated from teamKPIs (number of KPIs achieved / total KPIs)
     // - clientes: Count of unique CNPJs from teamCarteiraClientes
     // - tarefasFinalizadas: atividadesFinalizadas from progressMetrics
     const uniqueClientes = this.teamCarteiraClientes?.length || 0;
     
     this.teamSeasonProgress = {
       metas: {
-        current: 0, // Not applicable for teams
-        target: 0  // Not applicable for teams
+        current: metasAchieved,
+        target: totalKPIs
       },
       clientes: uniqueClientes,
       tarefasFinalizadas: this.progressMetrics?.atividadesFinalizadas || 0,
       seasonDates: this.seasonDates
     };
     
+    console.log('📊 Team metas updated from KPIs:', this.teamSeasonProgress.metas, `(${metasAchieved}/${totalKPIs})`, `from ${totalKPIs} KPIs`);
+    
     this.cdr.markForCheck();
   }
 
   /**
+   * Format collaborator name from email or use provided name
+   * Converts email like "joyce.carla@bwa.global" to "Joyce Carla"
+   * 
+   * @param userId - The user ID (email) or collaborator ID
+   * @param collaboratorName - Optional name from collaborator object
+   * @returns Formatted name for display
+   */
+  private formatCollaboratorName(userId: string, collaboratorName?: string): string {
+    // If we have a name from the collaborator object, use it
+    if (collaboratorName && collaboratorName.trim()) {
+      return collaboratorName.trim();
+    }
+    
+    // Otherwise, extract and format from email
+    if (userId && userId.includes('@')) {
+      // Get the part before @
+      const emailPrefix = userId.split('@')[0];
+      // Replace dots with spaces and split into words
+      const words = emailPrefix.split('.');
+      // Capitalize each word
+      const formattedWords = words.map(word => {
+        if (word.length === 0) return '';
+        return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+      });
+      return formattedWords.join(' ');
+    }
+    
+    // Fallback: return userId as-is if it's not an email
+    return userId;
+  }
+
+  /**
    * Logout user and redirect to login page
+   * Includes double confirmation to prevent accidental logout
    */
   logout(): void {
+    // First confirmation
+    const firstConfirm = window.confirm('Tem certeza que deseja sair do sistema?');
+    if (!firstConfirm) {
+      return;
+    }
+    
+    // Second confirmation (double validation)
+    const secondConfirm = window.confirm('Esta ação irá desconectar você do sistema. Deseja continuar?');
+    if (!secondConfirm) {
+      return;
+    }
+    
+    // If both confirmations are accepted, proceed with logout
     this.sessaoProvider.logout();
   }
 }

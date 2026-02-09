@@ -4,30 +4,12 @@
 .progress-list-content {
   padding: $spacing-lg;
   min-height: 400px;
-  max-height: 78vh;
   display: flex;
   flex-direction: column;
-  overflow-y: auto;
-  overflow-x: hidden;
+  overflow: visible; // Remove overflow - let modal base handle scrolling
   
-  // Custom scrollbar styling
-  &::-webkit-scrollbar {
-    width: 8px;
-  }
-  
-  &::-webkit-scrollbar-track {
-    background: rgba(255, 255, 255, 0.05);
-    border-radius: 4px;
-  }
-  
-  &::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.2);
-    border-radius: 4px;
-    
-    &:hover {
-      background: rgba(255, 255, 255, 0.3);
-    }
-  }
+  // Add padding at the bottom to ensure last items are visible
+  padding-bottom: $spacing-xxl;
 }
 
 .loading-state,
@@ -229,12 +211,10 @@
     text-transform: uppercase;
     letter-spacing: 0.5px;
     position: sticky;
-    top: -$spacing-lg; // Compensate for parent padding to stick at the top
-    margin-top: $spacing-lg; // Add margin to compensate for negative top
+    top: 0; // Stick at the top of the scrollable container
     z-index: 10;
     border-radius: 8px 8px 0 0;
     margin-bottom: $spacing-xs;
-    margin-top: 0; // Remove any top margin
     
     // Adjust grid for pontos type
     &.with-points {
