@@ -773,12 +773,21 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   /**
    * Format KPI value as integer with percentage symbol for compact display
    */
-  formatKpiValue(value: number): string {
-    return `${Math.round(value)}%`;
+  /**
+   * Format KPI value to show percentage of target achievement
+   * Similar to c4u-kpi-circular-progress component
+   */
+  formatKpiValue(kpi: KPIData): string {
+    if (kpi.target === 0) {
+      return '0%';
+    }
+    const percentage = Math.round((kpi.current / kpi.target) * 100);
+    return `${percentage}%`;
   }
 
   /**
    * Get tooltip text showing current value vs target
+   * Format: "75% de 80%" (valor alcançado de meta)
    */
   getKpiTooltip(kpi: KPIData): string {
     const current = Math.round(kpi.current);

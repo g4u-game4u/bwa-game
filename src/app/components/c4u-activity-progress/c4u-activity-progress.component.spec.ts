@@ -134,7 +134,7 @@ describe('C4uActivityProgressComponent', () => {
       const compiled = fixture.nativeElement;
       const titles = compiled.querySelectorAll('.section-title');
       
-      expect(titles[0].textContent.trim()).toBe('Atividades');
+      expect(titles[0].textContent.trim()).toBe('Tarefas');
       expect(titles[1].textContent.trim()).toBe('Processos');
     });
   });
