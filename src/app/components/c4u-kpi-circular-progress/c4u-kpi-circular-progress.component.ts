@@ -26,6 +26,13 @@ export class C4uKpiCircularProgressComponent {
   ];
 
   get percentage(): number {
+    // For percentage KPIs (like "Entregas no Prazo"), use the raw value as the percentage
+    // capped at 100 for the progress bar visual
+    if (this.unit === '%') {
+      return Math.min(Math.round(this.current), 100);
+    }
+    
+    // For count-based KPIs, calculate goal completion percentage
     if (this.target === 0) {
       return 0;
     }
@@ -59,15 +66,18 @@ export class C4uKpiCircularProgressComponent {
   }
 
   /**
-   * Get display value showing percentage above target
-   * Instead of showing "100 de 10", shows "1000%" (percentage above target)
+   * Get display value
+   * For percentage-based KPIs (unit === '%'), show the raw value directly
+   * For count-based KPIs, show the raw count (not percentage)
    */
   get displayValue(): string {
-    if (this.target === 0) {
-      return '0%';
+    // For percentage KPIs (like "Entregas no Prazo"), show the raw value with %
+    if (this.unit === '%') {
+      return `${Math.round(this.current)}%`;
     }
-    const percentage = Math.round((this.current / this.target) * 100);
-    return `${percentage}%`;
+    
+    // For count-based KPIs (like "Clientes na Carteira"), show the raw count
+    return `${Math.round(this.current)}`;
   }
 
   /**
