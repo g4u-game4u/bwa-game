@@ -1,10 +1,11 @@
 import { Injectable, PLATFORM_ID, Inject } from '@angular/core';
 import { isPlatformBrowser } from '@angular/common';
+import { inject } from '@vercel/analytics';
 
 /**
  * Service to initialize Vercel Analytics
  * This service handles the initialization of Vercel Analytics for tracking page views and visitors
- * Uses the script-based approach which is compatible with Angular
+ * Uses the @vercel/analytics package for proper integration
  */
 @Injectable({
   providedIn: 'root'
@@ -17,7 +18,7 @@ export class VercelAnalyticsService {
   /**
    * Initialize Vercel Analytics
    * Only runs in the browser (not during SSR)
-   * Uses script injection approach for Angular compatibility
+   * Uses the inject function from @vercel/analytics package
    */
   initialize(): void {
     if (this.initialized || !isPlatformBrowser(this.platformId)) {
@@ -25,29 +26,10 @@ export class VercelAnalyticsService {
     }
 
     try {
-      // Check if script already exists
-      if (document.querySelector('script[data-vercel-analytics]')) {
-        this.initialized = true;
-        return;
-      }
-
-      // Create and inject the Vercel Analytics script
-      const script = document.createElement('script');
-      script.src = 'https://va.vercel-scripts.com/v1/script.debug.js';
-      script.setAttribute('data-vercel-analytics', 'true');
-      script.defer = true;
-      script.async = true;
-      
-      script.onload = () => {
-        this.initialized = true;
-        console.log('✅ Vercel Analytics initialized');
-      };
-      
-      script.onerror = (error) => {
-        console.error('❌ Error loading Vercel Analytics script:', error);
-      };
-
-      document.head.appendChild(script);
+      // Initialize Vercel Analytics using the inject function
+      inject();
+      this.initialized = true;
+      console.log('✅ Vercel Analytics initialized');
     } catch (error) {
       console.error('❌ Error initializing Vercel Analytics:', error);
     }

@@ -25,6 +25,7 @@
     "@ngx-translate/core": "^15.0.0",
     "@popperjs/core": "^2.11.6",
     "@types/canvas-confetti": "^1.9.0",
+    "@vercel/analytics": "^1.6.1",
     "animate.css": "^4.1.1",
     "bootstrap": "^5.2.3",
     "canvas-confetti": "^1.9.3",
