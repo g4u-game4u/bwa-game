@@ -9,6 +9,7 @@ import {LoadingProvider} from "@providers/loading.provider";
 import {SystemParamsService} from "@services/system-params.service";
 import {Title} from "@angular/platform-browser";
 import {SystemInitService} from "@services/system-init.service";
+import { VercelAnalyticsService } from '@services/vercel-analytics.service';
 
 @Component({
   selector: 'page-root',
@@ -26,7 +27,8 @@ export class AppComponent implements OnInit {
     protected loadingProvider: LoadingProvider,
     private systemParamsService: SystemParamsService,
     private titleService: Title,
-    private systemInitService: SystemInitService
+    private systemInitService: SystemInitService,
+    private vercelAnalytics: VercelAnalyticsService
   ) {
     this.configChartJS();
     this.configMoment();
@@ -42,6 +44,9 @@ export class AppComponent implements OnInit {
 
 
   ngOnInit() {
+    // Initialize Vercel Analytics
+    this.vercelAnalytics.initialize();
+    
     // Initialize system params asynchronously without blocking
     // This prevents NullInjectorError issues with async initialization
     this.initializeSystem();
