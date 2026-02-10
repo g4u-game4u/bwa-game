@@ -75,6 +75,65 @@
           </div>
         </ng-template>
         
+        <!-- Meta Configuration Section -->
+        <div class="sidebar-section meta-config-section" role="region" aria-labelledby="meta-config-section-title">
+          <h4 id="meta-config-section-title" class="selector-label">Configurar Meta de Clientes</h4>
+          
+          <form class="meta-config-form" (ngSubmit)="saveClientesMeta()" #metaForm="ngForm">
+            <div class="form-group">
+              <label for="meta-collaborator-select" class="form-label">Colaborador</label>
+              <select 
+                id="meta-collaborator-select"
+                class="form-control"
+                [(ngModel)]="metaConfig.selectedCollaborator"
+                name="selectedCollaborator"
+                required>
+                <option [value]="'all'">Todos os Colaboradores</option>
+                <option *ngFor="let collaborator of collaborators" [value]="collaborator.userId">
+                  {{ collaborator.name || getCollaboratorDisplayName(collaborator.userId) }}
+                </option>
+              </select>
+            </div>
+            
+            <div class="form-group">
+              <label for="meta-value-input" class="form-label">Meta de Clientes</label>
+              <input 
+                type="number"
+                id="meta-value-input"
+                class="form-control"
+                [(ngModel)]="metaConfig.targetValue"
+                name="targetValue"
+                min="0"
+                step="1"
+                placeholder="Ex: 10"
+                required>
+              <small class="form-text text-muted">Número de clientes na carteira</small>
+            </div>
+            
+            <div class="form-actions">
+              <button 
+                type="submit"
+                class="btn btn-primary"
+                [disabled]="!metaForm.valid || isSavingMeta">
+                <i class="ri-save-line" *ngIf="!isSavingMeta" aria-hidden="true"></i>
+                <i class="ri-loader-4-line spinning" *ngIf="isSavingMeta" aria-hidden="true"></i>
+                <span>{{ isSavingMeta ? 'Salvando...' : 'Salvar' }}</span>
+              </button>
+              <button 
+                type="button"
+                class="btn btn-secondary"
+                (click)="resetMetaForm()"
+                [disabled]="isSavingMeta">
+                Limpar
+              </button>
+            </div>
+            
+            <div *ngIf="metaSaveMessage" class="alert" [ngClass]="metaSaveSuccess ? 'alert-success' : 'alert-danger'" role="alert">
+              {{ metaSaveMessage }}
+            </div>
+          </form>
+        </div>
+        
         <!-- Sidebar Toggle Button - At the end of sidebar content -->
         <div class="sidebar-section sidebar-toggle-section">
           <button class="sidebar-toggle" (click)="toggleSidebar()" [attr.aria-label]="sidebarCollapsed ? 'Expandir menu' : 'Recolher menu'">
@@ -97,10 +156,11 @@
         </div>
         
         <!-- Season Progress Compact -->
-        <div class="compact-item" *ngIf="teamSeasonProgress">
+        <!-- Barra de metas de Clientes na carteira - Comentada temporariamente -->
+        <!-- <div class="compact-item" *ngIf="teamSeasonProgress">
           <i class="ri-building-line compact-icon clientes"></i>
           <span class="compact-value">{{ teamSeasonProgress.clientes | number:'1.0-0':'pt-BR' }}</span>
-        </div>
+        </div> -->
         <div class="compact-item" *ngIf="teamSeasonProgress">
           <i class="ri-checkbox-circle-line compact-icon tarefas"></i>
           <span class="compact-value">{{ teamSeasonProgress.tarefasFinalizadas | number:'1.0-0':'pt-BR' }}</span>
@@ -202,16 +262,29 @@
               <h3 id="kpi-section-title" class="section-title">Carteira da Equipe</h3>
               
               <div class="kpi-grid" *ngIf="teamKPIs.length > 0" role="group" aria-labelledby="kpi-section-title">
-                <c4u-kpi-circular-progress
-                  *ngFor="let kpi of teamKPIs; let i = index; trackBy: trackByKpiId"
-                  [label]="kpi.label"
-                  [current]="roundValue(kpi.current)"
-                  [target]="roundValue(kpi.target)"
-                  [superTarget]="kpi.superTarget ? roundValue(kpi.superTarget) : undefined"
-                  [color]="kpi.color"
-                  [unit]="kpi.unit"
-                  [colorIndex]="i">
-                </c4u-kpi-circular-progress>
+                <!-- KPI de Clientes na Carteira - Comentado temporariamente -->
+                <ng-container *ngFor="let kpi of teamKPIs; let i = index; trackBy: trackByKpiId">
+                  <!-- <c4u-kpi-circular-progress
+                    *ngIf="kpi.id === 'numero-empresas'"
+                    [label]="kpi.label"
+                    [current]="roundValue(kpi.current)"
+                    [target]="roundValue(kpi.target)"
+                    [superTarget]="kpi.superTarget ? roundValue(kpi.superTarget) : undefined"
+                    [color]="kpi.color"
+                    [unit]="kpi.unit"
+                    [colorIndex]="i">
+                  </c4u-kpi-circular-progress> -->
+                  <c4u-kpi-circular-progress
+                    *ngIf="kpi.id !== 'numero-empresas'"
+                    [label]="kpi.label"
+                    [current]="roundValue(kpi.current)"
+                    [target]="roundValue(kpi.target)"
+                    [superTarget]="kpi.superTarget ? roundValue(kpi.superTarget) : undefined"
+                    [color]="kpi.color"
+                    [unit]="kpi.unit"
+                    [colorIndex]="i">
+                  </c4u-kpi-circular-progress>
+                </ng-container>
               </div>
               
               <div class="kpi-grid" *ngIf="isLoadingKPIs">

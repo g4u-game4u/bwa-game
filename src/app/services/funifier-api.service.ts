@@ -156,13 +156,79 @@ export class FunifierApiService {
     let cleanEndpoint = endpoint.startsWith('/v3/') ? endpoint.substring(4) : endpoint;
     // Remove leading / if present to avoid double slashes
     cleanEndpoint = cleanEndpoint.startsWith('/') ? cleanEndpoint.substring(1) : cleanEndpoint;
-    // Ensure baseUrl ends with /
+    // Ensure baseUrl ends with / 
     const cleanBaseUrl = this.baseUrl.endsWith('/') ? this.baseUrl : `${this.baseUrl}/`;
     const url = `${cleanBaseUrl}${cleanEndpoint}`;
     
     console.log('🌐 FunifierAPI POST:', url);
     
     return this.http.post<T>(url, body, { headers }).pipe(
+      retry({ count: 3, delay: 1000 }),
+      catchError(this.handleError)
+    );
+  }
+
+  /**
+   * PUT request to Funifier API
+   * Endpoint should not include /v3/ prefix as it's already in baseUrl
+   * @param endpoint - API endpoint
+   * @param body - Request body
+   * @param options - Optional request options (e.g., custom headers)
+   */
+  put<T>(endpoint: string, body: any, options?: { headers?: { [key: string]: string } }): Observable<T> {
+    let headers = this.getHeaders(endpoint);
+    
+    // Merge custom headers if provided
+    if (options?.headers) {
+      Object.entries(options.headers).forEach(([key, value]) => {
+        headers = headers.set(key, value);
+      });
+    }
+    
+    // Remove leading /v3/ if present to avoid duplication
+    let cleanEndpoint = endpoint.startsWith('/v3/') ? endpoint.substring(4) : endpoint;
+    // Remove leading / if present to avoid double slashes
+    cleanEndpoint = cleanEndpoint.startsWith('/') ? cleanEndpoint.substring(1) : cleanEndpoint;
+    // Ensure baseUrl ends with /
+    const cleanBaseUrl = this.baseUrl.endsWith('/') ? this.baseUrl : `${this.baseUrl}/`;
+    const url = `${cleanBaseUrl}${cleanEndpoint}`;
+    
+    console.log('🌐 FunifierAPI PUT:', url);
+    
+    return this.http.put<T>(url, body, { headers }).pipe(
+      retry({ count: 3, delay: 1000 }),
+      catchError(this.handleError)
+    );
+  }
+
+  /**
+   * PATCH request to Funifier API
+   * Endpoint should not include /v3/ prefix as it's already in baseUrl
+   * @param endpoint - API endpoint
+   * @param body - Request body
+   * @param options - Optional request options (e.g., custom headers)
+   */
+  patch<T>(endpoint: string, body: any, options?: { headers?: { [key: string]: string } }): Observable<T> {
+    let headers = this.getHeaders(endpoint);
+    
+    // Merge custom headers if provided
+    if (options?.headers) {
+      Object.entries(options.headers).forEach(([key, value]) => {
+        headers = headers.set(key, value);
+      });
+    }
+    
+    // Remove leading /v3/ if present to avoid duplication
+    let cleanEndpoint = endpoint.startsWith('/v3/') ? endpoint.substring(4) : endpoint;
+    // Remove leading / if present to avoid double slashes
+    cleanEndpoint = cleanEndpoint.startsWith('/') ? cleanEndpoint.substring(1) : cleanEndpoint;
+    // Ensure baseUrl ends with /
+    const cleanBaseUrl = this.baseUrl.endsWith('/') ? this.baseUrl : `${this.baseUrl}/`;
+    const url = `${cleanBaseUrl}${cleanEndpoint}`;
+    
+    console.log('🌐 FunifierAPI PATCH:', url);
+    
+    return this.http.patch<T>(url, body, { headers }).pipe(
       retry({ count: 3, delay: 1000 }),
       catchError(this.handleError)
     );

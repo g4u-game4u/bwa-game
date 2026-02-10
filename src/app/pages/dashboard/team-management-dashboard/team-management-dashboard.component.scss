@@ -312,6 +312,179 @@
         min-height: auto;
       }
       
+      // Meta Configuration Section in Sidebar
+      &.meta-config-section {
+        padding-top: $spacing-md;
+        border-top: 1px solid rgba(255, 255, 255, 0.1);
+        
+        h4 {
+          margin-bottom: $spacing-md;
+        }
+        
+        .meta-config-form {
+          display: flex;
+          flex-direction: column;
+          gap: $spacing-md;
+          
+          .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: $spacing-xs;
+            
+            .form-label {
+              font-size: 13px;
+              font-weight: 500;
+              color: $text-secondary;
+              margin-bottom: $spacing-xs;
+            }
+            
+            .form-control {
+              padding: $spacing-sm $spacing-md;
+              border: 1px solid rgba(255, 255, 255, 0.1);
+              border-radius: $border-radius-sm;
+              background: $bg-secondary;
+              color: $text-primary;
+              font-size: 13px;
+              transition: all 0.2s ease;
+              width: 100%;
+              box-sizing: border-box;
+              
+              &:focus {
+                outline: none;
+                border-color: $primary-electric-blue;
+                background: rgba(255, 255, 255, 0.08);
+                box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+              }
+              
+              &:disabled {
+                opacity: 0.5;
+                cursor: not-allowed;
+              }
+              
+              &::placeholder {
+                color: rgba(255, 255, 255, 0.4);
+              }
+            }
+            
+            select.form-control {
+              cursor: pointer;
+              appearance: none;
+              background-color: $bg-secondary;
+              background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23ffffff' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+              background-repeat: no-repeat;
+              background-position: right $spacing-sm center;
+              padding: $spacing-sm $spacing-xl $spacing-sm $spacing-md;
+              
+              // Estilizar opções do dropdown
+              option {
+                background-color: $bg-secondary;
+                color: $text-primary;
+                padding: $spacing-sm;
+              }
+              
+              // Opção selecionada
+              option:checked {
+                background-color: $primary-electric-blue;
+                color: $text-primary;
+              }
+              
+              // Opção em hover (alguns navegadores não suportam)
+              option:hover {
+                background-color: rgba($primary-electric-blue, 0.3);
+              }
+              
+              &:focus {
+                background-color: $bg-secondary;
+                border-color: $primary-electric-blue;
+              }
+            }
+            
+            .form-text {
+              font-size: 11px;
+              color: rgba(255, 255, 255, 0.5);
+              margin-top: $spacing-xs;
+            }
+          }
+          
+          .form-actions {
+            display: flex;
+            gap: $spacing-sm;
+            margin-top: $spacing-xs;
+            
+            .btn {
+              flex: 1;
+              padding: $spacing-xs $spacing-md;
+              border: none;
+              border-radius: $border-radius-sm;
+              font-size: 12px;
+              font-weight: 500;
+              cursor: pointer;
+              transition: all 0.2s ease;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              gap: $spacing-xs;
+              
+              &:disabled {
+                opacity: 0.5;
+                cursor: not-allowed;
+              }
+              
+              i {
+                font-size: 14px;
+                
+                &.spinning {
+                  animation: spin 1s linear infinite;
+                }
+              }
+            }
+            
+            .btn-primary {
+              background: $primary-electric-blue;
+              color: $text-primary;
+              
+              &:hover:not(:disabled) {
+                background: lighten($primary-electric-blue, 5%);
+                transform: translateY(-1px);
+                box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+              }
+              
+              &:active:not(:disabled) {
+                transform: translateY(0);
+              }
+            }
+            
+            .btn-secondary {
+              background: rgba(255, 255, 255, 0.1);
+              color: $text-secondary;
+              
+              &:hover:not(:disabled) {
+                background: rgba(255, 255, 255, 0.15);
+              }
+            }
+          }
+          
+          .alert {
+            padding: $spacing-sm $spacing-md;
+            border-radius: $border-radius-sm;
+            font-size: 12px;
+            margin-top: $spacing-sm;
+            
+            &.alert-success {
+              background: rgba(34, 197, 94, 0.1);
+              border: 1px solid rgba(34, 197, 94, 0.3);
+              color: #4ade80;
+            }
+            
+            &.alert-danger {
+              background: rgba(239, 68, 68, 0.1);
+              border: 1px solid rgba(239, 68, 68, 0.3);
+              color: #f87171;
+            }
+          }
+        }
+      }
+      
       .team-metrics {
         display: flex;
         flex-direction: column;
