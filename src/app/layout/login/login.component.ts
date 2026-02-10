@@ -9,6 +9,7 @@ import { SystemParams } from '@model/system-params.model';
 import {AuthProvider} from "@providers/auth/auth.provider";
 import {AbstractControl, ValidationErrors} from "@angular/forms";
 import {TranslateService} from "@ngx-translate/core";
+import { LoginLogService } from '@services/login-log.service';
 
 @Component({
   selector: 'app-login',
@@ -36,7 +37,8 @@ export class LoginComponent implements OnInit {
 
   constructor(private sessao: SessaoProvider, private router: Router, private loadingProvider: LoadingProvider,
               private toastService: ToastService, private systemParamsService: SystemParamsService,
-              private authProvider: AuthProvider, private translate: TranslateService) {
+              private authProvider: AuthProvider, private translate: TranslateService,
+              private loginLogService: LoginLogService) {
   }
 
   // Estado do fluxo: 'login' | 'reset-request' | 'reset-confirm'
@@ -153,6 +155,12 @@ export class LoginComponent implements OnInit {
         console.log('🔐 Login response:', user);
         console.log('🔐 User object:', this.sessao.usuario);
         if (user) {
+          // Track login event in Vercel Analytics (non-blocking)
+          this.loginLogService.logLogin(this.username).catch(error => {
+            // Silently fail - don't block login if tracking fails
+            console.warn('⚠️ Failed to track login event:', error);
+          });
+          
           // Wait a bit to ensure state is fully updated
           await new Promise(resolve => setTimeout(resolve, 100));
           console.log('🔐 Navigating to dashboard...');
