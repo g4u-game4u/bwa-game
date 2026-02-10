@@ -109,16 +109,29 @@ export class KPIService {
             map((cnpjList: { cnpj: string; actionCount: number }[]) => {
               const companyCount = Array.isArray(cnpjList) ? cnpjList.length : 0;
               
+              // Get target from player's extra.client_goals (number), fallback to default 10
+              // Support both formats: client_goals as number or client_goals.goalValue (backward compatibility)
+              const clientGoals = playerStatus.extra?.client_goals;
+              const goalValue = typeof clientGoals === 'number' 
+                ? clientGoals 
+                : clientGoals?.goalValue;
+              const target = goalValue !== undefined && goalValue !== null
+                ? (typeof goalValue === 'number' 
+                    ? goalValue 
+                    : parseInt(String(goalValue), 10)) 
+                : 10;
+              const superTarget = Math.ceil(target * 1.5); // Super target is 50% above target
+              
               // Always add Clientes na Carteira KPI, even if count is 0
               kpis.push({
                 id: 'numero-empresas',
                 label: 'Clientes na Carteira',
                 current: companyCount,
-                target: 10,
-                superTarget: 15,
+                target: target,
+                superTarget: superTarget,
                 unit: 'clientes',
-                color: this.getKPIColorByGoals(companyCount, 10, 15),
-                percentage: Math.min((companyCount / 15) * 100, 100)
+                color: this.getKPIColorByGoals(companyCount, target, superTarget),
+                percentage: Math.min((companyCount / superTarget) * 100, 100)
               });
 
               // Porcentagem de Entregas no Prazo - only for current month
@@ -129,11 +142,11 @@ export class KPIService {
                   id: 'entregas-prazo',
                   label: 'Entregas no Prazo',
                   current: deliveryPercentage,
-                  target: 80,
-                  superTarget: 90,
+                  target: 90,
+                  superTarget: 100,
                   unit: '%',
-                  color: this.getKPIColorByGoals(deliveryPercentage, 80, 90),
-                  percentage: Math.min(deliveryPercentage / 90 * 100, 100)
+                  color: this.getKPIColorByGoals(deliveryPercentage, 90, 100),
+                  percentage: Math.min(deliveryPercentage / 100 * 100, 100)
                 });
               }
 
@@ -143,12 +156,25 @@ export class KPIService {
             catchError(error => {
               console.error('📊 Error loading companies from action_log:', error);
               // Return at least the empresas KPI with 0 count on error
-               const errorKpis: KPIData[] = [{
+              // Get target from player's extra.client_goals (number), fallback to default 10
+              // Support both formats: client_goals as number or client_goals.goalValue (backward compatibility)
+              const clientGoals = playerStatus.extra?.client_goals;
+              const goalValue = typeof clientGoals === 'number' 
+                ? clientGoals 
+                : clientGoals?.goalValue;
+              const target = goalValue !== undefined && goalValue !== null
+                ? (typeof goalValue === 'number' 
+                    ? goalValue 
+                    : parseInt(String(goalValue), 10)) 
+                : 10;
+              const superTarget = Math.ceil(target * 1.5);
+              
+              const errorKpis: KPIData[] = [{
                  id: 'numero-empresas',
                  label: 'Clientes na Carteira',
                 current: 0,
-                target: 10,
-                superTarget: 15,
+                target: target,
+                superTarget: superTarget,
                 unit: 'clientes',
                 color: 'red' as const,
                 percentage: 0
@@ -161,11 +187,11 @@ export class KPIService {
                   id: 'entregas-prazo',
                   label: 'Entregas no Prazo',
                   current: deliveryPercentage,
-                  target: 80,
-                  superTarget: 90,
+                  target: 90,
+                  superTarget: 100,
                   unit: '%',
-                  color: this.getKPIColorByGoals(deliveryPercentage, 80, 90),
-                  percentage: Math.min(deliveryPercentage / 90 * 100, 100)
+                  color: this.getKPIColorByGoals(deliveryPercentage, 90, 100),
+                  percentage: Math.min(deliveryPercentage / 100 * 100, 100)
                 });
               }
               
@@ -179,15 +205,28 @@ export class KPIService {
                    ? playerStatus.extra.cnpj.split(',').filter((item: string) => item.trim()).length 
                    : 0;
                  
+                 // Get target from player's extra.client_goals (number), fallback to default 10
+                 // Support both formats: client_goals as number or client_goals.goalValue (backward compatibility)
+                 const clientGoals = playerStatus.extra?.client_goals;
+                 const goalValue = typeof clientGoals === 'number' 
+                   ? clientGoals 
+                   : clientGoals?.goalValue;
+                 const target = goalValue !== undefined && goalValue !== null
+                   ? (typeof goalValue === 'number' 
+                       ? goalValue 
+                       : parseInt(String(goalValue), 10)) 
+                   : 10;
+                 const superTarget = Math.ceil(target * 1.5);
+                 
                  kpis.push({
                    id: 'numero-empresas',
                    label: 'Clientes na Carteira',
             current: companyCount,
-            target: 10,
-            superTarget: 15,
+            target: target,
+            superTarget: superTarget,
             unit: 'empresas',
-            color: this.getKPIColorByGoals(companyCount, 10, 15),
-            percentage: Math.min((companyCount / 15) * 100, 100)
+            color: this.getKPIColorByGoals(companyCount, target, superTarget),
+            percentage: Math.min((companyCount / superTarget) * 100, 100)
           });
 
           // Porcentagem de Entregas no Prazo - only for current month
@@ -198,11 +237,11 @@ export class KPIService {
               id: 'entregas-prazo',
               label: 'Entregas no Prazo',
               current: deliveryPercentage,
-              target: 80,
-              superTarget: 90,
+              target: 90,
+              superTarget: 100,
               unit: '%',
-              color: this.getKPIColorByGoals(deliveryPercentage, 80, 90),
-              percentage: Math.min(deliveryPercentage / 90 * 100, 100)
+              color: this.getKPIColorByGoals(deliveryPercentage, 90, 100),
+              percentage: Math.min(deliveryPercentage / 100 * 100, 100)
             });
           }
 

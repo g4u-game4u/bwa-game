@@ -76,10 +76,11 @@
           <i class="ri-focus-3-line compact-icon metas"></i>
           <span class="compact-value">{{ seasonProgress.metas.current }}/{{ seasonProgress.metas.target }}</span>
         </div>
-        <div class="compact-item" *ngIf="seasonProgress">
+        <!-- Barra de metas de Clientes na carteira - Comentada temporariamente -->
+        <!-- <div class="compact-item" *ngIf="seasonProgress">
           <i class="ri-building-line compact-icon clientes"></i>
           <span class="compact-value">{{ seasonProgress.clientes | number:'1.0-0':'pt-BR' }}</span>
-        </div>
+        </div> -->
         <div class="compact-item" *ngIf="seasonProgress">
           <i class="ri-checkbox-circle-line compact-icon tarefas"></i>
           <span class="compact-value">{{ seasonProgress.tarefasFinalizadas | number:'1.0-0':'pt-BR' }}</span>
@@ -127,16 +128,29 @@
       <h3 id="kpi-section-title" class="section-title">Minha Carteira</h3>
       
       <div class="kpi-grid" *ngIf="playerKPIs.length > 0" role="group" aria-labelledby="kpi-section-title">
-        <c4u-kpi-circular-progress
-          *ngFor="let kpi of playerKPIs; let i = index; trackBy: trackByKpiId"
-          [label]="kpi.label"
-          [current]="roundValue(kpi.current)"
-          [target]="roundValue(kpi.target)"
-          [superTarget]="kpi.superTarget ? roundValue(kpi.superTarget) : undefined"
-          [color]="kpi.color"
-          [unit]="kpi.unit"
-          [colorIndex]="i">
-        </c4u-kpi-circular-progress>
+        <!-- KPI de Clientes na Carteira - Comentado temporariamente -->
+        <ng-container *ngFor="let kpi of playerKPIs; let i = index; trackBy: trackByKpiId">
+          <!-- <c4u-kpi-circular-progress
+            *ngIf="kpi.id === 'numero-empresas'"
+            [label]="kpi.label"
+            [current]="roundValue(kpi.current)"
+            [target]="roundValue(kpi.target)"
+            [superTarget]="kpi.superTarget ? roundValue(kpi.superTarget) : undefined"
+            [color]="kpi.color"
+            [unit]="kpi.unit"
+            [colorIndex]="i">
+          </c4u-kpi-circular-progress> -->
+          <c4u-kpi-circular-progress
+            *ngIf="kpi.id !== 'numero-empresas'"
+            [label]="kpi.label"
+            [current]="roundValue(kpi.current)"
+            [target]="roundValue(kpi.target)"
+            [superTarget]="kpi.superTarget ? roundValue(kpi.superTarget) : undefined"
+            [color]="kpi.color"
+            [unit]="kpi.unit"
+            [colorIndex]="i">
+          </c4u-kpi-circular-progress>
+        </ng-container>
       </div>
       
       <div class="kpi-grid" *ngIf="isLoadingKPIs">

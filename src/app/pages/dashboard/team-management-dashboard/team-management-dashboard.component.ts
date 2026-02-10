@@ -179,6 +179,18 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
   // Sidebar collapse state
   sidebarCollapsed: boolean = false;
   
+  // Meta configuration state
+  metaConfig: {
+    selectedCollaborator: string;
+    targetValue: number | null;
+  } = {
+    selectedCollaborator: 'all',
+    targetValue: null
+  };
+  isSavingMeta: boolean = false;
+  metaSaveMessage: string = '';
+  metaSaveSuccess: boolean = false;
+  
   // Cleanup
   private destroy$ = new Subject<void>();
 
@@ -2741,18 +2753,77 @@ private calculateCollaboratorTotals(memberData: Array<{
         // 1. Clientes na Carteira: use already-loaded teamCarteiraClientes
         // This data was loaded by loadTeamCarteiraData() using optimized aggregate query
         const totalEmpresasAtual = this.teamCarteiraClientes.length;
-        const defaultTargetPerMember = 10;
-        const somaMetasEmpresas = this.teamMemberIds.length * defaultTargetPerMember;
+        
+        // Fetch client_goals from all team members using aggregate query
+        let somaMetasEmpresas = 0;
+        try {
+          const aggregateQuery = [
+            {
+              $match: {
+                _id: { $in: this.teamMemberIds }
+              }
+            },
+            {
+              $project: {
+                _id: 1,
+                client_goals: '$extra.client_goals'
+              }
+            }
+          ];
+          
+          const playerClientGoals = await firstValueFrom(
+            this.funifierApi.post<{ _id: string; client_goals?: number | { goalValue?: number } }[]>(
+              '/database/player_status/aggregate?strict=true',
+              aggregateQuery
+            ).pipe(takeUntil(this.destroy$))
+          ).catch(error => {
+            console.error('Error fetching team client_goals data:', error);
+            return [] as { _id: string; client_goals?: number | { goalValue?: number } }[];
+          });
+          
+          // Sum all client_goals from team members
+          // Support both formats: client_goals as number or client_goals.goalValue (backward compatibility)
+          somaMetasEmpresas = playerClientGoals.reduce((sum: number, player: { _id: string; client_goals?: number | { goalValue?: number } }) => {
+            const clientGoals = player.client_goals;
+            if (clientGoals === undefined || clientGoals === null) {
+              return sum; // Skip if no goal set
+            }
+            
+            // Handle both formats: number directly or object with goalValue
+            const goalValue = typeof clientGoals === 'number' 
+              ? clientGoals 
+              : clientGoals?.goalValue;
+            
+            if (goalValue !== undefined && goalValue !== null) {
+              const numValue = typeof goalValue === 'number' 
+                ? goalValue 
+                : parseInt(String(goalValue), 10);
+              return sum + (isNaN(numValue) ? 0 : numValue);
+            }
+            
+            return sum;
+          }, 0);
+          
+          console.log('📊 Team client_goals sum:', somaMetasEmpresas, 'from', playerClientGoals.length, 'members');
+        } catch (error) {
+          console.error('Error loading team client_goals:', error);
+          // Fallback to default if error
+          somaMetasEmpresas = this.teamMemberIds.length * 10;
+        }
+        
+        // Use sum of goals, or fallback to default if no goals set
+        const targetEmpresas = somaMetasEmpresas > 0 ? somaMetasEmpresas : (this.teamMemberIds.length * 10);
+        const superTargetEmpresas = Math.ceil(targetEmpresas * 1.5);
         
         teamKPIs.push({
           id: 'numero-empresas',
           label: 'Clientes na Carteira',
           current: totalEmpresasAtual,
-          target: somaMetasEmpresas || 10,
-          superTarget: Math.max(somaMetasEmpresas * 1.5, 15),
+          target: targetEmpresas,
+          superTarget: superTargetEmpresas,
           unit: 'clientes',
-          color: this.getKPIColorByGoals(totalEmpresasAtual, somaMetasEmpresas || 10, Math.max(somaMetasEmpresas * 1.5, 15)),
-          percentage: Math.min((totalEmpresasAtual / Math.max(somaMetasEmpresas * 1.5, 15)) * 100, 100)
+          color: this.getKPIColorByGoals(totalEmpresasAtual, targetEmpresas, superTargetEmpresas),
+          percentage: Math.min((totalEmpresasAtual / superTargetEmpresas) * 100, 100)
         });
         
         // 2. Entregas no Prazo: fetch from player data using single aggregate query
@@ -2796,8 +2867,8 @@ private calculateCollaboratorTotals(memberData: Array<{
             
             if (validEntregas.length > 0) {
               const mediaEntregas = validEntregas.reduce((sum, v) => sum + v, 0) / validEntregas.length;
-              const targetEntregas = 80;
-              const superTargetEntregas = 90;
+              const targetEntregas = 90;
+              const superTargetEntregas = 100;
               
               teamKPIs.push({
                 id: 'entregas-prazo',
@@ -2898,6 +2969,13 @@ private calculateCollaboratorTotals(memberData: Array<{
   }
 
   /**
+   * Format collaborator name for display (public method for template)
+   */
+  getCollaboratorDisplayName(userId: string): string {
+    return this.formatCollaboratorName(userId);
+  }
+
+  /**
    * Format collaborator name from email or use provided name
    * Converts email like "joyce.carla@bwa.global" to "Joyce Carla"
    * 
@@ -2927,6 +3005,118 @@ private calculateCollaboratorTotals(memberData: Array<{
     
     // Fallback: return userId as-is if it's not an email
     return userId;
+  }
+
+  /**
+   * Save clientes meta configuration for selected collaborator(s)
+   * Updates the extra.client_goals field (number) in Funifier player object
+   */
+  async saveClientesMeta(): Promise<void> {
+    if (!this.metaConfig.targetValue || this.metaConfig.targetValue < 0) {
+      this.metaSaveMessage = 'Por favor, insira um valor válido para a meta';
+      this.metaSaveSuccess = false;
+      this.cdr.markForCheck();
+      return;
+    }
+
+    this.isSavingMeta = true;
+    this.metaSaveMessage = '';
+    this.cdr.markForCheck();
+
+    try {
+      const targetValue = Math.floor(this.metaConfig.targetValue);
+      const selectedCollaborator = this.metaConfig.selectedCollaborator;
+
+      if (selectedCollaborator === 'all') {
+        // Update all collaborators in the team
+        if (this.collaborators.length === 0) {
+          this.metaSaveMessage = 'Nenhum colaborador encontrado na equipe';
+          this.metaSaveSuccess = false;
+          this.isSavingMeta = false;
+          this.cdr.markForCheck();
+          return;
+        }
+
+        // Update all collaborators
+        const updatePromises = this.collaborators.map(collaborator => 
+          this.updatePlayerClientesTarget(collaborator.userId, targetValue)
+        );
+
+        await Promise.all(updatePromises);
+        this.metaSaveMessage = `Meta de ${targetValue} clientes configurada para todos os ${this.collaborators.length} colaboradores`;
+        this.toastService.success(`Meta configurada para todos os colaboradores`);
+      } else {
+        // Update single collaborator
+        const collaborator = this.collaborators.find(c => c.userId === selectedCollaborator);
+        const collaboratorName = collaborator?.name || this.formatCollaboratorName(selectedCollaborator);
+        
+        await this.updatePlayerClientesTarget(selectedCollaborator, targetValue);
+        this.metaSaveMessage = `Meta de ${targetValue} clientes configurada para ${collaboratorName}`;
+        this.toastService.success(`Meta configurada para ${collaboratorName}`);
+      }
+
+      this.metaSaveSuccess = true;
+      
+      // Reset form after successful save
+      setTimeout(() => {
+        this.resetMetaForm();
+      }, 2000);
+      
+    } catch (error: any) {
+      console.error('Error saving clientes meta:', error);
+      this.metaSaveMessage = error?.message || 'Erro ao salvar meta. Tente novamente.';
+      this.metaSaveSuccess = false;
+      this.toastService.error('Erro ao salvar meta de clientes');
+    } finally {
+      this.isSavingMeta = false;
+      this.cdr.markForCheck();
+    }
+  }
+
+  /**
+   * Update player's client_goals in Funifier
+   * @param playerId - Player ID (email)
+   * @param targetValue - Target number of clients
+   */
+  private async updatePlayerClientesTarget(playerId: string, targetValue: number): Promise<void> {
+    try {
+      // First, get current player data to preserve existing extra fields
+      const currentPlayerData = await firstValueFrom(
+        this.funifierApi.get<any>(`player/${playerId}`)
+      );
+
+      // Prepare update payload following Funifier API structure
+      // Payload: { "extra": { "client_goals": number } }
+      const updatePayload: any = {
+        extra: {
+          ...(currentPlayerData.extra || {}),
+          client_goals: targetValue
+        }
+      };
+
+      // Update player using PUT endpoint
+      await firstValueFrom(
+        this.funifierApi.put<any>(`player/${playerId}`, updatePayload)
+      );
+
+      console.log(`✅ Updated client_goals for ${playerId}:`, targetValue);
+    } catch (error: any) {
+      console.error(`❌ Error updating client_goals for ${playerId}:`, error);
+      throw new Error(`Erro ao atualizar meta para ${playerId}: ${error.message}`);
+    }
+  }
+
+  /**
+   * Reset meta configuration form
+   */
+  resetMetaForm(): void {
+    this.metaConfig = {
+      selectedCollaborator: 'all',
+      targetValue: null
+    };
+    this.metaSaveMessage = '';
+    this.metaSaveSuccess = false;
+    this.cdr.markForCheck();
   }
 
   /**
