@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { Observable, of } from 'rxjs';
-import { map, catchError, tap } from 'rxjs/operators';
+import { map, catchError, tap, switchMap } from 'rxjs/operators';
 import { environment } from '../../environments/environment';
 
 export interface CnpjEntry {
@@ -90,41 +90,30 @@ export class CnpjLookupService {
     const rangeHeader = `items=${startIndex}-${batchSize}`;
     const headersWithRange = headers.set('Range', rangeHeader);
 
-    console.log(`📊 Fetching CNPJ batch: ${rangeHeader}`);
+    console.log(`📊 Fetching CNPJ batch: ${rangeHeader} (accumulated: ${accumulatedResults.length})`);
 
     return this.http.post<CnpjEntry[]>(url, aggregateBody, { headers: headersWithRange }).pipe(
-      map(response => {
+      switchMap(response => {
         // Handle response format
         let batchResults: CnpjEntry[] = [];
         if (response && Array.isArray(response)) {
           batchResults = response;
         }
-        return batchResults;
-      }),
-      map(batchResults => {
+
         // Accumulate results
         const allResults = [...accumulatedResults, ...batchResults];
 
-        // If we got a full batch, there might be more data
+        // If we got a full batch, there might be more data - recursively fetch
         if (batchResults.length === batchSize) {
           console.log(`📊 CNPJ batch complete (${batchResults.length} items), fetching next batch...`);
-          // Return results so far, will fetch more in next call
-          return { results: allResults, hasMore: true, nextIndex: startIndex + batchSize };
+          const nextIndex = startIndex + batchSize;
+          // Recursively fetch next batch
+          return this.fetchAllPaginatedCnpj(url, aggregateBody, headers, batchSize, nextIndex, allResults);
         } else {
           // Last batch (partial or empty), return all accumulated results
           console.log(`📊 CNPJ final batch (${batchResults.length} items), total: ${allResults.length}`);
-          return { results: allResults, hasMore: false, nextIndex: 0 };
+          return of(allResults);
         }
-      }),
-      // Use switchMap to recursively fetch more if needed
-      map(({ results, hasMore, nextIndex }) => {
-        if (hasMore) {
-          // For simplicity, we'll just return what we have
-          // The recursive approach would require more complex RxJS handling
-          // In practice, most CNPJ lists won't exceed 100 items
-          return results;
-        }
-        return results;
       }),
       catchError(error => {
         console.error(`❌ Error fetching CNPJ batch at index ${startIndex}:`, error);

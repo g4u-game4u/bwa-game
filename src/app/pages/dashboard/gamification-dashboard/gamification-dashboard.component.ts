@@ -797,8 +797,9 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
    * Format KPI value as integer with percentage symbol for compact display
    */
   /**
-   * Format KPI value to show percentage of target achievement
-   * Similar to c4u-kpi-circular-progress component
+   * Format KPI value for display in company list
+   * For percentage-based KPIs (unit === '%'), show the raw value directly
+   * For other KPIs, show percentage of target achievement
    */
   formatKpiValue(kpi: KPIData): string {
     // Show current value instead of achievement percentage
@@ -814,7 +815,8 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   getKpiTooltip(kpi: KPIData): string {
     const current = Math.round(kpi.current);
     const target = Math.round(kpi.target);
-    return `${current}% de ${target}%`;
+    const unit = kpi.unit || '';
+    return `${current}${unit} de ${target}${unit}`;
   }
   
   /**
