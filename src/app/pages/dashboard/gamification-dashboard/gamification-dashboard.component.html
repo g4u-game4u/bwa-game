@@ -85,6 +85,11 @@
           <i class="ri-focus-3-line compact-icon metas"></i>
           <span class="compact-value">{{ seasonProgress.metas.current }}/{{ seasonProgress.metas.target }}</span>
         </div>
+        <!-- Barra de metas de Clientes na carteira - Comentada temporariamente -->
+        <!-- <div class="compact-item" *ngIf="seasonProgress">
+          <i class="ri-building-line compact-icon clientes"></i>
+          <span class="compact-value">{{ seasonProgress.clientes | number:'1.0-0':'pt-BR' }}</span>
+        </div> -->
         <div class="compact-item" *ngIf="seasonProgress">
           <i class="ri-checkbox-circle-line compact-icon tarefas"></i>
           <span class="compact-value">{{ seasonProgress.tarefasFinalizadas | number:'1.0-0':'pt-BR' }}</span>
