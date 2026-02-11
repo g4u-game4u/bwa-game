@@ -150,6 +150,23 @@
   }
 }
 
+.kpi-target {
+  font-family: 'Urbanist', sans-serif;
+  font-weight: 400;
+  font-size: 12px;
+  color: #9ca3af;
+  text-align: center;
+  
+  // Size variants
+  :host.size-small & {
+    font-size: 9px;
+  }
+  
+  :host.size-large & {
+    font-size: 14px;
+  }
+}
+
 
 .kpi-status {
   font-family: 'Urbanist', sans-serif;

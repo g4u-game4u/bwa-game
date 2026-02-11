@@ -2638,15 +2638,15 @@ private calculateCollaboratorTotals(memberData: Array<{
    * Format KPI value as integer with percentage sign
    */
   /**
-   * Format KPI value to show percentage of target achievement
-   * Similar to c4u-kpi-circular-progress component
+   * Format KPI value for display in company list
+   * For percentage-based KPIs (unit === '%'), show the raw value directly
+   * For other KPIs, show percentage of target achievement
    */
   formatKpiValue(kpi: KPIData): string {
-    if (kpi.target === 0) {
-      return '0%';
-    }
-    const percentage = Math.round((kpi.current / kpi.target) * 100);
-    return `${percentage}%`;
+    // Show current value instead of achievement percentage
+    const current = Math.round(kpi.current);
+    const unit = kpi.unit || '%';
+    return `${current}${unit}`;
   }
 
   /**
@@ -2656,7 +2656,8 @@ private calculateCollaboratorTotals(memberData: Array<{
   getKpiTooltip(kpi: KPIData): string {
     const current = Math.round(kpi.current);
     const target = Math.round(kpi.target);
-    return `${current}% de ${target}%`;
+    const unit = kpi.unit || '';
+    return `${current}${unit} de ${target}${unit}`;
   }
 
   /**
@@ -2926,6 +2927,14 @@ private calculateCollaboratorTotals(memberData: Array<{
    */
   trackByKpiId(index: number, kpi: KPIData): string {
     return kpi.id;
+  }
+
+  /**
+   * Get enabled KPIs (excluding commented/disabled ones)
+   * Currently excludes 'numero-empresas' (Clientes na Carteira)
+   */
+  get enabledKPIs(): KPIData[] {
+    return this.teamKPIs.filter(kpi => kpi.id !== 'numero-empresas');
   }
 
   /**
