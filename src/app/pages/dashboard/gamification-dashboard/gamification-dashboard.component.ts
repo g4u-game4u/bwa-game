@@ -786,6 +786,14 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   }
 
   /**
+   * Get enabled KPIs (excluding commented/disabled ones)
+   * Currently excludes 'numero-empresas' (Clientes na Carteira)
+   */
+  get enabledKPIs(): KPIData[] {
+    return this.playerKPIs.filter(kpi => kpi.id !== 'numero-empresas');
+  }
+
+  /**
    * Format KPI value as integer with percentage symbol for compact display
    */
   /**
@@ -793,11 +801,10 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
    * Similar to c4u-kpi-circular-progress component
    */
   formatKpiValue(kpi: KPIData): string {
-    if (kpi.target === 0) {
-      return '0%';
-    }
-    const percentage = Math.round((kpi.current / kpi.target) * 100);
-    return `${percentage}%`;
+    // Show current value instead of achievement percentage
+    const current = Math.round(kpi.current);
+    const unit = kpi.unit || '%';
+    return `${current}${unit}`;
   }
 
   /**

@@ -155,12 +155,16 @@
           <span class="compact-value">{{ teamPointWallet.desbloqueados | number:'1.0-0':'pt-BR' }}</span>
         </div>
         
+        <!-- Circular KPIs Compact - Show only enabled KPIs -->
+        <ng-container *ngFor="let kpi of enabledKPIs">
+          <div class="compact-item" [title]="kpi.label + ': ' + roundValue(kpi.current) + ' / ' + roundValue(kpi.target) + (kpi.unit ? ' ' + kpi.unit : '')">
+            <i class="ri-time-line compact-icon entregas" *ngIf="kpi.id === 'entregas-prazo'"></i>
+            <i class="ri-building-line compact-icon clientes" *ngIf="kpi.id === 'numero-empresas'"></i>
+            <span class="compact-value">{{ roundValue(kpi.current) }}{{ kpi.unit || '' }}</span>
+          </div>
+        </ng-container>
+        
         <!-- Season Progress Compact -->
-        <!-- Barra de metas de Clientes na carteira - Comentada temporariamente -->
-        <!-- <div class="compact-item" *ngIf="teamSeasonProgress">
-          <i class="ri-building-line compact-icon clientes"></i>
-          <span class="compact-value">{{ teamSeasonProgress.clientes | number:'1.0-0':'pt-BR' }}</span>
-        </div> -->
         <div class="compact-item" *ngIf="teamSeasonProgress">
           <i class="ri-checkbox-circle-line compact-icon tarefas"></i>
           <span class="compact-value">{{ teamSeasonProgress.tarefasFinalizadas | number:'1.0-0':'pt-BR' }}</span>

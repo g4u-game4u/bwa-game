@@ -213,7 +213,7 @@ export class CompanyKpiService {
    */
   private mapToKpiData(cnpjKpi: CnpjKpiData): KPIData {
     const current = cnpjKpi.entrega || 0;
-    const target = 80; // Target matches the circular KPI progress (80%)
+    const target = 90; // Target matches the circular KPI progress (90%)
     const percentage = Math.min((current / target) * 100, 100);
 
     return {
