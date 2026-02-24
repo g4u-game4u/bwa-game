@@ -42,7 +42,8 @@ export class CompanyService {
         const companiesStr = playerResponse?.extra?.companies || '';
         const companyIds = companiesStr.split(/[;,]/)
           .map((id: string) => id.trim())
-          .filter((id: string) => id.length > 0);
+          .filter((id: string) => id.length > 0)
+          .map((id: string) => String(id));
         
         console.log('📊 Player company IDs from extra.companies:', companyIds);
         

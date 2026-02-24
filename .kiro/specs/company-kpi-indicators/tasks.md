@@ -547,13 +547,13 @@ Verify performance targets are met for KPI data fetching and rendering.
 
 **Subtasks**:
 - [x] 11.1 Create performance test file `company-kpi.service.performance.spec.ts`
-- [~] 11.2 Measure KPI data fetch time for various dataset sizes
-- [~] 11.3 Measure page load time increase with KPI feature enabled
-- [~] 11.4 Measure memory overhead for 100+ companies
-- [~] 11.5 Verify caching effectiveness (API call reduction)
-- [~] 11.6 Test with 50+ companies to verify scalability
-- [~] 11.7 Measure rendering performance of KPI indicators
-- [~] 11.8 Profile and optimize any bottlenecks found
+- [ ] 11.2 Measure KPI data fetch time for various dataset sizes
+- [ ] 11.3 Measure page load time increase with KPI feature enabled
+- [ ] 11.4 Measure memory overhead for 100+ companies
+- [ ] 11.5 Verify caching effectiveness (API call reduction)
+- [ ] 11.6 Test with 50+ companies to verify scalability
+- [ ] 11.7 Measure rendering performance of KPI indicators
+- [ ] 11.8 Profile and optimize any bottlenecks found
 
 **Acceptance Criteria**:
 - KPI data fetch < 500ms for 50 companies

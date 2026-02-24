@@ -511,8 +511,8 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       
       // Extract member IDs from aggregate result
       const memberIds = allPlayersStatus
-        .map((player: any) => player._id)
-        .filter((id: any) => id != null) as string[];
+        .map((player: any) => String(player._id))
+        .filter((id: string) => id != null && id !== 'null' && id !== 'undefined');
       
       this.teamMemberIds = memberIds;
       console.log('✅ Team member IDs loaded via aggregate:', memberIds.length, 'members');
