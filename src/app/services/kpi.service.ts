@@ -4,7 +4,6 @@ import { map, catchError, shareReplay, switchMap } from 'rxjs/operators';
 import { FunifierApiService } from './funifier-api.service';
 import { KPIMapper } from './kpi-mapper.service';
 import { KPIData } from '@model/gamification-dashboard.model';
-import { ActionLogService } from './action-log.service';
 import { PlayerService } from './player.service';
 
 interface CacheEntry<T> {
@@ -102,15 +101,17 @@ export class KPIService {
           (selectedMonth.getFullYear() === now.getFullYear() && 
            selectedMonth.getMonth() === now.getMonth());
 
-        // Clientes na Carteira - count from action_log filtered by selected month
+        // Clientes na Carteira - count from extra.cnpj (allocated companies)
         if (actionLogService && selectedMonth) {
-          // Use action_log to count companies for the selected month
+          // Use action_log to count companies for the selected month (for carteira display)
           return actionLogService.getPlayerCnpjListWithCount(playerId, selectedMonth).pipe(
             map((cnpjList: { cnpj: string; actionCount: number }[]) => {
-              const companyCount = Array.isArray(cnpjList) ? cnpjList.length : 0;
+              // Company count comes from extra.cnpj (total allocated), not action_log
+              const companyCount = playerStatus.extra?.cnpj 
+                ? playerStatus.extra.cnpj.split(',').filter((item: string) => item.trim()).length 
+                : 0;
               
               // Get target from player's extra.client_goals (number), fallback to default 10
-              // Support both formats: client_goals as number or client_goals.goalValue (backward compatibility)
               const clientGoals = playerStatus.extra?.client_goals;
               const goalValue = typeof clientGoals === 'number' 
                 ? clientGoals 
@@ -169,10 +170,15 @@ export class KPIService {
                 : 10;
               const superTarget = Math.ceil(target * 1.5);
               
+              // Count from extra.cnpj even on action_log error
+              const errorCompanyCount = playerStatus.extra?.cnpj 
+                ? playerStatus.extra.cnpj.split(',').filter((item: string) => item.trim()).length 
+                : 0;
+              
               const errorKpis: KPIData[] = [{
                  id: 'numero-empresas',
                  label: 'Clientes na Carteira',
-                current: 0,
+                current: errorCompanyCount,
                 target: target,
                 superTarget: superTarget,
                 unit: 'clientes',

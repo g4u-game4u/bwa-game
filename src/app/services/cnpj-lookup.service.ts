@@ -60,9 +60,11 @@ export class CnpjLookupService {
       }),
       map(entries => {
         // Create a map for fast lookup by _id (empid)
+        // API may return _id as string or number, so normalize to number for consistent lookup
         const cnpjMap = new Map<number, CnpjEntry>();
         entries.forEach(entry => {
-          cnpjMap.set(entry._id, entry);
+          const numericId = typeof entry._id === 'string' ? parseInt(entry._id, 10) : entry._id;
+          cnpjMap.set(numericId, { ...entry, _id: numericId });
         });
         console.log('📊 Created map with', cnpjMap.size, 'entries');
         return cnpjMap;

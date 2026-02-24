@@ -790,7 +790,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
    * Currently excludes 'numero-empresas' (Clientes na Carteira)
    */
   get enabledKPIs(): KPIData[] {
-    return this.playerKPIs.filter(kpi => kpi.id !== 'numero-empresas');
+    return this.playerKPIs;
   }
 
   /**
