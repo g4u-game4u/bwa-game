@@ -39,10 +39,12 @@ export class CnpjLookupService {
     });
 
     // Use aggregate query with $match and $in to fetch only needed empids
+    // Funifier API requires _id values to be strings, not numbers
+    const empidStrings = empids.map(id => String(id));
     const aggregateBody = [
       {
         $match: {
-          _id: { $in: empids }
+          _id: { $in: empidStrings }
         }
       }
     ];

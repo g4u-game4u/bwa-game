@@ -91,8 +91,10 @@ export class CompanyKpiService {
     }
 
     // Query cnpj__c collection with aggregate
+    // Ensure all IDs are strings for Funifier API
+    const stringIds = cnpjIds.map(id => String(id));
     const aggregateBody = [
-      { $match: { _id: { $in: cnpjIds } } }
+      { $match: { _id: { $in: stringIds } } }
     ];
 
     console.log('📊 Fetching KPI data for CNPJ IDs:', cnpjIds);
