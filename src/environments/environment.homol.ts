@@ -1,13 +1,25 @@
+/**
+ * Homologation/Staging environment configuration
+ * 
+ * IMPORTANT: This file uses hardcoded default values.
+ * For deployment, these values should be replaced at build time using:
+ * 1. CI/CD pipeline environment variable substitution
+ * 2. Docker build args
+ * 3. Vercel/Netlify environment variables (injected at build time)
+ * 
+ * The build process should replace placeholder values like '${ENV_VAR_NAME}'
+ * with actual environment variable values.
+ */
 export const environment = {
   production: false,
-  client_id: process.env['CLIENT_ID'] || process.env['client_id'] || '',
-  backend_url_base: process.env['BACKEND_URL_BASE'] || process.env['backend_url_base'] || '',
+  client_id: 'bwa',
+  backend_url_base: '',
   
-  // Funifier API Configuration (supports both uppercase and lowercase env vars)
-  funifier_api_url: process.env['FUNIFIER_BASE_URL'] || process.env['funifier_base_url'] || 'https://service2.funifier.com/v3/',
-  funifier_api_key: process.env['FUNIFIER_API_KEY'] || process.env['funifier_api_key'] || '',
-  funifier_base_url: process.env['FUNIFIER_BASE_URL'] || process.env['funifier_base_url'] || 'https://service2.funifier.com/v3/',
-  funifier_basic_token: process.env['FUNIFIER_BASIC_TOKEN'] || process.env['funifier_basic_token'] || '',
+  // Funifier API Configuration
+  funifier_api_url: 'https://service2.funifier.com/v3/',
+  funifier_api_key: '690a785ce179d46fce59ed65',
+  funifier_base_url: 'https://service2.funifier.com/v3/',
+  funifier_basic_token: 'NjkwYTc4NWNlMTc5ZDQ2ZmNlNTllZDY1OjY3ZWM0ZTRhMjMyN2Y3NGYzYTJmOTZmNQ==',
   
   // Cache Configuration
   cacheTimeout: 300000, // 5 minutes in milliseconds
@@ -15,11 +27,13 @@ export const environment = {
   // Feature Flags
   enableAnalytics: false,
   
-  // Logo Configuration (supports both uppercase and lowercase env vars)
-  logoUrl: process.env['LOGO_URL'] || process.env['logo_url'] || '',
+  // Logo Configuration
+  // Empty string means use default logo
+  logoUrl: '',
   
-  // Team Code Configuration (supports both uppercase and lowercase env vars)
-  supervisorTeamCode: process.env['SUPERVISOR_TEAM_CODE'] || process.env['supervisor_team_code'] || 'Fkmdmko',
-  gestorTeamCode: process.env['GESTOR_TEAM_CODE'] || process.env['gestor_team_code'] || 'FkmdnFU',
-  diretorTeamCode: process.env['DIRETOR_TEAM_CODE'] || process.env['diretor_team_code'] || 'FkmdhZ9'
+  // Team Code Configuration
+  // Default values for management team codes
+  supervisorTeamCode: 'Fkmdmko',
+  gestorTeamCode: 'FkmdnFU',
+  diretorTeamCode: 'FkmdhZ9'
 };
