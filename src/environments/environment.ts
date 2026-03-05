@@ -19,5 +19,13 @@ export const environment = {
   cacheTimeout: 300000, // 5 minutes in milliseconds
   
   // Feature Flags
-  enableAnalytics: false
+  enableAnalytics: false,
+  
+  // Logo Configuration
+  logoUrl: '', // Empty string means use default logo
+  
+  // Team Code Configuration (hardcoded defaults for development)
+  supervisorTeamCode: 'Fkmdmko',
+  gestorTeamCode: 'FkmdnFU',
+  diretorTeamCode: 'FkmdhZ9'
 };

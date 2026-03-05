@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { SessaoProvider } from '@providers/sessao/sessao.provider';
 import { UserProfile, determineUserProfile, getUserOwnTeamId, getAccessibleTeamIds } from '@utils/user-profile';
+import { TeamCodeService } from './team-code.service';
 
 /**
  * Service to manage user profile and permissions
@@ -10,12 +11,17 @@ import { UserProfile, determineUserProfile, getUserOwnTeamId, getAccessibleTeamI
  * - Check if user can access team management
  * - Get user's accessible teams
  * - Get user's own team ID
+ * 
+ * Uses TeamCodeService to get configurable team codes for role determination.
  */
 @Injectable({
   providedIn: 'root'
 })
 export class UserProfileService {
-  constructor(private sessao: SessaoProvider) {}
+  constructor(
+    private sessao: SessaoProvider,
+    private teamCodeService: TeamCodeService
+  ) {}
 
   /**
    * Get current user's profile
@@ -27,7 +33,7 @@ export class UserProfileService {
     if (!user) {
       return UserProfile.JOGADOR;
     }
-    return determineUserProfile(user.teams);
+    return determineUserProfile(user.teams, this.teamCodeService.getTeamCodes());
   }
 
   /**
@@ -51,7 +57,7 @@ export class UserProfileService {
       return null;
     }
     const profile = this.getCurrentUserProfile();
-    return getUserOwnTeamId(user.teams, profile);
+    return getUserOwnTeamId(user.teams, profile, this.teamCodeService.getTeamCodes());
   }
 
   /**
@@ -70,7 +76,7 @@ export class UserProfileService {
       return [];
     }
     const profile = this.getCurrentUserProfile();
-    return getAccessibleTeamIds(user.teams, profile);
+    return getAccessibleTeamIds(user.teams, profile, this.teamCodeService.getTeamCodes());
   }
 
   /**

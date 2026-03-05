@@ -11,7 +11,12 @@
       <div *ngIf="!clientLogoUrl" class="default-logo"></div>
     </div>
 
-    <img src="/assets/images/logo-bwa-white-inteira-full.png" alt="BWA Global" class="bwa-logo" draggable="false">
+    <img 
+      [src]="bwaLogoUrl" 
+      alt="BWA Global" 
+      class="bwa-logo" 
+      draggable="false"
+      (error)="onLogoError()">
 
     <h2 class="text-center md:text-left">Bem-vindo de volta ao {{clientName}}!</h2>
 

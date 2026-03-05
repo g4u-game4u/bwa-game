@@ -13,5 +13,13 @@ export const environment = {
   cacheTimeout: 300000, // 5 minutes in milliseconds
   
   // Feature Flags
-  enableAnalytics: false
+  enableAnalytics: false,
+  
+  // Logo Configuration (supports both uppercase and lowercase env vars)
+  logoUrl: process.env['LOGO_URL'] || process.env['logo_url'] || '',
+  
+  // Team Code Configuration (supports both uppercase and lowercase env vars)
+  supervisorTeamCode: process.env['SUPERVISOR_TEAM_CODE'] || process.env['supervisor_team_code'] || 'Fkmdmko',
+  gestorTeamCode: process.env['GESTOR_TEAM_CODE'] || process.env['gestor_team_code'] || 'FkmdnFU',
+  diretorTeamCode: process.env['DIRETOR_TEAM_CODE'] || process.env['diretor_team_code'] || 'FkmdhZ9'
 };

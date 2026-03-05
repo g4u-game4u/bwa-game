@@ -10,6 +10,7 @@ import {AuthProvider} from "@providers/auth/auth.provider";
 import {AbstractControl, ValidationErrors} from "@angular/forms";
 import {TranslateService} from "@ngx-translate/core";
 import { LoginLogService } from '@services/login-log.service';
+import { LogoService } from '@services/logo.service';
 
 @Component({
   selector: 'app-login',
@@ -23,6 +24,7 @@ export class LoginComponent implements OnInit {
   isLoading: boolean = false;
   loadingText: string = 'Entrando...';
   systemParams: SystemParams | null = null;
+  bwaLogoUrl: string;
 
   private loadingTexts: string[] = [
     'Entrando...',
@@ -38,7 +40,8 @@ export class LoginComponent implements OnInit {
   constructor(private sessao: SessaoProvider, private router: Router, private loadingProvider: LoadingProvider,
               private toastService: ToastService, private systemParamsService: SystemParamsService,
               private authProvider: AuthProvider, private translate: TranslateService,
-              private loginLogService: LoginLogService) {
+              private loginLogService: LoginLogService, private logoService: LogoService) {
+    this.bwaLogoUrl = this.logoService.getLogoUrl();
   }
 
   // Estado do fluxo: 'login' | 'reset-request' | 'reset-confirm'
@@ -128,6 +131,17 @@ export class LoginComponent implements OnInit {
       console.log('Informações do cliente carregadas:', { name: this.clientName, logo: this.clientLogoUrl });
     } catch (error) {
       console.error('Erro ao carregar informações do cliente:', error);
+    }
+  }
+
+  /**
+   * Handles logo image load errors by falling back to the default logo.
+   * Includes protection against infinite loops if the default logo also fails.
+   */
+  onLogoError(): void {
+    // Only fallback if not already using default to prevent infinite loops
+    if (this.bwaLogoUrl !== this.logoService.getDefaultLogoUrl()) {
+      this.bwaLogoUrl = this.logoService.getDefaultLogoUrl();
     }
   }
 
