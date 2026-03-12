@@ -10,6 +10,7 @@ import {AuthProvider} from "@providers/auth/auth.provider";
 import {AbstractControl, ValidationErrors} from "@angular/forms";
 import {TranslateService} from "@ngx-translate/core";
 import { LoginLogService } from '@services/login-log.service';
+import { environment } from '../../../environments/environment';
 
 @Component({
   selector: 'app-login',
@@ -140,7 +141,16 @@ export class LoginComponent implements OnInit {
   //   }
   // }
 
+  get maintenanceMode(): boolean {
+    return !!environment.maintenanceMode;
+  }
+
   async submit() {
+    if (this.maintenanceMode) {
+      this.toastService.error('Sistema em manutenção. Você será avisado pelos canais oficiais de comunicação quando terminar.');
+      return;
+    }
+
     console.log('🔐 Submit called - Form valid:', this.form.valid);
     console.log('🔐 Username:', this.username);
     console.log('🔐 Password length:', this.password?.length);

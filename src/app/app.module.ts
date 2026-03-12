@@ -15,17 +15,19 @@ import { NgbModule } from '@ng-bootstrap/ng-bootstrap';
 import { SemPermissaoComponent } from './layout/sem-permissao/sem-permissao.component';
 import { SharedModule } from './shared.module';
 import { BreveComponent } from './layout/breve/breve.component';
+import { ManutencaoComponent } from './layout/manutencao/manutencao.component';
 import { C4uAnimacaoCidModule } from './components/c4u-animacao-cid/c4u-animacao-cid.module';
 import { MatSnackBarModule } from '@angular/material/snack-bar';
 import { C4uSpinnerModule } from '@components/c4u-spinner/c4u-spinner.module';
 import { AuthInterceptor } from './providers/auth.interceptor';
 import { NotificationService } from './services/notification.service';
 import { OverlayModule } from '@angular/cdk/overlay';
+import { C4uCardModule } from '@components/c4u-card/c4u-card.module';
 
 Chart.register(...registerables);
 
 @NgModule({
-  declarations: [AppComponent, SemPermissaoComponent, BreveComponent],
+  declarations: [AppComponent, SemPermissaoComponent, BreveComponent, ManutencaoComponent],
   imports: [
     BrowserAnimationsModule,
     BrowserModule,
@@ -46,6 +48,7 @@ Chart.register(...registerables);
     MatSnackBarModule,
     C4uSpinnerModule,
     OverlayModule,
+    C4uCardModule,
     // ToastrModule.forRoot({
     //   timeOut: 5000,
     //   positionClass: 'toast-top-right',

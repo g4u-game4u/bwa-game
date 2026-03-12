@@ -1,7 +1,8 @@
 import {inject, Injectable} from '@angular/core';
-import {ActivatedRouteSnapshot, CanActivateChildFn, Router, RouterStateSnapshot} from "@angular/router";
+import {ActivatedRouteSnapshot, CanActivateChildFn, CanActivateFn, Router, RouterStateSnapshot} from "@angular/router";
 import {SessaoProvider} from "./sessao.provider";
 import {Usuario} from "@model/usuario.model";
+import { environment } from '../../../environments/environment';
 
 @Injectable({
     providedIn: 'root'
@@ -46,7 +47,19 @@ export class PermissaoAcessoProvider {
     }
 
     async validaTokenAcessoValido(route: ActivatedRouteSnapshot, state: RouterStateSnapshot) {
-        const canActivate = await this.validateSSOUser()
+        // Em modo manutenção: usuário logado vai para /manutencao; não logado vai para /login
+        if (environment.maintenanceMode) {
+            const isAuthenticated = await this.validateSSOUser();
+            setTimeout(() => window.scrollTo(0, 0));
+            if (isAuthenticated) {
+                await this.router.navigate(['/manutencao']);
+                return false;
+            }
+            await this.router.navigate(['/login']);
+            return false;
+        }
+
+        const canActivate = await this.validateSSOUser();
         setTimeout(() => window.scrollTo(0, 0));
 
         if (canActivate)
@@ -60,4 +73,9 @@ export class PermissaoAcessoProvider {
 
 export const PermissaoAcessoGeral: CanActivateChildFn = async (route: ActivatedRouteSnapshot, state: RouterStateSnapshot): Promise<boolean> => {
     return inject(PermissaoAcessoProvider).validaTokenAcessoValido(route, state);
-}
+};
+
+/** Guard para a rota pai (ex.: /dashboard) — bloqueia acesso antes de carregar o layout do painel (ex.: em modo manutenção). */
+export const PermissaoAcessoRota: CanActivateFn = async (route: ActivatedRouteSnapshot, state: RouterStateSnapshot): Promise<boolean> => {
+    return inject(PermissaoAcessoProvider).validaTokenAcessoValido(route, state);
+};

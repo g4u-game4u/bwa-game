@@ -19,5 +19,8 @@ export const environment = {
   cacheTimeout: 300000, // 5 minutes in milliseconds
   
   // Feature Flags
-  enableAnalytics: false
+  enableAnalytics: false,
+
+  // Modo manutenção: bloqueia login e redireciona usuários logados para página de manutenção
+  maintenanceMode: true
 };
