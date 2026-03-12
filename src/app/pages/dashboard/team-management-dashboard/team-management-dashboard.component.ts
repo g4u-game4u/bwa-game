@@ -179,13 +179,16 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
   // Sidebar collapse state
   sidebarCollapsed: boolean = false;
   
-  // Meta configuration state
+  // Meta configuration state (expanded for both cnpj_goal and entrega_goal)
+  // Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.7
   metaConfig: {
     selectedCollaborator: string;
-    targetValue: number | null;
+    cnpjGoalValue: number | null;
+    entregaGoalValue: number | null;
   } = {
     selectedCollaborator: 'all',
-    targetValue: null
+    cnpjGoalValue: null,
+    entregaGoalValue: null
   };
   isSavingMeta: boolean = false;
   metaSaveMessage: string = '';
@@ -2753,7 +2756,8 @@ private calculateCollaboratorTotals(memberData: Array<{
         // This data was loaded by loadTeamCarteiraData() using optimized aggregate query
         const totalEmpresasAtual = this.teamCarteiraClientes.length;
         
-        // Fetch client_goals from all team members using aggregate query
+        // Fetch cnpj_goal from all team members using aggregate query
+        // Sum all cnpj_goal values, defaulting each member to 10 if not set
         let somaMetasEmpresas = 0;
         try {
           const aggregateQuery = [
@@ -2765,53 +2769,50 @@ private calculateCollaboratorTotals(memberData: Array<{
             {
               $project: {
                 _id: 1,
-                client_goals: '$extra.client_goals'
+                cnpj_goal: '$extra.cnpj_goal'
               }
             }
           ];
           
-          const playerClientGoals = await firstValueFrom(
-            this.funifierApi.post<{ _id: string; client_goals?: number | { goalValue?: number } }[]>(
+          const playerCnpjGoals = await firstValueFrom(
+            this.funifierApi.post<{ _id: string; cnpj_goal?: number }[]>(
               '/database/player_status/aggregate?strict=true',
               aggregateQuery
             ).pipe(takeUntil(this.destroy$))
           ).catch(error => {
-            console.error('Error fetching team client_goals data:', error);
-            return [] as { _id: string; client_goals?: number | { goalValue?: number } }[];
+            console.error('Error fetching team cnpj_goal data:', error);
+            return [] as { _id: string; cnpj_goal?: number }[];
           });
           
-          // Sum all client_goals from team members
-          // Support both formats: client_goals as number or client_goals.goalValue (backward compatibility)
-          somaMetasEmpresas = playerClientGoals.reduce((sum: number, player: { _id: string; client_goals?: number | { goalValue?: number } }) => {
-            const clientGoals = player.client_goals;
-            if (clientGoals === undefined || clientGoals === null) {
-              return sum; // Skip if no goal set
+          // Sum all cnpj_goal from team members, defaulting to 10 for each member without a goal
+          somaMetasEmpresas = playerCnpjGoals.reduce((sum: number, player: { _id: string; cnpj_goal?: number }) => {
+            const cnpjGoal = player.cnpj_goal;
+            
+            // Default to 10 if cnpj_goal is null or undefined
+            if (cnpjGoal === undefined || cnpjGoal === null) {
+              return sum + 10;
             }
             
-            // Handle both formats: number directly or object with goalValue
-            const goalValue = typeof clientGoals === 'number' 
-              ? clientGoals 
-              : clientGoals?.goalValue;
-            
-            if (goalValue !== undefined && goalValue !== null) {
-              const numValue = typeof goalValue === 'number' 
-                ? goalValue 
-                : parseInt(String(goalValue), 10);
-              return sum + (isNaN(numValue) ? 0 : numValue);
-            }
-            
-            return sum;
+            const numValue = typeof cnpjGoal === 'number' 
+              ? cnpjGoal 
+              : parseInt(String(cnpjGoal), 10);
+            return sum + (isNaN(numValue) ? 10 : numValue);
           }, 0);
           
-          console.log('📊 Team client_goals sum:', somaMetasEmpresas, 'from', playerClientGoals.length, 'members');
+          // If no members were found, use default of 10 per member
+          if (playerCnpjGoals.length === 0) {
+            somaMetasEmpresas = this.teamMemberIds.length * 10;
+          }
+          
+          console.log('📊 Team cnpj_goal sum:', somaMetasEmpresas, 'from', playerCnpjGoals.length, 'members');
         } catch (error) {
-          console.error('Error loading team client_goals:', error);
+          console.error('Error loading team cnpj_goal:', error);
           // Fallback to default if error
           somaMetasEmpresas = this.teamMemberIds.length * 10;
         }
         
-        // Use sum of goals, or fallback to default if no goals set
-        const targetEmpresas = somaMetasEmpresas > 0 ? somaMetasEmpresas : (this.teamMemberIds.length * 10);
+        // Use sum of goals (already includes defaults for members without goals)
+        const targetEmpresas = somaMetasEmpresas;
         const superTargetEmpresas = Math.ceil(targetEmpresas * 1.5);
         
         teamKPIs.push({
@@ -2833,7 +2834,7 @@ private calculateCollaboratorTotals(memberData: Array<{
         
         if (isCurrentMonth) {
           try {
-            // Use single aggregate query to get all team members' entrega values
+            // Use single aggregate query to get all team members' entrega values and entrega_goal
             const aggregateQuery = [
               {
                 $match: {
@@ -2843,19 +2844,20 @@ private calculateCollaboratorTotals(memberData: Array<{
               {
                 $project: {
                   _id: 1,
-                  entrega: '$extra.entrega'
+                  entrega: '$extra.entrega',
+                  entrega_goal: '$extra.entrega_goal'
                 }
               }
             ];
             
             const playerEntregas = await firstValueFrom(
-              this.funifierApi.post<{ _id: string; entrega?: string }[]>(
+              this.funifierApi.post<{ _id: string; entrega?: string; entrega_goal?: number }[]>(
                 '/database/player_status/aggregate?strict=true',
                 aggregateQuery
               ).pipe(takeUntil(this.destroy$))
             ).catch(error => {
               console.error('Error fetching team entrega data:', error);
-              return [];
+              return [] as { _id: string; entrega?: string; entrega_goal?: number }[];
             });
             
             // Calculate average entrega percentage
@@ -2864,9 +2866,29 @@ private calculateCollaboratorTotals(memberData: Array<{
               .map(p => parseFloat(p.entrega || '0'))
               .filter(v => !isNaN(v));
             
+            // Calculate average entrega_goal from team members, defaulting to 90 for each member without a goal
+            let targetEntregas = 90;
+            if (playerEntregas.length > 0) {
+              const entregaGoalSum = playerEntregas.reduce((sum: number, player: { _id: string; entrega?: string; entrega_goal?: number }) => {
+                const entregaGoal = player.entrega_goal;
+                
+                // Default to 90 if entrega_goal is null or undefined
+                if (entregaGoal === undefined || entregaGoal === null) {
+                  return sum + 90;
+                }
+                
+                const numValue = typeof entregaGoal === 'number' 
+                  ? entregaGoal 
+                  : parseFloat(String(entregaGoal));
+                return sum + (isNaN(numValue) ? 90 : numValue);
+              }, 0);
+              
+              targetEntregas = Math.round((entregaGoalSum / playerEntregas.length) * 100) / 100;
+              console.log('📊 Team entrega_goal average:', targetEntregas, 'from', playerEntregas.length, 'members');
+            }
+            
             if (validEntregas.length > 0) {
               const mediaEntregas = validEntregas.reduce((sum, v) => sum + v, 0) / validEntregas.length;
-              const targetEntregas = 90;
               const superTargetEntregas = 100;
               
               teamKPIs.push({
@@ -3015,12 +3037,58 @@ private calculateCollaboratorTotals(memberData: Array<{
   }
 
   /**
-   * Save clientes meta configuration for selected collaborator(s)
-   * Updates the extra.client_goals field (number) in Funifier player object
+   * Validate cnpj_goal value: must be a non-negative integer
+   * @param value - Value to validate
+   * @returns true if valid, false otherwise
+   * Requirements: 4.7
    */
-  async saveClientesMeta(): Promise<void> {
-    if (!this.metaConfig.targetValue || this.metaConfig.targetValue < 0) {
-      this.metaSaveMessage = 'Por favor, insira um valor válido para a meta';
+  private isValidCnpjGoal(value: number | null): boolean {
+    if (value === null || value === undefined) {
+      return true; // null is valid (optional field)
+    }
+    return Number.isInteger(value) && value >= 0;
+  }
+
+  /**
+   * Validate entrega_goal value: must be a number between 0 and 100
+   * @param value - Value to validate
+   * @returns true if valid, false otherwise
+   * Requirements: 4.7
+   */
+  private isValidEntregaGoal(value: number | null): boolean {
+    if (value === null || value === undefined) {
+      return true; // null is valid (optional field)
+    }
+    return typeof value === 'number' && value >= 0 && value <= 100;
+  }
+
+  /**
+   * Save goals configuration for selected collaborator(s)
+   * Updates the extra.cnpj_goal and extra.entrega_goal fields in Funifier player object
+   * Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.7
+   */
+  async saveGoals(): Promise<void> {
+    const { cnpjGoalValue, entregaGoalValue, selectedCollaborator } = this.metaConfig;
+
+    // Validate that at least one goal is provided
+    if (cnpjGoalValue === null && entregaGoalValue === null) {
+      this.metaSaveMessage = 'Por favor, insira pelo menos um valor de meta';
+      this.metaSaveSuccess = false;
+      this.cdr.markForCheck();
+      return;
+    }
+
+    // Validate cnpj_goal: must be a non-negative integer (Requirement 4.7)
+    if (cnpjGoalValue !== null && !this.isValidCnpjGoal(cnpjGoalValue)) {
+      this.metaSaveMessage = 'Meta de Clientes deve ser um número inteiro não negativo';
+      this.metaSaveSuccess = false;
+      this.cdr.markForCheck();
+      return;
+    }
+
+    // Validate entrega_goal: must be between 0 and 100 (Requirement 4.7)
+    if (entregaGoalValue !== null && !this.isValidEntregaGoal(entregaGoalValue)) {
+      this.metaSaveMessage = 'Meta de Entregas deve ser um número entre 0 e 100';
       this.metaSaveSuccess = false;
       this.cdr.markForCheck();
       return;
@@ -3031,11 +3099,12 @@ private calculateCollaboratorTotals(memberData: Array<{
     this.cdr.markForCheck();
 
     try {
-      const targetValue = Math.floor(this.metaConfig.targetValue);
-      const selectedCollaborator = this.metaConfig.selectedCollaborator;
+      // Prepare goal values (floor cnpj_goal to ensure integer)
+      const cnpjGoal = cnpjGoalValue !== null ? Math.floor(cnpjGoalValue) : null;
+      const entregaGoal = entregaGoalValue;
 
       if (selectedCollaborator === 'all') {
-        // Update all collaborators in the team
+        // Update all collaborators in the team (Requirement 4.4)
         if (this.collaborators.length === 0) {
           this.metaSaveMessage = 'Nenhum colaborador encontrado na equipe';
           this.metaSaveSuccess = false;
@@ -3044,36 +3113,67 @@ private calculateCollaboratorTotals(memberData: Array<{
           return;
         }
 
-        // Update all collaborators
-        const updatePromises = this.collaborators.map(collaborator => 
-          this.updatePlayerClientesTarget(collaborator.userId, targetValue)
-        );
+        // Track failures for individual error reporting (Requirement 4.5)
+        const failures: { collaboratorName: string; error: string }[] = [];
+        let successCount = 0;
 
-        await Promise.all(updatePromises);
-        this.metaSaveMessage = `Meta de ${targetValue} clientes configurada para todos os ${this.collaborators.length} colaboradores`;
-        this.toastService.success(`Meta configurada para todos os colaboradores`);
+        // Send individual PUT requests per collaborator (Requirement 4.4)
+        for (const collaborator of this.collaborators) {
+          try {
+            await this.updatePlayerGoals(collaborator.userId, cnpjGoal, entregaGoal);
+            successCount++;
+          } catch (error: any) {
+            const collaboratorName = collaborator.name || this.formatCollaboratorName(collaborator.userId);
+            failures.push({
+              collaboratorName,
+              error: error?.message || 'Erro desconhecido'
+            });
+            // Show error toast per collaborator on failure (Requirement 4.5)
+            this.toastService.error(`Erro ao atualizar meta para ${collaboratorName}`);
+          }
+        }
+
+        // Report results
+        if (failures.length === 0) {
+          // All succeeded (Requirement 4.6)
+          const goalDescription = this.buildGoalDescription(cnpjGoal, entregaGoal);
+          this.metaSaveMessage = `${goalDescription} configurada para todos os ${this.collaborators.length} colaboradores`;
+          this.metaSaveSuccess = true;
+          this.toastService.success(`Metas configuradas para todos os colaboradores`);
+        } else if (successCount > 0) {
+          // Partial success
+          this.metaSaveMessage = `Metas configuradas para ${successCount} colaboradores. ${failures.length} falha(s).`;
+          this.metaSaveSuccess = false;
+        } else {
+          // All failed
+          this.metaSaveMessage = `Erro ao configurar metas para todos os colaboradores`;
+          this.metaSaveSuccess = false;
+        }
       } else {
-        // Update single collaborator
+        // Update single collaborator (Requirements 4.2, 4.3)
         const collaborator = this.collaborators.find(c => c.userId === selectedCollaborator);
         const collaboratorName = collaborator?.name || this.formatCollaboratorName(selectedCollaborator);
         
-        await this.updatePlayerClientesTarget(selectedCollaborator, targetValue);
-        this.metaSaveMessage = `Meta de ${targetValue} clientes configurada para ${collaboratorName}`;
-        this.toastService.success(`Meta configurada para ${collaboratorName}`);
+        await this.updatePlayerGoals(selectedCollaborator, cnpjGoal, entregaGoal);
+        
+        const goalDescription = this.buildGoalDescription(cnpjGoal, entregaGoal);
+        this.metaSaveMessage = `${goalDescription} configurada para ${collaboratorName}`;
+        this.metaSaveSuccess = true;
+        this.toastService.success(`Metas configuradas para ${collaboratorName}`);
       }
 
-      this.metaSaveSuccess = true;
-      
       // Reset form after successful save
-      setTimeout(() => {
-        this.resetMetaForm();
-      }, 2000);
+      if (this.metaSaveSuccess) {
+        setTimeout(() => {
+          this.resetMetaForm();
+        }, 2000);
+      }
       
     } catch (error: any) {
-      console.error('Error saving clientes meta:', error);
-      this.metaSaveMessage = error?.message || 'Erro ao salvar meta. Tente novamente.';
+      console.error('Error saving goals:', error);
+      this.metaSaveMessage = error?.message || 'Erro ao salvar metas. Tente novamente.';
       this.metaSaveSuccess = false;
-      this.toastService.error('Erro ao salvar meta de clientes');
+      this.toastService.error('Erro ao salvar metas');
     } finally {
       this.isSavingMeta = false;
       this.cdr.markForCheck();
@@ -3081,24 +3181,55 @@ private calculateCollaboratorTotals(memberData: Array<{
   }
 
   /**
-   * Update player's client_goals in Funifier
-   * @param playerId - Player ID (email)
-   * @param targetValue - Target number of clients
+   * Build a human-readable description of the goals being set
+   * @param cnpjGoal - CNPJ goal value (or null)
+   * @param entregaGoal - Entrega goal value (or null)
+   * @returns Description string
    */
-  private async updatePlayerClientesTarget(playerId: string, targetValue: number): Promise<void> {
+  private buildGoalDescription(cnpjGoal: number | null, entregaGoal: number | null): string {
+    const parts: string[] = [];
+    if (cnpjGoal !== null) {
+      parts.push(`Meta de ${cnpjGoal} clientes`);
+    }
+    if (entregaGoal !== null) {
+      parts.push(`Meta de ${entregaGoal}% entregas`);
+    }
+    return parts.join(' e ') || 'Metas';
+  }
+
+  /**
+   * Update player's cnpj_goal and entrega_goal in Funifier
+   * Sends PUT request to https://service2.funifier.com/v3/player/{playerId}
+   * with body {"extra": {"cnpj_goal": value, "entrega_goal": value}}
+   * 
+   * @param playerId - Player ID (email)
+   * @param cnpjGoal - Target number of clients (non-negative integer) or null to skip
+   * @param entregaGoal - Target delivery percentage (0-100) or null to skip
+   * Requirements: 4.2, 4.3
+   */
+  private async updatePlayerGoals(playerId: string, cnpjGoal: number | null, entregaGoal: number | null): Promise<void> {
     try {
       // First, get current player data to preserve existing extra fields
       const currentPlayerData = await firstValueFrom(
         this.funifierApi.get<any>(`player/${playerId}`)
       );
 
+      // Build the extra object with only the goals being updated
+      const extraUpdate: any = { ...(currentPlayerData.extra || {}) };
+      
+      // Update cnpj_goal if provided (Requirement 4.2)
+      if (cnpjGoal !== null) {
+        extraUpdate.cnpj_goal = cnpjGoal;
+      }
+      
+      // Update entrega_goal if provided (Requirement 4.3)
+      if (entregaGoal !== null) {
+        extraUpdate.entrega_goal = entregaGoal;
+      }
+
       // Prepare update payload following Funifier API structure
-      // Payload: { "extra": { "client_goals": number } }
       const updatePayload: any = {
-        extra: {
-          ...(currentPlayerData.extra || {}),
-          client_goals: targetValue
-        }
+        extra: extraUpdate
       };
 
       // Update player using PUT endpoint
@@ -3106,20 +3237,47 @@ private calculateCollaboratorTotals(memberData: Array<{
         this.funifierApi.put<any>(`player/${playerId}`, updatePayload)
       );
 
-      console.log(`✅ Updated client_goals for ${playerId}:`, targetValue);
+      console.log(`✅ Updated goals for ${playerId}:`, { cnpj_goal: cnpjGoal, entrega_goal: entregaGoal });
     } catch (error: any) {
-      console.error(`❌ Error updating client_goals for ${playerId}:`, error);
-      throw new Error(`Erro ao atualizar meta para ${playerId}: ${error.message}`);
+      console.error(`❌ Error updating goals for ${playerId}:`, error);
+      throw new Error(`Erro ao atualizar metas para ${playerId}: ${error.message}`);
     }
   }
 
   /**
+   * Save clientes meta configuration for selected collaborator(s)
+   * @deprecated Use saveGoals() instead
+   * Updates the extra.client_goals field (number) in Funifier player object
+   */
+  async saveClientesMeta(): Promise<void> {
+    // Redirect to new saveGoals method for backward compatibility
+    // Map old targetValue to cnpjGoalValue
+    if ((this.metaConfig as any).targetValue !== undefined) {
+      this.metaConfig.cnpjGoalValue = (this.metaConfig as any).targetValue;
+    }
+    return this.saveGoals();
+  }
+
+  /**
+   * Update player's client_goals in Funifier
+   * @deprecated Use updatePlayerGoals() instead
+   * @param playerId - Player ID (email)
+   * @param targetValue - Target number of clients
+   */
+  private async updatePlayerClientesTarget(playerId: string, targetValue: number): Promise<void> {
+    // Redirect to new updatePlayerGoals method for backward compatibility
+    return this.updatePlayerGoals(playerId, targetValue, null);
+  }
+
+  /**
    * Reset meta configuration form
+   * Requirements: 4.1
    */
   resetMetaForm(): void {
     this.metaConfig = {
       selectedCollaborator: 'all',
-      targetValue: null
+      cnpjGoalValue: null,
+      entregaGoalValue: null
     };
     this.metaSaveMessage = '';
     this.metaSaveSuccess = false;

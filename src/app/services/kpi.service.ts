@@ -111,15 +111,10 @@ export class KPIService {
                 ? playerStatus.extra.cnpj_resp.split(/[;,]/).map((s: string) => s.trim()).filter((s: string) => s.length > 0).length 
                 : 0;
               
-              // Get target from player's extra.client_goals (number), fallback to default 10
-              const clientGoals = playerStatus.extra?.client_goals;
-              const goalValue = typeof clientGoals === 'number' 
-                ? clientGoals 
-                : clientGoals?.goalValue;
-              const target = goalValue !== undefined && goalValue !== null
-                ? (typeof goalValue === 'number' 
-                    ? goalValue 
-                    : parseInt(String(goalValue), 10)) 
+              // Get target from player's extra.cnpj_goal, fallback to default 10
+              const cnpjGoal = playerStatus.extra?.cnpj_goal;
+              const target = cnpjGoal !== undefined && cnpjGoal !== null
+                ? (typeof cnpjGoal === 'number' ? cnpjGoal : parseInt(String(cnpjGoal), 10))
                 : 10;
               const superTarget = Math.ceil(target * 1.5); // Super target is 50% above target
               
@@ -139,14 +134,20 @@ export class KPIService {
               if (isCurrentMonth && playerStatus.extra?.entrega) {
                 const deliveryPercentage = parseFloat(playerStatus.extra.entrega);
                 
+                // Get target from player's extra.entrega_goal, fallback to default 90
+                const entregaGoal = playerStatus.extra?.entrega_goal;
+                const entregaTarget = entregaGoal !== undefined && entregaGoal !== null
+                  ? (typeof entregaGoal === 'number' ? entregaGoal : parseFloat(String(entregaGoal)))
+                  : 90;
+                
                 kpis.push({
                   id: 'entregas-prazo',
                   label: 'Entregas no Prazo',
                   current: deliveryPercentage,
-                  target: 90,
+                  target: entregaTarget,
                   superTarget: 100,
                   unit: '%',
-                  color: this.getKPIColorByGoals(deliveryPercentage, 90, 100),
+                  color: this.getKPIColorByGoals(deliveryPercentage, entregaTarget, 100),
                   percentage: Math.min(deliveryPercentage / 100 * 100, 100)
                 });
               }
@@ -157,16 +158,10 @@ export class KPIService {
             catchError(error => {
               console.error('📊 Error loading companies from action_log:', error);
               // Return at least the empresas KPI with 0 count on error
-              // Get target from player's extra.client_goals (number), fallback to default 10
-              // Support both formats: client_goals as number or client_goals.goalValue (backward compatibility)
-              const clientGoals = playerStatus.extra?.client_goals;
-              const goalValue = typeof clientGoals === 'number' 
-                ? clientGoals 
-                : clientGoals?.goalValue;
-              const target = goalValue !== undefined && goalValue !== null
-                ? (typeof goalValue === 'number' 
-                    ? goalValue 
-                    : parseInt(String(goalValue), 10)) 
+              // Get target from player's extra.cnpj_goal, fallback to default 10
+              const cnpjGoal = playerStatus.extra?.cnpj_goal;
+              const target = cnpjGoal !== undefined && cnpjGoal !== null
+                ? (typeof cnpjGoal === 'number' ? cnpjGoal : parseInt(String(cnpjGoal), 10))
                 : 10;
               const superTarget = Math.ceil(target * 1.5);
               
@@ -189,14 +184,21 @@ export class KPIService {
               // Add entregas KPI only for current month if available
               if (isCurrentMonth && playerStatus.extra?.entrega) {
                 const deliveryPercentage = parseFloat(playerStatus.extra.entrega);
+                
+                // Get target from player's extra.entrega_goal, fallback to default 90
+                const entregaGoal = playerStatus.extra?.entrega_goal;
+                const entregaTarget = entregaGoal !== undefined && entregaGoal !== null
+                  ? (typeof entregaGoal === 'number' ? entregaGoal : parseFloat(String(entregaGoal)))
+                  : 90;
+                
                 errorKpis.push({
                   id: 'entregas-prazo',
                   label: 'Entregas no Prazo',
                   current: deliveryPercentage,
-                  target: 90,
+                  target: entregaTarget,
                   superTarget: 100,
                   unit: '%',
-                  color: this.getKPIColorByGoals(deliveryPercentage, 90, 100),
+                  color: this.getKPIColorByGoals(deliveryPercentage, entregaTarget, 100),
                   percentage: Math.min(deliveryPercentage / 100 * 100, 100)
                 });
               }
@@ -211,16 +213,10 @@ export class KPIService {
                    ? playerStatus.extra.cnpj_resp.split(/[;,]/).map((s: string) => s.trim()).filter((s: string) => s.length > 0).length 
                    : 0;
                  
-                 // Get target from player's extra.client_goals (number), fallback to default 10
-                 // Support both formats: client_goals as number or client_goals.goalValue (backward compatibility)
-                 const clientGoals = playerStatus.extra?.client_goals;
-                 const goalValue = typeof clientGoals === 'number' 
-                   ? clientGoals 
-                   : clientGoals?.goalValue;
-                 const target = goalValue !== undefined && goalValue !== null
-                   ? (typeof goalValue === 'number' 
-                       ? goalValue 
-                       : parseInt(String(goalValue), 10)) 
+                 // Get target from player's extra.cnpj_goal, fallback to default 10
+                 const cnpjGoal = playerStatus.extra?.cnpj_goal;
+                 const target = cnpjGoal !== undefined && cnpjGoal !== null
+                   ? (typeof cnpjGoal === 'number' ? cnpjGoal : parseInt(String(cnpjGoal), 10))
                    : 10;
                  const superTarget = Math.ceil(target * 1.5);
                  
@@ -239,14 +235,20 @@ export class KPIService {
           if (isCurrentMonth && playerStatus.extra?.entrega) {
             const deliveryPercentage = parseFloat(playerStatus.extra.entrega);
             
+            // Get target from player's extra.entrega_goal, fallback to default 90
+            const entregaGoal = playerStatus.extra?.entrega_goal;
+            const entregaTarget = entregaGoal !== undefined && entregaGoal !== null
+              ? (typeof entregaGoal === 'number' ? entregaGoal : parseFloat(String(entregaGoal)))
+              : 90;
+            
             kpis.push({
               id: 'entregas-prazo',
               label: 'Entregas no Prazo',
               current: deliveryPercentage,
-              target: 90,
+              target: entregaTarget,
               superTarget: 100,
               unit: '%',
-              color: this.getKPIColorByGoals(deliveryPercentage, 90, 100),
+              color: this.getKPIColorByGoals(deliveryPercentage, entregaTarget, 100),
               percentage: Math.min(deliveryPercentage / 100 * 100, 100)
             });
           }

@@ -34,8 +34,6 @@ export class DadosMesAnteriorComponent implements OnChanges {
 
   questInfo: Array<PainelInfoModel> = [];
 
-  processInfo: Array<PainelInfoModel> = [];
-
   aliases: SystemAliases | null = null;
 
   constructor(

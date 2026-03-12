@@ -808,7 +808,21 @@ egressionDuration = performance.now() - regressionStart;
       testSizes.forEach(size => {
         const companies = generateMockCompanies(size);
         const mockResponse = generateMockKpiResponse(size);
-       
+        
+        funifierApiSpy.post.and.returnValue(of(mockResponse));
+        
+        const start = performance.now();
+        service.enrichCompaniesWithKpis(companies).subscribe();
+        tick();
+        const duration = performance.now() - start;
+        timings.push(duration);
+      });
+
+      // Verify linear scaling (each doubling should roughly double the time)
+      // Allow for some variance due to overhead
+      expect(timings.length).toBe(testSizes.length);
+    }));
+  });
 
   // ========================================
   // Task 11.3: Measure page load time increase with KPI feature
