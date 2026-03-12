@@ -94,6 +94,8 @@ export class KPIService {
     const request$: Observable<KPIData[]> = this.playerService.getRawPlayerData(playerId).pipe(
       switchMap((playerStatus): Observable<KPIData[]> => {
         console.log('📊 Player status received:', playerStatus);
+        console.log('📊 Player extra:', playerStatus.extra);
+        console.log('📊 Player extra.entrega:', playerStatus.extra?.entrega);
         
         const kpis: KPIData[] = [];
         const now = new Date();
@@ -101,160 +103,70 @@ export class KPIService {
           (selectedMonth.getFullYear() === now.getFullYear() && 
            selectedMonth.getMonth() === now.getMonth());
 
-        // Clientes na Carteira - count from extra.cnpj_resp (allocated companies)
-        if (actionLogService && selectedMonth) {
-          // Use action_log to count companies for the selected month (for carteira display)
-          return actionLogService.getPlayerCnpjListWithCount(playerId, selectedMonth).pipe(
-            map((cnpjList: { cnpj: string; actionCount: number }[]) => {
-              // Company count comes from extra.cnpj_resp (total allocated), not action_log
-              const companyCount = playerStatus.extra?.cnpj_resp 
-                ? playerStatus.extra.cnpj_resp.split(/[;,]/).map((s: string) => s.trim()).filter((s: string) => s.length > 0).length 
-                : 0;
-              
-              // Get target from player's extra.cnpj_goal, fallback to default 10
-              const cnpjGoal = playerStatus.extra?.cnpj_goal;
-              const target = cnpjGoal !== undefined && cnpjGoal !== null
-                ? (typeof cnpjGoal === 'number' ? cnpjGoal : parseInt(String(cnpjGoal), 10))
-                : 10;
-              const superTarget = Math.ceil(target * 1.5); // Super target is 50% above target
-              
-              // Always add Clientes na Carteira KPI, even if count is 0
-              kpis.push({
-                id: 'numero-empresas',
-                label: 'Clientes na Carteira',
-                current: companyCount,
-                target: target,
-                superTarget: superTarget,
-                unit: 'clientes',
-                color: this.getKPIColorByGoals(companyCount, target, superTarget),
-                percentage: Math.min((companyCount / superTarget) * 100, 100)
-              });
-
-              // Porcentagem de Entregas no Prazo - show when entrega value exists (regardless of month)
-              if (playerStatus.extra?.entrega) {
-                const deliveryPercentage = parseFloat(playerStatus.extra.entrega);
-                
-                // Get target from player's extra.entrega_goal, fallback to default 90
-                const entregaGoal = playerStatus.extra?.entrega_goal;
-                const entregaTarget = entregaGoal !== undefined && entregaGoal !== null
-                  ? (typeof entregaGoal === 'number' ? entregaGoal : parseFloat(String(entregaGoal)))
-                  : 90;
-                
-                kpis.push({
-                  id: 'entregas-prazo',
-                  label: 'Entregas no Prazo',
-                  current: deliveryPercentage,
-                  target: entregaTarget,
-                  superTarget: 100,
-                  unit: '%',
-                  color: this.getKPIColorByGoals(deliveryPercentage, entregaTarget, 100),
-                  percentage: Math.min(deliveryPercentage / 100 * 100, 100)
-                });
-              }
-
-              console.log('📊 Generated KPIs:', kpis, `(${kpis.length} KPIs)`, isCurrentMonth ? '(current month)' : '(previous month)');
-              return kpis;
-            }),
-            catchError(error => {
-              console.error('📊 Error loading companies from action_log:', error);
-              // Return at least the empresas KPI with 0 count on error
-              // Get target from player's extra.cnpj_goal, fallback to default 10
-              const cnpjGoal = playerStatus.extra?.cnpj_goal;
-              const target = cnpjGoal !== undefined && cnpjGoal !== null
-                ? (typeof cnpjGoal === 'number' ? cnpjGoal : parseInt(String(cnpjGoal), 10))
-                : 10;
-              const superTarget = Math.ceil(target * 1.5);
-              
-              // Count from extra.cnpj_resp even on action_log error
-              const errorCompanyCount = playerStatus.extra?.cnpj_resp 
-                ? playerStatus.extra.cnpj_resp.split(/[;,]/).map((s: string) => s.trim()).filter((s: string) => s.length > 0).length 
-                : 0;
-              
-              const errorKpis: KPIData[] = [{
-                 id: 'numero-empresas',
-                 label: 'Clientes na Carteira',
-                current: errorCompanyCount,
-                target: target,
-                superTarget: superTarget,
-                unit: 'clientes',
-                color: 'red' as const,
-                percentage: 0
-              }];
-              
-              // Add entregas KPI when entrega value exists (regardless of month)
-              if (playerStatus.extra?.entrega) {
-                const deliveryPercentage = parseFloat(playerStatus.extra.entrega);
-                
-                // Get target from player's extra.entrega_goal, fallback to default 90
-                const entregaGoal = playerStatus.extra?.entrega_goal;
-                const entregaTarget = entregaGoal !== undefined && entregaGoal !== null
-                  ? (typeof entregaGoal === 'number' ? entregaGoal : parseFloat(String(entregaGoal)))
-                  : 90;
-                
-                errorKpis.push({
-                  id: 'entregas-prazo',
-                  label: 'Entregas no Prazo',
-                  current: deliveryPercentage,
-                  target: entregaTarget,
-                  superTarget: 100,
-                  unit: '%',
-                  color: this.getKPIColorByGoals(deliveryPercentage, entregaTarget, 100),
-                  percentage: Math.min(deliveryPercentage / 100 * 100, 100)
-                });
-              }
-              
-              return of(errorKpis);
-            })
-          );
-        } else {
-          // Fallback: use extra.cnpj_resp if actionLogService not available
-                 // Always add Clientes na Carteira KPI, even if count is 0
-                 const companyCount = playerStatus.extra?.cnpj_resp 
-                   ? playerStatus.extra.cnpj_resp.split(/[;,]/).map((s: string) => s.trim()).filter((s: string) => s.length > 0).length 
-                   : 0;
-                 
-                 // Get target from player's extra.cnpj_goal, fallback to default 10
-                 const cnpjGoal = playerStatus.extra?.cnpj_goal;
-                 const target = cnpjGoal !== undefined && cnpjGoal !== null
-                   ? (typeof cnpjGoal === 'number' ? cnpjGoal : parseInt(String(cnpjGoal), 10))
-                   : 10;
-                 const superTarget = Math.ceil(target * 1.5);
-                 
-                 kpis.push({
-                   id: 'numero-empresas',
-                   label: 'Clientes na Carteira',
+        // Helper function to build both KPIs
+        const buildKPIs = (companyCount: number) => {
+          // Get target from player's extra.cnpj_goal, fallback to default 10
+          const cnpjGoal = playerStatus.extra?.cnpj_goal;
+          const target = cnpjGoal !== undefined && cnpjGoal !== null
+            ? (typeof cnpjGoal === 'number' ? cnpjGoal : parseInt(String(cnpjGoal), 10))
+            : 10;
+          const superTarget = Math.ceil(target * 1.5); // Super target is 50% above target
+          
+          // KPI 1: Clientes na Carteira - always show
+          kpis.push({
+            id: 'numero-empresas',
+            label: 'Clientes na Carteira',
             current: companyCount,
             target: target,
             superTarget: superTarget,
-            unit: 'empresas',
+            unit: 'clientes',
             color: this.getKPIColorByGoals(companyCount, target, superTarget),
             percentage: Math.min((companyCount / superTarget) * 100, 100)
           });
 
-          // Porcentagem de Entregas no Prazo - show when entrega value exists (regardless of month)
-          if (playerStatus.extra?.entrega) {
-            const deliveryPercentage = parseFloat(playerStatus.extra.entrega);
-            
-            // Get target from player's extra.entrega_goal, fallback to default 90
-            const entregaGoal = playerStatus.extra?.entrega_goal;
-            const entregaTarget = entregaGoal !== undefined && entregaGoal !== null
-              ? (typeof entregaGoal === 'number' ? entregaGoal : parseFloat(String(entregaGoal)))
-              : 90;
-            
-            kpis.push({
-              id: 'entregas-prazo',
-              label: 'Entregas no Prazo',
-              current: deliveryPercentage,
-              target: entregaTarget,
-              superTarget: 100,
-              unit: '%',
-              color: this.getKPIColorByGoals(deliveryPercentage, entregaTarget, 100),
-              percentage: Math.min(deliveryPercentage / 100 * 100, 100)
-            });
-          }
+          // KPI 2: Entregas no Prazo - always show (use 0 if entrega doesn't exist)
+          const deliveryPercentage = playerStatus.extra?.entrega 
+            ? parseFloat(playerStatus.extra.entrega) 
+            : 0;
+          
+          // Get target from player's extra.entrega_goal, fallback to default 90
+          const entregaGoal = playerStatus.extra?.entrega_goal;
+          const entregaTarget = entregaGoal !== undefined && entregaGoal !== null
+            ? (typeof entregaGoal === 'number' ? entregaGoal : parseFloat(String(entregaGoal)))
+            : 90;
+          
+          kpis.push({
+            id: 'entregas-prazo',
+            label: 'Entregas no Prazo',
+            current: deliveryPercentage,
+            target: entregaTarget,
+            superTarget: 100,
+            unit: '%',
+            color: this.getKPIColorByGoals(deliveryPercentage, entregaTarget, 100),
+            percentage: Math.min(deliveryPercentage / 100 * 100, 100)
+          });
 
-          console.log('📊 Generated KPIs (fallback):', kpis, `(${kpis.length} KPIs)`, isCurrentMonth ? '(current month)' : '(previous month)');
-          return of(kpis);
+          console.log('📊 Generated KPIs:', kpis, `(${kpis.length} KPIs)`, isCurrentMonth ? '(current month)' : '(previous month)');
+          return kpis;
+        };
+
+        // Company count comes from extra.cnpj_resp (total allocated)
+        const companyCount = playerStatus.extra?.cnpj_resp 
+          ? playerStatus.extra.cnpj_resp.split(/[;,]/).map((s: string) => s.trim()).filter((s: string) => s.length > 0).length 
+          : 0;
+
+        // If actionLogService is provided, we can use it for additional data
+        // but the KPIs are built from player.extra values
+        if (actionLogService && selectedMonth) {
+          return actionLogService.getPlayerCnpjListWithCount(playerId, selectedMonth).pipe(
+            map(() => buildKPIs(companyCount)),
+            catchError(error => {
+              console.error('📊 Error loading companies from action_log:', error);
+              return of(buildKPIs(companyCount));
+            })
+          );
+        } else {
+          return of(buildKPIs(companyCount));
         }
       }),
       catchError(error => {

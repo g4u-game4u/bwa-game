@@ -98,10 +98,10 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   // Refresh state
   lastRefreshTime: Date | null = null;
   
-  // Season dates (TODO: Get from season service or API)
+  // Season dates - Fixed for current season (01/01/2026 to 30/04/2026)
   private readonly seasonDates = {
-    start: new Date('2026-01-01'),
-    end: new Date('2026-04-30')
+    start: new Date(2026, 0, 1),  // January 1, 2026
+    end: new Date(2026, 3, 30)   // April 30, 2026
   };
   
   // Accessibility properties
@@ -340,9 +340,13 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   
   /**
    * Load additional season progress details:
-   * - Metas: count of KPIs above target from metric_targets__c
+   * - Metas: count of achieved goals (entrega vs entrega_goal, cnpj_resp count vs cnpj_goal)
    * - Clientes: count of CNPJs in player's cnpj_resp (assigned portfolio)
-   * - Tarefas finalizadas: ALL actions from action_log (no date filter for season progress)
+   * - Tarefas finalizadas: ALL action_log entries for the season (no month filter)
+   * 
+   * NOTE: The left sidebar (Progresso da Temporada) shows SEASON-WIDE data.
+   * It is NOT affected by the month selector. Only the center-right "Meu Progresso" section
+   * is filtered by the month selector.
    */
   private loadSeasonProgressDetails(): void {
     const usuario = this.sessaoProvider.usuario as { _id?: string; email?: string } | null;
@@ -354,6 +358,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
 
     // Load clientes count from player's extra.cnpj_resp (assigned portfolio count)
     // cnpj_resp is a comma-separated string of CNPJ IDs
+    // This is SEASON-WIDE data - not affected by month selector
     if (this.playerStatus?.extra?.cnpj_resp) {
       const cnpjRespStr = this.playerStatus.extra.cnpj_resp;
       const cnpjList = cnpjRespStr.split(',').map(s => s.trim()).filter(s => s.length > 0);
@@ -378,12 +383,13 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
       }
     }
     
-    // Load tarefas finalizadas from action_log WITH date filter (selected month only)
-    this.actionLogService.getAtividadesFinalizadas(playerId, this.selectedMonth)
+    // Load tarefas finalizadas from action_log WITHOUT date filter (season-wide)
+    // Pass undefined for month to get ALL action_log entries
+    this.actionLogService.getCompletedTasksCount(playerId)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (count: number) => {
-          console.log('📊 Tarefas finalizadas count (selected month):', count);
+          console.log('📊 Tarefas finalizadas count (season-wide):', count);
           if (this.seasonProgress) {
             this.seasonProgress = {
               ...this.seasonProgress,
@@ -664,6 +670,9 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   /**
    * Handle month change event from c4u-seletor-mes
    * @param monthsAgo - Number of months ago (0 = current month)
+   * 
+   * NOTE: Month change only affects the center-right "Meu Progresso" section.
+   * The left sidebar (Progresso da Temporada) shows season-wide data and is NOT affected.
    */
   onMonthChange(monthsAgo: number): void {
     const date = new Date();
@@ -674,9 +683,12 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     
     // Clear caches to force fresh data for the new month
     this.actionLogService.clearCache();
-    this.playerService.clearCache();
     
-    this.loadDashboardData();
+    // Only reload month-filtered data (center-right section)
+    // Do NOT reload player data or season progress (left sidebar)
+    this.loadKPIData();
+    this.loadProgressData();
+    this.loadCarteiraData();
   }
   
   /**
@@ -906,8 +918,11 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   }
   
   /**
-   * Calculate the average KPI percentage across all player KPIs based on super goals
-   * Super goal = 100%, 0 = 0%. This is used for the level indicator in the sidebar
+   * Calculate the average KPI percentage across all player KPIs based on their targets (goals)
+   * Target = 100%, 0 = 0%. This is used for the level indicator in the sidebar.
+   * 
+   * Example: If one KPI is at 101% of goal and another is at 85% of goal,
+   * the average would be (101 + 85) / 2 = 93%
    */
   get kpiAveragePercent(): number {
     if (!this.playerKPIs || this.playerKPIs.length === 0) {
@@ -915,13 +930,41 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     }
     
     const totalPercent = this.playerKPIs.reduce((sum, kpi) => {
-      // Calculate percentage based on super goal (super goal = 100%)
-      const superGoal = kpi.superTarget || kpi.target;
-      const percent = superGoal > 0 ? (kpi.current / superGoal) * 100 : 0;
-      return sum + Math.min(100, percent); // Cap at 100%
+      // Calculate percentage based on target (goal = 100%)
+      const target = kpi.target || 1; // Avoid division by zero
+      const percent = target > 0 ? (kpi.current / target) * 100 : 0;
+      return sum + percent; // Don't cap - allow values above 100%
     }, 0);
     
     return Math.round(totalPercent / this.playerKPIs.length);
+  }
+
+  /**
+   * Count how many KPIs have beaten their target (goal)
+   * Used to determine the color of the level indicator
+   */
+  get kpiGoalsBeatenCount(): number {
+    if (!this.playerKPIs || this.playerKPIs.length === 0) {
+      return 0;
+    }
+    
+    return this.playerKPIs.filter(kpi => kpi.current >= kpi.target).length;
+  }
+
+  /**
+   * Get the color class for the level indicator based on how many goals are beaten
+   * - Red: No goals beaten (0 of 2)
+   * - Yellow: One goal beaten (1 of 2)
+   * - Green: All goals beaten (2 of 2)
+   */
+  get kpiLevelColorClass(): 'red' | 'yellow' | 'green' {
+    const beaten = this.kpiGoalsBeatenCount;
+    const total = this.playerKPIs?.length || 0;
+    
+    if (total === 0) return 'red';
+    if (beaten === 0) return 'red';
+    if (beaten < total) return 'yellow';
+    return 'green';
   }
   
   /**

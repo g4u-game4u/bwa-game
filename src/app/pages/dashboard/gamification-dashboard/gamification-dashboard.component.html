@@ -20,7 +20,8 @@
             [level]="playerStatus.seasonLevel"
             [playerName]="playerStatus.name"
             [metadata]="playerStatus.metadata"
-            [kpiAveragePercent]="kpiAveragePercent">
+            [kpiAveragePercent]="kpiAveragePercent"
+            [kpiColorClass]="kpiLevelColorClass">
           </c4u-season-level>
           
           <c4u-shimmer *ngIf="isLoadingPlayer && !playerStatus"></c4u-shimmer>
