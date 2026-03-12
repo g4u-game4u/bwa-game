@@ -31,11 +31,10 @@ describe('CompanyKpiService Performance Tests', () => {
   let funifierApiSpy: jasmine.SpyObj<FunifierApiService>;
 
   // Helper function to generate mock companies
-  const generateMockCompanies = (count: number): { cnpj: string; actionCount: number; processCount: number }[] => {
+  const generateMockCompanies = (count: number): { cnpj: string; actionCount: number }[] => {
     return Array.from({ length: count }, (_, i) => ({
       cnpj: `COMPANY ${i} l 000${i % 10} [${1000 + i}|0001-60]`,
-      actionCount: Math.floor(Math.random() * 20) + 1,
-      processCount: Math.floor(Math.random() * 10) + 1
+      actionCount: Math.floor(Math.random() * 20) + 1
     }));
   };
 

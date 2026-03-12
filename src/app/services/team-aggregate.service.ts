@@ -743,84 +743,76 @@ export class TeamAggregateService {
    * @returns Observable of CNPJ list with aggregated counts
    */
   getTeamCnpjListWithCount(
-    teamId: string,
-    startDate: Date,
-    endDate: Date
-  ): Observable<{ cnpj: string; actionCount: number; processCount: number }[]> {
-    const cacheKey = `team_cnpj_${teamId}_${startDate.getTime()}_${endDate.getTime()}`;
-    
-    const cached = this.getFromCache<any[]>(cacheKey);
-    if (cached) {
-      return of(cached);
+      teamId: string,
+      startDate: Date,
+      endDate: Date
+    ): Observable<{ cnpj: string; actionCount: number }[]> {
+      const cacheKey = `team_cnpj_${teamId}_${startDate.getTime()}_${endDate.getTime()}`;
+
+      const cached = this.getFromCache<any[]>(cacheKey);
+      if (cached) {
+        return of(cached);
+      }
+
+      // Single aggregate query with $lookup to get all CNPJs for team members
+      const actionCountQuery = [
+        {
+          $lookup: {
+            from: 'player',
+            localField: 'userId',
+            foreignField: '_id',
+            as: 'playerData'
+          }
+        },
+        {
+          $unwind: '$playerData'
+        },
+        {
+          $match: {
+            'playerData.teams': teamId,
+            time: {
+              $gte: { $date: startDate.toISOString() },
+              $lte: { $date: endDate.toISOString() }
+            },
+            'attributes.cnpj': { $ne: null }
+          }
+        },
+        {
+          $group: {
+            _id: '$attributes.cnpj',
+            actionCount: { $sum: 1 }
+          }
+        },
+        {
+          $sort: { actionCount: -1 }
+        }
+      ];
+
+      console.log('🔍 Team CNPJ list aggregate query');
+
+      return this.funifierApi.post<any[]>(
+        '/database/action_log/aggregate?strict=true',
+        actionCountQuery
+      ).pipe(
+        map(response => {
+          const result = Array.isArray(response) ? response : [];
+          const cnpjList = result
+            .filter(item => item._id != null)
+            .map(item => ({
+              cnpj: item._id,
+              actionCount: item.actionCount || 0
+            }));
+          console.log('✅ Team CNPJ list (OPTIMIZED):', cnpjList.length, 'unique CNPJs');
+          return cnpjList;
+        }),
+        tap(data => this.setCache(cacheKey, data)),
+        catchError(error => {
+          console.error('Error in getTeamCnpjListWithCount:', error);
+          return of([]);
+        })
+      );
     }
 
-    // Single aggregate query with $lookup to get all CNPJs for team members
-    const actionCountQuery = [
-      {
-        $lookup: {
-          from: 'player',
-          localField: 'userId',
-          foreignField: '_id',
-          as: 'playerData'
-        }
-      },
-      {
-        $unwind: '$playerData'
-      },
-      {
-        $match: {
-          'playerData.teams': teamId,
-          time: {
-            $gte: { $date: startDate.toISOString() },
-            $lte: { $date: endDate.toISOString() }
-          },
-          'attributes.cnpj': { $ne: null }
-        }
-      },
-      {
-        $group: {
-          _id: '$attributes.cnpj',
-          actionCount: { $sum: 1 },
-          uniqueProcesses: { $addToSet: '$attributes.delivery_id' }
-        }
-      },
-      {
-        $project: {
-          _id: 1,
-          actionCount: 1,
-          processCount: { $size: '$uniqueProcesses' }
-        }
-      },
-      {
-        $sort: { actionCount: -1 }
-      }
-    ];
-
-    console.log('🔍 Team CNPJ list aggregate query');
-
-    return this.funifierApi.post<any[]>(
-      '/database/action_log/aggregate?strict=true',
-      actionCountQuery
-    ).pipe(
-      map(response => {
-        const result = Array.isArray(response) ? response : [];
-        const cnpjList = result
-          .filter(item => item._id != null)
-          .map(item => ({
-            cnpj: item._id,
-            actionCount: item.actionCount || 0,
-            processCount: item.processCount || 0
-          }));
-        console.log('✅ Team CNPJ list (OPTIMIZED):', cnpjList.length, 'unique CNPJs');
-        return cnpjList;
-      }),
-      tap(data => this.setCache(cacheKey, data)),
-      catchError(error => {
-        console.error('Error in getTeamCnpjListWithCount:', error);
-        return of([]);
-      })
-    );
-  }
 
   /**
    * OPTIMIZED: Get monthly points breakdown for all team members in a single aggregate query.

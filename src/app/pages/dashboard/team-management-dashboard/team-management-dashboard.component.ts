@@ -137,7 +137,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
   teamTotalTasks: number = 0;
   teamTotalBlockedPoints: number = 0; // Sum of blocked points from all team members
   teamMemberIds: string[] = [];
-  teamMembersData: any[] = []; // Store full player data from aggregate (includes extra.cnpj)
+  teamMembersData: any[] = []; // Store full player data from aggregate (includes extra.cnpj_resp)
   
   // Activity and Process metrics for team
   teamActivityMetrics: ActivityMetrics = {
@@ -506,7 +506,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       
       console.log('✅ Player status aggregate returned:', allPlayersStatus.length, 'players');
       
-      // Store full player data from aggregate (includes extra.cnpj, name, email, point_categories, etc.)
+      // Store full player data from aggregate (includes extra.cnpj_resp, name, email, point_categories, etc.)
       this.teamMembersData = allPlayersStatus;
       
       // Extract member IDs from aggregate result
@@ -2029,8 +2029,7 @@ private calculateCollaboratorTotals(memberData: Array<{
         // Return data without KPI enrichment on error
         return carteiraData.map(item => ({
           cnpj: item.cnpj,
-          actionCount: item.actionCount,
-          processCount: item.processCount
+          actionCount: item.actionCount
         } as CompanyDisplay));
       });
       
@@ -2125,8 +2124,7 @@ private calculateCollaboratorTotals(memberData: Array<{
         // Return data without KPI enrichment on error
         return cnpjListWithCounts.map(item => ({
           cnpj: item.cnpj,
-          actionCount: item.actionCount,
-          processCount: item.processCount
+          actionCount: item.actionCount
         } as CompanyDisplay));
       });
       

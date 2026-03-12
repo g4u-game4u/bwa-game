@@ -101,14 +101,14 @@ export class KPIService {
           (selectedMonth.getFullYear() === now.getFullYear() && 
            selectedMonth.getMonth() === now.getMonth());
 
-        // Clientes na Carteira - count from extra.cnpj (allocated companies)
+        // Clientes na Carteira - count from extra.cnpj_resp (allocated companies)
         if (actionLogService && selectedMonth) {
           // Use action_log to count companies for the selected month (for carteira display)
           return actionLogService.getPlayerCnpjListWithCount(playerId, selectedMonth).pipe(
             map((cnpjList: { cnpj: string; actionCount: number }[]) => {
-              // Company count comes from extra.cnpj (total allocated), not action_log
-              const companyCount = playerStatus.extra?.cnpj 
-                ? playerStatus.extra.cnpj.split(',').filter((item: string) => item.trim()).length 
+              // Company count comes from extra.cnpj_resp (total allocated), not action_log
+              const companyCount = playerStatus.extra?.cnpj_resp 
+                ? playerStatus.extra.cnpj_resp.split(/[;,]/).map((s: string) => s.trim()).filter((s: string) => s.length > 0).length 
                 : 0;
               
               // Get target from player's extra.client_goals (number), fallback to default 10
@@ -170,9 +170,9 @@ export class KPIService {
                 : 10;
               const superTarget = Math.ceil(target * 1.5);
               
-              // Count from extra.cnpj even on action_log error
-              const errorCompanyCount = playerStatus.extra?.cnpj 
-                ? playerStatus.extra.cnpj.split(',').filter((item: string) => item.trim()).length 
+              // Count from extra.cnpj_resp even on action_log error
+              const errorCompanyCount = playerStatus.extra?.cnpj_resp 
+                ? playerStatus.extra.cnpj_resp.split(/[;,]/).map((s: string) => s.trim()).filter((s: string) => s.length > 0).length 
                 : 0;
               
               const errorKpis: KPIData[] = [{
@@ -205,10 +205,10 @@ export class KPIService {
             })
           );
         } else {
-          // Fallback: use extra.cnpj if actionLogService not available
+          // Fallback: use extra.cnpj_resp if actionLogService not available
                  // Always add Clientes na Carteira KPI, even if count is 0
-                 const companyCount = playerStatus.extra?.cnpj 
-                   ? playerStatus.extra.cnpj.split(',').filter((item: string) => item.trim()).length 
+                 const companyCount = playerStatus.extra?.cnpj_resp 
+                   ? playerStatus.extra.cnpj_resp.split(/[;,]/).map((s: string) => s.trim()).filter((s: string) => s.length > 0).length 
                    : 0;
                  
                  // Get target from player's extra.client_goals (number), fallback to default 10

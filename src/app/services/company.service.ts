@@ -27,7 +27,7 @@ export class CompanyService {
 
   /**
    * Get companies with optional filtering
-   * First gets player's companies from extra.companies, then fetches from cnpj_performance__c
+   * First gets player's companies from extra.cnpj_resp, then fetches from cnpj_performance__c
    */
   getCompanies(playerId: string, filter?: { search?: string; minHealth?: number }): Observable<Company[]> {
     const cacheKey = `${playerId}_${JSON.stringify(filter || {})}`;
@@ -39,13 +39,13 @@ export class CompanyService {
     // Use PlayerService to get raw player data (shared cache), then fetch company data
     const request$ = this.playerService.getRawPlayerData(playerId).pipe(
       switchMap((playerResponse) => {
-        const companiesStr = playerResponse?.extra?.companies || '';
+        const companiesStr = playerResponse?.extra?.cnpj_resp || '';
         const companyIds = companiesStr.split(/[;,]/)
           .map((id: string) => id.trim())
           .filter((id: string) => id.length > 0)
           .map((id: string) => String(id));
         
-        console.log('📊 Player company IDs from extra.companies:', companyIds);
+        console.log('📊 Player company IDs from extra.cnpj_resp:', companyIds);
         
         if (companyIds.length === 0) {
           return of([]);

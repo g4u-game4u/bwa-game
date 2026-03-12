@@ -1,4 +1,4 @@
-import { Injectable } from '@angular/core';
+﻿import { Injectable } from '@angular/core';
 import { Observable, of, forkJoin } from 'rxjs';
 import { map, catchError, shareReplay, switchMap } from 'rxjs/operators';
 import { FunifierApiService } from './funifier-api.service';
@@ -43,7 +43,7 @@ export interface ActivityListItem {
   created: number;
   player?: string; // userId (email do executor)
   status?: 'finalizado' | 'pendente' | 'dispensado'; // Status da atividade
-  cnpj?: string; // CNPJ da empresa associada à atividade
+  cnpj?: string; // CNPJ da empresa associada Ã  atividade
 }
 
 export interface ProcessListItem {
@@ -177,14 +177,14 @@ export class ActionLogService {
       { $limit: 10000 } // High limit to get all documents (MongoDB default is 100)
     ];
 
-    console.log('📊 Action log query for month:', JSON.stringify(aggregateBody));
+    console.log('ðŸ“Š Action log query for month:', JSON.stringify(aggregateBody));
 
     const request$ = this.funifierApi.post<ActionLogEntry[]>(
       '/v3/database/action_log/aggregate?strict=true',
       aggregateBody
     ).pipe(
       map(response => {
-        console.log('📊 Action log loaded for month:', response);
+        console.log('ðŸ“Š Action log loaded for month:', response);
         return Array.isArray(response) ? response : [];
       }),
       catchError(error => {
@@ -228,14 +228,14 @@ export class ActionLogService {
       }
     ];
 
-    console.log('📊 Activity count query for month:', JSON.stringify(aggregateBody));
+    console.log('ðŸ“Š Activity count query for month:', JSON.stringify(aggregateBody));
 
     const request$ = this.funifierApi.post<{ total: number }[]>(
       '/v3/database/action_log/aggregate?strict=true',
       aggregateBody
     ).pipe(
       map(response => {
-        console.log('📊 Activity count response:', response);
+        console.log('ðŸ“Š Activity count response:', response);
         // $count returns array with single object: [{ total: number }]
         if (Array.isArray(response) && response.length > 0 && response[0]?.total !== undefined) {
           return response[0].total;
@@ -298,14 +298,14 @@ export class ActionLogService {
       }
     ];
 
-    console.log('📊 Monthly points breakdown query:', JSON.stringify(aggregateBody));
+    console.log('ðŸ“Š Monthly points breakdown query:', JSON.stringify(aggregateBody));
 
     const request$ = this.funifierApi.post<{ _id: string; total: number }[]>(
       '/v3/database/achievement/aggregate?strict=true',
       aggregateBody
     ).pipe(
       map(response => {
-        console.log('📊 Monthly points breakdown response:', response);
+        console.log('ðŸ“Š Monthly points breakdown response:', response);
         let bloqueados = 0;
         let desbloqueados = 0;
 
@@ -367,14 +367,14 @@ export class ActionLogService {
       }
     ];
 
-    console.log('📊 Achievement points query:', JSON.stringify(aggregateBody));
+    console.log('ðŸ“Š Achievement points query:', JSON.stringify(aggregateBody));
 
     const request$ = this.funifierApi.post<{ _id: null; total: number }[]>(
       '/v3/database/achievement/aggregate?strict=true',
       aggregateBody
     ).pipe(
       map(response => {
-        console.log('📊 Achievement points response:', response);
+        console.log('ðŸ“Š Achievement points response:', response);
         if (Array.isArray(response) && response.length > 0) {
           return response[0].total || 0;
         }
@@ -430,14 +430,14 @@ export class ActionLogService {
       }
     ];
 
-    console.log('📊 Unique CNPJs query:', JSON.stringify(aggregateBody));
+    console.log('ðŸ“Š Unique CNPJs query:', JSON.stringify(aggregateBody));
 
     const request$ = this.funifierApi.post<{ total: number }[]>(
       '/v3/database/action_log/aggregate?strict=true',
       aggregateBody
     ).pipe(
       map(response => {
-        console.log('📊 Unique CNPJs response:', response);
+        console.log('ðŸ“Š Unique CNPJs response:', response);
         if (Array.isArray(response) && response.length > 0) {
           return response[0].total || 0;
         }
@@ -478,7 +478,7 @@ export class ActionLogService {
             .filter((id): id is number => id != null)
         )];
 
-        console.log('📊 Unique delivery_ids found:', deliveryIds);
+        console.log('ðŸ“Š Unique delivery_ids found:', deliveryIds);
 
         if (deliveryIds.length === 0) {
           return of({ pendentes: 0, incompletas: 0, finalizadas: 0 });
@@ -500,7 +500,7 @@ export class ActionLogService {
           }
         ];
 
-        console.log('📊 Desbloquear query:', JSON.stringify(aggregateBody));
+        console.log('ðŸ“Š Desbloquear query:', JSON.stringify(aggregateBody));
 
         return this.funifierApi.post<{ _id: number }[]>(
           '/v3/database/action_log/aggregate?strict=true',
@@ -509,7 +509,7 @@ export class ActionLogService {
           map(desbloqueados => {
             const desbloqueadosIds = new Set(desbloqueados.map(d => d._id));
             
-            console.log('📊 Desbloqueados delivery_ids:', [...desbloqueadosIds]);
+            console.log('ðŸ“Š Desbloqueados delivery_ids:', [...desbloqueadosIds]);
 
             // Count finalizadas (have desbloquear action)
             const finalizadas = deliveryIds.filter(id => desbloqueadosIds.has(id)).length;
@@ -612,7 +612,7 @@ export class ActionLogService {
 
         return {
           id: a._id,
-          title: a.attributes?.acao || a.action_title || a.actionId || 'Ação sem título',
+          title: a.attributes?.acao || a.action_title || a.actionId || 'AÃ§Ã£o sem tÃ­tulo',
           points: a.points || 0,
           created: extractTimestamp(a.time as number | { $date: string } | undefined),
           player: a.userId || '',
@@ -668,7 +668,7 @@ export class ActionLogService {
 
         const deliveryIds = [...deliveryMap.keys()];
         
-        console.log('📊 Process list - unique delivery_ids:', deliveryIds);
+        console.log('ðŸ“Š Process list - unique delivery_ids:', deliveryIds);
 
         if (deliveryIds.length === 0) {
           return of([]);
@@ -711,7 +711,7 @@ export class ActionLogService {
           }
         ];
 
-        console.log('📊 Process finalization query:', JSON.stringify(aggregateBody));
+        console.log('ðŸ“Š Process finalization query:', JSON.stringify(aggregateBody));
 
         const finalizationRequest$ = this.funifierApi.post<{ _id: number }[]>(
           '/v3/database/action_log/aggregate?strict=true',
@@ -719,7 +719,7 @@ export class ActionLogService {
         ).pipe(
           map(desbloqueados => {
             const finalizedIds = new Set(desbloqueados.map(d => d._id));
-            console.log('📊 Finalized delivery_ids:', [...finalizedIds]);
+            console.log('ðŸ“Š Finalized delivery_ids:', [...finalizedIds]);
             return finalizedIds;
           }),
           catchError(() => {
@@ -758,13 +758,14 @@ export class ActionLogService {
     return request$;
   }
 
+
   /**
-   * Get list of unique CNPJs from player's action_log WITH action count and process count
-   * Returns CNPJ, action count, and unique process count (delivery_id) for each CNPJ
+   * Get list of unique CNPJs from player's action_log WITH action count
+   * Returns CNPJ and action count for each CNPJ
    * Uses userId field and time field with Funifier relative dates
    * Cached with shareReplay to avoid duplicate requests
    */
-  getPlayerCnpjListWithCount(playerId: string, month?: Date): Observable<{ cnpj: string; actionCount: number; processCount: number }[]> {
+  getPlayerCnpjListWithCount(playerId: string, month?: Date): Observable<{ cnpj: string; actionCount: number }[]> {
     const targetMonth = month || new Date();
     const cacheKey = `${playerId}_${dayjs(targetMonth).format('YYYY-MM')}_cnpj_list_count`;
     const cached = this.getCachedData(this.cnpjListWithCountCache, cacheKey);
@@ -776,7 +777,7 @@ export class ActionLogService {
     const startDate = getRelativeDateExpression(month, 'start');
     const endDate = getRelativeDateExpression(month, 'end');
 
-    // First query: get action count per CNPJ
+    // Single query: get action count per CNPJ
     const actionCountBody = [
       {
         $match: {
@@ -793,62 +794,20 @@ export class ActionLogService {
       }
     ];
 
-    // Second query: get unique process count (delivery_id) per CNPJ
-    const processCountBody = [
-      {
-        $match: {
-          userId: playerId,
-          time: { $gte: startDate, $lte: endDate },
-          'attributes.cnpj': { $ne: null },
-          'attributes.delivery_id': { $ne: null }
-        }
-      },
-      {
-        $group: {
-          _id: {
-            cnpj: '$attributes.cnpj',
-            delivery_id: '$attributes.delivery_id'
-          }
-        }
-      },
-      {
-        $group: {
-          _id: '$_id.cnpj',
-          processCount: { $sum: 1 }
-        }
-      }
-    ];
-
     console.log('📊 Player CNPJs with count query:', JSON.stringify(actionCountBody));
-    console.log('📊 Player CNPJs process count query:', JSON.stringify(processCountBody));
 
-    const request$ = forkJoin([
-      this.funifierApi.post<{ _id: string; count: number }[]>(
-        '/v3/database/action_log/aggregate?strict=true',
-        actionCountBody
-      ),
-      this.funifierApi.post<{ _id: string; processCount: number }[]>(
-        '/v3/database/action_log/aggregate?strict=true',
-        processCountBody
-      )
-    ]).pipe(
-      map(([actionResponse, processResponse]) => {
+    const request$ = this.funifierApi.post<{ _id: string; count: number }[]>(
+      '/v3/database/action_log/aggregate?strict=true',
+      actionCountBody
+    ).pipe(
+      map(actionResponse => {
         console.log('📊 Player CNPJs with count response:', actionResponse);
-        console.log('📊 Player CNPJs process count response:', processResponse);
-        
-        // Create a map of CNPJ to process count
-        const processCountMap = new Map<string, number>();
-        processResponse
-          .filter(r => r._id != null)
-          .forEach(r => processCountMap.set(r._id, r.processCount));
-        
-        // Combine action count with process count
+
         return actionResponse
           .filter(r => r._id != null)
           .map(r => ({
             cnpj: r._id,
-            actionCount: r.count,
-            processCount: processCountMap.get(r._id) || 0
+            actionCount: r.count
           }));
       }),
       catchError(error => {
@@ -900,14 +859,14 @@ export class ActionLogService {
       { $limit: 100 }
     ];
 
-    console.log('📊 Actions by CNPJ query:', JSON.stringify(aggregateBody));
+    console.log('ðŸ“Š Actions by CNPJ query:', JSON.stringify(aggregateBody));
 
     const request$ = this.funifierApi.post<ActionLogEntry[]>(
       '/v3/database/action_log/aggregate?strict=true',
       aggregateBody
     ).pipe(
       map(actions => {
-        console.log('📊 Actions by CNPJ response:', actions);
+        console.log('ðŸ“Š Actions by CNPJ response:', actions);
         return actions.map(a => {
           // Determine status based on action data
           let status: 'finalizado' | 'pendente' | 'dispensado' | undefined;
@@ -937,7 +896,7 @@ export class ActionLogService {
           
           return {
             id: a._id,
-            title: a.attributes?.acao || a.action_title || a.actionId || 'Ação sem título',
+            title: a.attributes?.acao || a.action_title || a.actionId || 'AÃ§Ã£o sem tÃ­tulo',
             player: a.userId || '',
             created: extractTimestamp(a.time as number | { $date: string } | undefined),
             status,
@@ -1009,14 +968,14 @@ export class ActionLogService {
       { $sort: { time: -1 } }
     ];
 
-    console.log('📊 Activities by process query:', JSON.stringify(aggregateBody));
+    console.log('ðŸ“Š Activities by process query:', JSON.stringify(aggregateBody));
 
     const request$ = this.funifierApi.post<ActionLogEntry[]>(
       '/v3/database/action_log/aggregate?strict=true',
       aggregateBody
     ).pipe(
       map(actions => {
-        console.log('📊 Activities by process response:', actions);
+        console.log('ðŸ“Š Activities by process response:', actions);
         return actions.map(a => {
           // Determine status based on action data
           let status: 'finalizado' | 'pendente' | 'dispensado' | undefined;
@@ -1042,7 +1001,7 @@ export class ActionLogService {
 
           return {
             id: a._id,
-            title: a.attributes?.acao || a.action_title || a.actionId || 'Ação sem título',
+            title: a.attributes?.acao || a.action_title || a.actionId || 'AÃ§Ã£o sem tÃ­tulo',
             points: a.points || 0,
             created: extractTimestamp(a.time as number | { $date: string } | undefined),
             player: a.userId || '',
@@ -1118,16 +1077,16 @@ export class ActionLogService {
       }
     ];
 
-    console.log('📊 Activities by day query:', JSON.stringify(aggregateBody, null, 2));
+    console.log('ðŸ“Š Activities by day query:', JSON.stringify(aggregateBody, null, 2));
 
     const request$ = this.funifierApi.post<{ _id: number; count: number }[]>(
       '/v3/database/action_log/aggregate?strict=true',
       aggregateBody
     ).pipe(
       map(response => {
-        console.log('📊 Activities by day response:', response);
+        console.log('ðŸ“Š Activities by day response:', response);
         const result = response.map(r => ({ day: r._id, count: r.count }));
-        console.log('📊 Activities by day mapped result:', result);
+        console.log('ðŸ“Š Activities by day mapped result:', result);
         return result;
       }),
       catchError(error => {
@@ -1275,7 +1234,7 @@ export class ActionLogService {
       }
     ];
 
-    console.log('📊 Team progress metrics query for team:', teamId);
+    console.log('ðŸ“Š Team progress metrics query for team:', teamId);
 
     const request$ = forkJoin([
       this.funifierApi.post<any[]>('/v3/database/action_log/aggregate?strict=true', activityAggregateBody),
@@ -1288,7 +1247,7 @@ export class ActionLogService {
         const totalProcessos = uniqueProcessResult[0]?.total || 0;
         const processosIncompletos = Math.max(0, totalProcessos - processosFinalizados);
 
-        console.log('✅ Team progress metrics loaded (OPTIMIZED):', {
+        console.log('âœ… Team progress metrics loaded (OPTIMIZED):', {
           finalizadas,
           processosFinalizados,
           totalProcessos,
@@ -1324,15 +1283,16 @@ export class ActionLogService {
     return request$;
   }
 
+
   /**
    * Get CNPJ list with action counts for all team members in a single aggregate query.
    * Uses $lookup to join player data and filter by team.
-   * 
+   *
    * @param teamId - Team ID (e.g., 'pessoal--rn--andreza-soares')
    * @param month - Target month for filtering
-   * @returns Observable of CNPJ list with action and process counts
+   * @returns Observable of CNPJ list with action counts
    */
-  getTeamCnpjListWithCount(teamId: string, month?: Date): Observable<{ cnpj: string; actionCount: number; processCount: number }[]> {
+  getTeamCnpjListWithCount(teamId: string, month?: Date): Observable<{ cnpj: string; actionCount: number }[]> {
     const targetMonth = month || new Date();
     const cacheKey = `team_cnpj_${teamId}_${dayjs(targetMonth).format('YYYY-MM')}`;
     const cached = this.getCachedData(this.teamCnpjCache, cacheKey);
@@ -1371,66 +1331,21 @@ export class ActionLogService {
       }
     ];
 
-    // Single aggregate query to get unique process count per CNPJ for the team
-    const processCountBody = [
-      {
-        $lookup: {
-          from: 'player',
-          localField: 'userId',
-          foreignField: '_id',
-          as: 'playerData'
-        }
-      },
-      {
-        $unwind: '$playerData'
-      },
-      {
-        $match: {
-          'playerData.teams': teamId,
-          time: { $gte: startDate, $lte: endDate },
-          'attributes.cnpj': { $ne: null },
-          'attributes.delivery_id': { $ne: null }
-        }
-      },
-      {
-        $group: {
-          _id: {
-            cnpj: '$attributes.cnpj',
-            delivery_id: '$attributes.delivery_id'
-          }
-        }
-      },
-      {
-        $group: {
-          _id: '$_id.cnpj',
-          processCount: { $sum: 1 }
-        }
-      }
-    ];
-
     console.log('📊 Team CNPJ list query for team:', teamId);
 
-    const request$ = forkJoin([
-      this.funifierApi.post<{ _id: string; count: number }[]>('/v3/database/action_log/aggregate?strict=true', actionCountBody),
-      this.funifierApi.post<{ _id: string; processCount: number }[]>('/v3/database/action_log/aggregate?strict=true', processCountBody)
-    ]).pipe(
-      map(([actionResponse, processResponse]) => {
-        // Create a map of CNPJ to process count
-        const processCountMap = new Map<string, number>();
-        processResponse
-          .filter(r => r._id != null)
-          .forEach(r => processCountMap.set(r._id, r.processCount));
-
-        // Combine action count with process count
+    const request$ = this.funifierApi.post<{ _id: string; count: number }[]>(
+      '/v3/database/action_log/aggregate?strict=true',
+      actionCountBody
+    ).pipe(
+      map(actionResponse => {
         const result = actionResponse
           .filter(r => r._id != null)
           .map(r => ({
             cnpj: r._id,
-            actionCount: r.count,
-            processCount: processCountMap.get(r._id) || 0
+            actionCount: r.count
           }));
 
-        console.log('✅ Team CNPJ list loaded (OPTIMIZED):', result.length, 'unique CNPJs, apiCalls: 2');
+        console.log('✅ Team CNPJ list loaded:', result.length, 'unique CNPJs');
         return result;
       }),
       catchError(error => {
@@ -1519,7 +1434,7 @@ export class ActionLogService {
       }
     ];
 
-    console.log('📊 Team monthly points breakdown query for team:', teamId);
+    console.log('ðŸ“Š Team monthly points breakdown query for team:', teamId);
 
     const request$ = forkJoin([
       this.funifierApi.post<any[]>('/v3/database/action_log/aggregate?strict=true', bloqueadosBody),
@@ -1529,7 +1444,7 @@ export class ActionLogService {
         const bloqueados = Math.floor(bloqueadosResult[0]?.total || 0);
         const desbloqueados = Math.floor(desbloqueadosResult[0]?.total || 0);
 
-        console.log('✅ Team monthly points breakdown loaded (OPTIMIZED):', {
+        console.log('âœ… Team monthly points breakdown loaded (OPTIMIZED):', {
           bloqueados,
           desbloqueados,
           apiCalls: 2 // Instead of 2*N calls
