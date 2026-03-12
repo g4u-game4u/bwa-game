@@ -272,13 +272,13 @@ export class RewardsComponent implements AfterViewInit, OnInit {
         requires: item.requires || [{ item: 'coins' }]
       };
     });
-    // }
+  }
 
   mapAchievementsToCards(achievements: Achievement[], items: Reward[]): PlayerRedeemLog[] {
     return achievements.map(ach => {
       const item = items.find(i => i.id === ach.item);
       return {
-        id: ach._id.slice(-6), // agora pega os Ãºltimos 6 dÃ­gitos
+        id: ach._id.slice(-6),
         itemName: item?.title || 'Desconhecido',
         imageUrl: item?.imageUrl || '',
         redeemedAt: new Date(ach.time).toISOString(),
@@ -290,4 +290,4 @@ export class RewardsComponent implements AfterViewInit, OnInit {
       };
     });
   }
-} 
+}
