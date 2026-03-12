@@ -17,6 +17,7 @@ import { firstValueFrom } from 'rxjs';
 export class ModalCompanyCarteiraDetailComponent implements OnInit, OnDestroy {
   @Input() company: CompanyDisplay | null = null;
   @Input() month?: Date;
+  @Input() entregaGoal?: number; // Player's entrega_goal for KPI target
   @Output() closed = new EventEmitter<void>();
 
   private destroy$ = new Subject<void>();
@@ -80,10 +81,11 @@ export class ModalCompanyCarteiraDetailComponent implements OnInit, OnDestroy {
         .pipe(takeUntil(this.destroy$))
         .subscribe({
           next: (kpis) => {
-            this.companyKPIs = kpis && kpis.length > 0 ? kpis : [];
+            // Apply player's entrega_goal to KPIs if provided
+            this.companyKPIs = this.applyEntregaGoal(kpis && kpis.length > 0 ? kpis : []);
             // If no KPIs from service, use deliveryKpi if available
             if (this.companyKPIs.length === 0 && this.company && this.company.deliveryKpi) {
-              this.companyKPIs = [this.company.deliveryKpi];
+              this.companyKPIs = this.applyEntregaGoal([this.company.deliveryKpi]);
             }
             this.isLoading = false;
             this.cdr.markForCheck();
@@ -92,7 +94,7 @@ export class ModalCompanyCarteiraDetailComponent implements OnInit, OnDestroy {
             console.error('Error loading company KPIs:', error);
             // Fallback to deliveryKpi if available
             if (this.company && this.company.deliveryKpi) {
-              this.companyKPIs = [this.company.deliveryKpi];
+              this.companyKPIs = this.applyEntregaGoal([this.company.deliveryKpi]);
             } else {
               this.companyKPIs = [];
             }
@@ -103,7 +105,7 @@ export class ModalCompanyCarteiraDetailComponent implements OnInit, OnDestroy {
     } else {
       // If no cnpjId, use deliveryKpi if available
       if (this.company.deliveryKpi) {
-        this.companyKPIs = [this.company.deliveryKpi];
+        this.companyKPIs = this.applyEntregaGoal([this.company.deliveryKpi]);
       } else {
         this.companyKPIs = [];
       }
@@ -113,6 +115,46 @@ export class ModalCompanyCarteiraDetailComponent implements OnInit, OnDestroy {
 
     // Load tasks
     this.loadTasks();
+  }
+
+  /**
+   * Apply player's entrega_goal to KPIs that are delivery-related
+   */
+  private applyEntregaGoal(kpis: KPIData[]): KPIData[] {
+    if (!this.entregaGoal || this.entregaGoal <= 0) {
+      return kpis;
+    }
+
+    return kpis.map(kpi => {
+      // Apply entrega_goal to delivery-related KPIs
+      if (kpi.id === 'delivery' || kpi.id === 'entrega' || kpi.label?.toLowerCase().includes('entrega')) {
+        const target = this.entregaGoal!;
+        const superTarget = 100; // Super target is always 100% for delivery
+        const percentage = Math.min((kpi.current / superTarget) * 100, 100);
+        
+        return {
+          ...kpi,
+          target,
+          superTarget,
+          percentage,
+          color: this.getKpiColor(kpi.current, target, superTarget)
+        };
+      }
+      return kpi;
+    });
+  }
+
+  /**
+   * Determine KPI color based on goal and super goal thresholds
+   */
+  private getKpiColor(current: number, goal: number, superGoal: number): 'red' | 'yellow' | 'green' {
+    if (current >= superGoal) {
+      return 'green';
+    } else if (current >= goal) {
+      return 'yellow';
+    } else {
+      return 'red';
+    }
   }
 
   private loadTasks(): void {

@@ -247,6 +247,7 @@
     *ngIf="isCompanyCarteiraDetailModalOpen && selectedCarteiraCompany"
     [company]="selectedCarteiraCompany"
     [month]="selectedMonth"
+    [entregaGoal]="playerStatus?.extra?.entrega_goal"
     (closed)="onCompanyCarteiraDetailModalClosed()">
   </modal-company-carteira-detail>
   
