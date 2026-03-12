@@ -104,8 +104,7 @@ export class TeamAggregateService {
    * 
    * @example
    * getTeamSeasonPoints('Departamento Pessoal', startDate, endDate)
-   *   .subscribe(points => console.log(points.total));
-   */
+   *   .subscribe(points => */
   getTeamSeasonPoints(
     teamId: string,
     seasonStart: Date,
@@ -143,8 +142,7 @@ export class TeamAggregateService {
    * 
    * @example
    * getTeamProgressMetrics('Departamento Pessoal', startDate, endDate)
-   *   .subscribe(metrics => console.log(metrics.processosFinalizados));
-   */
+   *   .subscribe(metrics => */
   getTeamProgressMetrics(
     teamId: string,
     seasonStart: Date,
@@ -179,8 +177,7 @@ export class TeamAggregateService {
    * 
    * @example
    * getTeamMembers('Departamento Pessoal')
-   *   .subscribe(members => console.log(members.length));
-   */
+   *   .subscribe(members => */
   getTeamMembers(teamId: string): Observable<Collaborator[]> {
     const cacheKey = `members_${teamId}`;
     
@@ -210,8 +207,7 @@ export class TeamAggregateService {
    * 
    * @example
    * getTeamPlayersStatus('pessoal--rn--andreza-soares')
-   *   .subscribe(players => console.log(players.length));
-   */
+   *   .subscribe(players => */
   getTeamPlayersStatus(teamId: string, batchSize: number = 100): Observable<any[]> {
     const cacheKey = `players_status_${teamId}`;
     
@@ -249,8 +245,7 @@ export class TeamAggregateService {
    * 
    * @example
    * getTeamActionLogs('pessoal--rn--andreza-soares', startDate, endDate)
-   *   .subscribe(logs => console.log(logs.length));
-   */
+   *   .subscribe(logs => */
   getTeamActionLogs(
     teamId: string,
     startDate?: Date,
@@ -324,8 +319,7 @@ export class TeamAggregateService {
    * 
    * @example
    * getCollaboratorData('user@example.com', startDate, endDate)
-   *   .subscribe(data => console.log(data));
-   */
+   *   .subscribe(data => */
   getCollaboratorData(
     userId: string,
     startDate: Date,
@@ -413,8 +407,6 @@ export class TeamAggregateService {
     // Send query.aggregate (the array of stages) instead of the whole query object
     const aggregatePipeline = query.aggregate;
     
-    console.log(`🔍 Executing aggregate query on ${collection}:`, JSON.stringify(aggregatePipeline));
-    
     return this.funifierApi.post<T[] | { result: T[] }>(endpoint, aggregatePipeline).pipe(
       map(response => {
         // Funifier may return results in a 'result' property or directly as an array
@@ -459,12 +451,9 @@ export class TeamAggregateService {
   ): Observable<T[]> {
     const endpoint = `/database/${collection}/aggregate?strict=true`;
     
-    console.log(`🔍 Executing paginated aggregate query on ${collection} with batch size ${batchSize}`);
-    
     // Start with first batch
     return this.fetchBatch<T>(endpoint, aggregatePipeline, 0, batchSize).pipe(
       map(allResults => {
-        console.log(`✅ Fetched ${allResults.length} total items from ${collection}`);
         return allResults;
       })
     );
@@ -491,8 +480,6 @@ export class TeamAggregateService {
     // Example: "items=0-100" for first 100, "items=100-100" for next 100
     const rangeHeader = `items=${startIndex}-${batchSize}`;
     
-    console.log(`📦 Fetching batch: ${rangeHeader}`);
-    
     return this.funifierApi.post<T[]>(
       endpoint,
       aggregatePipeline,
@@ -515,7 +502,6 @@ export class TeamAggregateService {
         
         // If we got a full batch, there might be more data
         if (batchResults.length === batchSize) {
-          console.log(`📦 Batch complete (${batchResults.length} items), fetching next batch...`);
           // Fetch next batch
           return this.fetchBatch<T>(
             endpoint,
@@ -526,7 +512,6 @@ export class TeamAggregateService {
           );
         } else {
           // Last batch (partial or empty), return all accumulated results
-          console.log(`✅ Final batch (${batchResults.length} items), total: ${allResults.length}`);
           return of(allResults);
         }
       }),
@@ -735,8 +720,6 @@ export class TeamAggregateService {
       }
     ];
 
-    console.log('🔍 Team activity metrics aggregate query');
-
     return this.funifierApi.post<any[]>(
       '/database/action_log/aggregate?strict=true',
       aggregateQuery
@@ -749,7 +732,6 @@ export class TeamAggregateService {
           processosFinalizados: result.desbloqueados || 0,
           processosIncompletos: (result.uniqueProcesses?.length || 0) - (result.desbloqueados || 0)
         };
-        console.log('✅ Team activity metrics (OPTIMIZED):', metrics);
         return metrics;
       }),
       tap(data => this.setCache(cacheKey, data)),
@@ -815,8 +797,6 @@ export class TeamAggregateService {
         }
       ];
 
-      console.log('🔍 Team CNPJ list aggregate query');
-
       return this.funifierApi.post<any[]>(
         '/database/action_log/aggregate?strict=true',
         actionCountQuery
@@ -829,7 +809,6 @@ export class TeamAggregateService {
               cnpj: item._id,
               actionCount: item.actionCount || 0
             }));
-          console.log('✅ Team CNPJ list (OPTIMIZED):', cnpjList.length, 'unique CNPJs');
           return cnpjList;
         }),
         tap(data => this.setCache(cacheKey, data)),
@@ -886,8 +865,6 @@ export class TeamAggregateService {
       }
     ];
 
-    console.log('🔍 Team monthly points breakdown aggregate query');
-
     return this.funifierApi.post<any[]>(
       '/database/achievement/aggregate?strict=true',
       aggregateQuery
@@ -907,7 +884,6 @@ export class TeamAggregateService {
         }
 
         const result = { bloqueados, desbloqueados };
-        console.log('✅ Team monthly points breakdown (OPTIMIZED):', result);
         return result;
       }),
       tap(data => this.setCache(cacheKey, data)),
@@ -962,8 +938,6 @@ export class TeamAggregateService {
       }
     ];
 
-    console.log('🔍 Team total points aggregate query');
-
     return this.funifierApi.post<any[]>(
       '/database/achievement/aggregate?strict=true',
       aggregateQuery
@@ -972,7 +946,6 @@ export class TeamAggregateService {
         const total = Array.isArray(response) && response.length > 0 
           ? Math.floor(response[0].total || 0) 
           : 0;
-        console.log('✅ Team total points (OPTIMIZED):', total);
         return total;
       }),
       tap(data => this.setCache(cacheKey, data)),

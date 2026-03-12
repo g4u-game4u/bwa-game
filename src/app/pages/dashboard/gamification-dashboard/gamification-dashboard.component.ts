@@ -76,7 +76,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   // Carteira data from action_log (CNPJs with action counts and KPI data)
   carteiraClientes: CompanyDisplay[] = [];
   isLoadingCarteira = true;
-  cnpjNameMap = new Map<string, string>(); // Map of original CNPJ → clean empresa name
+  cnpjNameMap = new Map<string, string>(); // Map of original CNPJ â†’ clean empresa name
   
   // Month selection
   selectedMonth: Date = new Date();
@@ -138,7 +138,6 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     // Check for playerId in query params (when viewing another player's dashboard)
     const playerIdParam = this.route.snapshot.queryParams['playerId'];
     if (playerIdParam && typeof playerIdParam === 'string') {
-      console.log('📊 Using player ID from query params:', playerIdParam);
       return playerIdParam;
     }
     
@@ -147,18 +146,15 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     if (usuario) {
       const sessionPlayerId = usuario._id || usuario.email;
       if (sessionPlayerId && typeof sessionPlayerId === 'string') {
-        console.log('📊 Using player ID from session:', sessionPlayerId);
         return sessionPlayerId;
       }
     }
     
     // Fallback to 'me' (current authenticated user)
-    console.log('📊 Using default player ID: me');
     return 'me';
   }
   
   ngOnInit(): void {
-    console.log('🎮 GamificationDashboardComponent ngOnInit STARTED');
     this.checkResponsiveBreakpoints();
     
     // Listen for query param changes (when viewing different players)
@@ -167,15 +163,12 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
       .subscribe(params => {
         const playerId = params['playerId'];
         if (playerId) {
-          console.log('📊 Player ID changed via query params:', playerId);
           this.loadDashboardData();
         }
       });
     
-    console.log('🎮 About to call loadDashboardData...');
     this.loadDashboardData();
-    console.log('🎮 loadDashboardData called');
-    this.announceToScreenReader('Painel de gamificação carregado');
+    this.announceToScreenReader('Painel de gamificaÃ§Ã£o carregado');
     this.performanceMonitor.trackChangeDetection('GamificationDashboardComponent');
   }
 
@@ -251,14 +244,10 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     const playerId = this.getPlayerId();
     
     // Load player status
-    console.log('📊 Loading player data for:', playerId);
-    console.log('📊 Token available:', !!this.sessaoProvider.token);
-    console.log('📊 Token value:', this.sessaoProvider.token?.substring(0, 20) + '...');
-    
     // Safety timeout to prevent infinite loading state
     const loadingTimeout = setTimeout(() => {
       if (this.isLoadingPlayer) {
-        console.warn('📊 Loading timeout reached, forcing loading state to false');
+        console.warn('ðŸ“Š Loading timeout reached, forcing loading state to false');
         this.isLoadingPlayer = false;
         this.cdr.markForCheck();
       }
@@ -268,53 +257,46 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (status) => {
-          console.log('📊 Player status loaded:', status);
           clearTimeout(loadingTimeout);
           this.playerStatus = status;
           this.isLoadingPlayer = false;
           this.cdr.markForCheck();
         },
         error: (error) => {
-          console.error('📊 Failed to load player status:', error);
+          console.error('ðŸ“Š Failed to load player status:', error);
           clearTimeout(loadingTimeout);
           this.toastService.error('Erro ao carregar dados do jogador');
           this.isLoadingPlayer = false;
           this.cdr.markForCheck();
         },
         complete: () => {
-          console.log('📊 Player status request completed');
           clearTimeout(loadingTimeout);
         }
       });
     
     // Load point wallet
-    console.log('📊 Starting point wallet request...');
     this.playerService.getPlayerPoints(playerId)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (points) => {
-          console.log('📊 Point wallet loaded:', points);
           this.pointWallet = points;
           this.cdr.markForCheck();
         },
         error: (error) => {
-          console.error('📊 Failed to load point wallet:', error);
+          console.error('ðŸ“Š Failed to load point wallet:', error);
           // Set default values on error so UI doesn't stay stuck
           this.pointWallet = { moedas: 0, bloqueados: 0, desbloqueados: 0 };
           this.cdr.markForCheck();
         },
         complete: () => {
-          console.log('📊 Point wallet request completed');
-        }
+          }
       });
     
     // Load season progress (basic data from player status)
-    console.log('📊 Starting season progress request...');
     this.playerService.getSeasonProgress(playerId, this.seasonDates)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (progress) => {
-          console.log('📊 Season progress loaded:', progress);
           this.seasonProgress = progress;
           this.cdr.markForCheck();
           
@@ -322,7 +304,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
           this.loadSeasonProgressDetails();
         },
         error: (error) => {
-          console.error('📊 Failed to load season progress:', error);
+          console.error('ðŸ“Š Failed to load season progress:', error);
           // Set default values on error so UI doesn't stay stuck
           this.seasonProgress = {
             metas: { current: 0, target: 0 },
@@ -333,8 +315,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
           this.cdr.markForCheck();
         },
         complete: () => {
-          console.log('📊 Season progress request completed');
-        }
+          }
       });
   }
   
@@ -363,8 +344,6 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
       const cnpjRespStr = this.playerStatus.extra.cnpj_resp;
       const cnpjList = cnpjRespStr.split(',').map(s => s.trim()).filter(s => s.length > 0);
       const clientesCount = cnpjList.length;
-      console.log('📊 Clientes count from cnpj_resp:', clientesCount, 'CNPJs:', cnpjList);
-      
       if (this.seasonProgress) {
         this.seasonProgress = {
           ...this.seasonProgress,
@@ -373,7 +352,6 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
         this.cdr.markForCheck();
       }
     } else {
-      console.log('📊 No cnpj_resp found in player extra, clientes = 0');
       if (this.seasonProgress) {
         this.seasonProgress = {
           ...this.seasonProgress,
@@ -389,7 +367,6 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (count: number) => {
-          console.log('📊 Tarefas finalizadas count (season-wide):', count);
           if (this.seasonProgress) {
             this.seasonProgress = {
               ...this.seasonProgress,
@@ -399,7 +376,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
           }
         },
         error: (err: Error) => {
-          console.error('📊 Failed to load tarefas count:', err);
+          console.error('ðŸ“Š Failed to load tarefas count:', err);
         }
       });
   }
@@ -416,7 +393,6 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (companies) => {
-          console.log('📊 Companies loaded:', companies);
           this.companies = companies;
           this.isLoadingCompanies = false;
           
@@ -426,7 +402,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
           this.cdr.markForCheck();
         },
         error: (error) => {
-          console.error('📊 Failed to load companies:', error);
+          console.error('ðŸ“Š Failed to load companies:', error);
           this.toastService.error('Erro ao carregar carteira de empresas');
           this.isLoadingCompanies = false;
           this.cdr.markForCheck();
@@ -438,7 +414,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
    * Load carteira data from player's extra.cnpj_resp (assigned portfolio)
    * and enrich with KPI data from cnpj__c collection
    * 
-   * Data source: player.extra.cnpj_resp → cnpj__c collection
+   * Data source: player.extra.cnpj_resp â†’ cnpj__c collection
    * Company names are fetched from empid_cnpj__c collection using CnpjLookupService
    * This shows all companies assigned to the player, not just ones with action_log entries
    */
@@ -448,23 +424,19 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     const playerId = this.getPlayerId();
     
     if (!playerId) {
-      console.warn('📊 No player ID available for carteira data');
+      console.warn('ðŸ“Š No player ID available for carteira data');
       this.isLoadingCarteira = false;
       this.cdr.markForCheck();
       return;
     }
     
-    // Use companyService to get companies from extra.cnpj_resp → cnpj__c
+    // Use companyService to get companies from extra.cnpj_resp â†’ cnpj__c
     // This shows all assigned companies, not just ones with action_log entries
     this.companyService.getCompanies(playerId)
       .pipe(
         switchMap(companies => {
-          console.log('📊 Carteira companies from extra.cnpj_resp:', companies);
-          
           // Extract CNPJ IDs to look up company names from empid_cnpj__c
           const cnpjIds = companies.map(c => c.cnpj).filter(id => id);
-          console.log('📊 CNPJ IDs to enrich:', cnpjIds);
-          
           if (cnpjIds.length === 0) {
             return of({ companies, nameMap: new Map<string, string>() });
           }
@@ -473,14 +445,12 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
           return this.cnpjLookupService.enrichCnpjList(cnpjIds).pipe(
             map(nameMap => ({ companies, nameMap })),
             catchError(error => {
-              console.error('📊 Error enriching CNPJ names:', error);
+              console.error('ðŸ“Š Error enriching CNPJ names:', error);
               return of({ companies, nameMap: new Map<string, string>() });
             })
           );
         }),
         map(({ companies, nameMap }) => {
-          console.log('📊 CNPJ name map:', Array.from(nameMap.entries()));
-          
           // Store the name map for later use in getCompanyDisplayName
           nameMap.forEach((name, cnpj) => {
             this.cnpjNameMap.set(cnpj, name);
@@ -510,13 +480,12 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
       )
       .subscribe({
         next: (carteiraClientes) => {
-          console.log('📊 Carteira clientes loaded:', carteiraClientes);
           this.carteiraClientes = carteiraClientes;
           this.isLoadingCarteira = false;
           this.cdr.markForCheck();
         },
         error: (error) => {
-          console.error('📊 Failed to load carteira data:', error);
+          console.error('ðŸ“Š Failed to load carteira data:', error);
           this.isLoadingCarteira = false;
           this.cdr.markForCheck();
         }
@@ -536,7 +505,6 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (kpis) => {
-          console.log('📊 KPIs loaded:', kpis, `(${kpis?.length || 0} KPIs)`);
           this.playerKPIs = kpis || [];
           this.isLoadingKPIs = false;
           
@@ -547,7 +515,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
           this.cdr.markForCheck();
         },
         error: (error) => {
-          console.error('📊 Failed to load KPIs:', error);
+          console.error('ðŸ“Š Failed to load KPIs:', error);
           this.toastService.error('Erro ao carregar KPIs');
           this.isLoadingKPIs = false;
           // Don't update metas on error - preserve existing values
@@ -565,12 +533,12 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
    */
   private updateMetasFromPlayerGoals(): void {
     if (!this.seasonProgress) {
-      console.warn('📊 updateMetasFromPlayerGoals called but seasonProgress is null');
+      console.warn('ðŸ“Š updateMetasFromPlayerGoals called but seasonProgress is null');
       return;
     }
 
     if (!this.playerStatus) {
-      console.warn('📊 updateMetasFromPlayerGoals called but playerStatus is null');
+      console.warn('ðŸ“Š updateMetasFromPlayerGoals called but playerStatus is null');
       return;
     }
 
@@ -602,11 +570,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
       }
     };
 
-    console.log('📊 Metas updated from player goals:', this.seasonProgress.metas, 
-      `(${metasAchieved}/${totalMetas})`,
-      `entrega: ${entrega}/${entregaGoal} (${entregaAchieved ? 'achieved' : 'not achieved'})`,
-      `cnpj: ${cnpjRespCount}/${cnpjGoal} (${cnpjAchieved ? 'achieved' : 'not achieved'})`);
-  }
+    }
 
   
   /**
@@ -621,7 +585,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     const playerId: string = (usuario?._id || usuario?.email || '') as string;
     
     if (!playerId) {
-      console.warn('📊 No player ID available for progress data');
+      console.warn('ðŸ“Š No player ID available for progress data');
       // Use default values if no player ID
       this.activityMetrics = { pendentes: 0, emExecucao: 0, finalizadas: 0, pontos: 0 };
       this.processMetrics = { pendentes: 0, incompletas: 0, finalizadas: 0 };
@@ -634,14 +598,13 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (metrics) => {
-          console.log('📊 Progress metrics loaded:', metrics);
           this.activityMetrics = metrics.activity;
           this.processMetrics = metrics.processo;
           this.isLoadingProgress = false;
           this.cdr.markForCheck();
         },
         error: (error) => {
-          console.error('📊 Failed to load progress metrics:', error);
+          console.error('ðŸ“Š Failed to load progress metrics:', error);
           // Use default values on error
           this.activityMetrics = { pendentes: 0, emExecucao: 0, finalizadas: 0, pontos: 0 };
           this.processMetrics = { pendentes: 0, incompletas: 0, finalizadas: 0 };
@@ -655,12 +618,11 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (breakdown) => {
-          console.log('📊 Monthly points breakdown loaded:', breakdown);
           this.monthlyPointsBreakdown = breakdown;
           this.cdr.markForCheck();
         },
         error: (error) => {
-          console.error('📊 Failed to load monthly points breakdown:', error);
+          console.error('ðŸ“Š Failed to load monthly points breakdown:', error);
           this.monthlyPointsBreakdown = { bloqueados: 0, desbloqueados: 0 };
           this.cdr.markForCheck();
         }
@@ -679,7 +641,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     date.setMonth(date.getMonth() - monthsAgo);
     this.selectedMonth = date;
     const monthName = date.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
-    this.announceToScreenReader(`Mês alterado para ${monthName}`);
+    this.announceToScreenReader(`MÃªs alterado para ${monthName}`);
     
     // Clear caches to force fresh data for the new month
     this.actionLogService.clearCache();
@@ -889,7 +851,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
 
   /**
    * Get tooltip text showing current value vs target
-   * Format: "75% de 80%" (valor alcançado de meta)
+   * Format: "75% de 80%" (valor alcanÃ§ado de meta)
    */
   getKpiTooltip(kpi: KPIData): string {
     const current = Math.round(kpi.current);
@@ -988,8 +950,8 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     const minutes = Math.floor(diff / 60000);
     
     if (minutes < 1) return 'Agora mesmo';
-    if (minutes === 1) return 'Há 1 minuto';
-    return `Há ${minutes} minutos`;
+    if (minutes === 1) return 'HÃ¡ 1 minuto';
+    return `HÃ¡ ${minutes} minutos`;
   }
 
   /**
@@ -1004,7 +966,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     }
     
     // Second confirmation (double validation)
-    const secondConfirm = window.confirm('Esta ação irá desconectar você do sistema. Deseja continuar?');
+    const secondConfirm = window.confirm('Esta aÃ§Ã£o irÃ¡ desconectar vocÃª do sistema. Deseja continuar?');
     if (!secondConfirm) {
       return;
     }

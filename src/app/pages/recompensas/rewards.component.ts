@@ -12,7 +12,7 @@ import { FeaturesService } from '../../services/features.service';
 import { NotificationService } from '../../services/notification.service';
 import { PlayerRedeemLog } from './components/rewards-store/rewards-store.component';
 
-// Placeholder para imagem - será tratado no template
+// Placeholder para imagem - serÃ¡ tratado no template
 const GIFT_ICON_PLACEHOLDER = 'placeholder-gift-icon';
 
 @Component({
@@ -73,7 +73,7 @@ export class RewardsComponent implements AfterViewInit, OnInit {
     this.loadMetricsFromStorage();
     this.listAchievements();
 
-    // Garante que o usuário está carregado da API
+    // Garante que o usuÃ¡rio estÃ¡ carregado da API
     await this.sessao.init(true);
     const usuario = this.sessao.usuario;
     if (usuario) {
@@ -91,17 +91,16 @@ export class RewardsComponent implements AfterViewInit, OnInit {
 
   private listAchievements() {
     this.recompensasService.listAchievements().subscribe((response) => {
-      console.log('Achievements:', response);
-    });
+      });
   }
 
   private initializeLocalStorageData() {
-    // Inicializa as moedas se não existirem
+    // Inicializa as moedas se nÃ£o existirem
     if (!localStorage.getItem('coins')) {
       localStorage.setItem('coins', this.coins.toString());
     }
 
-    // Inicializa os pontos desbloqueados se não existirem
+    // Inicializa os pontos desbloqueados se nÃ£o existirem
     if (!localStorage.getItem('points')) {
       localStorage.setItem('points', this.points.toString());
     }
@@ -110,7 +109,7 @@ export class RewardsComponent implements AfterViewInit, OnInit {
       localStorage.setItem('price', this.price.toString());
     }
 
-    // Inicializa o array de recompensas resgatadas se não existir
+    // Inicializa o array de recompensas resgatadas se nÃ£o existir
     if (!localStorage.getItem('redeemed_rewards')) {
       localStorage.setItem('redeemed_rewards', JSON.stringify([]));
     }
@@ -177,15 +176,14 @@ export class RewardsComponent implements AfterViewInit, OnInit {
   }
 
   onMenuItemHover(label: string) {
-    console.log('Mouse entered on:', label);
-  }
+    }
 
-  // Método para verificar se uma imagem é o placeholder
+  // MÃ©todo para verificar se uma imagem Ã© o placeholder
   isPlaceholderImage(imageUrl: string): boolean {
     return !imageUrl || imageUrl === GIFT_ICON_PLACEHOLDER;
   }
 
-  // Método para obter estatísticas de imagens
+  // MÃ©todo para obter estatÃ­sticas de imagens
   getImageStats() {
     const totalRewards = this.rewards.length;
     const placeholderCount = this.rewards.filter(r => this.isPlaceholderImage(r.imageUrl)).length;
@@ -204,18 +202,14 @@ export class RewardsComponent implements AfterViewInit, OnInit {
     this.recompensasService.listCatalogs().subscribe({
       next: (catalogResponse: CatalogResponse | Catalog[]) => {
         const catalogs = Array.isArray(catalogResponse) ? catalogResponse : (catalogResponse?.data || []);
-        console.log('CatalogResponse:', catalogs);
         const catalogMap = new Map<string, string>();
         catalogs.forEach(cat => {
           catalogMap.set(String(cat._id).trim(), cat.catalog);
         });
-        console.log('CatalogMap:', Array.from(catalogMap.entries()));
-
         this.recompensasService.listItems().subscribe({
           next: (itemResponse: ItemResponse) => {
             const items = Array.isArray(itemResponse) ? itemResponse : (itemResponse?.data || []);
-            // console.log('Itens recebidos:', items);
-            // Extrai os nomes dos catálogos usados nos items
+            // // Extrai os nomes dos catÃ¡logos usados nos items
             this.categories = Array.from(
               new Set(
                 items
@@ -229,26 +223,22 @@ export class RewardsComponent implements AfterViewInit, OnInit {
             if (this.categories.length === 0 && items.length > 0) {
               this.categories = ['Outros'];
             }
-            console.log('Categorias finais:', this.categories);
             this.processItems(items, catalogMap);
-            console.log('Rewards disponíveis para mapeamento:', this.rewards);
-            // Após processar os itens, buscar achievements e mapear
+            // ApÃ³s processar os itens, buscar achievements e mapear
             this.recompensasService.listAchievements().subscribe((achievements: Achievement[]) => {
-              console.log('Achievements recebidos da API:', achievements);
               this.playerRedeemLogs = this.mapAchievementsToCards(achievements, this.rewards);
-              console.log('Logs de resgate mapeados para cards:', this.playerRedeemLogs);
               this.isLoadingRewards = false;
             });
           },
           error: (itemError) => {
             console.error('Erro ao carregar itens:', itemError);
-            this.notificationService.showSuccess('Erro ao carregar recompensas. Usando dados de demonstração.', false);
+            this.notificationService.showSuccess('Erro ao carregar recompensas. Usando dados de demonstraÃ§Ã£o.', false);
             this.isLoadingRewards = false;
           }
         });
       },
       error: (catalogError) => {
-        this.notificationService.showSuccess('Erro ao carregar categorias. Usando dados de demonstração.', false);
+        this.notificationService.showSuccess('Erro ao carregar categorias. Usando dados de demonstraÃ§Ã£o.', false);
         this.isLoadingRewards = false;
       }
     });
@@ -258,8 +248,7 @@ export class RewardsComponent implements AfterViewInit, OnInit {
     this.rewards = items.map((item) => {
       const catalogId = String(item.catalogId).trim();
       const categoryName = catalogMap.get(catalogId) || 'Outros';
-      // console.log('Item:', item, 'CatalogId:', catalogId, 'Categoria mapeada:', categoryName);
-      const isLimited = item.amount > 0 && item.amount <= 10;
+      // const isLimited = item.amount > 0 && item.amount <= 10;
       const isHighlighted = item.techniques?.includes('premium') || 
                           item.techniques?.includes('featured') ||
                           false;
@@ -283,14 +272,13 @@ export class RewardsComponent implements AfterViewInit, OnInit {
         requires: item.requires || [{ item: 'coins' }]
       };
     });
-    // console.log('Rewards finais:', this.rewards);
-  }
+    // }
 
   mapAchievementsToCards(achievements: Achievement[], items: Reward[]): PlayerRedeemLog[] {
     return achievements.map(ach => {
       const item = items.find(i => i.id === ach.item);
       return {
-        id: ach._id.slice(-6), // agora pega os últimos 6 dígitos
+        id: ach._id.slice(-6), // agora pega os Ãºltimos 6 dÃ­gitos
         itemName: item?.title || 'Desconhecido',
         imageUrl: item?.imageUrl || '',
         redeemedAt: new Date(ach.time).toISOString(),

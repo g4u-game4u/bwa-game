@@ -27,9 +27,9 @@ export const MANAGEMENT_TEAM_IDS = {
  * Determine user profile based on team membership
  * 
  * Priority order (highest to lowest):
- * 1. DIRETOR - Has DIREÇÃO team (FkmdhZ9)
+ * 1. DIRETOR - Has DIREÃ‡ÃƒO team (FkmdhZ9)
  * 2. GESTOR - Has GESTAO team (FkmdnFU)
- * 3. SUPERVISOR - Has SUPERVISÃO team (Fkmdmko)
+ * 3. SUPERVISOR - Has SUPERVISÃƒO team (Fkmdmko)
  * 4. JOGADOR - No management teams
  * 
  * @param teams - User's teams array (can be strings or objects with _id)
@@ -92,7 +92,7 @@ export function getUserOwnTeamId(teams: any[] | undefined | null, profile: UserP
     return null;
   }).filter(Boolean) as string[];
 
-  // For SUPERVISOR, return their SUPERVISÃO team
+  // For SUPERVISOR, return their SUPERVISÃƒO team
   if (profile === UserProfile.SUPERVISOR) {
     return teamIds.find(id => id === MANAGEMENT_TEAM_IDS.SUPERVISAO) || null;
   }
@@ -136,13 +136,10 @@ export function getAccessibleTeamIds(teams: any[] | undefined | null, profile: U
     return null;
   }).filter(Boolean) as string[];
 
-  console.log('👤 getAccessibleTeamIds: extracted teamIds:', teamIds, 'for profile:', profile);
-
   if (profile === UserProfile.SUPERVISOR) {
     // Supervisor can see their managed team (the non-SUPERVISAO team)
     // They have 2 teams: SUPERVISAO team + the team they manage
     const managedTeams = teamIds.filter(id => id !== MANAGEMENT_TEAM_IDS.SUPERVISAO);
-    console.log('👤 SUPERVISOR: managedTeams:', managedTeams);
     return managedTeams.length > 0 ? managedTeams : [];
   }
 
@@ -150,7 +147,6 @@ export function getAccessibleTeamIds(teams: any[] | undefined | null, profile: U
     // Gestor can see ALL their teams EXCEPT the GESTAO team itself
     // They have multiple teams: GESTAO team + all teams they manage
     const managedTeams = teamIds.filter(id => id !== MANAGEMENT_TEAM_IDS.GESTAO);
-    console.log('👤 GESTOR: managedTeams:', managedTeams);
     return managedTeams;
   }
 

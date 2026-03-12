@@ -45,8 +45,6 @@ export class CompanyService {
           .filter((id: string) => id.length > 0)
           .map((id: string) => String(id));
         
-        console.log('📊 Player company IDs from extra.cnpj_resp:', companyIds);
-        
         if (companyIds.length === 0) {
           return of([]);
         }
@@ -57,15 +55,11 @@ export class CompanyService {
           { $match: { _id: { $in: companyIds } } }
         ];
         
-        console.log('📊 Company aggregate query:', JSON.stringify(aggregateBody));
-        
         return this.funifierApi.post<any[]>(
           `/v3/database/cnpj__c/aggregate?strict=true`,
           aggregateBody
         ).pipe(
           map((response) => {
-            console.log('📊 Companies from cnpj__c:', response);
-            
             if (!response || !Array.isArray(response)) {
               return [];
             }

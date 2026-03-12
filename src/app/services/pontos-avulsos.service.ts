@@ -18,25 +18,25 @@ export interface ActionTemplate {
 
 export interface ProcessActionPayload {
   status: string;
-  user_email: string | null; // Email do executor da atividade (null para tarefas não atribuídas/Unassigned)
+  user_email: string | null; // Email do executor da atividade (null para tarefas nÃ£o atribuÃ­das/Unassigned)
   action_id: string;
   delivery_id: string;
   delivery_title: string;
   created_at: string;
   finished_at?: string; // Tornando opcional
   integration_id: string;
-  comment?: string; // Comentário opcional para ações
+  comment?: string; // ComentÃ¡rio opcional para aÃ§Ãµes
   comments?: Array<{
     id: number;
     message: string;
     created_by: string;
     created_at: string;
     type: string;
-  }>; // Array de comentários estruturados
-  approved?: boolean | null; // Status de aprovação da atividade
-  approved_by?: string | null; // Email do usuário que aprovou (null se não aprovado)
+  }>; // Array de comentÃ¡rios estruturados
+  approved?: boolean | null; // Status de aprovaÃ§Ã£o da atividade
+  approved_by?: string | null; // Email do usuÃ¡rio que aprovou (null se nÃ£o aprovado)
   dismissed?: boolean; // Status de cancelamento da atividade
-  updated_by?: string; // Email do usuário que está fazendo a atualização (para logs)
+  updated_by?: string; // Email do usuÃ¡rio que estÃ¡ fazendo a atualizaÃ§Ã£o (para logs)
 }
 
 export interface AtividadeDetalhe {
@@ -51,10 +51,10 @@ export interface AtividadeDetalhe {
   integration_id?: string;
   delivery_id?: string;
   delivery_title?: string;
-  action_id?: string; // ID da ação/template
-  action_template_id?: string; // ID do template da ação
-  approved?: boolean | null; // Status de aprovação da atividade
-  approved_by?: string | null; // Email do usuário que aprovou (null se não aprovado)
+  action_id?: string; // ID da aÃ§Ã£o/template
+  action_template_id?: string; // ID do template da aÃ§Ã£o
+  approved?: boolean | null; // Status de aprovaÃ§Ã£o da atividade
+  approved_by?: string | null; // Email do usuÃ¡rio que aprovou (null se nÃ£o aprovado)
   comments?: Array<{
     id: string;
     message: string;
@@ -62,7 +62,7 @@ export interface AtividadeDetalhe {
     created_at: string;
     updated_at?: string;
     type: string;
-  }>; // Array de comentários da atividade
+  }>; // Array de comentÃ¡rios da atividade
   attachments?: Array<{
     id: string;
     filename: string;
@@ -137,7 +137,7 @@ export interface DownloadUrlResponse {
   providedIn: 'root'
 })
 export class PontosAvulsosService {
-  // Cache para o e-mail do usuário atual para evitar múltiplas chamadas à API
+  // Cache para o e-mail do usuÃ¡rio atual para evitar mÃºltiplas chamadas Ã  API
   private cachedUserEmail: string | null = null;
   private userEmailPromise: Promise<string | null> | null = null;
 
@@ -148,25 +148,24 @@ export class PontosAvulsosService {
     private sessao: SessaoProvider,
     private auth: AuthProvider
   ) {
-    // Limpar cache quando o usuário fizer logout
-    // Observar mudanças na sessão para limpar o cache quando necessário
-    // Nota: O SessaoProvider não tem eventos observáveis, então vamos confiar
-    // que o cache será limpo quando necessário através do método clearUserEmailCache
+    // Limpar cache quando o usuÃ¡rio fizer logout
+    // Observar mudanÃ§as na sessÃ£o para limpar o cache quando necessÃ¡rio
+    // Nota: O SessaoProvider nÃ£o tem eventos observÃ¡veis, entÃ£o vamos confiar
+    // que o cache serÃ¡ limpo quando necessÃ¡rio atravÃ©s do mÃ©todo clearUserEmailCache
   }
 
   /**
-   * Limpa o cache do e-mail do usuário
-   * Útil quando o usuário faz logout ou quando precisamos forçar uma nova busca
-   * Este método é chamado automaticamente quando detectamos mudança de usuário
+   * Limpa o cache do e-mail do usuÃ¡rio
+   * Ãštil quando o usuÃ¡rio faz logout ou quando precisamos forÃ§ar uma nova busca
+   * Este mÃ©todo Ã© chamado automaticamente quando detectamos mudanÃ§a de usuÃ¡rio
    */
   public clearUserEmailCache(): void {
     this.cachedUserEmail = null;
     this.userEmailPromise = null;
-    console.log('🧹 Cache do e-mail do usuário limpo');
-  }
+    }
 
   /**
-   * Busca a lista de action templates disponíveis
+   * Busca a lista de action templates disponÃ­veis
    * @returns Promise com array de ActionTemplate
    */
   public async getActionTemplates(): Promise<ActionTemplate[]> {
@@ -192,8 +191,8 @@ export class PontosAvulsosService {
   }
 
   /**
-   * Busca o action template correto baseado no título da atividade
-   * @param actionTitle Título da ação
+   * Busca o action template correto baseado no tÃ­tulo da atividade
+   * @param actionTitle TÃ­tulo da aÃ§Ã£o
    * @returns Promise com o ActionTemplate ou null
    */
   public async getActionTemplateByTitle(actionTitle: string): Promise<ActionTemplate | null> {
@@ -204,14 +203,14 @@ export class PontosAvulsosService {
       // Busca exata primeiro
       let template = templates.find(t => t.name === actionTitle);
       
-      // Se não encontrar, busca case-insensitive
+      // Se nÃ£o encontrar, busca case-insensitive
       if (!template) {
         template = templates.find(t => 
           t.name?.toLowerCase() === actionTitle?.toLowerCase()
         );
       }
       
-      // Se ainda não encontrar, busca parcial
+      // Se ainda nÃ£o encontrar, busca parcial
       if (!template) {
         template = templates.find(t => 
           t.name?.toLowerCase().includes(actionTitle?.toLowerCase()) ||
@@ -221,14 +220,14 @@ export class PontosAvulsosService {
       
       return template || null;
     } catch (error) {
-      console.error('Erro ao buscar action template por título:', error);
+      console.error('Erro ao buscar action template por tÃ­tulo:', error);
       return null;
     }
   }
 
   /**
-   * Busca o action_id para uma atividade baseado no título da ação
-   * @param actionTitle Título da ação
+   * Busca o action_id para uma atividade baseado no tÃ­tulo da aÃ§Ã£o
+   * @param actionTitle TÃ­tulo da aÃ§Ã£o
    * @returns Promise com o action_id ou null
    */
   public async getActionIdByTitle(actionTitle: string): Promise<string | null> {
@@ -242,16 +241,16 @@ export class PontosAvulsosService {
       
       return null;
     } catch (error) {
-      console.error('Erro ao buscar action_id por título:', error);
+      console.error('Erro ao buscar action_id por tÃ­tulo:', error);
       return null;
     }
   }
 
   /**
-   * Busca atividades pendentes e em execução para a temporada atual
+   * Busca atividades pendentes e em execuÃ§Ã£o para a temporada atual
    * @param timeId ID do time (para contexto de time)
-   * @param userId ID do usuário (para contexto de colaborador)
-   * @param isTeamContext Se é contexto de time ou colaborador
+   * @param userId ID do usuÃ¡rio (para contexto de colaborador)
+   * @param isTeamContext Se Ã© contexto de time ou colaborador
    * @returns Promise com array de AtividadeDetalhe
    */
   public async getAtividadesPendentes(
@@ -284,10 +283,10 @@ export class PontosAvulsosService {
   }
 
   /**
-   * Busca atividades pendentes usando endpoint específico do modal
+   * Busca atividades pendentes usando endpoint especÃ­fico do modal
    * @param timeId ID do time
-   * @param userId ID do usuário (para contexto de colaborador)
-   * @param isTeamContext Se é contexto de time ou colaborador
+   * @param userId ID do usuÃ¡rio (para contexto de colaborador)
+   * @param isTeamContext Se Ã© contexto de time ou colaborador
    * @returns Promise com array de AtividadeDetalhe
    */
   public async getAtividadesPendentesModal(
@@ -314,12 +313,10 @@ export class PontosAvulsosService {
 
       if (isTeamContext && timeId) {
         // Contexto de time - usar /user-action/search com team_id
-        console.log('👥 Buscando atividades do time:', timeId);
-        
-        // Buscar PENDING e DOING em uma única requisição (dismissed=false)
+        // Buscar PENDING e DOING em uma Ãºnica requisiÃ§Ã£o (dismissed=false)
         const response = await this.getUserActions(
           ['PENDING', 'DOING'], 
-          undefined, // userId não é necessário quando teamId é fornecido
+          undefined, // userId nÃ£o Ã© necessÃ¡rio quando teamId Ã© fornecido
           startDateISO, 
           endDateISO, 
           page, 
@@ -329,8 +326,6 @@ export class PontosAvulsosService {
           filtros
         );
 
-        console.log('📊 Modal - Atividades do time encontradas:', response.items.length, 'de', response.total);
-        
         return {
           items: response.items || [],
           total: response.total || 0,
@@ -339,11 +334,9 @@ export class PontosAvulsosService {
           totalPages: response.totalPages || 0
         };
       } else if (!isTeamContext && userId) {
-        // Contexto de colaborador - usar /user-action/search com paginação
-        // Otimizado: uma única requisição com múltiplos status (status=PENDING&status=DOING)
-        console.log('👤 Buscando atividades do colaborador:', userId);
-        
-        // Buscar PENDING e DOING em uma única requisição (dismissed=false)
+        // Contexto de colaborador - usar /user-action/search com paginaÃ§Ã£o
+        // Otimizado: uma Ãºnica requisiÃ§Ã£o com mÃºltiplos status (status=PENDING&status=DOING)
+        // Buscar PENDING e DOING em uma Ãºnica requisiÃ§Ã£o (dismissed=false)
         const response = await this.getUserActions(
           ['PENDING', 'DOING'], 
           userId, 
@@ -352,12 +345,10 @@ export class PontosAvulsosService {
           page, 
           limit, 
           false,
-          undefined, // Não passar teamId para contexto de colaborador
+          undefined, // NÃ£o passar teamId para contexto de colaborador
           filtros
         );
 
-        console.log('📊 Modal - Atividades encontradas:', response.items.length, 'de', response.total);
-        
         return {
           items: response.items || [],
           total: response.total || 0,
@@ -381,10 +372,10 @@ export class PontosAvulsosService {
   }
 
   /**
-   * Busca atividades finalizadas usando endpoint específico do modal
+   * Busca atividades finalizadas usando endpoint especÃ­fico do modal
    * @param timeId ID do time
-   * @param userId ID do usuário (para contexto de colaborador)
-   * @param isTeamContext Se é contexto de time ou colaborador
+   * @param userId ID do usuÃ¡rio (para contexto de colaborador)
+   * @param isTeamContext Se Ã© contexto de time ou colaborador
    * @returns Promise com array de AtividadeDetalhe
    */
   public async getAtividadesFinalizadasModal(
@@ -410,13 +401,11 @@ export class PontosAvulsosService {
       // Buscar atividades com status DONE
       if (isTeamContext && timeId) {
         // Contexto de time - usar /user-action/search com team_id
-        console.log('👥 Buscando atividades finalizadas do time:', timeId);
-        
         // Buscar todas as atividades DONE para filtrar corretamente por approved=false
-        // Usar um limite alto (1000) para buscar a maioria dos casos em uma única chamada
+        // Usar um limite alto (1000) para buscar a maioria dos casos em uma Ãºnica chamada
         const allDoneResponse = await this.getUserActions(
           'DONE', 
-          undefined, // userId não é necessário quando teamId é fornecido
+          undefined, // userId nÃ£o Ã© necessÃ¡rio quando teamId Ã© fornecido
           startDateISO, 
           endDateISO, 
           1, 
@@ -426,13 +415,13 @@ export class PontosAvulsosService {
           filtros
         );
         
-        // Filtrar apenas atividades com approved: false ou null (aguardando aprovação)
+        // Filtrar apenas atividades com approved: false ou null (aguardando aprovaÃ§Ã£o)
         const allNotApproved = allDoneResponse.items.filter((atividade: any) => {
           const isNotApproved = atividade.approved === false || atividade.approved === null;
           return isNotApproved;
         });
         
-        // Se ainda houver mais páginas (mais de 1000 itens), buscar as páginas restantes
+        // Se ainda houver mais pÃ¡ginas (mais de 1000 itens), buscar as pÃ¡ginas restantes
         if (allDoneResponse.totalPages > 1) {
           for (let p = 2; p <= allDoneResponse.totalPages; p++) {
             const pageResponse = await this.getUserActions(
@@ -454,7 +443,7 @@ export class PontosAvulsosService {
           }
         }
         
-        // Aplicar paginação local nos resultados filtrados
+        // Aplicar paginaÃ§Ã£o local nos resultados filtrados
         const totalNotApproved = allNotApproved.length;
         const totalPages = Math.ceil(totalNotApproved / limit);
         const startIndex = (page - 1) * limit;
@@ -470,7 +459,7 @@ export class PontosAvulsosService {
         };
       } else if (!isTeamContext && userId) {
         // Buscar todas as atividades DONE para filtrar corretamente por approved=false
-        // Usar um limite alto (1000) para buscar a maioria dos casos em uma única chamada
+        // Usar um limite alto (1000) para buscar a maioria dos casos em uma Ãºnica chamada
         const allDoneResponse = await this.getUserActions(
           'DONE', 
           userId, 
@@ -479,17 +468,17 @@ export class PontosAvulsosService {
           1, 
           1000, 
           false, 
-          undefined, // Não passar teamId para contexto de colaborador
+          undefined, // NÃ£o passar teamId para contexto de colaborador
           filtros
         );
         
-        // Filtrar apenas atividades com approved: false ou null (aguardando aprovação)
+        // Filtrar apenas atividades com approved: false ou null (aguardando aprovaÃ§Ã£o)
         const allNotApproved = allDoneResponse.items.filter((atividade: any) => {
           const isNotApproved = atividade.approved === false || atividade.approved === null;
           return isNotApproved;
         });
         
-        // Se ainda houver mais páginas (mais de 1000 itens), buscar as páginas restantes
+        // Se ainda houver mais pÃ¡ginas (mais de 1000 itens), buscar as pÃ¡ginas restantes
         if (allDoneResponse.totalPages > 1) {
           for (let p = 2; p <= allDoneResponse.totalPages; p++) {
             const pageResponse = await this.getUserActions(
@@ -500,7 +489,7 @@ export class PontosAvulsosService {
               p, 
               1000, 
               false, 
-              undefined, // Não passar teamId para contexto de colaborador
+              undefined, // NÃ£o passar teamId para contexto de colaborador
               filtros
             );
             const pageNotApproved = pageResponse.items.filter((atividade: any) => {
@@ -511,7 +500,7 @@ export class PontosAvulsosService {
           }
         }
         
-        // Aplicar paginação local nos resultados filtrados
+        // Aplicar paginaÃ§Ã£o local nos resultados filtrados
         const totalNotApproved = allNotApproved.length;
         const totalPages = Math.ceil(totalNotApproved / limit);
         const startIndex = (page - 1) * limit;
@@ -536,7 +525,7 @@ export class PontosAvulsosService {
         totalPages: 0
       };
     } catch (error) {
-      console.error('❌ Service - Erro ao buscar atividades finalizadas:', error);
+      console.error('âŒ Service - Erro ao buscar atividades finalizadas:', error);
       return {
         items: [],
         total: 0,
@@ -566,20 +555,8 @@ export class PontosAvulsosService {
       const startDateISO = await this.seasonDatesService.getSeasonStartDateISO();
       const endDateISO = await this.seasonDatesService.getSeasonEndDateISO();
 
-      console.log('✅ Modal - Buscando atividades aprovadas:', { 
-        timeId, 
-        userId, 
-        isTeamContext, 
-        startDateISO, 
-        endDateISO,
-        page,
-        limit
-      });
-
       if (isTeamContext && timeId) {
         // Contexto de time - usar /user-action/search com team_id
-        console.log('👥 Buscando atividades aprovadas do time:', timeId);
-        
         // Buscar atividades DELIVERED e DONE aprovadas usando /user-action/search
         const [deliveredResponse, doneResponse] = await Promise.all([
           this.getUserActions(
@@ -732,7 +709,7 @@ export class PontosAvulsosService {
         });
 
         const results = [...deliveredActivities, ...approvedDoneActivities];
-        const total = deliveredResponse.total + (approvedDoneActivities.length); // Aproximação
+        const total = deliveredResponse.total + (approvedDoneActivities.length); // AproximaÃ§Ã£o
 
         return {
           items: results,
@@ -757,12 +734,12 @@ export class PontosAvulsosService {
   }
 
   /**
-   * Busca atividades canceladas usando endpoint específico do modal
+   * Busca atividades canceladas usando endpoint especÃ­fico do modal
    * @param timeId ID do time
-   * @param userId ID do usuário (para contexto de colaborador)
-   * @param isTeamContext Se é contexto de time ou colaborador
-   * @param page Página atual
-   * @param limit Limite de itens por página
+   * @param userId ID do usuÃ¡rio (para contexto de colaborador)
+   * @param isTeamContext Se Ã© contexto de time ou colaborador
+   * @param page PÃ¡gina atual
+   * @param limit Limite de itens por pÃ¡gina
    * @returns Promise com resposta paginada
    */
   public async getAtividadesCanceladasModal(
@@ -787,13 +764,11 @@ export class PontosAvulsosService {
 
       if (isTeamContext && timeId) {
         // Contexto de time - usar /user-action/search com team_id
-        console.log('👥 Buscando atividades canceladas do time:', timeId);
-        
-        // Para cancelados: dismissed=true e todos os status possíveis
+        // Para cancelados: dismissed=true e todos os status possÃ­veis
         const allStatuses = ['PENDING', 'DOING', 'DONE', 'DELIVERED', 'CANCELLED', 'INCOMPLETE'];
         return await this.getUserActions(
           allStatuses, 
-          undefined, // userId não é necessário quando teamId é fornecido
+          undefined, // userId nÃ£o Ã© necessÃ¡rio quando teamId Ã© fornecido
           startDateISO, 
           endDateISO, 
           page, 
@@ -803,8 +778,8 @@ export class PontosAvulsosService {
           filtros
         );
       } else if (!isTeamContext && userId) {
-        // Contexto de colaborador - usar /user-action/search com paginação
-        // Para cancelados: dismissed=true e todos os status possíveis
+        // Contexto de colaborador - usar /user-action/search com paginaÃ§Ã£o
+        // Para cancelados: dismissed=true e todos os status possÃ­veis
         const allStatuses = ['PENDING', 'DOING', 'DONE', 'DELIVERED', 'CANCELLED', 'INCOMPLETE'];
         return await this.getUserActions(
           allStatuses, 
@@ -814,7 +789,7 @@ export class PontosAvulsosService {
           page, 
           limit, 
           true, // dismissed=true para cancelados
-          undefined, // Não passar teamId para contexto de colaborador
+          undefined, // NÃ£o passar teamId para contexto de colaborador
           filtros
         );
       }
@@ -832,13 +807,13 @@ export class PontosAvulsosService {
     }
   }
 
-  // ===== MÉTODOS PARA PROCESSOS (DELIVERIES) =====
+  // ===== MÃ‰TODOS PARA PROCESSOS (DELIVERIES) =====
 
   /**
    * Busca processos pendentes usando endpoint /game/team-deliveries
    * @param timeId ID do time
-   * @param userId ID do usuário (para contexto de colaborador)
-   * @param isTeamContext Se é contexto de time ou colaborador
+   * @param userId ID do usuÃ¡rio (para contexto de colaborador)
+   * @param isTeamContext Se Ã© contexto de time ou colaborador
    * @returns Promise com array de processos
    */
   public async getProcessosPendentes(
@@ -863,8 +838,8 @@ export class PontosAvulsosService {
   /**
    * Busca processos incompletos usando endpoint /game/team-deliveries
    * @param timeId ID do time
-   * @param userId ID do usuário (para contexto de colaborador)
-   * @param isTeamContext Se é contexto de time ou colaborador
+   * @param userId ID do usuÃ¡rio (para contexto de colaborador)
+   * @param isTeamContext Se Ã© contexto de time ou colaborador
    * @returns Promise com array de processos
    */
   public async getProcessosIncompletos(
@@ -889,8 +864,8 @@ export class PontosAvulsosService {
   /**
    * Busca processos entregues usando endpoint /game/team-deliveries
    * @param timeId ID do time
-   * @param userId ID do usuário (para contexto de colaborador)
-   * @param isTeamContext Se é contexto de time ou colaborador
+   * @param userId ID do usuÃ¡rio (para contexto de colaborador)
+   * @param isTeamContext Se Ã© contexto de time ou colaborador
    * @returns Promise com array de processos
    */
   public async getProcessosEntregues(
@@ -915,8 +890,8 @@ export class PontosAvulsosService {
   /**
    * Busca processos cancelados usando endpoint /game/team-deliveries
    * @param timeId ID do time
-   * @param userId ID do usuário (para contexto de colaborador)
-   * @param isTeamContext Se é contexto de time ou colaborador
+   * @param userId ID do usuÃ¡rio (para contexto de colaborador)
+   * @param isTeamContext Se Ã© contexto de time ou colaborador
    * @returns Promise com array de processos
    */
   public async getProcessosCancelados(
@@ -925,7 +900,7 @@ export class PontosAvulsosService {
     isTeamContext: boolean = true
   ): Promise<any[]> {
     try {
-      // Obter datas da temporada (obrigatório pelo backend)
+      // Obter datas da temporada (obrigatÃ³rio pelo backend)
       const startDateISO = await this.seasonDatesService.getSeasonStartDateISO();
       const endDateISO = await this.seasonDatesService.getSeasonEndDateISO();
 
@@ -933,7 +908,7 @@ export class PontosAvulsosService {
       
       return results;
     } catch (error) {
-      console.error('❌ Erro ao buscar processos cancelados:', error);
+      console.error('âŒ Erro ao buscar processos cancelados:', error);
       throw error;
     }
   }
@@ -941,11 +916,11 @@ export class PontosAvulsosService {
   /**
    * Busca atividades por status usando as datas da temporada
    * @param status Status das atividades (PENDING, DOING, DONE, DELIVERED, etc.)
-   * @param startDate Data de início
+   * @param startDate Data de inÃ­cio
    * @param endDate Data de fim
-   * @param isTeamContext Se é contexto de time ou colaborador
+   * @param isTeamContext Se Ã© contexto de time ou colaborador
    * @param timeId ID do time (para contexto de time)
-   * @param userId ID do usuário (para contexto de colaborador)
+   * @param userId ID do usuÃ¡rio (para contexto de colaborador)
    * @returns Promise com array de AtividadeDetalhe
    */
   private async getGameActions(
@@ -1007,11 +982,11 @@ export class PontosAvulsosService {
   /**
    * Busca processos (deliveries) por status usando as datas da temporada
    * @param status Status dos processos (PENDING, INCOMPLETE, DELIVERED, CANCELLED)
-   * @param startDate Data de início
+   * @param startDate Data de inÃ­cio
    * @param endDate Data de fim
-   * @param isTeamContext Se é contexto de time ou colaborador
+   * @param isTeamContext Se Ã© contexto de time ou colaborador
    * @param timeId ID do time (para contexto de time)
-   * @param userId ID do usuário (para contexto de colaborador)
+   * @param userId ID do usuÃ¡rio (para contexto de colaborador)
    * @returns Promise com array de processos
    */
   private async getGameDeliveries(
@@ -1048,7 +1023,7 @@ export class PontosAvulsosService {
       
       return [];
     } catch (error) {
-      console.error(`❌ Erro ao buscar processos com status ${status}:`, error);
+      console.error(`âŒ Erro ao buscar processos com status ${status}:`, error);
       return [];
     }
   }
@@ -1057,7 +1032,7 @@ export class PontosAvulsosService {
    * Busca atividades do time usando /game/team-actions
    * @param status Status das atividades
    * @param teamId ID do time
-   * @param startDate Data de início
+   * @param startDate Data de inÃ­cio
    * @param endDate Data de fim
    * @returns Promise com array de AtividadeDetalhe
    */
@@ -1076,23 +1051,11 @@ export class PontosAvulsosService {
         end: endDate
       };
 
-      console.log('🔗 Requisição GET /game/team-actions:', { url, params });
-      
       const response = await this.api.get<any>(url, { params });
-      
-      console.log('📥 Resposta /game/team-actions:', response);
       
       // Transformar a resposta para o formato AtividadeDetalhe
       if (Array.isArray(response)) {
         return response.map(item => {
-          console.log('🔍 Item da API (Team):', {
-            id: item.id,
-            action_title: item.action_title,
-            title: item.title,
-            action_id: item.action_id,
-            actionId: item.actionId,
-            action_template_id: item.action_template_id
-          });
           return {
             id: item.id,
             approved: item.approved,
@@ -1120,17 +1083,17 @@ export class PontosAvulsosService {
   }
 
   /**
-   * Busca atividades do usuário usando GET /user-action/search
-   * @param status Status das atividades (ou array de status para múltiplos)
-   * @param userId ID do usuário (será usado como user_email, opcional se teamId fornecido)
-   * @param startDate Data de início (será usado como created_at_start)
-   * @param endDate Data de fim (será usado como created_at_end)
-   * @param page Página atual (padrão: 1)
-   * @param limit Limite de itens por página (padrão: 10)
-   * @param dismissed Se deve filtrar por dismissed (padrão: false)
-   * @param teamId ID do time (opcional, será usado como team_id no query param)
+   * Busca atividades do usuÃ¡rio usando GET /user-action/search
+   * @param status Status das atividades (ou array de status para mÃºltiplos)
+   * @param userId ID do usuÃ¡rio (serÃ¡ usado como user_email, opcional se teamId fornecido)
+   * @param startDate Data de inÃ­cio (serÃ¡ usado como created_at_start)
+   * @param endDate Data de fim (serÃ¡ usado como created_at_end)
+   * @param page PÃ¡gina atual (padrÃ£o: 1)
+   * @param limit Limite de itens por pÃ¡gina (padrÃ£o: 10)
+   * @param dismissed Se deve filtrar por dismissed (padrÃ£o: false)
+   * @param teamId ID do time (opcional, serÃ¡ usado como team_id no query param)
    * @param filtros Filtros adicionais (busca, executor, created_at_start, created_at_end, finished_at_start, finished_at_end)
-   * @returns Promise com resposta paginada contendo items e metadata de paginação
+   * @returns Promise com resposta paginada contendo items e metadata de paginaÃ§Ã£o
    */
   private async getUserActions(
     status: string | string[],
@@ -1153,7 +1116,7 @@ export class PontosAvulsosService {
     try {
       const url = '/user-action/search';
       
-      // Usar HttpParams para suportar múltiplos valores no mesmo query param
+      // Usar HttpParams para suportar mÃºltiplos valores no mesmo query param
       let httpParams = new HttpParams()
         .set('created_at_start', startDate)
         .set('created_at_end', endDate)
@@ -1161,14 +1124,14 @@ export class PontosAvulsosService {
         .set('page', page.toString())
         .set('limit', limit.toString());
 
-      // Se teamId fornecido, adicionar team_id; caso contrário, usar user_email
+      // Se teamId fornecido, adicionar team_id; caso contrÃ¡rio, usar user_email
       if (teamId) {
         httpParams = httpParams.set('team_id', teamId.toString());
       } else if (userId) {
         httpParams = httpParams.set('user_email', userId);
       }
 
-      // Para múltiplos status, adicionar cada um separadamente: status=PENDING&status=DOING...
+      // Para mÃºltiplos status, adicionar cada um separadamente: status=PENDING&status=DOING...
       if (Array.isArray(status)) {
         status.forEach(s => {
           httpParams = httpParams.append('status', s);
@@ -1179,14 +1142,14 @@ export class PontosAvulsosService {
 
       // Adicionar filtros opcionais de busca
       if (filtros) {
-        // Busca por texto (título/ID) agora é feita no frontend, não enviar search para o backend
+        // Busca por texto (tÃ­tulo/ID) agora Ã© feita no frontend, nÃ£o enviar search para o backend
         
         if (filtros.executor && filtros.executor.trim()) {
-          // Filtro específico por executor (sobrescreve o user_email se fornecido)
+          // Filtro especÃ­fico por executor (sobrescreve o user_email se fornecido)
           httpParams = httpParams.set('executor_email', filtros.executor.trim());
         }
         
-        // Datas de criação personalizadas (sobrescrevem as datas da temporada se fornecidas)
+        // Datas de criaÃ§Ã£o personalizadas (sobrescrevem as datas da temporada se fornecidas)
         if (filtros.created_at_start && filtros.created_at_start.trim()) {
           httpParams = httpParams.set('created_at_start', filtros.created_at_start.trim());
         }
@@ -1195,7 +1158,7 @@ export class PontosAvulsosService {
           httpParams = httpParams.set('created_at_end', filtros.created_at_end.trim());
         }
         
-        // Datas de finalização personalizadas
+        // Datas de finalizaÃ§Ã£o personalizadas
         if (filtros.finished_at_start && filtros.finished_at_start.trim()) {
           httpParams = httpParams.set('finished_at_start', filtros.finished_at_start.trim());
         }
@@ -1210,18 +1173,14 @@ export class PontosAvulsosService {
       httpParams.keys().forEach(key => {
         const values = httpParams.getAll(key);
         if (values && values.length > 1) {
-          paramsObj[key] = values; // Array para múltiplos valores
+          paramsObj[key] = values; // Array para mÃºltiplos valores
         } else if (values && values.length === 1) {
-          paramsObj[key] = values[0]; // Valor único
+          paramsObj[key] = values[0]; // Valor Ãºnico
         }
       });
 
-      console.log('🔗 Requisição GET /user-action/search:', { url, params: paramsObj });
-      
       // Usar ApiProvider.get para fazer GET com query params
       const response: UserActionSearchResponse = await this.api.get<any>(url, { params: paramsObj });
-      
-      console.log('📥 Resposta /user-action/search:', response);
       
       // Transformar a resposta para o formato AtividadeDetalhe
       if (response && response.items && Array.isArray(response.items)) {
@@ -1249,7 +1208,7 @@ export class PontosAvulsosService {
             updated_at: comment.updated_at,
             type: comment.type
           })) : [],
-          attachments: [], // Será carregado separadamente se necessário
+          attachments: [], // SerÃ¡ carregado separadamente se necessÃ¡rio
           created_by: item.created_by,
           updated_at: item.updated_at,
           finished_by: item.finished_by,
@@ -1277,7 +1236,7 @@ export class PontosAvulsosService {
         totalPages: 0
       };
     } catch (error) {
-      console.error(`Erro ao buscar atividades do usuário com status ${status}:`, error);
+      console.error(`Erro ao buscar atividades do usuÃ¡rio com status ${status}:`, error);
       return {
         items: [],
         total: 0,
@@ -1289,37 +1248,35 @@ export class PontosAvulsosService {
   }
 
   /**
-   * Obtém o e-mail do usuário atual com cache
-   * Primeiro tenta obter da sessão, se não estiver disponível, busca do endpoint /auth/user
-   * @returns Promise com o e-mail do usuário atual ou null se não conseguir obter
-   * @note Este método é usado por todas as funções que chamam /game/action/process para garantir
+   * ObtÃ©m o e-mail do usuÃ¡rio atual com cache
+   * Primeiro tenta obter da sessÃ£o, se nÃ£o estiver disponÃ­vel, busca do endpoint /auth/user
+   * @returns Promise com o e-mail do usuÃ¡rio atual ou null se nÃ£o conseguir obter
+   * @note Este mÃ©todo Ã© usado por todas as funÃ§Ãµes que chamam /game/action/process para garantir
    *       que o campo 'updated_by' seja sempre preenchido corretamente
-   * @note O cache é automaticamente limpo quando o usuário faz logout ou quando um novo usuário faz login
+   * @note O cache Ã© automaticamente limpo quando o usuÃ¡rio faz logout ou quando um novo usuÃ¡rio faz login
    */
   public async getCurrentUserEmail(): Promise<string | null> {
-    // Verificar se o usuário da sessão mudou (logout/login de outro usuário)
+    // Verificar se o usuÃ¡rio da sessÃ£o mudou (logout/login de outro usuÃ¡rio)
     const currentSessionEmail = this.sessao.usuario?.email;
     const hasUserInSession = !!this.sessao.usuario;
     
-    // Se temos cache mas o usuário da sessão mudou ou foi removido, limpar o cache
+    // Se temos cache mas o usuÃ¡rio da sessÃ£o mudou ou foi removido, limpar o cache
     if (this.cachedUserEmail) {
-      // Se não há usuário na sessão (logout), limpar cache
+      // Se nÃ£o hÃ¡ usuÃ¡rio na sessÃ£o (logout), limpar cache
       if (!hasUserInSession) {
-        console.log('🔄 Usuário fez logout. Limpando cache do e-mail.');
         this.clearUserEmailCache();
       }
-      // Se há usuário na sessão mas o e-mail mudou (novo login), limpar cache
+      // Se hÃ¡ usuÃ¡rio na sessÃ£o mas o e-mail mudou (novo login), limpar cache
       else if (currentSessionEmail && this.cachedUserEmail !== currentSessionEmail) {
-        console.log('🔄 Novo usuário fez login. Limpando cache do e-mail anterior.');
         this.clearUserEmailCache();
       }
-      // Se o cache ainda é válido, retornar imediatamente
+      // Se o cache ainda Ã© vÃ¡lido, retornar imediatamente
       else if (currentSessionEmail && this.cachedUserEmail === currentSessionEmail) {
         return this.cachedUserEmail;
       }
     }
 
-    // Se já temos uma promise em andamento, aguardar ela
+    // Se jÃ¡ temos uma promise em andamento, aguardar ela
     if (this.userEmailPromise) {
       return this.userEmailPromise;
     }
@@ -1327,7 +1284,7 @@ export class PontosAvulsosService {
     // Criar nova promise para buscar o e-mail
     this.userEmailPromise = (async () => {
       try {
-        // Primeiro, tentar obter da sessão
+        // Primeiro, tentar obter da sessÃ£o
         const sessionEmail = this.sessao.usuario?.email;
         if (sessionEmail) {
           this.cachedUserEmail = sessionEmail;
@@ -1335,26 +1292,24 @@ export class PontosAvulsosService {
           return sessionEmail;
         }
 
-        // Se não estiver na sessão, buscar do endpoint /auth/user
-        console.log('📡 Buscando e-mail do usuário do endpoint /auth/user...');
+        // Se nÃ£o estiver na sessÃ£o, buscar do endpoint /auth/user
         const userInfo = await firstValueFrom(this.auth.userInfo());
         
         if (userInfo && userInfo.email) {
           this.cachedUserEmail = userInfo.email;
-          // Atualizar também a sessão se possível
+          // Atualizar tambÃ©m a sessÃ£o se possÃ­vel
           if (this.sessao.usuario && !this.sessao.usuario.email) {
             this.sessao.usuario.email = userInfo.email;
           }
           this.userEmailPromise = null;
-          console.log('✅ E-mail do usuário obtido do endpoint:', userInfo.email);
           return userInfo.email;
         }
 
-        console.warn('⚠️ E-mail do usuário não encontrado na resposta do endpoint /auth/user');
+        console.warn('âš ï¸ E-mail do usuÃ¡rio nÃ£o encontrado na resposta do endpoint /auth/user');
         this.userEmailPromise = null;
         return null;
       } catch (error) {
-        console.error('❌ Erro ao buscar e-mail do usuário:', error);
+        console.error('âŒ Erro ao buscar e-mail do usuÃ¡rio:', error);
         this.userEmailPromise = null;
         return null;
       }
@@ -1364,28 +1319,25 @@ export class PontosAvulsosService {
   }
 
   /**
-   * Processa a atribuição de uma atividade
-   * @param payload Dados da atribuição
+   * Processa a atribuiÃ§Ã£o de uma atividade
+   * @param payload Dados da atribuiÃ§Ã£o
    * @returns Promise com a resposta da API
-   * @note O campo 'updated_by' é removido do payload antes de enviar, pois não existe no schema da tabela user_action
-   *       Todas as funções que chamam /game/action/process passam por este método
+   * @note O campo 'updated_by' Ã© removido do payload antes de enviar, pois nÃ£o existe no schema da tabela user_action
+   *       Todas as funÃ§Ãµes que chamam /game/action/process passam por este mÃ©todo
    */
   public async processAction(payload: ProcessActionPayload): Promise<any> {
     try {
-      // Remover updated_by do payload se existir, pois não é aceito pelo backend
-      // O campo updated_by não existe no schema da tabela user_action
+      // Remover updated_by do payload se existir, pois nÃ£o Ã© aceito pelo backend
+      // O campo updated_by nÃ£o existe no schema da tabela user_action
       const payloadParaEnviar: any = { ...payload };
       if (payloadParaEnviar.updated_by !== undefined) {
         delete payloadParaEnviar.updated_by;
-        console.log('⚠️ Campo updated_by removido do payload (não suportado pelo backend)');
-      }
+        }
       
-      console.log('📤 POST /game/action/process com payload:', JSON.stringify(payloadParaEnviar, null, 2));
       const response = await this.api.post<any>('/game/action/process', payloadParaEnviar);
-      console.log('✅ Resposta de /game/action/process:', response);
       return response;
     } catch (error) {
-      console.error('❌ Erro ao processar ação:', error);
+      console.error('âŒ Erro ao processar aÃ§Ã£o:', error);
       throw error;
     }
   }
@@ -1394,7 +1346,7 @@ export class PontosAvulsosService {
    * Atualiza o status de uma atividade
    * @param atividadeId ID da atividade
    * @param novoStatus Novo status (DONE, PENDING, CANCELLED)
-   * @param userEmail Email do usuário que está fazendo a alteração
+   * @param userEmail Email do usuÃ¡rio que estÃ¡ fazendo a alteraÃ§Ã£o
    * @returns Promise com a resposta da API
    */
   public async atualizarStatusAtividade(
@@ -1410,11 +1362,8 @@ export class PontosAvulsosService {
         updated_at: new Date().toISOString()
       };
 
-      console.log('🔄 Atualizando status da atividade:', { atividadeId, novoStatus, userEmail });
-      
       const response = await this.api.put<any>('/game/action/status', payload);
       
-      console.log('✅ Status da atividade atualizado:', response);
       return response;
     } catch (error) {
       console.error('Erro ao atualizar status da atividade:', error);
@@ -1423,39 +1372,39 @@ export class PontosAvulsosService {
   }
 
   /**
-   * Busca a lista de usuários de um time específico
+   * Busca a lista de usuÃ¡rios de um time especÃ­fico
    * @param timeId ID do time
-   * @returns Promise com array de usuários
+   * @returns Promise com array de usuÃ¡rios
    */
   public async getUsers(timeId: number): Promise<any[]> {
     try {
       const response = await this.api.get<any>(`/team/${timeId}/users`);
       
-      // Transforma a resposta em um array de usuários
+      // Transforma a resposta em um array de usuÃ¡rios
       if (Array.isArray(response)) {
         return response;
       }
       
       return [];
     } catch (error) {
-      console.error('Erro ao buscar usuários do time:', error);
+      console.error('Erro ao buscar usuÃ¡rios do time:', error);
       throw error;
     }
   }
 
   /**
-   * Cria o payload para processamento de ação
-   * @param actionId ID da ação
-   * @param userEmail Email do executor da atividade (null para tarefas não atribuídas/Unassigned)
+   * Cria o payload para processamento de aÃ§Ã£o
+   * @param actionId ID da aÃ§Ã£o
+   * @param userEmail Email do executor da atividade (null para tarefas nÃ£o atribuÃ­das/Unassigned)
    * @param deliveryId ID da entrega (opcional)
-   * @param deliveryTitle Título da entrega (opcional)
-   * @param status Status da ação (padrão: PENDING)
-   * @param finishedAt Data de finalização (opcional)
-   * @param comment Comentário opcional para a ação
-   * @param integrationId ID de integração único da atividade (opcional)
+   * @param deliveryTitle TÃ­tulo da entrega (opcional)
+   * @param status Status da aÃ§Ã£o (padrÃ£o: PENDING)
+   * @param finishedAt Data de finalizaÃ§Ã£o (opcional)
+   * @param comment ComentÃ¡rio opcional para a aÃ§Ã£o
+   * @param integrationId ID de integraÃ§Ã£o Ãºnico da atividade (opcional)
    * @returns ProcessActionPayload
-   * @note O campo 'updated_by' será preenchido automaticamente pelo método processAction
-   *       com o e-mail do usuário atual da sessão quando o payload for processado
+   * @note O campo 'updated_by' serÃ¡ preenchido automaticamente pelo mÃ©todo processAction
+   *       com o e-mail do usuÃ¡rio atual da sessÃ£o quando o payload for processado
    */
   public createProcessPayload(
     actionId: string,
@@ -1471,25 +1420,25 @@ export class PontosAvulsosService {
     
     const payload: ProcessActionPayload = {
       status: status,
-      user_email: userEmail, // Email do executor da atividade (null para tarefas não atribuídas/Unassigned)
+      user_email: userEmail, // Email do executor da atividade (null para tarefas nÃ£o atribuÃ­das/Unassigned)
       action_id: actionId,
       delivery_id: deliveryId || '',
       delivery_title: deliveryTitle || '',
       created_at: now,
       integration_id: integrationId || deliveryId || actionId,
-      comments: [], // Sempre incluir array vazio de comentários
-      approved: false, // Nova atividade sempre começa como não aprovada
-      approved_by: null, // Ninguém aprovou ainda
-      dismissed: false // Nova atividade não é dismissed
-      // updated_by será adicionado automaticamente pelo processAction com o e-mail do usuário atual
+      comments: [], // Sempre incluir array vazio de comentÃ¡rios
+      approved: false, // Nova atividade sempre comeÃ§a como nÃ£o aprovada
+      approved_by: null, // NinguÃ©m aprovou ainda
+      dismissed: false // Nova atividade nÃ£o Ã© dismissed
+      // updated_by serÃ¡ adicionado automaticamente pelo processAction com o e-mail do usuÃ¡rio atual
     };
 
-    // Só inclui finished_at se uma data válida for fornecida
+    // SÃ³ inclui finished_at se uma data vÃ¡lida for fornecida
     if (finishedAt) {
       payload.finished_at = finishedAt;
     }
 
-    // Inclui comentário se fornecido
+    // Inclui comentÃ¡rio se fornecido
     if (comment) {
       payload.comment = comment;
     }
@@ -1499,17 +1448,17 @@ export class PontosAvulsosService {
 
   /**
    * Aprova uma atividade usando o endpoint /game/action/process
-   * @param actionId ID da ação/template
-   * @param userEmail Email do executor da atividade (não o usuário que está aprovando)
-   * @param finishedAt Data de finalização
-   * @param deliveryId ID da entrega (obrigatório)
-   * @param deliveryTitle Título da entrega (obrigatório)
-   * @param createdAt Data de criação da atividade (obrigatório)
-   * @param integrationId ID de integração único da atividade (obrigatório)
+   * @param actionId ID da aÃ§Ã£o/template
+   * @param userEmail Email do executor da atividade (nÃ£o o usuÃ¡rio que estÃ¡ aprovando)
+   * @param finishedAt Data de finalizaÃ§Ã£o
+   * @param deliveryId ID da entrega (obrigatÃ³rio)
+   * @param deliveryTitle TÃ­tulo da entrega (obrigatÃ³rio)
+   * @param createdAt Data de criaÃ§Ã£o da atividade (obrigatÃ³rio)
+   * @param integrationId ID de integraÃ§Ã£o Ãºnico da atividade (obrigatÃ³rio)
    * @returns Promise com a resposta da API
-   * @note Esta função chama getCurrentUserEmail() diretamente para preencher 'approved_by' e usa
-   *       processAction() que também chama getCurrentUserEmail() para preencher 'updated_by'
-   *       O e-mail é obtido da sessão ou do endpoint /auth/user com cache
+   * @note Esta funÃ§Ã£o chama getCurrentUserEmail() diretamente para preencher 'approved_by' e usa
+   *       processAction() que tambÃ©m chama getCurrentUserEmail() para preencher 'updated_by'
+   *       O e-mail Ã© obtido da sessÃ£o ou do endpoint /auth/user com cache
    */
   public async aprovarAtividade(
     actionId: string,
@@ -1521,14 +1470,14 @@ export class PontosAvulsosService {
     integrationId: string
   ): Promise<any> {
     try {
-      // Obter o email do usuário atual que está aprovando (não o executor)
+      // Obter o email do usuÃ¡rio atual que estÃ¡ aprovando (nÃ£o o executor)
       const currentUserEmail = await this.getCurrentUserEmail();
       if (!currentUserEmail) {
-        console.warn('⚠️ Email do usuário atual não encontrado. Usando userEmail como fallback para approved_by.');
+        console.warn('âš ï¸ Email do usuÃ¡rio atual nÃ£o encontrado. Usando userEmail como fallback para approved_by.');
       }
 
       const payload: ProcessActionPayload = {
-        status: 'DONE', // Manter status como DONE (não alterar para DELIVERED)
+        status: 'DONE', // Manter status como DONE (nÃ£o alterar para DELIVERED)
         user_email: userEmail, // Email do executor da atividade
         action_id: actionId,
         delivery_id: deliveryId,
@@ -1536,15 +1485,13 @@ export class PontosAvulsosService {
         created_at: createdAt,
         finished_at: finishedAt,
         integration_id: integrationId,
-        comments: [], // Sempre incluir array vazio de comentários
+        comments: [], // Sempre incluir array vazio de comentÃ¡rios
         approved: true, // Atividade aprovada
-        approved_by: currentUserEmail || userEmail // Email do usuário que está aprovando (fallback para userEmail se não houver sessão)
-        // updated_by será adicionado automaticamente pelo processAction com o e-mail do usuário atual
+        approved_by: currentUserEmail || userEmail // Email do usuÃ¡rio que estÃ¡ aprovando (fallback para userEmail se nÃ£o houver sessÃ£o)
+        // updated_by serÃ¡ adicionado automaticamente pelo processAction com o e-mail do usuÃ¡rio atual
       };
 
-      console.log('✅ Aprovando atividade:', payload);
       const response = await this.processAction(payload);
-      console.log('✅ Atividade aprovada:', response);
       return response;
     } catch (error) {
       console.error('Erro ao aprovar atividade:', error);
@@ -1554,16 +1501,16 @@ export class PontosAvulsosService {
 
   /**
    * Finaliza uma atividade (marca como DONE com approved: false)
-   * @param actionId ID da ação/template
-   * @param userEmail Email do executor da atividade (não o usuário que está finalizando)
-   * @param finishedAt Data de finalização
+   * @param actionId ID da aÃ§Ã£o/template
+   * @param userEmail Email do executor da atividade (nÃ£o o usuÃ¡rio que estÃ¡ finalizando)
+   * @param finishedAt Data de finalizaÃ§Ã£o
    * @param deliveryId ID da entrega
-   * @param deliveryTitle Título da entrega
-   * @param createdAt Data de criação da atividade
-   * @param integrationId ID de integração único da atividade (obrigatório)
+   * @param deliveryTitle TÃ­tulo da entrega
+   * @param createdAt Data de criaÃ§Ã£o da atividade
+   * @param integrationId ID de integraÃ§Ã£o Ãºnico da atividade (obrigatÃ³rio)
    * @returns Promise com a resposta da API
-   * @note Esta função usa processAction() que internamente chama getCurrentUserEmail() para preencher
-   *       o campo 'updated_by' com o e-mail do usuário atual (obtido da sessão ou do endpoint /auth/user)
+   * @note Esta funÃ§Ã£o usa processAction() que internamente chama getCurrentUserEmail() para preencher
+   *       o campo 'updated_by' com o e-mail do usuÃ¡rio atual (obtido da sessÃ£o ou do endpoint /auth/user)
    */
   public async finalizarAtividade(
     actionId: string,
@@ -1584,16 +1531,14 @@ export class PontosAvulsosService {
         created_at: createdAt,
         finished_at: finishedAt,
         integration_id: integrationId,
-        comments: [], // Sempre incluir array vazio de comentários
-        approved: false, // Atividade finalizada mas não aprovada
-        approved_by: null, // Ninguém aprovou ainda
-        dismissed: false // Atividade não é dismissed
-        // updated_by será adicionado automaticamente pelo processAction com o e-mail do usuário atual
+        comments: [], // Sempre incluir array vazio de comentÃ¡rios
+        approved: false, // Atividade finalizada mas nÃ£o aprovada
+        approved_by: null, // NinguÃ©m aprovou ainda
+        dismissed: false // Atividade nÃ£o Ã© dismissed
+        // updated_by serÃ¡ adicionado automaticamente pelo processAction com o e-mail do usuÃ¡rio atual
       };
 
-      console.log('✅ Finalizando atividade:', payload);
       const response = await this.processAction(payload);
-      console.log('✅ Atividade finalizada:', response);
       return response;
     } catch (error) {
       console.error('Erro ao finalizar atividade:', error);
@@ -1604,7 +1549,7 @@ export class PontosAvulsosService {
   /**
    * Desbloqueia uma atividade (marca como entregue)
    * @param deliveryId ID da entrega
-   * @param finishedAt Data de finalização
+   * @param finishedAt Data de finalizaÃ§Ã£o
    * @returns Promise com a resposta da API
    */
   public async desbloquearAtividade(deliveryId: string, finishedAt: string): Promise<any> {
@@ -1613,11 +1558,8 @@ export class PontosAvulsosService {
         finished_at: finishedAt
       };
 
-      console.log('🔓 Desbloqueando atividade:', { deliveryId, finishedAt });
-      
       const response = await this.api.post<any>(`/game/delivery/${deliveryId}/complete`, payload);
       
-      console.log('✅ Atividade desbloqueada:', response);
       return response;
     } catch (error) {
       console.error('Erro ao desbloquear atividade:', error);
@@ -1631,11 +1573,8 @@ export class PontosAvulsosService {
         user_email: userEmail
       };
 
-      console.log('🔒 Bloquear atividade:', { deliveryId, userEmail });
-
       const response = await this.api.post<any>(`/game/delivery/${deliveryId}/restore`, payload);
 
-      console.log('✅ Atividade bloqueada:', response);
       return response;
     } catch (error) {
       console.error('Erro ao bloquear atividade:', error);
@@ -1645,15 +1584,15 @@ export class PontosAvulsosService {
 
   /**
    * Cancela uma atividade usando o endpoint /game/action/process
-   * @param actionId ID da ação/template
-   * @param userEmail Email do executor da atividade (não o usuário que está cancelando)
+   * @param actionId ID da aÃ§Ã£o/template
+   * @param userEmail Email do executor da atividade (nÃ£o o usuÃ¡rio que estÃ¡ cancelando)
    * @param deliveryId ID da entrega
-   * @param deliveryTitle Título da entrega
-   * @param createdAt Data de criação da atividade
-   * @param integrationId ID de integração único da atividade (obrigatório)
+   * @param deliveryTitle TÃ­tulo da entrega
+   * @param createdAt Data de criaÃ§Ã£o da atividade
+   * @param integrationId ID de integraÃ§Ã£o Ãºnico da atividade (obrigatÃ³rio)
    * @returns Promise com a resposta da API
-   * @note Esta função usa processAction() que internamente chama getCurrentUserEmail() para preencher
-   *       o campo 'updated_by' com o e-mail do usuário atual (obtido da sessão ou do endpoint /auth/user)
+   * @note Esta funÃ§Ã£o usa processAction() que internamente chama getCurrentUserEmail() para preencher
+   *       o campo 'updated_by' com o e-mail do usuÃ¡rio atual (obtido da sessÃ£o ou do endpoint /auth/user)
    */
   public async cancelarAtividadeComComentario(
     actionId: string,
@@ -1675,32 +1614,27 @@ export class PontosAvulsosService {
         finished_at: now,
         integration_id: integrationId,
         dismissed: true, // Marcar como cancelada usando dismissed
-        comments: [], // Array vazio - comentários serão adicionados via endpoint separado
-        approved: false, // Atividade cancelada não está aprovada
-        approved_by: null // Ninguém aprovou uma atividade cancelada
-        // updated_by será adicionado automaticamente pelo processAction com o e-mail do usuário atual
+        comments: [], // Array vazio - comentÃ¡rios serÃ£o adicionados via endpoint separado
+        approved: false, // Atividade cancelada nÃ£o estÃ¡ aprovada
+        approved_by: null // NinguÃ©m aprovou uma atividade cancelada
+        // updated_by serÃ¡ adicionado automaticamente pelo processAction com o e-mail do usuÃ¡rio atual
       };
 
-      console.log('❌ Cancelando atividade (dismissed):', payload);
-      
       try {
         const response = await this.processAction(payload);
         // Se a resposta for null ou undefined (status 204), tratar como sucesso
         if (response === null || response === undefined) {
-          console.log('✅ Atividade cancelada (status 204 - No Content, resposta vazia)');
           return { success: true, status: 204 };
         }
-        console.log('✅ Atividade cancelada (dismissed):', response);
         return response;
       } catch (error: any) {
-        // Status 204 (No Content) é sucesso - a operação foi concluída
-        // Pode ser que o HttpClient lance erro ou retorne null para 204 dependendo da configuração
+        // Status 204 (No Content) Ã© sucesso - a operaÃ§Ã£o foi concluÃ­da
+        // Pode ser que o HttpClient lance erro ou retorne null para 204 dependendo da configuraÃ§Ã£o
         if (error?.status === 204 || error?.response?.status === 204 || 
             error === null || error === undefined) {
-          console.log('✅ Atividade cancelada (status 204 - No Content)');
           return { success: true, status: 204 };
         }
-        // Re-lançar outros erros
+        // Re-lanÃ§ar outros erros
         throw error;
       }
     } catch (error) {
@@ -1711,15 +1645,15 @@ export class PontosAvulsosService {
 
   /**
    * Bloqueia uma atividade usando o endpoint /game/action/process
-   * @param actionId ID da ação/template
-   * @param userEmail Email do executor da atividade (não o usuário que está bloqueando)
+   * @param actionId ID da aÃ§Ã£o/template
+   * @param userEmail Email do executor da atividade (nÃ£o o usuÃ¡rio que estÃ¡ bloqueando)
    * @param deliveryId ID da entrega
-   * @param deliveryTitle Título da entrega
-   * @param createdAt Data de criação da atividade
-   * @param integrationId ID de integração único da atividade (obrigatório)
+   * @param deliveryTitle TÃ­tulo da entrega
+   * @param createdAt Data de criaÃ§Ã£o da atividade
+   * @param integrationId ID de integraÃ§Ã£o Ãºnico da atividade (obrigatÃ³rio)
    * @returns Promise com a resposta da API
-   * @note Esta função usa processAction() que internamente chama getCurrentUserEmail() para preencher
-   *       o campo 'updated_by' com o e-mail do usuário atual (obtido da sessão ou do endpoint /auth/user)
+   * @note Esta funÃ§Ã£o usa processAction() que internamente chama getCurrentUserEmail() para preencher
+   *       o campo 'updated_by' com o e-mail do usuÃ¡rio atual (obtido da sessÃ£o ou do endpoint /auth/user)
    */
   public async bloquearAtividadeComComentario(
     actionId: string,
@@ -1740,15 +1674,13 @@ export class PontosAvulsosService {
         created_at: createdAt,
         finished_at: now,
         integration_id: integrationId,
-        comments: [], // Array vazio - comentários serão adicionados via endpoint separado
-        approved: false, // Atividade bloqueada aguarda aprovação
-        approved_by: null // Ninguém aprovou ainda
-        // updated_by será adicionado automaticamente pelo processAction com o e-mail do usuário atual
+        comments: [], // Array vazio - comentÃ¡rios serÃ£o adicionados via endpoint separado
+        approved: false, // Atividade bloqueada aguarda aprovaÃ§Ã£o
+        approved_by: null // NinguÃ©m aprovou ainda
+        // updated_by serÃ¡ adicionado automaticamente pelo processAction com o e-mail do usuÃ¡rio atual
       };
 
-      console.log('🔒 Bloqueando atividade:', payload);
       const response = await this.processAction(payload);
-      console.log('✅ Atividade bloqueada:', response);
       return response;
     } catch (error) {
       console.error('Erro ao bloquear atividade:', error);
@@ -1758,15 +1690,15 @@ export class PontosAvulsosService {
 
   /**
    * Reprova uma atividade usando o endpoint /game/action/process
-   * @param actionId ID da ação/template
-   * @param userEmail Email do executor da atividade (não o usuário que está reprovando)
+   * @param actionId ID da aÃ§Ã£o/template
+   * @param userEmail Email do executor da atividade (nÃ£o o usuÃ¡rio que estÃ¡ reprovando)
    * @param deliveryId ID da entrega
-   * @param deliveryTitle Título da entrega
-   * @param createdAt Data de criação da atividade
-   * @param integrationId ID de integração único da atividade (obrigatório)
+   * @param deliveryTitle TÃ­tulo da entrega
+   * @param createdAt Data de criaÃ§Ã£o da atividade
+   * @param integrationId ID de integraÃ§Ã£o Ãºnico da atividade (obrigatÃ³rio)
    * @returns Promise com a resposta da API
-   * @note Esta função usa processAction() que internamente chama getCurrentUserEmail() para preencher
-   *       o campo 'updated_by' com o e-mail do usuário atual (obtido da sessão ou do endpoint /auth/user)
+   * @note Esta funÃ§Ã£o usa processAction() que internamente chama getCurrentUserEmail() para preencher
+   *       o campo 'updated_by' com o e-mail do usuÃ¡rio atual (obtido da sessÃ£o ou do endpoint /auth/user)
    */
   public async reprovarAtividadeComComentario(
     actionId: string,
@@ -1786,15 +1718,13 @@ export class PontosAvulsosService {
         delivery_title: deliveryTitle,
         created_at: createdAt,
         integration_id: integrationId,
-        comments: [], // Array vazio - comentários serão adicionados via endpoint separado
-        approved: false, // Atividade reprovada não está aprovada
-        approved_by: null // Ninguém aprovou uma atividade reprovada
-        // updated_by será adicionado automaticamente pelo processAction com o e-mail do usuário atual
+        comments: [], // Array vazio - comentÃ¡rios serÃ£o adicionados via endpoint separado
+        approved: false, // Atividade reprovada nÃ£o estÃ¡ aprovada
+        approved_by: null // NinguÃ©m aprovou uma atividade reprovada
+        // updated_by serÃ¡ adicionado automaticamente pelo processAction com o e-mail do usuÃ¡rio atual
       };
 
-      console.log('🔄 Reprovando atividade:', payload);
       const response = await this.processAction(payload);
-      console.log('✅ Atividade reprovada:', response);
       return response;
     } catch (error) {
       console.error('Erro ao reprovar atividade:', error);
@@ -1802,7 +1732,7 @@ export class PontosAvulsosService {
     }
   }
 
-  // ===== MÉTODOS PARA AÇÕES DE DELIVERY =====
+  // ===== MÃ‰TODOS PARA AÃ‡Ã•ES DE DELIVERY =====
 
   /**
    * Cancela uma delivery
@@ -1811,9 +1741,7 @@ export class PontosAvulsosService {
    */
   public async cancelarDelivery(deliveryId: string): Promise<any> {
     try {
-      console.log('❌ Cancelando delivery:', deliveryId);
       const response = await this.api.post<any>(`/game/delivery/${deliveryId}/cancel`, {});
-      console.log('✅ Delivery cancelada com sucesso');
       return response;
     } catch (error) {
       console.error('Erro ao cancelar delivery:', error);
@@ -1828,9 +1756,7 @@ export class PontosAvulsosService {
    */
   public async completarDelivery(deliveryId: string): Promise<any> {
     try {
-      console.log('✅ Completando delivery:', deliveryId);
       const response = await this.api.post<any>(`/game/delivery/${deliveryId}/complete`, {});
-      console.log('✅ Delivery completada com sucesso');
       return response;
     } catch (error) {
       console.error('Erro ao completar delivery:', error);
@@ -1845,9 +1771,7 @@ export class PontosAvulsosService {
    */
   public async desfazerDelivery(deliveryId: string): Promise<any> {
     try {
-      console.log('🔄 Desfazendo delivery:', deliveryId);
       const response = await this.api.post<any>(`/game/delivery/${deliveryId}/undeliver`, {});
-      console.log('✅ Delivery desfeita com sucesso');
       return response;
     } catch (error) {
       console.error('Erro ao desfazer delivery:', error);
@@ -1862,9 +1786,7 @@ export class PontosAvulsosService {
    */
   public async restaurarDelivery(deliveryId: string): Promise<any> {
     try {
-      console.log('🔄 Restaurando delivery:', deliveryId);
       const response = await this.api.post<any>(`/game/delivery/${deliveryId}/restore`, {});
-      console.log('✅ Delivery restaurada com sucesso');
       return response;
     } catch (error) {
       console.error('Erro ao restaurar delivery:', error);
@@ -1873,14 +1795,12 @@ export class PontosAvulsosService {
   }
 
   /**
-   * Método de teste para verificar se os filtros estão funcionando corretamente
+   * MÃ©todo de teste para verificar se os filtros estÃ£o funcionando corretamente
    * @param atividades Array de atividades para testar
    * @returns Objeto com os resultados dos filtros
    */
   public testarFiltros(atividades: AtividadeDetalhe[]): any {
-    console.log('🧪 Testando filtros com', atividades.length, 'atividades');
-    
-    // Filtrar atividades aguardando aprovação (DONE com approved: false ou null)
+    // Filtrar atividades aguardando aprovaÃ§Ã£o (DONE com approved: false ou null)
     const aguardandoAprovacao = atividades.filter(atividade => 
       atividade.status === 'DONE' && (atividade.approved === false || atividade.approved === null)
     );
@@ -1945,18 +1865,15 @@ export class PontosAvulsosService {
       }
     };
     
-    console.log('�� Resultado dos testes:', resultado);
     return resultado;
   }
 
   /**
-   * Método de teste específico para verificar o filtro de atividades aguardando aprovação
+   * MÃ©todo de teste especÃ­fico para verificar o filtro de atividades aguardando aprovaÃ§Ã£o
    * @param atividades Array de atividades para testar
    * @returns Objeto com os resultados do teste
    */
   public testarFiltroAguardandoAprovacao(atividades: AtividadeDetalhe[]): any {
-    console.log('🧪 Testando filtro de atividades aguardando aprovação...');
-    
     // Contar atividades por status
     const porStatus = atividades.reduce((acc, atividade) => {
       acc[atividade.status] = (acc[atividade.status] || 0) + 1;
@@ -1972,12 +1889,12 @@ export class PontosAvulsosService {
       return acc;
     }, {} as any);
     
-    // Filtrar atividades que deveriam estar na aba aguardando aprovação
+    // Filtrar atividades que deveriam estar na aba aguardando aprovaÃ§Ã£o
     const aguardandoAprovacao = atividades.filter(atividade => 
       atividade.status === 'DONE' && (atividade.approved === false || atividade.approved === null || atividade.approved === undefined)
     );
     
-    // Filtrar atividades que NÃO deveriam estar na aba aguardando aprovação
+    // Filtrar atividades que NÃƒO deveriam estar na aba aguardando aprovaÃ§Ã£o
     const naoDeveriamEstar = atividades.filter(atividade => 
       atividade.status !== 'DONE' || atividade.approved === true
     );
@@ -1996,50 +1913,47 @@ export class PontosAvulsosService {
       }
     };
     
-    console.log('🧪 Resultado do teste de filtro aguardando aprovação:', resultado);
-    
     if (resultado.naoDeveriamEstar.count > 0) {
-      console.error('❌ PROBLEMA: Encontradas atividades que não deveriam estar na aba aguardando aprovação!');
+      console.error('âŒ PROBLEMA: Encontradas atividades que nÃ£o deveriam estar na aba aguardando aprovaÃ§Ã£o!');
     } else {
-      console.log('✅ Filtro funcionando corretamente!');
-    }
+      }
     
     return resultado;
   }
 
   /**
-   * Método auxiliar para verificar se uma atividade está aprovada
+   * MÃ©todo auxiliar para verificar se uma atividade estÃ¡ aprovada
    * @param atividade Atividade para verificar
-   * @returns true se aprovada, false caso contrário
+   * @returns true se aprovada, false caso contrÃ¡rio
    */
   public isAtividadeAprovada(atividade: any): boolean {
     return atividade?.approved === true;
   }
 
   /**
-   * Método auxiliar para verificar se uma atividade não está aprovada
+   * MÃ©todo auxiliar para verificar se uma atividade nÃ£o estÃ¡ aprovada
    * @param atividade Atividade para verificar
-   * @returns true se não aprovada (false ou null), false caso contrário
+   * @returns true se nÃ£o aprovada (false ou null), false caso contrÃ¡rio
    */
   public isAtividadeNaoAprovada(atividade: any): boolean {
     return atividade?.approved === false || atividade?.approved === null;
   }
 
   /**
-   * Método auxiliar para verificar se uma atividade está cancelada
+   * MÃ©todo auxiliar para verificar se uma atividade estÃ¡ cancelada
    * @param atividade Atividade para verificar
-   * @returns true se cancelada, false caso contrário
+   * @returns true se cancelada, false caso contrÃ¡rio
    */
   public isAtividadeCancelada(atividade: any): boolean {
     return atividade?.status === 'CANCELLED' || atividade?.dismissed === true;
   }
 
   /**
-   * Adiciona um comentário a uma user action
+   * Adiciona um comentÃ¡rio a uma user action
    * @param userActionId ID da user action
-   * @param comment Comentário a ser adicionado
-   * @param userEmail Email do usuário que está comentando
-   * @param commentType Tipo do comentário (CANCEL, BLOCK, FINISH, DENY, APPROVE)
+   * @param comment ComentÃ¡rio a ser adicionado
+   * @param userEmail Email do usuÃ¡rio que estÃ¡ comentando
+   * @param commentType Tipo do comentÃ¡rio (CANCEL, BLOCK, FINISH, DENY, APPROVE)
    * @returns Promise com a resposta da API
    */
   public async adicionarComentario(
@@ -2055,14 +1969,11 @@ export class PontosAvulsosService {
         type: commentType
       };
 
-      console.log('💬 Adicionando comentário:', { userActionId, payload });
-      
       const response = await this.api.post<any>(`/user-action/${userActionId}/comment`, payload);
       
-      console.log('✅ Comentário adicionado:', response);
       return response;
     } catch (error) {
-      console.error('Erro ao adicionar comentário:', error);
+      console.error('Erro ao adicionar comentÃ¡rio:', error);
       throw error;
     }
   }
@@ -2080,39 +1991,36 @@ export class PontosAvulsosService {
     try {
       const formData = new FormData();
       
-      // Usar 'files' (plural) como chave conforme documentação
+      // Usar 'files' (plural) como chave conforme documentaÃ§Ã£o
       files.forEach((file, index) => {
         formData.append('files', file);
       });
 
-      console.log('📎 Fazendo upload de anexos:', { userActionId, filesCount: files.length });
-      
-      // Para upload de arquivos, usar HttpClient diretamente para evitar headers padrão
+      // Para upload de arquivos, usar HttpClient diretamente para evitar headers padrÃ£o
       // que incluem Content-Type: application/json
       const url = `${environment.backend_url_base}/user-action/${userActionId}/attachment`;
       
       // Usar HttpClient diretamente para ter controle total sobre os headers
       const response = await firstValueFrom(this.http.put<any>(url, formData));
       
-      console.log('✅ Anexos enviados:', response);
       return response;
     } catch (error: any) {
       console.error('Erro ao fazer upload de anexos:', error);
       
-      // Tratar erros tipificados conforme documentação
+      // Tratar erros tipificados conforme documentaÃ§Ã£o
       if (error?.error?.errorType) {
         const errorData = error.error;
         let message = 'Erro no upload';
         
         switch (errorData.errorType) {
           case 'FILE_TOO_LARGE':
-            message = `Arquivo muito grande. Máximo: ${errorData.details?.maxSize || 'desconhecido'} bytes`;
+            message = `Arquivo muito grande. MÃ¡ximo: ${errorData.details?.maxSize || 'desconhecido'} bytes`;
             break;
           case 'INVALID_CONTENT_TYPE':
             message = 'Erro no envio do arquivo. Verifique o formato.';
             break;
           case 'UNAUTHORIZED':
-            message = 'Sessão expirada. Faça login novamente.';
+            message = 'SessÃ£o expirada. FaÃ§a login novamente.';
             break;
           default:
             message = errorData.message || message;
@@ -2134,27 +2042,12 @@ export class PontosAvulsosService {
     userActionId: string
   ): Promise<any> {
     try {
-      console.log('📎 Buscando anexos:', { userActionId });
-      
       const response = await this.api.get<any>(`/user-action/${userActionId}/attachment`);
-      
-      console.log('✅ Anexos encontrados:', response);
       
       // Log detalhado da estrutura dos anexos
       if (Array.isArray(response)) {
         response.forEach((anexo, index) => {
-          console.log(`📋 Anexo ${index + 1}:`, {
-            id: anexo.id,
-            filename: anexo.filename,
-            original_name: anexo.original_name,
-            name: anexo.name,
-            size: anexo.size,
-            mime_type: anexo.mime_type,
-            type: anexo.type,
-            created_at: anexo.created_at,
-            createdAt: anexo.createdAt
           });
-        });
       }
       
       return response;
@@ -2165,7 +2058,7 @@ export class PontosAvulsosService {
   }
 
   /**
-   * Obtém a URL de download de um anexo específico
+   * ObtÃ©m a URL de download de um anexo especÃ­fico
    * @param attachmentId ID do anexo
    * @returns Promise com a URL do arquivo
    */
@@ -2173,8 +2066,6 @@ export class PontosAvulsosService {
     attachmentId: string
   ): Promise<string> {
     try {
-      console.log('📥 Obtendo URL de download do anexo:', { attachmentId });
-      
       const url = `${environment.backend_url_base}/user-action/download-attachment/${attachmentId}`;
       
       // Usar HttpClient diretamente para obter a resposta JSON
@@ -2186,10 +2077,9 @@ export class PontosAvulsosService {
       const downloadUrl = response?.download_url;
       
       if (!downloadUrl) {
-        throw new Error('URL de download não encontrada na resposta');
+        throw new Error('URL de download nÃ£o encontrada na resposta');
       }
       
-      console.log('✅ URL de download obtida:', downloadUrl);
       return downloadUrl;
     } catch (error) {
       console.error('Erro ao obter URL de download do anexo:', error);
@@ -2198,12 +2088,10 @@ export class PontosAvulsosService {
   }
 
   /**
-   * Método de teste para simular os dados reais fornecidos
+   * MÃ©todo de teste para simular os dados reais fornecidos
    */
   public testarComDadosReais() {
-    console.log('🧪 TESTE COM DADOS REAIS - Iniciando...');
-    
-    // Simular os dados exatos fornecidos pelo usuário
+    // Simular os dados exatos fornecidos pelo usuÃ¡rio
     const dadosReais = [
       {
         "user_id": "0511ad9f-d3d3-4c3c-9a1c-55cb2dbd3118",
@@ -2214,7 +2102,7 @@ export class PontosAvulsosService {
         "action_template_id": "testeaitax",
         "delivery_id": "1234444",
         "created_at": "2025-07-24T17:59:52.304+00:00",
-        "action_title": "tarefa alterada pelo césar",
+        "action_title": "tarefa alterada pelo cÃ©sar",
         "delivery_title": "1234444",
         "user_email": "cesar.domingos@cidadania4u.com.br",
         "team_id": 13,
@@ -2239,7 +2127,7 @@ export class PontosAvulsosService {
         "action_template_id": "taxta47",
         "delivery_id": "azzzzaz",
         "created_at": "2025-07-24T18:08:51.126+00:00",
-        "action_title": "TX | Elaborar Relatório (Compensação com Crédito Tributário - Rubrica da Folha)",
+        "action_title": "TX | Elaborar RelatÃ³rio (CompensaÃ§Ã£o com CrÃ©dito TributÃ¡rio - Rubrica da Folha)",
         "delivery_title": "azzzzaz",
         "user_email": "cesar.domingos@cidadania4u.com.br",
         "team_id": 13,
@@ -2257,50 +2145,23 @@ export class PontosAvulsosService {
       }
     ];
     
-    console.log('📊 Dados reais fornecidos:', dadosReais);
-    
-    // Testar filtro para "aguardando aprovação"
+    // Testar filtro para "aguardando aprovaÃ§Ã£o"
     const aguardandoAprovacao = dadosReais.filter(atividade => {
       const isNotApproved = atividade.approved === false || atividade.approved === null;
-      console.log(`🔍 TESTE - Atividade ${atividade.id}:`, {
-        approved: atividade.approved,
-        approved_type: typeof atividade.approved,
-        isNotApproved: isNotApproved,
-        action_title: atividade.action_title
-      });
       return isNotApproved;
     });
     
-    console.log('✅ TESTE - Atividades que deveriam estar em "aguardando aprovação":', aguardandoAprovacao.length);
     aguardandoAprovacao.forEach((atividade, index) => {
-      console.log(`✅ TESTE - Incluída ${index + 1}:`, {
-        id: atividade.id,
-        approved: atividade.approved,
-        action_title: atividade.action_title
       });
-    });
     
     // Testar filtro para "aprovados"
     const aprovados = dadosReais.filter(atividade => {
       const isApproved = this.isAtividadeAprovada(atividade);
-      console.log(`🔍 TESTE - Atividade ${atividade.id}:`, {
-        approved: atividade.approved,
-        approved_type: typeof atividade.approved,
-        isApproved: isApproved,
-        action_title: atividade.action_title
-      });
       return isApproved;
     });
     
-    console.log('✅ TESTE - Atividades que deveriam estar em "aprovados":', aprovados.length);
     aprovados.forEach((atividade, index) => {
-      console.log(`✅ TESTE - Incluída ${index + 1}:`, {
-        id: atividade.id,
-        approved: atividade.approved,
-        action_title: atividade.action_title
       });
-    });
     
-    console.log('🏁 TESTE COM DADOS REAIS - Finalizado');
-  }
+    }
 } 
