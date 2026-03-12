@@ -87,42 +87,33 @@ function extractTimestamp(time: number | { $date: string } | undefined): number 
 }
 
 /**
- * Helper to generate Funifier relative date expressions
+ * Helper to generate Funifier date expressions using ISO format
  * 
- * Funifier supports relative date shortcuts in aggregates:
- * - `-0d-` → start of current day (00:00:00)
- * - `-0d+` → end of current day (23:59:59)
- * - `-1d-` / `-1d+` → start/end of yesterday
- * - `-0w-` / `-0w+` → start/end of current week
- * - `-0M-` / `-0M+` → start/end of current month
- * - `-1M-` / `-1M+` → start/end of previous month
- * - `-0y-` / `-0y+` → start/end of current year
- * 
- * Usage in aggregates:
- * { "time": { "$gte": { "$date": "-0M-" }, "$lte": { "$date": "-0M+" } } }
+ * NOTE: Funifier's relative date shortcuts (-0M-, -0M+, etc.) were found to be
+ * unreliable in aggregate queries. Using ISO date strings instead for consistency.
  * 
  * @param month - Target month (if undefined, uses current month)
  * @param position - 'start' for beginning of month, 'end' for end of month
- * @returns Funifier relative date expression like { $date: "-0M-" }
+ * @returns Funifier date expression with ISO string like { $date: "2026-03-01T00:00:00.000Z" }
  */
 function getRelativeDateExpression(month: Date | undefined, position: 'start' | 'end'): { $date: string } {
-  const now = new Date();
-  const targetMonth = month || now;
+  const targetMonth = month || new Date();
   
-  // Calculate months difference from current month
-  const currentYear = now.getFullYear();
-  const currentMonth = now.getMonth();
-  const targetYear = targetMonth.getFullYear();
-  const targetMonthNum = targetMonth.getMonth();
+  const year = targetMonth.getFullYear();
+  const monthNum = targetMonth.getMonth();
   
-  // Calculate how many months ago the target month is
-  const monthsAgo = (currentYear - targetYear) * 12 + (currentMonth - targetMonthNum);
+  let date: Date;
+  if (position === 'start') {
+    // Start of month: first day at 00:00:00.000 UTC
+    date = new Date(Date.UTC(year, monthNum, 1, 0, 0, 0, 0));
+  } else {
+    // End of month: last day at 23:59:59.999 UTC
+    // Get first day of next month, then subtract 1ms
+    date = new Date(Date.UTC(year, monthNum + 1, 1, 0, 0, 0, 0));
+    date = new Date(date.getTime() - 1);
+  }
   
-  // Generate Funifier relative date expression
-  // -0M- = start of current month, -1M- = start of previous month, etc.
-  const suffix = position === 'start' ? '-' : '+';
-  
-  return { $date: `-${monthsAgo}M${suffix}` };
+  return { $date: date.toISOString() };
 }
 
 @Injectable({

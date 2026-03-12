@@ -6,30 +6,30 @@ import { AggregateQueryBuilderService, AggregateQuery } from './aggregate-query-
 import { PerformanceMonitorService } from './performance-monitor.service';
 
 /**
- * Helper to generate Funifier relative date expressions
+ * Helper to generate Funifier date expressions using ISO format
  * 
- * Funifier supports relative date shortcuts in aggregates:
- * - "-0M-" = start of current month
- * - "-0M+" = end of current month
- * - "-1M-" = start of previous month
+ * NOTE: Funifier's relative date shortcuts (-0M-, -0M+, etc.) were found to be
+ * unreliable in aggregate queries. Using ISO date strings instead for consistency.
  * 
  * @param date - Target date
  * @param position - 'start' for beginning of period, 'end' for end of period
- * @returns Funifier relative date expression like { $date: "-0M-" }
+ * @returns Funifier date expression with ISO string like { $date: "2026-03-01T00:00:00.000Z" }
  */
 function toFunifierDate(date: Date, position: 'start' | 'end' = 'start'): { $date: string } {
-  const now = new Date();
-  const currentYear = now.getFullYear();
-  const currentMonth = now.getMonth();
-  const targetYear = date.getFullYear();
-  const targetMonth = date.getMonth();
+  const year = date.getFullYear();
+  const month = date.getMonth();
   
-  // Calculate months difference
-  const monthsAgo = (currentYear - targetYear) * 12 + (currentMonth - targetMonth);
+  let resultDate: Date;
+  if (position === 'start') {
+    // Start of month: first day at 00:00:00.000 UTC
+    resultDate = new Date(Date.UTC(year, month, 1, 0, 0, 0, 0));
+  } else {
+    // End of month: last day at 23:59:59.999 UTC
+    resultDate = new Date(Date.UTC(year, month + 1, 1, 0, 0, 0, 0));
+    resultDate = new Date(resultDate.getTime() - 1);
+  }
   
-  // Generate Funifier relative date expression
-  const suffix = position === 'start' ? '-' : '+';
-  return { $date: `-${monthsAgo}M${suffix}` };
+  return { $date: resultDate.toISOString() };
 }
 
 /**

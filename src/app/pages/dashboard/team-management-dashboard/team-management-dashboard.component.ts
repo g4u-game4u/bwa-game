@@ -30,30 +30,28 @@ import { ProgressCardType } from '@components/c4u-activity-progress/c4u-activity
 import { ProgressListType } from '@modals/modal-progress-list/modal-progress-list.component';
 
 /**
- * Helper to generate Funifier relative date expressions
+ * Helper to generate Funifier date expressions using ISO format
  * 
- * Funifier supports relative date shortcuts in aggregates:
- * - "-0d-" = start of current day
- * - "-0d+" = end of current day
- * - "-0M-" = start of current month
- * - "-0M+" = end of current month
- * - "-1M-" = start of previous month
- * - "-7d-" = 7 days ago (start of day)
+ * NOTE: Funifier's relative date shortcuts (-0d-, -0M-, etc.) were found to be
+ * unreliable in aggregate queries. Using ISO date strings instead for consistency.
  * 
  * @param date - Target date (dayjs object or Date)
  * @param position - 'start' for beginning of period, 'end' for end of period
- * @returns Funifier relative date expression like { $date: "-0M-" }
+ * @returns Funifier date expression with ISO string like { $date: "2026-03-12T00:00:00.000Z" }
  */
 function toFunifierDate(date: dayjs.Dayjs | Date, position: 'start' | 'end' = 'start'): { $date: string } {
-  const now = dayjs();
   const target = dayjs(date);
   
-  // Calculate days difference from today
-  const daysDiff = now.startOf('day').diff(target.startOf('day'), 'day');
+  let resultDate: Date;
+  if (position === 'start') {
+    // Start of day: 00:00:00.000 UTC
+    resultDate = target.startOf('day').toDate();
+  } else {
+    // End of day: 23:59:59.999 UTC
+    resultDate = target.endOf('day').toDate();
+  }
   
-  // Generate Funifier relative date expression
-  const suffix = position === 'start' ? '-' : '+';
-  return { $date: `-${daysDiff}d${suffix}` };
+  return { $date: resultDate.toISOString() };
 }
 
 /**
