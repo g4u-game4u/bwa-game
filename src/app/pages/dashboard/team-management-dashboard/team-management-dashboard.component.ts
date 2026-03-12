@@ -30,6 +30,33 @@ import { ProgressCardType } from '@components/c4u-activity-progress/c4u-activity
 import { ProgressListType } from '@modals/modal-progress-list/modal-progress-list.component';
 
 /**
+ * Helper to generate Funifier relative date expressions
+ * 
+ * Funifier supports relative date shortcuts in aggregates:
+ * - "-0d-" = start of current day
+ * - "-0d+" = end of current day
+ * - "-0M-" = start of current month
+ * - "-0M+" = end of current month
+ * - "-1M-" = start of previous month
+ * - "-7d-" = 7 days ago (start of day)
+ * 
+ * @param date - Target date (dayjs object or Date)
+ * @param position - 'start' for beginning of period, 'end' for end of period
+ * @returns Funifier relative date expression like { $date: "-0M-" }
+ */
+function toFunifierDate(date: dayjs.Dayjs | Date, position: 'start' | 'end' = 'start'): { $date: string } {
+  const now = dayjs();
+  const target = dayjs(date);
+  
+  // Calculate days difference from today
+  const daysDiff = now.startOf('day').diff(target.startOf('day'), 'day');
+  
+  // Generate Funifier relative date expression
+  const suffix = position === 'start' ? '-' : '+';
+  return { $date: `-${daysDiff}d${suffix}` };
+}
+
+/**
  * Team Management Dashboard Component
  * Main container for the management dashboard view
  * Accessible only to users with management teams (GESTAO, SUPERVISÃO, or DIREÇÃO)
@@ -548,8 +575,8 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
             player: { $in: memberIds },
             type: 0, // type 0 = points
             time: {
-              $gte: { $date: monthStart.toISOString() },
-              $lte: { $date: monthEnd.toISOString() }
+              $gte: toFunifierDate(monthStart, 'start'),
+              $lte: toFunifierDate(monthEnd, 'end')
             }
           }
         },
@@ -1273,8 +1300,8 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
           $match: {
             userId: collaboratorId,
             time: {
-              $gte: { $date: startDate.toISOString() },
-              $lte: { $date: endDate.toISOString() }
+              $gte: toFunifierDate(startDate, 'start'),
+              $lte: toFunifierDate(endDate, 'end')
             }
           }
         },
@@ -1403,8 +1430,8 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
             player: collaboratorId,
             type: 0, // type 0 = points
             time: {
-              $gte: { $date: startDate.toISOString() },
-              $lte: { $date: endDate.toISOString() }
+              $gte: toFunifierDate(startDate, 'start'),
+              $lte: toFunifierDate(endDate, 'end')
             }
           }
         },
@@ -1542,8 +1569,8 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
             $match: {
               'playerData.teams': this.selectedTeamId,
               time: {
-                $gte: { $date: startDate.toISOString() },
-                $lte: { $date: endDate.toISOString() }
+                $gte: toFunifierDate(startDate, 'start'),
+                $lte: toFunifierDate(endDate, 'end')
               }
             }
           },
@@ -1573,8 +1600,8 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
               player: { $in: this.teamMemberIds },
               type: 0, // type 0 = points
               time: {
-                $gte: { $date: startDate.toISOString() },
-                $lte: { $date: endDate.toISOString() }
+                $gte: toFunifierDate(startDate, 'start'),
+                $lte: toFunifierDate(endDate, 'end')
               }
             }
           },

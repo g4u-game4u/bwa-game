@@ -187,7 +187,7 @@
       </div>
       
       <c4u-card class="carteira-card">
-        <!-- Carteira list from action_log CNPJs -->
+        <!-- Carteira list from player's extra.cnpj_resp (assigned portfolio) -->
         <div *ngIf="carteiraClientes.length > 0" class="carteira-list">
           <div *ngFor="let cliente of carteiraClientes" 
                class="carteira-item"
@@ -211,7 +211,8 @@
                 <i class="ri-time-line kpi-icon" aria-hidden="true"></i>
               </div>
               <span *ngIf="!cliente.deliveryKpi" class="kpi-na">N/A</span>
-              <span class="carteira-action-count">{{ cliente.actionCount }} tarefas</span>
+              <!-- Show CNPJ ID for reference -->
+              <span *ngIf="cliente.cnpjId" class="carteira-cnpj-id">{{ cliente.cnpjId }}</span>
             </div>
           </div>
         </div>

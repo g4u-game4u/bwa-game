@@ -87,41 +87,42 @@ function extractTimestamp(time: number | { $date: string } | undefined): number 
 }
 
 /**
- * Helper to generate Funifier date expressions (relative or absolute)
- * Funifier supports: -0d-, -0d+, -1d-, -0M-, -0M+, -0y-, etc.
- * - `-0M-` = start of current month
- * - `-0M+` = end of current month
- * - `-1M-` = start of previous month
- * - `-1M+` = end of previous month
+ * Helper to generate Funifier relative date expressions
  * 
- * Also supports absolute dates: { $date: "2026-01-01T00:00:00.000Z" }
+ * Funifier supports relative date shortcuts in aggregates:
+ * - `-0d-` → start of current day (00:00:00)
+ * - `-0d+` → end of current day (23:59:59)
+ * - `-1d-` / `-1d+` → start/end of yesterday
+ * - `-0w-` / `-0w+` → start/end of current week
+ * - `-0M-` / `-0M+` → start/end of current month
+ * - `-1M-` / `-1M+` → start/end of previous month
+ * - `-0y-` / `-0y+` → start/end of current year
  * 
- * Logic:
- * - When February 2026 is selected (current month), start date includes January (01/01/2026)
- * - When January 2026 is selected, returns only January (01/01/2026 to 31/01/2026)
- * - Minimum date is always 01/01/2026
+ * Usage in aggregates:
+ * { "time": { "$gte": { "$date": "-0M-" }, "$lte": { "$date": "-0M+" } } }
+ * 
+ * @param month - Target month (if undefined, uses current month)
+ * @param position - 'start' for beginning of month, 'end' for end of month
+ * @returns Funifier relative date expression like { $date: "-0M-" }
  */
-function getRelativeDateExpression(month: Date | undefined, position: 'start' | 'end'): { $date: string } | number {
-  const targetMonth = month || new Date();
-  const targetMonthNum = targetMonth.getMonth();
+function getRelativeDateExpression(month: Date | undefined, position: 'start' | 'end'): { $date: string } {
+  const now = new Date();
+  const targetMonth = month || now;
+  
+  // Calculate months difference from current month
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth();
   const targetYear = targetMonth.getFullYear();
+  const targetMonthNum = targetMonth.getMonth();
   
-  // Season start date: 01/01/2026
-  const seasonStartDate = new Date('2026-01-01T00:00:00.000Z');
+  // Calculate how many months ago the target month is
+  const monthsAgo = (currentYear - targetYear) * 12 + (currentMonth - targetMonthNum);
   
-  // Calculate the start or end of the selected month
-  if (position === 'start') {
-    const monthStart = new Date(targetYear, targetMonthNum, 1, 0, 0, 0, 0);
-    // Ensure we don't go before season start
-    if (monthStart < seasonStartDate) {
-      return { $date: seasonStartDate.toISOString() };
-    }
-    return { $date: monthStart.toISOString() };
-  } else {
-    // End of the selected month
-    const monthEnd = new Date(targetYear, targetMonthNum + 1, 0, 23, 59, 59, 999);
-    return { $date: monthEnd.toISOString() };
-  }
+  // Generate Funifier relative date expression
+  // -0M- = start of current month, -1M- = start of previous month, etc.
+  const suffix = position === 'start' ? '-' : '+';
+  
+  return { $date: `-${monthsAgo}M${suffix}` };
 }
 
 @Injectable({

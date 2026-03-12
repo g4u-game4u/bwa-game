@@ -1,7 +1,7 @@
 import { Component, OnInit, OnDestroy, HostListener, ChangeDetectionStrategy, ChangeDetectorRef, AfterViewInit } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { Subject } from 'rxjs';
-import { takeUntil, switchMap } from 'rxjs/operators';
+import { takeUntil, switchMap, map } from 'rxjs/operators';
 
 import { PlayerService } from '@services/player.service';
 import { CompanyService } from '@services/company.service';
@@ -422,14 +422,16 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   }
 
   /**
-   * Load carteira data from action_log (CNPJs with action counts)
+   * Load carteira data from player's extra.cnpj_resp (assigned portfolio)
    * and enrich with KPI data from cnpj__c collection
+   * 
+   * Data source: player.extra.cnpj_resp → cnpj__c collection
+   * This shows all companies assigned to the player, not just ones with action_log entries
    */
   private loadCarteiraData(): void {
     this.isLoadingCarteira = true;
     
-    const usuario = this.sessaoProvider.usuario as { _id?: string; email?: string } | null;
-    const playerId: string = (usuario?._id || usuario?.email || '') as string;
+    const playerId = this.getPlayerId();
     
     if (!playerId) {
       console.warn('📊 No player ID available for carteira data');
@@ -438,31 +440,36 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
       return;
     }
     
-    this.actionLogService.getPlayerCnpjListWithCount(playerId, this.selectedMonth)
+    // Use companyService to get companies from extra.cnpj_resp → cnpj__c
+    // This shows all assigned companies, not just ones with action_log entries
+    this.companyService.getCompanies(playerId)
       .pipe(
-        switchMap(clientes => {
-          console.log('📊 Carteira clientes loaded, enriching with KPI data:', clientes);
+        map(companies => {
+          console.log('📊 Carteira companies from extra.cnpj_resp:', companies);
           
-          // Extract all CNPJ strings for lookup
-          const cnpjList = clientes.map(c => c.cnpj);
-          
-          // Enrich CNPJs with clean company names and KPI data in parallel
-          return this.cnpjLookupService.enrichCnpjList(cnpjList).pipe(
-            switchMap(cnpjNames => {
-              // Store the CNPJ name map for display
-              this.cnpjNameMap = cnpjNames;
-              // Enrich companies with KPI data from cnpj__c collection
-              return this.companyKpiService.enrichCompaniesWithKpis(clientes);
-            })
-          );
+          // Convert Company[] to CompanyDisplay[] format
+          // Use company._id (CNPJ ID) as the cnpj field for display
+          return companies.map(company => ({
+            cnpj: company.name, // Use company name for display
+            cnpjId: company.cnpj, // The CNPJ ID from cnpj__c._id
+            actionCount: 0, // Will be enriched with action count if needed
+            deliveryKpi: company.healthScore !== undefined ? {
+              id: 'delivery',
+              label: 'Entregas no Prazo',
+              current: company.healthScore,
+              target: 90,
+              unit: '%',
+              percentage: Math.min((company.healthScore / 90) * 100, 100),
+              color: company.healthScore >= 90 ? 'green' as const : company.healthScore >= 50 ? 'yellow' as const : 'red' as const
+            } : undefined
+          } as CompanyDisplay));
         }),
         takeUntil(this.destroy$)
       )
       .subscribe({
-        next: (enrichedClientes) => {
-          console.log('📊 Carteira clientes enriched with KPI data:', enrichedClientes);
-          console.log('📊 CNPJ name map:', this.cnpjNameMap);
-          this.carteiraClientes = enrichedClientes;
+        next: (carteiraClientes) => {
+          console.log('📊 Carteira clientes loaded:', carteiraClientes);
+          this.carteiraClientes = carteiraClientes;
           this.isLoadingCarteira = false;
           this.cdr.markForCheck();
         },
@@ -821,16 +828,21 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   
   /**
    * Get clean company display name from CNPJ
-   * Uses the enriched CNPJ name map from the lookup service
+   * 
+   * For carteira data from extra.cnpj_resp, the cnpj field already contains the company name.
+   * For action_log data, uses the enriched CNPJ name map from the lookup service.
    */
   getCompanyDisplayName(cnpj: string): string {
     if (!cnpj) {
       return '';
     }
-    // Use the enriched name from the map, fallback to original
+    // First check if we have an enriched name in the map (for action_log data)
     const displayName = this.cnpjNameMap.get(cnpj);
-    console.log('📊 getCompanyDisplayName called:', { cnpj, displayName, hasInMap: this.cnpjNameMap.has(cnpj), mapSize: this.cnpjNameMap.size });
-    return displayName || cnpj;
+    if (displayName) {
+      return displayName;
+    }
+    // Otherwise return the cnpj as-is (for extra.cnpj_resp data, it's already the company name)
+    return cnpj;
   }
   
   /**

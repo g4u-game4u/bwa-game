@@ -6,6 +6,33 @@ import { AggregateQueryBuilderService, AggregateQuery } from './aggregate-query-
 import { PerformanceMonitorService } from './performance-monitor.service';
 
 /**
+ * Helper to generate Funifier relative date expressions
+ * 
+ * Funifier supports relative date shortcuts in aggregates:
+ * - "-0M-" = start of current month
+ * - "-0M+" = end of current month
+ * - "-1M-" = start of previous month
+ * 
+ * @param date - Target date
+ * @param position - 'start' for beginning of period, 'end' for end of period
+ * @returns Funifier relative date expression like { $date: "-0M-" }
+ */
+function toFunifierDate(date: Date, position: 'start' | 'end' = 'start'): { $date: string } {
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth();
+  const targetYear = date.getFullYear();
+  const targetMonth = date.getMonth();
+  
+  // Calculate months difference
+  const monthsAgo = (currentYear - targetYear) * 12 + (currentMonth - targetMonth);
+  
+  // Generate Funifier relative date expression
+  const suffix = position === 'start' ? '-' : '+';
+  return { $date: `-${monthsAgo}M${suffix}` };
+}
+
+/**
  * Team season points model
  */
 export interface TeamSeasonPoints {
@@ -262,10 +289,10 @@ export class TeamAggregateService {
     if (startDate || endDate) {
       const dateMatch: any = {};
       if (startDate) {
-        dateMatch.$gte = { $date: startDate.toISOString() };
+        dateMatch.$gte = toFunifierDate(startDate, 'start');
       }
       if (endDate) {
-        dateMatch.$lte = { $date: endDate.toISOString() };
+        dateMatch.$lte = toFunifierDate(endDate, 'end');
       }
       
       // Insert date match after the team match
@@ -319,8 +346,8 @@ export class TeamAggregateService {
           $match: {
             userId: userId,
             time: {
-              $gte: { $date: startDate.toISOString() },
-              $lte: { $date: endDate.toISOString() }
+              $gte: toFunifierDate(startDate, 'start'),
+              $lte: toFunifierDate(endDate, 'end')
             }
           }
         },
@@ -689,8 +716,8 @@ export class TeamAggregateService {
         $match: {
           'playerData.teams': teamId,
           time: {
-            $gte: { $date: startDate.toISOString() },
-            $lte: { $date: endDate.toISOString() }
+            $gte: toFunifierDate(startDate, 'start'),
+            $lte: toFunifierDate(endDate, 'end')
           }
         }
       },
@@ -771,8 +798,8 @@ export class TeamAggregateService {
           $match: {
             'playerData.teams': teamId,
             time: {
-              $gte: { $date: startDate.toISOString() },
-              $lte: { $date: endDate.toISOString() }
+              $gte: toFunifierDate(startDate, 'start'),
+              $lte: toFunifierDate(endDate, 'end')
             },
             'attributes.cnpj': { $ne: null }
           }
@@ -846,8 +873,8 @@ export class TeamAggregateService {
           player: { $in: memberIds },
           type: 0, // type 0 = points
           time: {
-            $gte: { $date: startDate.toISOString() },
-            $lte: { $date: endDate.toISOString() }
+            $gte: toFunifierDate(startDate, 'start'),
+            $lte: toFunifierDate(endDate, 'end')
           }
         }
       },
@@ -922,8 +949,8 @@ export class TeamAggregateService {
           player: { $in: memberIds },
           type: 0, // type 0 = points
           time: {
-            $gte: { $date: startDate.toISOString() },
-            $lte: { $date: endDate.toISOString() }
+            $gte: toFunifierDate(startDate, 'start'),
+            $lte: toFunifierDate(endDate, 'end')
           }
         }
       },
