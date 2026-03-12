@@ -1,4 +1,4 @@
-﻿﻿import { Injectable } from '@angular/core';
+﻿﻿﻿﻿﻿﻿import { Injectable } from '@angular/core';
 import { Observable, of, forkJoin } from 'rxjs';
 import { map, catchError, shareReplay, switchMap } from 'rxjs/operators';
 import { FunifierApiService } from './funifier-api.service';
@@ -134,14 +134,133 @@ export class ActionLogService {
   private processMetricsCache = new Map<string, CacheEntry<ProcessMetrics>>();
   private pontosForMonthCache = new Map<string, CacheEntry<number>>();
   private monthlyPointsBreakdownCache = new Map<string, CacheEntry<{ bloqueados: number; desbloqueados: number }>>();
+  // Cache for all action log entries (no date filter)
+  private allActionLogCache = new Map<string, CacheEntry<ActionLogEntry[]>>();
 
   constructor(private funifierApi: FunifierApiService) {}
 
   /**
-   * Get action log entries for a player for the current month
-   * Uses userId field to match the user's email
-   * Uses Funifier's relative date expressions for time filtering
-   * Note: action_log uses 'time' field for timestamp, not 'created'
+   * Get ALL action log entries for a player (no date filter)
+   * Uses pagination with Range header to fetch all entries
+   * Results are cached and filtered by month on the frontend
+   */
+  getAllPlayerActionLog(playerId: string): Observable<ActionLogEntry[]> {
+    const cacheKey = `all_${playerId}`;
+    const cached = this.getCachedData(this.allActionLogCache, cacheKey);
+    if (cached) {
+      return cached;
+    }
+
+    // Aggregate query to get ALL action log for this player (no date filter)
+    const aggregateBody = [
+      { 
+        $match: { 
+          userId: playerId
+        } 
+      },
+      { $sort: { time: -1 } }
+    ];
+
+    console.log('📊 Fetching ALL action log for player:', playerId);
+
+    const request$ = this.fetchAllActionLogPaginated(
+      '/v3/database/action_log/aggregate?strict=true',
+      aggregateBody,
+      100, // batch size
+      0,   // start index
+      []   // accumulated results
+    ).pipe(
+      map(response => {
+        console.log('📊 All action log loaded:', response.length, 'entries');
+        return response;
+      }),
+      catchError(error => {
+        console.error('Error fetching all action log:', error);
+        return of([]);
+      }),
+      shareReplay({ bufferSize: 1, refCount: true, windowTime: this.CACHE_DURATION })
+    );
+
+    this.setCachedData(this.allActionLogCache, cacheKey, request$);
+    return request$;
+  }
+
+  /**
+   * Fetch all action log entries with pagination using Range header
+   * Recursively fetches batches until all data is retrieved
+   */
+  private fetchAllActionLogPaginated(
+    endpoint: string,
+    aggregateBody: any[],
+    batchSize: number,
+    startIndex: number = 0,
+    accumulatedResults: ActionLogEntry[] = []
+  ): Observable<ActionLogEntry[]> {
+    // Set Range header: "items=startIndex-batchSize"
+    const rangeHeader = `items=${startIndex}-${batchSize}`;
+
+    console.log(`📦 Fetching action log batch: ${rangeHeader} (accumulated: ${accumulatedResults.length})`);
+
+    return this.funifierApi.post<ActionLogEntry[]>(
+      endpoint,
+      aggregateBody,
+      { headers: { 'Range': rangeHeader } }
+    ).pipe(
+      switchMap(response => {
+        // Handle response format
+        let batchResults: ActionLogEntry[] = [];
+        if (response && Array.isArray(response)) {
+          batchResults = response;
+        }
+
+        // Accumulate results
+        const allResults = [...accumulatedResults, ...batchResults];
+
+        // If we got a full batch, there might be more data - recursively fetch
+        if (batchResults.length === batchSize) {
+          console.log(`📦 Action log batch complete (${batchResults.length} items), fetching next batch...`);
+          const nextIndex = startIndex + batchSize;
+          // Recursively fetch next batch
+          return this.fetchAllActionLogPaginated(endpoint, aggregateBody, batchSize, nextIndex, allResults);
+        } else {
+          // Last batch (partial or empty), return all accumulated results
+          console.log(`📦 Action log final batch (${batchResults.length} items), total: ${allResults.length}`);
+          return of(allResults);
+        }
+      }),
+      catchError(error => {
+        console.error(`❌ Error fetching action log batch at index ${startIndex}:`, error);
+        // Return accumulated results so far on error
+        return of(accumulatedResults);
+      })
+    );
+  }
+
+  /**
+   * Filter action log entries by month on the frontend
+   * @param entries - All action log entries
+   * @param month - Target month to filter by
+   * @returns Filtered entries for the specified month
+   */
+  private filterEntriesByMonth(entries: ActionLogEntry[], month?: Date): ActionLogEntry[] {
+    const targetMonth = month || new Date();
+    const year = targetMonth.getFullYear();
+    const monthNum = targetMonth.getMonth();
+
+    // Calculate month boundaries
+    const startOfMonth = new Date(Date.UTC(year, monthNum, 1, 0, 0, 0, 0)).getTime();
+    const endOfMonth = new Date(Date.UTC(year, monthNum + 1, 1, 0, 0, 0, 0)).getTime() - 1;
+
+    return entries.filter(entry => {
+      const timestamp = extractTimestamp(entry.time as number | { $date: string } | undefined);
+      return timestamp >= startOfMonth && timestamp <= endOfMonth;
+    });
+  }
+
+  /**
+   * Get action log entries for a player for a specific month
+   * Fetches ALL entries and filters by month on the frontend
+   * This approach avoids Funifier aggregate date filtering issues
    */
   getPlayerActionLogForMonth(playerId: string, month?: Date): Observable<ActionLogEntry[]> {
     const targetMonth = month || new Date();
@@ -151,37 +270,14 @@ export class ActionLogService {
       return cached;
     }
 
-    // Use Funifier's relative date syntax for time filtering
-    const startDate = getRelativeDateExpression(month, 'start');
-    const endDate = getRelativeDateExpression(month, 'end');
+    console.log('📊 Getting action log for month:', dayjs(targetMonth).format('YYYY-MM'));
 
-    // Aggregate query to get action log for this player in the target month
-    // Uses userId field and time field with Funifier $date expressions
-    // Add $limit with high value to avoid MongoDB default limit of 100 documents
-    const aggregateBody = [
-      { 
-        $match: { 
-          userId: playerId,
-          time: { $gte: startDate, $lte: endDate }
-        } 
-      },
-      { $sort: { time: -1 } },
-      { $limit: 10000 } // High limit to get all documents (MongoDB default is 100)
-    ];
-
-    console.log('ðŸ“Š Action log query for month:', JSON.stringify(aggregateBody));
-
-    const request$ = this.funifierApi.post<ActionLogEntry[]>(
-      '/v3/database/action_log/aggregate?strict=true',
-      aggregateBody
-    ).pipe(
-      map(response => {
-        console.log('ðŸ“Š Action log loaded for month:', response);
-        return Array.isArray(response) ? response : [];
-      }),
-      catchError(error => {
-        console.error('Error fetching action log:', error);
-        return of([]);
+    // Fetch ALL entries and filter by month on frontend
+    const request$ = this.getAllPlayerActionLog(playerId).pipe(
+      map(allEntries => {
+        const filtered = this.filterEntriesByMonth(allEntries, month);
+        console.log(`📊 Filtered ${filtered.length} entries for ${dayjs(targetMonth).format('YYYY-MM')} from ${allEntries.length} total`);
+        return filtered;
       }),
       shareReplay({ bufferSize: 1, refCount: true, windowTime: this.CACHE_DURATION })
     );
@@ -190,9 +286,10 @@ export class ActionLogService {
     return request$;
   }
 
+
   /**
    * Get count of activities finalizadas (entries in action_log for the month)
-   * Uses $count aggregation for better performance and to avoid MongoDB default limit
+   * Uses frontend filtering for reliable month filtering
    */
   getAtividadesFinalizadas(playerId: string, month?: Date): Observable<number> {
     const targetMonth = month || new Date();
@@ -202,52 +299,24 @@ export class ActionLogService {
       return cached;
     }
 
-    // Use Funifier's relative date syntax for time filtering
-    const startDate = getRelativeDateExpression(month, 'start');
-    const endDate = getRelativeDateExpression(month, 'end');
-
-    // Use $count aggregation to get total count without returning all documents
-    // This avoids MongoDB default limit of 100 documents
-    const aggregateBody = [
-      { 
-        $match: { 
-          userId: playerId,
-          time: { $gte: startDate, $lte: endDate }
-        } 
-      },
-      {
-        $count: 'total'
-      }
-    ];
-
-    console.log('ðŸ“Š Activity count query for month:', JSON.stringify(aggregateBody));
-
-    const request$ = this.funifierApi.post<{ total: number }[]>(
-      '/v3/database/action_log/aggregate?strict=true',
-      aggregateBody
-    ).pipe(
-      map(response => {
-        console.log('ðŸ“Š Activity count response:', response);
-        // $count returns array with single object: [{ total: number }]
-        if (Array.isArray(response) && response.length > 0 && response[0]?.total !== undefined) {
-          return response[0].total;
-        }
-        return 0;
+    // Use frontend filtering approach - fetch all and filter by month
+    const request$ = this.getPlayerActionLogForMonth(playerId, month).pipe(
+      map(actions => {
+        console.log(`📊 Activity count for ${dayjs(targetMonth).format('YYYY-MM')}: ${actions.length}`);
+        return actions.length;
       }),
       catchError(error => {
         console.error('Error fetching activity count:', error);
-        // Fallback to old method if $count doesn't work
-        return this.getPlayerActionLogForMonth(playerId, month).pipe(
-          map(actions => actions.length)
-        );
+        return of(0);
       }),
       shareReplay({ bufferSize: 1, refCount: true, windowTime: this.CACHE_DURATION })
     );
-    
+
     // Store in cache
     this.setCachedData(this.activityCountCache, cacheKey, request$);
     return request$;
   }
+
 
   /**
    * Alias for getAtividadesFinalizadas for backward compatibility
@@ -261,32 +330,11 @@ export class ActionLogService {
       return cached;
     }
 
-    // Use $count aggregation to get total count WITHOUT date filter
-    // This gives all-time count for season progress
-    const aggregateBody = [
-      { 
-        $match: { 
-          userId: playerId
-        } 
-      },
-      {
-        $count: 'total'
-      }
-    ];
-
-    console.log('📊 All-time activity count query:', JSON.stringify(aggregateBody));
-
-    const request$ = this.funifierApi.post<{ total: number }[]>(
-      '/v3/database/action_log/aggregate?strict=true',
-      aggregateBody
-    ).pipe(
-      map(response => {
-        console.log('📊 All-time activity count response:', response);
-        // $count returns array with single object: [{ total: number }]
-        if (Array.isArray(response) && response.length > 0 && response[0]?.total !== undefined) {
-          return response[0].total;
-        }
-        return 0;
+    // Use frontend approach - fetch all entries and count them
+    const request$ = this.getAllPlayerActionLog(playerId).pipe(
+      map(actions => {
+        console.log(`📊 All-time activity count: ${actions.length}`);
+        return actions.length;
       }),
       catchError(error => {
         console.error('Error fetching all-time activity count:', error);
@@ -1159,6 +1207,7 @@ export class ActionLogService {
    */
   clearCache(): void {
     this.actionLogCache.clear();
+    this.allActionLogCache.clear();
     this.metricsCache.clear();
     this.activityCountCache.clear();
     this.uniqueClientesCache.clear();
