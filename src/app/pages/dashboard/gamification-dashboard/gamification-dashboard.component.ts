@@ -100,8 +100,8 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   
   // Season dates (TODO: Get from season service or API)
   private readonly seasonDates = {
-    start: new Date('2023-04-01'),
-    end: new Date('2023-09-30')
+    start: new Date('2026-01-01'),
+    end: new Date('2026-04-30')
   };
   
   // Accessibility properties
@@ -341,8 +341,8 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   /**
    * Load additional season progress details:
    * - Metas: count of KPIs above target from metric_targets__c
-   * - Clientes: count of unique CNPJs from action_log aggregate
-   * - Tarefas finalizadas: count of actions from action_log
+   * - Clientes: count of CNPJs in player's cnpj_resp (assigned portfolio)
+   * - Tarefas finalizadas: ALL actions from action_log (no date filter for season progress)
    */
   private loadSeasonProgressDetails(): void {
     const usuario = this.sessaoProvider.usuario as { _id?: string; email?: string } | null;
@@ -352,31 +352,38 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
       return;
     }
 
-    // Load clientes count from unique CNPJs in action_log
-    this.actionLogService.getUniqueClientesCount(playerId)
-      .pipe(takeUntil(this.destroy$))
-      .subscribe({
-        next: (count: number) => {
-          console.log('📊 Unique CNPJs (Clientes) count:', count);
-          if (this.seasonProgress) {
-            this.seasonProgress = {
-              ...this.seasonProgress,
-              clientes: count
-            };
-            this.cdr.markForCheck();
-          }
-        },
-        error: (err: Error) => {
-          console.error('📊 Failed to load clientes count:', err);
-        }
-      });
+    // Load clientes count from player's extra.cnpj_resp (assigned portfolio count)
+    // cnpj_resp is a comma-separated string of CNPJ IDs
+    if (this.playerStatus?.extra?.cnpj_resp) {
+      const cnpjRespStr = this.playerStatus.extra.cnpj_resp;
+      const cnpjList = cnpjRespStr.split(',').map(s => s.trim()).filter(s => s.length > 0);
+      const clientesCount = cnpjList.length;
+      console.log('📊 Clientes count from cnpj_resp:', clientesCount, 'CNPJs:', cnpjList);
+      
+      if (this.seasonProgress) {
+        this.seasonProgress = {
+          ...this.seasonProgress,
+          clientes: clientesCount
+        };
+        this.cdr.markForCheck();
+      }
+    } else {
+      console.log('📊 No cnpj_resp found in player extra, clientes = 0');
+      if (this.seasonProgress) {
+        this.seasonProgress = {
+          ...this.seasonProgress,
+          clientes: 0
+        };
+        this.cdr.markForCheck();
+      }
+    }
     
-    // Load tarefas finalizadas from action_log
+    // Load tarefas finalizadas from action_log WITHOUT date filter (all-time count for season)
     this.actionLogService.getCompletedTasksCount(playerId)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (count: number) => {
-          console.log('📊 Tarefas finalizadas count:', count);
+          console.log('📊 Tarefas finalizadas count (all-time):', count);
           if (this.seasonProgress) {
             this.seasonProgress = {
               ...this.seasonProgress,
@@ -645,6 +652,11 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     this.selectedMonth = date;
     const monthName = date.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
     this.announceToScreenReader(`Mês alterado para ${monthName}`);
+    
+    // Clear caches to force fresh data for the new month
+    this.actionLogService.clearCache();
+    this.playerService.clearCache();
+    
     this.loadDashboardData();
   }
   

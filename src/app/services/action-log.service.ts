@@ -1,4 +1,4 @@
-﻿import { Injectable } from '@angular/core';
+﻿﻿import { Injectable } from '@angular/core';
 import { Observable, of, forkJoin } from 'rxjs';
 import { map, catchError, shareReplay, switchMap } from 'rxjs/operators';
 import { FunifierApiService } from './funifier-api.service';
@@ -251,9 +251,53 @@ export class ActionLogService {
 
   /**
    * Alias for getAtividadesFinalizadas for backward compatibility
+   * NOTE: For season progress, this returns ALL-TIME count (no date filter)
+   * to show total tasks completed during the entire season
    */
   getCompletedTasksCount(playerId: string): Observable<number> {
-    return this.getAtividadesFinalizadas(playerId);
+    const cacheKey = `count_all_${playerId}`;
+    const cached = this.getCachedData(this.activityCountCache, cacheKey);
+    if (cached) {
+      return cached;
+    }
+
+    // Use $count aggregation to get total count WITHOUT date filter
+    // This gives all-time count for season progress
+    const aggregateBody = [
+      { 
+        $match: { 
+          userId: playerId
+        } 
+      },
+      {
+        $count: 'total'
+      }
+    ];
+
+    console.log('📊 All-time activity count query:', JSON.stringify(aggregateBody));
+
+    const request$ = this.funifierApi.post<{ total: number }[]>(
+      '/v3/database/action_log/aggregate?strict=true',
+      aggregateBody
+    ).pipe(
+      map(response => {
+        console.log('📊 All-time activity count response:', response);
+        // $count returns array with single object: [{ total: number }]
+        if (Array.isArray(response) && response.length > 0 && response[0]?.total !== undefined) {
+          return response[0].total;
+        }
+        return 0;
+      }),
+      catchError(error => {
+        console.error('Error fetching all-time activity count:', error);
+        return of(0);
+      }),
+      shareReplay({ bufferSize: 1, refCount: true, windowTime: this.CACHE_DURATION })
+    );
+    
+    // Store in cache
+    this.setCachedData(this.activityCountCache, cacheKey, request$);
+    return request$;
   }
 
   /**
@@ -825,7 +869,11 @@ export class ActionLogService {
 
   /**
    * Get all actions for a specific CNPJ (by all players)
-   * Uses time field with Funifier relative dates
+   * 
+   * NOTE: Funifier's $date extended JSON format doesn't work reliably in aggregate queries.
+   * We fetch ALL actions for the CNPJ and filter by month on the frontend.
+   * Uses Funifier pagination (default limit 100, we use higher limit to get all data).
+   * 
    * Cached with shareReplay to avoid duplicate requests
    */
   getActionsByCnpj(cnpj: string, month?: Date): Observable<ClienteActionItem[]> {
@@ -836,33 +884,46 @@ export class ActionLogService {
       return cached;
     }
 
-    // Use Funifier's relative date syntax
-    const startDate = getRelativeDateExpression(month, 'start');
-    const endDate = getRelativeDateExpression(month, 'end');
+    // Calculate month boundaries for frontend filtering
+    const year = targetMonth.getFullYear();
+    const monthNum = targetMonth.getMonth();
+    const monthStart = new Date(year, monthNum, 1, 0, 0, 0, 0).getTime();
+    const monthEnd = new Date(year, monthNum + 1, 0, 23, 59, 59, 999).getTime();
 
+    // Fetch ALL actions for this CNPJ without date filter
+    // Funifier's $date format doesn't work reliably in aggregate queries
+    // We'll filter by month on the frontend
     const aggregateBody = [
       {
         $match: {
-          'attributes.cnpj': cnpj,
-          time: { $gte: startDate, $lte: endDate }
+          'attributes.cnpj': cnpj
         }
       },
       { $sort: { time: -1 } },
-      { $limit: 100 }
+      { $limit: 1000 } // High limit to get all data (Funifier default is 100)
     ];
 
-    console.log('ðŸ“Š Actions by CNPJ query:', JSON.stringify(aggregateBody));
+    console.log('📊 Actions by CNPJ query (no date filter, will filter on frontend):', JSON.stringify(aggregateBody));
 
     const request$ = this.funifierApi.post<ActionLogEntry[]>(
       '/v3/database/action_log/aggregate?strict=true',
       aggregateBody
     ).pipe(
       map(actions => {
-        console.log('ðŸ“Š Actions by CNPJ response:', actions);
-        return actions.map(a => {
+        console.log('📊 Actions by CNPJ response (all):', actions?.length || 0, 'actions');
+
+        // Filter by month on frontend
+        const filteredActions = (actions || []).filter(a => {
+          const timestamp = extractTimestamp(a.time as number | { $date: string } | undefined);
+          return timestamp >= monthStart && timestamp <= monthEnd;
+        });
+
+        console.log('📊 Actions by CNPJ after month filter:', filteredActions.length, 'actions for', dayjs(targetMonth).format('YYYY-MM'));
+
+        return filteredActions.map(a => {
           // Determine status based on action data
           let status: 'finalizado' | 'pendente' | 'dispensado' | undefined;
-          
+
           // Check if action is dismissed (highest priority)
           if (a.extra?.['dismissed'] === true || a.attributes?.['dismissed'] === true || a.status === 'CANCELLED') {
             status = 'dispensado';
@@ -885,10 +946,10 @@ export class ActionLogService {
           else {
             status = 'pendente';
           }
-          
+
           return {
             id: a._id,
-            title: a.attributes?.acao || a.action_title || a.actionId || 'AÃ§Ã£o sem tÃ­tulo',
+            title: a.attributes?.acao || a.action_title || a.actionId || 'Ação sem título',
             player: a.userId || '',
             created: extractTimestamp(a.time as number | { $date: string } | undefined),
             status,
@@ -906,6 +967,7 @@ export class ActionLogService {
     this.setCachedData(this.actionsByCnpjCache, cacheKey, request$);
     return request$;
   }
+
 
   /**
    * Get cliente list with actions for carteira section
