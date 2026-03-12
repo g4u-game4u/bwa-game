@@ -1,7 +1,7 @@
 import { Component, OnInit, OnDestroy, HostListener, ChangeDetectionStrategy, ChangeDetectorRef, AfterViewInit } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
-import { Subject } from 'rxjs';
-import { takeUntil, switchMap, map } from 'rxjs/operators';
+import { Subject, of } from 'rxjs';
+import { takeUntil, switchMap, map, catchError } from 'rxjs/operators';
 
 import { PlayerService } from '@services/player.service';
 import { CompanyService } from '@services/company.service';
@@ -426,6 +426,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
    * and enrich with KPI data from cnpj__c collection
    * 
    * Data source: player.extra.cnpj_resp → cnpj__c collection
+   * Company names are fetched from empid_cnpj__c collection using CnpjLookupService
    * This shows all companies assigned to the player, not just ones with action_log entries
    */
   private loadCarteiraData(): void {
@@ -444,25 +445,53 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     // This shows all assigned companies, not just ones with action_log entries
     this.companyService.getCompanies(playerId)
       .pipe(
-        map(companies => {
+        switchMap(companies => {
           console.log('📊 Carteira companies from extra.cnpj_resp:', companies);
           
+          // Extract CNPJ IDs to look up company names from empid_cnpj__c
+          const cnpjIds = companies.map(c => c.cnpj).filter(id => id);
+          console.log('📊 CNPJ IDs to enrich:', cnpjIds);
+          
+          if (cnpjIds.length === 0) {
+            return of({ companies, nameMap: new Map<string, string>() });
+          }
+          
+          // Enrich company names from empid_cnpj__c collection
+          return this.cnpjLookupService.enrichCnpjList(cnpjIds).pipe(
+            map(nameMap => ({ companies, nameMap })),
+            catchError(error => {
+              console.error('📊 Error enriching CNPJ names:', error);
+              return of({ companies, nameMap: new Map<string, string>() });
+            })
+          );
+        }),
+        map(({ companies, nameMap }) => {
+          console.log('📊 CNPJ name map:', Array.from(nameMap.entries()));
+          
+          // Store the name map for later use in getCompanyDisplayName
+          nameMap.forEach((name, cnpj) => {
+            this.cnpjNameMap.set(cnpj, name);
+          });
+          
           // Convert Company[] to CompanyDisplay[] format
-          // Use company._id (CNPJ ID) as the cnpj field for display
-          return companies.map(company => ({
-            cnpj: company.name, // Use company name for display
-            cnpjId: company.cnpj, // The CNPJ ID from cnpj__c._id
-            actionCount: 0, // Will be enriched with action count if needed
-            deliveryKpi: company.healthScore !== undefined ? {
-              id: 'delivery',
-              label: 'Entregas no Prazo',
-              current: company.healthScore,
-              target: 90,
-              unit: '%',
-              percentage: Math.min((company.healthScore / 90) * 100, 100),
-              color: company.healthScore >= 90 ? 'green' as const : company.healthScore >= 50 ? 'yellow' as const : 'red' as const
-            } : undefined
-          } as CompanyDisplay));
+          // Use enriched company name from empid_cnpj__c, fallback to cnpj ID
+          return companies.map(company => {
+            const enrichedName = nameMap.get(company.cnpj) || company.name;
+            return {
+              cnpj: enrichedName, // Use enriched company name for display
+              cnpjId: company.cnpj, // The CNPJ ID from cnpj__c._id
+              actionCount: 0, // Will be enriched with action count if needed
+              deliveryKpi: company.healthScore !== undefined ? {
+                id: 'delivery',
+                label: 'Entregas no Prazo',
+                current: company.healthScore,
+                target: 90,
+                unit: '%',
+                percentage: Math.min((company.healthScore / 90) * 100, 100),
+                color: company.healthScore >= 90 ? 'green' as const : company.healthScore >= 50 ? 'yellow' as const : 'red' as const
+              } : undefined
+            } as CompanyDisplay;
+          });
         }),
         takeUntil(this.destroy$)
       )

@@ -52,8 +52,12 @@ export class ModalCompanyCarteiraDetailComponent implements OnInit, OnDestroy {
     if (!this.company) return;
     
     try {
+      // Use cnpjId (raw CNPJ ID) for lookup, not cnpj (display name)
+      const cnpjForLookup = this.company.cnpjId || this.company.cnpj;
+      console.log('📊 Modal detail: enriching company name for:', cnpjForLookup);
+      
       const cnpjNames = await firstValueFrom(
-        this.cnpjLookupService.enrichCnpjList([this.company.cnpj])
+        this.cnpjLookupService.enrichCnpjList([cnpjForLookup])
           .pipe(takeUntil(this.destroy$))
       );
       this.cnpjNameMap = cnpjNames;
@@ -117,7 +121,11 @@ export class ModalCompanyCarteiraDetailComponent implements OnInit, OnDestroy {
     this.isLoadingTasks = true;
     this.cdr.markForCheck();
 
-    this.actionLogService.getActionsByCnpj(this.company.cnpj, this.month)
+    // Use cnpjId (raw CNPJ ID) for action_log queries, not cnpj (display name)
+    const cnpjForQuery = this.company.cnpjId || this.company.cnpj;
+    console.log('📊 Loading tasks for CNPJ:', cnpjForQuery, '(cnpjId:', this.company.cnpjId, ', cnpj:', this.company.cnpj, ')');
+
+    this.actionLogService.getActionsByCnpj(cnpjForQuery, this.month)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (tasks) => {
@@ -139,10 +147,26 @@ export class ModalCompanyCarteiraDetailComponent implements OnInit, OnDestroy {
     if (!cnpj) {
       return '';
     }
-    // Use the enriched name from the map, fallback to original
+    
+    // First try to get from the name map using cnpjId (raw CNPJ ID)
+    if (this.company?.cnpjId) {
+      const displayName = this.cnpjNameMap.get(this.company.cnpjId);
+      if (displayName) {
+        console.log('📊 Modal detail getCompanyDisplayName: found via cnpjId:', displayName);
+        return displayName;
+      }
+    }
+    
+    // Try direct lookup (for backward compatibility)
     const displayName = this.cnpjNameMap.get(cnpj);
-    console.log('📊 Modal detail getCompanyDisplayName called:', { cnpj, displayName, hasInMap: this.cnpjNameMap.has(cnpj), mapSize: this.cnpjNameMap.size });
-    return displayName || cnpj;
+    if (displayName) {
+      console.log('📊 Modal detail getCompanyDisplayName: found via direct lookup:', displayName);
+      return displayName;
+    }
+    
+    // Fallback: if cnpj is already the display name (from gamification-dashboard), return it
+    console.log('📊 Modal detail getCompanyDisplayName: using fallback:', cnpj);
+    return cnpj;
   }
 
   formatDate(timestamp: number): string {
