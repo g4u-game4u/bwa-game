@@ -13,5 +13,8 @@ export const environment = {
   cacheTimeout: 300000, // 5 minutes in milliseconds
   
   // Feature Flags
-  enableAnalytics: false
+  enableAnalytics: false,
+
+  // Modo manutenção
+  maintenanceMode: process.env['MAINTENANCE_MODE'] === 'true' || process.env['maintenanceMode'] === 'true'
 };
