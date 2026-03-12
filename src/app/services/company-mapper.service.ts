@@ -10,7 +10,7 @@ export class CompanyMapper {
 
   /**
    * Map Funifier API response to Company model
-   * Data comes from player status extra.companies or cnpj_performance__c
+   * Data comes from player status extra.companies or cnpj__c
    */
   toCompany(apiResponse: any): Company {
     // Extract KPIs from the response
@@ -41,7 +41,7 @@ export class CompanyMapper {
 
   /**
    * Map Funifier API response to CompanyDetails model
-   * For now, processes/activities/macros are empty as they're not in cnpj_performance__c
+   * For now, processes/activities/macros are empty as they're not in cnpj__c
    */
   toCompanyDetails(apiResponse: any): CompanyDetails {
     const company = this.toCompany(apiResponse);

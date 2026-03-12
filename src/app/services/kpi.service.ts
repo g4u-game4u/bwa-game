@@ -282,7 +282,7 @@ export class KPIService {
   }
 
   /**
-   * Get company KPIs from cnpj_performance__c database
+   * Get company KPIs from cnpj__c database
    * companyId is the CNPJ
    */
   getCompanyKPIs(companyId: string): Observable<KPIData[]> {
@@ -298,7 +298,7 @@ export class KPIService {
     ];
 
     const request$ = this.funifierApi.post<any[]>(
-      `/v3/database/cnpj_performance__c/aggregate?strict=true`,
+      `/v3/database/cnpj__c/aggregate?strict=true`,
       aggregateBody
     ).pipe(
       map(response => {

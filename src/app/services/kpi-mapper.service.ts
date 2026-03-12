@@ -33,13 +33,13 @@ export class KPIMapper {
       );
     }
     
-    // If it's an object (from cnpj_performance__c), extract KPI fields
+    // If it's an object (from cnpj__c), extract KPI fields
     if (typeof apiResponses === 'object' && apiResponses !== null) {
       const kpis: KPIData[] = [];
       const addedIds = new Set<string>();
       
       // Named KPIs to look for (check these first as they have meaningful labels)
-      // Based on cnpj_performance__c structure: nps, multas, eficiencia, extra, prazo
+      // Based on cnpj__c structure: nps, multas, eficiencia, extra, prazo
       const namedKpis = ['nps', 'multas', 'eficiencia', 'extra', 'prazo', 'qualidade', 'produtividade', 'satisfacao', 'saude'];
       const namedKpiLabels: { [key: string]: string } = {
         nps: 'NPS',

@@ -27,7 +27,7 @@ export class CompanyService {
 
   /**
    * Get companies with optional filtering
-   * First gets player's companies from extra.cnpj_resp, then fetches from cnpj_performance__c
+   * First gets player's companies from extra.cnpj_resp, then fetches from cnpj__c
    */
   getCompanies(playerId: string, filter?: { search?: string; minHealth?: number }): Observable<Company[]> {
     const cacheKey = `${playerId}_${JSON.stringify(filter || {})}`;
@@ -51,7 +51,7 @@ export class CompanyService {
           return of([]);
         }
         
-        // Fetch company data from cnpj_performance__c using aggregate
+        // Fetch company data from cnpj__c using aggregate
         // Query format: [{"$match":{"_id":{"$in":["1218","9654","1456"]}}}]
         const aggregateBody = [
           { $match: { _id: { $in: companyIds } } }
@@ -60,11 +60,11 @@ export class CompanyService {
         console.log('📊 Company aggregate query:', JSON.stringify(aggregateBody));
         
         return this.funifierApi.post<any[]>(
-          `/v3/database/cnpj_performance__c/aggregate?strict=true`,
+          `/v3/database/cnpj__c/aggregate?strict=true`,
           aggregateBody
         ).pipe(
           map((response) => {
-            console.log('📊 Companies from cnpj_performance__c:', response);
+            console.log('📊 Companies from cnpj__c:', response);
             
             if (!response || !Array.isArray(response)) {
               return [];
@@ -90,7 +90,7 @@ export class CompanyService {
             return companies;
           }),
           catchError((error) => {
-            console.error('Error fetching companies from cnpj_performance__c:', error);
+            console.error('Error fetching companies from cnpj__c:', error);
             return throwError(() => error);
           })
         );
@@ -107,7 +107,7 @@ export class CompanyService {
   }
 
   /**
-   * Get company details from cnpj_performance__c database
+   * Get company details from cnpj__c database
    * companyId is the CNPJ
    */
   getCompanyDetails(companyId: string): Observable<CompanyDetails> {
@@ -123,7 +123,7 @@ export class CompanyService {
     ];
 
     const request$ = this.funifierApi.post<any[]>(
-      `/v3/database/cnpj_performance__c/aggregate?strict=true`,
+      `/v3/database/cnpj__c/aggregate?strict=true`,
       aggregateBody
     ).pipe(
       map(response => {
