@@ -130,8 +130,8 @@ export class KPIService {
                 percentage: Math.min((companyCount / superTarget) * 100, 100)
               });
 
-              // Porcentagem de Entregas no Prazo - only for current month
-              if (isCurrentMonth && playerStatus.extra?.entrega) {
+              // Porcentagem de Entregas no Prazo - show when entrega value exists (regardless of month)
+              if (playerStatus.extra?.entrega) {
                 const deliveryPercentage = parseFloat(playerStatus.extra.entrega);
                 
                 // Get target from player's extra.entrega_goal, fallback to default 90
@@ -181,8 +181,8 @@ export class KPIService {
                 percentage: 0
               }];
               
-              // Add entregas KPI only for current month if available
-              if (isCurrentMonth && playerStatus.extra?.entrega) {
+              // Add entregas KPI when entrega value exists (regardless of month)
+              if (playerStatus.extra?.entrega) {
                 const deliveryPercentage = parseFloat(playerStatus.extra.entrega);
                 
                 // Get target from player's extra.entrega_goal, fallback to default 90
@@ -231,8 +231,8 @@ export class KPIService {
             percentage: Math.min((companyCount / superTarget) * 100, 100)
           });
 
-          // Porcentagem de Entregas no Prazo - only for current month
-          if (isCurrentMonth && playerStatus.extra?.entrega) {
+          // Porcentagem de Entregas no Prazo - show when entrega value exists (regardless of month)
+          if (playerStatus.extra?.entrega) {
             const deliveryPercentage = parseFloat(playerStatus.extra.entrega);
             
             // Get target from player's extra.entrega_goal, fallback to default 90

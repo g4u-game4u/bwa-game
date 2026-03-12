@@ -507,7 +507,18 @@ egressionDuration = performance.now() - regressionStart;
   // No Performance Regressions
   // ========================================
   describe('No Performance Regressions', () => {
-    it('should not slow d     // Total time should be close to single request
+    it('should not slow down with concurrent requests', fakeAsync(() => {
+      const companies = generateMockCompanies(20);
+      const mockResponse = generateMockKpiResponse(20);
+      funifierApiSpy.post.and.returnValue(of(mockResponse).pipe(delay(50)));
+      
+      const startTime = performance.now();
+      service.enrichCompaniesWithKpis(companies).subscribe();
+      service.enrichCompaniesWithKpis(companies).subscribe();
+      tick(100);
+      const duration = performance.now() - startTime;
+      
+      // Total time should be close to single request
       expect(duration).toBeLessThan(200);
     }));
 

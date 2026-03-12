@@ -378,12 +378,12 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
       }
     }
     
-    // Load tarefas finalizadas from action_log WITHOUT date filter (all-time count for season)
-    this.actionLogService.getCompletedTasksCount(playerId)
+    // Load tarefas finalizadas from action_log WITH date filter (selected month only)
+    this.actionLogService.getAtividadesFinalizadas(playerId, this.selectedMonth)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (count: number) => {
-          console.log('📊 Tarefas finalizadas count (all-time):', count);
+          console.log('📊 Tarefas finalizadas count (selected month):', count);
           if (this.seasonProgress) {
             this.seasonProgress = {
               ...this.seasonProgress,
@@ -534,13 +534,9 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
           this.playerKPIs = kpis || [];
           this.isLoadingKPIs = false;
           
-          // Always update metas if we have KPIs (even if empty, to show 0/0)
-          // But preserve existing values if KPIs array is null/undefined (error case)
-          if (kpis !== null && kpis !== undefined) {
-            this.updateMetasFromKPIs(kpis);
-          } else {
-            console.log('📊 KPIs is null/undefined, skipping metas update to preserve existing values');
-          }
+          // Update metas based on player goals (not KPIs)
+          // Metas calculation uses player.extra values, not KPI data
+          this.updateMetasFromPlayerGoals();
           
           this.cdr.markForCheck();
         },
@@ -555,34 +551,57 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   }
   
   /**
-   * Update metas count based on KPIs that are above their target
-   * Metas = count of KPIs where current >= target
-   * Only updates if there are KPIs available, otherwise preserves existing values
-   * This method assumes kpis array is not empty (checked before calling)
+   * Update metas count based on player goals from player.extra
+   * Metas = count of achieved goals (0, 1, or 2):
+   *   - +1 if entrega >= entrega_goal (fallback: 90)
+   *   - +1 if cnpj_resp count >= cnpj_goal (fallback: 10)
+   * Always shows X/2 (duas metas fixas)
    */
-  private updateMetasFromKPIs(kpis: KPIData[]): void {
+  private updateMetasFromPlayerGoals(): void {
     if (!this.seasonProgress) {
-      console.warn('📊 updateMetasFromKPIs called but seasonProgress is null');
+      console.warn('📊 updateMetasFromPlayerGoals called but seasonProgress is null');
       return;
     }
-    
-    // Allow empty array - this means 0/0 (no KPIs available)
-    const totalKPIs = kpis ? kpis.length : 0;
-    const metasAchieved = kpis ? kpis.filter(kpi => kpi.current >= kpi.target).length : 0;
-    
-    // Update with KPI-based values
-    // Note: metasAchieved can be 0 if no KPIs meet their target
-    // totalKPIs can be 0 if no KPIs are available (should show 0/0)
+
+    if (!this.playerStatus) {
+      console.warn('📊 updateMetasFromPlayerGoals called but playerStatus is null');
+      return;
+    }
+
+    const extra = this.playerStatus.extra;
+
+    // Get values from player.extra with fallback defaults
+    const entrega = extra?.entrega ? parseFloat(extra.entrega) : 0;
+    const entregaGoal = extra?.entrega_goal ?? 90; // Default fallback: 90
+
+    // cnpj_resp is a comma-separated string of CNPJs
+    const cnpjRespStr = extra?.cnpj_resp || '';
+    const cnpjRespCount = cnpjRespStr ? cnpjRespStr.split(',').filter(c => c.trim()).length : 0;
+    const cnpjGoal = extra?.cnpj_goal ?? 10; // Default fallback: 10
+
+    // Calculate achievements
+    const entregaAchieved = entrega >= entregaGoal ? 1 : 0;
+    const cnpjAchieved = cnpjRespCount >= cnpjGoal ? 1 : 0;
+    const metasAchieved = entregaAchieved + cnpjAchieved;
+
+    // Fixed denominator: always 2 (duas metas)
+    const totalMetas = 2;
+
+    // Update with goals-based values
     this.seasonProgress = {
       ...this.seasonProgress,
       metas: {
         current: metasAchieved,
-        target: totalKPIs
+        target: totalMetas
       }
     };
-    
-    console.log('📊 Metas updated from KPIs:', this.seasonProgress.metas, `(${metasAchieved}/${totalKPIs})`, `from ${totalKPIs} KPIs`);
+
+    console.log('📊 Metas updated from player goals:', this.seasonProgress.metas, 
+      `(${metasAchieved}/${totalMetas})`,
+      `entrega: ${entrega}/${entregaGoal} (${entregaAchieved ? 'achieved' : 'not achieved'})`,
+      `cnpj: ${cnpjRespCount}/${cnpjGoal} (${cnpjAchieved ? 'achieved' : 'not achieved'})`);
   }
+
   
   /**
    * Load activity and macro progress data from action_log
