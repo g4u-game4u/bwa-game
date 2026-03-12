@@ -84,14 +84,12 @@ export class CompanyService {
             return companies;
           }),
           catchError((error) => {
-            console.error('Error fetching companies from cnpj__c:', error);
-            return throwError(() => error);
+                        return throwError(() => error);
           })
         );
       }),
       catchError((error) => {
-        console.error('Error fetching player status:', error);
-        return throwError(() => error);
+                return throwError(() => error);
       }),
       shareReplay({ bufferSize: 1, refCount: true, windowTime: this.CACHE_DURATION })
     );
@@ -131,8 +129,7 @@ export class CompanyService {
         return this.mapper.toCompanyDetails(companyData);
       }),
       catchError(error => {
-        console.error('Error fetching company details:', error);
-        return throwError(() => error);
+                return throwError(() => error);
       }),
       shareReplay({ bufferSize: 1, refCount: true, windowTime: this.CACHE_DURATION })
     );
@@ -170,8 +167,7 @@ export class CompanyService {
         }
       }),
       catchError(error => {
-        console.error('Error fetching company processes:', error);
-        return throwError(() => error);
+                return throwError(() => error);
       })
     );
   }
@@ -222,3 +218,4 @@ export class CompanyService {
     });
   }
 }
+

@@ -93,13 +93,11 @@ export class RewardRedeemModalComponent {
           // Fecha o modal com sucesso
           this.activeModal.close('redeemed');
         } else {
-          console.error('Erro na API:', response.status);
-          this.notificationService.showSuccess(`Erro ao resgatar recompensa: ${response.status || 'Erro desconhecido'}`, false);
+                    this.notificationService.showSuccess(`Erro ao resgatar recompensa: ${response.status || 'Erro desconhecido'}`, false);
         }
       },
       error: (error) => {
-        console.error('Erro na requisiÃ§Ã£o:', error);
-        this.notificationService.showSuccess('Erro ao conectar com o servidor. Tente novamente.', false);
+                this.notificationService.showSuccess('Erro ao conectar com o servidor. Tente novamente.', false);
       },
       complete: () => {
         this.isProcessing = false;

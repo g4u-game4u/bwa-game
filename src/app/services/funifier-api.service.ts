@@ -68,9 +68,7 @@ export class FunifierApiService {
     const cleanBaseUrl = this.baseUrl.endsWith('/') ? this.baseUrl : `${this.baseUrl}/`;
     const authUrl = `${cleanBaseUrl}auth/token`;
     
-    console.log('🔐 FunifierAPI authenticate URL:', authUrl);
-    
-    return this.http.post<AuthToken>(authUrl, authBody).pipe(
+        return this.http.post<AuthToken>(authUrl, authBody).pipe(
       tap(response => {
         this.authToken = response.access_token;
         this.tokenExpiry = response.expires_in;
@@ -79,8 +77,7 @@ export class FunifierApiService {
         localStorage.setItem('funifier_token', response.access_token);
         localStorage.setItem('funifier_token_expiry', response.expires_in.toString());
         
-        console.log('Funifier authentication successful');
-      }),
+              }),
       catchError(this.handleError)
     );
   }
@@ -118,19 +115,10 @@ export class FunifierApiService {
     const cleanBaseUrl = this.baseUrl.endsWith('/') ? this.baseUrl : `${this.baseUrl}/`;
     const url = `${cleanBaseUrl}${cleanEndpoint}`;
     
-    console.log('🌐 FunifierAPI GET:', url);
-    console.log('🌐 Headers keys:', headers.keys());
-    console.log('🌐 Authorization header:', headers.get('Authorization'));
-    console.log('🌐 Is database endpoint:', endpoint.includes('/database'));
-    
     return this.http.get<T>(url, { headers, params }).pipe(
-      tap(response => console.log('🌐 FunifierAPI Response:', response)),
       retry({ count: 2, delay: 1000 }), // Reduced retries
       catchError(error => {
-        console.error('🌐 FunifierAPI Error after retries:', error);
-        console.error('🌐 Error status:', error.status);
-        console.error('🌐 Error message:', error.message);
-        return this.handleError(error);
+                                return this.handleError(error);
       })
     );
   }
@@ -160,9 +148,7 @@ export class FunifierApiService {
     const cleanBaseUrl = this.baseUrl.endsWith('/') ? this.baseUrl : `${this.baseUrl}/`;
     const url = `${cleanBaseUrl}${cleanEndpoint}`;
     
-    console.log('🌐 FunifierAPI POST:', url);
-    
-    return this.http.post<T>(url, body, { headers }).pipe(
+        return this.http.post<T>(url, body, { headers }).pipe(
       retry({ count: 3, delay: 1000 }),
       catchError(this.handleError)
     );
@@ -193,9 +179,7 @@ export class FunifierApiService {
     const cleanBaseUrl = this.baseUrl.endsWith('/') ? this.baseUrl : `${this.baseUrl}/`;
     const url = `${cleanBaseUrl}${cleanEndpoint}`;
     
-    console.log('🌐 FunifierAPI PUT:', url);
-    
-    return this.http.put<T>(url, body, { headers }).pipe(
+        return this.http.put<T>(url, body, { headers }).pipe(
       retry({ count: 3, delay: 1000 }),
       catchError(this.handleError)
     );
@@ -226,9 +210,7 @@ export class FunifierApiService {
     const cleanBaseUrl = this.baseUrl.endsWith('/') ? this.baseUrl : `${this.baseUrl}/`;
     const url = `${cleanBaseUrl}${cleanEndpoint}`;
     
-    console.log('🌐 FunifierAPI PATCH:', url);
-    
-    return this.http.patch<T>(url, body, { headers }).pipe(
+        return this.http.patch<T>(url, body, { headers }).pipe(
       retry({ count: 3, delay: 1000 }),
       catchError(this.handleError)
     );
@@ -254,12 +236,8 @@ export class FunifierApiService {
       // Use Basic Auth for database operations
       if (this.basicToken) {
         headers = headers.set('Authorization', `Basic ${this.basicToken}`);
-        console.log('🔐 Using Basic Auth for database endpoint:', endpoint);
-        console.log('🔐 Basic token present:', !!this.basicToken);
-      } else {
-        console.error('🔐 ERROR: Basic token is empty! Check funifier_basic_token env variable');
-        console.error('🔐 Environment funifier_basic_token:', environment.funifier_basic_token);
-      }
+                      } else {
+                      }
     }
     // For non-database endpoints, the AuthInterceptor will add the Bearer token
     // from the session storage, so we don't add it here to avoid conflicts
@@ -301,8 +279,7 @@ export class FunifierApiService {
       }
     }
 
-    console.error('Funifier API Error:', errorMessage, error);
-    return throwError(() => new Error(errorMessage));
+        return throwError(() => new Error(errorMessage));
   }
 
   /**
@@ -315,3 +292,6 @@ export class FunifierApiService {
     localStorage.removeItem('funifier_token_expiry');
   }
 }
+
+
+

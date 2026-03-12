@@ -257,11 +257,9 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
         // Por padrão, jogadores veem apenas seus dados pessoais
         // Mas podem alternar para ver dados do time
         this.viewMode = 'personal';
-        console.log('👤 Jogador detectado com time:', this.playerTeamId);
-      } else {
+              } else {
         this.canViewTeamData = false;
-        console.log('👤 Jogador sem time associado');
-      }
+              }
     }
 
     await Promise.all([
@@ -288,8 +286,7 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
 
     // Verificar se o email do usuário atual está disponível
     if (!this.currentUserEmail) {
-      console.warn('⚠️ Email do usuário atual não fornecido. As ações de aprovar/reprovar/cancelar podem não funcionar.');
-      // Fallback: usar o userId como email se disponível
+            // Fallback: usar o userId como email se disponível
       this.currentUserEmail = this.userId || 'usuario@exemplo.com';
     }
 
@@ -309,8 +306,7 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
     
     // Se a aba inicial for "processos-pendentes", carregar os dados
     if (this.aba === 'processos-pendentes') {
-      console.log('📊 Modal inicializado na aba Processos Pendentes');
-      this.carregarProcessosPendentes();
+            this.carregarProcessosPendentes();
     }
   }
 
@@ -325,8 +321,7 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
         return nameA.localeCompare(nameB);
       });
     } catch (error) {
-      console.error('Erro ao carregar atividades:', error);
-      // Aqui você pode adicionar um toast ou notificação de erro
+            // Aqui você pode adicionar um toast ou notificação de erro
     } finally {
       this.loadingAtividades = false;
     }
@@ -346,8 +341,7 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
       } else if (this.isPlayer && this.playerTeamId) {
         // Jogador com time - usar o time do jogador
         timeIdParaBuscar = this.playerTeamId;
-        console.log('👤 Carregando jogadores do time do jogador:', timeIdParaBuscar);
-      }
+              }
       
       if (timeIdParaBuscar) {
         // Buscar usuários do endpoint /team/{id}/users
@@ -358,9 +352,7 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
           return jogador.deactivated_at === null || jogador.deactivated_at === undefined;
         });
         
-        console.log('Usuários ativos do time carregados:', this.jogadores);
-        
-        // Se houver uma atividade selecionada, atualizar o seletor de executor
+                // Se houver uma atividade selecionada, atualizar o seletor de executor
         if (this.atividadeSelecionada?.user_email) {
           const jogadorEncontrado = this.jogadores.find(j => 
             j.email === this.atividadeSelecionada.user_email || 
@@ -381,8 +373,7 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
       } else {
         // Contexto de colaborador sem time - usar apenas o colaborador atual
         if (!this.userId || !this.userName) {
-          console.error('userId ou userName não fornecidos para contexto de colaborador');
-          return;
+                    return;
         }
         
         // Criar objeto do colaborador atual
@@ -392,11 +383,9 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
           name: this.userName,
           full_name: this.userName
         }];
-        console.log('Colaborador carregado:', this.jogadores);
-      }
+              }
     } catch (error) {
-      console.error('Erro ao carregar jogadores:', error);
-      // Aqui você pode adicionar um toast ou notificação de erro
+            // Aqui você pode adicionar um toast ou notificação de erro
     } finally {
       this.loadingJogadores = false;
     }
@@ -452,8 +441,7 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
         filtrosAtivosEmpty: Object.keys(this.filtrosAtivos || {}).length === 0
       });
     } catch (error) {
-      console.error('❌ Modal - Erro ao carregar atividades pendentes:', error);
-      this.atividadesPendentes = [];
+            this.atividadesPendentes = [];
       this.paginacaoPendentes = null;
     } finally {
       this.loadingAtividadesPendentes = false;
@@ -489,20 +477,8 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
         this.atividadesFinalizadas = response.items;
       }
       
-      console.log('📊 Atividades finalizadas carregadas:', {
-        total: response.total,
-        pagina: response.page,
-        itens: response.items.length,
-        totalPages: response.totalPages,
-        paginacaoFinalizadas: this.paginacaoFinalizadas,
-        paginacaoFinalizadasTotalPages: this.paginacaoFinalizadas?.totalPages,
-        loading: this.loadingAtividadesFinalizadas,
-        shouldShowPagination: this.paginacaoFinalizadas && this.paginacaoFinalizadas.totalPages > 1 && !this.loadingAtividadesFinalizadas,
-        filtrosAtivos: this.filtrosAtivos
-      });
-    } catch (error) {
-      console.error('❌ Modal - Erro ao carregar atividades aguardando aprovação:', error);
-      this.atividadesFinalizadas = [];
+          } catch (error) {
+            this.atividadesFinalizadas = [];
       this.paginacaoFinalizadas = null;
     } finally {
       this.loadingAtividadesFinalizadas = false;
@@ -513,16 +489,7 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
     this.loadingAtividadesAprovadas = true;
     this.currentPageAprovadas = page;
     try {
-      console.log('🔄 Modal - Iniciando carregamento de atividades aprovadas...');
-      console.log('📋 Parâmetros:', { 
-        timeId: this.timeId, 
-        userId: this.userId, 
-        isTeamContext: this.isTeamContext,
-        page: page,
-        limit: this.pageSize
-      });
-      
-      const context = this.getCurrentContext();
+                  const context = this.getCurrentContext();
       const response = await this.pontosAvulsosService.getAtividadesAprovadasModal(
         context.timeId || 0,
         context.userId || '',
@@ -547,20 +514,8 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
         this.atividadesAprovadas = response.items;
       }
       
-      console.log('✅ Modal - Atividades aprovadas carregadas:', {
-        total: response.total,
-        pagina: response.page,
-        itens: response.items.length,
-        totalPages: response.totalPages,
-        paginacaoAprovadas: this.paginacaoAprovadas,
-        paginacaoAprovadasTotalPages: this.paginacaoAprovadas?.totalPages,
-        loading: this.loadingAtividadesAprovadas,
-        shouldShowPagination: this.paginacaoAprovadas && this.paginacaoAprovadas.totalPages > 1 && !this.loadingAtividadesAprovadas,
-        filtrosAtivos: this.filtrosAtivos
-      });
-    } catch (error) {
-      console.error('❌ Modal - Erro ao carregar atividades aprovadas:', error);
-      this.atividadesAprovadas = [];
+          } catch (error) {
+            this.atividadesAprovadas = [];
       this.paginacaoAprovadas = null;
     } finally {
       this.loadingAtividadesAprovadas = false;
@@ -571,16 +526,7 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
     this.loadingAtividadesCanceladas = true;
     this.currentPageCanceladas = page;
     try {
-      console.log('🔄 Modal - Iniciando carregamento de atividades canceladas...');
-      console.log('📋 Parâmetros:', { 
-        timeId: this.timeId, 
-        userId: this.userId, 
-        isTeamContext: this.isTeamContext,
-        page: page,
-        limit: this.pageSize
-      });
-      
-      const context = this.getCurrentContext();
+                  const context = this.getCurrentContext();
       const response = await this.pontosAvulsosService.getAtividadesCanceladasModal(
         context.timeId,
         context.userId,
@@ -605,19 +551,8 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
         this.atividadesCanceladas = response.items;
       }
       
-      console.log('✅ Modal - Atividades canceladas carregadas:', {
-        total: response.total,
-        pagina: response.page,
-        itens: response.items.length,
-        totalPages: response.totalPages,
-        paginacaoCanceladas: this.paginacaoCanceladas,
-        paginacaoCanceladasTotalPages: this.paginacaoCanceladas?.totalPages,
-        loading: this.loadingAtividadesCanceladas,
-        filtrosAtivos: this.filtrosAtivos
-      });
-    } catch (error) {
-      console.error('❌ Modal - Erro ao carregar atividades canceladas:', error);
-      this.atividadesCanceladas = [];
+          } catch (error) {
+            this.atividadesCanceladas = [];
       this.paginacaoCanceladas = null;
     } finally {
       this.loadingAtividadesCanceladas = false;
@@ -700,8 +635,7 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
   async atribuirAtividade() {
     // Prevenir execução múltipla
     if (this.processandoAtribuicao) {
-      console.log('⚠️ Processamento de atribuição já em andamento, ignorando requisição duplicada');
-      return;
+            return;
     }
 
     if (this.formAtribuir.valid) {
@@ -748,8 +682,7 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
         const atividadeSelecionada = this.atividades.find(a => a.id === formValue.atividade);
         
         if (!atividadeSelecionada) {
-          console.error('Atividade não encontrada');
-          this.isLoadingBlocking = false;
+                    this.isLoadingBlocking = false;
           this.loadingProvider.show = false;
           document.body.style.pointerEvents = '';
           document.body.style.userSelect = '';
@@ -803,9 +736,7 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
         const quantidade = Number(formValue.quantidade) || 1;
         
         console.log(`🔄 Criando ${quantidade} atividade(s)...`);
-        console.log(`📊 Valor de quantidade no formulário: ${formValue.quantidade}, convertido para número: ${quantidade}`);
-
-        // Usar o mesmo delivery_id e delivery_title para todas as atividades
+                // Usar o mesmo delivery_id e delivery_title para todas as atividades
         const deliveryId = formValue.delivery_id || '';
         const deliveryTitle = formValue.delivery_title || '';
         
@@ -820,9 +751,7 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
               ? `${deliveryId}_${uniqueSuffix}`
               : `${atividadeSelecionada.id}_${uniqueSuffix}`;
             
-            console.log(`📝 Criando atividade ${i + 1}/${quantidade} com delivery_id: ${deliveryId} e integration_id: ${uniqueIntegrationId}`);
-
-            const payload = this.pontosAvulsosService.createProcessPayload(
+                        const payload = this.pontosAvulsosService.createProcessPayload(
               atividadeSelecionada.id,
               userEmail,
               deliveryId,
@@ -836,9 +765,7 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
             await this.pontosAvulsosService.processAction(payload);
             
             sucessos++;
-            console.log(`✅ Atividade ${i + 1}/${quantidade} atribuída com sucesso!`);
-            
-            // Pequeno delay entre requisições para evitar sobrecarga
+                        // Pequeno delay entre requisições para evitar sobrecarga
             if (i < quantidade - 1) {
               await new Promise(resolve => setTimeout(resolve, 500));
             }
@@ -846,17 +773,13 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
             falhas++;
             const errorMsg = error?.message || `Erro ao criar atividade ${i + 1}`;
             erros.push(errorMsg);
-            console.error(`❌ Erro ao criar atividade ${i + 1}/${quantidade}:`, error);
-            
-            // Continuar com as próximas requisições mesmo se uma falhar
+                        // Continuar com as próximas requisições mesmo se uma falhar
           }
         }
         
         // Verificar se deve retornar para a delivery usando o cache
         if (this.estadoDetalheProcessoCache || (this.retornarParaDelivery && this.deliveryParaRetornar)) {
-          console.log('🔄 Retornando para detalhe da delivery após atribuição');
-          
-          // Tentar restaurar usando o cache primeiro (mais confiável)
+                    // Tentar restaurar usando o cache primeiro (mais confiável)
           const restaurado = await this.restaurarEstadoDetalheProcesso();
           
           // Se o cache não funcionou, tentar com a lógica antiga (fallback)
@@ -887,11 +810,9 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
             const deliveryAtualizada = await this.buscarDeliveryAtualizada(deliveryId);
             
             if (deliveryAtualizada) {
-              console.log('✅ Delivery atualizada encontrada com', deliveryAtualizada.user_action?.length || 0, 'atividades');
-              this.abrirDetalheDelivery(deliveryAtualizada);
+                            this.abrirDetalheDelivery(deliveryAtualizada);
             } else {
-              console.warn('⚠️ Delivery não encontrada após recarregamento, tentando com dados originais');
-              if (this.deliveryParaRetornar) {
+                            if (this.deliveryParaRetornar) {
                 this.abrirDetalheDelivery(this.deliveryParaRetornar);
               }
             }
@@ -906,8 +827,7 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
           this.formAtribuir.reset({ status: 'PENDING', quantidade: 1 });
           
           // Redirecionar para processos pendentes após criação
-          console.log('🔄 Redirecionando para lista de processos pendentes...');
-          this.onTypeChange(0); // Muda para tipo "Processos"
+                    this.onTypeChange(0); // Muda para tipo "Processos"
           this.aba = 'processos-pendentes'; // Define a aba como "processos-pendentes"
           this.onAbaChange(); // Carrega os dados da aba
         }
@@ -916,8 +836,7 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
         this.mostrarToastResultado(sucessos, falhas, quantidade);
         
       } catch (error) {
-        console.error('Erro ao atribuir atividade:', error);
-        this.toastService.error('Erro ao processar as requisições. Por favor, tente novamente ou contate o suporte.');
+                this.toastService.error('Erro ao processar as requisições. Por favor, tente novamente ou contate o suporte.');
       } finally {
         // Restaurar interação do usuário
         this.isLoadingBlocking = false;
@@ -1052,8 +971,7 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
 
   abrirDetalheDelivery(delivery: any) {
     // Log para inspecionar a estrutura recebida
-    console.log('🟢 Detalhe da delivery selecionada:', delivery);
-    // Normaliza o campo de tarefas
+        // Normaliza o campo de tarefas
     if (!Array.isArray(delivery.user_action)) {
       if (Array.isArray(delivery.user_actions)) {
         delivery.user_action = delivery.user_actions;
@@ -1098,8 +1016,7 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
 
   async cancelarDelivery() {
     if (!this.deliverySelecionada) {
-      console.error('❌ Delivery não selecionada');
-      return;
+            return;
     }
 
     const modalRef = this.modalService.open(ModalConfirmarCancelarDeliveryComponent, { size: 'sm' });
@@ -1109,9 +1026,7 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
     
     if (result) {
       try {
-        console.log('❌ Cancelando delivery:', this.deliverySelecionada.id);
-        
-        await this.pontosAvulsosService.cancelarDelivery(this.deliverySelecionada.id);
+                await this.pontosAvulsosService.cancelarDelivery(this.deliverySelecionada.id);
         
         // Atualizar status localmente
         this.deliverySelecionada.status = 'CANCELLED';
@@ -1125,17 +1040,14 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
         // Sempre recarregar também a lista de cancelados para garantir que apareça
         await this.carregarProcessosCancelados();
         
-        console.log('✅ Delivery cancelada com sucesso!');
-        
-        // Mostrar toast de sucesso
+                // Mostrar toast de sucesso
         const alias = this.aliases?.deliveryAlias || 'processo';
         this.toastService.success(`${alias} cancelado com sucesso! Status alterado para "Cancelado".`, 4000);
         
         this.fecharDetalheDelivery();
         
       } catch (error) {
-        console.error('❌ Erro ao cancelar delivery:', error);
-        const alias = this.aliases?.deliveryAlias || 'processo';
+                const alias = this.aliases?.deliveryAlias || 'processo';
         this.toastService.error(`Erro ao cancelar ${alias}. Por favor, tente novamente.`);
       }
     }
@@ -1143,8 +1055,7 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
 
   async completarDelivery() {
     if (!this.deliverySelecionada) {
-      console.error('❌ Delivery não selecionada');
-      return;
+            return;
     }
 
     const modalRef = this.modalService.open(ModalConfirmarCompletarDeliveryComponent, { size: 'sm' });
@@ -1154,9 +1065,7 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
     
     if (result) {
       try {
-        console.log('✅ Completando delivery:', this.deliverySelecionada.id);
-        
-        await this.pontosAvulsosService.completarDelivery(this.deliverySelecionada.id);
+                await this.pontosAvulsosService.completarDelivery(this.deliverySelecionada.id);
         
         // Atualizar status localmente
         this.deliverySelecionada.status = 'DELIVERED';
@@ -1164,19 +1073,16 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
         // Recarregar as listas
         await this.recarregarListasProcessos();
         
-        console.log('✅ Delivery completada com sucesso!');
-        this.fecharDetalheDelivery();
+                this.fecharDetalheDelivery();
         
       } catch (error) {
-        console.error('❌ Erro ao completar delivery:', error);
-      }
+              }
     }
   }
 
   async desfazerDelivery() {
     if (!this.deliverySelecionada) {
-      console.error('❌ Delivery não selecionada');
-      return;
+            return;
     }
 
     const modalRef = this.modalService.open(ModalConfirmarDesfazerDeliveryComponent, { size: 'sm' });
@@ -1186,9 +1092,7 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
     
     if (result) {
       try {
-        console.log('🔄 Desfazendo delivery:', this.deliverySelecionada.id);
-        
-        await this.pontosAvulsosService.desfazerDelivery(this.deliverySelecionada.id);
+                await this.pontosAvulsosService.desfazerDelivery(this.deliverySelecionada.id);
         
         // Atualizar status localmente
         this.deliverySelecionada.status = 'INCOMPLETE';
@@ -1196,19 +1100,16 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
         // Recarregar as listas
         await this.recarregarListasProcessos();
         
-        console.log('✅ Delivery desfeita com sucesso!');
-        this.fecharDetalheDelivery();
+                this.fecharDetalheDelivery();
         
       } catch (error) {
-        console.error('❌ Erro ao desfazer delivery:', error);
-      }
+              }
     }
   }
 
   async restaurarDelivery() {
     if (!this.deliverySelecionada) {
-      console.error('❌ Delivery não selecionada');
-      return;
+            return;
     }
 
     const modalRef = this.modalService.open(ModalConfirmarRestaurarDeliveryComponent, { size: 'sm' });
@@ -1218,9 +1119,7 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
     
     if (result) {
       try {
-        console.log('🔄 Restaurando delivery:', this.deliverySelecionada.id);
-        
-        await this.pontosAvulsosService.restaurarDelivery(this.deliverySelecionada.id);
+                await this.pontosAvulsosService.restaurarDelivery(this.deliverySelecionada.id);
         
         // Atualizar status localmente
         this.deliverySelecionada.status = 'PENDING';
@@ -1228,24 +1127,16 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
         // Recarregar as listas
         await this.recarregarListasProcessos();
         
-        console.log('✅ Delivery restaurada com sucesso!');
-        this.fecharDetalheDelivery();
+                this.fecharDetalheDelivery();
         
       } catch (error) {
-        console.error('❌ Erro ao restaurar delivery:', error);
-      }
+              }
     }
   }
 
   async criarTarefa() {
-    console.log('🔍 Criando nova tarefa para delivery:', {
-      deliverySelecionada: this.deliverySelecionada?.id,
-      currentUserEmail: this.currentUserEmail
-    });
-
-    if (!this.deliverySelecionada) {
-      console.error('❌ Delivery não selecionada');
-      return;
+        if (!this.deliverySelecionada) {
+            return;
     }
 
     // Salvar estado completo do detalhe do processo no cache
@@ -1260,20 +1151,14 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
     // Trocar para aba "Criar" (tipo 2)
     this.onTypeChange(2);
 
-    console.log('✅ Formulário de criação aberto com dados da delivery:', {
-      titulo: this.deliverySelecionada.title || this.deliverySelecionada.name,
-      id: this.deliverySelecionada.id
-    });
-    console.log('💾 Estado do detalhe salvo no cache:', this.estadoDetalheProcessoCache);
-  }
+          }
 
   /**
    * Salva o estado atual do detalhe do processo no cache
    */
   private salvarEstadoDetalheProcesso(): void {
     if (!this.deliverySelecionada || !this.mostrarDetalheDelivery) {
-      console.warn('⚠️ Não há detalhe de processo para salvar no cache');
-      return;
+            return;
     }
 
     this.estadoDetalheProcessoCache = {
@@ -1290,27 +1175,19 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
     this.deliveryParaRetornar = { ...this.deliverySelecionada };
     this.abaAnterior = this.aba;
 
-    console.log('💾 Estado do detalhe do processo salvo no cache:', {
-      deliveryId: this.estadoDetalheProcessoCache.deliveryId,
-      aba: this.estadoDetalheProcessoCache.aba,
-      selectedType: this.estadoDetalheProcessoCache.selectedType
-    });
-  }
+      }
 
   /**
    * Restaura o estado do detalhe do processo do cache
    */
   private async restaurarEstadoDetalheProcesso(): Promise<boolean> {
     if (!this.estadoDetalheProcessoCache) {
-      console.warn('⚠️ Não há estado de detalhe salvo no cache para restaurar');
-      return false;
+            return false;
     }
 
     try {
       const cache = this.estadoDetalheProcessoCache;
-      console.log('🔄 Restaurando estado do detalhe do processo do cache:', cache);
-
-      // Aguardar um pequeno delay para garantir que a API processou as novas atividades
+            // Aguardar um pequeno delay para garantir que a API processou as novas atividades
       await new Promise(resolve => setTimeout(resolve, 500));
 
       // Restaurar tipo e aba
@@ -1327,20 +1204,15 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
       const deliveryAtualizada = await this.buscarDeliveryAtualizada(cache.deliveryId);
 
       if (deliveryAtualizada) {
-        console.log('✅ Delivery atualizada encontrada com', deliveryAtualizada.user_action?.length || 0, 'atividades');
-        
-        // Restaurar detalhe com dados atualizados
+                // Restaurar detalhe com dados atualizados
         this.abrirDetalheDelivery(deliveryAtualizada);
         
         // Restaurar cor do detalhe
         this.detalheDeliveryCor = cache.detalheDeliveryCor;
         
-        console.log('✅ Estado do detalhe do processo restaurado com sucesso');
-        return true;
+                return true;
       } else {
-        console.warn('⚠️ Delivery não encontrada após recarregamento, tentando com dados do cache');
-        
-        // Se não encontrou, usar dados do cache (podem estar desatualizados)
+                // Se não encontrou, usar dados do cache (podem estar desatualizados)
         if (cache.delivery) {
           this.abrirDetalheDelivery(cache.delivery);
           this.detalheDeliveryCor = cache.detalheDeliveryCor;
@@ -1351,8 +1223,7 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
 
       return false;
     } catch (error) {
-      console.error('❌ Erro ao restaurar estado do detalhe do processo:', error);
-      return false;
+            return false;
     } finally {
       // Limpar cache após tentar restaurar
       this.limparEstadoDetalheProcesso();
@@ -1367,8 +1238,7 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
     this.retornarParaDelivery = false;
     this.deliveryParaRetornar = null;
     this.abaAnterior = null;
-    console.log('🧹 Cache do estado do detalhe do processo limpo');
-  }
+      }
 
   /**
    * Verifica se existe estado em cache para voltar
@@ -1382,18 +1252,14 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
    */
   async voltarParaEstadoAnterior(): Promise<void> {
     if (!this.estadoDetalheProcessoCache) {
-      console.warn('⚠️ Não há estado em cache para voltar');
-      return;
+            return;
     }
 
-    console.log('⬅️ Voltando para estado anterior usando cache');
-
-    try {
+        try {
       // Usar o método de restauração existente
       await this.restaurarEstadoDetalheProcesso();
     } catch (error) {
-      console.error('❌ Erro ao voltar para estado anterior:', error);
-      this.toastService.error('Erro ao voltar para a página anterior');
+            this.toastService.error('Erro ao voltar para a página anterior');
     }
   }
 
@@ -1405,9 +1271,7 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
     const titulo = delivery.title || delivery.name || '';
     const id = delivery.id || '';
 
-    console.log('📝 Preenchendo formulário com dados da delivery:', { titulo, id });
-
-    // Preencher campos do formulário
+        // Preencher campos do formulário
     this.formAtribuir.patchValue({
       delivery_title: titulo,
       delivery_id: id,
@@ -1434,9 +1298,7 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
    * Limpa o formulário de atribuição de atividades
    */
   private limparFormularioAtribuicao(): void {
-    console.log('🧹 Limpando formulário de atribuição');
-    
-    // Resetar formulário para valores padrão
+        // Resetar formulário para valores padrão
     this.formAtribuir.reset({
       atividade: null,
       jogador: null,
@@ -1460,8 +1322,7 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
       this.preSelecionarJogadorAtual();
     }
     
-    console.log('✅ Formulário limpo com sucesso');
-  }
+      }
 
   /**
    * Busca uma delivery atualizada na lista recarregada
@@ -1470,9 +1331,7 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
    */
   private async buscarDeliveryAtualizada(deliveryId: string): Promise<any | null> {
     try {
-      console.log('🔍 Buscando delivery atualizada:', deliveryId, 'na aba:', this.aba);
-      
-      let deliveryAtualizada: any = null;
+            let deliveryAtualizada: any = null;
       
       // Buscar na lista apropriada baseada na aba atual
       if (this.aba === 'processos-pendentes') {
@@ -1495,11 +1354,8 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
           }
         }
         
-        console.log('✅ Delivery encontrada com', deliveryAtualizada.user_action?.length || 0, 'atividades');
-      } else {
-        console.warn('⚠️ Delivery não encontrada na lista. Tentando buscar em todas as listas...');
-        
-        // Se não encontrou na aba atual, buscar em todas as listas
+              } else {
+                // Se não encontrou na aba atual, buscar em todas as listas
         const todasListas = [
           ...this.processosPendentes,
           ...this.processosIncompletos,
@@ -1518,14 +1374,12 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
               deliveryAtualizada.user_action = [];
             }
           }
-          console.log('✅ Delivery encontrada em outra lista com', deliveryAtualizada.user_action?.length || 0, 'atividades');
-        }
+                  }
       }
       
       return deliveryAtualizada;
     } catch (error) {
-      console.error('❌ Erro ao buscar delivery atualizada:', error);
-      return null;
+            return null;
     }
   }
 
@@ -1548,28 +1402,18 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
       // Reaplicar filtros locais após recarregar
       this.aplicarFiltrosLocaisProcessos();
     } catch (error) {
-      console.error('Erro ao recarregar listas de processos:', error);
-    }
+          }
   }
 
   async finalizarAtividade() {
-    console.log('🔍 Verificando dados para finalizar atividade:', {
-      atividadeSelecionada: this.atividadeSelecionada?.id,
-      executorEmail: this.atividadeSelecionada?.user_email,
-      currentUserEmail: this.currentUserEmail,
-      status: this.atividadeSelecionada?.status
-    });
-
-    if (!this.atividadeSelecionada) {
-      console.error('❌ Atividade não selecionada');
-      return;
+        if (!this.atividadeSelecionada) {
+            return;
     }
 
     // Usar o email do executor da atividade (não o do usuário logado)
     const executorEmail = this.atividadeSelecionada.user_email;
     if (!executorEmail) {
-      console.error('❌ Email do executor da atividade não fornecido');
-      return;
+            return;
     }
 
     // Obter o action_id
@@ -1579,14 +1423,12 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
     }
 
     if (!this.atividadeSelecionada.delivery_id) {
-      console.error('❌ Delivery ID não encontrado na atividade');
-      return;
+            return;
     }
 
     // Verificar se a atividade já está finalizada
     if (this.atividadeSelecionada.status === 'DONE') {
-      console.log('⚠️ Atividade já está finalizada');
-      return;
+            return;
     }
 
     // Abrir modal de confirmação
@@ -1595,10 +1437,7 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
 
     if (result && result.confirmado) {
       try {
-        console.log('✅ Finalizando atividade:', this.atividadeSelecionada.delivery_id);
-        console.log('📧 Usando email do executor:', executorEmail);
-        
-        // Usar a data atual como data de finalização
+                        // Usar a data atual como data de finalização
         const finishedAt = new Date().toISOString();
         
         await this.pontosAvulsosService.finalizarAtividade(
@@ -1628,41 +1467,28 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
         // Recarregar as listas para refletir as mudanças
         await this.recarregarListasAtualizadas();
         
-        console.log('✅ Atividade enviada para aprovação!');
-        
-        // Mostrar toast de sucesso
+                // Mostrar toast de sucesso
         const alias = this.aliases?.actionAlias || 'atividade';
         this.toastService.success(`${alias} finalizada com sucesso! Status alterado para "Aguardando Aprovação".`, 4000);
         
         this.fecharDetalhe();
         
       } catch (error) {
-        console.error('❌ Erro ao finalizar atividade:', error);
-        const alias = this.aliases?.actionAlias || 'atividade';
+                const alias = this.aliases?.actionAlias || 'atividade';
         this.toastService.error(`Erro ao finalizar ${alias}. Por favor, tente novamente.`);
       }
     }
   }
 
   async aprovarAtividade() {
-    console.log('🔍 Verificando dados para aprovar atividade:', {
-      atividadeSelecionada: this.atividadeSelecionada?.id,
-      executorEmail: this.atividadeSelecionada?.user_email,
-      currentUserEmail: this.currentUserEmail,
-      status: this.atividadeSelecionada?.status,
-      deliveryId: this.atividadeSelecionada?.delivery_id
-    });
-
-    if (!this.atividadeSelecionada) {
-      console.error('❌ Atividade não selecionada');
-      return;
+        if (!this.atividadeSelecionada) {
+            return;
     }
 
     // Usar o email do executor da atividade (não o do usuário logado)
     const executorEmail = this.atividadeSelecionada.user_email;
     if (!executorEmail) {
-      console.error('❌ Email do executor da atividade não fornecido');
-      return;
+            return;
     }
 
     // Obter o action_id
@@ -1672,8 +1498,7 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
     }
 
     if (!this.atividadeSelecionada.delivery_id) {
-      console.error('❌ Delivery ID não encontrado na atividade');
-      return;
+            return;
     }
 
     const modalRef = this.modalService.open(ModalConfirmarAprovacaoComponent, { size: 'sm' });
@@ -1681,10 +1506,7 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
 
     if (result && result.aprovado) {
       try {
-        console.log('✅ Aprovando atividade:', this.atividadeSelecionada.delivery_id);
-        console.log('📧 Usando email do executor:', executorEmail);
-        
-        // Usar a data atual como data de finalização
+                        // Usar a data atual como data de finalização
         const finishedAt = new Date().toISOString();
         
         await this.pontosAvulsosService.aprovarAtividade(
@@ -1712,38 +1534,27 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
         // Recarregar as listas para refletir as mudanças
         await this.recarregarListasAtualizadas();
         
-        console.log('✅ Atividade aprovada com sucesso!');
-        this.fecharDetalhe();
+                this.fecharDetalhe();
         
         // Aqui você pode adicionar um toast de sucesso
         // this.toastService.showSuccess('Atividade aprovada com sucesso!');
         
       } catch (error) {
-        console.error('❌ Erro ao aprovar atividade:', error);
-        // Aqui você pode adicionar um toast de erro
+                // Aqui você pode adicionar um toast de erro
         // this.toastService.showError('Erro ao aprovar atividade');
       }
     }
   }
 
   async bloquearAtividade() {
-    console.log('🔍 Verificando dados para bloquear atividade:', {
-      atividadeSelecionada: this.atividadeSelecionada?.id,
-      executorEmail: this.atividadeSelecionada?.user_email,
-      currentUserEmail: this.currentUserEmail,
-      status: this.atividadeSelecionada?.status
-    });
-
-    if (!this.atividadeSelecionada) {
-      console.error('❌ Atividade não selecionada');
-      return;
+        if (!this.atividadeSelecionada) {
+            return;
     }
 
     // Usar o email do executor da atividade (não o do usuário logado)
     const executorEmail = this.atividadeSelecionada.user_email;
     if (!executorEmail) {
-      console.error('❌ Email do executor da atividade não fornecido');
-      return;
+            return;
     }
 
     // Obter o action_id
@@ -1753,13 +1564,11 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
     }
 
     if (!this.atividadeSelecionada.delivery_id) {
-      console.error('❌ Delivery ID não encontrado na atividade');
-      return;
+            return;
     }
 
     if (this.atividadeSelecionada.status === 'DONE') {
-      console.log('⚠️ Atividade já está bloqueada');
-      return;
+            return;
     }
 
     const modalRef = this.modalService.open(ModalConfirmarBloqueioComponent, { size: 'sm' });
@@ -1767,10 +1576,7 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
 
     if (motivo) {
       try {
-        console.log('🔒 Bloqueando atividade com comentário:', this.atividadeSelecionada.delivery_id);
-        console.log('📧 Usando email do executor:', executorEmail);
-
-        await this.pontosAvulsosService.bloquearAtividadeComComentario(
+                        await this.pontosAvulsosService.bloquearAtividadeComComentario(
           actionId,
           executorEmail,
           this.atividadeSelecionada.delivery_id,
@@ -1793,33 +1599,22 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
         // Recarregar as listas para refletir as mudanças
         await this.recarregarListasAtualizadas();
         
-        console.log('✅ Atividade bloqueada com sucesso!');
-        this.fecharDetalhe();
+                this.fecharDetalhe();
         
       } catch (error) {
-        console.error('❌ Erro ao bloquear atividade:', error);
-      }
+              }
     }
   }
 
   async reprovarAtividade() {
-    console.log('🔍 Verificando dados para reprovar atividade:', {
-      atividadeSelecionada: this.atividadeSelecionada?.id,
-      executorEmail: this.atividadeSelecionada?.user_email,
-      currentUserEmail: this.currentUserEmail,
-      status: this.atividadeSelecionada?.status
-    });
-
-    if (!this.atividadeSelecionada) {
-      console.error('❌ Atividade não selecionada');
-      return;
+        if (!this.atividadeSelecionada) {
+            return;
     }
 
     // Usar o email do executor da atividade (não o do usuário logado)
     const executorEmail = this.atividadeSelecionada.user_email;
     if (!executorEmail) {
-      console.error('❌ Email do executor da atividade não fornecido');
-      return;
+            return;
     }
 
     // Obter o action_id
@@ -1829,14 +1624,12 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
     }
 
     if (!this.atividadeSelecionada.delivery_id) {
-      console.error('❌ Delivery ID não encontrado na atividade');
-      return;
+            return;
     }
 
     // Verificar se a atividade já está pendente
     if (this.atividadeSelecionada.status === 'PENDING') {
-      console.log('⚠️ Atividade já está pendente');
-      return;
+            return;
     }
 
     const modalRef = this.modalService.open(ModalMotivoReprovacaoComponent, { size: 'sm' });
@@ -1844,10 +1637,7 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
     
     if (motivo) {
       try {
-        console.log('🔄 Reprovar atividade com comentário:', this.atividadeSelecionada.id);
-        console.log('📧 Usando email do executor:', executorEmail);
-        
-        await this.pontosAvulsosService.reprovarAtividadeComComentario(
+                        await this.pontosAvulsosService.reprovarAtividadeComComentario(
           actionId,
           executorEmail,
           this.atividadeSelecionada.delivery_id,
@@ -1870,38 +1660,27 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
         // Recarregar as listas para refletir as mudanças
         await this.recarregarListasAtualizadas();
         
-        console.log('✅ Atividade reprovada com sucesso!');
-        this.fecharDetalhe();
+                this.fecharDetalhe();
         
         // Aqui você pode adicionar um toast de sucesso
         // this.toastService.showSuccess('Atividade reprovada com sucesso!');
         
       } catch (error) {
-        console.error('❌ Erro ao reprovar atividade:', error);
-        // Aqui você pode adicionar um toast de erro
+                // Aqui você pode adicionar um toast de erro
         // this.toastService.showError('Erro ao reprovar atividade');
       }
     }
   }
 
   async cancelarAtividade() {
-    console.log('🔍 Verificando dados para cancelar atividade:', {
-      atividadeSelecionada: this.atividadeSelecionada?.id,
-      executorEmail: this.atividadeSelecionada?.user_email,
-      currentUserEmail: this.currentUserEmail,
-      status: this.atividadeSelecionada?.status
-    });
-
-    if (!this.atividadeSelecionada) {
-      console.error('❌ Atividade não selecionada');
-      return;
+        if (!this.atividadeSelecionada) {
+            return;
     }
 
     // Usar o email do executor da atividade (não o do usuário logado)
     const executorEmail = this.atividadeSelecionada.user_email;
     if (!executorEmail) {
-      console.error('❌ Email do executor da atividade não fornecido');
-      return;
+            return;
     }
 
     // Obter o action_id
@@ -1911,8 +1690,7 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
     }
 
     if (!this.atividadeSelecionada.delivery_id) {
-      console.error('❌ Delivery ID não encontrado na atividade');
-      return;
+            return;
     }
 
     const modalRef = this.modalService.open(ModalMotivoCancelamentoComponent, { size: 'sm' });
@@ -1920,10 +1698,7 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
     
     if (motivo) {
       try {
-        console.log('❌ Cancelando atividade com comentário:', this.atividadeSelecionada.id);
-        console.log('📧 Usando email do executor:', executorEmail);
-        
-        try {
+                        try {
           await this.pontosAvulsosService.cancelarAtividadeComComentario(
             actionId,
             executorEmail,
@@ -1953,8 +1728,7 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
           if (commentError?.status === 204 || commentError?.response?.status === 204) {
             console.log('✅ Comentário adicionado (status 204)');
           } else {
-            console.warn('⚠️ Comentário não pôde ser adicionado:', commentError);
-          }
+                      }
         }
 
         // Atualizar o status localmente
@@ -1974,17 +1748,14 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
         // Recarregar as listas para refletir as mudanças
         await this.recarregarListasAtualizadas();
         
-        console.log('✅ Atividade cancelada com sucesso!');
-        
-        // Mostrar toast de sucesso
+                // Mostrar toast de sucesso
         const alias = this.aliases?.actionAlias || 'atividade';
         this.toastService.success(`${alias} cancelada com sucesso! Status alterado para "Cancelada".`, 4000);
         
         this.fecharDetalhe();
         
       } catch (error) {
-        console.error('❌ Erro ao cancelar atividade:', error);
-        const alias = this.aliases?.actionAlias || 'atividade';
+                const alias = this.aliases?.actionAlias || 'atividade';
         this.toastService.error(`Erro ao cancelar ${alias}. Por favor, tente novamente.`);
       }
     }
@@ -1995,8 +1766,7 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
    */
   async atualizarExecutor() {
     if (!this.atividadeSelecionada) {
-      console.error('❌ Atividade não selecionada');
-      return;
+            return;
     }
 
     // Validar que apenas atividades com status PENDING podem ter o executor alterado
@@ -2031,8 +1801,7 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
           // Se for um email direto e não encontrar na lista, usar o email
           userEmail = this.novoExecutorSelecionado;
         } else {
-          console.warn('⚠️ Jogador não encontrado para o ID selecionado:', this.novoExecutorSelecionado);
-          userEmail = null;
+                    userEmail = null;
         }
       }
 
@@ -2074,8 +1843,7 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
       await this.recarregarListasAtualizadas();
 
     } catch (error) {
-      console.error('❌ Erro ao atualizar executor:', error);
-      const alias = this.aliases?.actionAlias || 'atividade';
+            const alias = this.aliases?.actionAlias || 'atividade';
       this.toastService.error(`Erro ao atualizar executor da ${alias}. Por favor, tente novamente.`);
     } finally {
       this.atualizandoExecutor = false;
@@ -2098,8 +1866,7 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
         await this.carregarAtividadesCanceladas(this.currentPageCanceladas);
       }
     } catch (error) {
-      console.error('Erro ao recarregar listas:', error);
-    }
+          }
   }
 
   /**
@@ -2231,9 +1998,7 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
   private async carregarAnexos(userActionId: string): Promise<void> {
     try {
       this.loadingAnexos = true;
-      console.log('📎 Carregando anexos para atividade:', userActionId);
-      
-      const response = await this.pontosAvulsosService.buscarAnexos(userActionId);
+            const response = await this.pontosAvulsosService.buscarAnexos(userActionId);
       
       if (Array.isArray(response)) {
         // Mapear os anexos para garantir que todos os campos estejam presentes
@@ -2247,15 +2012,11 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
           url: anexo.url
         }));
         
-        console.log('✅ Anexos carregados:', this.anexosExistentes.length);
-        console.log('📋 Detalhes dos anexos:', this.anexosExistentes);
-      } else {
+                      } else {
         this.anexosExistentes = [];
-        console.log('ℹ️ Nenhum anexo encontrado');
-      }
+              }
     } catch (error) {
-      console.error('❌ Erro ao carregar anexos:', error);
-      this.anexosExistentes = [];
+            this.anexosExistentes = [];
     } finally {
       this.loadingAnexos = false;
     }
@@ -2266,21 +2027,16 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
    */
   public async fazerUploadAnexos(): Promise<void> {
     if (!this.atividadeSelecionada?.id || this.arquivosSelecionados.length === 0) {
-      console.log('ℹ️ Nenhum arquivo para upload ou atividade não selecionada');
-      return;
+            return;
     }
 
     try {
-      console.log('📎 Iniciando upload de anexos:', this.arquivosSelecionados.length);
-      
-      await this.pontosAvulsosService.uploadAnexos(
+            await this.pontosAvulsosService.uploadAnexos(
         this.atividadeSelecionada.id,
         this.arquivosSelecionados
       );
 
-      console.log('✅ Upload de anexos concluído');
-      
-      // Recarregar anexos após upload
+            // Recarregar anexos após upload
       await this.carregarAnexos(this.atividadeSelecionada.id);
       
       // Limpar arquivos selecionados
@@ -2290,13 +2046,9 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
       // this.toastService.showSuccess('Anexos enviados com sucesso!');
       
     } catch (error: any) {
-      console.error('❌ Erro ao fazer upload de anexos:', error);
-      
-      // Exibir mensagem de erro específica
+            // Exibir mensagem de erro específica
       const errorMessage = error.message || 'Erro ao fazer upload dos anexos';
-      console.error('Mensagem de erro:', errorMessage);
-      
-      // Aqui você pode adicionar um toast de erro
+            // Aqui você pode adicionar um toast de erro
       // this.toastService.showError(errorMessage);
     }
   }
@@ -2314,8 +2066,7 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
   ): Promise<void> {
     try {
       if (!this.currentUserEmail) {
-        console.error('❌ Email do usuário não fornecido para adicionar comentário');
-        return;
+                return;
       }
 
       await this.pontosAvulsosService.adicionarComentario(
@@ -2325,10 +2076,8 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
         commentType
       );
 
-      console.log('✅ Comentário adicionado com sucesso');
-    } catch (error) {
-      console.error('❌ Erro ao adicionar comentário:', error);
-      // Aqui você pode adicionar um toast de erro
+          } catch (error) {
+            // Aqui você pode adicionar um toast de erro
     }
   }
 
@@ -2348,8 +2097,7 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
 
     // Se não temos o action_id mas temos o título, buscar pelo título
     if (this.atividadeSelecionada.action_title) {
-      console.log('🔍 Action ID não encontrado, buscando pelo título:', this.atividadeSelecionada.action_title);
-      const actionId = await this.pontosAvulsosService.getActionIdByTitle(this.atividadeSelecionada.action_title);
+            const actionId = await this.pontosAvulsosService.getActionIdByTitle(this.atividadeSelecionada.action_title);
       
       if (actionId) {
         // Atualizar o objeto da atividade com o action_id encontrado
@@ -2358,8 +2106,7 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
       }
     }
 
-    console.error('❌ Action ID não encontrado na atividade e não foi possível buscar pelo título');
-    return null;
+        return null;
   }
 
   // Métodos para upload de arquivos
@@ -2388,16 +2135,14 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
       
       // Verificar se já atingiu o limite de arquivos
       if (this.arquivosSelecionados.length >= this.maxArquivos) {
-        console.warn('Limite máximo de arquivos atingido');
-        // Aqui você pode adicionar um toast de aviso
+                // Aqui você pode adicionar um toast de aviso
         // this.toastService.showWarning('Limite máximo de 5 arquivos atingido');
         break;
       }
 
       // Verificar se o arquivo já foi selecionado
       if (this.arquivosSelecionados.some(f => f.name === file.name && f.size === file.size)) {
-        console.warn('Arquivo já selecionado:', file.name);
-        // Aqui você pode adicionar um toast de aviso
+                // Aqui você pode adicionar um toast de aviso
         // this.toastService.showWarning(`Arquivo "${file.name}" já foi selecionado`);
         continue;
       }
@@ -2412,8 +2157,7 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
 
       // Verificar tipo do arquivo
       if (!this.isTipoArquivoValido(file)) {
-        console.warn('Tipo de arquivo não suportado:', file.name);
-        // Aqui você pode adicionar um toast de erro
+                // Aqui você pode adicionar um toast de erro
         // this.toastService.showError(`Tipo de arquivo não suportado: ${file.name}`);
         continue;
       }
@@ -2430,17 +2174,12 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
   public removerArquivo(index: number): void {
     if (index >= 0 && index < this.arquivosSelecionados.length) {
       const arquivoRemovido = this.arquivosSelecionados[index];
-      console.log('🗑️ Removendo arquivo:', arquivoRemovido.name);
+            this.arquivosSelecionados.splice(index, 1);
       
-      this.arquivosSelecionados.splice(index, 1);
-      
-      console.log('✅ Arquivo removido. Arquivos restantes:', this.arquivosSelecionados.length);
-      
-      // Aqui você pode adicionar um toast de sucesso se desejar
+            // Aqui você pode adicionar um toast de sucesso se desejar
       // this.toastService.showSuccess(`Arquivo "${arquivoRemovido.name}" removido`);
     } else {
-      console.warn('⚠️ Índice inválido para remoção de arquivo:', index);
-    }
+          }
   }
 
   /**
@@ -2448,17 +2187,12 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
    */
   public removerTodosArquivos(): void {
     if (this.arquivosSelecionados.length > 0) {
-      console.log('🗑️ Removendo todos os arquivos selecionados:', this.arquivosSelecionados.length);
+            this.arquivosSelecionados = [];
       
-      this.arquivosSelecionados = [];
-      
-      console.log('✅ Todos os arquivos foram removidos');
-      
-      // Aqui você pode adicionar um toast de sucesso se desejar
+            // Aqui você pode adicionar um toast de sucesso se desejar
       // this.toastService.showSuccess('Todos os arquivos foram removidos');
     } else {
-      console.log('ℹ️ Nenhum arquivo para remover');
-    }
+          }
   }
 
   /**
@@ -2467,23 +2201,19 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
    */
   public async fazerDownloadAnexo(anexo: any): Promise<void> {
     if (!anexo?.id) {
-      console.error('❌ ID do anexo não fornecido');
-      return;
+            return;
     }
 
     // Verificar se já está baixando
     if (this.downloadingAnexos.has(anexo.id)) {
-      console.log('⏳ Download já em andamento para:', anexo.original_name || anexo.filename);
-      return;
+            return;
     }
 
     // Adicionar ao conjunto de downloads em andamento
     this.downloadingAnexos.add(anexo.id);
 
     try {
-      console.log('📥 Iniciando download:', anexo.original_name || anexo.filename);
-      
-      // Obter a URL de download do anexo
+            // Obter a URL de download do anexo
       const downloadUrl = await this.pontosAvulsosService.getDownloadUrl(anexo.id);
       
       // Fazer o download via fetch para preservar o formato original
@@ -2502,25 +2232,7 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
       // Determinar o tipo MIME correto
       const mimeType = this.getCorrectMimeType(anexo, blob.type);
       
-      console.log('📋 Informações do download:', {
-        anexo: {
-          id: anexo.id,
-          original_name: anexo.original_name,
-          filename: anexo.filename,
-          mime_type: anexo.mime_type,
-          url: anexo.url
-        },
-        blob: {
-          type: blob.type,
-          size: blob.size
-        },
-        resultado: {
-          fileName,
-          mimeType
-        }
-      });
-      
-      // Criar um blob com o tipo MIME correto
+            // Criar um blob com o tipo MIME correto
       const correctBlob = new Blob([blob], { type: mimeType });
       
       // Criar URL do blob
@@ -2531,9 +2243,7 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
       
       if (isImage) {
         // Para imagens: abrir em nova aba
-        console.log('🖼️ Abrindo imagem em nova aba:', fileName);
-        
-        const link = document.createElement('a');
+                const link = document.createElement('a');
         link.href = blobUrl;
         link.target = '_blank';
         link.rel = 'noopener noreferrer';
@@ -2551,9 +2261,7 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
         
       } else {
         // Para outros arquivos: download normal
-        console.log('📥 Fazendo download do arquivo:', fileName);
-        
-        const link = document.createElement('a');
+                const link = document.createElement('a');
         link.href = blobUrl;
         link.download = fileName;
         link.style.display = 'none';
@@ -2567,18 +2275,12 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
         window.URL.revokeObjectURL(blobUrl);
       }
       
-              console.log('✅ Ação concluída:', isImage ? 'Imagem aberta em nova aba' : 'Download realizado', fileName, 'Tipo:', mimeType);
-      
-      // Aqui você pode adicionar um toast de sucesso
+                    // Aqui você pode adicionar um toast de sucesso
       // this.toastService.showSuccess(`Download de "${fileName}" concluído`);
       
     } catch (error: any) {
-      console.error('❌ Erro ao fazer download:', error);
-      
-      const errorMessage = error.message || 'Erro ao fazer download do anexo';
-      console.error('Mensagem de erro:', errorMessage);
-      
-      // Aqui você pode adicionar um toast de erro
+            const errorMessage = error.message || 'Erro ao fazer download do anexo';
+            // Aqui você pode adicionar um toast de erro
       // this.toastService.showError(errorMessage);
     } finally {
       // Remover do conjunto de downloads em andamento
@@ -2753,27 +2455,17 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
       // Decodificar a URL para lidar com caracteres especiais (como %20 para espaços)
       const decodedUrl = decodeURIComponent(url);
       
-      console.log('🔍 Analisando URL para extrair extensão:', {
-        original: url,
-        decoded: decodedUrl
-      });
-      
-      // Extrair o nome do arquivo da URL
+            // Extrair o nome do arquivo da URL
       const fileName = decodedUrl.split('/').pop() || '';
       
-      console.log('📄 Nome do arquivo extraído:', fileName);
-      
-      // Extrair a extensão
+            // Extrair a extensão
       const extension = fileName.split('.').pop()?.toLowerCase();
       
-      console.log('🔧 Extensão encontrada:', extension);
-      
-      if (extension && extension.length <= 5) { // Extensões válidas têm até 5 caracteres
+            if (extension && extension.length <= 5) { // Extensões válidas têm até 5 caracteres
         return '.' + extension;
       }
     } catch (error) {
-      console.warn('Erro ao extrair extensão da URL:', error);
-    }
+          }
     
     return '';
   }
@@ -2833,9 +2525,7 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
 
   // Método chamado quando a aba muda
   async onAbaChange() {
-    console.log('🔄 Aba mudou para:', this.aba);
-    
-    // Resetar paginação para página 1 quando a aba muda
+        // Resetar paginação para página 1 quando a aba muda
     if (this.aba === 'pendentes') {
       this.currentPagePendentes = 1;
       console.log('📊 Carregando dados da aba Pendentes (Tarefas)...');
@@ -2845,22 +2535,17 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
       await this.carregarProcessosPendentes();
     } else if (this.aba === 'finalizados') {
       this.currentPageFinalizadas = 1;
-      console.log('📊 Carregando dados da aba Aguardando Aprovação...');
-      await this.carregarAtividadesFinalizadas(1);
+            await this.carregarAtividadesFinalizadas(1);
     } else if (this.aba === 'aprovados') {
       this.currentPageAprovadas = 1;
-      console.log('📊 Carregando dados da aba Aprovados...');
-      await this.carregarAtividadesAprovadas(1);
+            await this.carregarAtividadesAprovadas(1);
     } else if (this.aba === 'cancelados') {
       this.currentPageCanceladas = 1;
-      console.log('📊 Carregando dados da aba Cancelados...');
-      await this.carregarAtividadesCanceladas(1);
+            await this.carregarAtividadesCanceladas(1);
     } else if (this.aba === 'incompletos') {
-      console.log('📊 Carregando dados da aba Incompleto...');
-      await this.carregarProcessosIncompletos();
+            await this.carregarProcessosIncompletos();
     } else if (this.aba === 'entregues') {
-      console.log('📊 Carregando dados da aba Entregue...');
-      await this.carregarProcessosEntregues();
+            await this.carregarProcessosEntregues();
     } else if (this.aba === 'processos-cancelados') {
       console.log('📊 Carregando dados da aba Cancelados (Processos)...');
       await this.carregarProcessosCancelados();
@@ -2881,15 +2566,7 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
     this.loadingProcessosPendentes = true;
     try {
       const context = this.getCurrentContext();
-      console.log('🔄 Modal - Iniciando carregamento de processos pendentes...');
-      console.log('📋 Parâmetros:', { 
-        timeId: context.timeId, 
-        userId: context.userId, 
-        isTeamContext: context.isTeamContext,
-        viewMode: this.viewMode
-      });
-      
-      this.processosPendentes = await this.pontosAvulsosService.getProcessosPendentes(
+                  this.processosPendentes = await this.pontosAvulsosService.getProcessosPendentes(
         context.timeId,
         context.userId,
         context.isTeamContext
@@ -2901,10 +2578,8 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
       // Aplicar filtros locais se houver busca
       this.aplicarFiltrosLocaisProcessos();
       
-      console.log('✅ Modal - Processos pendentes carregados:', this.processosPendentes.length);
-    } catch (error) {
-      console.error('❌ Modal - Erro ao carregar processos pendentes:', error);
-      this.processosPendentes = [];
+          } catch (error) {
+            this.processosPendentes = [];
       this.processosPendentesOriginais = [];
     } finally {
       this.loadingProcessosPendentes = false;
@@ -2915,15 +2590,7 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
     this.loadingProcessosIncompletos = true;
     try {
       const context = this.getCurrentContext();
-      console.log('🔄 Modal - Iniciando carregamento de processos incompletos...');
-      console.log('📋 Parâmetros:', { 
-        timeId: context.timeId, 
-        userId: context.userId, 
-        isTeamContext: context.isTeamContext,
-        viewMode: this.viewMode
-      });
-      
-      this.processosIncompletos = await this.pontosAvulsosService.getProcessosIncompletos(
+                  this.processosIncompletos = await this.pontosAvulsosService.getProcessosIncompletos(
         context.timeId,
         context.userId,
         context.isTeamContext
@@ -2935,10 +2602,8 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
       // Aplicar filtros locais se houver busca
       this.aplicarFiltrosLocaisProcessos();
       
-      console.log('✅ Modal - Processos incompletos carregados:', this.processosIncompletos.length);
-    } catch (error) {
-      console.error('❌ Modal - Erro ao carregar processos incompletos:', error);
-      this.processosIncompletos = [];
+          } catch (error) {
+            this.processosIncompletos = [];
       this.processosIncompletosOriginais = [];
     } finally {
       this.loadingProcessosIncompletos = false;
@@ -2949,15 +2614,7 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
     this.loadingProcessosEntregues = true;
     try {
       const context = this.getCurrentContext();
-      console.log('🔄 Modal - Iniciando carregamento de processos entregues...');
-      console.log('📋 Parâmetros:', { 
-        timeId: context.timeId, 
-        userId: context.userId, 
-        isTeamContext: context.isTeamContext,
-        viewMode: this.viewMode
-      });
-      
-      this.processosEntregues = await this.pontosAvulsosService.getProcessosEntregues(
+                  this.processosEntregues = await this.pontosAvulsosService.getProcessosEntregues(
         context.timeId,
         context.userId,
         context.isTeamContext
@@ -2969,10 +2626,8 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
       // Aplicar filtros locais se houver busca
       this.aplicarFiltrosLocaisProcessos();
       
-      console.log('✅ Modal - Processos entregues carregados:', this.processosEntregues.length);
-    } catch (error) {
-      console.error('❌ Modal - Erro ao carregar processos entregues:', error);
-      this.processosEntregues = [];
+          } catch (error) {
+            this.processosEntregues = [];
       this.processosEntreguesOriginais = [];
     } finally {
       this.loadingProcessosEntregues = false;
@@ -2995,8 +2650,7 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
       // Aplicar filtros locais se houver busca
       this.aplicarFiltrosLocaisProcessos();
     } catch (error) {
-      console.error('❌ Modal - Erro ao carregar processos cancelados:', error);
-      this.processosCancelados = [];
+            this.processosCancelados = [];
       this.processosCanceladosOriginais = [];
     } finally {
       this.loadingProcessosCancelados = false;
@@ -3015,20 +2669,16 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
    * @param typeIndex Índice do tipo selecionado (0 = Processos, 1 = Tarefas, 2 = Criar)
    */
   onTypeChange(typeIndex: number) {
-    console.log('🔄 Alterando tipo para:', typeIndex);
-    
-    // Se estiver no detalhe de uma atividade, fechar o detalhe primeiro
+        // Se estiver no detalhe de uma atividade, fechar o detalhe primeiro
     if (this.mostrarDetalhe) {
-      console.log('📋 Fechando detalhe de atividade antes de trocar de tipo');
-      this.abaAnterior = null;
+            this.abaAnterior = null;
       this.fecharDetalhe();
     }
     
     // Se estiver no detalhe de uma delivery, fechar o detalhe primeiro
     // Mas preservar o estado se estivermos retornando de uma criação
     if (this.mostrarDetalheDelivery && !this.retornarParaDelivery && !this.estadoDetalheProcessoCache) {
-      console.log('📋 Fechando detalhe de delivery antes de trocar de tipo');
-      this.abaAnterior = null;
+            this.abaAnterior = null;
       this.fecharDetalheDelivery();
       // Limpar cache se estiver navegando manualmente
       this.limparEstadoDetalheProcesso();
@@ -3063,28 +2713,23 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
    * @param novaAba Nova aba selecionada
    */
   trocarAba(novaAba: 'atribuir' | 'pendentes' | 'aprovados' | 'cancelados' | 'finalizados' | 'incompletos' | 'entregues' | 'processos-pendentes' | 'processos-cancelados') {
-    console.log('🔄 Tentando trocar para aba:', novaAba);
-    
-    // Se estiver no detalhe de uma atividade, fechar o detalhe primeiro
+        // Se estiver no detalhe de uma atividade, fechar o detalhe primeiro
     if (this.mostrarDetalhe) {
-      console.log('📋 Fechando detalhe de atividade antes de trocar de aba');
-      // Definir abaAnterior como null para indicar que estamos trocando de aba
+            // Definir abaAnterior como null para indicar que estamos trocando de aba
       this.abaAnterior = null;
       this.fecharDetalhe();
     }
     
     // Se estiver no detalhe de uma delivery, fechar o detalhe primeiro
     if (this.mostrarDetalheDelivery) {
-      console.log('📋 Fechando detalhe de delivery antes de trocar de aba');
-      // Definir abaAnterior como null para indicar que estamos trocando de aba
+            // Definir abaAnterior como null para indicar que estamos trocando de aba
       this.abaAnterior = null;
       this.fecharDetalheDelivery();
     }
     
     // Limpar estado de retorno e cache se o usuário navegar manualmente
     if (this.retornarParaDelivery || this.estadoDetalheProcessoCache) {
-      console.log('🧹 Limpando estado de retorno e cache - navegação manual detectada');
-      this.limparEstadoDetalheProcesso();
+            this.limparEstadoDetalheProcesso();
       this.limparEstadoRetorno();
     }
     
@@ -3114,8 +2759,7 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
     if (novaAba !== 'atribuir') {
       this.onAbaChange();
     } else {
-      console.log('📝 Aba "Atribuir" selecionada - não precisa carregar dados');
-      // Limpar formulário se não estiver vindo de uma delivery
+            // Limpar formulário se não estiver vindo de uma delivery
       if (!this.retornarParaDelivery) {
         this.limparFormularioAtribuicao();
       }
@@ -3432,9 +3076,7 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
    * Busca todas as páginas da aba atual (sem filtros de busca) para permitir busca local completa
    */
   async buscarTodasPaginasAbaAtual(): Promise<void> {
-    console.log('📥 Buscando todas as páginas da aba:', this.aba);
-    
-    // Criar filtros sem busca para buscar todas as páginas
+        // Criar filtros sem busca para buscar todas as páginas
     const filtrosSemBusca = { ...this.filtrosAtivos };
     delete filtrosSemBusca.busca;
     
@@ -3477,10 +3119,8 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
       }
       
       this.atividadesPendentesOriginais = todasAtividades;
-      console.log(`✅ Total de ${todasAtividades.length} atividades pendentes carregadas`);
-    } catch (error) {
-      console.error('❌ Erro ao buscar todas as páginas pendentes:', error);
-    }
+          } catch (error) {
+          }
   }
 
   /**
@@ -3510,10 +3150,8 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
       }
       
       this.atividadesFinalizadasOriginais = todasAtividades;
-      console.log(`✅ Total de ${todasAtividades.length} atividades finalizadas carregadas`);
-    } catch (error) {
-      console.error('❌ Erro ao buscar todas as páginas finalizadas:', error);
-    }
+          } catch (error) {
+          }
   }
 
   /**
@@ -3543,10 +3181,8 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
       }
       
       this.atividadesAprovadasOriginais = todasAtividades;
-      console.log(`✅ Total de ${todasAtividades.length} atividades aprovadas carregadas`);
-    } catch (error) {
-      console.error('❌ Erro ao buscar todas as páginas aprovadas:', error);
-    }
+          } catch (error) {
+          }
   }
 
   /**
@@ -3576,10 +3212,8 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
       }
       
       this.atividadesCanceladasOriginais = todasAtividades;
-      console.log(`✅ Total de ${todasAtividades.length} atividades canceladas carregadas`);
-    } catch (error) {
-      console.error('❌ Erro ao buscar todas as páginas canceladas:', error);
-    }
+          } catch (error) {
+          }
   }
 
   /**
@@ -3592,9 +3226,7 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
     }
 
     this.viewMode = this.viewMode === 'personal' ? 'team' : 'personal';
-    console.log('🔄 Modo de visualização alterado para:', this.viewMode);
-
-    // Recarregar dados com o novo contexto
+        // Recarregar dados com o novo contexto
     await this.onAbaChange();
   }
 
@@ -3624,9 +3256,7 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
    * Método chamado quando os filtros são alterados
    */
   async onFiltrosChange(filtros: any) {
-    console.log('🔍 Filtros alterados:', filtros);
-    
-    // Normalizar busca: se for string vazia, tratar como undefined
+        // Normalizar busca: se for string vazia, tratar como undefined
     const buscaNormalizada = filtros?.busca?.trim() || undefined;
     
     // Atualizar filtros ativos com busca normalizada
@@ -3839,13 +3469,9 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
    * Método chamado quando uma ação em lote é solicitada
    */
   onAcaoLote(tipo: 'cancelar' | 'finalizar' | 'restaurar' | 'aprovar') {
-    console.log(`🔔 onAcaoLote chamado com tipo: ${tipo}`);
-    const itensSelecionados = this.getItensSelecionados();
-    console.log(`📋 Itens selecionados encontrados: ${itensSelecionados.length}`);
-    
-    if (itensSelecionados.length === 0) {
-      console.warn('⚠️ Nenhum item selecionado');
-      this.toastService.error('Selecione pelo menos um item para executar a ação');
+        const itensSelecionados = this.getItensSelecionados();
+        if (itensSelecionados.length === 0) {
+            this.toastService.error('Selecione pelo menos um item para executar a ação');
       return;
     }
 
@@ -3861,26 +3487,21 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
     });
 
     if (itensUnicos.length !== itensSelecionados.length) {
-      console.warn(`⚠️ Detectados ${itensSelecionados.length - itensUnicos.length} itens duplicados. Processando apenas ${itensUnicos.length} itens únicos.`);
-    }
+          }
     
     // Usar apenas itens únicos
     switch (tipo) {
       case 'cancelar':
-        console.log('🚫 Chamando executarCancelamentoLote...');
-        this.executarCancelamentoLote(itensUnicos);
+                this.executarCancelamentoLote(itensUnicos);
         break;
       case 'finalizar':
-        console.log('✅ Chamando executarFinalizacaoLote...');
-        this.executarFinalizacaoLote(itensUnicos);
+                this.executarFinalizacaoLote(itensUnicos);
         break;
       case 'restaurar':
-        console.log('🔄 Chamando executarRestauracaoLote...');
-        this.executarRestauracaoLote(itensUnicos);
+                this.executarRestauracaoLote(itensUnicos);
         break;
       case 'aprovar':
-        console.log('👍 Chamando executarAprovacaoLote...');
-        this.executarAprovacaoLote(itensUnicos);
+                this.executarAprovacaoLote(itensUnicos);
         break;
     }
   }
@@ -3951,9 +3572,7 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
         try {
           await this.atualizarItem(item, alteracoes);
           sucessos++;
-          console.log(`✅ Item ${i + 1}/${itensSelecionados.length} alterado com sucesso!`);
-
-          // Pequeno delay entre requisições
+                    // Pequeno delay entre requisições
           if (i < itensSelecionados.length - 1) {
             await new Promise(resolve => setTimeout(resolve, 300));
           }
@@ -3961,8 +3580,7 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
           falhas++;
           const errorMsg = error?.message || `Erro ao alterar item ${i + 1}`;
           erros.push(errorMsg);
-          console.error(`❌ Erro ao alterar item ${i + 1}/${itensSelecionados.length}:`, error);
-        }
+                  }
       }
 
       // Mensagem de resultado
@@ -3978,8 +3596,7 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
       await this.onAbaChange();
 
     } catch (error: any) {
-      console.error('❌ Erro geral ao alterar itens:', error);
-      this.toastService.error('Erro ao processar alterações. Tente novamente.');
+            this.toastService.error('Erro ao processar alterações. Tente novamente.');
     } finally {
       this.isLoadingBlocking = false;
     }
@@ -4026,8 +3643,7 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
    * Método chamado quando limpar filtros é solicitado
    */
   async onLimparFiltros() {
-    console.log('🧹 Limpando filtros');
-    this.filtrosAtivos = {};
+        this.filtrosAtivos = {};
     
     // Restaurar listas originais
     this.atividadesPendentes = [...this.atividadesPendentesOriginais];
@@ -4058,8 +3674,7 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
 
     // Se não temos o action_id mas temos o título, buscar pelo título
     if (item.action_title) {
-      console.log('🔍 Action ID não encontrado, buscando pelo título:', item.action_title);
-      const actionId = await this.pontosAvulsosService.getActionIdByTitle(item.action_title);
+            const actionId = await this.pontosAvulsosService.getActionIdByTitle(item.action_title);
       
       if (actionId) {
         // Atualizar o objeto da atividade com o action_id encontrado
@@ -4070,8 +3685,7 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
       }
     }
 
-    console.error('❌ Action ID não encontrado na atividade e não foi possível buscar pelo título');
-    return null;
+        return null;
   }
 
   /**
@@ -4155,15 +3769,12 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
               if (commentError?.status === 204 || commentError?.response?.status === 204) {
                 console.log(`✅ Comentário adicionado (status 204)`);
               } else {
-                console.warn(`⚠️ Comentário não pôde ser adicionado para item ${i + 1}:`, commentError);
-              }
+                              }
             }
           }
 
           sucessos++;
-          console.log(`✅ Item ${i + 1}/${itens.length} cancelado com sucesso!`);
-
-          // Pequeno delay entre requisições
+                    // Pequeno delay entre requisições
           if (i < itens.length - 1) {
             await new Promise(resolve => setTimeout(resolve, 300));
           }
@@ -4178,8 +3789,7 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
             falhas++;
             const errorMsg = error?.message || `Erro ao cancelar item ${i + 1}`;
             erros.push(errorMsg);
-            console.error(`❌ Erro ao cancelar item ${i + 1}/${itens.length}:`, error);
-          }
+                      }
         }
       }
 
@@ -4193,8 +3803,7 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
       }
       if (falhas > 0) {
         this.toastService.error(`${falhas} item(s) falharam ao cancelar. Verifique o console para mais detalhes.`);
-        console.error('Erros detalhados:', erros);
-      }
+              }
 
       // Limpar filtros de busca local para forçar recarregamento do backend
       const temFiltroData = !!(this.filtrosAtivos?.created_at_start || this.filtrosAtivos?.created_at_end || 
@@ -4210,8 +3819,7 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
       await this.onAbaChange();
 
     } catch (error: any) {
-      console.error('❌ Erro geral ao cancelar itens:', error);
-      this.toastService.error('Erro ao processar cancelamentos. Tente novamente.');
+            this.toastService.error('Erro ao processar cancelamentos. Tente novamente.');
     } finally {
       this.isLoadingBlocking = false;
     }
@@ -4273,8 +3881,7 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
 
           // Verificar se a atividade já está finalizada
           if (item.status === 'DONE') {
-            console.log(`⚠️ Item ${i + 1} já está finalizado`);
-            sucessos++; // Contar como sucesso, pois já está no estado desejado
+                        sucessos++; // Contar como sucesso, pois já está no estado desejado
             continue;
           }
 
@@ -4316,15 +3923,13 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
                 if (commentError?.status === 204 || commentError?.response?.status === 204) {
                   console.log(`✅ Comentário adicionado (status 204)`);
                 } else {
-                  console.warn(`⚠️ Comentário não pôde ser adicionado para item ${i + 1}:`, commentError);
-                  // Não incrementa falhas, pois a finalização já foi bem-sucedida
+                                    // Não incrementa falhas, pois a finalização já foi bem-sucedida
                 }
               }
             }
 
             sucessos++;
-            console.log(`✅ Item ${i + 1}/${itens.length} finalizado com sucesso!`);
-          }
+                      }
 
           // Pequeno delay entre requisições
           if (i < itens.length - 1) {
@@ -4341,8 +3946,7 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
           } else {
             const errorMsg = error?.message || `Erro ao finalizar item ${i + 1}`;
             erros.push(errorMsg);
-            console.error(`❌ Erro ao finalizar item ${i + 1}/${itens.length}:`, error);
-          }
+                      }
         }
       }
 
@@ -4356,8 +3960,7 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
       }
       if (falhas > 0) {
         this.toastService.error(`${falhas} item(s) falharam ao finalizar. Verifique o console para mais detalhes.`);
-        console.error('Erros detalhados:', erros);
-      }
+              }
 
       // Limpar filtros de busca para garantir que as tarefas apareçam
       if (this.filtrosAtivos?.busca) {
@@ -4367,8 +3970,7 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
       // Recarregar listas para refletir as mudanças
       // Se estava na aba de pendentes, pode trocar para finalizados para ver as tarefas finalizadas
       if (this.aba === 'pendentes' && sucessos > 0) {
-        console.log('🔄 Tarefas finalizadas - pode verificar na aba "Finalizados"');
-      }
+              }
       
       await this.onAbaChange();
       
@@ -4376,8 +3978,7 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
       await new Promise(resolve => setTimeout(resolve, 500));
 
     } catch (error: any) {
-      console.error('❌ Erro geral ao finalizar itens:', error);
-      this.toastService.error('Erro ao processar finalizações. Tente novamente.');
+            this.toastService.error('Erro ao processar finalizações. Tente novamente.');
     } finally {
       this.isLoadingBlocking = false;
     }
@@ -4404,59 +4005,35 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
       // Processar cada item selecionado
       for (let i = 0; i < itens.length; i++) {
         const item = itens[i];
-        console.log(`\n📦 Processando item ${i + 1}/${itens.length}:`, {
-          id: item.id,
-          dismissed: item.dismissed,
-          status: item.status,
-          action_title: item.action_title
-        });
-        
-        try {
+                try {
           // Obter action_id do item
-          console.log(`🔍 Buscando action_id para item ${i + 1}...`);
-          const actionId = await this.getActionIdForItem(item);
+                    const actionId = await this.getActionIdForItem(item);
           if (!actionId) {
-            console.error(`❌ Item ${i + 1}: Action ID não encontrado`);
-            falhas++;
+                        falhas++;
             erros.push(`Item ${i + 1}: Action ID não encontrado`);
             continue;
           }
-          console.log(`✅ Action ID encontrado: ${actionId}`);
-
-          // Obter delivery_id
+                    // Obter delivery_id
           const deliveryId = item.delivery_id || item.integration_id || item.id;
           if (!deliveryId) {
-            console.error(`❌ Item ${i + 1}: Delivery ID não encontrado`);
-            falhas++;
+                        falhas++;
             erros.push(`Item ${i + 1}: Delivery ID não encontrado`);
             continue;
           }
-          console.log(`✅ Delivery ID: ${deliveryId}`);
-
-          // Usar o email do executor da atividade (não o do usuário logado)
+                    // Usar o email do executor da atividade (não o do usuário logado)
           const executorEmail = item.user_email;
           if (!executorEmail) {
-            console.error(`❌ Item ${i + 1}: Email do executor não encontrado`);
-            falhas++;
+                        falhas++;
             erros.push(`Item ${i + 1}: Email do executor não encontrado`);
             continue;
           }
-          console.log(`✅ Executor email: ${executorEmail}`);
-
-          // Verificar se a atividade está cancelada
+                    // Verificar se a atividade está cancelada
           // Pode ter dismissed: true OU estar na aba de canceladas (sempre está cancelada)
           const estaCancelada = item.dismissed === true || 
                                 item.status === 'CANCELLED' ||
                                 this.aba === 'cancelados'; // Se está na aba cancelados, está cancelada
           
-          console.log(`🔍 Verificação de cancelamento:`, {
-            dismissed: item.dismissed,
-            status: item.status,
-            aba: this.aba,
-            estaCancelada
-          });
-          
-          if (!estaCancelada) {
+                    if (!estaCancelada) {
             console.log(`⚠️ Item ${i + 1} não está cancelado - pulando (dismissed: ${item.dismissed}, status: ${item.status})`);
             // Mesmo assim, tentar restaurar - pode ser que apenas precise mudar dismissed para false
             // Não pular, continuar com a restauração
@@ -4480,16 +4057,11 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
 
           // Não incluir finished_at ao restaurar - atividade volta para pendente
           
-          console.log('🔄 Preparando payload para restaurar atividade:', payload);
-          console.log('📤 Fazendo POST para /game/action/process...');
-
-          // Fazer POST para restaurar
+                              // Fazer POST para restaurar
           try {
             const response = await this.pontosAvulsosService.processAction(payload);
-            console.log('✅ Resposta da API:', response);
-          } catch (apiError: any) {
-            console.error('❌ Erro na chamada da API:', apiError);
-            throw apiError; // Re-lançar para ser capturado no catch externo
+                      } catch (apiError: any) {
+                        throw apiError; // Re-lançar para ser capturado no catch externo
           }
 
           // Adicionar comentário de restauração (não crítico se falhar)
@@ -4502,14 +4074,11 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
               );
             } catch (commentError: any) {
               // Comentário não é crítico - log mas não falha a operação
-              console.warn(`⚠️ Comentário não pôde ser adicionado para item ${i + 1}:`, commentError);
-            }
+                          }
           }
 
           sucessos++;
-          console.log(`✅ Item ${i + 1}/${itens.length} restaurado com sucesso!`);
-
-          // Pequeno delay entre requisições
+                    // Pequeno delay entre requisições
           if (i < itens.length - 1) {
             await new Promise(resolve => setTimeout(resolve, 300));
           }
@@ -4517,8 +4086,7 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
           falhas++;
           const errorMsg = error?.message || `Erro ao restaurar item ${i + 1}`;
           erros.push(errorMsg);
-          console.error(`❌ Erro ao restaurar item ${i + 1}/${itens.length}:`, error);
-        }
+                  }
       }
 
       // Limpar seleção
@@ -4531,15 +4099,13 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
       }
       if (falhas > 0) {
         this.toastService.error(`${falhas} item(s) falharam ao restaurar. Verifique o console para mais detalhes.`);
-        console.error('Erros detalhados:', erros);
-      }
+              }
 
       // Recarregar listas para refletir as mudanças
       await this.onAbaChange();
 
     } catch (error: any) {
-      console.error('❌ Erro geral ao restaurar itens:', error);
-      this.toastService.error('Erro ao processar restaurações. Tente novamente.');
+            this.toastService.error('Erro ao processar restaurações. Tente novamente.');
     } finally {
       this.isLoadingBlocking = false;
     }
@@ -4598,8 +4164,7 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
 
           // Verificar se a atividade já está aprovada
           if (item.status === 'DONE' && item.approved === true) {
-            console.log(`⚠️ Item ${i + 1} já está aprovado`);
-            sucessos++; // Contar como sucesso, pois já está no estado desejado
+                        sucessos++; // Contar como sucesso, pois já está no estado desejado
             continue;
           }
 
@@ -4641,15 +4206,13 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
                 if (commentError?.status === 204 || commentError?.response?.status === 204) {
                   console.log(`✅ Comentário adicionado (status 204)`);
                 } else {
-                  console.warn(`⚠️ Comentário não pôde ser adicionado para item ${i + 1}:`, commentError);
-                  // Não incrementa falhas, pois a aprovação já foi bem-sucedida
+                                    // Não incrementa falhas, pois a aprovação já foi bem-sucedida
                 }
               }
             }
 
             sucessos++;
-            console.log(`✅ Item ${i + 1}/${itens.length} aprovado com sucesso!`);
-          }
+                      }
 
           // Pequeno delay entre requisições
           if (i < itens.length - 1) {
@@ -4666,8 +4229,7 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
           } else {
             const errorMsg = error?.message || `Erro ao aprovar item ${i + 1}`;
             erros.push(errorMsg);
-            console.error(`❌ Erro ao aprovar item ${i + 1}/${itens.length}:`, error);
-          }
+                      }
         }
       }
 
@@ -4681,8 +4243,7 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
       }
       if (falhas > 0) {
         this.toastService.error(`${falhas} item(s) falharam ao aprovar. Verifique o console para mais detalhes.`);
-        console.error('Erros detalhados:', erros);
-      }
+              }
 
       // Limpar filtros de busca para garantir que as tarefas apareçam
       if (this.filtrosAtivos?.busca) {
@@ -4697,8 +4258,7 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
       await new Promise(resolve => setTimeout(resolve, 500));
 
     } catch (error: any) {
-      console.error('❌ Erro geral ao aprovar itens:', error);
-      this.toastService.error('Erro ao processar aprovações. Tente novamente.');
+            this.toastService.error('Erro ao processar aprovações. Tente novamente.');
     } finally {
       this.isLoadingBlocking = false;
     }
@@ -4755,8 +4315,7 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
     }
     
     // Se nada funcionar, gerar um ID único baseado em timestamp e random
-    console.warn('⚠️ Tarefa sem identificadores válidos, usando fallback:', tarefa);
-    return `fallback_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        return `fallback_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   }
 
   /**
@@ -4772,8 +4331,7 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
     
     // Garantir que temos um ID válido
     if (!id) {
-      console.warn('⚠️ Tarefa sem ID válido:', tarefa);
-      return;
+            return;
     }
     
     // Debug: verificar se há outras tarefas com o mesmo ID
@@ -4803,14 +4361,11 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
     
     if (this.tarefasSelecionadasDetalhe.has(id)) {
       this.tarefasSelecionadasDetalhe.delete(id);
-      console.log('✅ Tarefa desmarcada:', id);
-    } else {
+          } else {
       this.tarefasSelecionadasDetalhe.add(id);
-      console.log('✅ Tarefa marcada:', id);
-    }
+          }
     
-    console.log('📊 Total selecionadas após toggle:', this.tarefasSelecionadasDetalhe.size);
-  }
+      }
 
   /**
    * Seleciona/desseleciona todas as tarefas no detalhe de processo
@@ -4933,8 +4488,7 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
         this.deliverySelecionada = deliveryAtualizada;
       }
     } catch (error) {
-      console.error('❌ Erro ao recarregar detalhe do processo:', error);
-    }
+          }
   }
 
   /**
@@ -5055,9 +4609,7 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
    * Método chamado quando os filtros de processos são alterados
    */
   async onFiltrosProcessosChange(filtros: any) {
-    console.log('🔍 Filtros de processos alterados:', filtros);
-    
-    // Normalizar busca: se for string vazia, tratar como undefined
+        // Normalizar busca: se for string vazia, tratar como undefined
     const buscaNormalizada = filtros?.busca?.trim() || undefined;
     
     // Atualizar filtros ativos
@@ -5074,8 +4626,7 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
    * Método chamado quando limpar filtros de processos é solicitado
    */
   async onLimparFiltrosProcessos() {
-    console.log('🧹 Limpando filtros de processos');
-    this.filtrosProcessos = {};
+        this.filtrosProcessos = {};
     
     // Restaurar listas originais
     this.processosPendentes = [...this.processosPendentesOriginais];
@@ -5103,8 +4654,7 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
       this.formAtribuir.patchValue({
         jogador: jogadorId
       });
-      console.log('👤 Jogador atual pré-selecionado:', jogadorId, jogadorAtual);
-    } else if (this.userId.includes('@')) {
+          } else if (this.userId.includes('@')) {
       // Se não encontrou na lista mas é um email, tentar usar o email diretamente
       this.formAtribuir.patchValue({
         jogador: this.userId
@@ -5135,3 +4685,5 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
     return jogador.name || jogador.full_name || jogador.email || 'N/A';
   }
 } 
+
+

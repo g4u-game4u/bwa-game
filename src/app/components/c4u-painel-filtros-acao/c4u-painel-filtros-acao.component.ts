@@ -74,8 +74,7 @@ export class C4uPainelFiltrosAcaoComponent implements OnInit, OnDestroy {
       // Busca é feita no frontend, apenas emitir evento para que o componente pai filtre
       // Aguardar a função assíncrona
       this.onFiltrosChange().catch(error => {
-        console.error('Erro ao processar mudança de filtros:', error);
-      });
+              });
     });
 
     // Escuta mudanças no campo de busca com debounce
@@ -87,8 +86,7 @@ export class C4uPainelFiltrosAcaoComponent implements OnInit, OnDestroy {
     this.formFiltros.get('executor')?.valueChanges.subscribe(() => {
       // Aguardar a função assíncrona
       this.onFiltrosChange().catch(error => {
-        console.error('Erro ao processar mudança de filtros:', error);
-      });
+              });
     });
 
     // Datas não devem emitir eventos automaticamente - apenas quando o botão Filtrar for clicado
@@ -141,8 +139,7 @@ export class C4uPainelFiltrosAcaoComponent implements OnInit, OnDestroy {
         this.fetchAllPagesNeeded.emit();
       }
     } catch (error) {
-      console.error('Erro ao buscar todas as páginas:', error);
-    } finally {
+          } finally {
       this.isFetchingAllPages = false;
     }
   }
@@ -264,4 +261,5 @@ export class C4uPainelFiltrosAcaoComponent implements OnInit, OnDestroy {
     return this.itensSelecionados > 0 && !!executor;
   }
 }
+
 

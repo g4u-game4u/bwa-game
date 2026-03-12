@@ -45,8 +45,7 @@ export class PlayerService {
         }),
       shareReplay({ bufferSize: 1, refCount: true, windowTime: this.CACHE_DURATION }),
       catchError(error => {
-        console.error('ðŸ“Š Error fetching player data:', error);
-        // Remove from cache on error
+                // Remove from cache on error
         this.cachedRawData.delete(playerId);
         return throwError(() => error);
       })
@@ -79,8 +78,7 @@ export class PlayerService {
         return status;
       }),
       catchError(error => {
-        console.error('Error mapping player status:', error);
-        return throwError(() => error);
+                return throwError(() => error);
       })
     );
   }
@@ -95,8 +93,7 @@ export class PlayerService {
         return points;
       }),
       catchError(error => {
-        console.error('Error mapping point wallet:', error);
-        return throwError(() => error);
+                return throwError(() => error);
       })
     );
   }
@@ -111,8 +108,7 @@ export class PlayerService {
         return progress;
       }),
       catchError(error => {
-        console.error('Error mapping season progress:', error);
-        return throwError(() => error);
+                return throwError(() => error);
       })
     );
   }
@@ -131,3 +127,4 @@ export class PlayerService {
     this.cachedRawData.delete(playerId);
   }
 }
+

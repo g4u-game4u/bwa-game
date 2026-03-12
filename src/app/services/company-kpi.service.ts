@@ -96,16 +96,12 @@ export class CompanyKpiService {
       { $match: { _id: { $in: stringIds } } }
     ];
 
-    console.log('📊 Fetching KPI data for CNPJ IDs:', cnpjIds);
-
-    const request$ = this.funifierApi.post<CnpjKpiData[]>(
+        const request$ = this.funifierApi.post<CnpjKpiData[]>(
       '/v3/database/cnpj__c/aggregate?strict=true',
       aggregateBody
     ).pipe(
       map(response => {
-        console.log('📊 KPI data response:', response);
-        
-        // Convert array to Map for easy lookup
+                // Convert array to Map for easy lookup
         const kpiMap = new Map<string, CnpjKpiData>();
         if (Array.isArray(response)) {
           response.forEach(item => {
@@ -118,8 +114,7 @@ export class CompanyKpiService {
         return kpiMap;
       }),
       catchError(error => {
-        console.error('📊 Error fetching KPI data:', error);
-        // Return empty map on error - don't break the UI
+                // Return empty map on error - don't break the UI
         return of(new Map<string, CnpjKpiData>());
       }),
       shareReplay({ bufferSize: 1, refCount: true, windowTime: this.CACHE_DURATION })
@@ -160,9 +155,7 @@ export class CompanyKpiService {
         .filter((id): id is string => id !== null)
     )];
 
-    console.log('📊 Extracted CNPJ IDs:', validCnpjIds);
-
-    if (validCnpjIds.length === 0) {
+        if (validCnpjIds.length === 0) {
       // No valid IDs, return companies without KPI data
       return of(companiesWithIds.map(c => ({
         cnpj: c.cnpj,
@@ -192,8 +185,7 @@ export class CompanyKpiService {
         });
       }),
       catchError(error => {
-        console.error('📊 Error enriching companies with KPIs:', error);
-        // Return companies without KPI data on error
+                // Return companies without KPI data on error
         return of(companiesWithIds.map(c => ({
           cnpj: c.cnpj,
           cnpjId: c.cnpjId || undefined,
@@ -293,3 +285,4 @@ export class CompanyKpiService {
     });
   }
 }
+

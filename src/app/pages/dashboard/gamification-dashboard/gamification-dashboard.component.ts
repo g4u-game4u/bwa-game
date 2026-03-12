@@ -247,8 +247,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     // Safety timeout to prevent infinite loading state
     const loadingTimeout = setTimeout(() => {
       if (this.isLoadingPlayer) {
-        console.warn('ðŸ“Š Loading timeout reached, forcing loading state to false');
-        this.isLoadingPlayer = false;
+                this.isLoadingPlayer = false;
         this.cdr.markForCheck();
       }
     }, 20000); // 20 second timeout
@@ -263,8 +262,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
           this.cdr.markForCheck();
         },
         error: (error) => {
-          console.error('ðŸ“Š Failed to load player status:', error);
-          clearTimeout(loadingTimeout);
+                    clearTimeout(loadingTimeout);
           this.toastService.error('Erro ao carregar dados do jogador');
           this.isLoadingPlayer = false;
           this.cdr.markForCheck();
@@ -283,8 +281,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
           this.cdr.markForCheck();
         },
         error: (error) => {
-          console.error('ðŸ“Š Failed to load point wallet:', error);
-          // Set default values on error so UI doesn't stay stuck
+                    // Set default values on error so UI doesn't stay stuck
           this.pointWallet = { moedas: 0, bloqueados: 0, desbloqueados: 0 };
           this.cdr.markForCheck();
         },
@@ -304,8 +301,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
           this.loadSeasonProgressDetails();
         },
         error: (error) => {
-          console.error('ðŸ“Š Failed to load season progress:', error);
-          // Set default values on error so UI doesn't stay stuck
+                    // Set default values on error so UI doesn't stay stuck
           this.seasonProgress = {
             metas: { current: 0, target: 0 },
             clientes: 0,
@@ -376,8 +372,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
           }
         },
         error: (err: Error) => {
-          console.error('ðŸ“Š Failed to load tarefas count:', err);
-        }
+                  }
       });
   }
   
@@ -402,8 +397,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
           this.cdr.markForCheck();
         },
         error: (error) => {
-          console.error('ðŸ“Š Failed to load companies:', error);
-          this.toastService.error('Erro ao carregar carteira de empresas');
+                    this.toastService.error('Erro ao carregar carteira de empresas');
           this.isLoadingCompanies = false;
           this.cdr.markForCheck();
         }
@@ -424,8 +418,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     const playerId = this.getPlayerId();
     
     if (!playerId) {
-      console.warn('ðŸ“Š No player ID available for carteira data');
-      this.isLoadingCarteira = false;
+            this.isLoadingCarteira = false;
       this.cdr.markForCheck();
       return;
     }
@@ -445,8 +438,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
           return this.cnpjLookupService.enrichCnpjList(cnpjIds).pipe(
             map(nameMap => ({ companies, nameMap })),
             catchError(error => {
-              console.error('ðŸ“Š Error enriching CNPJ names:', error);
-              return of({ companies, nameMap: new Map<string, string>() });
+                            return of({ companies, nameMap: new Map<string, string>() });
             })
           );
         }),
@@ -485,8 +477,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
           this.cdr.markForCheck();
         },
         error: (error) => {
-          console.error('ðŸ“Š Failed to load carteira data:', error);
-          this.isLoadingCarteira = false;
+                    this.isLoadingCarteira = false;
           this.cdr.markForCheck();
         }
       });
@@ -515,8 +506,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
           this.cdr.markForCheck();
         },
         error: (error) => {
-          console.error('ðŸ“Š Failed to load KPIs:', error);
-          this.toastService.error('Erro ao carregar KPIs');
+                    this.toastService.error('Erro ao carregar KPIs');
           this.isLoadingKPIs = false;
           // Don't update metas on error - preserve existing values
           this.cdr.markForCheck();
@@ -533,13 +523,11 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
    */
   private updateMetasFromPlayerGoals(): void {
     if (!this.seasonProgress) {
-      console.warn('ðŸ“Š updateMetasFromPlayerGoals called but seasonProgress is null');
-      return;
+            return;
     }
 
     if (!this.playerStatus) {
-      console.warn('ðŸ“Š updateMetasFromPlayerGoals called but playerStatus is null');
-      return;
+            return;
     }
 
     const extra = this.playerStatus.extra;
@@ -585,8 +573,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     const playerId: string = (usuario?._id || usuario?.email || '') as string;
     
     if (!playerId) {
-      console.warn('ðŸ“Š No player ID available for progress data');
-      // Use default values if no player ID
+            // Use default values if no player ID
       this.activityMetrics = { pendentes: 0, emExecucao: 0, finalizadas: 0, pontos: 0 };
       this.processMetrics = { pendentes: 0, incompletas: 0, finalizadas: 0 };
       this.isLoadingProgress = false;
@@ -604,8 +591,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
           this.cdr.markForCheck();
         },
         error: (error) => {
-          console.error('ðŸ“Š Failed to load progress metrics:', error);
-          // Use default values on error
+                    // Use default values on error
           this.activityMetrics = { pendentes: 0, emExecucao: 0, finalizadas: 0, pontos: 0 };
           this.processMetrics = { pendentes: 0, incompletas: 0, finalizadas: 0 };
           this.isLoadingProgress = false;
@@ -622,8 +608,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
           this.cdr.markForCheck();
         },
         error: (error) => {
-          console.error('ðŸ“Š Failed to load monthly points breakdown:', error);
-          this.monthlyPointsBreakdown = { bloqueados: 0, desbloqueados: 0 };
+                    this.monthlyPointsBreakdown = { bloqueados: 0, desbloqueados: 0 };
           this.cdr.markForCheck();
         }
       });
@@ -976,3 +961,4 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     this.sessaoProvider.logout();
   }
 }
+

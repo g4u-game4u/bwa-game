@@ -231,7 +231,6 @@ export class RewardsComponent implements AfterViewInit, OnInit {
             });
           },
           error: (itemError) => {
-            console.error('Erro ao carregar itens:', itemError);
             this.notificationService.showSuccess('Erro ao carregar recompensas. Usando dados de demonstraÃ§Ã£o.', false);
             this.isLoadingRewards = false;
           }
@@ -248,7 +247,7 @@ export class RewardsComponent implements AfterViewInit, OnInit {
     this.rewards = items.map((item) => {
       const catalogId = String(item.catalogId).trim();
       const categoryName = catalogMap.get(catalogId) || 'Outros';
-      // const isLimited = item.amount > 0 && item.amount <= 10;
+      const isLimited = item.amount > 0 && item.amount <= 10;
       const isHighlighted = item.techniques?.includes('premium') || 
                           item.techniques?.includes('featured') ||
                           false;

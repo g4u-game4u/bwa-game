@@ -76,8 +76,7 @@ export class DadosMesAnteriorComponent implements OnChanges {
 
               return results;
             } catch (error) {
-              console.error('Error fetching data:', error);
-              return []
+                            return []
             }
           }
         }
@@ -100,8 +99,7 @@ export class DadosMesAnteriorComponent implements OnChanges {
     try {
       this.aliases = await this.aliasService.getAliases();
     } catch (error) {
-      console.error('Erro ao carregar aliases:', error);
-    }
+          }
   }
 
   get actionAlias(): string {
@@ -142,3 +140,4 @@ export class DadosMesAnteriorComponent implements OnChanges {
     this.defineDadosMesAnterior();
   }
 }
+

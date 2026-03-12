@@ -50,8 +50,7 @@ export class ModalCompanyDetailComponent implements OnInit {
         this.cdr.detectChanges();
       },
       error: (error) => {
-        console.error('Error loading company details:', error);
-        this.isLoading = false;
+                this.isLoading = false;
         this.cdr.detectChanges();
       }
     });
@@ -119,3 +118,4 @@ export class ModalCompanyDetailComponent implements OnInit {
     this.closed.emit();
   }
 }
+

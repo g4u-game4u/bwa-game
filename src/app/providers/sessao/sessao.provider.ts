@@ -20,18 +20,15 @@ export class SessaoProvider {
     }
 
     public async login(email: string, password: string) {
-        console.log('🔐 SessaoProvider.login called');
-        const loginResponse = await this.auth.login(email, password);
-        console.log('🔐 Login response received:', loginResponse);
-        this.storeLoginInfo(loginResponse)
+                const loginResponse = await this.auth.login(email, password);
+                this.storeLoginInfo(loginResponse)
         return await this.init(true);
     }
 
     public async init(canActivate: boolean): Promise<boolean> {
         // If already initializing, return the existing promise to prevent concurrent calls
         if (this.initPromise) {
-            console.log('🔐 Init already in progress, waiting for existing call...');
-            return this.initPromise;
+                        return this.initPromise;
         }
 
         if (canActivate) {
@@ -40,13 +37,11 @@ export class SessaoProvider {
                 try {
                     // Add timeout to prevent infinite loading (15 seconds)
                     const REQUEST_TIMEOUT = 15000;
-                    console.log('🔐 Starting session initialization...');
-                    let info = await firstValueFrom(
+                                        let info = await firstValueFrom(
                         this.auth.userInfo().pipe(
                             timeout(REQUEST_TIMEOUT),
                             catchError(error => {
-                                console.error('🔐 Error fetching user info:', error);
-                                // Re-throw to be caught by outer try-catch
+                                                                // Re-throw to be caught by outer try-catch
                                 return throwError(() => error);
                             })
                         )
@@ -54,26 +49,19 @@ export class SessaoProvider {
 
                     if (info) {
                         await this.getUserAfterValidations(info);
-                        console.log('🔐 Session initialized successfully');
-                        console.log('🔐 Final usuario state:', this._usuario);
-                        console.log('🔐 Final usuario getter:', this.usuario);
-                        return true;
+                                                                                                return true;
                     } else {
-                        console.warn('🔐 User info is null or undefined');
-                        await this.logout();
+                                                await this.logout();
                         return false;
                     }
                 } catch (error: any) {
-                    console.error('🔐 Failed to initialize session:', error);
-                    
-                    // For timeout, network errors, or authentication errors, clear token
+                                        // For timeout, network errors, or authentication errors, clear token
                     if (error?.name === 'TimeoutError' || 
                         error?.message?.includes('timeout') ||
                         error?.status === 401 || 
                         error?.status === 403 ||
                         error?.status === 0) {
-                        console.log('🔐 Clearing invalid token due to error');
-                        // Clear token but don't navigate (let guard handle it)
+                                                // Clear token but don't navigate (let guard handle it)
                         this._usuario = null;
                         delete this.loginResponse;
                         sessionStorage.removeItem(TKN_KEY);
@@ -112,11 +100,7 @@ export class SessaoProvider {
             return;
         }
         
-        console.log('👤 Raw user data from API:', user);
-        console.log('👤 User teams from API:', user.teams);
-        console.log('👤 User extra from API:', user.extra);
-        
-        // Handle Funifier response format - map _id to email if email is not set
+                                // Handle Funifier response format - map _id to email if email is not set
         // Funifier uses _id as the email/player identifier
         if (!user.email && user._id) {
             user.email = user._id;
@@ -161,13 +145,8 @@ export class SessaoProvider {
             user.teams = [];
         }
         
-        console.log('👤 User data after validation:', user);
-        console.log('👤 User teams:', user.teams);
-        this._usuario = user;
-        console.log('👤 _usuario set to:', this._usuario);
-        console.log('👤 usuario getter returns:', this.usuario);
-        console.log('👤 usuario.teams:', this.usuario?.teams);
-    }
+                        this._usuario = user;
+                            }
 
     async logout() {
         this._usuario = null; // Limpar dados do usuário
@@ -215,3 +194,4 @@ export class SessaoProvider {
         }
     }
 }
+

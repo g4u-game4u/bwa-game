@@ -171,8 +171,7 @@ export class ActionLogService {
       map(response => {
         return response;
       }),
-      catchError(error => {
-        console.error('Error fetching all action log:', error);
+      catchError(() => {
         return of([]);
       }),
       shareReplay({ bufferSize: 1, refCount: true, windowTime: this.CACHE_DURATION })
@@ -221,8 +220,7 @@ export class ActionLogService {
           return of(allResults);
         }
       }),
-      catchError(error => {
-        console.error(`❌ Error fetching action log batch at index ${startIndex}:`, error);
+      catchError(() => {
         // Return accumulated results so far on error
         return of(accumulatedResults);
       })
@@ -294,8 +292,7 @@ export class ActionLogService {
       map(actions => {
         return actions.length;
       }),
-      catchError(error => {
-        console.error('Error fetching activity count:', error);
+      catchError(() => {
         return of(0);
       }),
       shareReplay({ bufferSize: 1, refCount: true, windowTime: this.CACHE_DURATION })
@@ -324,8 +321,7 @@ export class ActionLogService {
       map(actions => {
         return actions.length;
       }),
-      catchError(error => {
-        console.error('Error fetching all-time activity count:', error);
+      catchError(() => {
         return of(0);
       }),
       shareReplay({ bufferSize: 1, refCount: true, windowTime: this.CACHE_DURATION })
@@ -390,8 +386,7 @@ export class ActionLogService {
 
         return { bloqueados, desbloqueados };
       }),
-      catchError(error => {
-        console.error('Error fetching monthly points breakdown:', error);
+      catchError(() => {
         return of({ bloqueados: 0, desbloqueados: 0 });
       }),
       shareReplay({ bufferSize: 1, refCount: true, windowTime: this.CACHE_DURATION })
@@ -446,8 +441,7 @@ export class ActionLogService {
         }
         return 0;
       }),
-      catchError(error => {
-        console.error('Error fetching achievement points:', error);
+      catchError(() => {
         return of(0);
       }),
       shareReplay({ bufferSize: 1, refCount: true, windowTime: this.CACHE_DURATION })
@@ -488,8 +482,7 @@ export class ActionLogService {
 
         return uniqueCnpjs.size;
       }),
-      catchError(error => {
-        console.error('Error counting unique CNPJs:', error);
+      catchError(() => {
         return of(0);
       }),
       shareReplay({ bufferSize: 1, refCount: true, windowTime: this.CACHE_DURATION })
@@ -563,14 +556,12 @@ export class ActionLogService {
               finalizadas
             };
           }),
-          catchError(error => {
-            console.error('Error fetching desbloquear actions:', error);
+          catchError(() => {
             return of({ pendentes: deliveryIds.length, incompletas: 0, finalizadas: 0 });
           })
         );
       }),
-      catchError(error => {
-        console.error('Error calculating process metrics:', error);
+      catchError(() => {
         return of({ pendentes: 0, incompletas: 0, finalizadas: 0 });
       }),
       shareReplay({ bufferSize: 1, refCount: true, windowTime: this.CACHE_DURATION })
@@ -607,8 +598,7 @@ export class ActionLogService {
         },
         processo
       })),
-      catchError(error => {
-        console.error('Error calculating progress metrics:', error);
+      catchError(() => {
         return of({
           activity: { pendentes: 0, emExecucao: 0, finalizadas: 0, pontos: 0 },
           processo: { pendentes: 0, incompletas: 0, finalizadas: 0 }
@@ -660,8 +650,7 @@ export class ActionLogService {
           cnpj: a.attributes?.cnpj || undefined
         };
       })),
-      catchError(error => {
-        console.error('Error fetching activity list:', error);
+      catchError(() => {
         return of([]);
       })
     );
@@ -782,8 +771,7 @@ export class ActionLogService {
           })
         );
       }),
-      catchError(error => {
-        console.error('Error fetching process list:', error);
+      catchError(() => {
         return of([]);
       }),
       shareReplay({ bufferSize: 1, refCount: true, windowTime: this.CACHE_DURATION })
@@ -831,8 +819,7 @@ export class ActionLogService {
 
         return result;
       }),
-      catchError(error => {
-        console.error('Error fetching player CNPJs with count:', error);
+      catchError(() => {
         return of([]);
       }),
       shareReplay({ bufferSize: 1, refCount: true, windowTime: this.CACHE_DURATION })
@@ -936,8 +923,7 @@ export class ActionLogService {
           };
         });
       }),
-      catchError(error => {
-        console.error('Error fetching actions by CNPJ:', error);
+      catchError(() => {
         return of([]);
       }),
       shareReplay({ bufferSize: 1, refCount: true, windowTime: this.CACHE_DURATION })
@@ -967,8 +953,7 @@ export class ActionLogService {
 
         return forkJoin(requests);
       }),
-      catchError(error => {
-        console.error('Error fetching carteira clientes:', error);
+      catchError(() => {
         return of([]);
       })
     );
@@ -1038,8 +1023,7 @@ export class ActionLogService {
           };
         });
       }),
-      catchError(error => {
-        console.error('Error fetching activities by process:', error);
+      catchError(() => {
         return of([]);
       }),
       shareReplay({ bufferSize: 1, refCount: true, windowTime: this.CACHE_DURATION })
@@ -1087,8 +1071,7 @@ export class ActionLogService {
 
         return result;
       }),
-      catchError(error => {
-        console.error('Error fetching activities by day:', error);
+      catchError(() => {
         return of([]);
       }),
       shareReplay({ bufferSize: 1, refCount: true, windowTime: this.CACHE_DURATION })
@@ -1258,8 +1241,7 @@ export class ActionLogService {
           }
         };
       }),
-      catchError(error => {
-        console.error('Error fetching team progress metrics:', error);
+      catchError(() => {
         return of({
           activity: { pendentes: 0, emExecucao: 0, finalizadas: 0, pontos: 0 },
           processo: { pendentes: 0, incompletas: 0, finalizadas: 0 }
@@ -1334,8 +1316,7 @@ export class ActionLogService {
 
         return result;
       }),
-      catchError(error => {
-        console.error('Error fetching team CNPJ list:', error);
+      catchError(() => {
         return of([]);
       }),
       shareReplay({ bufferSize: 1, refCount: true, windowTime: this.CACHE_DURATION })
@@ -1430,8 +1411,7 @@ export class ActionLogService {
 
         return { bloqueados, desbloqueados };
       }),
-      catchError(error => {
-        console.error('Error fetching team monthly points breakdown:', error);
+      catchError(() => {
         return of({ bloqueados: 0, desbloqueados: 0 });
       }),
       shareReplay({ bufferSize: 1, refCount: true, windowTime: this.CACHE_DURATION })

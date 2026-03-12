@@ -55,18 +55,14 @@ export class ModalCompanyCarteiraDetailComponent implements OnInit, OnDestroy {
     try {
       // Use cnpjId (raw CNPJ ID) for lookup, not cnpj (display name)
       const cnpjForLookup = this.company.cnpjId || this.company.cnpj;
-      console.log('📊 Modal detail: enriching company name for:', cnpjForLookup);
-      
-      const cnpjNames = await firstValueFrom(
+            const cnpjNames = await firstValueFrom(
         this.cnpjLookupService.enrichCnpjList([cnpjForLookup])
           .pipe(takeUntil(this.destroy$))
       );
       this.cnpjNameMap = cnpjNames;
-      console.log('📊 Modal detail: CNPJ name map loaded with', this.cnpjNameMap.size, 'entries');
-      this.cdr.markForCheck();
+            this.cdr.markForCheck();
     } catch (error) {
-      console.error('Error enriching company name:', error);
-    }
+          }
   }
 
   private loadCompanyData(): void {
@@ -91,8 +87,7 @@ export class ModalCompanyCarteiraDetailComponent implements OnInit, OnDestroy {
             this.cdr.markForCheck();
           },
           error: (error) => {
-            console.error('Error loading company KPIs:', error);
-            // Fallback to deliveryKpi if available
+                        // Fallback to deliveryKpi if available
             if (this.company && this.company.deliveryKpi) {
               this.companyKPIs = this.applyEntregaGoal([this.company.deliveryKpi]);
             } else {
@@ -171,14 +166,12 @@ export class ModalCompanyCarteiraDetailComponent implements OnInit, OnDestroy {
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (tasks) => {
-          console.log('📊 Tasks loaded for company:', tasks);
-          this.tasks = tasks;
+                    this.tasks = tasks;
           this.isLoadingTasks = false;
           this.cdr.markForCheck();
         },
         error: (error) => {
-          console.error('Error loading tasks:', error);
-          this.tasks = [];
+                    this.tasks = [];
           this.isLoadingTasks = false;
           this.cdr.markForCheck();
         }
@@ -194,21 +187,18 @@ export class ModalCompanyCarteiraDetailComponent implements OnInit, OnDestroy {
     if (this.company?.cnpjId) {
       const displayName = this.cnpjNameMap.get(this.company.cnpjId);
       if (displayName) {
-        console.log('📊 Modal detail getCompanyDisplayName: found via cnpjId:', displayName);
-        return displayName;
+                return displayName;
       }
     }
     
     // Try direct lookup (for backward compatibility)
     const displayName = this.cnpjNameMap.get(cnpj);
     if (displayName) {
-      console.log('📊 Modal detail getCompanyDisplayName: found via direct lookup:', displayName);
-      return displayName;
+            return displayName;
     }
     
     // Fallback: if cnpj is already the display name (from gamification-dashboard), return it
-    console.log('📊 Modal detail getCompanyDisplayName: using fallback:', cnpj);
-    return cnpj;
+        return cnpj;
   }
 
   formatDate(timestamp: number): string {
@@ -274,4 +264,7 @@ export class ModalCompanyCarteiraDetailComponent implements OnInit, OnDestroy {
     this.closed.emit();
   }
 }
+
+
+
 

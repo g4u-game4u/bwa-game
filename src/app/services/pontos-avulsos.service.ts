@@ -185,8 +185,7 @@ export class PontosAvulsosService {
       
       return [];
     } catch (error) {
-      console.error('Erro ao buscar action templates:', error);
-      throw error;
+            throw error;
     }
   }
 
@@ -220,8 +219,7 @@ export class PontosAvulsosService {
       
       return template || null;
     } catch (error) {
-      console.error('Erro ao buscar action template por tÃ­tulo:', error);
-      return null;
+            return null;
     }
   }
 
@@ -241,8 +239,7 @@ export class PontosAvulsosService {
       
       return null;
     } catch (error) {
-      console.error('Erro ao buscar action_id por tÃ­tulo:', error);
-      return null;
+            return null;
     }
   }
 
@@ -277,8 +274,7 @@ export class PontosAvulsosService {
 
       return results;
     } catch (error) {
-      console.error('Erro ao buscar atividades pendentes:', error);
-      throw error;
+            throw error;
     }
   }
 
@@ -366,8 +362,7 @@ export class PontosAvulsosService {
         totalPages: 0
       };
     } catch (error) {
-      console.error('Erro ao buscar atividades pendentes no modal:', error);
-      throw error;
+            throw error;
     }
   }
 
@@ -525,8 +520,7 @@ export class PontosAvulsosService {
         totalPages: 0
       };
     } catch (error) {
-      console.error('âŒ Service - Erro ao buscar atividades finalizadas:', error);
-      return {
+            return {
         items: [],
         total: 0,
         page: page,
@@ -728,8 +722,7 @@ export class PontosAvulsosService {
         totalPages: 0
       };
     } catch (error) {
-      console.error('Erro ao buscar atividades aprovadas:', error);
-      throw error;
+            throw error;
     }
   }
 
@@ -802,8 +795,7 @@ export class PontosAvulsosService {
         totalPages: 0
       };
     } catch (error) {
-      console.error('Erro ao buscar atividades canceladas no modal:', error);
-      throw error;
+            throw error;
     }
   }
 
@@ -830,8 +822,7 @@ export class PontosAvulsosService {
       const results = await this.getGameDeliveries('PENDING', startDateISO, endDateISO, isTeamContext, timeId, userId);
       return results;
     } catch (error) {
-      console.error('Erro ao buscar processos pendentes:', error);
-      throw error;
+            throw error;
     }
   }
 
@@ -856,8 +847,7 @@ export class PontosAvulsosService {
       const results = await this.getGameDeliveries('INCOMPLETE', startDateISO, endDateISO, isTeamContext, timeId, userId);
       return results;
     } catch (error) {
-      console.error('Erro ao buscar processos incompletos:', error);
-      throw error;
+            throw error;
     }
   }
 
@@ -882,8 +872,7 @@ export class PontosAvulsosService {
       const results = await this.getGameDeliveries('DELIVERED', startDateISO, endDateISO, isTeamContext, timeId, userId);
       return results;
     } catch (error) {
-      console.error('Erro ao buscar processos entregues:', error);
-      throw error;
+            throw error;
     }
   }
 
@@ -908,8 +897,7 @@ export class PontosAvulsosService {
       
       return results;
     } catch (error) {
-      console.error('âŒ Erro ao buscar processos cancelados:', error);
-      throw error;
+            throw error;
     }
   }
 
@@ -974,8 +962,7 @@ export class PontosAvulsosService {
       
       return [];
     } catch (error) {
-      console.error(`Erro ao buscar atividades com status ${status}:`, error);
-      return [];
+            return [];
     }
   }
 
@@ -1023,8 +1010,7 @@ export class PontosAvulsosService {
       
       return [];
     } catch (error) {
-      console.error(`âŒ Erro ao buscar processos com status ${status}:`, error);
-      return [];
+            return [];
     }
   }
 
@@ -1077,8 +1063,7 @@ export class PontosAvulsosService {
       
       return [];
     } catch (error) {
-      console.error(`Erro ao buscar atividades do time com status ${status}:`, error);
-      return [];
+            return [];
     }
   }
 
@@ -1236,8 +1221,7 @@ export class PontosAvulsosService {
         totalPages: 0
       };
     } catch (error) {
-      console.error(`Erro ao buscar atividades do usuÃ¡rio com status ${status}:`, error);
-      return {
+            return {
         items: [],
         total: 0,
         page: page,
@@ -1305,12 +1289,10 @@ export class PontosAvulsosService {
           return userInfo.email;
         }
 
-        console.warn('âš ï¸ E-mail do usuÃ¡rio nÃ£o encontrado na resposta do endpoint /auth/user');
-        this.userEmailPromise = null;
+                this.userEmailPromise = null;
         return null;
       } catch (error) {
-        console.error('âŒ Erro ao buscar e-mail do usuÃ¡rio:', error);
-        this.userEmailPromise = null;
+                this.userEmailPromise = null;
         return null;
       }
     })();
@@ -1337,8 +1319,7 @@ export class PontosAvulsosService {
       const response = await this.api.post<any>('/game/action/process', payloadParaEnviar);
       return response;
     } catch (error) {
-      console.error('âŒ Erro ao processar aÃ§Ã£o:', error);
-      throw error;
+            throw error;
     }
   }
 
@@ -1366,8 +1347,7 @@ export class PontosAvulsosService {
       
       return response;
     } catch (error) {
-      console.error('Erro ao atualizar status da atividade:', error);
-      throw error;
+            throw error;
     }
   }
 
@@ -1387,8 +1367,7 @@ export class PontosAvulsosService {
       
       return [];
     } catch (error) {
-      console.error('Erro ao buscar usuÃ¡rios do time:', error);
-      throw error;
+            throw error;
     }
   }
 
@@ -1473,8 +1452,7 @@ export class PontosAvulsosService {
       // Obter o email do usuÃ¡rio atual que estÃ¡ aprovando (nÃ£o o executor)
       const currentUserEmail = await this.getCurrentUserEmail();
       if (!currentUserEmail) {
-        console.warn('âš ï¸ Email do usuÃ¡rio atual nÃ£o encontrado. Usando userEmail como fallback para approved_by.');
-      }
+              }
 
       const payload: ProcessActionPayload = {
         status: 'DONE', // Manter status como DONE (nÃ£o alterar para DELIVERED)
@@ -1494,8 +1472,7 @@ export class PontosAvulsosService {
       const response = await this.processAction(payload);
       return response;
     } catch (error) {
-      console.error('Erro ao aprovar atividade:', error);
-      throw error;
+            throw error;
     }
   }
 
@@ -1541,8 +1518,7 @@ export class PontosAvulsosService {
       const response = await this.processAction(payload);
       return response;
     } catch (error) {
-      console.error('Erro ao finalizar atividade:', error);
-      throw error;
+            throw error;
     }
   }
 
@@ -1562,8 +1538,7 @@ export class PontosAvulsosService {
       
       return response;
     } catch (error) {
-      console.error('Erro ao desbloquear atividade:', error);
-      throw error;
+            throw error;
     }
   }
 
@@ -1577,8 +1552,7 @@ export class PontosAvulsosService {
 
       return response;
     } catch (error) {
-      console.error('Erro ao bloquear atividade:', error);
-      throw error;
+            throw error;
     }
   }
 
@@ -1638,8 +1612,7 @@ export class PontosAvulsosService {
         throw error;
       }
     } catch (error) {
-      console.error('Erro ao cancelar atividade:', error);
-      throw error;
+            throw error;
     }
   }
 
@@ -1683,8 +1656,7 @@ export class PontosAvulsosService {
       const response = await this.processAction(payload);
       return response;
     } catch (error) {
-      console.error('Erro ao bloquear atividade:', error);
-      throw error;
+            throw error;
     }
   }
 
@@ -1727,8 +1699,7 @@ export class PontosAvulsosService {
       const response = await this.processAction(payload);
       return response;
     } catch (error) {
-      console.error('Erro ao reprovar atividade:', error);
-      throw error;
+            throw error;
     }
   }
 
@@ -1744,8 +1715,7 @@ export class PontosAvulsosService {
       const response = await this.api.post<any>(`/game/delivery/${deliveryId}/cancel`, {});
       return response;
     } catch (error) {
-      console.error('Erro ao cancelar delivery:', error);
-      throw error;
+            throw error;
     }
   }
 
@@ -1759,8 +1729,7 @@ export class PontosAvulsosService {
       const response = await this.api.post<any>(`/game/delivery/${deliveryId}/complete`, {});
       return response;
     } catch (error) {
-      console.error('Erro ao completar delivery:', error);
-      throw error;
+            throw error;
     }
   }
 
@@ -1774,8 +1743,7 @@ export class PontosAvulsosService {
       const response = await this.api.post<any>(`/game/delivery/${deliveryId}/undeliver`, {});
       return response;
     } catch (error) {
-      console.error('Erro ao desfazer delivery:', error);
-      throw error;
+            throw error;
     }
   }
 
@@ -1789,8 +1757,7 @@ export class PontosAvulsosService {
       const response = await this.api.post<any>(`/game/delivery/${deliveryId}/restore`, {});
       return response;
     } catch (error) {
-      console.error('Erro ao restaurar delivery:', error);
-      throw error;
+            throw error;
     }
   }
 
@@ -1914,8 +1881,7 @@ export class PontosAvulsosService {
     };
     
     if (resultado.naoDeveriamEstar.count > 0) {
-      console.error('âŒ PROBLEMA: Encontradas atividades que nÃ£o deveriam estar na aba aguardando aprovaÃ§Ã£o!');
-    } else {
+          } else {
       }
     
     return resultado;
@@ -1973,8 +1939,7 @@ export class PontosAvulsosService {
       
       return response;
     } catch (error) {
-      console.error('Erro ao adicionar comentÃ¡rio:', error);
-      throw error;
+            throw error;
     }
   }
 
@@ -2005,9 +1970,7 @@ export class PontosAvulsosService {
       
       return response;
     } catch (error: any) {
-      console.error('Erro ao fazer upload de anexos:', error);
-      
-      // Tratar erros tipificados conforme documentaÃ§Ã£o
+            // Tratar erros tipificados conforme documentaÃ§Ã£o
       if (error?.error?.errorType) {
         const errorData = error.error;
         let message = 'Erro no upload';
@@ -2052,8 +2015,7 @@ export class PontosAvulsosService {
       
       return response;
     } catch (error) {
-      console.error('Erro ao buscar anexos:', error);
-      throw error;
+            throw error;
     }
   }
 
@@ -2082,8 +2044,7 @@ export class PontosAvulsosService {
       
       return downloadUrl;
     } catch (error) {
-      console.error('Erro ao obter URL de download do anexo:', error);
-      throw error;
+            throw error;
     }
   }
 

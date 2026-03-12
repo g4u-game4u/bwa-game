@@ -56,12 +56,9 @@ export class SystemParamsService {
       this.isInitialized = true;
       return params;
     } catch (error) {
-      console.error('Erro na inicializaÃ§Ã£o dos parÃ¢metros do sistema:', error);
-      
       // Se falhar na inicializaÃ§Ã£o, tenta usar cache mesmo que expirado
       const storedData = this.getFromStorage();
       if (storedData) {
-        console.warn('Usando dados do cache para inicializaÃ§Ã£o devido a erro na API');
         this.cachedParams = storedData.params;
         this.lastFetchTime = storedData.timestamp;
         this.isInitialized = true;
@@ -208,11 +205,8 @@ export class SystemParamsService {
       
       return params;
     } catch (error) {
-      console.error('Erro ao buscar parÃ¢metros do sistema:', error);
-      
       // Se falhar, tenta retornar dados do cache mesmo que expirados
       if (this.cachedParams) {
-        console.warn('Retornando dados do cache expirado devido a erro na API');
         return this.cachedParams;
       }
       
@@ -243,7 +237,6 @@ export class SystemParamsService {
       const stored = localStorage.getItem(this.STORAGE_KEY);
       return stored ? JSON.parse(stored) : null;
     } catch (error) {
-      console.error('Erro ao ler parÃ¢metros do localStorage:', error);
       return null;
     }
   }
@@ -259,7 +252,7 @@ export class SystemParamsService {
       };
       localStorage.setItem(this.STORAGE_KEY, JSON.stringify(data));
     } catch (error) {
-      console.error('Erro ao salvar parÃ¢metros no localStorage:', error);
+      // Silently fail - localStorage is not critical
     }
   }
 } 

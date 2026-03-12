@@ -54,16 +54,13 @@ export class KPIService {
       aggregateBody
     ).pipe(
       map(response => {
-        console.log('📊 Metric targets loaded from database:', response);
-        if (Array.isArray(response) && response.length > 0) {
+                if (Array.isArray(response) && response.length > 0) {
           return response;
         }
-        console.warn('📊 No metric targets found in database, returning empty array');
-        return [];
+                return [];
       }),
       catchError(error => {
-        console.error('📊 Error fetching metric targets from database:', error);
-        // Return empty array - no hardcoded fallback
+                // Return empty array - no hardcoded fallback
         return of([]);
       }),
       shareReplay({ bufferSize: 1, refCount: true, windowTime: this.CACHE_DURATION })
@@ -93,11 +90,7 @@ export class KPIService {
     // Use PlayerService to get raw player data (shared cache)
     const request$: Observable<KPIData[]> = this.playerService.getRawPlayerData(playerId).pipe(
       switchMap((playerStatus): Observable<KPIData[]> => {
-        console.log('📊 Player status received:', playerStatus);
-        console.log('📊 Player extra:', playerStatus.extra);
-        console.log('📊 Player extra.entrega:', playerStatus.extra?.entrega);
-        
-        const kpis: KPIData[] = [];
+                                const kpis: KPIData[] = [];
         const now = new Date();
         const isCurrentMonth = !selectedMonth || 
           (selectedMonth.getFullYear() === now.getFullYear() && 
@@ -161,8 +154,7 @@ export class KPIService {
           return actionLogService.getPlayerCnpjListWithCount(playerId, selectedMonth).pipe(
             map(() => buildKPIs(companyCount)),
             catchError(error => {
-              console.error('📊 Error loading companies from action_log:', error);
-              return of(buildKPIs(companyCount));
+                            return of(buildKPIs(companyCount));
             })
           );
         } else {
@@ -170,8 +162,7 @@ export class KPIService {
         }
       }),
       catchError(error => {
-        console.error('📊 Error fetching player KPIs:', error);
-        // Return empty array instead of throwing - don't block the UI
+                // Return empty array instead of throwing - don't block the UI
         return of([]);
       }),
       shareReplay({ bufferSize: 1, refCount: true, windowTime: this.CACHE_DURATION })
@@ -218,16 +209,14 @@ export class KPIService {
         const companyData = response && response.length > 0 ? response[0] : null;
         
         if (!companyData) {
-          console.warn(`Company KPI data not found for CNPJ ${companyId}`);
-          return [];
+                    return [];
         }
         
         // Extract KPIs from company data (nps, multas, eficiencia, extra, prazo)
         return this.mapper.toKPIDataArray(companyData);
       }),
       catchError(error => {
-        console.error('Error fetching company KPIs:', error);
-        return throwError(() => error);
+                return throwError(() => error);
       }),
       shareReplay({ bufferSize: 1, refCount: true, windowTime: this.CACHE_DURATION })
     );
@@ -311,3 +300,6 @@ export class KPIService {
     });
   }
 }
+
+
+

@@ -418,19 +418,11 @@ export class TeamAggregateService {
           return (response as any).result;
         }
         // Return empty array if no valid result
-        console.warn('Unexpected aggregate response format:', response);
         return [];
       }),
       tap(() => {
         // End performance monitoring
         endMeasure();
-        const endTime = performance.now();
-        const duration = endTime - startTime;
-        
-        // Log slow queries (> 1 second)
-        if (duration > 1000) {
-          console.warn(`Slow aggregate query on ${collection}: ${duration.toFixed(2)}ms`);
-        }
       })
     );
   }
@@ -515,8 +507,7 @@ export class TeamAggregateService {
           return of(allResults);
         }
       }),
-      catchError(error => {
-        console.error(`Error fetching batch at index ${startIndex}:`, error);
+      catchError(() => {
         // Return accumulated results so far on error
         return of(accumulatedResults);
       })
@@ -652,8 +643,6 @@ export class TeamAggregateService {
    * @returns Observable that throws formatted error
    */
   private handleAggregateError(methodName: string, error: any): Observable<never> {
-    console.error(`TeamAggregateService.${methodName} error:`, error);
-    
     let errorMessage = 'Erro ao carregar dados da equipe';
     
     if (error.message) {
@@ -735,8 +724,7 @@ export class TeamAggregateService {
         return metrics;
       }),
       tap(data => this.setCache(cacheKey, data)),
-      catchError(error => {
-        console.error('Error in getTeamActivityMetrics:', error);
+      catchError(() => {
         return of({ finalizadas: 0, pontos: 0, processosFinalizados: 0, processosIncompletos: 0 });
       })
     );
@@ -812,8 +800,7 @@ export class TeamAggregateService {
           return cnpjList;
         }),
         tap(data => this.setCache(cacheKey, data)),
-        catchError(error => {
-          console.error('Error in getTeamCnpjListWithCount:', error);
+        catchError(() => {
           return of([]);
         })
       );
@@ -887,8 +874,7 @@ export class TeamAggregateService {
         return result;
       }),
       tap(data => this.setCache(cacheKey, data)),
-      catchError(error => {
-        console.error('Error in getTeamMonthlyPointsBreakdown:', error);
+      catchError(() => {
         return of({ bloqueados: 0, desbloqueados: 0 });
       })
     );
@@ -949,8 +935,7 @@ export class TeamAggregateService {
         return total;
       }),
       tap(data => this.setCache(cacheKey, data)),
-      catchError(error => {
-        console.error('Error in getTeamTotalPoints:', error);
+      catchError(() => {
         return of(0);
       })
     );

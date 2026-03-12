@@ -62,19 +62,13 @@ export class PlayerMapper {
    * - coins -> Moedas
    */
   toPointWallet(apiResponse: any): PointWallet {
-    console.log('📊 Point wallet mapping - FULL API response keys:', Object.keys(apiResponse || {}));
-    
     // Get point_categories from response (can be snake_case or camelCase)
     const pointCategories = apiResponse?.point_categories || apiResponse?.pointCategories || {};
-    
-    console.log('📊 Point wallet mapping - point_categories:', JSON.stringify(pointCategories));
     
     // Extract values from point_categories
     const bloqueados = Number(pointCategories.locked_points) || Number(pointCategories.lockedPoints) || 0;
     const desbloqueados = Number(pointCategories.points) || 0;
     const moedas = Number(pointCategories.coins) || 0;
-    
-    console.log('📊 Point wallet FINAL result:', { bloqueados, desbloqueados, moedas });
     
     return {
       bloqueados,

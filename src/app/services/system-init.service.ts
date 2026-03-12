@@ -102,8 +102,6 @@ export class SystemInitService {
 
       return this.initStatus;
     } catch (error) {
-      console.error('âŒ Erro durante a inicializaÃ§Ã£o dos parÃ¢metros do sistema:', error);
-      
       // Retorna o status atual mesmo com erro
       return this.initStatus;
     }

@@ -281,12 +281,10 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
         
         await this.onTeamChange(teamToSelect);
         } else {
-        console.error('âŒ No teams available for user');
-        this.toastService.error('UsuÃ¡rio nÃ£o tem acesso a nenhum time');
+                this.toastService.error('UsuÃ¡rio nÃ£o tem acesso a nenhum time');
       }
     } catch (error) {
-      console.error('âŒ Error initializing dashboard:', error);
-      this.toastService.error('Erro ao carregar dashboard');
+            this.toastService.error('Erro ao carregar dashboard');
     } finally {
       this.isLoading = false;
       this.cdr.markForCheck();
@@ -315,8 +313,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
         end: (dates as any).end || (dates as any).dataFim
       };
     } catch (error) {
-      console.error('Error loading season dates:', error);
-      // Use default dates if service fails
+            // Use default dates if service fails
       const now = new Date();
       this.seasonDates = {
         start: new Date(now.getFullYear(), 0, 1),
@@ -365,8 +362,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       const allTeams = await firstValueFrom(
         this.funifierApi.get<any[]>(`/v3/team`).pipe(takeUntil(this.destroy$))
       ).catch((error) => {
-        console.error('Error loading teams from Funifier:', error);
-        return [];
+                return [];
       });
       
       let availableTeams: any[] = [];
@@ -443,16 +439,14 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
               aggregatePayload
             ).pipe(takeUntil(this.destroy$))
           ).catch((error) => {
-            console.error(`Error loading member count for team ${team.id}:`, error);
-            return [];
+                        return [];
           });
           
           // Extract count from result
           const count = result && result.length > 0 && result[0].total ? result[0].total : 0;
           return { ...team, memberCount: count };
         } catch (error) {
-          console.error(`Error processing member count for team ${team.id}:`, error);
-          return { ...team, memberCount: 0 };
+                    return { ...team, memberCount: 0 };
         }
       });
       
@@ -462,8 +456,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       this.teams = teamsWithCounts;
       this.isLoadingTeams = false;
     } catch (error) {
-      console.error('Error in loadAvailableTeams:', error);
-      this.teams = [];
+            this.teams = [];
       this.isLoadingTeams = false;
       this.toastService.error('Erro ao carregar equipes');
     }
@@ -513,8 +506,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       
       this.teamMemberIds = memberIds;
       if (memberIds.length === 0) {
-        console.warn('âš ï¸ No members found in team');
-        this.teamTotalPoints = 0;
+                this.teamTotalPoints = 0;
         this.teamAveragePoints = 0;
         this.teamTotalTasks = 0;
         this.teamTotalBlockedPoints = 0;
@@ -559,8 +551,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
           pointsAggregatePayload
         ).pipe(takeUntil(this.destroy$))
       ).catch((error) => {
-        console.error('Error loading points aggregate:', error);
-        return [];
+                return [];
       });
       
       // Create a map of player -> points for quick lookup
@@ -605,8 +596,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       
       this.cdr.markForCheck();
     } catch (error) {
-      console.error('Error in loadTeamMembersData:', error);
-      this.teamTotalPoints = 0;
+            this.teamTotalPoints = 0;
       this.teamAveragePoints = 0;
       this.teamTotalTasks = 0;
       this.teamTotalBlockedPoints = 0;
@@ -656,8 +646,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
           hasMore = false;
         }
       } catch (error) {
-        console.error(`Error fetching batch at index ${startIndex}:`, error);
-        hasMore = false;
+                hasMore = false;
       }
     }
     
@@ -734,8 +723,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       
       this.lastRefresh = new Date();
     } catch (error) {
-      console.error('Error loading team data:', error);
-      this.toastService.error('Erro ao carregar dados da equipe');
+            this.toastService.error('Erro ao carregar dados da equipe');
     } finally {
       this.isLoading = false;
       this.cdr.markForCheck();
@@ -775,8 +763,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       this.cdr.markForCheck();
       
       } catch (error) {
-      console.error('Error loading collaborator data:', error);
-      this.toastService.error('Erro ao carregar dados do colaborador');
+            this.toastService.error('Erro ao carregar dados do colaborador');
     }
   }
 
@@ -867,8 +854,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
         this.actionLogService.getProgressMetrics(collaboratorId, this.selectedMonth)
           .pipe(takeUntil(this.destroy$))
       ).catch((error) => {
-        console.error('Error loading collaborator progress metrics:', error);
-        this.hasSidebarError = true;
+                this.hasSidebarError = true;
         this.sidebarErrorMessage = 'Erro ao carregar mÃ©tricas de progresso';
         return {
           activity: { pendentes: 0, emExecucao: 0, finalizadas: 0, pontos: 0 },
@@ -880,8 +866,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       const status = await firstValueFrom(
         this.funifierApi.get<any>(`/v3/player/${collaboratorId}/status`).pipe(takeUntil(this.destroy$))
       ).catch((error) => {
-        console.error('Error loading collaborator status:', error);
-        return null;
+                return null;
       });
       
       // Calculate blocked points from status
@@ -943,8 +928,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       
       this.cdr.markForCheck();
     } catch (error) {
-      console.error('Error in loadCollaboratorSidebarData:', error);
-      this.hasSidebarError = true;
+            this.hasSidebarError = true;
       this.sidebarErrorMessage = 'Erro ao carregar dados da barra lateral';
       this.isLoadingSidebar = false;
       this.cdr.markForCheck();
@@ -967,8 +951,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
             .getTeamSeasonPoints(this.selectedTeam, dateRange.start, dateRange.end)
             .pipe(takeUntil(this.destroy$))
         ).catch((error) => {
-          console.error('Error loading season points:', error);
-          this.hasSidebarError = true;
+                    this.hasSidebarError = true;
           this.sidebarErrorMessage = 'Erro ao carregar pontos da temporada';
           this.toastService.error('Erro ao carregar pontos da temporada');
           return { total: 0, bloqueados: 0, desbloqueados: 0 };
@@ -978,8 +961,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
             .getTeamProgressMetrics(this.selectedTeam, dateRange.start, dateRange.end)
             .pipe(takeUntil(this.destroy$))
         ).catch((error) => {
-          console.error('Error loading progress metrics:', error);
-          this.hasSidebarError = true;
+                    this.hasSidebarError = true;
           this.sidebarErrorMessage = 'Erro ao carregar mÃ©tricas de progresso';
           this.toastService.error('Erro ao carregar mÃ©tricas de progresso');
           return {
@@ -1021,8 +1003,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       
       this.cdr.markForCheck();
     } catch (error) {
-      console.error('Error in loadSidebarData:', error);
-      this.hasSidebarError = true;
+            this.hasSidebarError = true;
       this.sidebarErrorMessage = 'Erro ao carregar dados da barra lateral';
       this.isLoadingSidebar = false;
     }
@@ -1051,15 +1032,13 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
         }));
         
         } else if (this.teamMemberIds.length === 0) {
-        console.warn('âš ï¸ No member data available, trying to load from aggregate query');
-        // Fallback: try to load from aggregate query
+                // Fallback: try to load from aggregate query
         const members = await firstValueFrom(
           this.teamAggregateService
             .getTeamMembers(this.selectedTeam)
             .pipe(takeUntil(this.destroy$))
         ).catch((error) => {
-          console.error('Error loading collaborators:', error);
-          return [];
+                    return [];
         });
         
         this.collaborators = members;
@@ -1077,16 +1056,14 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       if (this.selectedCollaborator) {
         const collaboratorExists = this.collaborators.find(c => c.userId === this.selectedCollaborator);
         if (!collaboratorExists) {
-          console.warn('âš ï¸ Selected collaborator not found in list, resetting to team view');
-          this.selectedCollaborator = null;
+                    this.selectedCollaborator = null;
         }
       }
       
       this.isLoadingCollaborators = false;
       this.cdr.markForCheck();
     } catch (error) {
-      console.error('Error in loadCollaborators:', error);
-      this.collaborators = [];
+            this.collaborators = [];
       this.isLoadingCollaborators = false;
     }
   }
@@ -1111,8 +1088,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
         this.actionLogService.getProgressMetrics(collaboratorId, this.selectedMonth)
           .pipe(takeUntil(this.destroy$))
       ).catch((error) => {
-        console.error('Error loading collaborator progress metrics for goals:', error);
-        return {
+                return {
           activity: { pendentes: 0, emExecucao: 0, finalizadas: 0, pontos: 0 },
           processo: { pendentes: 0, incompletas: 0, finalizadas: 0 }
         };
@@ -1139,8 +1115,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       this.isLoadingGoals = false;
       this.cdr.markForCheck();
     } catch (error) {
-      console.error('Error loading collaborator goals data:', error);
-      this.goalMetrics = [];
+            this.goalMetrics = [];
       this.isLoadingGoals = false;
       this.hasGoalsError = true;
       this.goalsErrorMessage = 'Erro ao carregar dados de metas';
@@ -1178,8 +1153,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       
       this.isLoadingGoals = false;
     } catch (error) {
-      console.error('Error loading goals data:', error);
-      this.goalMetrics = [];
+            this.goalMetrics = [];
       this.isLoadingGoals = false;
       this.hasGoalsError = true;
       this.goalsErrorMessage = 'Erro ao carregar dados de metas';
@@ -1243,8 +1217,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
           aggregateBody
         ).pipe(takeUntil(this.destroy$))
       ).catch((error) => {
-        console.error(`Error loading productivity for collaborator ${collaboratorId}:`, error);
-        return [];
+                return [];
       });
       
       // Convert to GraphDataPoint format
@@ -1299,8 +1272,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       this.isLoadingProductivity = false;
       this.cdr.markForCheck();
     } catch (error) {
-      console.error('Error loading collaborator productivity data:', error);
-      this.graphData = [];
+            this.graphData = [];
       this.graphDatasets = [];
       this.pointsGraphData = [];
       this.pointsGraphDatasets = [];
@@ -1369,8 +1341,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
           aggregateBody
         ).pipe(takeUntil(this.destroy$))
       ).catch((error) => {
-        console.error(`Error loading points for collaborator ${collaboratorId}:`, error);
-        return [];
+                return [];
       });
       
       // Convert to GraphDataPoint format
@@ -1420,8 +1391,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       this.pointsByCollaboratorLabels = [`${memberName} - ${pointsTotal} (100%)`];
       
       } catch (error) {
-      console.error('Error loading collaborator points data:', error);
-      this.pointsGraphData = [];
+            this.pointsGraphData = [];
       this.pointsGraphDatasets = [];
     }
   }
@@ -1437,8 +1407,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       this.productivityErrorMessage = '';
       
       if (this.teamMemberIds.length === 0) {
-        console.warn('âš ï¸ No team members to load productivity data for');
-        this.graphData = [];
+                this.graphData = [];
         this.graphDatasets = [];
         this.pointsGraphData = [];
         this.pointsGraphDatasets = [];
@@ -1543,8 +1512,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
               pointsAggregateBody
             ).pipe(takeUntil(this.destroy$))
           ).catch((error) => {
-            console.error('Error loading points aggregate:', error);
-            return [];
+                        return [];
           })
         ]);
         
@@ -1702,8 +1670,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
         this.hasProductivityError = false;
         this.cdr.markForCheck();
       } catch (error) {
-        console.error('Error loading productivity data:', error);
-      this.graphData = [];
+              this.graphData = [];
       this.graphDatasets = [];
       this.pointsGraphData = [];
       this.pointsGraphDatasets = [];
@@ -1718,8 +1685,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       this.isLoadingProductivity = false;
     }
   } catch (error) {
-    console.error('Error in loadProductivityData:', error);
-    this.graphData = [];
+        this.graphData = [];
     this.graphDatasets = [];
     this.pointsGraphData = [];
     this.pointsGraphDatasets = [];
@@ -1847,8 +1813,7 @@ private calculateCollaboratorTotals(memberData: Array<{
   private async loadTeamActivityAndMacroData(dateRange: { start: Date; end: Date }): Promise<void> {
     try {
       if (this.teamMemberIds.length === 0) {
-        console.warn('âš ï¸ No team members to aggregate data from');
-        return;
+                return;
       }
       
       // OPTIMIZED: Single aggregate query for all team members
@@ -1859,8 +1824,7 @@ private calculateCollaboratorTotals(memberData: Array<{
           dateRange.end
         ).pipe(takeUntil(this.destroy$))
       ).catch((error) => {
-        console.error('Error loading team activity metrics:', error);
-        return { finalizadas: 0, pontos: 0, processosFinalizados: 0, processosIncompletos: 0 };
+                return { finalizadas: 0, pontos: 0, processosFinalizados: 0, processosIncompletos: 0 };
       });
       
       // Get total points from achievement aggregate
@@ -1871,8 +1835,7 @@ private calculateCollaboratorTotals(memberData: Array<{
           dateRange.end
         ).pipe(takeUntil(this.destroy$))
       ).catch((error) => {
-        console.error('Error loading team total points:', error);
-        return 0;
+                return 0;
       });
       
       // Set aggregated team metrics
@@ -1891,8 +1854,7 @@ private calculateCollaboratorTotals(memberData: Array<{
       
       this.cdr.markForCheck();
     } catch (error) {
-      console.error('Error loading team activity and process data:', error);
-    }
+          }
   }
 
   /**
@@ -1912,8 +1874,7 @@ private calculateCollaboratorTotals(memberData: Array<{
         this.actionLogService.getPlayerCnpjListWithCount(collaboratorId, this.selectedMonth)
           .pipe(takeUntil(this.destroy$))
       ).catch((error) => {
-        console.error(`Error loading carteira for collaborator ${collaboratorId}:`, error);
-        return [];
+                return [];
       });
       
       // Extract all CNPJ strings for lookup
@@ -1924,8 +1885,7 @@ private calculateCollaboratorTotals(memberData: Array<{
         this.cnpjLookupService.enrichCnpjList(cnpjList)
           .pipe(takeUntil(this.destroy$))
       ).catch((error) => {
-        console.error('Error enriching CNPJ names:', error);
-        return new Map<string, string>();
+                return new Map<string, string>();
       });
       this.cnpjNameMap = cnpjNames;
       // Enrich with KPI data
@@ -1933,8 +1893,7 @@ private calculateCollaboratorTotals(memberData: Array<{
         this.companyKpiService.enrichCompaniesWithKpis(carteiraData)
           .pipe(takeUntil(this.destroy$))
       ).catch((error) => {
-        console.error(`Error enriching carteira data for collaborator ${collaboratorId}:`, error);
-        // Return data without KPI enrichment on error
+                // Return data without KPI enrichment on error
         return carteiraData.map(item => ({
           cnpj: item.cnpj,
           actionCount: item.actionCount
@@ -1949,8 +1908,7 @@ private calculateCollaboratorTotals(memberData: Array<{
       this.isLoadingCarteira = false;
       this.cdr.markForCheck();
     } catch (error) {
-      console.error('Error loading collaborator carteira data:', error);
-      this.teamCarteiraClientes = [];
+            this.teamCarteiraClientes = [];
       this.isLoadingCarteira = false;
       this.cdr.markForCheck();
     }
@@ -1971,8 +1929,7 @@ private calculateCollaboratorTotals(memberData: Array<{
     try {
       this.isLoadingCarteira = true;
       if (!this.selectedTeamId) {
-        console.warn('âš ï¸ No team selected for carteira data');
-        this.teamCarteiraClientes = [];
+                this.teamCarteiraClientes = [];
         this.isLoadingCarteira = false;
         this.cdr.markForCheck();
         return;
@@ -2009,8 +1966,7 @@ private calculateCollaboratorTotals(memberData: Array<{
         this.cnpjLookupService.enrichCnpjList(cnpjList)
           .pipe(takeUntil(this.destroy$))
       ).catch((error) => {
-        console.error('Error enriching CNPJ names:', error);
-        return new Map<string, string>();
+                return new Map<string, string>();
       });
       this.cnpjNameMap = cnpjNames;
       // Enrich with KPI data
@@ -2018,8 +1974,7 @@ private calculateCollaboratorTotals(memberData: Array<{
         this.companyKpiService.enrichCompaniesWithKpis(cnpjListWithCounts)
           .pipe(takeUntil(this.destroy$))
       ).catch((error) => {
-        console.error('Error enriching team carteira data:', error);
-        // Return data without KPI enrichment on error
+                // Return data without KPI enrichment on error
         return cnpjListWithCounts.map(item => ({
           cnpj: item.cnpj,
           actionCount: item.actionCount
@@ -2034,8 +1989,7 @@ private calculateCollaboratorTotals(memberData: Array<{
       this.isLoadingCarteira = false;
       this.cdr.markForCheck();
     } catch (error) {
-      console.error('Error loading team carteira data:', error);
-      this.teamCarteiraClientes = [];
+            this.teamCarteiraClientes = [];
       this.isLoadingCarteira = false;
       this.cdr.markForCheck();
     }
@@ -2065,8 +2019,7 @@ private calculateCollaboratorTotals(memberData: Array<{
       // Find the team in the teams array to get the name
       const team = this.teams.find(t => t.id === teamId);
       if (!team) {
-        console.error('Team not found:', teamId);
-        return;
+                return;
       }
       
       // Check if team is actually changing
@@ -2103,8 +2056,7 @@ private calculateCollaboratorTotals(memberData: Array<{
       
       this.cdr.markForCheck();
     } catch (error) {
-      console.error('Error in onTeamChange:', error);
-      this.toastService.error('Erro ao carregar dados do time');
+            this.toastService.error('Erro ao carregar dados do time');
     }
   }
 
@@ -2444,8 +2396,7 @@ private calculateCollaboratorTotals(memberData: Array<{
           this.actionLogService.getMonthlyPointsBreakdown(collaboratorId, this.selectedMonth)
             .pipe(takeUntil(this.destroy$))
         ).catch((error) => {
-          console.error(`Error loading monthly points breakdown for collaborator ${collaboratorId}:`, error);
-          return { bloqueados: 0, desbloqueados: 0 };
+                    return { bloqueados: 0, desbloqueados: 0 };
         });
         
         this.monthlyPointsBreakdown = breakdown;
@@ -2477,8 +2428,7 @@ private calculateCollaboratorTotals(memberData: Array<{
       
       this.cdr.markForCheck();
     } catch (error) {
-      console.error('Error loading monthly points breakdown:', error);
-      this.monthlyPointsBreakdown = { bloqueados: 0, desbloqueados: 0 };
+            this.monthlyPointsBreakdown = { bloqueados: 0, desbloqueados: 0 };
       this.cdr.markForCheck();
     }
   }
@@ -2664,8 +2614,7 @@ private calculateCollaboratorTotals(memberData: Array<{
               aggregateQuery
             ).pipe(takeUntil(this.destroy$))
           ).catch(error => {
-            console.error('Error fetching team cnpj_goal data:', error);
-            return [] as { _id: string; cnpj_goal?: number }[];
+                        return [] as { _id: string; cnpj_goal?: number }[];
           });
           
           // Sum all cnpj_goal from team members, defaulting to 10 for each member without a goal
@@ -2689,8 +2638,7 @@ private calculateCollaboratorTotals(memberData: Array<{
           }
           
           } catch (error) {
-          console.error('Error loading team cnpj_goal:', error);
-          // Fallback to default if error
+                    // Fallback to default if error
           somaMetasEmpresas = this.teamMemberIds.length * 10;
         }
         
@@ -2739,8 +2687,7 @@ private calculateCollaboratorTotals(memberData: Array<{
                 aggregateQuery
               ).pipe(takeUntil(this.destroy$))
             ).catch(error => {
-              console.error('Error fetching team entrega data:', error);
-              return [] as { _id: string; entrega?: string; entrega_goal?: number }[];
+                            return [] as { _id: string; entrega?: string; entrega_goal?: number }[];
             });
             
             // Calculate average entrega percentage
@@ -2786,8 +2733,7 @@ private calculateCollaboratorTotals(memberData: Array<{
             }
             
             } catch (error) {
-            console.error('Error loading team entrega KPI:', error);
-          }
+                      }
         }
         
         this.teamKPIs = teamKPIs;
@@ -2796,8 +2742,7 @@ private calculateCollaboratorTotals(memberData: Array<{
       this.isLoadingKPIs = false;
       this.cdr.markForCheck();
     } catch (error) {
-      console.error('Error loading team KPIs:', error);
-      this.teamKPIs = [];
+            this.teamKPIs = [];
       this.isLoadingKPIs = false;
       this.cdr.markForCheck();
     }
@@ -3049,8 +2994,7 @@ private calculateCollaboratorTotals(memberData: Array<{
       }
       
     } catch (error: any) {
-      console.error('Error saving goals:', error);
-      this.metaSaveMessage = error?.message || 'Erro ao salvar metas. Tente novamente.';
+            this.metaSaveMessage = error?.message || 'Erro ao salvar metas. Tente novamente.';
       this.metaSaveSuccess = false;
       this.toastService.error('Erro ao salvar metas');
     } finally {
@@ -3117,8 +3061,7 @@ private calculateCollaboratorTotals(memberData: Array<{
       );
 
       } catch (error: any) {
-      console.error(`âŒ Error updating goals for ${playerId}:`, error);
-      throw new Error(`Erro ao atualizar metas para ${playerId}: ${error.message}`);
+            throw new Error(`Erro ao atualizar metas para ${playerId}: ${error.message}`);
     }
   }
 
@@ -3183,3 +3126,6 @@ private calculateCollaboratorTotals(memberData: Array<{
     this.sessaoProvider.logout();
   }
 }
+
+
+
