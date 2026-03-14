@@ -1382,6 +1382,7 @@
               [mostrarFiltros]="true"
               [mostrarAcoes]="false"
               [acoesDisponiveis]="[]"
+              [executorsList]="getExecutorsList()"
               (filtrosChange)="onFiltrosProcessosChange($event)"
               (limparFiltros)="onLimparFiltrosProcessos()">
             </c4u-painel-filtros-acao>
@@ -1488,7 +1489,7 @@
                 </div>
 
                 <!-- Botões de ação em lote para tarefas (separados dos botões de processo) -->
-                <div class="tarefas-acoes-lote" *ngIf="deliverySelecionada?.user_action && deliverySelecionada.user_action.length > 0 && isAdminOrGerente" style="margin-bottom: 1rem; padding: 0.75rem; background-color: #2a2b32; border-radius: 6px; display: flex; align-items: center; gap: 0.75rem;">
+                <div class="tarefas-acoes-lote" *ngIf="getTarefasDetalheDelivery().length > 0 && isAdminOrGerente" style="margin-bottom: 1rem; padding: 0.75rem; background-color: #2a2b32; border-radius: 6px; display: flex; align-items: center; gap: 0.75rem;">
                   <span style="font-size: 0.875rem; color: #6b7280; margin-right: auto;">
                     <strong>{{ tarefasSelecionadasDetalhe.size }}</strong> tarefa(s) selecionada(s)
                   </span>
@@ -1515,8 +1516,8 @@
                   <tr>
                     <th style="width: 5%;" *ngIf="isAdminOrGerente">
                       <c4u-checkbox
-                        [value]="tarefasSelecionadasDetalhe.size === (deliverySelecionada?.user_action?.length || 0) && (deliverySelecionada?.user_action?.length || 0) > 0"
-                        [indeterminate]="tarefasSelecionadasDetalhe.size > 0 && tarefasSelecionadasDetalhe.size < (deliverySelecionada?.user_action?.length || 0)"
+                        [value]="getTarefasDetalheDelivery().length > 0 && tarefasSelecionadasDetalhe.size === getTarefasDetalheDelivery().length"
+                        [indeterminate]="tarefasSelecionadasDetalhe.size > 0 && tarefasSelecionadasDetalhe.size < getTarefasDetalheDelivery().length"
                         (click)="toggleSelecionarTodasTarefasDetalhe($event)"
                         style="display: inline-block;">
                       </c4u-checkbox>
@@ -1529,7 +1530,7 @@
                   </tr>
                   </thead>
                   <tbody class="tableBody">
-                  <tr *ngFor="let tarefa of deliverySelecionada?.user_action || []" 
+                  <tr *ngFor="let tarefa of getTarefasDetalheDelivery()" 
                       (click)="onTarefaClick(tarefa)"
                       style="cursor:pointer"
                       [class.selected]="isTarefaSelecionadaDetalhe(tarefa)">
@@ -1551,7 +1552,7 @@
                   </tbody>
                 </table>
 
-                <div *ngIf="!deliverySelecionada?.user_action || deliverySelecionada?.user_action.length === 0"
+                <div *ngIf="getTarefasDetalheDelivery().length === 0"
                      class="sem-tarefas">
                   <div class="empty-state">
                     <i class="icon-task"></i>
@@ -1598,6 +1599,7 @@
               [mostrarFiltros]="true"
               [mostrarAcoes]="false"
               [acoesDisponiveis]="[]"
+              [executorsList]="getExecutorsList()"
               (filtrosChange)="onFiltrosProcessosChange($event)"
               (limparFiltros)="onLimparFiltrosProcessos()">
             </c4u-painel-filtros-acao>
@@ -1688,7 +1690,7 @@
                 </div>
 
                 <!-- Botões de ação em lote para tarefas (separados dos botões de processo) -->
-                <div class="tarefas-acoes-lote" *ngIf="deliverySelecionada?.user_action && deliverySelecionada.user_action.length > 0 && isAdminOrGerente" style="margin-bottom: 1rem; padding: 0.75rem; background-color: #2a2b32; border-radius: 6px; display: flex; align-items: center; gap: 0.75rem;">
+                <div class="tarefas-acoes-lote" *ngIf="getTarefasDetalheDelivery().length > 0 && isAdminOrGerente" style="margin-bottom: 1rem; padding: 0.75rem; background-color: #2a2b32; border-radius: 6px; display: flex; align-items: center; gap: 0.75rem;">
                   <span style="font-size: 0.875rem; color: #6b7280; margin-right: auto;">
                     <strong>{{ tarefasSelecionadasDetalhe.size }}</strong> tarefa(s) selecionada(s)
                   </span>
@@ -1715,8 +1717,8 @@
                   <tr>
                     <th style="width: 5%;" *ngIf="isAdminOrGerente">
                       <c4u-checkbox
-                        [value]="tarefasSelecionadasDetalhe.size === (deliverySelecionada?.user_action?.length || 0) && (deliverySelecionada?.user_action?.length || 0) > 0"
-                        [indeterminate]="tarefasSelecionadasDetalhe.size > 0 && tarefasSelecionadasDetalhe.size < (deliverySelecionada?.user_action?.length || 0)"
+                        [value]="getTarefasDetalheDelivery().length > 0 && tarefasSelecionadasDetalhe.size === getTarefasDetalheDelivery().length"
+                        [indeterminate]="tarefasSelecionadasDetalhe.size > 0 && tarefasSelecionadasDetalhe.size < getTarefasDetalheDelivery().length"
                         (click)="toggleSelecionarTodasTarefasDetalhe($event)"
                         style="display: inline-block;">
                       </c4u-checkbox>
@@ -1729,7 +1731,7 @@
                   </tr>
                   </thead>
                   <tbody class="tableBody">
-                  <tr *ngFor="let tarefa of deliverySelecionada?.user_action || []" 
+                  <tr *ngFor="let tarefa of getTarefasDetalheDelivery()" 
                       (click)="onTarefaClick(tarefa)"
                       style="cursor:pointer"
                       [class.selected]="isTarefaSelecionadaDetalhe(tarefa)">
@@ -1751,7 +1753,7 @@
                   </tbody>
                 </table>
 
-                <div *ngIf="!deliverySelecionada?.user_action || deliverySelecionada?.user_action.length === 0"
+                <div *ngIf="getTarefasDetalheDelivery().length === 0"
                      class="sem-tarefas">
                   <div class="empty-state">
                     <i class="icon-task"></i>
@@ -1802,6 +1804,7 @@
               [mostrarFiltros]="true"
               [mostrarAcoes]="false"
               [acoesDisponiveis]="[]"
+              [executorsList]="getExecutorsList()"
               (filtrosChange)="onFiltrosProcessosChange($event)"
               (limparFiltros)="onLimparFiltrosProcessos()">
             </c4u-painel-filtros-acao>
@@ -1892,7 +1895,7 @@
                 </div>
 
                 <!-- Botões de ação em lote para tarefas (separados dos botões de processo) -->
-                <div class="tarefas-acoes-lote" *ngIf="deliverySelecionada?.user_action && deliverySelecionada.user_action.length > 0 && isAdminOrGerente" style="margin-bottom: 1rem; padding: 0.75rem; background-color: #2a2b32; border-radius: 6px; display: flex; align-items: center; gap: 0.75rem;">
+                <div class="tarefas-acoes-lote" *ngIf="getTarefasDetalheDelivery().length > 0 && isAdminOrGerente" style="margin-bottom: 1rem; padding: 0.75rem; background-color: #2a2b32; border-radius: 6px; display: flex; align-items: center; gap: 0.75rem;">
                   <span style="font-size: 0.875rem; color: #6b7280; margin-right: auto;">
                     <strong>{{ tarefasSelecionadasDetalhe.size }}</strong> tarefa(s) selecionada(s)
                   </span>
@@ -1919,8 +1922,8 @@
                   <tr>
                     <th style="width: 5%;" *ngIf="isAdminOrGerente">
                       <c4u-checkbox
-                        [value]="tarefasSelecionadasDetalhe.size === (deliverySelecionada?.user_action?.length || 0) && (deliverySelecionada?.user_action?.length || 0) > 0"
-                        [indeterminate]="tarefasSelecionadasDetalhe.size > 0 && tarefasSelecionadasDetalhe.size < (deliverySelecionada?.user_action?.length || 0)"
+                        [value]="getTarefasDetalheDelivery().length > 0 && tarefasSelecionadasDetalhe.size === getTarefasDetalheDelivery().length"
+                        [indeterminate]="tarefasSelecionadasDetalhe.size > 0 && tarefasSelecionadasDetalhe.size < getTarefasDetalheDelivery().length"
                         (click)="toggleSelecionarTodasTarefasDetalhe($event)"
                         style="display: inline-block;">
                       </c4u-checkbox>
@@ -1933,7 +1936,7 @@
                   </tr>
                   </thead>
                   <tbody class="tableBody">
-                  <tr *ngFor="let tarefa of deliverySelecionada?.user_action || []" 
+                  <tr *ngFor="let tarefa of getTarefasDetalheDelivery()" 
                       (click)="onTarefaClick(tarefa)"
                       style="cursor:pointer"
                       [class.selected]="isTarefaSelecionadaDetalhe(tarefa)">
@@ -1955,7 +1958,7 @@
                   </tbody>
                 </table>
 
-                <div *ngIf="!deliverySelecionada?.user_action || deliverySelecionada?.user_action.length === 0"
+                <div *ngIf="getTarefasDetalheDelivery().length === 0"
                      class="sem-tarefas">
                   <div class="empty-state">
                     <i class="icon-task"></i>
@@ -2006,6 +2009,7 @@
               [mostrarFiltros]="true"
               [mostrarAcoes]="false"
               [acoesDisponiveis]="[]"
+              [executorsList]="getExecutorsList()"
               (filtrosChange)="onFiltrosProcessosChange($event)"
               (limparFiltros)="onLimparFiltrosProcessos()">
             </c4u-painel-filtros-acao>
@@ -2096,7 +2100,7 @@
                 </div>
 
                 <!-- Botões de ação em lote para tarefas (separados dos botões de processo) -->
-                <div class="tarefas-acoes-lote" *ngIf="deliverySelecionada?.user_action && deliverySelecionada.user_action.length > 0 && isAdminOrGerente" style="margin-bottom: 1rem; padding: 0.75rem; background-color: #2a2b32; border-radius: 6px; display: flex; align-items: center; gap: 0.75rem;">
+                <div class="tarefas-acoes-lote" *ngIf="getTarefasDetalheDelivery().length > 0 && isAdminOrGerente" style="margin-bottom: 1rem; padding: 0.75rem; background-color: #2a2b32; border-radius: 6px; display: flex; align-items: center; gap: 0.75rem;">
                   <span style="font-size: 0.875rem; color: #6b7280; margin-right: auto;">
                     <strong>{{ tarefasSelecionadasDetalhe.size }}</strong> tarefa(s) selecionada(s)
                   </span>
@@ -2123,8 +2127,8 @@
                   <tr>
                     <th style="width: 5%;" *ngIf="isAdminOrGerente">
                       <c4u-checkbox
-                        [value]="tarefasSelecionadasDetalhe.size === (deliverySelecionada?.user_action?.length || 0) && (deliverySelecionada?.user_action?.length || 0) > 0"
-                        [indeterminate]="tarefasSelecionadasDetalhe.size > 0 && tarefasSelecionadasDetalhe.size < (deliverySelecionada?.user_action?.length || 0)"
+                        [value]="getTarefasDetalheDelivery().length > 0 && tarefasSelecionadasDetalhe.size === getTarefasDetalheDelivery().length"
+                        [indeterminate]="tarefasSelecionadasDetalhe.size > 0 && tarefasSelecionadasDetalhe.size < getTarefasDetalheDelivery().length"
                         (click)="toggleSelecionarTodasTarefasDetalhe($event)"
                         style="display: inline-block;">
                       </c4u-checkbox>
@@ -2138,7 +2142,7 @@
                   </tr>
                   </thead>
                   <tbody class="tableBody">
-                  <tr *ngFor="let tarefa of deliverySelecionada?.user_action || []" 
+                  <tr *ngFor="let tarefa of getTarefasDetalheDelivery()" 
                       (click)="onTarefaClick(tarefa)"
                       style="cursor:pointer"
                       [class.selected]="isTarefaSelecionadaDetalhe(tarefa)">
@@ -2163,7 +2167,7 @@
                   </tbody>
                 </table>
 
-                <div *ngIf="!deliverySelecionada?.user_action || deliverySelecionada?.user_action.length === 0"
+                <div *ngIf="getTarefasDetalheDelivery().length === 0"
                      class="sem-tarefas">
                   <div class="empty-state">
                     <i class="icon-task"></i>

@@ -4319,6 +4319,33 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
   }
 
   /**
+   * Retorna o email do executor usado no filtro (filtrosProcessos ou filtrosAtivos).
+   * Quando em contexto de time e há executor selecionado no painel, usa esse valor.
+   * Quando em contexto de colaborador (pessoa selecionada no dashboard/season), usa this.userId.
+   */
+  private getExecutorEmailParaFiltroDetalhe(): string | undefined {
+    if (this.isTeamContext) {
+      const executor = this.filtrosProcessos?.executor || this.filtrosAtivos?.executor;
+      if (!executor) return undefined;
+      const jogador = this.jogadores.find((j: any) =>
+        (j.email === executor) || (j.id === executor) || (j._id === executor)
+      );
+      return jogador ? (jogador.email || executor) : executor;
+    }
+    return this.userId || undefined;
+  }
+
+  /**
+   * Retorna as tarefas do detalhe da delivery, filtradas pelo executor quando uma pessoa está selecionada no modal (contexto de time).
+   */
+  getTarefasDetalheDelivery(): any[] {
+    const todas = this.deliverySelecionada?.user_action || [];
+    const executorEmail = this.getExecutorEmailParaFiltroDetalhe();
+    if (!executorEmail) return todas;
+    return todas.filter((t: any) => (t.user_email || '').trim() === executorEmail.trim());
+  }
+
+  /**
    * Toggle de seleção de uma tarefa no detalhe de processo
    */
   toggleSelecionarTarefaDetalhe(tarefa: any, event?: Event) {
@@ -4368,31 +4395,26 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
       }
 
   /**
-   * Seleciona/desseleciona todas as tarefas no detalhe de processo
+   * Seleciona/desseleciona todas as tarefas no detalhe de processo (considera a lista filtrada por executor quando aplicável)
    */
   toggleSelecionarTodasTarefasDetalhe(event?: Event) {
     if (event) {
       event.stopPropagation();
       event.preventDefault();
     }
-    
-    if (!this.deliverySelecionada?.user_action || this.deliverySelecionada.user_action.length === 0) {
-      return;
-    }
 
-    const todasSelecionadas = this.tarefasSelecionadasDetalhe.size === this.deliverySelecionada.user_action.length;
-    
+    const tarefasVisiveis = this.getTarefasDetalheDelivery();
+    if (!tarefasVisiveis.length) return;
+
+    const todasSelecionadas = tarefasVisiveis.every((t: any) => this.tarefasSelecionadasDetalhe.has(this.getTarefaIdDetalhe(t)));
+
     if (todasSelecionadas) {
-      // Desselecionar todas
-      this.deliverySelecionada.user_action.forEach((tarefa: any) => {
-        const id = this.getTarefaIdDetalhe(tarefa);
-        this.tarefasSelecionadasDetalhe.delete(id);
+      tarefasVisiveis.forEach((tarefa: any) => {
+        this.tarefasSelecionadasDetalhe.delete(this.getTarefaIdDetalhe(tarefa));
       });
     } else {
-      // Selecionar todas
-      this.deliverySelecionada.user_action.forEach((tarefa: any) => {
-        const id = this.getTarefaIdDetalhe(tarefa);
-        this.tarefasSelecionadasDetalhe.add(id);
+      tarefasVisiveis.forEach((tarefa: any) => {
+        this.tarefasSelecionadasDetalhe.add(this.getTarefaIdDetalhe(tarefa));
       });
     }
   }
