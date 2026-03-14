@@ -12,6 +12,7 @@ export class PlayerMapper {
   toPlayerStatus(apiResponse: any): PlayerStatus {
     const levelProgress = apiResponse.level_progress || {};
     const nextLevel = levelProgress.next_level || {};
+    const extra = apiResponse.extra || {};
     
     return {
       _id: apiResponse._id || '',
@@ -23,7 +24,14 @@ export class PlayerMapper {
       percentCompleted: levelProgress.percent_completed || 0,
       metadata: this.extractMetadata(apiResponse),
       created: apiResponse.created || Date.now(),
-      updated: apiResponse.updated || Date.now()
+      updated: apiResponse.updated || Date.now(),
+      extra: {
+        entrega_goal: extra.entrega_goal,
+        cnpj_goal: extra.cnpj_goal,
+        cnpj_resp: extra.cnpj_resp,
+        entrega: extra.entrega,
+        ...extra
+      }
     };
   }
 
@@ -54,19 +62,13 @@ export class PlayerMapper {
    * - coins -> Moedas
    */
   toPointWallet(apiResponse: any): PointWallet {
-    console.log('📊 Point wallet mapping - FULL API response keys:', Object.keys(apiResponse || {}));
-    
     // Get point_categories from response (can be snake_case or camelCase)
     const pointCategories = apiResponse?.point_categories || apiResponse?.pointCategories || {};
-    
-    console.log('📊 Point wallet mapping - point_categories:', JSON.stringify(pointCategories));
     
     // Extract values from point_categories
     const bloqueados = Number(pointCategories.locked_points) || Number(pointCategories.lockedPoints) || 0;
     const desbloqueados = Number(pointCategories.points) || 0;
     const moedas = Number(pointCategories.coins) || 0;
-    
-    console.log('📊 Point wallet FINAL result:', { bloqueados, desbloqueados, moedas });
     
     return {
       bloqueados,

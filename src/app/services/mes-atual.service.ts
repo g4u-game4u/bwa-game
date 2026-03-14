@@ -26,8 +26,7 @@ export class MesAtualService {
     public async getDadosMesAtualDashboard(id: number, tipo: number): Promise<ResumoMes> {
         // Check if backend_url_base is configured - if not, return empty data
         if (!environment.backend_url_base || environment.backend_url_base === 'http://localhost') {
-            console.warn('⚠️ MesAtualService: backend_url_base not configured, returning empty data');
-            return this.getEmptyResumoMes();
+                        return this.getEmptyResumoMes();
         }
 
         try {
@@ -60,8 +59,7 @@ export class MesAtualService {
                 completedDeliveries: response?.delivery_stats?.DELIVERED || 0,
             };
         } catch (error) {
-            console.error('❌ MesAtualService: Error fetching current month data:', error);
-            return this.getEmptyResumoMes();
+                        return this.getEmptyResumoMes();
         }
     }
 
@@ -132,3 +130,4 @@ export class MesAtualService {
         ).toPromise();
     }
 }
+

@@ -26,25 +26,23 @@ export class TeamStatsCacheService {
   ) {}
 
   /**
-   * Obtém dados do time com cache
+   * ObtÃ©m dados do time com cache
    */
   async getTeamStats(teamId: number, tipo: number, monthsAgo: number = 0): Promise<ResumoMes> {
     const cacheKey = this.createCacheKey({ teamId, period: monthsAgo > 0 ? 'previous' : 'current', monthsAgo });
 
-    // Verifica se já está carregando
+    // Verifica se jÃ¡ estÃ¡ carregando
     if (this.loadingPromises.has(cacheKey)) {
       return this.loadingPromises.get(cacheKey)!;
     }
 
-    // Verifica se há dados em cache válidos
+    // Verifica se hÃ¡ dados em cache vÃ¡lidos
     const cached = this.cache.get(cacheKey);
     if (cached && Date.now() - cached.timestamp < this.CACHE_DURATION) {
-      console.log(`📊 Usando cache para team-stats: ${cacheKey}`);
       return cached.data;
     }
 
-    // Faz a requisição
-    console.log(`📊 Fazendo requisição para team-stats: ${cacheKey}`);
+    // Faz a requisiÃ§Ã£o
     const promise = this.fetchTeamStats(teamId, tipo, monthsAgo);
     this.loadingPromises.set(cacheKey, promise);
 
@@ -58,7 +56,7 @@ export class TeamStatsCacheService {
   }
 
   /**
-   * Faz a requisição real para a API
+   * Faz a requisiÃ§Ã£o real para a API
    */
   private async fetchTeamStats(teamId: number, tipo: number, monthsAgo: number): Promise<ResumoMes> {
     if (monthsAgo > 0) {
@@ -69,14 +67,14 @@ export class TeamStatsCacheService {
   }
 
   /**
-   * Cria uma chave única para o cache
+   * Cria uma chave Ãºnica para o cache
    */
   private createCacheKey(key: TeamStatsCacheKey): string {
     return `${key.teamId}-${key.period}-${key.monthsAgo || 0}`;
   }
 
   /**
-   * Limpa o cache para um time específico
+   * Limpa o cache para um time especÃ­fico
    */
   clearTeamCache(teamId: number): void {
     const keysToDelete: string[] = [];
@@ -97,7 +95,7 @@ export class TeamStatsCacheService {
   }
 
   /**
-   * Obtém estatísticas do cache
+   * ObtÃ©m estatÃ­sticas do cache
    */
   getCacheStats(): { size: number; keys: string[] } {
     return {

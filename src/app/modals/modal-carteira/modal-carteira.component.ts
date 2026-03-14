@@ -49,9 +49,7 @@ export class ModalCarteiraComponent implements OnInit, OnDestroy {
     this.actionLogService.getPlayerCnpjListWithCount(this.playerId, this.month)
       .pipe(
         switchMap(clientes => {
-          console.log('📊 Modal carteira clientes loaded, enriching with KPI data:', clientes);
-          
-          // Extract all CNPJ strings for lookup
+                    // Extract all CNPJ strings for lookup
           const cnpjList = clientes.map(c => c.cnpj);
           
           // Enrich CNPJs with clean company names and KPI data in parallel
@@ -62,25 +60,20 @@ export class ModalCarteiraComponent implements OnInit, OnDestroy {
         }),
         map(({ enrichedClientes, cnpjNames }) => {
           // Store the CNPJ name map for display
-          console.log('📊 Modal: Received CNPJ name map with', cnpjNames.size, 'entries');
-          console.log('📊 Modal: CNPJ name map entries:', Array.from(cnpjNames.entries()));
+                    console.log('📊 Modal: CNPJ name map entries:', Array.from(cnpjNames.entries()));
           this.cnpjNameMap = cnpjNames;
-          console.log('📊 Modal: Stored cnpjNameMap:', this.cnpjNameMap);
-          return enrichedClientes;
+                    return enrichedClientes;
         }),
         takeUntil(this.destroy$)
       )
       .subscribe({
         next: (enrichedClientes) => {
-          console.log('📊 Modal carteira clientes enriched with KPI data:', enrichedClientes);
-          console.log('📊 CNPJ name map:', this.cnpjNameMap);
-          this.clientes = enrichedClientes;
+                              this.clientes = enrichedClientes;
           this.isLoading = false;
           this.cdr.markForCheck();
         },
         error: (err: Error) => {
-          console.error('Error loading carteira:', err);
-          this.isLoading = false;
+                    this.isLoading = false;
           this.cdr.markForCheck();
         }
       });
@@ -105,14 +98,12 @@ export class ModalCarteiraComponent implements OnInit, OnDestroy {
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (actions) => {
-          console.log('📊 Actions for CNPJ loaded:', actions);
-          this.selectedClienteActions = actions;
+                    this.selectedClienteActions = actions;
           this.isLoadingActions = false;
           this.cdr.markForCheck();
         },
         error: (err: Error) => {
-          console.error('Error loading actions for CNPJ:', err);
-          this.isLoadingActions = false;
+                    this.isLoadingActions = false;
           this.cdr.markForCheck();
         }
       });
@@ -153,3 +144,6 @@ export class ModalCarteiraComponent implements OnInit, OnDestroy {
     return displayName || cnpj;
   }
 }
+
+
+

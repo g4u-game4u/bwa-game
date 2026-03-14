@@ -23,8 +23,7 @@ export class FeaturesDemoComponent implements OnInit {
       await this.featuresService.initializeFeatures();
       this.features = this.featuresService.getFeatures();
     } catch (error) {
-      console.error('Erro ao carregar funcionalidades:', error);
-    } finally {
+          } finally {
       this.isLoading = false;
     }
   }

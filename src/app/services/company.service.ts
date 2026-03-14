@@ -27,7 +27,7 @@ export class CompanyService {
 
   /**
    * Get companies with optional filtering
-   * First gets player's companies from extra.companies, then fetches from cnpj_performance__c
+   * First gets player's companies from extra.cnpj_resp, then fetches from cnpj__c
    */
   getCompanies(playerId: string, filter?: { search?: string; minHealth?: number }): Observable<Company[]> {
     const cacheKey = `${playerId}_${JSON.stringify(filter || {})}`;
@@ -39,33 +39,27 @@ export class CompanyService {
     // Use PlayerService to get raw player data (shared cache), then fetch company data
     const request$ = this.playerService.getRawPlayerData(playerId).pipe(
       switchMap((playerResponse) => {
-        const companiesStr = playerResponse?.extra?.companies || '';
+        const companiesStr = playerResponse?.extra?.cnpj_resp || '';
         const companyIds = companiesStr.split(/[;,]/)
           .map((id: string) => id.trim())
           .filter((id: string) => id.length > 0)
           .map((id: string) => String(id));
         
-        console.log('📊 Player company IDs from extra.companies:', companyIds);
-        
         if (companyIds.length === 0) {
           return of([]);
         }
         
-        // Fetch company data from cnpj_performance__c using aggregate
+        // Fetch company data from cnpj__c using aggregate
         // Query format: [{"$match":{"_id":{"$in":["1218","9654","1456"]}}}]
         const aggregateBody = [
           { $match: { _id: { $in: companyIds } } }
         ];
         
-        console.log('📊 Company aggregate query:', JSON.stringify(aggregateBody));
-        
         return this.funifierApi.post<any[]>(
-          `/v3/database/cnpj_performance__c/aggregate?strict=true`,
+          `/v3/database/cnpj__c/aggregate?strict=true`,
           aggregateBody
         ).pipe(
           map((response) => {
-            console.log('📊 Companies from cnpj_performance__c:', response);
-            
             if (!response || !Array.isArray(response)) {
               return [];
             }
@@ -90,14 +84,12 @@ export class CompanyService {
             return companies;
           }),
           catchError((error) => {
-            console.error('Error fetching companies from cnpj_performance__c:', error);
-            return throwError(() => error);
+                        return throwError(() => error);
           })
         );
       }),
       catchError((error) => {
-        console.error('Error fetching player status:', error);
-        return throwError(() => error);
+                return throwError(() => error);
       }),
       shareReplay({ bufferSize: 1, refCount: true, windowTime: this.CACHE_DURATION })
     );
@@ -107,7 +99,7 @@ export class CompanyService {
   }
 
   /**
-   * Get company details from cnpj_performance__c database
+   * Get company details from cnpj__c database
    * companyId is the CNPJ
    */
   getCompanyDetails(companyId: string): Observable<CompanyDetails> {
@@ -123,7 +115,7 @@ export class CompanyService {
     ];
 
     const request$ = this.funifierApi.post<any[]>(
-      `/v3/database/cnpj_performance__c/aggregate?strict=true`,
+      `/v3/database/cnpj__c/aggregate?strict=true`,
       aggregateBody
     ).pipe(
       map(response => {
@@ -137,8 +129,7 @@ export class CompanyService {
         return this.mapper.toCompanyDetails(companyData);
       }),
       catchError(error => {
-        console.error('Error fetching company details:', error);
-        return throwError(() => error);
+                return throwError(() => error);
       }),
       shareReplay({ bufferSize: 1, refCount: true, windowTime: this.CACHE_DURATION })
     );
@@ -176,8 +167,7 @@ export class CompanyService {
         }
       }),
       catchError(error => {
-        console.error('Error fetching company processes:', error);
-        return throwError(() => error);
+                return throwError(() => error);
       })
     );
   }
@@ -228,3 +218,4 @@ export class CompanyService {
     });
   }
 }
+

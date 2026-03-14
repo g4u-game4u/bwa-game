@@ -60,8 +60,7 @@ export class AuthInterceptor implements HttpInterceptor {
             // Don't modify requests that already have Authorization header (e.g., Basic Auth for database)
             // Also explicitly skip database endpoints - they use Basic Auth set by the service
             if (request.headers.has('Authorization') || isDatabaseEndpoint) {
-                console.log('🔐 Interceptor: Passing through request with existing auth or database endpoint:', requestUrl);
-                return next.handle(request);
+                                return next.handle(request);
             }
             
             const token = this.sessao.token;
@@ -159,3 +158,6 @@ export class AuthInterceptor implements HttpInterceptor {
         ));
     }
 }
+
+
+

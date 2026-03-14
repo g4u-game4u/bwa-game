@@ -26,13 +26,10 @@ export class CnpjLookupService {
    */
   private fetchCnpjByEmpids(empids: number[]): Observable<Map<number, CnpjEntry>> {
     if (empids.length === 0) {
-      console.log('📊 fetchCnpjByEmpids: empty empid list');
-      return of(new Map<number, CnpjEntry>());
+            return of(new Map<number, CnpjEntry>());
     }
 
-    console.log('📊 Fetching CNPJ entries for empids:', empids.length, 'empids');
-
-    // Create headers with Basic Auth
+        // Create headers with Basic Auth
     const headers = new HttpHeaders({
       'Authorization': `Basic ${this.basicToken}`,
       'Content-Type': 'application/json'
@@ -50,10 +47,7 @@ export class CnpjLookupService {
     ];
 
     const aggregateUrl = `${this.apiUrl}/aggregate?strict=true`;
-    console.log('📊 Aggregate URL:', aggregateUrl);
-    console.log('📊 Aggregate body with', empids.length, 'empids');
-
-    // Use pagination for large requests (batch size of 100)
+            // Use pagination for large requests (batch size of 100)
     return this.fetchAllPaginatedCnpj(aggregateUrl, aggregateBody, headers, 100).pipe(
       tap(entries => {
         console.log('📊 CNPJ entries fetched (paginated):', entries.length);
@@ -66,14 +60,10 @@ export class CnpjLookupService {
           const numericId = typeof entry._id === 'string' ? parseInt(entry._id, 10) : entry._id;
           cnpjMap.set(numericId, { ...entry, _id: numericId });
         });
-        console.log('📊 Created map with', cnpjMap.size, 'entries');
-        return cnpjMap;
+                return cnpjMap;
       }),
       catchError(error => {
-        console.error('❌ Error fetching CNPJ entries:', error);
-        console.error('❌ Error status:', error.status);
-        console.error('❌ Error message:', error.message);
-        return of(new Map<number, CnpjEntry>());
+                                return of(new Map<number, CnpjEntry>());
       })
     );
   }
@@ -120,8 +110,7 @@ export class CnpjLookupService {
         }
       }),
       catchError(error => {
-        console.error(`❌ Error fetching CNPJ batch at index ${startIndex}:`, error);
-        // Return accumulated results so far on error
+                // Return accumulated results so far on error
         return of(accumulatedResults);
       })
     );
@@ -143,18 +132,14 @@ export class CnpjLookupService {
    */
   extractEmpid(cnpj: string): number | null {
     if (!cnpj) {
-      console.log('📊 extractEmpid: empty CNPJ');
-      return null;
+            return null;
     }
 
     const trimmed = cnpj.trim();
-    console.log('📊 extractEmpid: processing CNPJ:', trimmed);
-
-    // Check if it's a simple number (≤ 8 digits)
+        // Check if it's a simple number (≤ 8 digits)
     if (/^\d{1,8}$/.test(trimmed)) {
       const empid = parseInt(trimmed, 10);
-      console.log('📊 extractEmpid: simple number detected, empid =', empid);
-      return empid;
+            return empid;
     }
 
     // Try to extract empid from pattern [empid|...]
@@ -162,13 +147,11 @@ export class CnpjLookupService {
     const match = trimmed.match(/\[(\d+)\|/);
     if (match && match[1]) {
       const empid = parseInt(match[1], 10);
-      console.log('📊 extractEmpid: pattern match, empid =', empid);
-      return empid;
+            return empid;
     }
 
     // If no pattern found, return null
-    console.warn('📊 extractEmpid: Could not extract empid from CNPJ:', cnpj);
-    return null;
+        return null;
   }
 
   /**
@@ -176,25 +159,20 @@ export class CnpjLookupService {
    * Returns the empresa field from the database, or the original CNPJ if not found
    */
   getCompanyName(cnpj: string): Observable<string> {
-    console.log('📊 getCompanyName called with:', cnpj);
-    const empid = this.extractEmpid(cnpj);
+        const empid = this.extractEmpid(cnpj);
     
     if (empid === null) {
       // Could not extract empid, return original
-      console.log('📊 getCompanyName: no empid extracted, returning original');
-      return of(cnpj);
+            return of(cnpj);
     }
 
-    console.log('📊 getCompanyName: fetching database for empid:', empid);
-    return this.fetchCnpjByEmpids([empid]).pipe(
+        return this.fetchCnpjByEmpids([empid]).pipe(
       map(cnpjMap => {
         const entry = cnpjMap.get(empid);
         if (entry) {
-          console.log('📊 getCompanyName: FOUND -', empid, '→', entry.empresa);
-          return entry.empresa;
+                    return entry.empresa;
         }
-        console.warn('📊 getCompanyName: NOT FOUND - empid:', empid, '- returning original');
-        return cnpj;
+                return cnpj;
       })
     );
   }
@@ -205,21 +183,16 @@ export class CnpjLookupService {
    */
   enrichCnpjList(cnpjList: string[]): Observable<Map<string, string>> {
     if (cnpjList.length === 0) {
-      console.log('📊 enrichCnpjList: empty list provided');
-      return of(new Map<string, string>());
+            return of(new Map<string, string>());
     }
 
-    console.log('📊 enrichCnpjList: processing', cnpjList.length, 'CNPJs:', cnpjList);
-
-    // Extract all empids from the CNPJ list
+        // Extract all empids from the CNPJ list
     const empidMap = new Map<number, string[]>(); // empid → original CNPJs
     const cnpjToEmpid = new Map<string, number>(); // CNPJ → empid
 
     cnpjList.forEach(cnpj => {
       const empid = this.extractEmpid(cnpj);
-      console.log('📊 enrichCnpjList: processing CNPJ:', cnpj, '→ empid:', empid);
-      
-      if (empid !== null) {
+            if (empid !== null) {
         cnpjToEmpid.set(cnpj, empid);
         if (!empidMap.has(empid)) {
           empidMap.set(empid, []);
@@ -229,9 +202,7 @@ export class CnpjLookupService {
     });
 
     const uniqueEmpids = Array.from(empidMap.keys());
-    console.log('📊 enrichCnpjList: unique empids to fetch:', uniqueEmpids);
-
-    if (uniqueEmpids.length === 0) {
+        if (uniqueEmpids.length === 0) {
       // No valid empids extracted, return original CNPJs
       const result = new Map<string, string>();
       cnpjList.forEach(cnpj => result.set(cnpj, cnpj));
@@ -243,23 +214,18 @@ export class CnpjLookupService {
       map(cnpjMap => {
         const result = new Map<string, string>();
         
-        console.log('📊 enrichCnpjList: database returned', cnpjMap.size, 'entries');
-        
-        cnpjList.forEach(cnpj => {
+                cnpjList.forEach(cnpj => {
           const empid = cnpjToEmpid.get(cnpj);
           
           if (empid !== undefined) {
             const entry = cnpjMap.get(empid);
             if (entry) {
-              console.log('📊 enrichCnpjList: MATCH FOUND -', cnpj, '→', entry.empresa);
-              result.set(cnpj, entry.empresa);
+                            result.set(cnpj, entry.empresa);
             } else {
-              console.log('📊 enrichCnpjList: NO MATCH - empid', empid, 'not in database, using original');
-              result.set(cnpj, cnpj); // Fallback to original
+                            result.set(cnpj, cnpj); // Fallback to original
             }
           } else {
-            console.log('📊 enrichCnpjList: EXTRACTION FAILED - using original');
-            result.set(cnpj, cnpj); // Fallback to original
+                        result.set(cnpj, cnpj); // Fallback to original
           }
         });
 
@@ -277,3 +243,7 @@ export class CnpjLookupService {
     console.log('📊 clearCache: no cache to clear (using direct aggregate queries)');
   }
 }
+
+
+
+

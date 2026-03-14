@@ -75,11 +75,11 @@
           </div>
         </ng-template>
         
-        <!-- Meta Configuration Section -->
+        <!-- Meta Configuration Section (Requirements: 4.1, 4.7) -->
         <div class="sidebar-section meta-config-section" role="region" aria-labelledby="meta-config-section-title">
-          <h4 id="meta-config-section-title" class="selector-label">Configurar Meta de Clientes</h4>
+          <h4 id="meta-config-section-title" class="selector-label">Configurar Metas</h4>
           
-          <form class="meta-config-form" (ngSubmit)="saveClientesMeta()" #metaForm="ngForm">
+          <form class="meta-config-form" (ngSubmit)="saveGoals()" #metaForm="ngForm">
             <div class="form-group">
               <label for="meta-collaborator-select" class="form-label">Colaborador</label>
               <select 
@@ -95,26 +95,42 @@
               </select>
             </div>
             
+            <!-- CNPJ Goal Input (Requirement 4.2, 4.7) -->
             <div class="form-group">
-              <label for="meta-value-input" class="form-label">Meta de Clientes</label>
+              <label for="meta-cnpj-goal-input" class="form-label">Meta de Clientes</label>
               <input 
                 type="number"
-                id="meta-value-input"
+                id="meta-cnpj-goal-input"
                 class="form-control"
-                [(ngModel)]="metaConfig.targetValue"
-                name="targetValue"
+                [(ngModel)]="metaConfig.cnpjGoalValue"
+                name="cnpjGoalValue"
                 min="0"
                 step="1"
-                placeholder="Ex: 10"
-                required>
-              <small class="form-text text-muted">Número de clientes na carteira</small>
+                placeholder="Ex: 10">
+              <small class="form-text text-muted">Número de clientes na carteira (inteiro ≥ 0)</small>
+            </div>
+            
+            <!-- Entrega Goal Input (Requirement 4.3, 4.7) -->
+            <div class="form-group">
+              <label for="meta-entrega-goal-input" class="form-label">Meta de Entregas no Prazo (%)</label>
+              <input 
+                type="number"
+                id="meta-entrega-goal-input"
+                class="form-control"
+                [(ngModel)]="metaConfig.entregaGoalValue"
+                name="entregaGoalValue"
+                min="0"
+                max="100"
+                step="1"
+                placeholder="Ex: 90">
+              <small class="form-text text-muted">Percentual de entregas no prazo (0-100)</small>
             </div>
             
             <div class="form-actions">
               <button 
                 type="submit"
                 class="btn btn-primary"
-                [disabled]="!metaForm.valid || isSavingMeta">
+                [disabled]="(metaConfig.cnpjGoalValue === null && metaConfig.entregaGoalValue === null) || isSavingMeta">
                 <i class="ri-save-line" *ngIf="!isSavingMeta" aria-hidden="true"></i>
                 <i class="ri-loader-4-line spinning" *ngIf="isSavingMeta" aria-hidden="true"></i>
                 <span>{{ isSavingMeta ? 'Salvando...' : 'Salvar' }}</span>
@@ -357,7 +373,6 @@
                       </div>
                       <span *ngIf="!cliente.deliveryKpi" class="kpi-na">N/A</span>
                       <span class="carteira-action-count">{{ cliente.actionCount }} tarefas</span>
-                      <span class="carteira-process-count">{{ cliente.processCount }} processos</span>
                     </div>
                   </div>
                 </div>
@@ -508,6 +523,7 @@
     *ngIf="isCompanyCarteiraDetailModalOpen && selectedCarteiraCompany"
     [company]="selectedCarteiraCompany"
     [month]="selectedMonth"
+    [entregaGoal]="90"
     (closed)="onCompanyCarteiraDetailModalClosed()">
   </modal-company-carteira-detail>
   

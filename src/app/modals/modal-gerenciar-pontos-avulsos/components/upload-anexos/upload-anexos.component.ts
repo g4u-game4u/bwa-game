@@ -70,23 +70,19 @@ export class UploadAnexosComponent implements OnInit {
       const file = files[i];
       
       if (this.arquivosSelecionados.length >= this.maxArquivos) {
-        console.warn('Limite máximo de arquivos atingido');
-        break;
+                break;
       }
 
       if (this.arquivosSelecionados.some(f => f.name === file.name && f.size === file.size)) {
-        console.warn('Arquivo já selecionado:', file.name);
-        continue;
+                continue;
       }
 
       if (file.size > this.maxTamanhoArquivo) {
-        console.warn('Arquivo muito grande:', file.name);
-        continue;
+                continue;
       }
 
       if (!this.isTipoArquivoValido(file)) {
-        console.warn('Tipo de arquivo não suportado:', file.name);
-        continue;
+                continue;
       }
 
       this.arquivosSelecionados.push(file);
@@ -105,17 +101,14 @@ export class UploadAnexosComponent implements OnInit {
 
   async fazerUpload(): Promise<void> {
     if (!this.userActionId || this.arquivosSelecionados.length === 0) {
-      console.log('ℹ️ Nenhum arquivo para upload ou ID não fornecido');
-      return;
+            return;
     }
 
     this.fazendoUpload = true;
     this.progressoUpload = 0;
 
     try {
-      console.log('📎 Iniciando upload de anexos:', this.arquivosSelecionados.length);
-      
-      // Simular progresso (em uma implementação real, você usaria um Observable)
+            // Simular progresso (em uma implementação real, você usaria um Observable)
       const interval = setInterval(() => {
         this.progressoUpload += 10;
         if (this.progressoUpload >= 90) {
@@ -132,9 +125,7 @@ export class UploadAnexosComponent implements OnInit {
       clearInterval(interval);
       this.progressoUpload = 100;
 
-      console.log('✅ Upload de anexos concluído');
-      
-      // Recarregar anexos após upload
+            // Recarregar anexos após upload
       await this.carregarAnexos();
       
       // Limpar arquivos selecionados
@@ -144,8 +135,7 @@ export class UploadAnexosComponent implements OnInit {
       this.uploadConcluido.emit();
       
     } catch (error: any) {
-      console.error('❌ Erro ao fazer upload de anexos:', error);
-    } finally {
+          } finally {
       this.fazendoUpload = false;
       this.progressoUpload = 0;
     }
@@ -155,8 +145,7 @@ export class UploadAnexosComponent implements OnInit {
 
   async fazerDownloadAnexo(anexo: Anexo): Promise<void> {
     if (!anexo?.id) {
-      console.error('❌ ID do anexo não fornecido');
-      return;
+            return;
     }
 
     if (this.downloadingAnexos.has(anexo.id)) {
@@ -167,19 +156,14 @@ export class UploadAnexosComponent implements OnInit {
     this.downloadIniciado.emit(anexo.id);
 
     try {
-      console.log('📥 Iniciando download:', anexo.original_name || anexo.filename);
-      
-      // Aqui você faria a chamada real para o serviço
+            // Aqui você faria a chamada real para o serviço
       // const downloadUrl = await this.pontosAvulsosService.getDownloadUrl(anexo.id);
       
       // Simular delay do download
       await new Promise(resolve => setTimeout(resolve, 1000));
       
-      console.log('✅ Download concluído:', anexo.original_name || anexo.filename);
-      
-    } catch (error: any) {
-      console.error('❌ Erro ao fazer download:', error);
-    } finally {
+          } catch (error: any) {
+          } finally {
       this.downloadingAnexos.delete(anexo.id);
     }
   }
@@ -189,9 +173,7 @@ export class UploadAnexosComponent implements OnInit {
   private async carregarAnexos(): Promise<void> {
     try {
       this.loadingAnexos = true;
-      console.log('📎 Carregando anexos para atividade:', this.userActionId);
-      
-      // Aqui você faria a chamada real para o serviço
+            // Aqui você faria a chamada real para o serviço
       // const response = await this.pontosAvulsosService.buscarAnexos(this.userActionId);
       
       // Simular dados de anexos
@@ -214,11 +196,8 @@ export class UploadAnexosComponent implements OnInit {
         }
       ];
       
-      console.log('✅ Anexos carregados:', this.anexosExistentes.length);
-      
-    } catch (error) {
-      console.error('❌ Erro ao carregar anexos:', error);
-      this.anexosExistentes = [];
+          } catch (error) {
+            this.anexosExistentes = [];
     } finally {
       this.loadingAnexos = false;
     }

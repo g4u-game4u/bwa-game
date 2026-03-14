@@ -10,6 +10,15 @@ export interface PlayerStatus {
   metadata: PlayerMetadata;
   created: number;
   updated: number;
+  extra?: PlayerExtra;
+}
+
+export interface PlayerExtra {
+  entrega_goal?: number;
+  cnpj_goal?: number;
+  cnpj_resp?: string;
+  entrega?: string;
+  [key: string]: any;
 }
 
 export interface PlayerMetadata {

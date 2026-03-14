@@ -71,11 +71,8 @@ export class C4uDashboardNavigationComponent implements OnInit {
     
     // Log profile for debugging
     if (usuario && usuario.teams && Array.isArray(usuario.teams)) {
-      console.log('👤 User logged in - Profile:', profile);
-      console.log('👤 User logged in - Team IDs:', usuario.teams);
-    } else {
-      console.log('👤 User logged in - No teams found, Profile:', profile);
-    }
+                } else {
+          }
     
     // Check if user can access team management (not JOGADOR)
     this.hasGestaoRole = this.userProfileService.canAccessTeamManagement();
@@ -141,8 +138,7 @@ export class C4uDashboardNavigationComponent implements OnInit {
     try {
       sessionStorage.setItem(this.LAST_DASHBOARD_KEY, route);
     } catch (error) {
-      console.warn('Failed to save last visited dashboard:', error);
-    }
+          }
   }
   
   /**
@@ -163,8 +159,7 @@ export class C4uDashboardNavigationComponent implements OnInit {
         }
       }
     } catch (error) {
-      console.warn('Failed to restore last visited dashboard:', error);
-    }
+          }
   }
   
   /**
@@ -181,3 +176,4 @@ export class C4uDashboardNavigationComponent implements OnInit {
     return this.currentDashboard?.label || 'Painel';
   }
 }
+

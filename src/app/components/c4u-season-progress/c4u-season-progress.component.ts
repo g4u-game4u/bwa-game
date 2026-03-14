@@ -19,10 +19,12 @@ export class C4uSeasonProgressComponent {
   
   @Input() processosFinalizados?: number;
 
-  formatDate(date: Date): string {
-    const day = date.getDate();
-    const month = date.getMonth() + 1;
-    const year = date.getFullYear().toString().slice(-2);
+  formatDate(date: Date | string): string {
+    // Ensure we have a Date object
+    const dateObj = date instanceof Date ? date : new Date(date);
+    const day = dateObj.getDate().toString().padStart(2, '0');
+    const month = (dateObj.getMonth() + 1).toString().padStart(2, '0');
+    const year = dateObj.getFullYear().toString().slice(-2);
     return `${day}/${month}/${year}`;
   }
 

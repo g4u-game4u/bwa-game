@@ -48,8 +48,7 @@ export class DadosMesAtualComponent implements OnChanges {
     try {
       this.aliases = await this.aliasService.getAliases();
     } catch (error) {
-      console.error('Erro ao carregar aliases:', error);
-    }
+          }
   }
 
   get actionAlias(): string {
@@ -94,8 +93,7 @@ export class DadosMesAtualComponent implements OnChanges {
 
               return results;
             } catch (error) {
-              console.error('Error fetching data:', error);
-              return []
+                            return []
             }
           }
         },
@@ -157,8 +155,7 @@ export class DadosMesAtualComponent implements OnChanges {
 
               return results;
             } catch (error) {
-              console.error('Error fetching data:', error);
-              return []
+                            return []
             }
           }
         },
@@ -170,66 +167,6 @@ export class DadosMesAtualComponent implements OnChanges {
         icon: 'icon-auto_awesome',
         extras: {
           showModal: false,
-        },
-      },
-    ];
-
-    this.processInfo = [
-      {
-        value: this.dadosMesAtual?.pendingDeliveries || 0,
-        text: translate('LABEL_PENDING', {deliveryAlias: this.deliveryAlias}),
-        toolTip: translate('HINT_PENDING_MACRO_QUESTS', {deliveryAlias: this.deliveryAlias, actionAlias: this.actionAlias}),
-        icon: 'icon-notifications_paused',
-        action: () => {
-          this.abreModal(1, 0);
-        },
-        extras: {
-          showModal: true,
-          textoItem: {
-            label: 'LABEL_PROCESS_PENDING_SINCE',
-            param: 'dataUltimaAtribuicao',
-          },
-          dataApi: async (page: number, pageSize: number) => {
-            return this.mesAtualService.getGameDeliveries('PENDING', page, pageSize, this.idUsuario, this.tipoConsulta);
-          }
-        },
-      },
-      {
-        value: this.dadosMesAtual?.incompleteDeliveries || 0,
-        text: translate('LABEL_PROCESS_INCOMPLETE', {deliveryAlias: this.deliveryAlias}),
-        toolTip: translate('HINT_INCOMPLETE_MACRO_QUESTS', {deliveryAlias: this.deliveryAlias, actionAlias: this.actionAlias}),
-        icon: 'icon-rule',
-        action: () => {
-          this.abreModal(1, 1);
-        },
-        extras: {
-          showModal: true,
-          textoItem: {
-            label: 'LABEL_PROCESS_INCOMPLETE_SINCE',
-            param: 'dataUltimaFinalizacao',
-          },
-          dataApi: async (page: number, pageSize: number) => {
-            return this.mesAtualService.getGameDeliveries('INCOMPLETE', page, pageSize, this.idUsuario, this.tipoConsulta);
-          }
-        },
-      },
-      {
-        value: this.dadosMesAtual?.completedDeliveries || 0,
-        text: translate('LABEL_FINISHED', {deliveryAlias: this.deliveryAlias}),
-        toolTip: translate('HINT_FINISHED_MACRO_QUESTS', {deliveryAlias: this.deliveryAlias}),
-        icon: 'icon-new_releases',
-        action: () => {
-          this.abreModal(1, 2);
-        },
-        extras: {
-          showModal: true,
-          textoItem: {
-            label: 'LABEL_PROCESS_COMPLETED_SINCE',
-            param: 'dataUltimaFinalizacao',
-          },
-          dataApi: async (page: number, pageSize: number) => {
-            return this.mesAtualService.getGameDeliveries('DELIVERED', page, pageSize, this.idUsuario, this.tipoConsulta);
-          }
         },
       },
     ];
@@ -246,10 +183,6 @@ export class DadosMesAtualComponent implements OnChanges {
           translate('LABEL_QUESTS', {actionAlias: this.actionAlias}),
           this.questInfo
         ),
-        this.modalDetailsPainelInfo.infoToTypes(
-          translate('LABEL_PROCESSES_QUESTS', {deliveryAlias: this.deliveryAlias}),
-          this.processInfo
-        ),
       ],
     };
     this.modalDetailsPainelInfo.abreModal(dataModal);
@@ -263,3 +196,4 @@ export class DadosMesAtualComponent implements OnChanges {
     this.defineDadosMesAtual();
   }
 }
+

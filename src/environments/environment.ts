@@ -22,5 +22,5 @@ export const environment = {
   enableAnalytics: false,
 
   // Modo manutenção: bloqueia login e redireciona usuários logados para página de manutenção
-  maintenanceMode: true
+  maintenanceMode: false
 };

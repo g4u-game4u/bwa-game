@@ -32,8 +32,7 @@ export class C4uCollaboratorSelectorComponent implements OnChanges, AfterViewChe
         if (!exists && this.selectedCollaborator) {
           // Não resetar aqui, apenas marcar para atualização
           // O componente pai vai lidar com a validação
-          console.warn('Selected collaborator not in new list, but keeping selection for parent to handle');
-        }
+                  }
       }
       
       // Marcar que precisa atualizar o select se o valor mudou
@@ -55,8 +54,7 @@ export class C4uCollaboratorSelectorComponent implements OnChanges, AfterViewChe
       // Só atualizar se o valor estiver diferente
       if (select.value !== expectedValue) {
         select.value = expectedValue;
-        console.log('🔄 Forced select update to:', expectedValue);
-      }
+              }
       
       this.needsUpdate = false;
     }
@@ -90,3 +88,4 @@ export class C4uCollaboratorSelectorComponent implements OnChanges, AfterViewChe
     this.cdr.markForCheck();
   }
 }
+

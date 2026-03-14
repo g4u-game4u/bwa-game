@@ -39,8 +39,7 @@ export class HelpTextsService {
       this.helpTexts$ = this.http.get<HelpTexts>('assets/help-texts.json').pipe(
         catchError(() => {
           // Fallback to default texts if JSON file is not found
-          console.warn('Help texts JSON not found, using default texts');
-          return of(this.defaultTexts);
+                    return of(this.defaultTexts);
         }),
         shareReplay(1) // Cache and share the result
       );
@@ -65,4 +64,5 @@ export class HelpTextsService {
     this.helpTexts$ = null;
   }
 }
+
 
