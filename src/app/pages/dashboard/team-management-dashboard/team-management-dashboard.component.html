@@ -163,11 +163,7 @@
       <div class="sidebar-compact" *ngIf="sidebarCollapsed">
         <!-- Point Wallet Compact -->
         <div class="compact-item" *ngIf="teamPointWallet">
-          <i class="ri-lock-fill compact-icon bloqueados"></i>
-          <span class="compact-value">{{ teamPointWallet.bloqueados | number:'1.0-0':'pt-BR' }}</span>
-        </div>
-        <div class="compact-item" *ngIf="teamPointWallet">
-          <i class="ri-lock-unlock-fill compact-icon desbloqueados"></i>
+          <i class="ri-star-fill compact-icon desbloqueados"></i>
           <span class="compact-value">{{ teamPointWallet.desbloqueados | number:'1.0-0':'pt-BR' }}</span>
         </div>
         
@@ -214,6 +210,15 @@
     <!-- Header -->
     <div class="dashboard-header" role="banner">
       <c4u-dashboard-navigation></c4u-dashboard-navigation>
+      <!-- Return to Supervisor Dashboard button (only for SUPERVISOR) -->
+      <button
+        *ngIf="isSupervisorUser"
+        class="btn-return-supervisor"
+        (click)="navigateToSupervisorDashboard()"
+        aria-label="Voltar ao Dashboard Supervisor">
+        <i class="ri-arrow-left-line" aria-hidden="true"></i>
+        <span>Voltar ao Dashboard Supervisor</span>
+      </button>
       <div class="header-spacer"></div>
       <c4u-seletor-mes 
         [playerId]="getTeamPlayerIdForMonthSelector()" 

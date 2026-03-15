@@ -32,6 +32,11 @@ export class C4uDashboardNavigationComponent implements OnInit {
       route: '/dashboard/team-management',
       icon: 'ri-team-line',
       requiresRole: ROLES_LIST.ACCESS_TEAM_MANAGEMENT
+    },
+    {
+      label: 'Dashboard de Equipe',
+      route: '/dashboard/supervisor-tecnico',
+      icon: 'ri-group-line'
     }
   ];
   
@@ -80,22 +85,29 @@ export class C4uDashboardNavigationComponent implements OnInit {
   
   /**
    * Filter dashboards based on user role
-   * - "Meu Painel" is only available for JOGADOR profile
+   * - "Meu Painel" is available for JOGADOR and SUPERVISOR_TECNICO profiles
    * - "Gestão de Equipe" is only available for management profiles (SUPERVISOR, GESTOR, DIRETOR)
+   * - "Dashboard de Equipe" is only available for SUPERVISOR_TECNICO
    */
   private filterAvailableDashboards(): void {
     const userProfile = this.userProfileService.getCurrentUserProfile();
     const isJogador = this.userProfileService.isJogador();
+    const isSupervisorTecnico = this.userProfileService.isSupervisorTecnico();
     
     this.availableDashboards = this.dashboards.filter(dashboard => {
-      // "Meu Painel" should only be shown to JOGADOR
+      // "Meu Painel" should be shown to JOGADOR and SUPERVISOR_TECNICO
       if (dashboard.route === '/dashboard' && dashboard.label === 'Meu Painel') {
-        return isJogador;
+        return isJogador || isSupervisorTecnico;
+      }
+      
+      // "Dashboard de Equipe" should only be shown to SUPERVISOR_TECNICO
+      if (dashboard.route === '/dashboard/supervisor-tecnico') {
+        return isSupervisorTecnico;
       }
       
       // Dashboards with role requirement (e.g., "Gestão de Equipe")
       if (dashboard.requiresRole) {
-        return this.hasGestaoRole;
+        return this.hasGestaoRole && !isSupervisorTecnico;
       }
       
       // Other dashboards without specific requirements

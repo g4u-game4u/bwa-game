@@ -48,25 +48,25 @@ function playerExtraWithCnpjGoal(): fc.Arbitrary<{
       extra: { cnpj_goal: String(goal), cnpj_resp: '12345,67890' },
       expectedTarget: goal
     })),
-    // Case 4: cnpj_goal is null - should default to 10
+    // Case 4: cnpj_goal is null - should default to 100
     fc.constant({
       extra: { cnpj_goal: null, cnpj_resp: '12345' },
-      expectedTarget: 10
+      expectedTarget: 100
     }),
-    // Case 5: cnpj_goal is undefined - should default to 10
+    // Case 5: cnpj_goal is undefined - should default to 100
     fc.constant({
       extra: { cnpj_goal: undefined, cnpj_resp: '12345' },
-      expectedTarget: 10
+      expectedTarget: 100
     }),
-    // Case 6: extra object exists but cnpj_goal field is missing - should default to 10
+    // Case 6: extra object exists but cnpj_goal field is missing - should default to 100
     fc.constant({
       extra: { cnpj_resp: '12345,67890,11111' },
-      expectedTarget: 10
+      expectedTarget: 100
     }),
-    // Case 7: extra is null - should default to 10
+    // Case 7: extra is null - should default to 100
     fc.constant({
       extra: null,
-      expectedTarget: 10
+      expectedTarget: 100
     }),
     // Case 8: extra is undefined - should default to 10
     fc.constant({

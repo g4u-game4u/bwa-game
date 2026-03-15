@@ -3,6 +3,7 @@ import { registerLocaleData } from '@angular/common';
 import localePt from '@angular/common/locales/pt';
 import { C4uPointWalletComponent } from './c4u-point-wallet.component';
 import { PointWallet } from '@model/gamification-dashboard.model';
+import { C4uInfoButtonModule } from '../c4u-info-button/c4u-info-button.module';
 
 registerLocaleData(localePt, 'pt-BR');
 
@@ -12,7 +13,8 @@ describe('C4uPointWalletComponent', () => {
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      declarations: [C4uPointWalletComponent]
+      declarations: [C4uPointWalletComponent],
+      imports: [C4uInfoButtonModule]
     }).compileComponents();
 
     fixture = TestBed.createComponent(C4uPointWalletComponent);
@@ -23,7 +25,7 @@ describe('C4uPointWalletComponent', () => {
     expect(component).toBeTruthy();
   });
 
-  it('should display all three point categories', () => {
+  it('should display only Pontos and Moedas rows (no Bloqueados)', () => {
     component.points = {
       bloqueados: 1000,
       desbloqueados: 2500,
@@ -32,28 +34,26 @@ describe('C4uPointWalletComponent', () => {
     fixture.detectChanges();
 
     const compiled = fixture.nativeElement as HTMLElement;
-    const categories = compiled.querySelectorAll('.point-category');
-    expect(categories.length).toBe(3);
+    const rows = compiled.querySelectorAll('.point-row');
+    // Should have 2 rows: Pontos (desbloqueados) and Moedas — no Bloqueados row
+    expect(rows.length).toBe(2);
   });
 
-  it('should display bloqueados points correctly', () => {
+  it('should not display bloqueados label anywhere', () => {
     component.points = {
       bloqueados: 1234,
-      desbloqueados: 0,
-      moedas: 0
+      desbloqueados: 5678,
+      moedas: 999
     };
     fixture.detectChanges();
 
     const compiled = fixture.nativeElement as HTMLElement;
-    const categoryValues = compiled.querySelectorAll('.category-value');
-    const bloqueadosValue = categoryValues[0]?.textContent?.trim();
-    
-    // The number pipe formats with locale, so we check for the number
-    expect(bloqueadosValue).toContain('1');
-    expect(bloqueadosValue).toContain('234');
+    const labels = compiled.querySelectorAll('.label');
+    const labelTexts = Array.from(labels).map(l => l.textContent?.trim());
+    expect(labelTexts).not.toContain('Bloqueados');
   });
 
-  it('should display desbloqueados points correctly', () => {
+  it('should display desbloqueados as "Pontos"', () => {
     component.points = {
       bloqueados: 0,
       desbloqueados: 5678,
@@ -62,14 +62,11 @@ describe('C4uPointWalletComponent', () => {
     fixture.detectChanges();
 
     const compiled = fixture.nativeElement as HTMLElement;
-    const categoryValues = compiled.querySelectorAll('.category-value');
-    const desbloqueadosValue = categoryValues[1]?.textContent?.trim();
-    
-    expect(desbloqueadosValue).toContain('5');
-    expect(desbloqueadosValue).toContain('678');
+    const labels = compiled.querySelectorAll('.label');
+    expect(labels[0]?.textContent?.trim()).toBe('Pontos');
   });
 
-  it('should display moedas points correctly', () => {
+  it('should display moedas correctly', () => {
     component.points = {
       bloqueados: 0,
       desbloqueados: 0,
@@ -78,37 +75,8 @@ describe('C4uPointWalletComponent', () => {
     fixture.detectChanges();
 
     const compiled = fixture.nativeElement as HTMLElement;
-    const categoryValues = compiled.querySelectorAll('.category-value');
-    const moedasValue = categoryValues[2]?.textContent?.trim();
-    
-    expect(moedasValue).toBe('999');
-  });
-
-  it('should display zero values correctly', () => {
-    component.points = {
-      bloqueados: 0,
-      desbloqueados: 0,
-      moedas: 0
-    };
-    fixture.detectChanges();
-
-    const compiled = fixture.nativeElement as HTMLElement;
-    const categoryValues = compiled.querySelectorAll('.category-value');
-    
-    expect(categoryValues[0]?.textContent?.trim()).toBe('0');
-    expect(categoryValues[1]?.textContent?.trim()).toBe('0');
-    expect(categoryValues[2]?.textContent?.trim()).toBe('0');
-  });
-
-  it('should display category labels correctly', () => {
-    fixture.detectChanges();
-
-    const compiled = fixture.nativeElement as HTMLElement;
-    const categoryLabels = compiled.querySelectorAll('.category-label');
-    
-    expect(categoryLabels[0]?.textContent?.trim()).toBe('Bloqueados');
-    expect(categoryLabels[1]?.textContent?.trim()).toBe('Desbloqueados');
-    expect(categoryLabels[2]?.textContent?.trim()).toBe('Moedas');
+    const labels = compiled.querySelectorAll('.label');
+    expect(labels[1]?.textContent?.trim()).toBe('Moedas');
   });
 
   it('should display wallet title', () => {
@@ -119,31 +87,33 @@ describe('C4uPointWalletComponent', () => {
     expect(title?.textContent?.trim()).toBe('Carteira de Pontos');
   });
 
-  it('should handle large point values', () => {
+  it('should show mediaPontos row when provided', () => {
     component.points = {
-      bloqueados: 1000000,
-      desbloqueados: 999999,
-      moedas: 500000
+      bloqueados: 0,
+      desbloqueados: 100,
+      moedas: 50
+    };
+    component.mediaPontos = 75;
+    fixture.detectChanges();
+
+    const compiled = fixture.nativeElement as HTMLElement;
+    const rows = compiled.querySelectorAll('.point-row');
+    // 3 rows: Pontos, Moedas, Média de Pontos
+    expect(rows.length).toBe(3);
+    const labels = compiled.querySelectorAll('.label');
+    expect(labels[2]?.textContent?.trim()).toBe('Média de Pontos');
+  });
+
+  it('should not show mediaPontos row when not provided', () => {
+    component.points = {
+      bloqueados: 0,
+      desbloqueados: 100,
+      moedas: 50
     };
     fixture.detectChanges();
 
     const compiled = fixture.nativeElement as HTMLElement;
-    const categoryValues = compiled.querySelectorAll('.category-value');
-    
-    // Check that values are rendered (formatting may vary)
-    expect(categoryValues[0]?.textContent).toBeTruthy();
-    expect(categoryValues[1]?.textContent).toBeTruthy();
-    expect(categoryValues[2]?.textContent).toBeTruthy();
-  });
-
-  it('should have correct icon classes for each category', () => {
-    fixture.detectChanges();
-
-    const compiled = fixture.nativeElement as HTMLElement;
-    const icons = compiled.querySelectorAll('.category-icon');
-    
-    expect(icons[0]?.classList.contains('bloqueados')).toBe(true);
-    expect(icons[1]?.classList.contains('desbloqueados')).toBe(true);
-    expect(icons[2]?.classList.contains('moedas')).toBe(true);
+    const rows = compiled.querySelectorAll('.point-row');
+    expect(rows.length).toBe(2);
   });
 });

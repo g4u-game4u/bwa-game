@@ -1507,17 +1507,17 @@ describe('TeamManagementDashboardComponent - Property 5: Goal Form Validation', 
   const negativeCnpjGoalArb = fc.integer({ min: -10000, max: -1 });
   
   // Invalid cnpj_goal: floats with decimal parts
-  const floatCnpjGoalArb = fc.float({ min: 0.01, max: 1000, noNaN: true })
+  const floatCnpjGoalArb = fc.float({ min: Math.fround(0.01), max: Math.fround(1000), noNaN: true })
     .filter(n => !Number.isInteger(n));
   
   // Valid entrega_goal: numbers between 0 and 100
   const validEntregaGoalArb = fc.integer({ min: 0, max: 100 });
   
   // Invalid entrega_goal: numbers below 0
-  const belowRangeEntregaGoalArb = fc.float({ min: -1000, max: -0.01, noNaN: true });
+  const belowRangeEntregaGoalArb = fc.float({ min: Math.fround(-1000), max: Math.fround(-0.01), noNaN: true });
   
   // Invalid entrega_goal: numbers above 100
-  const aboveRangeEntregaGoalArb = fc.float({ min: 100.01, max: 10000, noNaN: true });
+  const aboveRangeEntregaGoalArb = fc.float({ min: Math.fround(100.01), max: Math.fround(10000), noNaN: true });
   
   // Player ID arbitrary
   const playerIdArb = fc.emailAddress();

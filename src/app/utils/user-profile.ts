@@ -1,8 +1,9 @@
 /**
  * User Profile Types
  * 
- * Defines the 4 user profile types and their access levels:
+ * Defines the 5 user profile types and their access levels:
  * - JOGADOR: Can only see their own dashboard
+ * - SUPERVISOR_TECNICO: Main view is player dashboard, secondary read-only management dashboard
  * - SUPERVISOR: Can see team-management dashboard, but only their own team
  * - GESTOR: Can see team-management dashboard, can see multiple teams in their management
  * - DIRETOR: Can see team-management dashboard, has admin view and can see all teams
@@ -10,9 +11,11 @@
 export enum UserProfile {
   JOGADOR = 'JOGADOR',
   SUPERVISOR = 'SUPERVISOR',
+  SUPERVISOR_TECNICO = 'SUPERVISOR_TECNICO',
   GESTOR = 'GESTOR',
   DIRETOR = 'DIRETOR'
 }
+
 
 /**
  * Team IDs that correspond to management roles
@@ -20,17 +23,19 @@ export enum UserProfile {
 export const MANAGEMENT_TEAM_IDS = {
   GESTAO: 'FkmdnFU',
   SUPERVISAO: 'Fkmdmko',
-  DIRECAO: 'FkmdhZ9'
+  DIRECAO: 'FkmdhZ9',
+  SUPERVISAO_TECNICA: 'Fn2lrg3'
 } as const;
 
 /**
  * Determine user profile based on team membership
  * 
  * Priority order (highest to lowest):
- * 1. DIRETOR - Has DIREÃ‡ÃƒO team (FkmdhZ9)
+ * 1. DIRETOR - Has DIRECAO team (FkmdhZ9)
  * 2. GESTOR - Has GESTAO team (FkmdnFU)
- * 3. SUPERVISOR - Has SUPERVISÃƒO team (Fkmdmko)
- * 4. JOGADOR - No management teams
+ * 3. SUPERVISOR - Has SUPERVISAO team (Fkmdmko)
+ * 4. SUPERVISOR_TECNICO - Has SUPERVISAO TECNICA team (Fn2lrg3)
+ * 5. JOGADOR - No management teams
  * 
  * @param teams - User's teams array (can be strings or objects with _id)
  * @returns UserProfile enum value
@@ -61,6 +66,10 @@ export function determineUserProfile(teams: any[] | undefined | null): UserProfi
   
   if (teamIds.includes(MANAGEMENT_TEAM_IDS.SUPERVISAO)) {
     return UserProfile.SUPERVISOR;
+  }
+
+  if (teamIds.includes(MANAGEMENT_TEAM_IDS.SUPERVISAO_TECNICA)) {
+    return UserProfile.SUPERVISOR_TECNICO;
   }
 
   return UserProfile.JOGADOR;
@@ -100,6 +109,11 @@ export function getUserOwnTeamId(teams: any[] | undefined | null, profile: UserP
   // For GESTOR, return their GESTAO team
   if (profile === UserProfile.GESTOR) {
     return teamIds.find(id => id === MANAGEMENT_TEAM_IDS.GESTAO) || null;
+  }
+
+  // For SUPERVISOR_TECNICO, return their SUPERVISAO_TECNICA team
+  if (profile === UserProfile.SUPERVISOR_TECNICO) {
+    return teamIds.find(id => id === MANAGEMENT_TEAM_IDS.SUPERVISAO_TECNICA) || null;
   }
 
   return null;
@@ -147,6 +161,13 @@ export function getAccessibleTeamIds(teams: any[] | undefined | null, profile: U
     // Gestor can see ALL their teams EXCEPT the GESTAO team itself
     // They have multiple teams: GESTAO team + all teams they manage
     const managedTeams = teamIds.filter(id => id !== MANAGEMENT_TEAM_IDS.GESTAO);
+    return managedTeams;
+  }
+
+  if (profile === UserProfile.SUPERVISOR_TECNICO) {
+    // Supervisor Técnico can see ALL their teams EXCEPT the SUPERVISAO_TECNICA role team
+    // Same logic as GESTOR — filter out the role team
+    const managedTeams = teamIds.filter(id => id !== MANAGEMENT_TEAM_IDS.SUPERVISAO_TECNICA);
     return managedTeams;
   }
 

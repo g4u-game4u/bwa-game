@@ -293,7 +293,7 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
       // Assert
       const expectedMonth = new Date();
       expectedMonth.setMonth(expectedMonth.getMonth() - monthsAgo);
-      expect(component.selectedMonth.getMonth()).toEqual(expectedMonth.getMonth());
+      expect(component.selectedMonth!.getMonth()).toEqual(expectedMonth.getMonth());
       expect(playerService.getPlayerStatus).toHaveBeenCalled();
       expect(companyService.getCompanies).toHaveBeenCalled();
       expect(kpiService.getPlayerKPIs).toHaveBeenCalled();
@@ -316,7 +316,7 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
       // Assert
       const expectedMonth = new Date();
       expectedMonth.setMonth(expectedMonth.getMonth() - monthsAgo);
-      expect(component.selectedMonth.getMonth()).toEqual(expectedMonth.getMonth());
+      expect(component.selectedMonth!.getMonth()).toEqual(expectedMonth.getMonth());
     }));
   });
 
