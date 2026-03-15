@@ -518,7 +518,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
    * Update metas count based on player goals from player.extra
    * Metas = count of achieved goals (0, 1, or 2):
    *   - +1 if entrega >= entrega_goal (fallback: 90)
-   *   - +1 if cnpj_resp count >= cnpj_goal (fallback: 10)
+   *   - +1 if cnpj_resp count >= cnpj_goal (fallback: 100)
    * Always shows X/2 (duas metas fixas)
    */
   private updateMetasFromPlayerGoals(): void {

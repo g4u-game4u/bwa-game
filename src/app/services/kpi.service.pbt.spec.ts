@@ -9,11 +9,11 @@ import * as fc from 'fast-check';
  * the "Clientes na Carteira" KPI target.
  * 
  * @param cnpjGoal - The value from player.extra.cnpj_goal
- * @returns The target value (defaults to 10 if null/undefined)
+ * @returns The target value (defaults to 100 if null/undefined)
  */
 function extractCnpjGoalTarget(cnpjGoal: number | string | null | undefined): number {
   if (cnpjGoal === undefined || cnpjGoal === null) {
-    return 10; // Default target
+    return 100; // Default target
   }
   
   if (typeof cnpjGoal === 'number') {
@@ -68,10 +68,10 @@ function playerExtraWithCnpjGoal(): fc.Arbitrary<{
       extra: null,
       expectedTarget: 100
     }),
-    // Case 8: extra is undefined - should default to 10
+    // Case 8: extra is undefined - should default to 100
     fc.constant({
       extra: undefined,
-      expectedTarget: 10
+      expectedTarget: 100
     })
   );
 }
@@ -113,14 +113,14 @@ describe('Property 6: Dynamic cnpj_goal target in KPI', () => {
       );
     });
 
-    it('should default to 10 when cnpj_goal is null', () => {
+    it('should default to 100 when cnpj_goal is null', () => {
       const target = extractCnpjGoalTarget(null);
-      expect(target).toBe(10);
+      expect(target).toBe(100);
     });
 
-    it('should default to 10 when cnpj_goal is undefined', () => {
+    it('should default to 100 when cnpj_goal is undefined', () => {
       const target = extractCnpjGoalTarget(undefined);
-      expect(target).toBe(10);
+      expect(target).toBe(100);
     });
   });
 
@@ -154,13 +154,13 @@ describe('Property 6: Dynamic cnpj_goal target in KPI', () => {
       );
     });
 
-    it('should always default to 10 for null/undefined cnpj_goal', () => {
+    it('should always default to 100 for null/undefined cnpj_goal', () => {
       fc.assert(
         fc.property(
           fc.constantFrom(null, undefined),
           (cnpjGoal) => {
             const target = extractCnpjGoalTarget(cnpjGoal);
-            expect(target).toBe(10);
+            expect(target).toBe(100);
           }
         ),
         { numRuns: 100 }
@@ -213,15 +213,15 @@ describe('Property 6: Dynamic cnpj_goal target in KPI', () => {
       );
     });
 
-    it('should use default target of 10 with super target of 15 when cnpj_goal is missing', () => {
+    it('should use default target of 100 with super target of 150 when cnpj_goal is missing', () => {
       const nullCases = [null, undefined];
       
       nullCases.forEach(cnpjGoal => {
         const target = extractCnpjGoalTarget(cnpjGoal);
         const superTarget = Math.ceil(target * 1.5);
         
-        expect(target).toBe(10);
-        expect(superTarget).toBe(15); // Math.ceil(10 * 1.5) = 15
+        expect(target).toBe(100);
+        expect(superTarget).toBe(150); // Math.ceil(100 * 1.5) = 150
       });
     });
   });

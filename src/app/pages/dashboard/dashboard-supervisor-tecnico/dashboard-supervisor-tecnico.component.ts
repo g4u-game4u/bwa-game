@@ -616,16 +616,16 @@ export class DashboardSupervisorTecnicoComponent implements OnInit, OnDestroy {
 
           somaMetasEmpresas = playerCnpjGoals.reduce((sum: number, player: { _id: string; cnpj_goal?: number }) => {
             const cnpjGoal = player.cnpj_goal;
-            if (cnpjGoal === undefined || cnpjGoal === null) return sum + 10;
+            if (cnpjGoal === undefined || cnpjGoal === null) return sum + 100;
             const numValue = typeof cnpjGoal === 'number' ? cnpjGoal : parseInt(String(cnpjGoal), 10);
-            return sum + (isNaN(numValue) ? 10 : numValue);
+            return sum + (isNaN(numValue) ? 100 : numValue);
           }, 0);
 
           if (playerCnpjGoals.length === 0) {
-            somaMetasEmpresas = this.teamMemberIds.length * 10;
+            somaMetasEmpresas = this.teamMemberIds.length * 100;
           }
         } catch {
-          somaMetasEmpresas = this.teamMemberIds.length * 10;
+          somaMetasEmpresas = this.teamMemberIds.length * 100;
         }
 
         const targetEmpresas = somaMetasEmpresas;
