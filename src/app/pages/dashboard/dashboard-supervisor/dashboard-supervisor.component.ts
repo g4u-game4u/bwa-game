@@ -399,8 +399,9 @@ export class DashboardSupervisorComponent implements OnInit, OnDestroy {
     const points = Number(pointCategories.points) || 0;
     const coins = Number(pointCategories.coins) || 0;
 
-    // Regular player metrics
-    const cnpjMetric = extra.cnpj ? parseFloat(extra.cnpj) : 0;
+    // Regular player metrics - count CNPJs from cnpj_resp (comma-separated list)
+    const cnpjRespStr = extra.cnpj_resp || '';
+    const cnpjMetric = cnpjRespStr ? cnpjRespStr.split(',').filter((s: string) => s.trim()).length : 0;
     const entregaMetric = extra.entrega ? parseFloat(extra.entrega) : 0;
 
     // Goals
