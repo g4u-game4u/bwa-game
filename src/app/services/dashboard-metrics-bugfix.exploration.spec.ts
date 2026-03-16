@@ -39,7 +39,7 @@ function getPlayerKPIs_buggy(
   const companyCount = playerExtra?.cnpj_resp 
     ? playerExtra.cnpj_resp.split(/[;,]/).map(s => s.trim()).filter(s => s.length > 0).length 
     : 0;
-  const cnpjGoal = playerExtra?.cnpj_goal ?? 10;
+  const cnpjGoal = playerExtra?.cnpj_goal ?? 100;
   
   kpis.push({
     id: 'numero-empresas',
@@ -84,7 +84,7 @@ function getPlayerKPIs_expected(
   const companyCount = playerExtra?.cnpj_resp 
     ? playerExtra.cnpj_resp.split(/[;,]/).map(s => s.trim()).filter(s => s.length > 0).length 
     : 0;
-  const cnpjGoal = playerExtra?.cnpj_goal ?? 10;
+  const cnpjGoal = playerExtra?.cnpj_goal ?? 100;
   
   kpis.push({
     id: 'numero-empresas',
@@ -210,7 +210,7 @@ function calculateMetas_expected(
     : 0;
   const cnpjGoal = playerExtra?.cnpj_goal != null
     ? (typeof playerExtra.cnpj_goal === 'number' ? playerExtra.cnpj_goal : parseInt(String(playerExtra.cnpj_goal), 10))
-    : 10; // Default fallback
+    : 100; // Default fallback
   
   if (cnpjCount >= cnpjGoal) {
     metasAchieved++;

@@ -67,7 +67,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   // Activity and Process data
   activityMetrics: ActivityMetrics | null = null;
   processMetrics: ProcessMetrics | null = null;
-  monthlyPointsBreakdown: { bloqueados: number; desbloqueados: number } | null = null;
+  monthlyPointsBreakdown: { desbloqueados: number } | null = null;
   
   // Company data
   companies: Company[] = [];
@@ -76,10 +76,15 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   // Carteira data from action_log (CNPJs with action counts and KPI data)
   carteiraClientes: CompanyDisplay[] = [];
   isLoadingCarteira = true;
-  cnpjNameMap = new Map<string, string>(); // Map of original CNPJ â†’ clean empresa name
+  cnpjNameMap = new Map<string, string>(); // Map of original CNPJ to clean empresa name
+
+  // Clientes sub-tabs: 'carteira' (extra.cnpj_resp) vs 'participacao' (extra.cnpj)
+  clientesActiveTab: 'carteira' | 'participacao' = 'carteira';
+  participacaoCnpjs: { cnpj: string; playerName: string; companyName: string }[] = [];
+  isLoadingParticipacao = false;
   
-  // Month selection
-  selectedMonth: Date = new Date();
+  // Month selection (undefined = "Toda temporada" / season-wide, no month filtering)
+  selectedMonth: Date | undefined = new Date();
   
   // Modal state
   isCompanyModalOpen = false;
@@ -282,7 +287,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
         },
         error: (error) => {
                     // Set default values on error so UI doesn't stay stuck
-          this.pointWallet = { moedas: 0, bloqueados: 0, desbloqueados: 0 };
+          this.pointWallet = { moedas: 0, bloqueados: 0, desbloqueados: 0 }; // bloqueados kept for interface compat but not displayed
           this.cdr.markForCheck();
         },
         complete: () => {
@@ -518,7 +523,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
    * Update metas count based on player goals from player.extra
    * Metas = count of achieved goals (0, 1, or 2):
    *   - +1 if entrega >= entrega_goal (fallback: 90)
-   *   - +1 if cnpj_resp count >= cnpj_goal (fallback: 10)
+   *   - +1 if cnpj_resp count >= cnpj_goal (fallback: 100)
    * Always shows X/2 (duas metas fixas)
    */
   private updateMetasFromPlayerGoals(): void {
@@ -539,7 +544,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     // cnpj_resp is a comma-separated string of CNPJs
     const cnpjRespStr = extra?.cnpj_resp || '';
     const cnpjRespCount = cnpjRespStr ? cnpjRespStr.split(',').filter(c => c.trim()).length : 0;
-    const cnpjGoal = extra?.cnpj_goal ?? 10; // Default fallback: 10
+    const cnpjGoal = extra?.cnpj_goal ?? 100; // Default fallback: 100
 
     // Calculate achievements
     const entregaAchieved = entrega >= entregaGoal ? 1 : 0;
@@ -608,7 +613,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
           this.cdr.markForCheck();
         },
         error: (error) => {
-                    this.monthlyPointsBreakdown = { bloqueados: 0, desbloqueados: 0 };
+                    this.monthlyPointsBreakdown = { desbloqueados: 0 };
           this.cdr.markForCheck();
         }
       });
@@ -622,11 +627,17 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
    * The left sidebar (Progresso da Temporada) shows season-wide data and is NOT affected.
    */
   onMonthChange(monthsAgo: number): void {
-    const date = new Date();
-    date.setMonth(date.getMonth() - monthsAgo);
-    this.selectedMonth = date;
-    const monthName = date.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
-    this.announceToScreenReader(`MÃªs alterado para ${monthName}`);
+    // Handle "Toda temporada" (-1) — undefined means no month filtering (season-wide)
+    if (monthsAgo === -1) {
+      this.selectedMonth = undefined;
+      this.announceToScreenReader('Filtro alterado para toda temporada');
+    } else {
+      const date = new Date();
+      date.setMonth(date.getMonth() - monthsAgo);
+      this.selectedMonth = date;
+      const monthName = date.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+      this.announceToScreenReader(`Mês alterado para ${monthName}`);
+    }
     
     // Clear caches to force fresh data for the new month
     this.actionLogService.clearCache();
@@ -765,6 +776,81 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
         this.focusedElementBeforeModal = null;
       }, 100);
     }
+  }
+  
+  /**
+   * Switch between Carteira and Participação sub-tabs in the Clientes section
+   */
+  switchClientesTab(tab: 'carteira' | 'participacao'): void {
+    this.clientesActiveTab = tab;
+    if (tab === 'participacao' && this.participacaoCnpjs.length === 0 && !this.isLoadingParticipacao) {
+      this.loadParticipacaoData();
+    }
+  }
+  
+  /**
+   * Load participação data from player's extra.cnpj (CNPJs the player has participated with)
+   */
+  private loadParticipacaoData(): void {
+    this.isLoadingParticipacao = true;
+    this.cdr.markForCheck();
+    
+    const playerId = this.getPlayerId();
+    
+    if (!playerId) {
+      this.isLoadingParticipacao = false;
+      this.cdr.markForCheck();
+      return;
+    }
+    
+    // Get player data to access extra.cnpj
+    this.playerService.getPlayerStatus(playerId)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (player) => {
+          const extra = player?.extra as Record<string, unknown> | undefined;
+          const cnpjStr = (extra?.['cnpj'] as string) || '';
+          if (!cnpjStr) {
+            this.participacaoCnpjs = [];
+            this.isLoadingParticipacao = false;
+            this.cdr.markForCheck();
+            return;
+          }
+          
+          // Parse comma-separated CNPJs
+          const cnpjList = cnpjStr.split(',').map((s: string) => s.trim()).filter((s: string) => s.length > 0);
+          
+          // Enrich with company names from empid_cnpj__c
+          this.cnpjLookupService.enrichCnpjList(cnpjList)
+            .pipe(takeUntil(this.destroy$))
+            .subscribe({
+              next: (nameMap) => {
+                this.participacaoCnpjs = cnpjList.map((cnpj: string) => ({
+                  cnpj: cnpj,
+                  playerName: player?.name || '',
+                  companyName: nameMap.get(cnpj) || cnpj
+                }));
+                this.isLoadingParticipacao = false;
+                this.cdr.markForCheck();
+              },
+              error: () => {
+                // Fallback without enriched names
+                this.participacaoCnpjs = cnpjList.map((cnpj: string) => ({
+                  cnpj: cnpj,
+                  playerName: player?.name || '',
+                  companyName: cnpj
+                }));
+                this.isLoadingParticipacao = false;
+                this.cdr.markForCheck();
+              }
+            });
+        },
+        error: () => {
+          this.participacaoCnpjs = [];
+          this.isLoadingParticipacao = false;
+          this.cdr.markForCheck();
+        }
+      });
   }
   
   /**

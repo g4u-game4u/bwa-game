@@ -124,6 +124,47 @@ function getRelativeDateExpression(month: Date | undefined, position: 'start' | 
   }
 }
 
+/**
+ * Helper to get epoch milliseconds for a date position.
+ * Used alongside getRelativeDateExpression to build $or queries
+ * that match both { $date: "..." } and raw epoch number formats.
+ */
+function getEpochMs(month: Date | undefined, position: 'start' | 'end'): number {
+  const targetMonth = month || new Date();
+  const targetMonthNum = targetMonth.getMonth();
+  const targetYear = targetMonth.getFullYear();
+
+  const seasonStartDate = new Date('2026-01-01T00:00:00.000Z');
+
+  if (position === 'start') {
+    const monthStart = new Date(targetYear, targetMonthNum, 1, 0, 0, 0, 0);
+    return monthStart < seasonStartDate ? seasonStartDate.getTime() : monthStart.getTime();
+  } else {
+    const monthEnd = new Date(targetYear, targetMonthNum + 1, 0, 23, 59, 59, 999);
+    return monthEnd.getTime();
+  }
+}
+
+/**
+ * Build a $match condition for the time field that handles both formats:
+ * - { $date: "ISO string" } (BSON Date objects from Funifier)
+ * - number (epoch milliseconds)
+ * Uses $or to match documents regardless of which format their time field uses.
+ */
+function buildTimeMatch(month: Date | undefined): Record<string, unknown> {
+  const startDate = getRelativeDateExpression(month, 'start');
+  const endDate = getRelativeDateExpression(month, 'end');
+  const startMs = getEpochMs(month, 'start');
+  const endMs = getEpochMs(month, 'end');
+
+  return {
+    $or: [
+      { time: { $gte: startDate, $lte: endDate } },
+      { time: { $gte: startMs, $lte: endMs } }
+    ]
+  };
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -159,18 +200,17 @@ export class ActionLogService {
       return cached;
     }
 
-    // Use Funifier's relative date syntax for time filtering
-    const startDate = getRelativeDateExpression(month, 'start');
-    const endDate = getRelativeDateExpression(month, 'end');
+    // Build time match that handles both { $date: "..." } and epoch number formats
+    const timeMatch = buildTimeMatch(month);
 
     // Aggregate query to get action log for this player in the target month
-    // Uses userId field and time field with Funifier $date expressions
+    // Uses userId field and time field with dual-format $or match
     // Add $limit with high value to avoid MongoDB default limit of 100 documents
     const aggregateBody = [
       { 
         $match: { 
           userId: playerId,
-          time: { $gte: startDate, $lte: endDate }
+          ...timeMatch
         } 
       },
       { $sort: { time: -1 } },
@@ -210,9 +250,8 @@ export class ActionLogService {
       return cached;
     }
 
-    // Use Funifier's relative date syntax for time filtering
-    const startDate = getRelativeDateExpression(month, 'start');
-    const endDate = getRelativeDateExpression(month, 'end');
+    // Build time match that handles both { $date: "..." } and epoch number formats
+    const timeMatch = buildTimeMatch(month);
 
     // Use $count aggregation to get total count without returning all documents
     // This avoids MongoDB default limit of 100 documents
@@ -220,7 +259,7 @@ export class ActionLogService {
       { 
         $match: { 
           userId: playerId,
-          time: { $gte: startDate, $lte: endDate }
+          ...timeMatch
         } 
       },
       {
@@ -278,16 +317,15 @@ export class ActionLogService {
       return cached;
     }
 
-    // Use Funifier's relative date syntax
-    const startDate = getRelativeDateExpression(month, 'start');
-    const endDate = getRelativeDateExpression(month, 'end');
+    // Build time match that handles both { $date: "..." } and epoch number formats
+    const timeMatch = buildTimeMatch(month);
 
     const aggregateBody = [
       {
         $match: {
           player: playerId,
           type: 0, // type 0 = points
-          time: { $gte: startDate, $lte: endDate }
+          ...timeMatch
         }
       },
       {
@@ -347,16 +385,15 @@ export class ActionLogService {
       return cached;
     }
 
-    // Use Funifier's relative date syntax
-    const startDate = getRelativeDateExpression(month, 'start');
-    const endDate = getRelativeDateExpression(month, 'end');
+    // Build time match that handles both { $date: "..." } and epoch number formats
+    const timeMatch = buildTimeMatch(month);
 
     const aggregateBody = [
       {
         $match: {
           player: playerId,
           type: 0, // type 0 = points
-          time: { $gte: startDate, $lte: endDate }
+          ...timeMatch
         }
       },
       {
@@ -404,15 +441,14 @@ export class ActionLogService {
       return cached;
     }
 
-    // Use Funifier's relative date syntax
-    const startDate = getRelativeDateExpression(month, 'start');
-    const endDate = getRelativeDateExpression(month, 'end');
+    // Build time match that handles both { $date: "..." } and epoch number formats
+    const timeMatch = buildTimeMatch(month);
 
     const aggregateBody = [
       {
         $match: {
           userId: playerId,
-          time: { $gte: startDate, $lte: endDate }
+          ...timeMatch
         }
       },
       {
@@ -772,16 +808,15 @@ export class ActionLogService {
         return cached;
       }
 
-      // Use Funifier's relative date syntax
-      const startDate = getRelativeDateExpression(month, 'start');
-      const endDate = getRelativeDateExpression(month, 'end');
+      // Build time match that handles both { $date: "..." } and epoch number formats
+      const timeMatch = buildTimeMatch(month);
 
       // Single query: get action count per CNPJ
       const actionCountBody = [
         {
           $match: {
             userId: playerId,
-            time: { $gte: startDate, $lte: endDate },
+            ...timeMatch,
             'attributes.cnpj': { $ne: null }
           }
         },
@@ -793,20 +828,21 @@ export class ActionLogService {
         }
       ];
 
-    console.log('📊 Player CNPJs with count query:', JSON.stringify(actionCountBody)););
+    console.log('📊 Player CNPJs with count query:', JSON.stringify(actionCountBody));
 
       const request$ = this.funifierApi.post<{ _id: string; count: number }[]>(
         '/v3/database/action_log/aggregate?strict=true',
         actionCountBody
       ).pipe(
         map(actionResponse => {
-        console.log('📊 Player CNPJs with count response:', actionResponse););
+        console.log('📊 Player CNPJs with count response:', actionResponse);
 
           return actionResponse
             .filter(r => r._id != null)
             .map(r => ({
               cnpj: r._id,
-              actionCount: r.count
+              actionCount: r.count,
+              processCount: 0
             }));
         }),
         catchError(error => {
@@ -844,15 +880,14 @@ export class ActionLogService {
       return cached;
     }
 
-    // Use Funifier's relative date syntax
-    const startDate = getRelativeDateExpression(month, 'start');
-    const endDate = getRelativeDateExpression(month, 'end');
+    // Build time match that handles both { $date: "..." } and epoch number formats
+    const timeMatch = buildTimeMatch(month);
 
     const aggregateBody = [
       {
         $match: {
           'attributes.cnpj': cnpj,
-          time: { $gte: startDate, $lte: endDate }
+          ...timeMatch
         }
       },
       { $sort: { time: -1 } },
@@ -954,15 +989,14 @@ export class ActionLogService {
       return cached;
     }
 
-    const startDate = getRelativeDateExpression(month, 'start');
-    const endDate = getRelativeDateExpression(month, 'end');
+    const timeMatch = buildTimeMatch(month);
 
     const aggregateBody = [
       {
         $match: {
           userId: playerId,
           'attributes.delivery_id': deliveryId,
-          time: { $gte: startDate, $lte: endDate }
+          ...timeMatch
         }
       },
       { $sort: { time: -1 } }
@@ -1034,14 +1068,13 @@ export class ActionLogService {
       return cached;
     }
 
-    const startDate = getRelativeDateExpression(targetMonth, 'start');
-    const endDate = getRelativeDateExpression(targetMonth, 'end');
+    const timeMatch = buildTimeMatch(targetMonth);
 
     const aggregateBody = [
       {
         $match: {
           userId: playerId,
-          time: { $gte: startDate, $lte: endDate }
+          ...timeMatch
         }
       },
       {
@@ -1147,8 +1180,7 @@ export class ActionLogService {
       return cached;
     }
 
-    const startDate = getRelativeDateExpression(targetMonth, 'start');
-    const endDate = getRelativeDateExpression(targetMonth, 'end');
+    const timeMatch = buildTimeMatch(targetMonth);
 
     // Single aggregate query to get all action counts for the team
     const activityAggregateBody = [
@@ -1166,7 +1198,7 @@ export class ActionLogService {
       {
         $match: {
           'playerData.teams': teamId,
-          time: { $gte: startDate, $lte: endDate }
+          ...timeMatch
         }
       },
       {
@@ -1190,7 +1222,7 @@ export class ActionLogService {
       {
         $match: {
           'playerData.teams': teamId,
-          time: { $gte: startDate, $lte: endDate },
+          ...timeMatch,
           actionId: 'desbloquear'
         }
       },
@@ -1220,7 +1252,7 @@ export class ActionLogService {
       {
         $match: {
           'playerData.teams': teamId,
-          time: { $gte: startDate, $lte: endDate },
+          ...timeMatch,
           'attributes.delivery_id': { $ne: null }
         }
       },
@@ -1299,8 +1331,7 @@ export class ActionLogService {
       return cached;
     }
 
-    const startDate = getRelativeDateExpression(targetMonth, 'start');
-    const endDate = getRelativeDateExpression(targetMonth, 'end');
+    const timeMatch = buildTimeMatch(targetMonth);
 
     // Single aggregate query to get action count per CNPJ for the team
     const actionCountBody = [
@@ -1318,7 +1349,7 @@ export class ActionLogService {
       {
         $match: {
           'playerData.teams': teamId,
-          time: { $gte: startDate, $lte: endDate },
+          ...timeMatch,
           'attributes.cnpj': { $ne: null }
         }
       },
@@ -1329,48 +1360,6 @@ export class ActionLogService {
         }
       }
     ];
-    console.log('📊 Team CNPJ list query for team:', teamId);
-   * @returns Observable of CNPJ list with action counts
-   */
-  getTeamCnpjListWithCount(teamId: string, month?: Date): Observable<{ cnpj: string; actionCount: number }[]> {
-    const targetMonth = month || new Date();
-    const cacheKey = `team_cnpj_${teamId}_${dayjs(targetMonth).format('YYYY-MM')}`;
-    const cached = this.getCachedData(this.teamCnpjCache, cacheKey);
-    if (cached) {
-      return cached;
-    }
-
-    const startDate = getRelativeDateExpression(targetMonth, 'start');
-    const endDate = getRelativeDateExpression(targetMonth, 'end');
-
-        console.log('✅ Team CNPJ list loaded:', result.length, 'unique CNPJs');
-    const actionCountBody = [
-      {
-        $lookup: {
-          from: 'player',
-          localField: 'userId',
-          foreignField: '_id',
-          as: 'playerData'
-        }
-      },
-      {
-        $unwind: '$playerData'
-      },
-      {
-        $match: {
-          'playerData.teams': teamId,
-          time: { $gte: startDate, $lte: endDate },
-          'attributes.cnpj': { $ne: null }
-        }
-      },
-      {
-        $group: {
-          _id: '$attributes.cnpj',
-          count: { $sum: 1 }
-        }
-      }
-    ];
-
     console.log('📊 Team CNPJ list query for team:', teamId);
 
     const request$ = this.funifierApi.post<{ _id: string; count: number }[]>(
@@ -1382,7 +1371,8 @@ export class ActionLogService {
           .filter(r => r._id != null)
           .map(r => ({
             cnpj: r._id,
-            actionCount: r.count
+            actionCount: r.count,
+            processCount: 0
           }));
 
         console.log('✅ Team CNPJ list loaded:', result.length, 'unique CNPJs');
@@ -1390,75 +1380,12 @@ export class ActionLogService {
       }),
       catchError(error => {
         console.error('Error fetching team CNPJ list:', error);
-        return of([]);
+        return of([] as { cnpj: string; actionCount: number; processCount: number }[]);
       }),
       shareReplay({ bufferSize: 1, refCount: true, windowTime: this.CACHE_DURATION })
     );
 
     this.setCachedData(this.teamCnpjCache, cacheKey, request$);
-    return request$;
-  }   {
-        $group: {
-          _id: null,
-          total: { $sum: { $ifNull: ['$points', 0] } }
-        }
-      }
-    ];
-
-    // Query for desbloqueados (unlocked points) - desbloquear actions
-    const desbloqueadosBody = [
-      {
-        $lookup: {
-          from: 'player',
-          localField: 'userId',
-          foreignField: '_id',
-          as: 'playerData'
-        }
-      },
-      {
-        $unwind: '$playerData'
-      },
-      {
-        $match: {
-          'playerData.teams': teamId,
-          time: { $gte: startDate, $lte: endDate },
-          actionId: 'desbloquear'
-        }
-      },
-      {
-        $group: {
-          _id: null,
-          total: { $sum: { $ifNull: ['$points', 0] } }
-        }
-      }
-    ];
-
-    console.log('📊 Team monthly points breakdown query for team:', teamId);
-
-    const request$ = forkJoin([
-      this.funifierApi.post<any[]>('/v3/database/action_log/aggregate?strict=true', bloqueadosBody),
-      this.funifierApi.post<any[]>('/v3/database/action_log/aggregate?strict=true', desbloqueadosBody)
-    ]).pipe(
-      map(([bloqueadosResult, desbloqueadosResult]) => {
-        const bloqueados = Math.floor(bloqueadosResult[0]?.total || 0);
-        const desbloqueados = Math.floor(desbloqueadosResult[0]?.total || 0);
-
-        console.log('✅ Team monthly points breakdown loaded (OPTIMIZED):', {
-          bloqueados,
-          desbloqueados,
-          apiCalls: 2 // Instead of 2*N calls
-        });
-
-        return { bloqueados, desbloqueados };
-      }),
-      catchError(error => {
-        console.error('Error fetching team monthly points breakdown:', error);
-        return of({ bloqueados: 0, desbloqueados: 0 });
-      }),
-      shareReplay({ bufferSize: 1, refCount: true, windowTime: this.CACHE_DURATION })
-    );
-
-    this.setCachedData(this.teamPointsBreakdownCache, cacheKey, request$);
     return request$;
   }
 

@@ -732,11 +732,51 @@
           font-weight: 500;
         }
       }
+
+      .btn-return-supervisor {
+        position: absolute;
+        left: 0;
+        top: 50%;
+        transform: translateY(-50%);
+        display: flex;
+        align-items: center;
+        gap: $spacing-xs;
+        padding: 8px 16px;
+        background: transparent;
+        border: 1px solid rgba($primary-electric-blue, 0.3);
+        border-radius: $border-radius-sm;
+        color: $primary-electric-blue;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        white-space: nowrap;
+        font-size: $font-size-small;
+        font-weight: 500;
+
+        &:hover {
+          background: rgba($primary-electric-blue, 0.1);
+          border-color: $primary-electric-blue;
+        }
+
+        &:focus-visible {
+          outline: 2px solid $primary-electric-blue;
+          outline-offset: 2px;
+        }
+
+        i {
+          font-size: 1rem;
+        }
+      }
       
       @include mobile-only {
         flex-direction: column;
         align-items: center;
         
+        .btn-return-supervisor {
+          position: static;
+          transform: none;
+          margin-bottom: $spacing-sm;
+        }
+
         .refresh-button {
           position: static;
           transform: none;
@@ -1010,6 +1050,53 @@
         background: rgba(255, 255, 255, 0.1);
         color: #eeeeee;
         border-color: rgba(255, 255, 255, 0.2);
+      }
+
+      &:focus-visible {
+        @include focus-visible;
+      }
+    }
+  }
+
+  // Clientes Sub-Tabs
+  .clientes-tabs {
+    display: flex;
+    gap: 4px;
+    margin-bottom: $spacing-md;
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: $border-radius-sm;
+    padding: 4px;
+
+    .clientes-tab-btn {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: $spacing-xs;
+      padding: 8px $spacing-md;
+      background: transparent;
+      color: $text-secondary;
+      border: none;
+      border-radius: $border-radius-sm;
+      font-size: $font-size-small;
+      font-weight: $font-weight-semibold;
+      font-family: $font-family;
+      cursor: pointer;
+      transition: all $transition-duration $transition-easing;
+
+      i {
+        font-size: 1rem;
+      }
+
+      &:hover:not(.active) {
+        background: rgba($primary-electric-blue, 0.08);
+        color: $primary-electric-blue;
+      }
+
+      &.active {
+        background: rgba($primary-electric-blue, 0.12);
+        color: $text-primary;
+        border: 1px solid rgba($primary-electric-blue, 0.3);
       }
 
       &:focus-visible {

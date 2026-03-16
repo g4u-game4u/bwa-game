@@ -1507,17 +1507,17 @@ describe('TeamManagementDashboardComponent - Property 5: Goal Form Validation', 
   const negativeCnpjGoalArb = fc.integer({ min: -10000, max: -1 });
   
   // Invalid cnpj_goal: floats with decimal parts
-  const floatCnpjGoalArb = fc.float({ min: 0.01, max: 1000, noNaN: true })
+  const floatCnpjGoalArb = fc.float({ min: Math.fround(0.01), max: Math.fround(1000), noNaN: true })
     .filter(n => !Number.isInteger(n));
   
   // Valid entrega_goal: numbers between 0 and 100
   const validEntregaGoalArb = fc.integer({ min: 0, max: 100 });
   
   // Invalid entrega_goal: numbers below 0
-  const belowRangeEntregaGoalArb = fc.float({ min: -1000, max: -0.01, noNaN: true });
+  const belowRangeEntregaGoalArb = fc.float({ min: Math.fround(-1000), max: Math.fround(-0.01), noNaN: true });
   
   // Invalid entrega_goal: numbers above 100
-  const aboveRangeEntregaGoalArb = fc.float({ min: 100.01, max: 10000, noNaN: true });
+  const aboveRangeEntregaGoalArb = fc.float({ min: Math.fround(100.01), max: Math.fround(10000), noNaN: true });
   
   // Player ID arbitrary
   const playerIdArb = fc.emailAddress();
@@ -2221,7 +2221,7 @@ describe('TeamManagementDashboardComponent - Property 5: Goal Form Validation', 
  * 
  * Feature: dashboard-metrics-refactor, Property 8: Team cnpj_goal target is sum of members
  * 
- * For any set of team members where each member has a `cnpj_goal` value (or defaults to 10),
+ * For any set of team members where each member has a `cnpj_goal` value (or defaults to 100),
  * the team-level "Clientes na Carteira" target should equal the sum of all individual
  * `cnpj_goal` values.
  * 
@@ -2230,7 +2230,7 @@ describe('TeamManagementDashboardComponent - Property 5: Goal Form Validation', 
 describe('TeamManagementDashboardComponent - Property 8: Team cnpj_goal Target is Sum of Members', () => {
   
   // Default cnpj_goal value when not set
-  const DEFAULT_CNPJ_GOAL = 10;
+  const DEFAULT_CNPJ_GOAL = 100;
   
   /**
    * Pure function that calculates the team cnpj_goal target from member goals.
@@ -2238,11 +2238,11 @@ describe('TeamManagementDashboardComponent - Property 8: Team cnpj_goal Target i
    * the team-level "Clientes na Carteira" target.
    * 
    * @param memberGoals - Array of cnpj_goal values (some may be null/undefined)
-   * @returns The sum of all goals (defaulting nulls to 10)
+   * @returns The sum of all goals (defaulting nulls to 100)
    */
   function calculateTeamCnpjGoalTarget(memberGoals: (number | string | null | undefined)[]): number {
     return memberGoals.reduce<number>((sum, goal) => {
-      // Default to 10 if cnpj_goal is null or undefined
+      // Default to 100 if cnpj_goal is null or undefined
       if (goal === undefined || goal === null) {
         return sum + DEFAULT_CNPJ_GOAL;
       }
@@ -2281,12 +2281,12 @@ describe('TeamManagementDashboardComponent - Property 8: Team cnpj_goal Target i
           cnpjGoal: String(goal) as number | string | null | undefined,
           expectedContribution: goal
         })),
-        // Case 4: cnpj_goal is null - should default to 10
+        // Case 4: cnpj_goal is null - should default to 100
         fc.constant({
           cnpjGoal: null as number | string | null | undefined,
           expectedContribution: DEFAULT_CNPJ_GOAL
         }),
-        // Case 5: cnpj_goal is undefined - should default to 10
+        // Case 5: cnpj_goal is undefined - should default to 100
         fc.constant({
           cnpjGoal: undefined as number | string | null | undefined,
           expectedContribution: DEFAULT_CNPJ_GOAL

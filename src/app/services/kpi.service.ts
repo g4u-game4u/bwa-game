@@ -98,11 +98,11 @@ export class KPIService {
 
         // Helper function to build both KPIs
         const buildKPIs = (companyCount: number) => {
-          // Get target from player's extra.cnpj_goal, fallback to default 10
+          // Get target from player's extra.cnpj_goal, fallback to default 100
           const cnpjGoal = playerStatus.extra?.cnpj_goal;
           const target = cnpjGoal !== undefined && cnpjGoal !== null
             ? (typeof cnpjGoal === 'number' ? cnpjGoal : parseInt(String(cnpjGoal), 10))
-            : 10;
+            : 100;
           const superTarget = Math.ceil(target * 1.5); // Super target is 50% above target
           
           // KPI 1: Clientes na Carteira - always show

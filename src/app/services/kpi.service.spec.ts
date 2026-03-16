@@ -199,10 +199,10 @@ describe('KPIService', () => {
         expect(empresasKPI).toBeDefined();
         expect(empresasKPI!.label).toBe('Número de Empresas');
         expect(empresasKPI!.current).toBe(6);
-        expect(empresasKPI!.target).toBe(10);
-        expect(empresasKPI!.superTarget).toBe(15);
+        expect(empresasKPI!.target).toBe(100);
+        expect(empresasKPI!.superTarget).toBe(150);
         expect(empresasKPI!.unit).toBe('empresas');
-        expect(empresasKPI!.color).toBe('red'); // 6 < 10 (below goal)
+        expect(empresasKPI!.color).toBe('red'); // 6 < 100 (below goal)
         done();
       });
     });
@@ -287,8 +287,8 @@ describe('KPIService', () => {
         
         expect(empresasKPI).toBeDefined();
         expect(empresasKPI!.current).toBe(6);
-        expect(empresasKPI!.superTarget).toBe(15);
-        expect(empresasKPI!.percentage).toBe(40); // 6/15 * 100 = 40%
+        expect(empresasKPI!.superTarget).toBe(150);
+        expect(empresasKPI!.percentage).toBe(4); // 6/150 * 100 = 4%
         done();
       });
     });

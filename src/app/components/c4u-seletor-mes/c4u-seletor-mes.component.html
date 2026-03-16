@@ -13,37 +13,47 @@
     <!-- Conteúdo principal (só mostra quando não está carregando) -->
     <div *ngIf="!isLoading" class="w-full animate-fade-in-up">
         <!-- Layout Desktop (oculto no mobile) -->
-        <div class="hidden md:flex items-center justify-center space-x-8">
-            <div class="flex-1 flex justify-end">
-                <button 
-                    class="flex items-center space-x-2 px-3 py-2 rounded-lg transition-all duration-200 hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
-                    [disabled]="!prevEnabled"
-                    (click)="goLeft()">
-                    <i class="icon-arrow_back_ios text-white/70 text-lg"></i>
-                    <span class="text-sm font-bold text-white/70">{{getPrevMonth()}}</span>
-                </button>
+        <div class="hidden md:flex flex-col items-center space-y-3">
+            <div class="flex items-center justify-center space-x-8">
+                <div class="flex-1 flex justify-end">
+                    <button 
+                        class="flex items-center space-x-2 px-3 py-2 rounded-lg transition-all duration-200 hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
+                        [disabled]="!prevEnabled"
+                        (click)="goLeft()">
+                        <i class="icon-arrow_back_ios text-white/70 text-lg"></i>
+                        <span class="text-sm font-bold text-white/70">{{getPrevMonth()}}</span>
+                    </button>
+                </div>
+                
+                <ng-select class="ng-select-large"
+                           [clearable]="false"
+                           [searchable]="false"
+                           [items]="months"
+                           [(ngModel)]="selected"
+                           (change)="onMonthDropdownChange()"
+                           bindLabel="name"
+                           notFoundText="Sem itens"
+                           bindValue="id">
+                </ng-select>
+                
+                <div class="flex-1 flex justify-start">
+                    <button 
+                        class="flex items-center space-x-2 px-3 py-2 rounded-lg transition-all duration-200 hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
+                        [disabled]="!nextEnabled"
+                        (click)="goRight()">
+                        <span class="text-sm font-bold text-white/70">{{getNextMonth()}}</span>
+                        <i class="icon-arrow_forward_ios text-white/70 text-lg"></i>
+                    </button>
+                </div>
             </div>
-            
-            <ng-select class="ng-select-large"
-                       [clearable]="false"
-                       [searchable]="false"
-                       [items]="months"
-                       [(ngModel)]="selected"
-                       (change)="onChange()"
-                       bindLabel="name"
-                       notFoundText="Sem itens"
-                       bindValue="id">
-            </ng-select>
-            
-            <div class="flex-1 flex justify-start">
-                <button 
-                    class="flex items-center space-x-2 px-3 py-2 rounded-lg transition-all duration-200 hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
-                    [disabled]="!nextEnabled"
-                    (click)="goRight()">
-                    <span class="text-sm font-bold text-white/70">{{getNextMonth()}}</span>
-                    <i class="icon-arrow_forward_ios text-white/70 text-lg"></i>
-                </button>
-            </div>
+
+            <!-- Botão "Toda temporada" Desktop -->
+            <button
+                class="px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200"
+                [ngClass]="isTodaTemporada ? 'bg-white/30 text-white ring-2 ring-white/40' : 'bg-white/10 text-white/70 hover:bg-white/20 hover:text-white'"
+                (click)="isTodaTemporada ? selectMonth(selected) : selectTodaTemporada()">
+                Toda temporada
+            </button>
         </div>
 
         <!-- Layout Mobile (visível apenas no mobile) -->
@@ -55,7 +65,7 @@
                            [searchable]="false"
                            [items]="months"
                            [(ngModel)]="selected"
-                           (change)="onChange()"
+                           (change)="onMonthDropdownChange()"
                            bindLabel="name"
                            notFoundText="Sem itens"
                            bindValue="id">
@@ -80,6 +90,14 @@
                     <i class="icon-arrow_forward_ios text-white text-lg"></i>
                 </button>
             </div>
+
+            <!-- Botão "Toda temporada" Mobile -->
+            <button
+                class="w-full h-12 rounded-lg text-sm font-medium transition-all duration-200"
+                [ngClass]="isTodaTemporada ? 'bg-white/30 text-white ring-2 ring-white/40' : 'bg-white/10 text-white/70 hover:bg-white/20 hover:text-white'"
+                (click)="isTodaTemporada ? selectMonth(selected) : selectTodaTemporada()">
+                Toda temporada
+            </button>
         </div>
     </div>
 </div>
