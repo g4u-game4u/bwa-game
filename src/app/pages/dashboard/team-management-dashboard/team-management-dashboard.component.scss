@@ -1062,9 +1062,9 @@
   .clientes-tabs {
     display: flex;
     gap: 4px;
-    margin-bottom: -md;
+    margin-bottom: $spacing-md;
     background: rgba(255, 255, 255, 0.03);
-    border-radius: -radius-sm;
+    border-radius: $border-radius-sm;
     padding: 4px;
 
     .clientes-tab-btn {

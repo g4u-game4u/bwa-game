@@ -1800,6 +1800,8 @@ private calculateCollaboratorTotals(memberData: Array<{
   /**
    * Load carteira data for a specific collaborator
    * 
+   * Carteira tab: Load CNPJs from extra.cnpj_resp (assigned portfolio) of the collaborator
+   * 
    * @private
    * @async
    * @param collaboratorId - The user ID (email) of the collaborator
@@ -1809,34 +1811,50 @@ private calculateCollaboratorTotals(memberData: Array<{
   private async loadCollaboratorCarteiraData(collaboratorId: string, dateRange: { start: Date; end: Date }): Promise<void> {
     try {
       this.isLoadingCarteira = true;
-      // Get CNPJ list with action counts and process counts for the collaborator
-      // Use undefined for "Toda temporada" to get season-wide data
-      const monthForQuery = this.selectedMonthsAgo === -1 ? undefined : this.selectedMonth;
-      const carteiraData = await firstValueFrom(
-        this.actionLogService.getPlayerCnpjListWithCount(collaboratorId, monthForQuery)
-          .pipe(takeUntil(this.destroy$))
-      ).catch((error) => {
-                return [];
-      });
+      
+      // Find the collaborator's player data from teamMembersData
+      const playerData = this.teamMembersData.find(p => p._id === collaboratorId || p.email === collaboratorId);
+      
+      // Get CNPJs from extra.cnpj_resp (assigned portfolio)
+      const raw: string = playerData?.extra?.cnpj_resp || '';
+      const cnpjListWithCounts: { cnpj: string; actionCount: number }[] = [];
+      
+      if (raw) {
+        const cnpjs = raw.split(/[;,]/).map((s: string) => s.trim()).filter((s: string) => s.length > 0);
+        for (const cnpj of cnpjs) {
+          cnpjListWithCounts.push({
+            cnpj,
+            actionCount: 0 // We don't have action count for assigned portfolio
+          });
+        }
+      }
+      
+      if (cnpjListWithCounts.length === 0) {
+        this.teamCarteiraClientes = [];
+        this.isLoadingCarteira = false;
+        this.cdr.markForCheck();
+        return;
+      }
       
       // Extract all CNPJ strings for lookup
-      const cnpjList = carteiraData.map(c => c.cnpj);
+      const cnpjList = cnpjListWithCounts.map(c => c.cnpj);
       
       // Enrich CNPJs with clean company names
       const cnpjNames = await firstValueFrom(
         this.cnpjLookupService.enrichCnpjList(cnpjList)
           .pipe(takeUntil(this.destroy$))
       ).catch((error) => {
-                return new Map<string, string>();
+        return new Map<string, string>();
       });
       this.cnpjNameMap = cnpjNames;
+      
       // Enrich with KPI data
       const enrichedClientes = await firstValueFrom(
-        this.companyKpiService.enrichCompaniesWithKpis(carteiraData)
+        this.companyKpiService.enrichCompaniesWithKpis(cnpjListWithCounts)
           .pipe(takeUntil(this.destroy$))
       ).catch((error) => {
-                // Return data without KPI enrichment on error
-        return carteiraData.map(item => ({
+        // Return data without KPI enrichment on error
+        return cnpjListWithCounts.map(item => ({
           cnpj: item.cnpj,
           actionCount: item.actionCount
         } as CompanyDisplay));
@@ -1850,7 +1868,7 @@ private calculateCollaboratorTotals(memberData: Array<{
       this.isLoadingCarteira = false;
       this.cdr.markForCheck();
     } catch (error) {
-            this.teamCarteiraClientes = [];
+      this.teamCarteiraClientes = [];
       this.isLoadingCarteira = false;
       this.cdr.markForCheck();
     }
@@ -1871,25 +1889,31 @@ private calculateCollaboratorTotals(memberData: Array<{
     try {
       this.isLoadingCarteira = true;
       if (!this.selectedTeamId) {
-                this.teamCarteiraClientes = [];
+        this.teamCarteiraClientes = [];
         this.isLoadingCarteira = false;
         this.cdr.markForCheck();
         return;
       }
       
-      // Use dateRange parameter for proper "Toda temporada" support
-      const monthStart = dayjs(dateRange.start).startOf('day').toDate();
-      const monthEnd = dayjs(dateRange.end).endOf('day').toDate();
-      const cnpjListWithCounts = await firstValueFrom(
-        this.teamAggregateService.getTeamCnpjListWithCount(
-          this.selectedTeamId,
-          monthStart,
-          monthEnd
-        ).pipe(takeUntil(this.destroy$))
-      ).catch((error) => {
-        console.error('Error loading team carteira data (optimized):', error);
-        return [];
-      });
+      // Carteira tab: Load CNPJs from extra.cnpj_resp (assigned portfolio) of each team member
+      // This is the portfolio assigned to each player, not the CNPJs they worked on
+      const seen = new Set<string>();
+      const cnpjListWithCounts: { cnpj: string; actionCount: number }[] = [];
+
+      for (const player of this.teamMembersData) {
+        const raw: string = player?.extra?.cnpj_resp || '';
+        if (!raw) continue;
+
+        const cnpjs = raw.split(/[;,]/).map((s: string) => s.trim()).filter((s: string) => s.length > 0);
+        for (const cnpj of cnpjs) {
+          if (seen.has(cnpj)) continue;
+          seen.add(cnpj);
+          cnpjListWithCounts.push({
+            cnpj,
+            actionCount: 0 // We don't have action count for assigned portfolio
+          });
+        }
+      }
       
       if (cnpjListWithCounts.length === 0) {
         this.teamCarteiraClientes = [];
@@ -1906,15 +1930,16 @@ private calculateCollaboratorTotals(memberData: Array<{
         this.cnpjLookupService.enrichCnpjList(cnpjList)
           .pipe(takeUntil(this.destroy$))
       ).catch((error) => {
-                return new Map<string, string>();
+        return new Map<string, string>();
       });
       this.cnpjNameMap = cnpjNames;
+      
       // Enrich with KPI data
       const enrichedClientes = await firstValueFrom(
         this.companyKpiService.enrichCompaniesWithKpis(cnpjListWithCounts)
           .pipe(takeUntil(this.destroy$))
       ).catch((error) => {
-                // Return data without KPI enrichment on error
+        // Return data without KPI enrichment on error
         return cnpjListWithCounts.map(item => ({
           cnpj: item.cnpj,
           actionCount: item.actionCount
@@ -1929,7 +1954,7 @@ private calculateCollaboratorTotals(memberData: Array<{
       this.isLoadingCarteira = false;
       this.cdr.markForCheck();
     } catch (error) {
-            this.teamCarteiraClientes = [];
+      this.teamCarteiraClientes = [];
       this.isLoadingCarteira = false;
       this.cdr.markForCheck();
     }
