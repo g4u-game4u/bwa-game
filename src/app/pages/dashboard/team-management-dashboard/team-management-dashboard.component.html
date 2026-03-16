@@ -509,12 +509,13 @@
     </div>
   </main>
 
-  <!-- Progress List Modal -->
+  <!-- Progress List Modal: quando um colaborador está selecionado, passa só o ID dele e o filtro para exibir apenas as tarefas dessa pessoa -->
   <modal-progress-list
     *ngIf="isProgressModalOpen"
     [playerId]="teamPlayerIdsForModal"
     [listType]="progressModalType"
     [month]="selectedMonth"
+    [filterByUserId]="selectedCollaborator"
     (closed)="onProgressModalClosed()">
   </modal-progress-list>
   

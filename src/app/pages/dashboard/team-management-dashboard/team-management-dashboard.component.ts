@@ -2334,13 +2334,18 @@ private calculateCollaboratorTotals(memberData: Array<{
   }
 
   /**
-   * Handle progress card click to open modal
+   * Handle progress card click to open modal.
+   * Para "tarefas finalizadas": quando há colaborador selecionado, o modal recebe apenas o ID
+   * desse usuário e exibe somente as tarefas dele (filtro no frontend). Valida e informa quem está sendo exibido.
    */
   onProgressCardClicked(type: ProgressCardType): void {
-    // Map ProgressCardType to ProgressListType
     switch (type) {
       case 'atividades-finalizadas':
         this.progressModalType = 'atividades';
+        if (this.selectedCollaborator) {
+          const nome = this.getSelectedCollaboratorDisplayName();
+          this.toastService.success(`Exibindo tarefas finalizadas de ${nome}`);
+        }
         break;
       case 'atividades-pontos':
         this.progressModalType = 'pontos';
@@ -2355,6 +2360,15 @@ private calculateCollaboratorTotals(memberData: Array<{
         this.progressModalType = 'atividades';
     }
     this.isProgressModalOpen = true;
+  }
+
+  /**
+   * Nome do colaborador selecionado para exibição (ex.: no toast ao abrir tarefas finalizadas).
+   */
+  getSelectedCollaboratorDisplayName(): string {
+    if (!this.selectedCollaborator) return '';
+    const collaborator = this.collaborators.find(c => c.userId === this.selectedCollaborator);
+    return collaborator?.name || this.formatCollaboratorName(this.selectedCollaborator) || this.selectedCollaborator;
   }
 
   /**
@@ -2434,10 +2448,14 @@ private calculateCollaboratorTotals(memberData: Array<{
   }
 
   /**
-   * Get team player IDs as comma-separated string for modal
-   * The modal expects a single playerId, but we'll pass all team member IDs
+   * Get team player IDs as comma-separated string for modal.
+   * Quando um colaborador está selecionado na visão de gestor, retorna apenas o ID dele
+   * para que o modal de tarefas finalizadas exiba somente as tarefas dessa pessoa (filtro no frontend).
    */
   get teamPlayerIdsForModal(): string {
+    if (this.selectedCollaborator) {
+      return this.selectedCollaborator;
+    }
     return this.teamMemberIds.join(',');
   }
 

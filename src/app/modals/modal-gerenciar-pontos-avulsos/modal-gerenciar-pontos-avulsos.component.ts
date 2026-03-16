@@ -407,7 +407,11 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
       
       // Sempre atribuir paginacao ANTES de aplicar filtros locais
       this.paginacaoPendentes = response;
-      this.atividadesPendentesOriginais = response.items;
+      let itensPendentes = response.items;
+      if (this.isTeamContext && this.getExecutorEmailParaFiltroTarefas()) {
+        itensPendentes = this.filtrarItensPorExecutor(itensPendentes);
+      }
+      this.atividadesPendentesOriginais = itensPendentes;
       
       // Aplicar filtros locais se houver busca por texto (após atribuir paginação)
       const temFiltroData = !!(this.filtrosAtivos?.created_at_start || this.filtrosAtivos?.created_at_end || 
@@ -417,7 +421,7 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
         // mas manter os dados originais para filtragem
         this.aplicarFiltrosLocais();
       } else {
-        this.atividadesPendentes = response.items;
+        this.atividadesPendentes = itensPendentes;
       }
       
       const temFiltrosBackendResult = this.temFiltrosBackend();
@@ -464,7 +468,11 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
       
       // Sempre atribuir paginacao ANTES de aplicar filtros locais
       this.paginacaoFinalizadas = response;
-      this.atividadesFinalizadasOriginais = response.items;
+      let itensFinalizadas = response.items;
+      if (this.isTeamContext && this.getExecutorEmailParaFiltroTarefas()) {
+        itensFinalizadas = this.filtrarItensPorExecutor(itensFinalizadas);
+      }
+      this.atividadesFinalizadasOriginais = itensFinalizadas;
       
       // Aplicar filtros locais se houver busca por texto (após atribuir paginação)
       const temFiltroData = !!(this.filtrosAtivos?.created_at_start || this.filtrosAtivos?.created_at_end || 
@@ -474,7 +482,7 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
         // mas manter os dados originais para filtragem
         this.aplicarFiltrosLocais();
       } else {
-        this.atividadesFinalizadas = response.items;
+        this.atividadesFinalizadas = itensFinalizadas;
       }
       
           } catch (error) {
@@ -501,7 +509,11 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
       
       // Sempre atribuir paginacao ANTES de aplicar filtros locais
       this.paginacaoAprovadas = response;
-      this.atividadesAprovadasOriginais = response.items;
+      let itensAprovadas = response.items;
+      if (this.isTeamContext && this.getExecutorEmailParaFiltroTarefas()) {
+        itensAprovadas = this.filtrarItensPorExecutor(itensAprovadas);
+      }
+      this.atividadesAprovadasOriginais = itensAprovadas;
       
       // Aplicar filtros locais se houver busca por texto (após atribuir paginação)
       const temFiltroData = !!(this.filtrosAtivos?.created_at_start || this.filtrosAtivos?.created_at_end || 
@@ -511,7 +523,7 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
         // mas manter os dados originais para filtragem
         this.aplicarFiltrosLocais();
       } else {
-        this.atividadesAprovadas = response.items;
+        this.atividadesAprovadas = itensAprovadas;
       }
       
           } catch (error) {
@@ -538,7 +550,11 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
       
       // Sempre atribuir paginacao ANTES de aplicar filtros locais
       this.paginacaoCanceladas = response;
-      this.atividadesCanceladasOriginais = response.items;
+      let itensCanceladas = response.items;
+      if (this.isTeamContext && this.getExecutorEmailParaFiltroTarefas()) {
+        itensCanceladas = this.filtrarItensPorExecutor(itensCanceladas);
+      }
+      this.atividadesCanceladasOriginais = itensCanceladas;
       
       // Aplicar filtros locais se houver busca por texto (após atribuir paginação)
       const temFiltroData = !!(this.filtrosAtivos?.created_at_start || this.filtrosAtivos?.created_at_end || 
@@ -548,7 +564,7 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
         // mas manter os dados originais para filtragem
         this.aplicarFiltrosLocais();
       } else {
-        this.atividadesCanceladas = response.items;
+        this.atividadesCanceladas = itensCanceladas;
       }
       
           } catch (error) {
@@ -4316,6 +4332,29 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
     
     // Se nada funcionar, gerar um ID único baseado em timestamp e random
         return `fallback_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  }
+
+  /**
+   * Retorna o email do executor usado no filtro de tarefas (filtrosAtivos.executor no contexto de time).
+   * Resolve id do jogador para email quando necessário.
+   */
+  private getExecutorEmailParaFiltroTarefas(): string | undefined {
+    const executor = this.filtrosAtivos?.executor;
+    if (!executor || !this.isTeamContext) return undefined;
+    const jogador = this.jogadores.find((j: any) =>
+      (j.email === executor) || (j.id === executor) || (j._id === executor)
+    );
+    return jogador ? (jogador.email || executor) : executor;
+  }
+
+  /**
+   * Filtra itens de atividade pelo executor selecionado (visão gestor).
+   * Quando há filtro por executor, retorna apenas tarefas cujo user_email corresponde ao executor.
+   */
+  private filtrarItensPorExecutor<T extends { user_email?: string | null }>(items: T[]): T[] {
+    const executorEmail = this.getExecutorEmailParaFiltroTarefas();
+    if (!executorEmail) return items;
+    return items.filter((item: T) => (item.user_email || '').trim() === executorEmail.trim());
   }
 
   /**

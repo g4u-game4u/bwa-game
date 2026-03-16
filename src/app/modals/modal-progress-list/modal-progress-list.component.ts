@@ -28,6 +28,8 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
   @Input() playerId = '';
   @Input() listType: ProgressListType = 'atividades';
   @Input() month?: Date;
+  /** Quando preenchido, filtra a lista no frontend para exibir apenas itens deste usuário (email/id). */
+  @Input() filterByUserId: string | null = null;
   @Output() closed = new EventEmitter<void>();
 
   private destroy$ = new Subject<void>();
@@ -141,8 +143,12 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
         .pipe(takeUntil(this.destroy$))
         .subscribe({
           next: async (results: ActivityListItem[][]) => {
-            // Aggregate all activities from all players
-            this.activityItems = results.flat();
+            let items = results.flat();
+            if (this.filterByUserId && this.filterByUserId.trim()) {
+              const userId = this.filterByUserId.trim();
+              items = items.filter(item => (item.player || '').trim() === userId);
+            }
+            this.activityItems = items;
             // Sort by created date (newest first)
             this.activityItems.sort((a, b) => b.created - a.created);
             
