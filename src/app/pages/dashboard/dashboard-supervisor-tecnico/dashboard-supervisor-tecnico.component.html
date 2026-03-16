@@ -237,12 +237,16 @@
           (click)="switchClientesTab('carteira')"
           role="tab" [attr.aria-selected]="clientesActiveTab === 'carteira'">
           <i class="ri-briefcase-line" aria-hidden="true"></i> Carteira
+          <c4u-info-button infoKey="clientes-carteira" position="top" (click)="$event.stopPropagation()"></c4u-info-button>
+          <span class="tab-count" aria-hidden="true">({{ teamCarteiraClientes.length }})</span>
         </button>
         <button type="button" class="clientes-tab-btn"
           [class.active]="clientesActiveTab === 'participacao'"
           (click)="switchClientesTab('participacao')"
           role="tab" [attr.aria-selected]="clientesActiveTab === 'participacao'">
           <i class="ri-group-line" aria-hidden="true"></i> Participação
+          <c4u-info-button infoKey="clientes-participacao" position="top" (click)="$event.stopPropagation()"></c4u-info-button>
+          <span class="tab-count" aria-hidden="true">({{ teamParticipacaoCnpjs.length }})</span>
         </button>
       </div>
 

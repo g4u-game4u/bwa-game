@@ -420,7 +420,7 @@ export class DashboardSupervisorTecnicoComponent implements OnInit, OnDestroy {
         const playerId = String(playerData._id);
         const extra = playerData.extra || {};
         const points = pointsMap.get(playerId) || 0;
-        const cnpjMetric = extra.cnpj ? parseFloat(extra.cnpj) : 0;
+        const cnpjMetric = this.getCnpjRespCount(extra);
         const entregaMetric = extra.entrega ? parseFloat(extra.entrega) : 0;
 
         const cnpjGoal = extra.cnpj_goal != null ? Number(extra.cnpj_goal) : 100;
@@ -796,7 +796,7 @@ export class DashboardSupervisorTecnicoComponent implements OnInit, OnDestroy {
         const extra = status.extra || {};
         const pointCategories = status.point_categories || status.pointCategories || {};
         const points = Number(pointCategories.points) || 0;
-        const cnpjMetric = extra.cnpj ? parseFloat(extra.cnpj) : 0;
+        const cnpjMetric = this.getCnpjRespCount(extra);
         const entregaMetric = extra.entrega ? parseFloat(extra.entrega) : 0;
 
         const cnpjGoal = extra.cnpj_goal != null ? Number(extra.cnpj_goal) : 100;
@@ -921,6 +921,19 @@ export class DashboardSupervisorTecnicoComponent implements OnInit, OnDestroy {
     if (current >= superTarget) return 'green';
     if (current >= target) return 'yellow';
     return 'red';
+  }
+
+  /**
+   * Conta quantos itens existem no array/string cnpj_resp do jogador (carteira atribuída).
+   */
+  private getCnpjRespCount(extra: Record<string, unknown>): number {
+    const raw = extra?.['cnpj_resp'];
+    if (raw == null) return 0;
+    if (typeof raw === 'string') {
+      return raw.split(/[;,]/).map((s: string) => s.trim()).filter((s: string) => s.length > 0).length;
+    }
+    if (Array.isArray(raw)) return raw.length;
+    return 0;
   }
 
   /** Resolve a team ID to a display name using ACL metadata */

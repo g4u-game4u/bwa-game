@@ -419,7 +419,10 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       // Wait for all member counts to be loaded
       const teamsWithCounts = await Promise.all(memberCountPromises);
       
-      this.teams = teamsWithCounts;
+      // Ordenar equipes/departamentos em ordem alfabética pelo nome
+      this.teams = teamsWithCounts.sort((a, b) =>
+        a.name.localeCompare(b.name, 'pt-BR', { sensitivity: 'base' })
+      );
       this.isLoadingTeams = false;
     } catch (error) {
       this.teams = [];

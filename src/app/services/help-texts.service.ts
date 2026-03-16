@@ -25,7 +25,10 @@ export class HelpTextsService {
     'pontos-total': 'Soma total de todos os pontos (bloqueados e desbloqueados) da equipe durante a temporada.',
     'media-pontos': 'Média de pontos por membro da equipe. Calculado dividindo o total de pontos pelo número de membros. Este valor representa o desempenho médio da equipe.',
     'processos-incompletos': 'Número de processos que ainda não foram finalizados pela equipe. Processos incompletos não geram pontos desbloqueados.',
-    'processos-finalizados': 'Número de processos que foram completamente finalizados pela equipe. Processos finalizados geram pontos desbloqueados e contribuem para o progresso da temporada.'
+    'processos-finalizados': 'Número de processos que foram completamente finalizados pela equipe. Processos finalizados geram pontos desbloqueados e contribuem para o progresso da temporada.',
+    'clientes-carteira-participacao': 'Carteira: empresas sob responsabilidade deste time ou pessoa. Participação: empresas em que houve execução de entregas no período filtrado; podem estar dentro ou fora da carteira.',
+    'clientes-carteira': 'Empresas sob responsabilidade deste time ou pessoa.',
+    'clientes-participacao': 'Empresas em que houve execução de entregas no período filtrado; podem estar dentro ou fora da carteira.'
   };
 
   constructor(private http: HttpClient) {}
