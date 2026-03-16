@@ -76,7 +76,12 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   // Carteira data from action_log (CNPJs with action counts and KPI data)
   carteiraClientes: CompanyDisplay[] = [];
   isLoadingCarteira = true;
-  cnpjNameMap = new Map<string, string>(); // Map of original CNPJ â†’ clean empresa name
+  cnpjNameMap = new Map<string, string>(); // Map of original CNPJ to clean empresa name
+
+  // Clientes sub-tabs: 'carteira' (extra.cnpj_resp) vs 'participacao' (extra.cnpj)
+  clientesActiveTab: 'carteira' | 'participacao' = 'carteira';
+  participacaoCnpjs: { cnpj: string; playerName: string; companyName: string }[] = [];
+  isLoadingParticipacao = false;
   
   // Month selection (undefined = "Toda temporada" / season-wide, no month filtering)
   selectedMonth: Date | undefined = new Date();
@@ -771,6 +776,81 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
         this.focusedElementBeforeModal = null;
       }, 100);
     }
+  }
+  
+  /**
+   * Switch between Carteira and Participação sub-tabs in the Clientes section
+   */
+  switchClientesTab(tab: 'carteira' | 'participacao'): void {
+    this.clientesActiveTab = tab;
+    if (tab === 'participacao' && this.participacaoCnpjs.length === 0 && !this.isLoadingParticipacao) {
+      this.loadParticipacaoData();
+    }
+  }
+  
+  /**
+   * Load participação data from player's extra.cnpj (CNPJs the player has participated with)
+   */
+  private loadParticipacaoData(): void {
+    this.isLoadingParticipacao = true;
+    this.cdr.markForCheck();
+    
+    const playerId = this.getPlayerId();
+    
+    if (!playerId) {
+      this.isLoadingParticipacao = false;
+      this.cdr.markForCheck();
+      return;
+    }
+    
+    // Get player data to access extra.cnpj
+    this.playerService.getPlayerStatus(playerId)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (player) => {
+          const extra = player?.extra as Record<string, unknown> | undefined;
+          const cnpjStr = (extra?.['cnpj'] as string) || '';
+          if (!cnpjStr) {
+            this.participacaoCnpjs = [];
+            this.isLoadingParticipacao = false;
+            this.cdr.markForCheck();
+            return;
+          }
+          
+          // Parse comma-separated CNPJs
+          const cnpjList = cnpjStr.split(',').map((s: string) => s.trim()).filter((s: string) => s.length > 0);
+          
+          // Enrich with company names from empid_cnpj__c
+          this.cnpjLookupService.enrichCnpjList(cnpjList)
+            .pipe(takeUntil(this.destroy$))
+            .subscribe({
+              next: (nameMap) => {
+                this.participacaoCnpjs = cnpjList.map((cnpj: string) => ({
+                  cnpj: cnpj,
+                  playerName: player?.name || '',
+                  companyName: nameMap.get(cnpj) || cnpj
+                }));
+                this.isLoadingParticipacao = false;
+                this.cdr.markForCheck();
+              },
+              error: () => {
+                // Fallback without enriched names
+                this.participacaoCnpjs = cnpjList.map((cnpj: string) => ({
+                  cnpj: cnpj,
+                  playerName: player?.name || '',
+                  companyName: cnpj
+                }));
+                this.isLoadingParticipacao = false;
+                this.cdr.markForCheck();
+              }
+            });
+        },
+        error: () => {
+          this.participacaoCnpjs = [];
+          this.isLoadingParticipacao = false;
+          this.cdr.markForCheck();
+        }
+      });
   }
   
   /**

@@ -30,6 +30,42 @@
 .dashboard-header {
   flex-shrink: 0;
   margin-bottom: $spacing-lg;
+  display: flex;
+  align-items: center;
+  gap: $spacing-md;
+  
+  .header-spacer {
+    flex: 1;
+  }
+  
+  .logout-button {
+    display: flex;
+    align-items: center;
+    gap: $spacing-xs;
+    padding: $spacing-sm $spacing-md;
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    border-radius: $border-radius-sm;
+    color: #ef4444;
+    font-size: $font-size-small;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    
+    i {
+      font-size: 1rem;
+    }
+    
+    &:hover {
+      background: rgba(239, 68, 68, 0.2);
+      border-color: rgba(239, 68, 68, 0.5);
+    }
+    
+    &:focus {
+      outline: 2px solid #ef4444;
+      outline-offset: 2px;
+    }
+  }
 }
 
 .info-card-section {

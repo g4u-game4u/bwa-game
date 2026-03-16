@@ -670,4 +670,22 @@ export class DashboardSupervisorComponent implements OnInit, OnDestroy {
   roundValue(value: number): number {
     return Math.round(value);
   }
+
+  /**
+   * Logout user and redirect to login page
+   * Includes double confirmation to prevent accidental logout
+   */
+  logout(): void {
+    const firstConfirm = window.confirm('Tem certeza que deseja sair do sistema?');
+    if (!firstConfirm) {
+      return;
+    }
+
+    const secondConfirm = window.confirm('Esta ação irá desconectar você do sistema. Deseja continuar?');
+    if (!secondConfirm) {
+      return;
+    }
+
+    this.sessaoProvider.logout();
+  }
 }

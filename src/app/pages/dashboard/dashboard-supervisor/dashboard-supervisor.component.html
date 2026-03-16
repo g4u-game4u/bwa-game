@@ -115,6 +115,15 @@
           (onSelectedMonth)="onMonthChange($event)"
           aria-label="Filtro de mês">
         </c4u-seletor-mes>
+        <div class="header-spacer"></div>
+        <button 
+          class="logout-button"
+          (click)="logout()"
+          aria-label="Sair do sistema"
+          title="Sair">
+          <i class="ri-logout-box-line" aria-hidden="true"></i>
+          <span>Sair</span>
+        </button>
       </header>
 
       <!-- View Toggle: Card / Table -->
