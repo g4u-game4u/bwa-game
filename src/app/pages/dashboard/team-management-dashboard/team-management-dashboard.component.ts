@@ -16,11 +16,11 @@ import { FunifierApiService } from '@services/funifier-api.service';
 import { PlayerService } from '@services/player.service';
 import { ActionLogService } from '@services/action-log.service';
 import { UserProfileService } from '@services/user-profile.service';
-import { UserProfile } from '@utils/user-profile';
 import { CompanyDisplay, CompanyKpiService } from '@services/company-kpi.service';
 import { KPIData } from '@app/model/gamification-dashboard.model';
 import { KPIService } from '@services/kpi.service';
 import { CnpjLookupService } from '@services/cnpj-lookup.service';
+import { ACLService } from '@services/acl.service';
 
 // Models
 import { Team } from '@components/c4u-team-selector/c4u-team-selector.component';
@@ -160,7 +160,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
   teamTotalPoints: number = 0;
   teamAveragePoints: number = 0;
   teamTotalTasks: number = 0;
-  teamTotalBlockedPoints: number = 0; // Sum of blocked points from all team members
+  teamTotalBlockedPoints: number = 0; // Deprecated: locked points no longer displayed (Requirement 16.4)
   teamMemberIds: string[] = [];
   teamMembersData: any[] = []; // Store full player data from aggregate (includes extra.cnpj_resp)
   
@@ -180,10 +180,15 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
   // Company/Carteira data for team
   teamCarteiraClientes: CompanyDisplay[] = [];
   isLoadingCarteira: boolean = false;
+
+  // Clientes sub-tabs: 'carteira' (action_log CNPJs) vs 'participacao' (extra.cnpj from players)
+  clientesActiveTab: 'carteira' | 'participacao' = 'carteira';
+  teamParticipacaoCnpjs: { cnpj: string; playerName: string; companyName: string }[] = [];
+  isLoadingParticipacao: boolean = false;
   cnpjNameMap = new Map<string, string>(); // Map of original CNPJ â†’ clean empresa name
-  
+
   // Monthly points breakdown
-  monthlyPointsBreakdown: { bloqueados: number; desbloqueados: number } | null = null;
+  monthlyPointsBreakdown: { desbloqueados: number } | null = null;
   
   // Company detail modal state
   isCompanyCarteiraDetailModalOpen: boolean = false;
@@ -236,7 +241,8 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
     private kpiService: KPIService,
     private cnpjLookupService: CnpjLookupService,
     private router: Router,
-    private cdr: ChangeDetectorRef
+    private cdr: ChangeDetectorRef,
+    private aclService: ACLService
   ) {}
 
   ngOnInit(): void {
@@ -253,9 +259,9 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
    * 
    * This method is called on component initialization and performs the following:
    * 1. Loads season dates from the SeasonDatesService
-   * 2. Identifies the user's management team (GESTAO, SUPERVISÃƒO, or DIREÃ‡ÃƒO)
-   * 3. Fetches team information from Funifier to get the team name
-   * 4. Loads all data for the user's team
+   * 2. Loads available teams via ACL Service (Virtual Good-based access control)
+   * 3. Selects the first available team or previously selected team
+   * 4. Loads all data for the selected team
    * 
    * @private
    * @async
@@ -323,89 +329,47 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Get the management team ID that the current user belongs to.
+   * Load all available teams from Funifier, filtered by Virtual Good-based ACL.
    * 
-   * Uses UserProfileService to get the user's own team ID based on their profile.
-   * 
-   * @private
-   * @returns The team ID if user belongs to a management team, null otherwise
-   * 
-   * @example
-   * const teamId = this.getUserManagementTeamId();
-   * // Returns: 'FkmdnFU' or 'Fkmdmko' or null (DIRETOR returns null as they can see all)
-   */
-  private getUserManagementTeamId(): string | null {
-    return this.userProfileService.getCurrentUserOwnTeamId();
-  }
-
-  /**
-   * Load all available teams from Funifier and filter by user profile.
-   * 
-   * Filtering logic based on profile:
-   * - JOGADOR: No teams (should not reach here)
-   * - SUPERVISOR: Only their own SUPERVISÃƒO team
-   * - GESTOR: Their GESTAO team and potentially other teams they manage
-   * - DIRETOR: All teams (no filtering)
+   * Uses ACL Service to determine which Operational Teams the user has access to
+   * via Virtual Good possession (quantity > 0 in catalog_items).
+   * All profiles (GESTOR, DIRETOR, SUPERVISOR) use the same ACL Service check.
    * 
    * @private
    * @async
    * @returns Promise that resolves when teams are loaded
+   * @see ACLService.getAccessibleTeamIds
    */
   private async loadAvailableTeams(): Promise<void> {
     try {
       this.isLoadingTeams = true;
       
-      const profile = this.userProfileService.getCurrentUserProfile();
-      // Debug: Log user's teams from session
-      const userTeams = this.sessaoProvider.usuario?.teams;
+      // Get current user's player ID for ACL Service lookup
+      const usuario = this.sessaoProvider.usuario as { _id?: string; email?: string } | null;
+      const playerId = usuario?._id || usuario?.email || '';
+      
+      // Use ACL Service to get accessible team IDs via Virtual Good possession
+      // This replaces the old team-membership-based logic with Virtual Good-based ACL
+      // For all profiles (GESTOR, DIRETOR, SUPERVISOR), the ACL Service returns
+      // team IDs where the user has a Virtual Good with quantity > 0
+      const accessibleTeamIds = await firstValueFrom(
+        this.aclService.getAccessibleTeamIds(playerId).pipe(takeUntil(this.destroy$))
+      ).catch((error) => {
+        console.error('[TeamManagementDashboard] Failed to get accessible teams from ACL Service:', error);
+        return [] as string[];
+      });
+      
       // Fetch all teams from Funifier
       const allTeams = await firstValueFrom(
         this.funifierApi.get<any[]>(`/v3/team`).pipe(takeUntil(this.destroy$))
       ).catch((error) => {
-                return [];
+        return [];
       });
       
-      let availableTeams: any[] = [];
+      let availableTeams: any[];
       
-      if (profile === UserProfile.DIRETOR) {
-        // DIRETOR can see all teams
-        availableTeams = allTeams.map((team: any) => ({
-          id: team._id || team.id,
-          name: team.name || team._id || team.id,
-          memberCount: 0 // Will be updated below
-        }));
-        } else {
-        // Get accessible team IDs based on profile
-        let accessibleTeamIds = this.userProfileService.getAccessibleTeamIds();
-        // If no accessible teams found, use ALL user's teams (except management team)
-        if (accessibleTeamIds.length === 0 && userTeams && Array.isArray(userTeams)) {
-          // Extract team IDs from user's teams
-          const userTeamIds = userTeams.map((team: any) => {
-            if (typeof team === 'string') return team;
-            if (team && typeof team === 'object' && team._id) return team._id;
-            return null;
-          }).filter(Boolean) as string[];
-          
-          // For GESTOR, filter out the GESTAO team
-          if (profile === UserProfile.GESTOR) {
-            accessibleTeamIds = userTeamIds.filter(id => id !== 'FkmdnFU');
-          } else if (profile === UserProfile.SUPERVISOR) {
-            accessibleTeamIds = userTeamIds.filter(id => id !== 'Fkmdmko');
-          } else {
-            accessibleTeamIds = userTeamIds;
-          }
-          
-          }
-        
-        // If still no accessible teams, try to get their own team
-        if (accessibleTeamIds.length === 0) {
-          const ownTeamId = this.userProfileService.getCurrentUserOwnTeamId();
-          if (ownTeamId) {
-            accessibleTeamIds.push(ownTeamId);
-            }
-        }
-        
-        // Filter teams to show only those the user has access to
+      if (accessibleTeamIds.length > 0) {
+        // Filter teams to show only those the user has Virtual Good access to
         availableTeams = allTeams
           .filter((team: any) => {
             const teamId = team._id || team.id;
@@ -416,8 +380,10 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
             name: team.name || team._id || team.id,
             memberCount: 0 // Will be updated below
           }));
-        
-        }
+      } else {
+        // No accessible teams from ACL — user has no Virtual Good access
+        availableTeams = [];
+      }
       
       // Load member count for each team using aggregate queries
       const memberCountPromises = availableTeams.map(async (team) => {
@@ -439,14 +405,14 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
               aggregatePayload
             ).pipe(takeUntil(this.destroy$))
           ).catch((error) => {
-                        return [];
+            return [];
           });
           
           // Extract count from result
           const count = result && result.length > 0 && result[0].total ? result[0].total : 0;
           return { ...team, memberCount: count };
         } catch (error) {
-                    return { ...team, memberCount: 0 };
+          return { ...team, memberCount: 0 };
         }
       });
       
@@ -456,7 +422,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       this.teams = teamsWithCounts;
       this.isLoadingTeams = false;
     } catch (error) {
-            this.teams = [];
+      this.teams = [];
       this.isLoadingTeams = false;
       this.toastService.error('Erro ao carregar equipes');
     }
@@ -465,8 +431,10 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
   /**
    * Load team members data (member IDs, points, tasks) from Funifier.
    * 
-   * Uses POST aggregate query to /database/player/aggregate?strict=true
-   * to filter players by team membership, then fetches status data and points for each member.
+   * Uses POST aggregate query on player_status to fetch all players belonging to the
+   * specified team. The teamId parameter comes from the ACL-filtered teams list
+   * (populated by loadAvailableTeams via ACL Service), ensuring only authorized
+   * team data is loaded.
    * 
    * Points are calculated for the selected month using achievement collection.
    * Tasks are taken from extra.tarefas_finalizadas in player status.
@@ -477,7 +445,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
    * @param teamId - The Funifier team ID (e.g., 'FkmdnFU')
    * @returns Promise that resolves when team members data is loaded
    */
-  private async loadTeamMembersData(teamId: string): Promise<void> {
+  private async loadTeamMembersData(teamId: string, dateRange?: { start: Date; end: Date }): Promise<void> {
     try {
       // OPTIMIZED: Use single aggregate query on player_status to get all team members' data
       // This replaces individual player status requests with one batched request
@@ -509,7 +477,6 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
                 this.teamTotalPoints = 0;
         this.teamAveragePoints = 0;
         this.teamTotalTasks = 0;
-        this.teamTotalBlockedPoints = 0;
         this.cdr.markForCheck();
         return;
       }
@@ -518,12 +485,11 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       // No need for individual requests - all data is already in allPlayersStatus
       let totalPoints = 0;
       let totalTasks = 0;
-      let totalBlockedPoints = 0;
       let validMembers = 0;
       
-      // Calculate points for the selected month using achievement aggregate
-      const monthStart = dayjs(this.selectedMonth).startOf('month');
-      const monthEnd = dayjs(this.selectedMonth).endOf('month');
+      // Calculate points for the selected date range (supports "Toda temporada")
+      const monthStart = dateRange ? dayjs(dateRange.start) : dayjs(this.selectedMonth).startOf('month');
+      const monthEnd = dateRange ? dayjs(dateRange.end) : dayjs(this.selectedMonth).endOf('month');
       
       // Fetch points for all team members in one aggregate query
       const pointsAggregatePayload = [
@@ -572,19 +538,6 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
         const tasks = status.extra?.tarefas_finalizadas || 0;
         totalTasks += tasks;
         
-        // Get blocked points from status
-        let blockedPoints = 0;
-        if (status.point_categories?.locked_points) {
-          if (typeof status.point_categories.locked_points === 'object' && status.point_categories.locked_points.total) {
-            blockedPoints = status.point_categories.locked_points.total;
-          } else if (typeof status.point_categories.locked_points === 'number') {
-            blockedPoints = status.point_categories.locked_points;
-          }
-        } else if (status.point_wallet?.bloqueados) {
-          blockedPoints = status.point_wallet.bloqueados;
-        }
-        totalBlockedPoints += blockedPoints;
-        
         validMembers++;
         });
       
@@ -592,14 +545,12 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       this.teamTotalPoints = Math.floor(totalPoints);
       this.teamAveragePoints = validMembers > 0 ? Math.floor(totalPoints / validMembers) : 0;
       this.teamTotalTasks = Math.floor(totalTasks);
-      this.teamTotalBlockedPoints = Math.floor(totalBlockedPoints);
       
       this.cdr.markForCheck();
     } catch (error) {
             this.teamTotalPoints = 0;
       this.teamAveragePoints = 0;
       this.teamTotalTasks = 0;
-      this.teamTotalBlockedPoints = 0;
       this.cdr.markForCheck();
     }
   }
@@ -696,7 +647,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
         // Otherwise, load team aggregated data
         // First, reload team members data to recalculate points for the selected month
         // This is important when the month changes, as points need to be recalculated
-        await this.loadTeamMembersData(this.selectedTeamId);
+        await this.loadTeamMembersData(this.selectedTeamId, dateRange);
         
         // Then, load team activity and macro data (needed for sidebar aggregation)
         await this.loadTeamActivityAndMacroData(dateRange);
@@ -798,8 +749,17 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
    */
   private calculateDateRange(): { start: Date; end: Date } {
     const now = dayjs();
-    const targetMonth = now.subtract(this.selectedMonthsAgo, 'month');
     const seasonStartDate = dayjs('2026-01-01');
+
+    // Handle "Toda temporada" (-1) — return full season range
+    if (this.selectedMonthsAgo === -1) {
+      return {
+        start: seasonStartDate.toDate(),
+        end: now.endOf('month').toDate()
+      };
+    }
+
+    const targetMonth = now.subtract(this.selectedMonthsAgo, 'month');
     
     // Check if the target month is January or February 2026
     const targetYear = targetMonth.year();
@@ -849,9 +809,11 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       this.hasSidebarError = false;
       this.sidebarErrorMessage = '';
       
-      // Get progress metrics and points for the collaborator
+      // Get progress metrics for the collaborator
+      // Use undefined for "Toda temporada" to get season-wide data
+      const monthForMetrics = this.selectedMonthsAgo === -1 ? undefined : this.selectedMonth;
       const metrics = await firstValueFrom(
-        this.actionLogService.getProgressMetrics(collaboratorId, this.selectedMonth)
+        this.actionLogService.getProgressMetrics(collaboratorId, monthForMetrics)
           .pipe(takeUntil(this.destroy$))
       ).catch((error) => {
                 this.hasSidebarError = true;
@@ -862,36 +824,15 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
         };
       });
       
-      // Get player status to get blocked points
-      const status = await firstValueFrom(
-        this.funifierApi.get<any>(`/v3/player/${collaboratorId}/status`).pipe(takeUntil(this.destroy$))
-      ).catch((error) => {
-                return null;
-      });
-      
-      // Calculate blocked points from status
-      let blockedPoints = 0;
-      if (status) {
-        if (status.point_categories?.locked_points) {
-          if (typeof status.point_categories.locked_points === 'object' && status.point_categories.locked_points.total) {
-            blockedPoints = status.point_categories.locked_points.total;
-          } else if (typeof status.point_categories.locked_points === 'number') {
-            blockedPoints = status.point_categories.locked_points;
-          }
-        } else if (status.point_wallet?.bloqueados) {
-          blockedPoints = status.point_wallet.bloqueados;
-        }
-      }
-      
       const totalPoints = metrics.activity.pontos;
-      const unlockedPoints = Math.max(0, totalPoints - blockedPoints);
       
       // Set sidebar data for collaborator
       // Round down all values to remove decimals
+      // No locked points displayed (Requirement 16.4)
       this.seasonPoints = {
         total: Math.floor(totalPoints),
-        bloqueados: Math.floor(blockedPoints),
-        desbloqueados: Math.floor(unlockedPoints)
+        bloqueados: 0,
+        desbloqueados: Math.floor(totalPoints)
       };
       
       this.progressMetrics = {
@@ -919,7 +860,6 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       this.teamTotalPoints = Math.floor(totalPoints);
       this.teamAveragePoints = Math.floor(totalPoints); // For single collaborator, average = total
       this.teamTotalTasks = Math.floor(metrics.activity.finalizadas);
-      this.teamTotalBlockedPoints = Math.floor(blockedPoints);
       
       // Update formatted data for gamification dashboard components
       this.updateFormattedSidebarData();
@@ -975,15 +915,13 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       // Use aggregated data from team members (from loadTeamMembersData and loadTeamActivityAndMacroData)
       // All data should be aggregated directly from team members, not from aggregate queries
       // Points: Sum from all team members' points for the selected month
-      // Blocked points: Sum from all team members' locked_points
-      // Unlocked points: Total points minus blocked points
+      // No locked points displayed (Requirement 16.4)
       // Round down all values to remove decimals
-      const unlockedPoints = Math.max(0, this.teamTotalPoints - this.teamTotalBlockedPoints);
       
       this.seasonPoints = {
-        total: Math.floor(this.teamTotalPoints), // Always use aggregated points from members (for selected month)
-        bloqueados: Math.floor(this.teamTotalBlockedPoints > 0 ? this.teamTotalBlockedPoints : points.bloqueados), // Use aggregated blocked points or fallback
-        desbloqueados: Math.floor(unlockedPoints > 0 ? unlockedPoints : this.teamTotalPoints) // Unlocked = total - blocked
+        total: Math.floor(this.teamTotalPoints),
+        bloqueados: 0, // No locked points displayed (Requirement 16.4)
+        desbloqueados: Math.floor(this.teamTotalPoints) // All points shown as unlocked
       };
       
       // Progress metrics: Use aggregated data from team members
@@ -1084,8 +1022,10 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       this.goalsErrorMessage = '';
       
       // Get progress metrics for the collaborator
+      // Use undefined for "Toda temporada" to get season-wide data
+      const monthForMetrics = this.selectedMonthsAgo === -1 ? undefined : this.selectedMonth;
       const metrics = await firstValueFrom(
-        this.actionLogService.getProgressMetrics(collaboratorId, this.selectedMonth)
+        this.actionLogService.getProgressMetrics(collaboratorId, monthForMetrics)
           .pipe(takeUntil(this.destroy$))
       ).catch((error) => {
                 return {
@@ -1870,8 +1810,10 @@ private calculateCollaboratorTotals(memberData: Array<{
     try {
       this.isLoadingCarteira = true;
       // Get CNPJ list with action counts and process counts for the collaborator
+      // Use undefined for "Toda temporada" to get season-wide data
+      const monthForQuery = this.selectedMonthsAgo === -1 ? undefined : this.selectedMonth;
       const carteiraData = await firstValueFrom(
-        this.actionLogService.getPlayerCnpjListWithCount(collaboratorId, this.selectedMonth)
+        this.actionLogService.getPlayerCnpjListWithCount(collaboratorId, monthForQuery)
           .pipe(takeUntil(this.destroy$))
       ).catch((error) => {
                 return [];
@@ -1935,11 +1877,9 @@ private calculateCollaboratorTotals(memberData: Array<{
         return;
       }
       
-      // Calculate date range for the selected month
-      const monthStart = dayjs(this.selectedMonth).startOf('month').toDate();
-      const monthEnd = dayjs(this.selectedMonth).endOf('month').toDate();
-      
-      // OPTIMIZED: Use single aggregate query with $lookup - 1 API call instead of N
+      // Use dateRange parameter for proper "Toda temporada" support
+      const monthStart = dayjs(dateRange.start).startOf('day').toDate();
+      const monthEnd = dayjs(dateRange.end).endOf('day').toDate();
       const cnpjListWithCounts = await firstValueFrom(
         this.teamAggregateService.getTeamCnpjListWithCount(
           this.selectedTeamId,
@@ -1995,6 +1935,62 @@ private calculateCollaboratorTotals(memberData: Array<{
     }
   }
 
+  /** Switch between Carteira and Participacao sub-tabs in the Clientes section */
+  switchClientesTab(tab: 'carteira' | 'participacao'): void {
+    this.clientesActiveTab = tab;
+    if (tab === 'participacao' && this.teamParticipacaoCnpjs.length === 0 && !this.isLoadingParticipacao) {
+      this.loadParticipacaoData();
+    }
+    this.cdr.markForCheck();
+  }
+
+  /** Load CNPJs from extra.cnpj of each team member for the Participacao tab */
+  private async loadParticipacaoData(): Promise<void> {
+    this.isLoadingParticipacao = true;
+    this.cdr.markForCheck();
+
+    try {
+      const seen = new Set<string>();
+      const rows: { cnpj: string; playerName: string; companyName: string }[] = [];
+
+      for (const player of this.teamMembersData) {
+        const raw: string = player?.extra?.cnpj || '';
+        if (!raw) continue;
+
+        const cnpjs = raw.split(/[;,]/).map((s: string) => s.trim()).filter((s: string) => s.length > 0);
+        for (const cnpj of cnpjs) {
+          if (seen.has(cnpj)) continue;
+          seen.add(cnpj);
+          rows.push({
+            cnpj,
+            playerName: player.name || player._id || '',
+            companyName: this.cnpjNameMap.get(cnpj) || cnpj
+          });
+        }
+      }
+
+      // Try to enrich unknown company names
+      const unknownCnpjs = rows.filter(r => r.companyName === r.cnpj).map(r => r.cnpj);
+      if (unknownCnpjs.length > 0) {
+        const names = await firstValueFrom(
+          this.cnpjLookupService.enrichCnpjList(unknownCnpjs).pipe(takeUntil(this.destroy$))
+        ).catch(() => new Map<string, string>());
+        for (const row of rows) {
+          const name = names.get(row.cnpj);
+          if (name) row.companyName = name;
+        }
+      }
+
+      this.teamParticipacaoCnpjs = rows;
+    } catch (error) {
+      console.error('Error loading participacao data:', error);
+      this.teamParticipacaoCnpjs = [];
+    } finally {
+      this.isLoadingParticipacao = false;
+      this.cdr.markForCheck();
+    }
+  }
+
   /**
    * Handle team selection change event.
    * 
@@ -2030,16 +2026,19 @@ private calculateCollaboratorTotals(memberData: Array<{
       this.selectedTeam = team.name;
       this.displayTeamName = team.name; // Update display name
       
-      // Reset collaborator filter when team changes
+      // Reset collaborator filter and participação data when team changes
       if (isTeamChanging) {
         this.selectedCollaborator = null;
+        this.teamParticipacaoCnpjs = [];
+        this.clientesActiveTab = 'carteira';
       }
       
       // Save team selection to localStorage
       localStorage.setItem('selectedTeamId', teamId);
       
       // Load team members data first (this sets teamTotalPoints, etc.)
-      await this.loadTeamMembersData(teamId);
+      const dateRange = this.calculateDateRange();
+      await this.loadTeamMembersData(teamId, dateRange);
       
       // Then load all other team data
       await this.loadTeamData();
@@ -2183,12 +2182,18 @@ private calculateCollaboratorTotals(memberData: Array<{
    */
   onMonthChange(monthsAgo: number): void {
     this.selectedMonthsAgo = monthsAgo;
-    // Calculate the target month date (similar to gamification-dashboard)
-    const date = new Date();
-    date.setMonth(date.getMonth() - monthsAgo);
-    this.selectedMonth = date;
-    const monthName = date.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
-    this.announceToScreenReader(`MÃªs alterado para ${monthName}`);
+    // Handle "Toda temporada" (-1) — null means no month filtering (season-wide)
+    if (monthsAgo === -1) {
+      this.selectedMonth = null as any;
+      this.announceToScreenReader('Filtro alterado para toda temporada');
+    } else {
+      // Calculate the target month date (similar to gamification-dashboard)
+      const date = new Date();
+      date.setMonth(date.getMonth() - monthsAgo);
+      this.selectedMonth = date;
+      const monthName = date.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+      this.announceToScreenReader(`Mês alterado para ${monthName}`);
+    }
     this.loadTeamData();
   }
 
@@ -2403,49 +2408,55 @@ private calculateCollaboratorTotals(memberData: Array<{
    * @returns Promise that resolves when monthly points breakdown is loaded
    */
   private async loadMonthlyPointsBreakdown(collaboratorId?: string): Promise<void> {
-    try {
-      if (collaboratorId) {
-        // Load for specific collaborator (single request)
-        const breakdown = await firstValueFrom(
-          this.actionLogService.getMonthlyPointsBreakdown(collaboratorId, this.selectedMonth)
-            .pipe(takeUntil(this.destroy$))
-        ).catch((error) => {
-                    return { bloqueados: 0, desbloqueados: 0 };
-        });
-        
-        this.monthlyPointsBreakdown = breakdown;
-      } else {
-        // OPTIMIZED: Use single aggregate query for all team members
-        if (this.teamMemberIds.length === 0) {
-          this.monthlyPointsBreakdown = { bloqueados: 0, desbloqueados: 0 };
-          return;
-        }
-        
-        // Calculate date range for the selected month
-        const monthStart = dayjs(this.selectedMonth).startOf('month').toDate();
-        const monthEnd = dayjs(this.selectedMonth).endOf('month').toDate();
-        
-        // Use optimized team aggregate service - single API call instead of N calls
-        const breakdown = await firstValueFrom(
-          this.teamAggregateService.getTeamMonthlyPointsBreakdown(
-            this.teamMemberIds,
-            monthStart,
-            monthEnd
-          ).pipe(takeUntil(this.destroy$))
-        ).catch((error) => {
-          console.error('Error loading team monthly points breakdown (optimized):', error);
-          return { bloqueados: 0, desbloqueados: 0 };
-        });
-        
-        this.monthlyPointsBreakdown = breakdown;
-        }
-      
-      this.cdr.markForCheck();
-    } catch (error) {
-            this.monthlyPointsBreakdown = { bloqueados: 0, desbloqueados: 0 };
-      this.cdr.markForCheck();
+      try {
+        // Use undefined for "Toda temporada" to get season-wide data
+        const monthForQuery = this.selectedMonthsAgo === -1 ? undefined : this.selectedMonth;
+        if (collaboratorId) {
+          // Load for specific collaborator (single request)
+          const breakdown = await firstValueFrom(
+            this.actionLogService.getMonthlyPointsBreakdown(collaboratorId, monthForQuery)
+              .pipe(takeUntil(this.destroy$))
+          ).catch((error) => {
+                      return { bloqueados: 0, desbloqueados: 0 };
+          });
+
+          // No locked points displayed (Requirement 16.4) — only pass desbloqueados
+          this.monthlyPointsBreakdown = { desbloqueados: breakdown.desbloqueados || 0 };
+        } else {
+          // OPTIMIZED: Use single aggregate query for all team members
+          if (this.teamMemberIds.length === 0) {
+            this.monthlyPointsBreakdown = { desbloqueados: 0 };
+            return;
+          }
+
+          // Use dateRange from calculateDateRange for proper "Toda temporada" support
+          const calcRange = this.calculateDateRange();
+          const monthStart = dayjs(calcRange.start).startOf('day').toDate();
+          const monthEnd = dayjs(calcRange.end).endOf('day').toDate();
+
+          // Use optimized team aggregate service - single API call instead of N calls
+          const breakdown = await firstValueFrom(
+            this.teamAggregateService.getTeamMonthlyPointsBreakdown(
+              this.teamMemberIds,
+              monthStart,
+              monthEnd
+            ).pipe(takeUntil(this.destroy$))
+          ).catch((error) => {
+            console.error('Error loading team monthly points breakdown (optimized):', error);
+            return { bloqueados: 0, desbloqueados: 0 };
+          });
+
+          // No locked points displayed (Requirement 16.4) — only pass desbloqueados
+          this.monthlyPointsBreakdown = { desbloqueados: breakdown.desbloqueados || 0 };
+          }
+
+        this.cdr.markForCheck();
+      } catch (error) {
+              this.monthlyPointsBreakdown = { desbloqueados: 0 };
+        this.cdr.markForCheck();
+      }
     }
-  }
+
 
   /**
    * Get team player IDs as comma-separated string for modal.
@@ -2588,8 +2599,10 @@ private calculateCollaboratorTotals(memberData: Array<{
       
       if (collaboratorId) {
         // For single collaborator, use their KPIs
+        // Use undefined for "Toda temporada" to get season-wide data
+        const monthForKPIs = this.selectedMonthsAgo === -1 ? undefined : this.selectedMonth;
         const kpis = await firstValueFrom(
-          this.kpiService.getPlayerKPIs(collaboratorId, this.selectedMonth, this.actionLogService)
+          this.kpiService.getPlayerKPIs(collaboratorId, monthForKPIs, this.actionLogService)
             .pipe(takeUntil(this.destroy$))
         );
         this.teamKPIs = kpis || [];
@@ -2609,7 +2622,7 @@ private calculateCollaboratorTotals(memberData: Array<{
         const totalEmpresasAtual = this.teamCarteiraClientes.length;
         
         // Fetch cnpj_goal from all team members using aggregate query
-        // Sum all cnpj_goal values, defaulting each member to 10 if not set
+        // Sum all cnpj_goal values, defaulting each member to 100 if not set
         let somaMetasEmpresas = 0;
         try {
           const aggregateQuery = [
@@ -2635,29 +2648,29 @@ private calculateCollaboratorTotals(memberData: Array<{
                         return [] as { _id: string; cnpj_goal?: number }[];
           });
           
-          // Sum all cnpj_goal from team members, defaulting to 10 for each member without a goal
+          // Sum all cnpj_goal from team members, defaulting to 100 for each member without a goal
           somaMetasEmpresas = playerCnpjGoals.reduce((sum: number, player: { _id: string; cnpj_goal?: number }) => {
             const cnpjGoal = player.cnpj_goal;
             
-            // Default to 10 if cnpj_goal is null or undefined
+            // Default to 100 if cnpj_goal is null or undefined
             if (cnpjGoal === undefined || cnpjGoal === null) {
-              return sum + 10;
+              return sum + 100;
             }
             
             const numValue = typeof cnpjGoal === 'number' 
               ? cnpjGoal 
               : parseInt(String(cnpjGoal), 10);
-            return sum + (isNaN(numValue) ? 10 : numValue);
+            return sum + (isNaN(numValue) ? 100 : numValue);
           }, 0);
           
-          // If no members were found, use default of 10 per member
+          // If no members were found, use default of 100 per member
           if (playerCnpjGoals.length === 0) {
-            somaMetasEmpresas = this.teamMemberIds.length * 10;
+            somaMetasEmpresas = this.teamMemberIds.length * 100;
           }
           
           } catch (error) {
                     // Fallback to default if error
-          somaMetasEmpresas = this.teamMemberIds.length * 10;
+          somaMetasEmpresas = this.teamMemberIds.length * 100;
         }
         
         // Use sum of goals (already includes defaults for members without goals)
@@ -2677,9 +2690,12 @@ private calculateCollaboratorTotals(memberData: Array<{
         
         // 2. Entregas no Prazo: fetch from player data using single aggregate query
         // Only fetch if we're looking at current month (entrega is only valid for current month)
+        // "Toda temporada" includes current month data
         const now = new Date();
-        const isCurrentMonth = this.selectedMonth.getFullYear() === now.getFullYear() && 
-                               this.selectedMonth.getMonth() === now.getMonth();
+        const isCurrentMonth = this.selectedMonthsAgo === -1 || (
+          this.selectedMonth && this.selectedMonth.getFullYear() === now.getFullYear() && 
+          this.selectedMonth.getMonth() === now.getMonth()
+        );
         
         if (isCurrentMonth) {
           try {
@@ -3121,6 +3137,16 @@ private calculateCollaboratorTotals(memberData: Array<{
     this.metaSaveMessage = '';
     this.metaSaveSuccess = false;
     this.cdr.markForCheck();
+  }
+
+  /** Whether the current user is a SUPERVISOR (used to show return button) */
+  get isSupervisorUser(): boolean {
+    return this.userProfileService.isSupervisor();
+  }
+
+  /** Navigate back to the new Dashboard Supervisor (Card/Table View) */
+  navigateToSupervisorDashboard(): void {
+    this.router.navigate(['/dashboard/supervisor']);
   }
 
   /**

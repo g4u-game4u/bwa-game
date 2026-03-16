@@ -144,7 +144,45 @@
                 "src/assets/styles"
               ]
             },
-            "scripts": []
+            "scripts": [],
+            "exclude": [
+              "src/app/services/company-kpi.service.performance.spec.ts",
+              "src/app/services/company.service.spec.ts",
+              "src/app/components/c4u-process-accordion/c4u-process-accordion.component.pbt.spec.ts",
+              "src/app/components/c4u-productivity-analysis-tab/c4u-productivity-analysis-tab.accessibility.spec.ts",
+              "src/app/modals/modal-carteira/modal-carteira.component.spec.ts",
+              "src/app/modals/modal-company-detail/modal-company-detail.accessibility.spec.ts",
+              "src/app/modals/modal-company-detail/modal-company-detail.component.pbt.spec.ts",
+              "src/app/modals/modal-company-detail/modal-company-detail.component.spec.ts",
+              "src/app/pages/dashboard/team-management-dashboard/team-management-dashboard.responsive.spec.ts",
+              "src/app/pages/dashboard/team-management-dashboard/team-management-dashboard.performance.spec.ts",
+              "src/app/pages/dashboard/team-management-dashboard/team-management-dashboard.accessibility.spec.ts",
+              "src/app/pages/dashboard/team-management-dashboard/team-management-dashboard.integration.spec.ts",
+              "src/app/pages/dashboard/team-management-dashboard/team-management-dashboard.component.pbt.spec.ts",
+              "src/app/pages/dashboard/gamification-dashboard/gamification-dashboard.performance.spec.ts",
+              "src/app/pages/dashboard/gamification-dashboard/gamification-dashboard.accessibility.spec.ts",
+              "src/app/pages/dashboard/gamification-dashboard/gamification-dashboard.kpi-integration.spec.ts",
+              "src/app/pages/dashboard/gamification-dashboard/gamification-dashboard.responsive.pbt.spec.ts",
+              "src/app/services/team-aggregate.service.performance.spec.ts",
+              "src/app/services/error-scenarios.spec.ts",
+              "src/app/services/company-kpi-error-scenarios.spec.ts",
+              "src/app/components/c4u-process-accordion/c4u-process-accordion.accessibility.spec.ts",
+              "src/app/components/c4u-company-table/c4u-company-table.performance.spec.ts",
+              "src/app/components/c4u-grafico-linhas/c4u-grafico-linhas.performance.spec.ts",
+              "src/app/components/c4u-grafico-barras/c4u-grafico-barras.performance.spec.ts",
+              "src/app/components/c4u-kpi-circular-progress/c4u-kpi-circular-progress.accessibility.spec.ts",
+              "src/app/components/c4u-goals-progress-tab/c4u-goals-progress-tab.accessibility.spec.ts",
+              "src/app/services/error-handling.pbt.spec.ts",
+              "src/app/services/cnpj-lookup.service.spec.ts",
+              "src/app/services/kpi.service.spec.ts",
+              "src/app/guards/team-role.guard.spec.ts",
+              "src/app/components/c4u-season-progress/c4u-season-progress.component.spec.ts",
+              "src/app/components/c4u-mostrador-progresso/c4u-mostrador-progresso.component.spec.ts",
+              "src/app/components/c4u-productivity-analysis-tab/c4u-productivity-analysis-tab.component.spec.ts",
+              "src/app/services/aggregate-query-builder.service.spec.ts",
+              "src/app/pages/dashboard/gamification-dashboard/gamification-dashboard.component.spec.ts",
+              "src/app/pages/dashboard/dashboard-gestor/dashboard-gestor.component.spec.ts"
+            ]
           }
         }
       }

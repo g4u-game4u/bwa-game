@@ -21,7 +21,7 @@ import * as fc from 'fast-check';
  * 
  * Validates: Requirements 3.1, 3.2
  * - Clientes na Carteira is calculated from player.extra.cnpj_resp
- * - Target uses player.extra.cnpj_goal (fallback: 10)
+ * - Target uses player.extra.cnpj_goal (fallback: 100)
  */
 function calculateClientesNaCarteiraKPI(
   playerExtra: { cnpj_resp?: string | null; cnpj_goal?: number | string | null } | null | undefined
@@ -31,18 +31,18 @@ function calculateClientesNaCarteiraKPI(
     ? playerExtra.cnpj_resp.split(/[;,]/).map(s => s.trim()).filter(s => s.length > 0).length 
     : 0;
   
-  // Get target from cnpj_goal with fallback to 10
+  // Get target from cnpj_goal with fallback to 100
   const cnpjGoal = playerExtra?.cnpj_goal != null
     ? (typeof playerExtra.cnpj_goal === 'number' 
         ? playerExtra.cnpj_goal 
         : parseInt(String(playerExtra.cnpj_goal), 10))
-    : 10;
+    : 100;
   
   return {
     id: 'numero-empresas',
     label: 'Clientes na Carteira',
     current: companyCount,
-    target: isNaN(cnpjGoal) ? 10 : cnpjGoal
+    target: isNaN(cnpjGoal) ? 100 : cnpjGoal
   };
 }
 
@@ -106,7 +106,7 @@ function getKPIsForCurrentMonth(
  * 
  * Validates: Requirements 3.5, 3.6
  * - entrega_goal defaults to 90 when not defined
- * - cnpj_goal defaults to 10 when not defined
+ * - cnpj_goal defaults to 100 when not defined
  */
 function applyDefaultGoals(
   playerExtra: { 
@@ -127,8 +127,8 @@ function applyDefaultGoals(
     }
   }
   
-  // Default cnpj_goal to 10
-  let cnpjGoal = 10;
+  // Default cnpj_goal to 100
+  let cnpjGoal = 100;
   if (playerExtra?.cnpj_goal != null) {
     const parsed = typeof playerExtra.cnpj_goal === 'number' 
       ? playerExtra.cnpj_goal 
@@ -449,7 +449,7 @@ describe('Preservation Property Tests - Dashboard Metrics Bugfix', () => {
    * 
    * Test 2.3 - Default Goals Preservation
    * 
-   * Verifies that fallback values (entrega_goal=90, cnpj_goal=10) are used
+   * Verifies that fallback values (entrega_goal=90, cnpj_goal=100) are used
    * when goals not defined in player.extra.
    * 
    * This behavior MUST be preserved after the bugfix.
@@ -470,15 +470,15 @@ describe('Preservation Property Tests - Dashboard Metrics Bugfix', () => {
       );
     });
 
-    it('should use default cnpj_goal=10 when not defined', () => {
+    it('should use default cnpj_goal=100 when not defined', () => {
       fc.assert(
         fc.property(
           playerExtraWithoutGoals(),
           (playerExtra) => {
             const goals = applyDefaultGoals(playerExtra);
             
-            // cnpj_goal should default to 10
-            expect(goals.cnpj_goal).toBe(10);
+            // cnpj_goal should default to 100
+            expect(goals.cnpj_goal).toBe(100);
           }
         ),
         { numRuns: 50 }
@@ -507,13 +507,13 @@ describe('Preservation Property Tests - Dashboard Metrics Bugfix', () => {
       const goals3 = applyDefaultGoals(undefined);
       
       expect(goals1.entrega_goal).toBe(90);
-      expect(goals1.cnpj_goal).toBe(10);
+      expect(goals1.cnpj_goal).toBe(100);
       
       expect(goals2.entrega_goal).toBe(90);
-      expect(goals2.cnpj_goal).toBe(10);
+      expect(goals2.cnpj_goal).toBe(100);
       
       expect(goals3.entrega_goal).toBe(90);
-      expect(goals3.cnpj_goal).toBe(10);
+      expect(goals3.cnpj_goal).toBe(100);
     });
 
     it('should handle string goal values', () => {

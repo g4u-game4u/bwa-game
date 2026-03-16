@@ -25,11 +25,14 @@ export class C4uSeletorMesComponent implements OnInit, OnChanges {
     @Input()
     playerId: string | null = null;
 
+    static readonly TODA_TEMPORADA_ID = -1;
+
     months: Array<any> = []
     selected: number = 0;
     prevEnabled = true;
     nextEnabled = false;
     isLoading = true;
+    isTodaTemporada = false;
 
     constructor(
       private sessao: SessaoProvider,
@@ -173,6 +176,12 @@ export class C4uSeletorMesComponent implements OnInit, OnChanges {
     }
 
     onChange() {
+        if (this.isTodaTemporada) {
+            this.prevEnabled = false;
+            this.nextEnabled = false;
+            this.onSelectedMonth.emit(C4uSeletorMesComponent.TODA_TEMPORADA_ID);
+            return;
+        }
         if (this.months.length > 0) {
             this.prevEnabled = (this.selected !== this.months.length - 1);
             this.nextEnabled = (this.selected !== 0);
@@ -180,7 +189,29 @@ export class C4uSeletorMesComponent implements OnInit, OnChanges {
         }
     }
 
+    onMonthDropdownChange() {
+        // When user picks a month from the dropdown, exit "Toda temporada" mode
+        this.isTodaTemporada = false;
+        this.onChange();
+    }
+
+    selectTodaTemporada() {
+        this.isTodaTemporada = true;
+        this.onChange();
+    }
+
+    selectMonth(index?: number) {
+        if (this.isTodaTemporada) {
+            this.isTodaTemporada = false;
+            if (index !== undefined) {
+                this.selected = index;
+            }
+            this.onChange();
+        }
+    }
+
     goLeft() {
+        if (this.isTodaTemporada) return;
         if ((this.prevEnabled || this.IS_TESTER) && this.months.length > 0 && this.selected < this.months.length - 1) {
             this.selected++;
             this.onChange();
@@ -188,6 +219,7 @@ export class C4uSeletorMesComponent implements OnInit, OnChanges {
     }
 
     goRight() {
+        if (this.isTodaTemporada) return;
         if ((this.nextEnabled || this.IS_TESTER) && this.months.length > 0 && this.selected > 0) {
             this.selected--;
             this.onChange();

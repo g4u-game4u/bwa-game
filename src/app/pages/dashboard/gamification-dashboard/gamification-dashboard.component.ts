@@ -67,7 +67,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   // Activity and Process data
   activityMetrics: ActivityMetrics | null = null;
   processMetrics: ProcessMetrics | null = null;
-  monthlyPointsBreakdown: { bloqueados: number; desbloqueados: number } | null = null;
+  monthlyPointsBreakdown: { desbloqueados: number } | null = null;
   
   // Company data
   companies: Company[] = [];
@@ -78,8 +78,8 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   isLoadingCarteira = true;
   cnpjNameMap = new Map<string, string>(); // Map of original CNPJ â†’ clean empresa name
   
-  // Month selection
-  selectedMonth: Date = new Date();
+  // Month selection (undefined = "Toda temporada" / season-wide, no month filtering)
+  selectedMonth: Date | undefined = new Date();
   
   // Modal state
   isCompanyModalOpen = false;
@@ -282,7 +282,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
         },
         error: (error) => {
                     // Set default values on error so UI doesn't stay stuck
-          this.pointWallet = { moedas: 0, bloqueados: 0, desbloqueados: 0 };
+          this.pointWallet = { moedas: 0, bloqueados: 0, desbloqueados: 0 }; // bloqueados kept for interface compat but not displayed
           this.cdr.markForCheck();
         },
         complete: () => {
@@ -518,7 +518,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
    * Update metas count based on player goals from player.extra
    * Metas = count of achieved goals (0, 1, or 2):
    *   - +1 if entrega >= entrega_goal (fallback: 90)
-   *   - +1 if cnpj_resp count >= cnpj_goal (fallback: 10)
+   *   - +1 if cnpj_resp count >= cnpj_goal (fallback: 100)
    * Always shows X/2 (duas metas fixas)
    */
   private updateMetasFromPlayerGoals(): void {
@@ -539,7 +539,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     // cnpj_resp is a comma-separated string of CNPJs
     const cnpjRespStr = extra?.cnpj_resp || '';
     const cnpjRespCount = cnpjRespStr ? cnpjRespStr.split(',').filter(c => c.trim()).length : 0;
-    const cnpjGoal = extra?.cnpj_goal ?? 10; // Default fallback: 10
+    const cnpjGoal = extra?.cnpj_goal ?? 100; // Default fallback: 100
 
     // Calculate achievements
     const entregaAchieved = entrega >= entregaGoal ? 1 : 0;
@@ -608,7 +608,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
           this.cdr.markForCheck();
         },
         error: (error) => {
-                    this.monthlyPointsBreakdown = { bloqueados: 0, desbloqueados: 0 };
+                    this.monthlyPointsBreakdown = { desbloqueados: 0 };
           this.cdr.markForCheck();
         }
       });
@@ -622,11 +622,17 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
    * The left sidebar (Progresso da Temporada) shows season-wide data and is NOT affected.
    */
   onMonthChange(monthsAgo: number): void {
-    const date = new Date();
-    date.setMonth(date.getMonth() - monthsAgo);
-    this.selectedMonth = date;
-    const monthName = date.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
-    this.announceToScreenReader(`MÃªs alterado para ${monthName}`);
+    // Handle "Toda temporada" (-1) — undefined means no month filtering (season-wide)
+    if (monthsAgo === -1) {
+      this.selectedMonth = undefined;
+      this.announceToScreenReader('Filtro alterado para toda temporada');
+    } else {
+      const date = new Date();
+      date.setMonth(date.getMonth() - monthsAgo);
+      this.selectedMonth = date;
+      const monthName = date.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+      this.announceToScreenReader(`Mês alterado para ${monthName}`);
+    }
     
     // Clear caches to force fresh data for the new month
     this.actionLogService.clearCache();

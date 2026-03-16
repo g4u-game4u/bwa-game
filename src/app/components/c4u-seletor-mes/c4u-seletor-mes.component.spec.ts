@@ -8,6 +8,7 @@ import * as moment from 'moment';
 import { C4uSeletorMesComponent } from './c4u-seletor-mes.component';
 import { SessaoProvider } from '@providers/sessao/sessao.provider';
 import { SeasonDatesService } from '@services/season-dates.service';
+import { ActionLogService } from '@services/action-log.service';
 import { configureTestBed } from '@app/testing/test-fixtures';
 
 describe('C4uSeletorMesComponent', () => {
@@ -15,10 +16,12 @@ describe('C4uSeletorMesComponent', () => {
   let fixture: ComponentFixture<C4uSeletorMesComponent>;
   let mockSessaoProvider: jasmine.SpyObj<SessaoProvider>;
   let mockSeasonDatesService: jasmine.SpyObj<SeasonDatesService>;
+  let mockActionLogService: jasmine.SpyObj<ActionLogService>;
 
   beforeEach(async () => {
     mockSessaoProvider = jasmine.createSpyObj('SessaoProvider', ['isAdmin']);
     mockSeasonDatesService = jasmine.createSpyObj('SeasonDatesService', ['getMonthsSinceSeasonStart']);
+    mockActionLogService = jasmine.createSpyObj('ActionLogService', ['getPlayerActionLogForMonth']);
     
     // Default mock behavior
     mockSessaoProvider.isAdmin.and.returnValue(false);
@@ -33,7 +36,8 @@ describe('C4uSeletorMesComponent', () => {
       ],
       providers: [
         { provide: SessaoProvider, useValue: mockSessaoProvider },
-        { provide: SeasonDatesService, useValue: mockSeasonDatesService }
+        { provide: SeasonDatesService, useValue: mockSeasonDatesService },
+        { provide: ActionLogService, useValue: mockActionLogService }
       ]
     });
 
@@ -57,6 +61,7 @@ describe('C4uSeletorMesComponent', () => {
           fc.integer({ min: 0, max: 11 }), // Starting selected index
           (monthCount, startIndex) => {
             // Setup: Initialize component with monthCount months
+            component.isTodaTemporada = false;
             component.months = Array.from({ length: monthCount }, (_, i) => ({
               id: i,
               name: moment().subtract(i, 'months').format('MMM/YY').toUpperCase()
@@ -101,6 +106,7 @@ describe('C4uSeletorMesComponent', () => {
           fc.integer({ min: 2, max: 12 }), // At least 2 months
           (monthCount) => {
             // Setup
+            component.isTodaTemporada = false;
             component.months = Array.from({ length: monthCount }, (_, i) => ({
               id: i,
               name: moment().subtract(i, 'months').format('MMM/YY').toUpperCase()
@@ -263,23 +269,25 @@ describe('C4uSeletorMesComponent', () => {
     });
 
     describe('Month Selection Event', () => {
-      it('should emit monthSelected event when month changes', (done) => {
+      it('should emit monthSelected event when month changes', () => {
         component.months = [
           { id: 0, name: 'JAN/24' },
           { id: 1, name: 'DEZ/23' }
         ];
-        component.selected = 0;
+        component.selected = 1;
 
-        component.onSelectedMonth.subscribe((selectedIndex: number) => {
-          expect(selectedIndex).toBe(1);
-          done();
+        const emissions: number[] = [];
+        const sub = component.onSelectedMonth.subscribe((value: number) => {
+          emissions.push(value);
         });
 
-        component.selected = 1;
         component.onChange();
+        sub.unsubscribe();
+
+        expect(emissions).toContain(1);
       });
 
-      it('should emit correct index when navigating left', (done) => {
+      it('should emit correct index when navigating left', () => {
         component.months = [
           { id: 0, name: 'JAN/24' },
           { id: 1, name: 'DEZ/23' }
@@ -287,15 +295,18 @@ describe('C4uSeletorMesComponent', () => {
         component.selected = 0;
         component.prevEnabled = true;
 
-        component.onSelectedMonth.subscribe((selectedIndex: number) => {
-          expect(selectedIndex).toBe(1);
-          done();
+        const emissions: number[] = [];
+        const sub = component.onSelectedMonth.subscribe((value: number) => {
+          emissions.push(value);
         });
 
         component.goLeft();
+        sub.unsubscribe();
+
+        expect(emissions).toContain(1);
       });
 
-      it('should emit correct index when navigating right', (done) => {
+      it('should emit correct index when navigating right', () => {
         component.months = [
           { id: 0, name: 'JAN/24' },
           { id: 1, name: 'DEZ/23' }
@@ -303,12 +314,15 @@ describe('C4uSeletorMesComponent', () => {
         component.selected = 1;
         component.nextEnabled = true;
 
-        component.onSelectedMonth.subscribe((selectedIndex: number) => {
-          expect(selectedIndex).toBe(0);
-          done();
+        const emissions: number[] = [];
+        const sub = component.onSelectedMonth.subscribe((value: number) => {
+          emissions.push(value);
         });
 
         component.goRight();
+        sub.unsubscribe();
+
+        expect(emissions).toContain(0);
       });
     });
 
@@ -359,7 +373,7 @@ describe('C4uSeletorMesComponent', () => {
       it('should initialize with months based on season dates', async () => {
         mockSeasonDatesService.getMonthsSinceSeasonStart.and.returnValue(Promise.resolve(3));
         
-        const newComponent = new C4uSeletorMesComponent(mockSessaoProvider, mockSeasonDatesService);
+        const newComponent = new C4uSeletorMesComponent(mockSessaoProvider, mockSeasonDatesService, mockActionLogService);
         await newComponent.ngOnInit();
 
         expect(newComponent.months.length).toBe(3);
@@ -368,7 +382,7 @@ describe('C4uSeletorMesComponent', () => {
       it('should show 6 months for admin users', async () => {
         mockSessaoProvider.isAdmin.and.returnValue(true);
         
-        const newComponent = new C4uSeletorMesComponent(mockSessaoProvider, mockSeasonDatesService);
+        const newComponent = new C4uSeletorMesComponent(mockSessaoProvider, mockSeasonDatesService, mockActionLogService);
         await newComponent.ngOnInit();
 
         expect(newComponent.months.length).toBe(6);
@@ -377,11 +391,125 @@ describe('C4uSeletorMesComponent', () => {
       it('should handle initialization errors gracefully', async () => {
         mockSeasonDatesService.getMonthsSinceSeasonStart.and.returnValue(Promise.reject('Error'));
         
-        const newComponent = new C4uSeletorMesComponent(mockSessaoProvider, mockSeasonDatesService);
+        const newComponent = new C4uSeletorMesComponent(mockSessaoProvider, mockSeasonDatesService, mockActionLogService);
         await newComponent.ngOnInit();
 
         // Should fallback to at least 1 month
         expect(newComponent.months.length).toBeGreaterThanOrEqual(1);
+      });
+
+      it('should default to current month (not Toda temporada) on load', () => {
+        expect(component.isTodaTemporada).toBe(false);
+        expect(component.selected).toBe(0);
+      });
+    });
+
+    describe('Toda Temporada', () => {
+      beforeEach(() => {
+        component.months = [
+          { id: 0, name: 'JAN/24' },
+          { id: 1, name: 'DEZ/23' },
+          { id: 2, name: 'NOV/23' }
+        ];
+        component.selected = 0;
+        component.isTodaTemporada = false;
+      });
+
+      it('should emit -1 when Toda temporada is selected', () => {
+        const emissions: number[] = [];
+        const sub = component.onSelectedMonth.subscribe((value: number) => {
+          emissions.push(value);
+        });
+
+        component.selectTodaTemporada();
+        sub.unsubscribe();
+
+        expect(emissions).toContain(C4uSeletorMesComponent.TODA_TEMPORADA_ID);
+        expect(emissions).toContain(-1);
+      });
+
+      it('should set isTodaTemporada to true when selected', () => {
+        component.selectTodaTemporada();
+
+        expect(component.isTodaTemporada).toBe(true);
+      });
+
+      it('should disable both navigation buttons when Toda temporada is active', () => {
+        component.selectTodaTemporada();
+
+        expect(component.prevEnabled).toBe(false);
+        expect(component.nextEnabled).toBe(false);
+      });
+
+      it('should not navigate left when Toda temporada is active', () => {
+        component.selected = 0;
+        component.selectTodaTemporada();
+
+        component.goLeft();
+
+        expect(component.selected).toBe(0);
+        expect(component.isTodaTemporada).toBe(true);
+      });
+
+      it('should not navigate right when Toda temporada is active', () => {
+        component.selected = 1;
+        component.selectTodaTemporada();
+
+        component.goRight();
+
+        expect(component.selected).toBe(1);
+        expect(component.isTodaTemporada).toBe(true);
+      });
+
+      it('should exit Toda temporada when selectMonth is called', () => {
+        component.selectTodaTemporada();
+        expect(component.isTodaTemporada).toBe(true);
+
+        component.selectMonth(0);
+
+        expect(component.isTodaTemporada).toBe(false);
+      });
+
+      it('should emit month index when exiting Toda temporada via selectMonth', () => {
+        component.selectTodaTemporada();
+
+        const emissions: number[] = [];
+        const sub = component.onSelectedMonth.subscribe((value: number) => {
+          emissions.push(value);
+        });
+
+        component.selectMonth(1);
+        sub.unsubscribe();
+
+        expect(emissions).toContain(1);
+      });
+
+      it('should exit Toda temporada when month is selected from dropdown', () => {
+        component.selectTodaTemporada();
+        component.selected = 2;
+
+        const emissions: number[] = [];
+        const sub = component.onSelectedMonth.subscribe((value: number) => {
+          emissions.push(value);
+        });
+
+        component.onMonthDropdownChange();
+        sub.unsubscribe();
+
+        expect(component.isTodaTemporada).toBe(false);
+        expect(emissions).toContain(2);
+      });
+
+      it('should re-enable navigation buttons when exiting Toda temporada', () => {
+        component.selected = 1; // Middle month
+        component.selectTodaTemporada();
+        expect(component.prevEnabled).toBe(false);
+        expect(component.nextEnabled).toBe(false);
+
+        component.selectMonth(1);
+
+        expect(component.prevEnabled).toBe(true);
+        expect(component.nextEnabled).toBe(true);
       });
     });
   });
