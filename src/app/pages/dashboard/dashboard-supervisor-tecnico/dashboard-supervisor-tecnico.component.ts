@@ -130,6 +130,12 @@ export class DashboardSupervisorTecnicoComponent implements OnInit, OnDestroy {
   teamCarteiraClientes: CompanyDisplay[] = [];
   cnpjNameMap = new Map<string, string>();
 
+  // Clientes sub-tabs
+  clientesActiveTab: 'carteira' | 'participacao' = 'carteira';
+  teamParticipacaoCnpjs: { cnpj: string; playerName: string; companyName: string }[] = [];
+  isLoadingParticipacao = false;
+  private teamMembersRawData: any[] = [];
+
   /** Team member IDs and data */
   teamMemberIds: string[] = [];
   teamTotalPoints = 0;
@@ -319,6 +325,8 @@ export class DashboardSupervisorTecnicoComponent implements OnInit, OnDestroy {
           { headers: { 'Range': 'items=0-200' } }
         ).pipe(takeUntil(this.destroy$))
       ).catch(() => [] as any[]);
+
+      this.teamMembersRawData = Array.isArray(allPlayersStatus) ? allPlayersStatus : [];
 
       const memberIds = (Array.isArray(allPlayersStatus) ? allPlayersStatus : [])
         .map((player: any) => String(player._id))
@@ -942,6 +950,8 @@ export class DashboardSupervisorTecnicoComponent implements OnInit, OnDestroy {
   /** Handle team change from selector */
   async onTeamChange(teamId: string): Promise<void> {
     this.selectedTeamId = teamId;
+    this.teamParticipacaoCnpjs = [];
+    this.clientesActiveTab = 'carteira';
     this.selectedCollaborator = null;
     await this.loadTeamData();
   }
@@ -1063,5 +1073,61 @@ export class DashboardSupervisorTecnicoComponent implements OnInit, OnDestroy {
   /** Get enabled KPIs (non-commented) */
   get enabledKPIs(): KPIData[] {
     return this.teamKPIs.filter(kpi => kpi.id !== 'numero-empresas');
+  }
+
+  /** Switch between Carteira and Participação sub-tabs */
+  switchClientesTab(tab: 'carteira' | 'participacao'): void {
+    this.clientesActiveTab = tab;
+    if (tab === 'participacao' && this.teamParticipacaoCnpjs.length === 0 && !this.isLoadingParticipacao) {
+      this.loadParticipacaoData();
+    }
+    this.cdr.markForCheck();
+  }
+
+  /** Load CNPJs from extra.cnpj of each team member for the Participação tab */
+  private async loadParticipacaoData(): Promise<void> {
+    this.isLoadingParticipacao = true;
+    this.cdr.markForCheck();
+
+    try {
+      const seen = new Set<string>();
+      const rows: { cnpj: string; playerName: string; companyName: string }[] = [];
+
+      for (const player of this.teamMembersRawData) {
+        const raw: string = player?.extra?.cnpj || '';
+        if (!raw) continue;
+
+        const cnpjs = raw.split(/[;,]/).map((s: string) => s.trim()).filter((s: string) => s.length > 0);
+        for (const cnpj of cnpjs) {
+          if (seen.has(cnpj)) continue;
+          seen.add(cnpj);
+          rows.push({
+            cnpj,
+            playerName: player.name || player._id || '',
+            companyName: this.cnpjNameMap.get(cnpj) || cnpj
+          });
+        }
+      }
+
+      // Enrich unknown company names
+      const unknownCnpjs = rows.filter(r => r.companyName === r.cnpj).map(r => r.cnpj);
+      if (unknownCnpjs.length > 0) {
+        const names = await firstValueFrom(
+          this.cnpjLookupService.enrichCnpjList(unknownCnpjs).pipe(takeUntil(this.destroy$))
+        ).catch(() => new Map<string, string>());
+        for (const row of rows) {
+          const name = names.get(row.cnpj);
+          if (name) row.companyName = name;
+        }
+      }
+
+      this.teamParticipacaoCnpjs = rows;
+    } catch (error) {
+      console.error('Error loading participacao data:', error);
+      this.teamParticipacaoCnpjs = [];
+    } finally {
+      this.isLoadingParticipacao = false;
+      this.cdr.markForCheck();
+    }
   }
 }

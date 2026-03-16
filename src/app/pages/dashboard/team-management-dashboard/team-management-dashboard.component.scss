@@ -1058,6 +1058,53 @@
     }
   }
 
+  // Clientes Sub-Tabs
+  .clientes-tabs {
+    display: flex;
+    gap: 4px;
+    margin-bottom: -md;
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: -radius-sm;
+    padding: 4px;
+
+    .clientes-tab-btn {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: -xs;
+      padding: 8px -md;
+      background: transparent;
+      color: -secondary;
+      border: none;
+      border-radius: -radius-sm;
+      font-size: -size-small;
+      font-weight: -weight-semibold;
+      font-family: -family;
+      cursor: pointer;
+      transition: all -duration -easing;
+
+      i {
+        font-size: 1rem;
+      }
+
+      &:hover:not(.active) {
+        background: rgba(-electric-blue, 0.08);
+        color: -electric-blue;
+      }
+
+      &.active {
+        background: rgba(-electric-blue, 0.12);
+        color: -primary;
+        border: 1px solid rgba(-electric-blue, 0.3);
+      }
+
+      &:focus-visible {
+        @include focus-visible;
+      }
+    }
+  }
+
   // Carteira Section
   .carteira-section {
     width: 100%;

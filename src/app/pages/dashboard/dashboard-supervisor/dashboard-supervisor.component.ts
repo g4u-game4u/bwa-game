@@ -99,6 +99,11 @@ export class DashboardSupervisorComponent implements OnInit, OnDestroy {
   clientRows: SupervisorClientRow[] = [];
   isLoadingClients = true;
 
+  // Clientes sub-tabs
+  clientesActiveTab: 'carteira' | 'participacao' = 'carteira';
+  participacaoCnpjs: { cnpj: string; playerName: string; companyName: string }[] = [];
+  isLoadingParticipacao = false;
+
   /** ACL metadata for resolving team display names */
   private aclMetadata: AclMetadata[] = [];
 
@@ -555,7 +560,82 @@ export class DashboardSupervisorComponent implements OnInit, OnDestroy {
     return card.playerId;
   }
 
-  /** Handle month filter changes from c4u-seletor-mes */
+  /** Switch between Carteira and Participação sub-tabs */
+  switchClientesTab(tab: 'carteira' | 'participacao'): void {
+    this.clientesActiveTab = tab;
+    if (tab === 'participacao' && this.participacaoCnpjs.length === 0 && !this.isLoadingParticipacao) {
+      this.loadParticipacaoData();
+    }
+    this.cdr.markForCheck();
+  }
+
+  /** Load CNPJs from extra.cnpj of each player for the Participação tab */
+  private loadParticipacaoData(): void {
+    this.isLoadingParticipacao = true;
+    this.cdr.markForCheck();
+
+    const seen = new Set<string>();
+    const rows: { cnpj: string; playerName: string; companyName: string }[] = [];
+
+    // Fetch raw player data to get extra.cnpj
+    const playerIds = this.playerCards.map(p => p.playerId);
+    if (playerIds.length === 0) {
+      this.participacaoCnpjs = [];
+      this.isLoadingParticipacao = false;
+      this.cdr.markForCheck();
+      return;
+    }
+
+    const aggregatePayload = [{ $match: { _id: { $in: playerIds } } }];
+    this.funifierApi.post<any[]>(
+      '/database/player_status/aggregate?strict=true',
+      aggregatePayload,
+      { headers: { 'Range': 'items=0-200' } }
+    ).pipe(
+      takeUntil(this.destroy$),
+      switchMap(players => {
+        const allPlayers = Array.isArray(players) ? players : [];
+        for (const player of allPlayers) {
+          const raw: string = player?.extra?.cnpj || '';
+          if (!raw) continue;
+          const cnpjs = raw.split(/[;,]/).map((s: string) => s.trim()).filter((s: string) => s.length > 0);
+          for (const cnpj of cnpjs) {
+            if (seen.has(cnpj)) continue;
+            seen.add(cnpj);
+            rows.push({
+              cnpj,
+              playerName: player.name || player._id || '',
+              companyName: cnpj
+            });
+          }
+        }
+
+        // Enrich company names
+        const cnpjIds = rows.map(r => r.cnpj);
+        if (cnpjIds.length === 0) return of(new Map<string, string>());
+        return this.cnpjLookupService.enrichCnpjList(cnpjIds).pipe(
+          catchError(() => of(new Map<string, string>()))
+        );
+      })
+    ).subscribe({
+      next: (nameMap) => {
+        for (const row of rows) {
+          const name = nameMap.get(row.cnpj);
+          if (name) row.companyName = name;
+        }
+        this.participacaoCnpjs = rows;
+        this.isLoadingParticipacao = false;
+        this.cdr.markForCheck();
+      },
+      error: () => {
+        this.participacaoCnpjs = [];
+        this.isLoadingParticipacao = false;
+        this.cdr.markForCheck();
+      }
+    });
+  }
+
+    /** Handle month filter changes from c4u-seletor-mes */
   onMonthChange(monthsAgo: number): void {
     this.selectedMonthsAgo = monthsAgo;
     // Clear player cache to force fresh data for the new month
@@ -566,6 +646,9 @@ export class DashboardSupervisorComponent implements OnInit, OnDestroy {
     this.loadTeamPlayers();
     // Reload client list with new month filter
     this.loadClientList();
+    // Reset participação data
+    this.participacaoCnpjs = [];
+    this.clientesActiveTab = 'carteira';
   }
 
   /** Toggle between Card View and Table View */

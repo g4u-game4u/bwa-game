@@ -180,8 +180,13 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
   // Company/Carteira data for team
   teamCarteiraClientes: CompanyDisplay[] = [];
   isLoadingCarteira: boolean = false;
+
+  // Clientes sub-tabs: 'carteira' (action_log CNPJs) vs 'participacao' (extra.cnpj from players)
+  clientesActiveTab: 'carteira' | 'participacao' = 'carteira';
+  teamParticipacaoCnpjs: { cnpj: string; playerName: string; companyName: string }[] = [];
+  isLoadingParticipacao: boolean = false;
   cnpjNameMap = new Map<string, string>(); // Map of original CNPJ â†’ clean empresa name
-  
+
   // Monthly points breakdown
   monthlyPointsBreakdown: { desbloqueados: number } | null = null;
   
@@ -1930,6 +1935,62 @@ private calculateCollaboratorTotals(memberData: Array<{
     }
   }
 
+  /** Switch between Carteira and Participacao sub-tabs in the Clientes section */
+  switchClientesTab(tab: 'carteira' | 'participacao'): void {
+    this.clientesActiveTab = tab;
+    if (tab === 'participacao' && this.teamParticipacaoCnpjs.length === 0 && !this.isLoadingParticipacao) {
+      this.loadParticipacaoData();
+    }
+    this.cdr.markForCheck();
+  }
+
+  /** Load CNPJs from extra.cnpj of each team member for the Participacao tab */
+  private async loadParticipacaoData(): Promise<void> {
+    this.isLoadingParticipacao = true;
+    this.cdr.markForCheck();
+
+    try {
+      const seen = new Set<string>();
+      const rows: { cnpj: string; playerName: string; companyName: string }[] = [];
+
+      for (const player of this.teamMembersData) {
+        const raw: string = player?.extra?.cnpj || '';
+        if (!raw) continue;
+
+        const cnpjs = raw.split(/[;,]/).map((s: string) => s.trim()).filter((s: string) => s.length > 0);
+        for (const cnpj of cnpjs) {
+          if (seen.has(cnpj)) continue;
+          seen.add(cnpj);
+          rows.push({
+            cnpj,
+            playerName: player.name || player._id || '',
+            companyName: this.cnpjNameMap.get(cnpj) || cnpj
+          });
+        }
+      }
+
+      // Try to enrich unknown company names
+      const unknownCnpjs = rows.filter(r => r.companyName === r.cnpj).map(r => r.cnpj);
+      if (unknownCnpjs.length > 0) {
+        const names = await firstValueFrom(
+          this.cnpjLookupService.enrichCnpjList(unknownCnpjs).pipe(takeUntil(this.destroy$))
+        ).catch(() => new Map<string, string>());
+        for (const row of rows) {
+          const name = names.get(row.cnpj);
+          if (name) row.companyName = name;
+        }
+      }
+
+      this.teamParticipacaoCnpjs = rows;
+    } catch (error) {
+      console.error('Error loading participacao data:', error);
+      this.teamParticipacaoCnpjs = [];
+    } finally {
+      this.isLoadingParticipacao = false;
+      this.cdr.markForCheck();
+    }
+  }
+
   /**
    * Handle team selection change event.
    * 
@@ -1965,9 +2026,11 @@ private calculateCollaboratorTotals(memberData: Array<{
       this.selectedTeam = team.name;
       this.displayTeamName = team.name; // Update display name
       
-      // Reset collaborator filter when team changes
+      // Reset collaborator filter and participação data when team changes
       if (isTeamChanging) {
         this.selectedCollaborator = null;
+        this.teamParticipacaoCnpjs = [];
+        this.clientesActiveTab = 'carteira';
       }
       
       // Save team selection to localStorage

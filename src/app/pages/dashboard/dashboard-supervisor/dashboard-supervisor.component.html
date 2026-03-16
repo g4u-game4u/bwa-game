@@ -290,49 +290,96 @@
       <section class="client-list-section" aria-label="Lista de clientes do supervisor">
         <h3 class="client-list-title">Meus Clientes</h3>
 
-        <!-- Loading state -->
-        <div class="client-list-loading" *ngIf="isLoadingClients">
-          <c4u-shimmer *ngFor="let i of [1,2,3]"></c4u-shimmer>
+        <!-- Clientes Sub-Tabs -->
+        <div class="clientes-tabs" role="tablist" aria-label="Tipo de clientes">
+          <button type="button" class="clientes-tab-btn"
+            [class.active]="clientesActiveTab === 'carteira'"
+            (click)="switchClientesTab('carteira')"
+            role="tab" [attr.aria-selected]="clientesActiveTab === 'carteira'">
+            <i class="ri-briefcase-line" aria-hidden="true"></i> Carteira
+          </button>
+          <button type="button" class="clientes-tab-btn"
+            [class.active]="clientesActiveTab === 'participacao'"
+            (click)="switchClientesTab('participacao')"
+            role="tab" [attr.aria-selected]="clientesActiveTab === 'participacao'">
+            <i class="ri-group-line" aria-hidden="true"></i> Participação
+          </button>
         </div>
 
-        <!-- Empty state -->
-        <div class="client-list-empty" *ngIf="!isLoadingClients && clientRows.length === 0">
-          <p class="placeholder-text">Nenhum cliente encontrado na carteira.</p>
+        <!-- Carteira Tab -->
+        <div *ngIf="clientesActiveTab === 'carteira'">
+          <div class="client-list-loading" *ngIf="isLoadingClients">
+            <c4u-shimmer *ngFor="let i of [1,2,3]"></c4u-shimmer>
+          </div>
+
+          <div class="client-list-empty" *ngIf="!isLoadingClients && clientRows.length === 0">
+            <p class="placeholder-text">Nenhum cliente encontrado na carteira.</p>
+          </div>
+
+          <div class="client-table-wrapper" *ngIf="!isLoadingClients && clientRows.length > 0">
+            <table class="client-table" aria-label="Tabela de clientes do supervisor">
+              <thead>
+                <tr>
+                  <th scope="col">Empresa</th>
+                  <th scope="col">CNPJ</th>
+                  <th scope="col" class="col-metric">Entregas no Prazo</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr
+                  *ngFor="let client of clientRows; trackBy: trackByClientCnpj"
+                  class="client-row"
+                  role="button"
+                  tabindex="0"
+                  [attr.aria-label]="'Cliente ' + client.companyName"
+                  (click)="onClientRowClick(client)"
+                  (keydown.enter)="onClientRowClick(client)">
+                  <td class="cell-company">
+                    <i class="ri-building-line company-icon" aria-hidden="true"></i>
+                    <span class="company-name">{{ client.companyName }}</span>
+                  </td>
+                  <td class="cell-cnpj">{{ client.cnpj }}</td>
+                  <td class="cell-metric">
+                    <span class="metric-value"
+                      [class.achieved]="client.healthScore >= 90">
+                      {{ roundValue(client.healthScore) }}%
+                    </span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </div>
 
-        <!-- Client table -->
-        <div class="client-table-wrapper" *ngIf="!isLoadingClients && clientRows.length > 0">
-          <table class="client-table" aria-label="Tabela de clientes do supervisor">
-            <thead>
-              <tr>
-                <th scope="col">Empresa</th>
-                <th scope="col">CNPJ</th>
-                <th scope="col" class="col-metric">Entregas no Prazo</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr
-                *ngFor="let client of clientRows; trackBy: trackByClientCnpj"
-                class="client-row"
-                role="button"
-                tabindex="0"
-                [attr.aria-label]="'Cliente ' + client.companyName"
-                (click)="onClientRowClick(client)"
-                (keydown.enter)="onClientRowClick(client)">
-                <td class="cell-company">
-                  <i class="ri-building-line company-icon" aria-hidden="true"></i>
-                  <span class="company-name">{{ client.companyName }}</span>
-                </td>
-                <td class="cell-cnpj">{{ client.cnpj }}</td>
-                <td class="cell-metric">
-                  <span class="metric-value"
-                    [class.achieved]="client.healthScore >= 90">
-                    {{ roundValue(client.healthScore) }}%
-                  </span>
-                </td>
-              </tr>
-            </tbody>
-          </table>
+        <!-- Participação Tab -->
+        <div *ngIf="clientesActiveTab === 'participacao'">
+          <div class="client-list-loading" *ngIf="isLoadingParticipacao">
+            <c4u-shimmer *ngFor="let i of [1,2,3]"></c4u-shimmer>
+          </div>
+
+          <div class="client-list-empty" *ngIf="!isLoadingParticipacao && participacaoCnpjs.length === 0">
+            <p class="placeholder-text">Nenhum CNPJ de participação encontrado.</p>
+          </div>
+
+          <div class="client-table-wrapper" *ngIf="!isLoadingParticipacao && participacaoCnpjs.length > 0">
+            <table class="client-table" aria-label="Tabela de participação">
+              <thead>
+                <tr>
+                  <th scope="col">Empresa</th>
+                  <th scope="col">CNPJ</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr *ngFor="let item of participacaoCnpjs" class="client-row">
+                  <td class="cell-company">
+                    <i class="ri-building-line company-icon" aria-hidden="true"></i>
+                    <span class="company-name">{{ item.companyName }}</span>
+                  </td>
+                  <td class="cell-cnpj">{{ item.cnpj }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </div>
       </section>
 
