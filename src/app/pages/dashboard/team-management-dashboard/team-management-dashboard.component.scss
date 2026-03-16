@@ -1072,31 +1072,31 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: -xs;
-      padding: 8px -md;
+      gap: $spacing-xs;
+      padding: 8px $spacing-md;
       background: transparent;
-      color: -secondary;
+      color: $text-secondary;
       border: none;
-      border-radius: -radius-sm;
-      font-size: -size-small;
-      font-weight: -weight-semibold;
-      font-family: -family;
+      border-radius: $border-radius-sm;
+      font-size: $font-size-small;
+      font-weight: $font-weight-semibold;
+      font-family: $font-family;
       cursor: pointer;
-      transition: all -duration -easing;
+      transition: all $transition-duration $transition-easing;
 
       i {
         font-size: 1rem;
       }
 
       &:hover:not(.active) {
-        background: rgba(-electric-blue, 0.08);
-        color: -electric-blue;
+        background: rgba($primary-electric-blue, 0.08);
+        color: $primary-electric-blue;
       }
 
       &.active {
-        background: rgba(-electric-blue, 0.12);
-        color: -primary;
-        border: 1px solid rgba(-electric-blue, 0.3);
+        background: rgba($primary-electric-blue, 0.12);
+        color: $text-primary;
+        border: 1px solid rgba($primary-electric-blue, 0.3);
       }
 
       &:focus-visible {
