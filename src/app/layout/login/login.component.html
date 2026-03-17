@@ -32,7 +32,7 @@
   </c4u-card>
 
   <!-- Login Form -->
-  <c4u-card *ngIf="resetFlow === 'login' && !maintenanceMode" [title]="'LABEL_LOGIN_SUBTITLE' | translate" align="center">
+  <c4u-card *ngIf="resetFlow === 'login'" [title]="'LABEL_LOGIN_SUBTITLE' | translate" align="center">
     <div class="login-form-container">
       <form class="login-form" (ngSubmit)="submit()" [formGroup]="form">
         <input type="text" placeholder="Login" formControlName="username" />
@@ -54,7 +54,7 @@
   </c4u-card>
 
   <!-- Reset Request Form -->
-  <c4u-card *ngIf="resetFlow === 'reset-request' && !maintenanceMode" [title]="'LABEL_PASSWORD_RESET' | translate" align="center">
+  <c4u-card *ngIf="resetFlow === 'reset-request'" [title]="'LABEL_PASSWORD_RESET' | translate" align="center">
     <div class="login-form-container">
       <form class="login-form" (ngSubmit)="requestResetCode()" [formGroup]="resetRequestForm">
         <p class="reset-instructions">{{ 'LABEL_PASSWORD_RESET_INSTRUCTIONS' | translate }}</p>
@@ -80,7 +80,7 @@
   </c4u-card>
 
   <!-- Reset Confirm Form -->
-  <c4u-card *ngIf="resetFlow === 'reset-confirm' && !maintenanceMode" [title]="'LABEL_PASSWORD_RESET' | translate" align="center">
+  <c4u-card *ngIf="resetFlow === 'reset-confirm'" [title]="'LABEL_PASSWORD_RESET' | translate" align="center">
     <div class="login-form-container">
       <form class="login-form" (ngSubmit)="confirmResetPassword()" [formGroup]="resetConfirmForm">
         <p class="reset-instructions">{{ 'LABEL_CODE_SENT_TO' | translate }}: <strong>{{resetEmail}}</strong></p>

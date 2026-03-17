@@ -10,7 +10,8 @@ import { environment } from '../environments/environment';
 const routes: Routes = [
   {
     path: '',
-    redirectTo: environment.maintenanceMode ? 'manutencao' : 'dashboard',
+    // A decisão de acesso em manutenção é feita pelo guard (com allowlist).
+    redirectTo: 'dashboard',
     pathMatch: 'full',
   },
   {

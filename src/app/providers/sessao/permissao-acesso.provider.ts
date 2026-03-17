@@ -3,6 +3,7 @@ import {ActivatedRouteSnapshot, CanActivateChildFn, CanActivateFn, Router, Route
 import {SessaoProvider} from "./sessao.provider";
 import {Usuario} from "@model/usuario.model";
 import { environment } from '../../../environments/environment';
+import { getMaintenanceAllowedEmails, isLoginEmailAllowed } from '@utils/maintenance-allowlist';
 
 @Injectable({
     providedIn: 'root'
@@ -44,27 +45,35 @@ export class PermissaoAcessoProvider {
     }
 
     async validaTokenAcessoValido(route: ActivatedRouteSnapshot, state: RouterStateSnapshot) {
-        // Em modo manutenção: usuário logado vai para /manutencao; não logado vai para /login
+        // Em modo manutenção: só usuários allowlist podem acessar /dashboard.
+        // Os demais (logados ou não) são enviados para /manutencao e a sessão é limpa.
         if (environment.maintenanceMode) {
             const isAuthenticated = await this.validateSSOUser();
             setTimeout(() => window.scrollTo(0, 0));
             if (isAuthenticated) {
-                await this.router.navigate(['/manutencao']);
-                return false;
+                return true;
             }
-            await this.router.navigate(['/login']);
+            await this.sessao.logout();
+            await this.router.navigate(['/manutencao']);
             return false;
         }
 
         const canActivate = await this.validateSSOUser();
         setTimeout(() => window.scrollTo(0, 0));
 
-        if (canActivate)
+        if (canActivate) {
+            if (getMaintenanceAllowedEmails().length > 0) {
+                const email = this.sessao.usuario?.email;
+                if (!isLoginEmailAllowed(email)) {
+                    await this.sessao.logout();
+                    await this.router.navigate(['/manutencao']);
+                    return false;
+                }
+            }
             return true;
-        else {
-            await this.router.navigate(['login']);
-            return false;
         }
+        await this.router.navigate(['login']);
+        return false;
     }
 }
 
