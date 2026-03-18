@@ -5,6 +5,7 @@ import { takeUntil, finalize } from 'rxjs/operators';
 import { firstValueFrom } from 'rxjs';
 import * as dayjs from 'dayjs';
 import { trigger, transition, style, animate } from '@angular/animations';
+import { NgbModal } from '@ng-bootstrap/ng-bootstrap';
 
 // Services
 import { TeamAggregateService, TeamSeasonPoints, TeamProgressMetrics, Collaborator } from '@services/team-aggregate.service';
@@ -28,6 +29,7 @@ import { GoalMetric } from '@components/c4u-goals-progress-tab/c4u-goals-progres
 import { GraphDataPoint, ActivityMetrics, ProcessMetrics, ChartDataset, PointWallet, SeasonProgress } from '@app/model/gamification-dashboard.model';
 import { ProgressCardType } from '@components/c4u-activity-progress/c4u-activity-progress.component';
 import { ProgressListType } from '@modals/modal-progress-list/modal-progress-list.component';
+import { ModalConfirmLogoutComponent } from '@modals/modal-confirm-logout/modal-confirm-logout.component';
 
 /**
  * Helper to generate Funifier date expressions using ISO format
@@ -242,7 +244,8 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
     private cnpjLookupService: CnpjLookupService,
     private router: Router,
     private cdr: ChangeDetectorRef,
-    private aclService: ACLService
+    private aclService: ACLService,
+    private modalService: NgbModal
   ) {}
 
   ngOnInit(): void {
@@ -3227,20 +3230,34 @@ private calculateCollaboratorTotals(memberData: Array<{
    * Logout user and redirect to login page
    * Includes double confirmation to prevent accidental logout
    */
-  logout(): void {
-    // First confirmation
-    const firstConfirm = window.confirm('Tem certeza que deseja sair do sistema?');
-    if (!firstConfirm) {
-      return;
-    }
-    
-    // Second confirmation (double validation)
-    const secondConfirm = window.confirm('Esta aÃ§Ã£o irÃ¡ desconectar vocÃª do sistema. Deseja continuar?');
-    if (!secondConfirm) {
-      return;
-    }
-    
-    // If both confirmations are accepted, proceed with logout
+  private async confirmLogoutStep(title: string, message: string): Promise<boolean> {
+    const modalRef = this.modalService.open(ModalConfirmLogoutComponent, {
+      size: 'sm',
+      backdrop: 'static',
+      keyboard: false
+    });
+
+    modalRef.componentInstance.title = title;
+    modalRef.componentInstance.message = message;
+    modalRef.componentInstance.confirmLabel = 'Desconectar';
+
+    const result = await modalRef.result.catch(() => null);
+    return !!result?.confirmed;
+  }
+
+  async logout(): Promise<void> {
+    const firstConfirm = await this.confirmLogoutStep(
+      'Sair do sistema',
+      'Tem certeza que deseja sair do sistema?'
+    );
+    if (!firstConfirm) return;
+
+    const secondConfirm = await this.confirmLogoutStep(
+      'Desconectar do sistema',
+      'Esta ação irá desconectar você do sistema. Deseja continuar?'
+    );
+    if (!secondConfirm) return;
+
     this.sessaoProvider.logout();
   }
 }

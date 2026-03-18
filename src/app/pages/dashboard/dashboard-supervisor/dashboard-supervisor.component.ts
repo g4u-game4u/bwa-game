@@ -3,6 +3,7 @@ import { Router } from '@angular/router';
 import { Subject, forkJoin, of } from 'rxjs';
 import { takeUntil, switchMap, catchError, map } from 'rxjs/operators';
 import { firstValueFrom } from 'rxjs';
+import { NgbModal } from '@ng-bootstrap/ng-bootstrap';
 
 import { ACLService, AclMetadata } from '@services/acl.service';
 import { UserProfileService } from '@services/user-profile.service';
@@ -14,6 +15,7 @@ import { CnpjLookupService } from '@services/cnpj-lookup.service';
 import { CompanyService } from '@services/company.service';
 import { SessaoProvider } from '@providers/sessao/sessao.provider';
 import { Company, KPIData } from '@model/gamification-dashboard.model';
+import { ModalConfirmLogoutComponent } from '@modals/modal-confirm-logout/modal-confirm-logout.component';
 
 /** Client row data for the client list section */
 export interface SupervisorClientRow {
@@ -118,7 +120,8 @@ export class DashboardSupervisorComponent implements OnInit, OnDestroy {
     private companyService: CompanyService,
     private sessaoProvider: SessaoProvider,
     private router: Router,
-    private cdr: ChangeDetectorRef
+    private cdr: ChangeDetectorRef,
+    private modalService: NgbModal
   ) {}
 
   ngOnInit(): void {
@@ -689,16 +692,33 @@ export class DashboardSupervisorComponent implements OnInit, OnDestroy {
    * Logout user and redirect to login page
    * Includes double confirmation to prevent accidental logout
    */
-  logout(): void {
-    const firstConfirm = window.confirm('Tem certeza que deseja sair do sistema?');
-    if (!firstConfirm) {
-      return;
-    }
+  private async confirmLogoutStep(title: string, message: string): Promise<boolean> {
+    const modalRef = this.modalService.open(ModalConfirmLogoutComponent, {
+      size: 'sm',
+      backdrop: 'static',
+      keyboard: false
+    });
 
-    const secondConfirm = window.confirm('Esta ação irá desconectar você do sistema. Deseja continuar?');
-    if (!secondConfirm) {
-      return;
-    }
+    modalRef.componentInstance.title = title;
+    modalRef.componentInstance.message = message;
+    modalRef.componentInstance.confirmLabel = 'Desconectar';
+
+    const result = await modalRef.result.catch(() => null);
+    return !!result?.confirmed;
+  }
+
+  async logout(): Promise<void> {
+    const firstConfirm = await this.confirmLogoutStep(
+      'Sair do sistema',
+      'Tem certeza que deseja sair do sistema?'
+    );
+    if (!firstConfirm) return;
+
+    const secondConfirm = await this.confirmLogoutStep(
+      'Desconectar do sistema',
+      'Esta ação irá desconectar você do sistema. Deseja continuar?'
+    );
+    if (!secondConfirm) return;
 
     this.sessaoProvider.logout();
   }

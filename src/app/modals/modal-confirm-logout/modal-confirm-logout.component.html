@@ -1,0 +1,21 @@
+<div class="modal-confirm-logout">
+  <div class="modal-confirm-logout-content">
+    <div class="modal-confirm-logout-icon">
+      <i class="ri-logout-box-line" aria-hidden="true"></i>
+    </div>
+
+    <div class="modal-confirm-logout-text">
+      <h3>{{ title }}</h3>
+      <p>{{ message }}</p>
+    </div>
+
+    <div class="modal-confirm-logout-footer">
+      <button type="button" class="btn-ghost" (click)="cancel()">Cancelar</button>
+      <button type="button" class="btn-danger" (click)="confirm()">
+        <i class="ri-logout-box-line" aria-hidden="true"></i>
+        {{ confirmLabel }}
+      </button>
+    </div>
+  </div>
+</div>
+

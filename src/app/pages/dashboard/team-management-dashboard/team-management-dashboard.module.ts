@@ -26,6 +26,7 @@ import { C4uKpiCircularProgressModule } from '@components/c4u-kpi-circular-progr
 import { ModalProgressListModule } from '@modals/modal-progress-list/modal-progress-list.module';
 import { ModalCarteiraModule } from '@modals/modal-carteira/modal-carteira.module';
 import { ModalCompanyCarteiraDetailModule } from '@modals/modal-company-carteira-detail/modal-company-carteira-detail.module';
+import { ModalConfirmLogoutModule } from '@modals/modal-confirm-logout/modal-confirm-logout.module';
 
 // Shared modules
 import { SharedModule } from '../../../shared.module';
@@ -67,7 +68,8 @@ const routes: Routes = [
     C4uKpiCircularProgressModule,
     ModalProgressListModule,
     ModalCarteiraModule,
-    ModalCompanyCarteiraDetailModule
+    ModalCompanyCarteiraDetailModule,
+    ModalConfirmLogoutModule
   ]
 })
 export class TeamManagementDashboardModule { }

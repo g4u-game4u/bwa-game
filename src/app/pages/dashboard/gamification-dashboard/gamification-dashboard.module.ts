@@ -22,6 +22,7 @@ import { ModalCompanyDetailModule } from '@modals/modal-company-detail/modal-com
 import { ModalProgressListModule } from '@modals/modal-progress-list/modal-progress-list.module';
 import { ModalCarteiraModule } from '@modals/modal-carteira/modal-carteira.module';
 import { ModalCompanyCarteiraDetailModule } from '@modals/modal-company-carteira-detail/modal-company-carteira-detail.module';
+import { ModalConfirmLogoutModule } from '@modals/modal-confirm-logout/modal-confirm-logout.module';
 
 const routes: Routes = [
   {
@@ -54,7 +55,8 @@ const routes: Routes = [
     ModalCompanyDetailModule,
     ModalProgressListModule,
     ModalCarteiraModule,
-    ModalCompanyCarteiraDetailModule
+    ModalCompanyCarteiraDetailModule,
+    ModalConfirmLogoutModule
   ],
   exports: [
     GamificationDashboardComponent

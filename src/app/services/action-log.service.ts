@@ -948,25 +948,53 @@ export class ActionLogService {
     // Build time match that handles both { $date: "..." } and epoch number formats
     const timeMatch = buildTimeMatch(month);
 
-    const aggregateBody = [
+    const pageSize = 100;
+
+    const basePipeline = [
       {
         $match: {
           'attributes.cnpj': cnpj,
           ...timeMatch
         }
       },
-      { $sort: { time: -1 } },
-      { $limit: 100 }
+      { $sort: { time: -1 } }
     ];
 
-    console.log('📊 Actions by CNPJ query:', JSON.stringify(aggregateBody));
+    const fetchPage = (skip: number): Observable<ActionLogEntry[]> => {
+      const pipeline = [
+        ...basePipeline,
+        { $skip: skip },
+        { $limit: pageSize }
+      ];
 
-    const request$ = this.funifierApi.post<ActionLogEntry[]>(
-      '/v3/database/action_log/aggregate?strict=true',
-      aggregateBody
-    ).pipe(
+      return this.funifierApi.post<ActionLogEntry[]>(
+        '/v3/database/action_log/aggregate?strict=true',
+        pipeline
+      ).pipe(
+        catchError(() => of([]))
+      );
+    };
+
+    const request$ = fetchPage(0).pipe(
+      switchMap((firstPage: ActionLogEntry[]) => {
+        const fetchAll = (skip: number, acc: ActionLogEntry[]): Observable<ActionLogEntry[]> =>
+          fetchPage(skip).pipe(
+            switchMap((page: ActionLogEntry[]) => {
+              const nextAcc = [...acc, ...page];
+              if (page.length < pageSize) {
+                return of(nextAcc);
+              }
+              return fetchAll(skip + pageSize, nextAcc);
+            })
+          );
+
+        if (firstPage.length < pageSize) {
+          return of(firstPage);
+        }
+
+        return fetchAll(pageSize, firstPage);
+      }),
       map(actions => {
-        console.log('📊 Actions by CNPJ response:', actions);
         return actions.map(a => {
           // Determine status based on action data
           let status: 'finalizado' | 'pendente' | 'dispensado' | undefined;
