@@ -1,3 +1,5 @@
+import maintenanceAllowedEmails from '../../maintenance-allowed-emails.json';
+
 export const environment = {
   production: false,
   // client_id: 'cidadania4u',
@@ -22,5 +24,11 @@ export const environment = {
   enableAnalytics: false,
 
   // Modo manutenção: bloqueia login e redireciona usuários logados para página de manutenção
-  maintenanceMode: false
+  maintenanceMode: false,
+
+  /**
+   * Lista allowlist (JSON string). Preencha em `maintenance-allowed-emails.json` na raiz do projeto.
+   * Com lista não vazia, só esses e-mails conseguem logar.
+   */
+  maintenanceAllowedEmailsJson: JSON.stringify(maintenanceAllowedEmails as string[])
 };

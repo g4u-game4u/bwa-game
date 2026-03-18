@@ -11,6 +11,7 @@ import {AbstractControl, ValidationErrors} from "@angular/forms";
 import {TranslateService} from "@ngx-translate/core";
 import { LoginLogService } from '@services/login-log.service';
 import { environment } from '../../../environments/environment';
+import { isLoginEmailAllowed } from '@utils/maintenance-allowlist';
 
 @Component({
   selector: 'app-login',
@@ -142,8 +143,9 @@ export class LoginComponent implements OnInit {
   }
 
   async submit() {
-    if (this.maintenanceMode) {
+    if (!isLoginEmailAllowed(this.username)) {
       this.toastService.error('Sistema em manutenção. Você será avisado pelos canais oficiais de comunicação quando terminar.');
+      await this.sessao.logout();
       return;
     }
 

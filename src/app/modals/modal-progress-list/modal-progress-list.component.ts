@@ -402,6 +402,13 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
    * Get status label for activities
    */
   getStatusLabel(item?: ActivityListItem): string {
+    // Este modal ("Tarefas Finalizadas" / "Pontos Obtidos") representa ações já concluídas.
+    // Se o backend vier com status "pendente" por inconsistência, aqui devemos exibir "Finalizado".
+    if (this.isActivityList) {
+      if (item?.status === 'dispensado') return 'Dispensado';
+      return 'Finalizado';
+    }
+
     if (item?.status) {
       switch (item.status) {
         case 'finalizado':
@@ -421,6 +428,11 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
    * Get status class for activities
    */
   getStatusClass(item?: ActivityListItem): string {
+    if (this.isActivityList) {
+      if (item?.status === 'dispensado') return 'status-dispensado';
+      return 'status-finalizado';
+    }
+
     if (item?.status) {
       switch (item.status) {
         case 'finalizado':

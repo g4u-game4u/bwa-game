@@ -4,6 +4,7 @@ import {ROLES_LIST} from '@utils/constants';
 import {AuthProvider, LoginResponse} from "@providers/auth/auth.provider";
 import {Router} from "@angular/router";
 import {firstValueFrom, timeout, catchError, throwError} from "rxjs";
+import { isLoginEmailAllowed } from '@utils/maintenance-allowlist';
 
 const TKN_KEY = 'g4utkn'
 
@@ -48,8 +49,8 @@ export class SessaoProvider {
                     );
 
                     if (info) {
-                        await this.getUserAfterValidations(info);
-                                                                                                return true;
+                        const ok = await this.getUserAfterValidations(info);
+                        return ok;
                     } else {
                                                 await this.logout();
                         return false;
@@ -94,10 +95,10 @@ export class SessaoProvider {
         return this.loginResponse?.refresh_token;
     }
 
-    public async getUserAfterValidations(user: any) {
+    public async getUserAfterValidations(user: any): Promise<boolean> {
         if (!user) {
             await this.logout();
-            return;
+            return false;
         }
         
                                 // Handle Funifier response format - map _id to email if email is not set
@@ -109,6 +110,11 @@ export class SessaoProvider {
         // Map name to full_name if full_name is not set
         if (!user.full_name && user.name) {
             user.full_name = user.name;
+        }
+
+        if (!isLoginEmailAllowed(user.email)) {
+            await this.logout();
+            return false;
         }
         
         // Handle Funifier response format - roles might be in different places
@@ -146,6 +152,7 @@ export class SessaoProvider {
         }
         
                         this._usuario = user;
+        return true;
                             }
 
     async logout() {
