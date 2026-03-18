@@ -1838,6 +1838,29 @@ private calculateCollaboratorTotals(memberData: Array<{
         this.cdr.markForCheck();
         return;
       }
+
+      // Enrich action counts for the selected month (não suportado em "Toda temporada")
+      if (this.selectedMonthsAgo !== -1) {
+        const cnpjListForCount = cnpjListWithCounts.map(c => c.cnpj).filter(Boolean);
+
+        const globalCnpjCounts = await firstValueFrom(
+          this.actionLogService
+            .getCnpjListWithCountForAllExecutors(cnpjListForCount, this.selectedMonth)
+            .pipe(takeUntil(this.destroy$))
+        ).catch(() => []);
+
+        const actionCountByKey = new Map<string, number>();
+        for (const item of globalCnpjCounts) {
+          const extractedId = this.companyKpiService.extractCnpjId(item.cnpj) || item.cnpj;
+          const prev = actionCountByKey.get(extractedId) || 0;
+          actionCountByKey.set(extractedId, prev + (item.actionCount || 0));
+        }
+
+        for (const row of cnpjListWithCounts) {
+          const extractedId = this.companyKpiService.extractCnpjId(row.cnpj) || row.cnpj;
+          row.actionCount = actionCountByKey.get(extractedId) || 0;
+        }
+      }
       
       // Extract all CNPJ strings for lookup
       const cnpjList = cnpjListWithCounts.map(c => c.cnpj);
@@ -1915,6 +1938,29 @@ private calculateCollaboratorTotals(memberData: Array<{
             cnpj,
             actionCount: 0 // We don't have action count for assigned portfolio
           });
+        }
+      }
+
+      // Enrich action counts for the selected month (Toda temporada => sem suporte para contagem mensal)
+      if (this.selectedMonthsAgo !== -1) {
+        const cnpjListForCount = cnpjListWithCounts.map(c => c.cnpj).filter(Boolean);
+
+        const globalCnpjCounts = await firstValueFrom(
+          this.actionLogService
+            .getCnpjListWithCountForAllExecutors(cnpjListForCount, this.selectedMonth)
+            .pipe(takeUntil(this.destroy$))
+        ).catch(() => []);
+
+        const actionCountByKey = new Map<string, number>();
+        for (const item of globalCnpjCounts) {
+          const extractedId = this.companyKpiService.extractCnpjId(item.cnpj) || item.cnpj;
+          const prev = actionCountByKey.get(extractedId) || 0;
+          actionCountByKey.set(extractedId, prev + (item.actionCount || 0));
+        }
+
+        for (const row of cnpjListWithCounts) {
+          const extractedId = this.companyKpiService.extractCnpjId(row.cnpj) || row.cnpj;
+          row.actionCount = actionCountByKey.get(extractedId) || 0;
         }
       }
       

@@ -868,6 +868,71 @@ export class ActionLogService {
   }
 
   /**
+   * Get list of unique CNPJs from player's action_log WITHOUT filtering by executor,
+   * aggregated across ALL users (matches modal-company-carteira-detail behavior).
+   *
+   * IMPORTANT: this method is intended for "carteira list" counters; it counts
+   * all actions (independent of status) for the given CNPJ ids.
+   */
+  getCnpjListWithCountForAllExecutors(
+    cnpjList: string[],
+    month?: Date
+  ): Observable<{ cnpj: string; actionCount: number }[]> {
+    const normalized = Array.from(new Set((cnpjList || []).filter(Boolean))).map(String);
+    const targetMonth = month || new Date();
+    const cacheKey = `${dayjs(targetMonth).format('YYYY-MM')}_global_cnpj_list_count_${normalized.sort().join(',')}`;
+
+    const cached = this.getCachedData(this.cnpjListWithCountCache, cacheKey);
+    if (cached) {
+      return cached;
+    }
+
+    if (normalized.length === 0) {
+      return of([]);
+    }
+
+    const timeMatch = buildTimeMatch(month);
+
+    const actionCountBody = [
+      {
+        $match: {
+          ...timeMatch,
+          'attributes.cnpj': { $in: normalized }
+        }
+      },
+      {
+        $group: {
+          _id: '$attributes.cnpj',
+          count: { $sum: 1 }
+        }
+      }
+    ];
+
+    const request$ = this.funifierApi.post<{ _id: string; count: number }[]>(
+      '/v3/database/action_log/aggregate?strict=true',
+      actionCountBody
+    ).pipe(
+      map(actionResponse => {
+        return actionResponse
+          .filter(r => r._id != null)
+          .map(r => ({
+            cnpj: r._id,
+            actionCount: r.count
+          }));
+      }),
+      catchError(error => {
+        console.error('Error fetching global CNPJ counts:', error);
+        return of([]);
+      }),
+      shareReplay({ bufferSize: 1, refCount: true, windowTime: this.CACHE_DURATION })
+    );
+
+    // Cache using existing cache map.
+    this.setCachedData(this.cnpjListWithCountCache, cacheKey, request$);
+    return request$;
+  }
+
+  /**
    * Get all actions for a specific CNPJ (by all players)
    * Uses time field with Funifier relative dates
    * Cached with shareReplay to avoid duplicate requests

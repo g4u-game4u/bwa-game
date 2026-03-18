@@ -236,6 +236,9 @@
               <span *ngIf="!cliente.deliveryKpi" class="kpi-na">N/A</span>
               <!-- Show CNPJ ID for reference -->
               <span *ngIf="cliente.cnpjId" class="carteira-cnpj-id">{{ cliente.cnpjId }}</span>
+              <span *ngIf="cliente.actionCount > 0" class="carteira-action-count">
+                {{ cliente.actionCount }} tarefas
+              </span>
             </div>
           </div>
         </div>
