@@ -166,7 +166,8 @@ export class ModalCompanyCarteiraDetailComponent implements OnInit, OnDestroy {
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (tasks) => {
-                    this.tasks = tasks;
+          // Este modal precisa exibir pendentes também, mas com label ajustada na UI.
+          this.tasks = tasks;
           this.isLoadingTasks = false;
           this.cdr.markForCheck();
         },
@@ -217,7 +218,7 @@ export class ModalCompanyCarteiraDetailComponent implements OnInit, OnDestroy {
       case 'finalizado':
         return 'Finalizado';
       case 'pendente':
-        return 'Pendente';
+        return 'Finalizado';
       case 'dispensado':
         return 'Dispensado';
       default:
@@ -230,7 +231,7 @@ export class ModalCompanyCarteiraDetailComponent implements OnInit, OnDestroy {
       case 'finalizado':
         return 'status-finalizado';
       case 'pendente':
-        return 'status-pendente';
+        return 'status-finalizado';
       case 'dispensado':
         return 'status-dispensado';
       default:

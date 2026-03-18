@@ -447,20 +447,42 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
             })
           );
         }),
-        map(({ companies, nameMap }) => {
+        switchMap(({ companies, nameMap }) => {
+          // "Toda temporada" => selectedMonth = undefined, so we intentionally skip the monthly count query.
+          if (this.selectedMonth === undefined) {
+            return of({ companies, nameMap, actionCounts: [] as { cnpj: string; actionCount: number }[] });
+          }
+
+          const cnpjList = companies.map(c => c.cnpj).filter(Boolean);
+
+          return this.actionLogService.getCnpjListWithCountForAllExecutors(cnpjList, this.selectedMonth).pipe(
+            map(actionCounts => ({ companies, nameMap, actionCounts })),
+            catchError(() => of({ companies, nameMap, actionCounts: [] as { cnpj: string; actionCount: number }[] }))
+          );
+        }),
+        map(({ companies, nameMap, actionCounts }) => {
           // Store the name map for later use in getCompanyDisplayName
           nameMap.forEach((name, cnpj) => {
             this.cnpjNameMap.set(cnpj, name);
           });
-          
+
+          // actionCounts.cnpj contains the action_log CNPJ string; extract the CNPJ ID for matching.
+          const actionCountByCnpjId = new Map<string, number>();
+          for (const item of actionCounts) {
+            const extractedId = this.companyKpiService.extractCnpjId(item.cnpj) || item.cnpj;
+            const prev = actionCountByCnpjId.get(extractedId) || 0;
+            actionCountByCnpjId.set(extractedId, prev + (item.actionCount || 0));
+          }
+
           // Convert Company[] to CompanyDisplay[] format
           // Use enriched company name from empid_cnpj__c, fallback to cnpj ID
           return companies.map(company => {
             const enrichedName = nameMap.get(company.cnpj) || company.name;
+            const lookupKey = this.companyKpiService.extractCnpjId(company.cnpj) || company.cnpj;
             return {
               cnpj: enrichedName, // Use enriched company name for display
               cnpjId: company.cnpj, // The CNPJ ID from cnpj__c._id
-              actionCount: 0, // Will be enriched with action count if needed
+              actionCount: actionCountByCnpjId.get(lookupKey) || 0,
               deliveryKpi: company.healthScore !== undefined ? {
                 id: 'delivery',
                 label: 'Entregas no Prazo',
@@ -1021,7 +1043,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     const minutes = Math.floor(diff / 60000);
     
     if (minutes < 1) return 'Agora mesmo';
-    if (minutes === 1) return 'HÃ¡ 1 minuto';
+    if (minutes === 1) return 'Há 1 minuto';
     return `HÃ¡ ${minutes} minutos`;
   }
 

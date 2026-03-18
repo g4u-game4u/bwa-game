@@ -732,7 +732,7 @@ export class DashboardSupervisorTecnicoComponent implements OnInit, OnDestroy {
       const monthStart = dayjs(dateRange.start).startOf('day').toDate();
       const monthEnd = dayjs(dateRange.end).endOf('day').toDate();
 
-      const cnpjListWithCounts = await firstValueFrom(
+      let cnpjListWithCounts = await firstValueFrom(
         this.teamAggregateService.getTeamCnpjListWithCount(
           this.selectedTeamId,
           monthStart,
@@ -745,6 +745,22 @@ export class DashboardSupervisorTecnicoComponent implements OnInit, OnDestroy {
         this.isLoadingCarteira = false;
         this.cdr.markForCheck();
         return;
+      }
+
+      // Replace executor-limited counts (team) with global counts (all users) for the same CNPJs.
+      if (this.selectedMonthsAgo !== -1) {
+        const cnpjList = cnpjListWithCounts.map(c => c.cnpj);
+        const globalCounts = await firstValueFrom(
+          this.actionLogService
+            .getCnpjListWithCountForAllExecutors(cnpjList, this.selectedMonth)
+            .pipe(takeUntil(this.destroy$))
+        ).catch(() => []);
+
+        const globalCountByCnpj = new Map(globalCounts.map(c => [c.cnpj, c.actionCount]));
+        cnpjListWithCounts = cnpjListWithCounts.map(item => ({
+          ...item,
+          actionCount: globalCountByCnpj.get(item.cnpj) || 0
+        }));
       }
 
       const cnpjList = cnpjListWithCounts.map(c => c.cnpj);

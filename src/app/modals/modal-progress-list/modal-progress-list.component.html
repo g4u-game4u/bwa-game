@@ -48,6 +48,7 @@
             <div class="task-header" [class.with-points]="listType === 'pontos'">
               <div class="task-col-title">Tarefa</div>
               <div class="task-col-executor">Executor</div>
+              <div class="task-col-company">Empresa</div>
               <div class="task-col-date">Data</div>
               <div class="task-col-status">Status</div>
               <div class="task-col-points" *ngIf="listType === 'pontos'">Pontos</div>
@@ -59,6 +60,12 @@
                 </div>
                 <div class="task-col-executor">
                   <span class="task-executor">{{ formatEmailToName(item.player) }}</span>
+                </div>
+                <div class="task-col-company">
+                  <div class="task-company">
+                    <div class="task-company-name">{{ getCompanyDisplayName(item.cnpj) }}</div>
+                    <div class="task-company-cnpj">{{ item.cnpj || 'N/A' }}</div>
+                  </div>
                 </div>
                 <div class="task-col-date">
                   <span class="task-date">{{ formatDate(item.created) }}</span>
@@ -106,9 +113,15 @@
                     <span class="task-title">{{ item.title }}</span>
                   </div>
                   <div class="task-col-delivery-id" [class.copied]="copiedDeliveryId === item.deliveryId">
-                    <span class="delivery-id-label">ID:</span>
-                    <span class="delivery-id-value">{{ item.deliveryId }}</span>
-                    <span *ngIf="item.cnpj" class="company-name">{{ getCompanyDisplayName(item.cnpj) }}</span>
+                    <ng-container *ngIf="item.cnpj; else showDeliveryId">
+                      <span class="delivery-id-label">CNPJ:</span>
+                      <span class="delivery-id-value">{{ item.cnpj }}</span>
+                      <span class="company-name">{{ getCompanyDisplayName(item.cnpj) }}</span>
+                    </ng-container>
+                    <ng-template #showDeliveryId>
+                      <span class="delivery-id-label">ID:</span>
+                      <span class="delivery-id-value">{{ item.deliveryId }}</span>
+                    </ng-template>
                     <button 
                       type="button"
                       class="copy-button"
@@ -151,6 +164,7 @@
                     <div class="activity-header">
                       <div class="activity-col-title">Tarefa</div>
                       <div class="activity-col-executor">Executor</div>
+                      <div class="activity-col-company">Empresa</div>
                       <div class="activity-col-date">Data</div>
                       <div class="activity-col-status">Status</div>
                     </div>
@@ -161,6 +175,12 @@
                         </div>
                         <div class="activity-col-executor">
                           <span class="activity-executor">{{ formatEmailToName(activity.player) }}</span>
+                        </div>
+                        <div class="activity-col-company">
+                          <div class="activity-company">
+                            <div class="activity-company-name">{{ getCompanyDisplayName(activity.cnpj) }}</div>
+                            <div class="activity-company-cnpj">{{ activity.cnpj || 'N/A' }}</div>
+                          </div>
                         </div>
                         <div class="activity-col-date">
                           <span class="activity-date">{{ formatDate(activity.created) }}</span>
