@@ -488,6 +488,12 @@
       align-items: center;
       margin-bottom: $spacing-md;
     }
+
+    .section-title-wrap {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
     
     .section-title {
       @include text-heading-3;
@@ -573,6 +579,12 @@
       transition: all 0.2s ease;
 
       i { font-size: 1rem; }
+
+      .tab-count {
+        margin-left: 4px;
+        opacity: 0.85;
+        font-weight: 400;
+      }
 
       &:hover:not(.active) {
         background: rgba(59, 130, 246, 0.08);

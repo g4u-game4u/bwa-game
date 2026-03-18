@@ -188,6 +188,8 @@
           id="clientes-carteira-tab">
           <i class="ri-briefcase-line" aria-hidden="true"></i>
           Carteira
+          <c4u-info-button infoKey="clientes-carteira" position="top" (click)="$event.stopPropagation()"></c4u-info-button>
+          <span class="tab-count" aria-hidden="true">({{ carteiraClientes.length }})</span>
         </button>
         <button
           type="button"
@@ -200,6 +202,8 @@
           id="clientes-participacao-tab">
           <i class="ri-group-line" aria-hidden="true"></i>
           Participação
+          <c4u-info-button infoKey="clientes-participacao" position="top" (click)="$event.stopPropagation()"></c4u-info-button>
+          <span class="tab-count" aria-hidden="true">({{ participacaoCnpjs.length }})</span>
         </button>
       </div>
 

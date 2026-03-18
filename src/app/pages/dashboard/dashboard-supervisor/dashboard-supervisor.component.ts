@@ -157,8 +157,8 @@ export class DashboardSupervisorComponent implements OnInit, OnDestroy {
           // Coins from coins field
           const coins = Number(pointCategories.coins) || 0;
 
-          // SUPERVISOR-specific metrics: cnpj_sup and entrega_sup
-          const cnpjMetric = extra.cnpj_sup ? parseFloat(extra.cnpj_sup) : 0;
+          // Volume de clientes = quantidade de itens no array cnpj_resp do jogador
+          const cnpjMetric = this.getCnpjRespCount(extra);
           const entregaMetric = extra.entrega_sup ? parseFloat(extra.entrega_sup) : 0;
 
           // Goals
@@ -483,6 +483,19 @@ export class DashboardSupervisorComponent implements OnInit, OnDestroy {
     this.isCompanyDetailModalOpen = false;
     this.selectedCompanyForDetail = null;
     this.cdr.markForCheck();
+  }
+
+  /**
+   * Conta quantos itens existem no array/string cnpj_resp do jogador (carteira atribuída).
+   */
+  private getCnpjRespCount(extra: Record<string, unknown>): number {
+    const raw = extra?.['cnpj_resp'];
+    if (raw == null) return 0;
+    if (typeof raw === 'string') {
+      return raw.split(/[;,]/).map((s: string) => s.trim()).filter((s: string) => s.length > 0).length;
+    }
+    if (Array.isArray(raw)) return raw.length;
+    return 0;
   }
 
   /**

@@ -927,6 +927,12 @@
       width: 100%;
     }
 
+    .section-title-wrap {
+      display: flex;
+      align-items: center;
+      gap: $spacing-xs;
+    }
+
     .section-title {
       @include text-heading-3;
       margin-bottom: $spacing-md;
@@ -1086,6 +1092,12 @@
 
       i {
         font-size: 1rem;
+      }
+
+      .tab-count {
+        margin-left: 4px;
+        opacity: 0.85;
+        font-weight: $font-weight-regular;
       }
 
       &:hover:not(.active) {
