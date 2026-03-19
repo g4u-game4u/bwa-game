@@ -145,6 +145,16 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
           next: async (results: ActivityListItem[][]) => {
             // Aggregate all activities from all players
             this.activityItems = results.flat();
+
+            // This modal is used for "atividades finalizadas".
+            // Ensure we don't show "pendente" / "dispensado" items inside the finalized view.
+            if (this.listType === 'atividades' || this.listType === 'pontos') {
+              this.activityItems = this.activityItems.filter(item => {
+                // If status is missing, keep it for backward compatibility (it will render as "Finalizado").
+                if (!item.status) return true;
+                return item.status === 'finalizado';
+              });
+            }
             // Sort by created date (newest first)
             this.activityItems.sort((a, b) => b.created - a.created);
             
@@ -306,9 +316,25 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
             const entryMonth = entryDate.getMonth();
             const entryDay = entryDate.getDate();
 
+            const isDismissed =
+              entry.extra?.['dismissed'] === true ||
+              (entry as any).attributes?.['dismissed'] === true ||
+              entry.status === 'CANCELLED';
+            const isFinalized =
+              entry.extra?.processed === true ||
+              entry.status === 'DONE' ||
+              entry.status === 'DELIVERED' ||
+              entry.actionId === 'desbloquear';
+
             // Check if entry is in the target month
             if (entryYear === year && entryMonth === month && entryDay >= 1 && entryDay <= daysInMonth) {
-              newDailyCounts[entryDay - 1]++;
+              if (this.listType === 'atividades' || this.listType === 'pontos') {
+                if (!isDismissed && isFinalized) {
+                  newDailyCounts[entryDay - 1]++;
+                }
+              } else {
+                newDailyCounts[entryDay - 1]++;
+              }
             }
           });
 

@@ -176,51 +176,23 @@
     <section class="dashboard-section carteira-section" aria-labelledby="company-section-title">
       <div class="section-header">
         <h3 id="company-section-title" class="section-title">Clientes</h3>
-        <!-- <button 
-          type="button" 
-          class="carteira-expand-btn"
-          (click)="openCarteiraModal()"
-          aria-label="Ver todos os clientes">
-          <i class="ri-external-link-line"></i>
-          Ver todos
-        </button> -->
+        <small class="table-subtitle">Deals únicos (attributes.deals)</small>
       </div>
       
       <c4u-card class="carteira-card">
-        <!-- Carteira list from action_log CNPJs -->
-        <div *ngIf="carteiraClientes.length > 0" class="carteira-list">
-          <div *ngFor="let cliente of carteiraClientes" 
-               class="carteira-item"
-               (click)="openCompanyDetailModal(cliente)"
-               role="button"
-               tabindex="0"
-               [attr.aria-label]="'Ver detalhes de ' + getCompanyDisplayName(cliente.cnpj)"
-               (keydown.enter)="openCompanyDetailModal(cliente)"
-               (keydown.space)="openCompanyDetailModal(cliente); $event.preventDefault()">
+        <c4u-shimmer *ngIf="isLoadingDeals"></c4u-shimmer>
+
+        <div *ngIf="!isLoadingDeals && uniqueDeals.length > 0" class="carteira-list">
+          <div *ngFor="let deal of uniqueDeals" class="carteira-item" role="article">
             <div class="carteira-item-info">
               <i class="ri-building-line"></i>
-              <span class="carteira-cnpj">{{ getCompanyDisplayName(cliente.cnpj) }}</span>
-            </div>
-            <div class="carteira-item-meta">
-              <!-- KPI Indicator - Compact Display -->
-              <div *ngIf="cliente.deliveryKpi" 
-                   class="carteira-kpi-compact" 
-                   [ngClass]="'kpi-' + (cliente.deliveryKpi.color || 'default')"
-                   [title]="getKpiTooltip(cliente.deliveryKpi)">
-                <span class="kpi-value">{{ formatKpiValue(cliente.deliveryKpi) }}</span>
-                <i class="ri-time-line kpi-icon" aria-hidden="true"></i>
-              </div>
-              <span *ngIf="!cliente.deliveryKpi" class="kpi-na">N/A</span>
-              <span class="carteira-action-count">{{ cliente.actionCount }} tarefas</span>
-              <span class="carteira-process-count">{{ cliente.processCount }} processos</span>
+              <span class="carteira-cnpj">{{ deal }}</span>
             </div>
           </div>
         </div>
         
-        <c4u-shimmer *ngIf="isLoadingCarteira"></c4u-shimmer>
-        
-        <div *ngIf="!isLoadingCarteira && carteiraClientes.length === 0" class="empty-state">
-          <p>Nenhum cliente encontrado na carteira</p>
+        <div *ngIf="!isLoadingDeals && uniqueDeals.length === 0" class="empty-state">
+          <p>Nenhum deal encontrado</p>
         </div>
       </c4u-card>
     </section>

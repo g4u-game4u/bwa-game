@@ -662,13 +662,24 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
       case 'PENDING': return 'Pendente';
       case 'DOING': return 'Em progresso';
       case 'DONE': 
+        // No modal de "atividades finalizadas", todo item com status DONE deve aparecer como "Finalizado"
+        // (mesmo que ainda esteja aguardando aprovação/liberação de pontos).
+        if (this.aba === 'finalizados') {
+          return 'Finalizado';
+        }
         // Se uma atividade foi passada, usar ela para verificar aprovação
         if (atividade) {
           return this.isAtividadeAprovada(atividade) ? 'Aprovado' : 'Aguardando Aprovação';
         }
         // Caso contrário, usar a atividade selecionada (para compatibilidade)
         return this.isAtividadeAprovada(this.atividadeSelecionada) ? 'Aprovado' : 'Aguardando Aprovação';
-      case 'DELIVERED': return 'Entregue'; // Status DELIVERED agora é usado apenas para deliveries completadas
+      case 'DELIVERED':
+        // No modal de "atividades finalizadas", o requisito é exibir "Finalizado"
+        if (this.aba === 'finalizados') {
+          return 'Finalizado';
+        }
+        // Status DELIVERED agora é usado apenas para deliveries completadas
+        return 'Entregue';
       case 'LOST': return 'Perdido';
       case 'CANCELLED': return 'Cancelado';
       case 'INCOMPLETE': return 'Incompleto';

@@ -133,6 +133,7 @@ export class ActionLogService {
   private metricsCache = new Map<string, CacheEntry<{ activity: ActivityMetrics; processo: ProcessMetrics }>>();
   private activityCountCache = new Map<string, CacheEntry<number>>(); // Cache for activity counts
   private uniqueClientesCache = new Map<string, CacheEntry<number>>();
+  private uniqueDealsCache = new Map<string, CacheEntry<string[]>>();
   private cnpjListWithCountCache = new Map<string, CacheEntry<{ cnpj: string; actionCount: number; processCount: number }[]>>();
   private activitiesByDayCache = new Map<string, CacheEntry<{ day: number; count: number }[]>>();
   private activitiesByProcessCache = new Map<string, CacheEntry<ActivityListItem[]>>();
@@ -417,7 +418,7 @@ export class ActionLogService {
       },
       {
         $group: {
-          _id: '$attributes.cnpj'
+          _id: '$attributes.deal'
         }
       },
       {
@@ -451,6 +452,86 @@ export class ActionLogService {
     );
 
     this.setCachedData(this.uniqueClientesCache, cacheKey, request$);
+    return request$;
+  }
+
+  /**
+   * Get unique deals from user's action_log (attributes.deals).
+   * Returns a de-duplicated list of values for the selected month.
+   */
+  getUniqueDeals(playerId: string, month?: Date): Observable<string[]> {
+    const targetMonth = month || new Date();
+    const cacheKey = `${playerId}_${dayjs(targetMonth).format('YYYY-MM')}_unique_deals`;
+    const cached = this.getCachedData(this.uniqueDealsCache, cacheKey);
+    if (cached) {
+      return cached;
+    }
+
+    const startDate = getRelativeDateExpression(month, 'start');
+    const endDate = getRelativeDateExpression(month, 'end');
+
+    const aggregateBody = [
+      {
+        $match: {
+          userId: playerId,
+          time: { $gte: startDate, $lte: endDate }
+        }
+      },
+      // Normalize attributes.deal into an array so we can unwind reliably.
+      {
+        $project: {
+          dealValues: {
+            $cond: [
+              { $isArray: '$attributes.deal' },
+              '$attributes.deal',
+              ['$attributes.deal']
+            ]
+          }
+        }
+      },
+      { $unwind: '$dealValues' },
+      {
+        $match: {
+          $and: [
+            { dealValues: { $ne: null } },
+            { dealValues: { $ne: '' } }
+          ]
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          deals: { $addToSet: '$dealValues' }
+        }
+      },
+      { $project: { _id: 0, deals: 1 } }
+    ];
+
+    console.log('📊 Unique deals query:', JSON.stringify(aggregateBody));
+
+    const request$ = this.funifierApi
+      .post<{ deals: unknown[] }[]>(
+        '/v3/database/action_log/aggregate?strict=true',
+        aggregateBody
+      )
+      .pipe(
+        map(response => {
+          if (Array.isArray(response) && response.length > 0) {
+            const deals = (response[0] as any)?.deals;
+            if (Array.isArray(deals)) {
+              return deals.map(d => String(d)).filter(d => d && d.trim().length > 0);
+            }
+          }
+          return [];
+        }),
+        catchError(error => {
+          console.error('Error fetching unique deals:', error);
+          return of([]);
+        }),
+        shareReplay({ bufferSize: 1, refCount: true, windowTime: this.CACHE_DURATION })
+      );
+
+    this.setCachedData(this.uniqueDealsCache, cacheKey, request$);
     return request$;
   }
 
@@ -583,13 +664,26 @@ export class ActionLogService {
 
   /**
    * Get list of activities for modal display
-   * Returns list with attributes.acao as title
+   * Returns list with attributes.stage as title (fallback to attributes.acao)
    */
   getActivityList(playerId: string, month?: Date): Observable<ActivityListItem[]> {
     return this.getPlayerActionLogForMonth(playerId, month).pipe(
       map(actions => actions.map(a => {
         // Determine status based on action data
         let status: 'finalizado' | 'pendente' | 'dispensado' | undefined;
+
+        // Some deployments encode completion inside attributes.stage (instead of extra.processed/status).
+        const stageForStatusRaw = a.attributes?.['stage'];
+        const stageForStatus =
+          typeof stageForStatusRaw === 'string' ? stageForStatusRaw.trim().toLowerCase() : '';
+        const stageIndicatesFinalizado =
+          stageForStatus === 'done' ||
+          stageForStatus === 'delivered' ||
+          stageForStatus === 'finalizado' ||
+          stageForStatus === 'finalizada' ||
+          stageForStatus.includes('finaliz') ||
+          stageForStatus.includes('entreg') ||
+          stageForStatus.includes('conclu');
         
         // Check if action is dismissed (highest priority)
         if (a.extra?.['dismissed'] === true || a.attributes?.['dismissed'] === true || a.status === 'CANCELLED') {
@@ -599,7 +693,8 @@ export class ActionLogService {
         else if (a.extra?.processed === true || 
                  a.status === 'DONE' || 
                  a.status === 'DELIVERED' ||
-                 a.actionId === 'desbloquear') {
+                 a.actionId === 'desbloquear' ||
+                 stageIndicatesFinalizado) {
           status = 'finalizado';
         }
         // Check if action is pending or in progress
@@ -610,14 +705,23 @@ export class ActionLogService {
           status = 'pendente';
         }
 
+        const stageFromAttributes = a.attributes?.['stage'];
+        const acaoFromAttributes = a.attributes?.['acao'];
+        const title =
+          (typeof stageFromAttributes === 'string' && stageFromAttributes.trim() !== '')
+            ? stageFromAttributes
+            : (typeof acaoFromAttributes === 'string' && acaoFromAttributes.trim() !== '')
+              ? acaoFromAttributes
+              : (a.action_title || a.actionId || 'Ação sem título');
+
         return {
           id: a._id,
-          title: a.attributes?.acao || a.action_title || a.actionId || 'Ação sem título',
+          title,
           points: a.points || 0,
           created: extractTimestamp(a.time as number | { $date: string } | undefined),
           player: a.userId || '',
           status,
-          cnpj: a.attributes?.cnpj || undefined
+          cnpj: typeof a.attributes?.['deal'] === 'string' ? a.attributes?.['deal'] : undefined
         };
       })),
       catchError(error => {
@@ -653,14 +757,17 @@ export class ActionLogService {
             if (existing) {
               existing.count++;
               // Update CNPJ if not set yet and this action has one
-              if (!existing.cnpj && action.attributes?.cnpj) {
-                existing.cnpj = action.attributes.cnpj;
+              if (!existing.cnpj) {
+                const deal = action.attributes?.['deal'];
+                if (typeof deal === 'string' && deal.trim() !== '') {
+                  existing.cnpj = deal;
+                }
               }
             } else {
               deliveryMap.set(deliveryId, {
                 title: action.attributes?.delivery_title || `Processo ${deliveryId}`,
                 count: 1,
-                cnpj: action.attributes?.cnpj
+                cnpj: typeof action.attributes?.['deal'] === 'string' ? action.attributes?.['deal'] : undefined
               });
             }
           }
@@ -776,37 +883,37 @@ export class ActionLogService {
     const startDate = getRelativeDateExpression(month, 'start');
     const endDate = getRelativeDateExpression(month, 'end');
 
-    // First query: get action count per CNPJ
+    // First query: get action count per Deal
     const actionCountBody = [
       {
         $match: {
           userId: playerId,
           time: { $gte: startDate, $lte: endDate },
-          'attributes.cnpj': { $ne: null }
+          'attributes.deal': { $ne: null }
         }
       },
       {
         $group: {
-          _id: '$attributes.cnpj',
+          _id: '$attributes.deal',
           count: { $sum: 1 }
         }
       }
     ];
 
-    // Second query: get unique process count (delivery_id) per CNPJ
+    // Second query: get unique process count (delivery_id) per Deal
     const processCountBody = [
       {
         $match: {
           userId: playerId,
           time: { $gte: startDate, $lte: endDate },
-          'attributes.cnpj': { $ne: null },
+          'attributes.deal': { $ne: null },
           'attributes.delivery_id': { $ne: null }
         }
       },
       {
         $group: {
           _id: {
-            cnpj: '$attributes.cnpj',
+            cnpj: '$attributes.deal',
             delivery_id: '$attributes.delivery_id'
           }
         }
@@ -892,7 +999,7 @@ export class ActionLogService {
     const aggregateBody = [
       {
         $match: {
-          'attributes.cnpj': cnpj,
+          'attributes.deal': cnpj,
           time: { $gte: startDate, $lte: endDate }
         }
       },
@@ -911,6 +1018,19 @@ export class ActionLogService {
         return actions.map(a => {
           // Determine status based on action data
           let status: 'finalizado' | 'pendente' | 'dispensado' | undefined;
+
+          // Some deployments encode completion inside attributes.stage (instead of extra.processed/status).
+          const stageForStatusRaw = a.attributes?.['stage'];
+          const stageForStatus =
+            typeof stageForStatusRaw === 'string' ? stageForStatusRaw.trim().toLowerCase() : '';
+          const stageIndicatesFinalizado =
+            stageForStatus === 'done' ||
+            stageForStatus === 'delivered' ||
+            stageForStatus === 'finalizado' ||
+            stageForStatus === 'finalizada' ||
+            stageForStatus.includes('finaliz') ||
+            stageForStatus.includes('entreg') ||
+            stageForStatus.includes('conclu');
           
           // Check if action is dismissed (highest priority)
           if (a.extra?.['dismissed'] === true || a.attributes?.['dismissed'] === true || a.status === 'CANCELLED') {
@@ -920,7 +1040,8 @@ export class ActionLogService {
           else if (a.extra?.processed === true || 
                    a.status === 'DONE' || 
                    a.status === 'DELIVERED' ||
-                   a.actionId === 'desbloquear') {
+                   a.actionId === 'desbloquear' ||
+                   stageIndicatesFinalizado) {
             status = 'finalizado';
           }
           // Check if action is pending or in progress
@@ -935,13 +1056,22 @@ export class ActionLogService {
             status = 'pendente';
           }
           
+          const stageFromAttributes = a.attributes?.['stage'];
+          const acaoFromAttributes = a.attributes?.['acao'];
+          const title =
+            (typeof stageFromAttributes === 'string' && stageFromAttributes.trim() !== '')
+              ? stageFromAttributes
+              : (typeof acaoFromAttributes === 'string' && acaoFromAttributes.trim() !== '')
+                ? acaoFromAttributes
+                : (a.action_title || a.actionId || 'Ação sem título');
+
           return {
             id: a._id,
-            title: a.attributes?.acao || a.action_title || a.actionId || 'Ação sem título',
+            title,
             player: a.userId || '',
             created: extractTimestamp(a.time as number | { $date: string } | undefined),
             status,
-            cnpj: a.attributes?.cnpj || undefined
+            cnpj: typeof a.attributes?.['deal'] === 'string' ? a.attributes?.['deal'] : undefined
           };
         });
       }),
@@ -1040,14 +1170,23 @@ export class ActionLogService {
             status = 'pendente';
           }
 
+          const stageFromAttributes = a.attributes?.['stage'];
+          const acaoFromAttributes = a.attributes?.['acao'];
+          const title =
+            (typeof stageFromAttributes === 'string' && stageFromAttributes.trim() !== '')
+              ? stageFromAttributes
+              : (typeof acaoFromAttributes === 'string' && acaoFromAttributes.trim() !== '')
+                ? acaoFromAttributes
+                : (a.action_title || a.actionId || 'Ação sem título');
+
           return {
             id: a._id,
-            title: a.attributes?.acao || a.action_title || a.actionId || 'Ação sem título',
+            title,
             points: a.points || 0,
             created: extractTimestamp(a.time as number | { $date: string } | undefined),
             player: a.userId || '',
             status,
-            cnpj: a.attributes?.cnpj || undefined
+            cnpj: typeof a.attributes?.['deal'] === 'string' ? a.attributes?.['deal'] : undefined
           };
         });
       }),
@@ -1149,6 +1288,7 @@ export class ActionLogService {
     this.metricsCache.clear();
     this.activityCountCache.clear();
     this.uniqueClientesCache.clear();
+    this.uniqueDealsCache.clear();
     this.cnpjListWithCountCache.clear();
     this.activitiesByDayCache.clear();
     this.activitiesByProcessCache.clear();
@@ -1360,12 +1500,12 @@ export class ActionLogService {
         $match: {
           'playerData.teams': teamId,
           time: { $gte: startDate, $lte: endDate },
-          'attributes.cnpj': { $ne: null }
+          'attributes.deal': { $ne: null }
         }
       },
       {
         $group: {
-          _id: '$attributes.cnpj',
+          _id: '$attributes.deal',
           count: { $sum: 1 }
         }
       }
@@ -1388,14 +1528,14 @@ export class ActionLogService {
         $match: {
           'playerData.teams': teamId,
           time: { $gte: startDate, $lte: endDate },
-          'attributes.cnpj': { $ne: null },
+          'attributes.deal': { $ne: null },
           'attributes.delivery_id': { $ne: null }
         }
       },
       {
         $group: {
           _id: {
-            cnpj: '$attributes.cnpj',
+            cnpj: '$attributes.deal',
             delivery_id: '$attributes.delivery_id'
           }
         }

@@ -77,6 +77,10 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   carteiraClientes: CompanyDisplay[] = [];
   isLoadingCarteira = true;
   cnpjNameMap = new Map<string, string>(); // Map of original CNPJ → clean empresa name
+
+  // Unique deals from action_log (attributes.deals)
+  uniqueDeals: string[] = [];
+  isLoadingDeals = true;
   
   // Month selection
   selectedMonth: Date = new Date();
@@ -237,6 +241,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     this.loadPlayerData();
     this.loadCompanyData();
     this.loadCarteiraData();
+    this.loadDealsData();
     this.loadKPIData();
     this.loadProgressData();
   }
@@ -469,6 +474,39 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
         error: (error) => {
           console.error('📊 Failed to load carteira data:', error);
           this.isLoadingCarteira = false;
+          this.cdr.markForCheck();
+        }
+      });
+  }
+
+  /**
+   * Load unique deals from action_log (attributes.deals) for the current player/month.
+   */
+  private loadDealsData(): void {
+    this.isLoadingDeals = true;
+    this.uniqueDeals = [];
+    this.cdr.markForCheck();
+
+    const playerId = this.getPlayerId();
+    if (!playerId) {
+      this.isLoadingDeals = false;
+      this.cdr.markForCheck();
+      return;
+    }
+
+    this.actionLogService
+      .getUniqueDeals(playerId, this.selectedMonth)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (deals) => {
+          this.uniqueDeals = deals || [];
+          this.isLoadingDeals = false;
+          this.cdr.markForCheck();
+        },
+        error: (err: Error) => {
+          console.error('📊 Failed to load unique deals:', err);
+          this.uniqueDeals = [];
+          this.isLoadingDeals = false;
           this.cdr.markForCheck();
         }
       });
