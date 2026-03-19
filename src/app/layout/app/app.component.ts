@@ -58,7 +58,7 @@ export class AppComponent implements OnInit {
       
       // Skip system initialization to avoid errors
       // Just set the page title with default value
-      this.titleService.setTitle('Game BWA');
+      this.titleService.setTitle('Game Revisaprev');
       this.paramReady = true;
       
       console.log('✅ Aplicação pronta!');
