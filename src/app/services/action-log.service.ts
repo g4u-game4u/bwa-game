@@ -124,47 +124,6 @@ function getRelativeDateExpression(month: Date | undefined, position: 'start' | 
   }
 }
 
-/**
- * Helper to get epoch milliseconds for a date position.
- * Used alongside getRelativeDateExpression to build $or queries
- * that match both { $date: "..." } and raw epoch number formats.
- */
-function getEpochMs(month: Date | undefined, position: 'start' | 'end'): number {
-  const targetMonth = month || new Date();
-  const targetMonthNum = targetMonth.getMonth();
-  const targetYear = targetMonth.getFullYear();
-
-  const seasonStartDate = new Date('2026-01-01T00:00:00.000Z');
-
-  if (position === 'start') {
-    const monthStart = new Date(targetYear, targetMonthNum, 1, 0, 0, 0, 0);
-    return monthStart < seasonStartDate ? seasonStartDate.getTime() : monthStart.getTime();
-  } else {
-    const monthEnd = new Date(targetYear, targetMonthNum + 1, 0, 23, 59, 59, 999);
-    return monthEnd.getTime();
-  }
-}
-
-/**
- * Build a $match condition for the time field that handles both formats:
- * - { $date: "ISO string" } (BSON Date objects from Funifier)
- * - number (epoch milliseconds)
- * Uses $or to match documents regardless of which format their time field uses.
- */
-function buildTimeMatch(month: Date | undefined): Record<string, unknown> {
-  const startDate = getRelativeDateExpression(month, 'start');
-  const endDate = getRelativeDateExpression(month, 'end');
-  const startMs = getEpochMs(month, 'start');
-  const endMs = getEpochMs(month, 'end');
-
-  return {
-    $or: [
-      { time: { $gte: startDate, $lte: endDate } },
-      { time: { $gte: startMs, $lte: endMs } }
-    ]
-  };
-}
-
 @Injectable({
   providedIn: 'root'
 })
@@ -174,7 +133,7 @@ export class ActionLogService {
   private metricsCache = new Map<string, CacheEntry<{ activity: ActivityMetrics; processo: ProcessMetrics }>>();
   private activityCountCache = new Map<string, CacheEntry<number>>(); // Cache for activity counts
   private uniqueClientesCache = new Map<string, CacheEntry<number>>();
-  private cnpjListWithCountCache = new Map<string, CacheEntry<{ cnpj: string; actionCount: number }[]>>();
+  private cnpjListWithCountCache = new Map<string, CacheEntry<{ cnpj: string; actionCount: number; processCount: number }[]>>();
   private activitiesByDayCache = new Map<string, CacheEntry<{ day: number; count: number }[]>>();
   private activitiesByProcessCache = new Map<string, CacheEntry<ActivityListItem[]>>();
   private processListCache = new Map<string, CacheEntry<ProcessListItem[]>>();
@@ -200,17 +159,18 @@ export class ActionLogService {
       return cached;
     }
 
-    // Build time match that handles both { $date: "..." } and epoch number formats
-    const timeMatch = buildTimeMatch(month);
+    // Use Funifier's relative date syntax for time filtering
+    const startDate = getRelativeDateExpression(month, 'start');
+    const endDate = getRelativeDateExpression(month, 'end');
 
     // Aggregate query to get action log for this player in the target month
-    // Uses userId field and time field with dual-format $or match
+    // Uses userId field and time field with Funifier $date expressions
     // Add $limit with high value to avoid MongoDB default limit of 100 documents
     const aggregateBody = [
       { 
         $match: { 
           userId: playerId,
-          ...timeMatch
+          time: { $gte: startDate, $lte: endDate }
         } 
       },
       { $sort: { time: -1 } },
@@ -250,8 +210,9 @@ export class ActionLogService {
       return cached;
     }
 
-    // Build time match that handles both { $date: "..." } and epoch number formats
-    const timeMatch = buildTimeMatch(month);
+    // Use Funifier's relative date syntax for time filtering
+    const startDate = getRelativeDateExpression(month, 'start');
+    const endDate = getRelativeDateExpression(month, 'end');
 
     // Use $count aggregation to get total count without returning all documents
     // This avoids MongoDB default limit of 100 documents
@@ -259,7 +220,7 @@ export class ActionLogService {
       { 
         $match: { 
           userId: playerId,
-          ...timeMatch
+          time: { $gte: startDate, $lte: endDate }
         } 
       },
       {
@@ -317,15 +278,16 @@ export class ActionLogService {
       return cached;
     }
 
-    // Build time match that handles both { $date: "..." } and epoch number formats
-    const timeMatch = buildTimeMatch(month);
+    // Use Funifier's relative date syntax
+    const startDate = getRelativeDateExpression(month, 'start');
+    const endDate = getRelativeDateExpression(month, 'end');
 
     const aggregateBody = [
       {
         $match: {
           player: playerId,
           type: 0, // type 0 = points
-          ...timeMatch
+          time: { $gte: startDate, $lte: endDate }
         }
       },
       {
@@ -385,15 +347,16 @@ export class ActionLogService {
       return cached;
     }
 
-    // Build time match that handles both { $date: "..." } and epoch number formats
-    const timeMatch = buildTimeMatch(month);
+    // Use Funifier's relative date syntax
+    const startDate = getRelativeDateExpression(month, 'start');
+    const endDate = getRelativeDateExpression(month, 'end');
 
     const aggregateBody = [
       {
         $match: {
           player: playerId,
           type: 0, // type 0 = points
-          ...timeMatch
+          time: { $gte: startDate, $lte: endDate }
         }
       },
       {
@@ -441,14 +404,15 @@ export class ActionLogService {
       return cached;
     }
 
-    // Build time match that handles both { $date: "..." } and epoch number formats
-    const timeMatch = buildTimeMatch(month);
+    // Use Funifier's relative date syntax
+    const startDate = getRelativeDateExpression(month, 'start');
+    const endDate = getRelativeDateExpression(month, 'end');
 
     const aggregateBody = [
       {
         $match: {
           userId: playerId,
-          ...timeMatch
+          time: { $gte: startDate, $lte: endDate }
         }
       },
       {
@@ -795,109 +759,30 @@ export class ActionLogService {
   }
 
   /**
-   * Get list of unique CNPJs from player's action_log WITH action count
+   * Get list of unique CNPJs from player's action_log WITH action count and process count
    * Returns CNPJ, action count, and unique process count (delivery_id) for each CNPJ
    * Uses userId field and time field with Funifier relative dates
    * Cached with shareReplay to avoid duplicate requests
    */
-  getPlayerCnpjListWithCount(playerId: string, month?: Date): Observable<{ cnpj: string; actionCount: number }[]> {
-      const targetMonth = month || new Date();
-      const cacheKey = `${playerId}_${dayjs(targetMonth).format('YYYY-MM')}_cnpj_list_count`;
-      const cached = this.getCachedData(this.cnpjListWithCountCache, cacheKey);
-      if (cached) {
-        return cached;
-      }
-
-      // Build time match that handles both { $date: "..." } and epoch number formats
-      const timeMatch = buildTimeMatch(month);
-
-      // Single query: get action count per CNPJ
-      const actionCountBody = [
-        {
-          $match: {
-            userId: playerId,
-            ...timeMatch,
-            'attributes.cnpj': { $ne: null }
-          }
-        },
-        {
-          $group: {
-            _id: '$attributes.cnpj',
-            count: { $sum: 1 }
-          }
-        }
-      ];
-
-    console.log('📊 Player CNPJs with count query:', JSON.stringify(actionCountBody));
-
-      const request$ = this.funifierApi.post<{ _id: string; count: number }[]>(
-        '/v3/database/action_log/aggregate?strict=true',
-        actionCountBody
-      ).pipe(
-        map(actionResponse => {
-        console.log('📊 Player CNPJs with count response:', actionResponse);
-
-          return actionResponse
-            .filter(r => r._id != null)
-            .map(r => ({
-              cnpj: r._id,
-              actionCount: r.count,
-              processCount: 0
-            }));
-        }),
-        catchError(error => {
-          console.error('Error fetching player CNPJs with count:', error);
-          return of([]);
-        }),
-        shareReplay({ bufferSize: 1, refCount: true, windowTime: this.CACHE_DURATION })
-      );
-
-      this.setCachedData(this.cnpjListWithCountCache, cacheKey, request$);
-      return request$;
-    }
-
-
-  /**
-   * Get list of unique CNPJs from player's action_log
-   * Uses userId field and time field with Funifier relative dates
-   */
-  getPlayerCnpjList(playerId: string, month?: Date): Observable<string[]> {
-    return this.getPlayerCnpjListWithCount(playerId, month).pipe(
-      map(items => items.map(i => i.cnpj))
-    );
-  }
-
-  /**
-   * Get list of unique CNPJs from player's action_log WITHOUT filtering by executor,
-   * aggregated across ALL users (matches modal-company-carteira-detail behavior).
-   *
-   * IMPORTANT: this method is intended for "carteira list" counters; it counts
-   * all actions (independent of status) for the given CNPJ ids.
-   */
-  getCnpjListWithCountForAllExecutors(
-    cnpjList: string[],
-    month?: Date
-  ): Observable<{ cnpj: string; actionCount: number }[]> {
-    const normalized = Array.from(new Set((cnpjList || []).filter(Boolean))).map(String);
+  getPlayerCnpjListWithCount(playerId: string, month?: Date): Observable<{ cnpj: string; actionCount: number; processCount: number }[]> {
     const targetMonth = month || new Date();
-    const cacheKey = `${dayjs(targetMonth).format('YYYY-MM')}_global_cnpj_list_count_${normalized.sort().join(',')}`;
-
+    const cacheKey = `${playerId}_${dayjs(targetMonth).format('YYYY-MM')}_cnpj_list_count`;
     const cached = this.getCachedData(this.cnpjListWithCountCache, cacheKey);
     if (cached) {
       return cached;
     }
 
-    if (normalized.length === 0) {
-      return of([]);
-    }
+    // Use Funifier's relative date syntax
+    const startDate = getRelativeDateExpression(month, 'start');
+    const endDate = getRelativeDateExpression(month, 'end');
 
-    const timeMatch = buildTimeMatch(month);
-
+    // First query: get action count per CNPJ
     const actionCountBody = [
       {
         $match: {
-          ...timeMatch,
-          'attributes.cnpj': { $in: normalized }
+          userId: playerId,
+          time: { $gte: startDate, $lte: endDate },
+          'attributes.cnpj': { $ne: null }
         }
       },
       {
@@ -908,28 +793,83 @@ export class ActionLogService {
       }
     ];
 
-    const request$ = this.funifierApi.post<{ _id: string; count: number }[]>(
-      '/v3/database/action_log/aggregate?strict=true',
-      actionCountBody
-    ).pipe(
-      map(actionResponse => {
+    // Second query: get unique process count (delivery_id) per CNPJ
+    const processCountBody = [
+      {
+        $match: {
+          userId: playerId,
+          time: { $gte: startDate, $lte: endDate },
+          'attributes.cnpj': { $ne: null },
+          'attributes.delivery_id': { $ne: null }
+        }
+      },
+      {
+        $group: {
+          _id: {
+            cnpj: '$attributes.cnpj',
+            delivery_id: '$attributes.delivery_id'
+          }
+        }
+      },
+      {
+        $group: {
+          _id: '$_id.cnpj',
+          processCount: { $sum: 1 }
+        }
+      }
+    ];
+
+    console.log('📊 Player CNPJs with count query:', JSON.stringify(actionCountBody));
+    console.log('📊 Player CNPJs process count query:', JSON.stringify(processCountBody));
+
+    const request$ = forkJoin([
+      this.funifierApi.post<{ _id: string; count: number }[]>(
+        '/v3/database/action_log/aggregate?strict=true',
+        actionCountBody
+      ),
+      this.funifierApi.post<{ _id: string; processCount: number }[]>(
+        '/v3/database/action_log/aggregate?strict=true',
+        processCountBody
+      )
+    ]).pipe(
+      map(([actionResponse, processResponse]) => {
+        console.log('📊 Player CNPJs with count response:', actionResponse);
+        console.log('📊 Player CNPJs process count response:', processResponse);
+        
+        // Create a map of CNPJ to process count
+        const processCountMap = new Map<string, number>();
+        processResponse
+          .filter(r => r._id != null)
+          .forEach(r => processCountMap.set(r._id, r.processCount));
+        
+        // Combine action count with process count
         return actionResponse
           .filter(r => r._id != null)
           .map(r => ({
             cnpj: r._id,
-            actionCount: r.count
+            actionCount: r.count,
+            processCount: processCountMap.get(r._id) || 0
           }));
       }),
       catchError(error => {
-        console.error('Error fetching global CNPJ counts:', error);
+        console.error('Error fetching player CNPJs with count:', error);
         return of([]);
       }),
       shareReplay({ bufferSize: 1, refCount: true, windowTime: this.CACHE_DURATION })
     );
 
-    // Cache using existing cache map.
     this.setCachedData(this.cnpjListWithCountCache, cacheKey, request$);
     return request$;
+  }
+
+  /**
+   * Get list of unique CNPJs from player's action_log
+   * Uses userId field and time field with Funifier relative dates
+   */
+  getPlayerCnpjList(playerId: string, month?: Date): Observable<string[]> {
+    return this.getPlayerCnpjListWithCount(playerId, month).pipe(
+      map(items => items.map(i => i.cnpj))
+    );
   }
 
   /**
@@ -945,14 +885,15 @@ export class ActionLogService {
       return cached;
     }
 
-    // Build time match that handles both { $date: "..." } and epoch number formats
-    const timeMatch = buildTimeMatch(month);
+    // Use Funifier's relative date syntax
+    const startDate = getRelativeDateExpression(month, 'start');
+    const endDate = getRelativeDateExpression(month, 'end');
 
     const aggregateBody = [
       {
         $match: {
           'attributes.cnpj': cnpj,
-          ...timeMatch
+          time: { $gte: startDate, $lte: endDate }
         }
       },
       { $sort: { time: -1 } },
@@ -1054,14 +995,15 @@ export class ActionLogService {
       return cached;
     }
 
-    const timeMatch = buildTimeMatch(month);
+    const startDate = getRelativeDateExpression(month, 'start');
+    const endDate = getRelativeDateExpression(month, 'end');
 
     const aggregateBody = [
       {
         $match: {
           userId: playerId,
           'attributes.delivery_id': deliveryId,
-          ...timeMatch
+          time: { $gte: startDate, $lte: endDate }
         }
       },
       { $sort: { time: -1 } }
@@ -1133,13 +1075,14 @@ export class ActionLogService {
       return cached;
     }
 
-    const timeMatch = buildTimeMatch(targetMonth);
+    const startDate = getRelativeDateExpression(targetMonth, 'start');
+    const endDate = getRelativeDateExpression(targetMonth, 'end');
 
     const aggregateBody = [
       {
         $match: {
           userId: playerId,
-          ...timeMatch
+          time: { $gte: startDate, $lte: endDate }
         }
       },
       {
@@ -1245,7 +1188,8 @@ export class ActionLogService {
       return cached;
     }
 
-    const timeMatch = buildTimeMatch(targetMonth);
+    const startDate = getRelativeDateExpression(targetMonth, 'start');
+    const endDate = getRelativeDateExpression(targetMonth, 'end');
 
     // Single aggregate query to get all action counts for the team
     const activityAggregateBody = [
@@ -1263,7 +1207,7 @@ export class ActionLogService {
       {
         $match: {
           'playerData.teams': teamId,
-          ...timeMatch
+          time: { $gte: startDate, $lte: endDate }
         }
       },
       {
@@ -1287,7 +1231,7 @@ export class ActionLogService {
       {
         $match: {
           'playerData.teams': teamId,
-          ...timeMatch,
+          time: { $gte: startDate, $lte: endDate },
           actionId: 'desbloquear'
         }
       },
@@ -1317,7 +1261,7 @@ export class ActionLogService {
       {
         $match: {
           'playerData.teams': teamId,
-          ...timeMatch,
+          time: { $gte: startDate, $lte: endDate },
           'attributes.delivery_id': { $ne: null }
         }
       },
@@ -1396,7 +1340,8 @@ export class ActionLogService {
       return cached;
     }
 
-    const timeMatch = buildTimeMatch(targetMonth);
+    const startDate = getRelativeDateExpression(targetMonth, 'start');
+    const endDate = getRelativeDateExpression(targetMonth, 'end');
 
     // Single aggregate query to get action count per CNPJ for the team
     const actionCountBody = [
@@ -1414,7 +1359,7 @@ export class ActionLogService {
       {
         $match: {
           'playerData.teams': teamId,
-          ...timeMatch,
+          time: { $gte: startDate, $lte: endDate },
           'attributes.cnpj': { $ne: null }
         }
       },
@@ -1425,32 +1370,181 @@ export class ActionLogService {
         }
       }
     ];
+
+    // Single aggregate query to get unique process count per CNPJ for the team
+    const processCountBody = [
+      {
+        $lookup: {
+          from: 'player',
+          localField: 'userId',
+          foreignField: '_id',
+          as: 'playerData'
+        }
+      },
+      {
+        $unwind: '$playerData'
+      },
+      {
+        $match: {
+          'playerData.teams': teamId,
+          time: { $gte: startDate, $lte: endDate },
+          'attributes.cnpj': { $ne: null },
+          'attributes.delivery_id': { $ne: null }
+        }
+      },
+      {
+        $group: {
+          _id: {
+            cnpj: '$attributes.cnpj',
+            delivery_id: '$attributes.delivery_id'
+          }
+        }
+      },
+      {
+        $group: {
+          _id: '$_id.cnpj',
+          processCount: { $sum: 1 }
+        }
+      }
+    ];
+
     console.log('📊 Team CNPJ list query for team:', teamId);
 
-    const request$ = this.funifierApi.post<{ _id: string; count: number }[]>(
-      '/v3/database/action_log/aggregate?strict=true',
-      actionCountBody
-    ).pipe(
-      map(actionResponse => {
+    const request$ = forkJoin([
+      this.funifierApi.post<{ _id: string; count: number }[]>('/v3/database/action_log/aggregate?strict=true', actionCountBody),
+      this.funifierApi.post<{ _id: string; processCount: number }[]>('/v3/database/action_log/aggregate?strict=true', processCountBody)
+    ]).pipe(
+      map(([actionResponse, processResponse]) => {
+        // Create a map of CNPJ to process count
+        const processCountMap = new Map<string, number>();
+        processResponse
+          .filter(r => r._id != null)
+          .forEach(r => processCountMap.set(r._id, r.processCount));
+
+        // Combine action count with process count
         const result = actionResponse
           .filter(r => r._id != null)
           .map(r => ({
             cnpj: r._id,
             actionCount: r.count,
-            processCount: 0
+            processCount: processCountMap.get(r._id) || 0
           }));
 
-        console.log('✅ Team CNPJ list loaded:', result.length, 'unique CNPJs');
+        console.log('✅ Team CNPJ list loaded (OPTIMIZED):', result.length, 'unique CNPJs, apiCalls: 2');
         return result;
       }),
       catchError(error => {
         console.error('Error fetching team CNPJ list:', error);
-        return of([] as { cnpj: string; actionCount: number; processCount: number }[]);
+        return of([]);
       }),
       shareReplay({ bufferSize: 1, refCount: true, windowTime: this.CACHE_DURATION })
     );
 
     this.setCachedData(this.teamCnpjCache, cacheKey, request$);
+    return request$;
+  }
+
+  /**
+   * Get monthly points breakdown (bloqueados and desbloqueados) for all team members.
+   * Uses aggregate query on achievement collection with player lookup.
+   * 
+   * @param teamId - Team ID (e.g., 'pessoal--rn--andreza-soares')
+   * @param month - Target month for filtering
+   * @returns Observable of points breakdown
+   */
+  getTeamMonthlyPointsBreakdown(teamId: string, month?: Date): Observable<{ bloqueados: number; desbloqueados: number }> {
+    const targetMonth = month || new Date();
+    const cacheKey = `team_points_breakdown_${teamId}_${dayjs(targetMonth).format('YYYY-MM')}`;
+    const cached = this.getCachedData(this.teamPointsBreakdownCache, cacheKey);
+    if (cached) {
+      return cached;
+    }
+
+    const startDate = getRelativeDateExpression(targetMonth, 'start');
+    const endDate = getRelativeDateExpression(targetMonth, 'end');
+
+    // Query for bloqueados (locked points) - actions that are NOT desbloquear
+    const bloqueadosBody = [
+      {
+        $lookup: {
+          from: 'player',
+          localField: 'userId',
+          foreignField: '_id',
+          as: 'playerData'
+        }
+      },
+      {
+        $unwind: '$playerData'
+      },
+      {
+        $match: {
+          'playerData.teams': teamId,
+          time: { $gte: startDate, $lte: endDate },
+          actionId: { $ne: 'desbloquear' }
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          total: { $sum: { $ifNull: ['$points', 0] } }
+        }
+      }
+    ];
+
+    // Query for desbloqueados (unlocked points) - desbloquear actions
+    const desbloqueadosBody = [
+      {
+        $lookup: {
+          from: 'player',
+          localField: 'userId',
+          foreignField: '_id',
+          as: 'playerData'
+        }
+      },
+      {
+        $unwind: '$playerData'
+      },
+      {
+        $match: {
+          'playerData.teams': teamId,
+          time: { $gte: startDate, $lte: endDate },
+          actionId: 'desbloquear'
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          total: { $sum: { $ifNull: ['$points', 0] } }
+        }
+      }
+    ];
+
+    console.log('📊 Team monthly points breakdown query for team:', teamId);
+
+    const request$ = forkJoin([
+      this.funifierApi.post<any[]>('/v3/database/action_log/aggregate?strict=true', bloqueadosBody),
+      this.funifierApi.post<any[]>('/v3/database/action_log/aggregate?strict=true', desbloqueadosBody)
+    ]).pipe(
+      map(([bloqueadosResult, desbloqueadosResult]) => {
+        const bloqueados = Math.floor(bloqueadosResult[0]?.total || 0);
+        const desbloqueados = Math.floor(desbloqueadosResult[0]?.total || 0);
+
+        console.log('✅ Team monthly points breakdown loaded (OPTIMIZED):', {
+          bloqueados,
+          desbloqueados,
+          apiCalls: 2 // Instead of 2*N calls
+        });
+
+        return { bloqueados, desbloqueados };
+      }),
+      catchError(error => {
+        console.error('Error fetching team monthly points breakdown:', error);
+        return of({ bloqueados: 0, desbloqueados: 0 });
+      }),
+      shareReplay({ bufferSize: 1, refCount: true, windowTime: this.CACHE_DURATION })
+    );
+
+    this.setCachedData(this.teamPointsBreakdownCache, cacheKey, request$);
     return request$;
   }
 

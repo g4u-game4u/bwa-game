@@ -14,12 +14,10 @@
           a 15.9155 15.9155 0 0 1 0 -31.831"
       />
     </svg>
+    <!-- <span class="level-number">{{ kpiAveragePercent | number:'1.0-0' }}</span> -->
   </div>
   <div class="player-info">
-    <div class="player-name-row">
-      <h3 class="player-name">{{ playerName }}</h3>
-      <span class="kpi-average" [ngClass]="levelColorClass">{{ kpiAveragePercent }}%</span>
-    </div>
+    <h3 class="player-name">{{ playerName }}</h3>
     <p class="player-metadata" *ngIf="metadata.area || metadata.time || metadata.squad">
       <span *ngIf="metadata.area">{{ metadata.area }}</span>
       <span *ngIf="metadata.area && metadata.time"> / </span>

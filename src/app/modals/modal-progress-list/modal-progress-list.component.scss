@@ -199,16 +199,9 @@
   background: rgba(255, 255, 255, 0.02);
   border-radius: 8px;
 
-  // Limita a largura da coluna "Empresa" para não quebrar a tabela
-  .task-col-company {
-    min-width: 0;
-    max-width: 240px;
-    overflow: hidden;
-  }
-
   .task-header {
     display: grid;
-    grid-template-columns: 2fr 1.5fr 2fr 1.5fr 1fr;
+    grid-template-columns: 2fr 1.5fr 1.5fr 1fr;
     gap: $spacing-md;
     padding: $spacing-md $spacing-lg;
     background: #323339;
@@ -225,7 +218,7 @@
     
     // Adjust grid for pontos type
     &.with-points {
-      grid-template-columns: 2fr 1.5fr 2fr 1.5fr 1fr 1fr;
+      grid-template-columns: 2fr 1.5fr 1.5fr 1fr 1fr;
     }
     
     // Adjust grid for processes
@@ -242,7 +235,7 @@
 
   .task-row {
     display: grid;
-    grid-template-columns: 2fr 1.5fr 2fr 1.5fr 1fr;
+    grid-template-columns: 2fr 1.5fr 1.5fr 1fr;
     gap: $spacing-md;
     padding: $spacing-md $spacing-lg;
     background: rgba(255, 255, 255, 0.02);
@@ -259,7 +252,7 @@
     
     // Adjust grid for pontos type
     &.with-points {
-      grid-template-columns: 2fr 1.5fr 2fr 1.5fr 1fr 1fr;
+      grid-template-columns: 2fr 1.5fr 1.5fr 1fr 1fr;
     }
     
     // Adjust grid for processes
@@ -285,37 +278,6 @@
       .task-date {
         color: $text-secondary;
         font-size: 0.875rem;
-      }
-    }
-
-    .task-col-company {
-      .task-company {
-        display: flex;
-        flex-direction: column;
-        gap: 2px;
-        min-width: 0;
-      }
-
-      .task-company-name {
-        color: $text-primary;
-        font-size: 0.875rem;
-        font-weight: 500;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        max-width: 240px;
-      }
-
-      .task-company-cnpj {
-        color: $text-secondary;
-        font-size: 0.8125rem;
-        font-family: 'Courier New', monospace;
-        font-weight: 600;
-        opacity: 0.9;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        max-width: 240px;
       }
     }
 
@@ -595,16 +557,9 @@
   background: rgba(255, 255, 255, 0.01);
   border-radius: 6px;
 
-  // Limita a largura da coluna "Empresa" no accordion de processos
-  .activity-col-company {
-    min-width: 0;
-    max-width: 240px;
-    overflow: hidden;
-  }
-
   .activity-header {
     display: grid;
-    grid-template-columns: 2fr 1.5fr 2fr 1.5fr 1fr;
+    grid-template-columns: 2fr 1.5fr 1.5fr 1fr;
     gap: $spacing-md;
     padding: $spacing-sm $spacing-md;
     background: rgba(255, 255, 255, 0.03);
@@ -623,7 +578,7 @@
 
   .activity-row {
     display: grid;
-    grid-template-columns: 2fr 1.5fr 2fr 1.5fr 1fr;
+    grid-template-columns: 2fr 1.5fr 1.5fr 1fr;
     gap: $spacing-md;
     padding: $spacing-sm $spacing-md;
     background: rgba(255, 255, 255, 0.01);
@@ -657,37 +612,6 @@
       .activity-date {
         color: $text-secondary;
         font-size: 0.8125rem;
-      }
-    }
-
-    .activity-col-company {
-      .activity-company {
-        display: flex;
-        flex-direction: column;
-        gap: 2px;
-        min-width: 0;
-      }
-
-      .activity-company-name {
-        color: $text-primary;
-        font-size: 0.8125rem;
-        font-weight: 500;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        max-width: 240px;
-      }
-
-      .activity-company-cnpj {
-        color: $text-secondary;
-        font-size: 0.75rem;
-        font-family: 'Courier New', monospace;
-        font-weight: 600;
-        opacity: 0.9;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        max-width: 240px;
       }
     }
 
@@ -758,12 +682,6 @@
 
       .task-col-date::before {
         content: 'Data: ';
-        font-weight: 600;
-        color: $text-secondary;
-      }
-
-      .task-col-company::before {
-        content: 'Empresa: ';
         font-weight: 600;
         color: $text-secondary;
       }

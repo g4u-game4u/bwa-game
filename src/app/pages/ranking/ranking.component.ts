@@ -43,7 +43,8 @@ export class RankingComponent implements OnInit {
       
       // Não carrega dados automaticamente - aguarda o usuário clicar em "Gerar Ranking"
     } catch (error) {
-          } finally {
+      console.error('Erro ao carregar dados iniciais:', error);
+    } finally {
       this.isLoading = false;
     }
   }
@@ -79,13 +80,15 @@ export class RankingComponent implements OnInit {
         this.filteredParticipants = [...this.participants];
         this.hasGeneratedRanking = true;
       } else {
-                // Usa dados padrão em caso de erro
+        console.warn('Erro ao carregar dados do ranking:', response.message);
+        // Usa dados padrão em caso de erro
         this.participants = this.getDefaultParticipants();
         this.filteredParticipants = [...this.participants];
         this.hasGeneratedRanking = true;
       }
     } catch (error) {
-            // Usa dados padrão em caso de erro
+      console.error('Erro ao carregar dados do ranking:', error);
+      // Usa dados padrão em caso de erro
       this.participants = this.getDefaultParticipants();
       this.filteredParticipants = [...this.participants];
       this.hasGeneratedRanking = true;
@@ -175,4 +178,3 @@ export class RankingComponent implements OnInit {
     }));
   }
 }
-

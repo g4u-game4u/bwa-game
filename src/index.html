@@ -15,12 +15,6 @@
     <script>
         window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
     </script>
-    <!-- Process polyfill for browser compatibility with Node.js-style env vars -->
-    <script>
-        if (typeof window.process === 'undefined') {
-            window.process = { env: {} };
-        }
-    </script>
 </head>
 <body>
 <page-root></page-root>

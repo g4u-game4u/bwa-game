@@ -26,19 +26,6 @@
       </label>
     </div>
 
-    <!-- Filtro por Executor (quando lista de executores fornecida) -->
-    <div class="filtro-item" *ngIf="mostrarFiltros && executorsList && executorsList.length > 0">
-      <label>
-        <i class="icon-person"></i>
-        <select formControlName="executor" class="select-executor">
-          <option [ngValue]="''">Todos os executores</option>
-          <option *ngFor="let executor of executorsList" [ngValue]="executor.value">
-            {{ executor.label }}
-          </option>
-        </select>
-      </label>
-    </div>
-
     <!-- Botão Filtros Avançados (direita) -->
     <div class="filtro-item" *ngIf="mostrarFiltros">
       <!-- <button 

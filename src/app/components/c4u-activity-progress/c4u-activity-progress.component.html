@@ -30,4 +30,32 @@
       </div>
     </div>
   </div>
+
+  <div class="section">
+    <h3 class="section-title">Processos</h3>
+    <div class="metrics-grid">
+      <button 
+        class="metric-item metric-button" 
+        type="button"
+        (click)="onCardClick('processos-pendentes')"
+        aria-label="Ver processos pendentes e incompletos">
+        <i class="ri-file-list-line metric-icon"></i>
+        <div class="metric-content">
+          <div class="metric-label">Pendentes e Incompletos</div>
+          <div class="metric-value">{{ formatNumber(processos.pendentes + processos.incompletas) }}</div>
+        </div>
+      </button>
+      <button 
+        class="metric-item metric-button" 
+        type="button"
+        (click)="onCardClick('processos-finalizados')"
+        aria-label="Ver processos finalizados">
+        <i class="ri-checkbox-circle-line metric-icon"></i>
+        <div class="metric-content">
+          <div class="metric-label">Finalizados</div>
+          <div class="metric-value">{{ formatNumber(processos.finalizadas) }}</div>
+        </div>
+      </button>
+    </div>
+  </div>
 </div>

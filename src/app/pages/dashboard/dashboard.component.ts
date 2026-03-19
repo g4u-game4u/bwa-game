@@ -70,7 +70,8 @@ export class DashboardComponent implements AfterViewInit, OnInit {
             const campaign = await this.campaignService.getCurrentCampaign();
 
         } catch (error) {
-                        this.hasActiveCampaign = false;
+            console.error('❌ Erro ao verificar campanha ativa:', error);
+            this.hasActiveCampaign = false;
         } finally {
             this.isLoadingCampaign = false;
         }
@@ -324,4 +325,3 @@ export class DashboardComponent implements AfterViewInit, OnInit {
         }
     }
 }
-

@@ -21,19 +21,20 @@ export class RewardRedeemModalComponent {
     private notificationService: NotificationService,
     private recompensasService: RecompensasService
   ) {
-    }
+    console.log('NotificationService injetado:', !!this.notificationService);
+  }
 
   close() {
     this.activeModal.close();
   }
 
   nextStep() {
-    // Verifica se o usuÃ¡rio tem moedas suficientes
+    // Verifica se o usuário tem moedas suficientes
     const currentCoins = parseFloat(localStorage.getItem('coins') || '0');
     if (currentCoins >= this.reward.cost) {
       this.currentStep = 2;
     } else {
-      this.notificationService.showSuccess(`Moedas insuficientes! VocÃª tem ${currentCoins} moedas e precisa de ${this.reward.cost} moedas.`, false);
+      this.notificationService.showSuccess(`Moedas insuficientes! Você tem ${currentCoins} moedas e precisa de ${this.reward.cost} moedas.`, false);
     }
   }
 
@@ -43,26 +44,32 @@ export class RewardRedeemModalComponent {
 
   confirmRedeem() {
     if (this.isProcessing) {
-      return; // Evita mÃºltiplas chamadas
+      return; // Evita múltiplas chamadas
     }
 
     this.isProcessing = true;
 
-    // ObtÃ©m o saldo atual de moedas
+    // Obtém o saldo atual de moedas
     const currentCoins = parseFloat(localStorage.getItem('coins') || '0');
     if (currentCoins < this.reward.cost) {
-      this.notificationService.showSuccess(`Moedas insuficientes! VocÃª tem ${currentCoins} moedas e precisa de ${this.reward.cost} moedas.`, false);
+      this.notificationService.showSuccess(`Moedas insuficientes! Você tem ${currentCoins} moedas e precisa de ${this.reward.cost} moedas.`, false);
       this.isProcessing = false;
       return;
     }
 
-    // ObtÃ©m o e-mail do usuÃ¡rio
+    console.log('Iniciando processamento do resgate via API...');
+    
+    // Obtém o e-mail do usuário
     const userEmail = this.sessao.usuario?.email || 'unknown';
+    console.log('Email do usuário:', userEmail);
+
     // Prepara o payload para a API
     const purchaseRequest: PurchaseRequest = {
       player: userEmail,
       item: this.reward.id
     };
+
+    console.log('Payload para API:', purchaseRequest);
 
     // Chama a API para criar a compra
     this.recompensasService.createPurchase(purchaseRequest).subscribe({
@@ -73,7 +80,7 @@ export class RewardRedeemModalComponent {
           const newCoins = currentCoins - this.reward.cost;
           localStorage.setItem('coins', newCoins.toString());
 
-          // Registra o histÃ³rico de resgates no localStorage (para compatibilidade)
+          // Registra o histórico de resgates no localStorage (para compatibilidade)
           const redeemHistory = JSON.parse(localStorage.getItem('redeem_history') || '[]');
           redeemHistory.push({
             rewardId: this.reward.id,
@@ -88,16 +95,19 @@ export class RewardRedeemModalComponent {
           // Atualiza a lista de recompensas resgatadas
           this.updateRedeemedRewards(userEmail);
 
-          this.notificationService.showSuccess(`ParabÃ©ns! VocÃª resgatou ${this.reward.title} com sucesso!`);
+          console.log('Resgate realizado com sucesso via API');
+          this.notificationService.showSuccess(`Parabéns! Você resgatou ${this.reward.title} com sucesso!`);
           
           // Fecha o modal com sucesso
           this.activeModal.close('redeemed');
         } else {
-                    this.notificationService.showSuccess(`Erro ao resgatar recompensa: ${response.status || 'Erro desconhecido'}`, false);
+          console.error('Erro na API:', response.status);
+          this.notificationService.showSuccess(`Erro ao resgatar recompensa: ${response.status || 'Erro desconhecido'}`, false);
         }
       },
       error: (error) => {
-                this.notificationService.showSuccess('Erro ao conectar com o servidor. Tente novamente.', false);
+        console.error('Erro na requisição:', error);
+        this.notificationService.showSuccess('Erro ao conectar com o servidor. Tente novamente.', false);
       },
       complete: () => {
         this.isProcessing = false;
@@ -106,17 +116,17 @@ export class RewardRedeemModalComponent {
   }
 
   private updateRedeemedRewards(userEmail: string) {
-    // ObtÃ©m a lista atual de recompensas resgatadas
+    // Obtém a lista atual de recompensas resgatadas
     const redeemedRewards = JSON.parse(localStorage.getItem('redeemed_rewards') || '[]');
     
-    // Procura se a recompensa jÃ¡ foi resgatada antes
+    // Procura se a recompensa já foi resgatada antes
     const existingRewardIndex = redeemedRewards.findIndex((r: Reward) => r.id === this.reward.id);
 
     if (existingRewardIndex >= 0) {
-      // Se jÃ¡ foi resgatada, incrementa a quantidade
+      // Se já foi resgatada, incrementa a quantidade
       redeemedRewards[existingRewardIndex].owned += 1;
     } else {
-      // Se Ã© a primeira vez, adiciona Ã  lista com quantidade 1
+      // Se é a primeira vez, adiciona à lista com quantidade 1
       const redeemedReward: Reward = {
         id: this.reward.id,
         title: this.reward.title,
@@ -146,10 +156,10 @@ export class RewardRedeemModalComponent {
       <button type="button" class="btn-close" aria-label="Close" (click)="close()"></button>
     </div>
     <div class="modal-body">
-      <p>VocÃª tem certeza que deseja trocar {{coinCost}} moedas por {{reward.title}}? Esta aÃ§Ã£o serÃ¡ definitiva e nÃ£o poderÃ¡ ser desfeita.</p>
+      <p>Você tem certeza que deseja trocar {{coinCost}} moedas por {{reward.title}}? Esta ação será definitiva e não poderá ser desfeita.</p>
     </div>
     <div class="modal-footer">
-      <button type="button" class="btn btn-secondary" (click)="close()">NÃ£o</button>
+      <button type="button" class="btn btn-secondary" (click)="close()">Não</button>
       <button type="button" class="btn btn-primary" (click)="confirm()">Sim</button>
     </div>
   `

@@ -59,8 +59,8 @@ export class AggregateQueryBuilderService {
           $match: {
             'extra.team': teamId,
             time: {
-              $gte: { $date: this.formatDateForFunifier(startDate, 'start') },
-              $lte: { $date: this.formatDateForFunifier(endDate, 'end') }
+              $gte: { $date: this.formatDateForFunifier(startDate) },
+              $lte: { $date: this.formatDateForFunifier(endDate) }
             },
             type: 0 // points only
           }
@@ -115,8 +115,8 @@ export class AggregateQueryBuilderService {
           $match: {
             'attributes.team': teamId,
             time: {
-              $gte: { $date: this.formatDateForFunifier(startDate, 'start') },
-              $lte: { $date: this.formatDateForFunifier(endDate, 'end') }
+              $gte: { $date: this.formatDateForFunifier(startDate) },
+              $lte: { $date: this.formatDateForFunifier(endDate) }
             }
           }
         },
@@ -161,8 +161,8 @@ export class AggregateQueryBuilderService {
           $match: {
             'attributes.team': teamId,
             time: {
-              $gte: { $date: this.formatDateForFunifier(startDate, 'start') },
-              $lte: { $date: this.formatDateForFunifier(endDate, 'end') }
+              $gte: { $date: this.formatDateForFunifier(startDate) },
+              $lte: { $date: this.formatDateForFunifier(endDate) }
             }
           }
         },
@@ -229,36 +229,19 @@ export class AggregateQueryBuilderService {
   /**
    * Format a Date object for Funifier API queries.
    * 
-   * Converts JavaScript Date objects to Funifier relative date expressions
-   * when possible (for month boundaries), otherwise uses ISO strings.
-   * 
-   * Funifier relative date syntax:
-   * - "-0M-" = start of current month
-   * - "-0M+" = end of current month
-   * - "-1M-" = start of previous month
-   * - "-1M+" = end of previous month
+   * Funifier supports relative date expressions like "-0M-" (start of month)
+   * or absolute ISO date strings. This method converts JavaScript Date objects
+   * to ISO strings for use in aggregate queries.
    * 
    * @param date - Date to format
-   * @param position - 'start' for beginning of period, 'end' for end of period
-   * @returns Funifier date string (relative or ISO)
+   * @returns ISO date string
    * 
    * @example
-   * formatDateForFunifier(new Date(), 'start')
-   * // Returns "-0M-" for start of current month
+   * formatDateForFunifier(new Date('2024-01-15'))
+   * // Returns "2024-01-15T00:00:00.000Z"
    */
-  private formatDateForFunifier(date: Date, position: 'start' | 'end' = 'start'): string {
-    const now = new Date();
-    const currentYear = now.getFullYear();
-    const currentMonth = now.getMonth();
-    const targetYear = date.getFullYear();
-    const targetMonth = date.getMonth();
-    
-    // Calculate months difference
-    const monthsAgo = (currentYear - targetYear) * 12 + (currentMonth - targetMonth);
-    
-    // Use relative date expression for month boundaries
-    const suffix = position === 'start' ? '-' : '+';
-    return `-${monthsAgo}M${suffix}`;
+  private formatDateForFunifier(date: Date): string {
+    return date.toISOString();
   }
 
   /**

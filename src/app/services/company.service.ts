@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { Observable, of, throwError, forkJoin } from 'rxjs';
+import { Observable, of, throwError } from 'rxjs';
 import { map, catchError, shareReplay, switchMap } from 'rxjs/operators';
 import { FunifierApiService } from './funifier-api.service';
 import { CompanyMapper } from './company-mapper.service';
@@ -16,7 +16,6 @@ interface CacheEntry<T> {
 })
 export class CompanyService {
   private readonly CACHE_DURATION = 10 * 60 * 1000; // 10 minutes
-  private readonly PAGE_SIZE = 100; // Funifier pagination limit
   private companiesCache = new Map<string, CacheEntry<Company[]>>();
   private companyDetailsCache = new Map<string, CacheEntry<CompanyDetails>>();
 
@@ -28,8 +27,7 @@ export class CompanyService {
 
   /**
    * Get companies with optional filtering
-   * First gets player's companies from extra.cnpj_resp, then fetches from cnpj__c
-   * Uses pagination to handle 100+ CNPJs (Funifier limit is 100 per request)
+   * First gets player's companies from extra.companies, then fetches from cnpj_performance__c
    */
   getCompanies(playerId: string, filter?: { search?: string; minHealth?: number }): Observable<Company[]> {
     const cacheKey = `${playerId}_${JSON.stringify(filter || {})}`;
@@ -41,21 +39,38 @@ export class CompanyService {
     // Use PlayerService to get raw player data (shared cache), then fetch company data
     const request$ = this.playerService.getRawPlayerData(playerId).pipe(
       switchMap((playerResponse) => {
-        const companiesStr = playerResponse?.extra?.cnpj_resp || '';
+        const companiesStr = playerResponse?.extra?.companies || '';
         const companyIds = companiesStr.split(/[;,]/)
           .map((id: string) => id.trim())
           .filter((id: string) => id.length > 0)
           .map((id: string) => String(id));
         
+        console.log('📊 Player company IDs from extra.companies:', companyIds);
+        
         if (companyIds.length === 0) {
           return of([]);
         }
         
-        // Fetch company data from cnpj__c using paginated requests
-        // Funifier limits to 100 items per request, so we paginate
-        return this.fetchCompaniesPaginated(companyIds).pipe(
-          map((allCompanies) => {
-            let companies = allCompanies;
+        // Fetch company data from cnpj_performance__c using aggregate
+        // Query format: [{"$match":{"_id":{"$in":["1218","9654","1456"]}}}]
+        const aggregateBody = [
+          { $match: { _id: { $in: companyIds } } }
+        ];
+        
+        console.log('📊 Company aggregate query:', JSON.stringify(aggregateBody));
+        
+        return this.funifierApi.post<any[]>(
+          `/v3/database/cnpj_performance__c/aggregate?strict=true`,
+          aggregateBody
+        ).pipe(
+          map((response) => {
+            console.log('📊 Companies from cnpj_performance__c:', response);
+            
+            if (!response || !Array.isArray(response)) {
+              return [];
+            }
+            
+            let companies = response.map((companyData: any) => this.mapper.toCompany(companyData));
             
             // Apply filters
             if (filter) {
@@ -73,10 +88,15 @@ export class CompanyService {
             }
             
             return companies;
+          }),
+          catchError((error) => {
+            console.error('Error fetching companies from cnpj_performance__c:', error);
+            return throwError(() => error);
           })
         );
       }),
       catchError((error) => {
+        console.error('Error fetching player status:', error);
         return throwError(() => error);
       }),
       shareReplay({ bufferSize: 1, refCount: true, windowTime: this.CACHE_DURATION })
@@ -87,63 +107,7 @@ export class CompanyService {
   }
 
   /**
-   * Fetch companies in paginated batches of 100
-   * Makes parallel requests for each page and combines results
-   */
-  private fetchCompaniesPaginated(companyIds: string[]): Observable<Company[]> {
-    const totalIds = companyIds.length;
-    const numPages = Math.ceil(totalIds / this.PAGE_SIZE);
-    
-    // If only one page needed, make a single request
-    if (numPages <= 1) {
-      return this.fetchCompaniesPage(companyIds, 0);
-    }
-    
-    // Create parallel requests for each page
-    const pageRequests: Observable<Company[]>[] = [];
-    for (let page = 0; page < numPages; page++) {
-      const startIdx = page * this.PAGE_SIZE;
-      const pageIds = companyIds.slice(startIdx, startIdx + this.PAGE_SIZE);
-      pageRequests.push(this.fetchCompaniesPage(pageIds, page));
-    }
-    
-    // Execute all pages in parallel and combine results
-    return forkJoin(pageRequests).pipe(
-      map((pages) => pages.flat())
-    );
-  }
-
-  /**
-   * Fetch a single page of companies
-   */
-  private fetchCompaniesPage(companyIds: string[], pageIndex: number): Observable<Company[]> {
-    const aggregateBody = [
-      { $match: { _id: { $in: companyIds } } }
-    ];
-    
-    const rangeStart = 0;
-    const rangeEnd = this.PAGE_SIZE - 1;
-    
-    return this.funifierApi.post<any[]>(
-      `/v3/database/cnpj__c/aggregate?strict=true`,
-      aggregateBody,
-      { headers: { 'Range': `items=${rangeStart}-${rangeEnd}` } }
-    ).pipe(
-      map((response) => {
-        if (!response || !Array.isArray(response)) {
-          return [];
-        }
-        return response.map((companyData: any) => this.mapper.toCompany(companyData));
-      }),
-      catchError((error) => {
-        console.error(`Error fetching companies page ${pageIndex}:`, error);
-        return of([]); // Return empty array on error to not break other pages
-      })
-    );
-  }
-
-  /**
-   * Get company details from cnpj__c database
+   * Get company details from cnpj_performance__c database
    * companyId is the CNPJ
    */
   getCompanyDetails(companyId: string): Observable<CompanyDetails> {
@@ -159,7 +123,7 @@ export class CompanyService {
     ];
 
     const request$ = this.funifierApi.post<any[]>(
-      `/v3/database/cnpj__c/aggregate?strict=true`,
+      `/v3/database/cnpj_performance__c/aggregate?strict=true`,
       aggregateBody
     ).pipe(
       map(response => {
@@ -173,7 +137,8 @@ export class CompanyService {
         return this.mapper.toCompanyDetails(companyData);
       }),
       catchError(error => {
-                return throwError(() => error);
+        console.error('Error fetching company details:', error);
+        return throwError(() => error);
       }),
       shareReplay({ bufferSize: 1, refCount: true, windowTime: this.CACHE_DURATION })
     );
@@ -211,7 +176,8 @@ export class CompanyService {
         }
       }),
       catchError(error => {
-                return throwError(() => error);
+        console.error('Error fetching company processes:', error);
+        return throwError(() => error);
       })
     );
   }
@@ -262,4 +228,3 @@ export class CompanyService {
     });
   }
 }
-

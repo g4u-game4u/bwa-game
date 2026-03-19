@@ -28,8 +28,6 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
   @Input() playerId = '';
   @Input() listType: ProgressListType = 'atividades';
   @Input() month?: Date;
-  /** Quando preenchido, filtra a lista no frontend para exibir apenas itens deste usuário (email/id). */
-  @Input() filterByUserId: string | null = null;
   @Output() closed = new EventEmitter<void>();
 
   private destroy$ = new Subject<void>();
@@ -122,7 +120,8 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
     const playerIds = this.getPlayerIds();
     
     if (playerIds.length === 0) {
-            this.activityItems = [];
+      console.warn('No player IDs provided');
+      this.activityItems = [];
       this.processoItems = [];
       this.isLoading = false;
       this.cdr.markForCheck();
@@ -134,7 +133,8 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
       const activityRequests = playerIds.map(playerId =>
         this.actionLogService.getActivityList(playerId, this.month).pipe(
           catchError(error => {
-                        return of([] as ActivityListItem[]);
+            console.error(`Error loading activity list for player ${playerId}:`, error);
+            return of([] as ActivityListItem[]);
           })
         )
       );
@@ -143,12 +143,8 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
         .pipe(takeUntil(this.destroy$))
         .subscribe({
           next: async (results: ActivityListItem[][]) => {
-            let items = results.flat();
-            if (this.filterByUserId && this.filterByUserId.trim()) {
-              const userId = this.filterByUserId.trim();
-              items = items.filter(item => (item.player || '').trim() === userId);
-            }
-            this.activityItems = items;
+            // Aggregate all activities from all players
+            this.activityItems = results.flat();
             // Sort by created date (newest first)
             this.activityItems.sort((a, b) => b.created - a.created);
             
@@ -159,7 +155,8 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
             this.cdr.markForCheck();
           },
           error: (err: Error) => {
-                        this.activityItems = [];
+            console.error('Error loading activity lists:', err);
+            this.activityItems = [];
             this.isLoading = false;
             this.cdr.markForCheck();
           }
@@ -172,7 +169,8 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
       const processRequests = playerIds.map(playerId =>
         this.actionLogService.getProcessList(playerId, this.month).pipe(
           catchError(error => {
-                        return of([] as ProcessListItem[]);
+            console.error(`Error loading process list for player ${playerId}:`, error);
+            return of([] as ProcessListItem[]);
           })
         )
       );
@@ -222,7 +220,8 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
             this.cdr.markForCheck();
           },
           error: (err: Error) => {
-                        this.processoItems = [];
+            console.error('Error loading process lists:', err);
+            this.processoItems = [];
             this.isLoading = false;
             this.cdr.markForCheck();
           }
@@ -249,14 +248,17 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
     const isCurrentMonth = year === today.getFullYear() && month === today.getMonth();
     const currentDay = isCurrentMonth ? today.getDate() : daysInMonth;
 
-        // Initialize all days with 0 - create new array
+    console.log('📊 Loading chart data for month:', year, month + 1, 'Days in month:', daysInMonth, 'Current day:', currentDay);
+
+    // Initialize all days with 0 - create new array
     const dailyCounts: number[] = Array.from({ length: daysInMonth }, () => 0);
 
     // Get all player IDs
     const playerIds = this.getPlayerIds();
     
     if (playerIds.length === 0) {
-            this.chartLabels = [];
+      console.warn('No player IDs for chart data');
+      this.chartLabels = [];
       this.chartDatasets = [];
       this.isLoadingChart = false;
       this.cdr.markForCheck();
@@ -267,7 +269,8 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
     const actionLogRequests = playerIds.map(playerId =>
       this.actionLogService.getPlayerActionLogForMonth(playerId, targetMonth).pipe(
         catchError(error => {
-                    return of([] as ActionLogEntry[]);
+          console.error(`Error loading action log for player ${playerId}:`, error);
+          return of([] as ActionLogEntry[]);
         })
       )
     );
@@ -279,7 +282,10 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
           // Aggregate all action log entries from all players
           const allActionLogEntries = results.flat();
           
-                              // Process entries to count activities by day
+          console.log('📊 Action log entries received:', allActionLogEntries);
+          console.log('📊 Total entries:', allActionLogEntries.length);
+          
+          // Process entries to count activities by day
           const newDailyCounts = [...dailyCounts];
           
           allActionLogEntries.forEach(entry => {
@@ -306,7 +312,8 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
             }
           });
 
-                    console.log('📊 Total activities:', newDailyCounts.reduce((sum, count) => sum + count, 0));
+          console.log('📊 Daily counts array:', newDailyCounts);
+          console.log('📊 Total activities:', newDailyCounts.reduce((sum, count) => sum + count, 0));
 
           // Generate labels (day numbers) - create new array reference
           this.chartLabels = [...Array.from({ length: daysInMonth }, (_, i) => String(i + 1))];
@@ -349,7 +356,8 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
           this.cdr.markForCheck();
         },
         error: (err: Error) => {
-                    // Initialize empty chart on error
+          console.error('Error loading chart data:', err);
+          // Initialize empty chart on error
           this.chartLabels = Array.from({ length: daysInMonth }, (_, i) => String(i + 1));
           this.chartDatasets = [{
             label: 'Tarefas',
@@ -402,13 +410,6 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
    * Get status label for activities
    */
   getStatusLabel(item?: ActivityListItem): string {
-    // Este modal ("Tarefas Finalizadas" / "Pontos Obtidos") representa ações já concluídas.
-    // Se o backend vier com status "pendente" por inconsistência, aqui devemos exibir "Finalizado".
-    if (this.isActivityList) {
-      if (item?.status === 'dispensado') return 'Dispensado';
-      return 'Finalizado';
-    }
-
     if (item?.status) {
       switch (item.status) {
         case 'finalizado':
@@ -428,11 +429,6 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
    * Get status class for activities
    */
   getStatusClass(item?: ActivityListItem): string {
-    if (this.isActivityList) {
-      if (item?.status === 'dispensado') return 'status-dispensado';
-      return 'status-finalizado';
-    }
-
     if (item?.status) {
       switch (item.status) {
         case 'finalizado':
@@ -477,12 +473,14 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
   private loadProcessActivities(deliveryId: string): void {
     const deliveryIdNum = parseInt(deliveryId, 10);
     if (isNaN(deliveryIdNum)) {
-            return;
+      console.error('Invalid delivery_id:', deliveryId);
+      return;
     }
 
     const playerIds = this.getPlayerIds();
     if (playerIds.length === 0) {
-            this.processActivities.set(deliveryId, []);
+      console.warn('No player IDs for process activities');
+      this.processActivities.set(deliveryId, []);
       this.loadingProcessActivities.delete(deliveryId);
       this.cdr.markForCheck();
       return;
@@ -495,7 +493,8 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
     const activityRequests = playerIds.map(playerId =>
       this.actionLogService.getActivitiesByProcess(deliveryIdNum, playerId, this.month).pipe(
         catchError(error => {
-                    return of([] as ActivityListItem[]);
+          console.error(`Error loading process activities for player ${playerId}:`, error);
+          return of([] as ActivityListItem[]);
         })
       )
     );
@@ -509,12 +508,14 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
           // Sort by created date (newest first)
           allActivities.sort((a, b) => b.created - a.created);
           
-                    this.processActivities.set(deliveryId, allActivities);
+          console.log('📊 Activities loaded for process:', deliveryId, allActivities);
+          this.processActivities.set(deliveryId, allActivities);
           this.loadingProcessActivities.delete(deliveryId);
           this.cdr.markForCheck();
         },
         error: (err: Error) => {
-                    this.processActivities.set(deliveryId, []);
+          console.error('Error loading process activities:', err);
+          this.processActivities.set(deliveryId, []);
           this.loadingProcessActivities.delete(deliveryId);
           this.cdr.markForCheck();
         }
@@ -547,8 +548,10 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
         this.cnpjLookupService.enrichCnpjList(validCnpjs)
       );
       this.cnpjNameMap = cnpjNames;
-          } catch (error) {
-          }
+      console.log('📊 Modal progress list: CNPJ name map loaded with', this.cnpjNameMap.size, 'entries');
+    } catch (error) {
+      console.error('Error enriching CNPJ names:', error);
+    }
   }
 
   /**
@@ -580,7 +583,8 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
           this.cdr.detectChanges();
         }, 2000);
       }).catch(err => {
-                // Fallback to old method
+        console.error('Failed to copy:', err);
+        // Fallback to old method
         this.fallbackCopyText(deliveryId);
       });
     } else {
@@ -613,13 +617,12 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
           this.cdr.detectChanges();
         }, 2000);
       } else {
-              }
+        console.error('Fallback copy failed');
+      }
     } catch (err) {
-          } finally {
+      console.error('Fallback copy error:', err);
+    } finally {
       document.body.removeChild(textArea);
     }
   }
 }
-
-
-

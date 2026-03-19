@@ -9,9 +9,6 @@
   "clientes": "Quantidade total de clientes únicos na sua carteira. Este número é calculado com base nos CNPJs únicos dos clientes que você atendeu.",
   "tarefas-finalizadas": "Número total de tarefas concluídas durante a temporada. Cada tarefa finalizada contribui para o seu progresso geral.",
   "media-pontos": "Média de pontos por membro da equipe. Calculado dividindo o total de pontos pelo número de membros. Este valor representa o desempenho médio da equipe.",
-  "processos-finalizados": "Número de processos que foram completamente finalizados pela equipe. Processos finalizados geram pontos desbloqueados e contribuem para o progresso da temporada.",
-  "clientes-carteira-participacao": "Carteira: empresas sob responsabilidade deste time ou pessoa. Participação: empresas em que houve execução de entregas no período filtrado; podem estar dentro ou fora da carteira.",
-  "clientes-carteira": "Empresas sob responsabilidade deste time ou pessoa.",
-  "clientes-participacao": "Empresas em que houve execução de entregas no período filtrado; podem estar dentro ou fora da carteira."
+  "processos-finalizados": "Número de processos que foram completamente finalizados pela equipe. Processos finalizados geram pontos desbloqueados e contribuem para o progresso da temporada."
 }
 

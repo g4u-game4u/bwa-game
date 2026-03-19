@@ -19,6 +19,7 @@ export interface CompanyDisplay {
   cnpj: string; // Full CNPJ string from action_log
   cnpjId?: string; // Extracted ID for KPI lookup
   actionCount: number; // Number of actions for this company
+  processCount: number; // Number of unique processes (delivery_id) for this company
   deliveryKpi?: KPIData; // Delivery KPI from cnpj__c
 }
 
@@ -96,12 +97,16 @@ export class CompanyKpiService {
       { $match: { _id: { $in: stringIds } } }
     ];
 
-        const request$ = this.funifierApi.post<CnpjKpiData[]>(
+    console.log('📊 Fetching KPI data for CNPJ IDs:', cnpjIds);
+
+    const request$ = this.funifierApi.post<CnpjKpiData[]>(
       '/v3/database/cnpj__c/aggregate?strict=true',
       aggregateBody
     ).pipe(
       map(response => {
-                // Convert array to Map for easy lookup
+        console.log('📊 KPI data response:', response);
+        
+        // Convert array to Map for easy lookup
         const kpiMap = new Map<string, CnpjKpiData>();
         if (Array.isArray(response)) {
           response.forEach(item => {
@@ -114,7 +119,8 @@ export class CompanyKpiService {
         return kpiMap;
       }),
       catchError(error => {
-                // Return empty map on error - don't break the UI
+        console.error('📊 Error fetching KPI data:', error);
+        // Return empty map on error - don't break the UI
         return of(new Map<string, CnpjKpiData>());
       }),
       shareReplay({ bufferSize: 1, refCount: true, windowTime: this.CACHE_DURATION })
@@ -136,7 +142,7 @@ export class CompanyKpiService {
    * @returns Observable of enriched company display data with KPI information
    */
   enrichCompaniesWithKpis(
-    companies: { cnpj: string; actionCount: number }[]
+    companies: { cnpj: string; actionCount: number; processCount: number }[]
   ): Observable<CompanyDisplay[]> {
     if (!companies || companies.length === 0) {
       return of([]);
@@ -155,12 +161,15 @@ export class CompanyKpiService {
         .filter((id): id is string => id !== null)
     )];
 
-        if (validCnpjIds.length === 0) {
+    console.log('📊 Extracted CNPJ IDs:', validCnpjIds);
+
+    if (validCnpjIds.length === 0) {
       // No valid IDs, return companies without KPI data
       return of(companiesWithIds.map(c => ({
         cnpj: c.cnpj,
         cnpjId: c.cnpjId || undefined,
-        actionCount: c.actionCount
+        actionCount: c.actionCount,
+        processCount: c.processCount || 0
       })));
     }
 
@@ -172,7 +181,8 @@ export class CompanyKpiService {
           const result: CompanyDisplay = {
             cnpj: company.cnpj,
             cnpjId: company.cnpjId || undefined,
-            actionCount: company.actionCount
+            actionCount: company.actionCount,
+            processCount: company.processCount || 0
           };
 
           // Add KPI data if available
@@ -185,11 +195,13 @@ export class CompanyKpiService {
         });
       }),
       catchError(error => {
-                // Return companies without KPI data on error
+        console.error('📊 Error enriching companies with KPIs:', error);
+        // Return companies without KPI data on error
         return of(companiesWithIds.map(c => ({
           cnpj: c.cnpj,
           cnpjId: c.cnpjId || undefined,
-          actionCount: c.actionCount
+          actionCount: c.actionCount,
+          processCount: c.processCount || 0
         })));
       })
     );
@@ -285,4 +297,3 @@ export class CompanyKpiService {
     });
   }
 }
-

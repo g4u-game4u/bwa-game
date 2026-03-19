@@ -100,7 +100,9 @@ export class AliasService {
 
       return aliases;
     } catch (error) {
-            // Retorna valores padrão em caso de erro
+      console.error('Erro ao carregar aliases:', error);
+      
+      // Retorna valores padrão em caso de erro
       return {
         pointAlias: 'Pontos',
         coinsAlias: 'Moedas',
@@ -122,7 +124,8 @@ export class AliasService {
   private processTeamRedirectUrl(teamRedirectUrlData: any): Record<string, { userActionRedirectUrl: string | null; deliveryRedirectUrl: string | null }> | null {
     
     if (!teamRedirectUrlData || typeof teamRedirectUrlData !== 'object') {
-            return null;
+      console.warn('⚠️ processTeamRedirectUrl - Dados inválidos ou vazios');
+      return null;
     }
 
     const processed: Record<string, { userActionRedirectUrl: string | null; deliveryRedirectUrl: string | null }> = {};

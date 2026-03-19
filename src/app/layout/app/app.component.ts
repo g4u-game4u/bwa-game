@@ -61,8 +61,10 @@ export class AppComponent implements OnInit {
       this.titleService.setTitle('Game BWA');
       this.paramReady = true;
       
-          } catch (error) {
-            this.paramReady = true;
+      console.log('✅ Aplicação pronta!');
+    } catch (error) {
+      console.error('❌ Erro ao inicializar:', error);
+      this.paramReady = true;
     }
   }
 
@@ -80,7 +82,8 @@ export class AppComponent implements OnInit {
         this.titleService.setTitle('Game | Sistema');
       }
     } catch (error) {
-            // Mantém o título padrão em caso de erro
+      console.error('Erro ao atualizar título da página:', error);
+      // Mantém o título padrão em caso de erro
       this.titleService.setTitle('Game | Sistema');
     }
   }
@@ -106,7 +109,8 @@ export class AppComponent implements OnInit {
     //     this.ensureDefaultFavicon();
     //   }
     // } catch (error) {
-    //       //   // Em caso de erro, garante que o favicon padrão esteja presente
+    //   console.error('Erro ao atualizar favicon:', error);
+    //   // Em caso de erro, garante que o favicon padrão esteja presente
     //   this.ensureDefaultFavicon();
     // }
   }
@@ -186,6 +190,3 @@ export class AppComponent implements OnInit {
     Chart.defaults.borderColor = 'white';
   }
 }
-
-
-

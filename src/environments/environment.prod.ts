@@ -1,33 +1,32 @@
-import maintenanceAllowedEmails from '../../maintenance-allowed-emails.json';
-
-const maintenanceEmailsFromEnv =
-  process.env['MAINTENANCE_ALLOWED_EMAILS_JSON'] || process.env['maintenanceAllowedEmailsJson'];
-
+/**
+ * Production environment configuration
+ * 
+ * Environment variables are injected at build time via webpack DefinePlugin.
+ * Vercel environment variables are read during the build process.
+ * Fallback values are used when environment variables are not set.
+ */
 export const environment = {
   production: true,
-  client_id: process.env['CLIENT_ID'] || process.env['client_id'] || '',
+  client_id: process.env['CLIENT_ID'] || process.env['client_id'] || 'bwa',
   backend_url_base: process.env['BACKEND_URL_BASE'] || process.env['backend_url_base'] || '',
   
-  // Funifier API Configuration (supports both uppercase and lowercase env vars)
-  funifier_api_url: process.env['FUNIFIER_BASE_URL'] || process.env['funifier_base_url'] || 'https://service2.funifier.com/v3/',
-  funifier_api_key: process.env['FUNIFIER_API_KEY'] || process.env['funifier_api_key'] || '',
+  // Funifier API Configuration
+  funifier_api_url: 'https://service2.funifier.com/v3/',
+  funifier_api_key: process.env['FUNIFIER_API_KEY'] || process.env['funifier_api_key'] || '690a785ce179d46fce59ed65',
   funifier_base_url: process.env['FUNIFIER_BASE_URL'] || process.env['funifier_base_url'] || 'https://service2.funifier.com/v3/',
-  funifier_basic_token: process.env['FUNIFIER_BASIC_TOKEN'] || process.env['funifier_basic_token'] || '',
+  funifier_basic_token: process.env['FUNIFIER_BASIC_TOKEN'] || process.env['funifier_basic_token'] || 'NjkwYTc4NWNlMTc5ZDQ2ZmNlNTllZDY1OjY3ZWM0ZTRhMjMyN2Y3NGYzYTJmOTZmNQ==',
   
   // Cache Configuration
   cacheTimeout: 300000, // 5 minutes in milliseconds
   
   // Feature Flags
   enableAnalytics: true,
-
-  // Modo manutenção: bloqueia login e redireciona usuários logados para página de manutenção
-  maintenanceMode: process.env['MAINTENANCE_MODE'] === 'true' || process.env['maintenanceMode'] === 'true',
-
-  /**
-   * Allowlist: use `MAINTENANCE_ALLOWED_EMAILS_JSON` no deploy ou o arquivo `maintenance-allowed-emails.json`.
-   */
-  maintenanceAllowedEmailsJson:
-    typeof maintenanceEmailsFromEnv === 'string' && maintenanceEmailsFromEnv.trim()
-      ? maintenanceEmailsFromEnv
-      : JSON.stringify(maintenanceAllowedEmails as string[])
+  
+  // Logo Configuration (supports both uppercase and lowercase env var names)
+  logoUrl: process.env['LOGO_URL'] || process.env['logo_url'] || '',
+  
+  // Team Code Configuration (supports both uppercase and lowercase env var names)
+  supervisorTeamCode: process.env['SUPERVISOR_TEAM_CODE'] || process.env['supervisor_team_code'] || 'Fkmdmko',
+  gestorTeamCode: process.env['GESTOR_TEAM_CODE'] || process.env['gestor_team_code'] || 'FkmdnFU',
+  diretorTeamCode: process.env['DIRETOR_TEAM_CODE'] || process.env['diretor_team_code'] || 'FkmdhZ9'
 };

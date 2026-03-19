@@ -167,7 +167,8 @@ export class DadosMetasProgressoTimeComponent {
       this.goalsConfigLoading = true;
       this.goalsConfig = await this.goalsConfigService.getGoalsConfig();
     } catch (error) {
-          } finally {
+      console.error('Erro ao carregar configurações de metas no componente:', error);
+    } finally {
       this.goalsConfigLoading = false;
     }
   }
@@ -202,4 +203,3 @@ export class DadosMetasProgressoTimeComponent {
     return this.featuresService.isLevelsEnabled();
   }
 }
-

@@ -35,17 +35,22 @@ export class PlayerService {
     
     // Return cached Observable if valid and not forcing refresh
     if (!forceRefresh && cached && (now - cached.timestamp) < this.CACHE_DURATION) {
+      console.log('📊 Using cached Observable for:', playerId);
       return cached.data$;
     }
 
+    console.log('📊 Fetching fresh player data for:', playerId);
+    
     // Create new Observable with shareReplay to share the request
     const request$ = this.funifierApi.get<any>(`/v3/player/${playerId}/status`).pipe(
       timeout(this.REQUEST_TIMEOUT),
       tap(response => {
-        }),
+        console.log('📊 Raw player data received:', response);
+      }),
       shareReplay({ bufferSize: 1, refCount: true, windowTime: this.CACHE_DURATION }),
       catchError(error => {
-                // Remove from cache on error
+        console.error('📊 Error fetching player data:', error);
+        // Remove from cache on error
         this.cachedRawData.delete(playerId);
         return throwError(() => error);
       })
@@ -75,10 +80,12 @@ export class PlayerService {
     return this.fetchPlayerData(playerId).pipe(
       map(response => {
         const status = this.mapper.toPlayerStatus(response);
+        console.log('📊 Mapped player status:', status);
         return status;
       }),
       catchError(error => {
-                return throwError(() => error);
+        console.error('Error mapping player status:', error);
+        return throwError(() => error);
       })
     );
   }
@@ -90,10 +97,12 @@ export class PlayerService {
     return this.fetchPlayerData(playerId).pipe(
       map(response => {
         const points = this.mapper.toPointWallet(response);
+        console.log('📊 Mapped point wallet:', points);
         return points;
       }),
       catchError(error => {
-                return throwError(() => error);
+        console.error('Error mapping point wallet:', error);
+        return throwError(() => error);
       })
     );
   }
@@ -105,10 +114,12 @@ export class PlayerService {
     return this.fetchPlayerData(playerId).pipe(
       map(response => {
         const progress = this.mapper.toSeasonProgress(response, seasonDates);
+        console.log('📊 Mapped season progress:', progress);
         return progress;
       }),
       catchError(error => {
-                return throwError(() => error);
+        console.error('Error mapping season progress:', error);
+        return throwError(() => error);
       })
     );
   }
@@ -127,4 +138,3 @@ export class PlayerService {
     this.cachedRawData.delete(playerId);
   }
 }
-

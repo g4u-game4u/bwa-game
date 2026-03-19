@@ -10,8 +10,7 @@ import {AuthProvider} from "@providers/auth/auth.provider";
 import {AbstractControl, ValidationErrors} from "@angular/forms";
 import {TranslateService} from "@ngx-translate/core";
 import { LoginLogService } from '@services/login-log.service';
-import { environment } from '../../../environments/environment';
-import { isLoginEmailAllowed } from '@utils/maintenance-allowlist';
+import { LogoService } from '@services/logo.service';
 
 @Component({
   selector: 'app-login',
@@ -25,6 +24,7 @@ export class LoginComponent implements OnInit {
   isLoading: boolean = false;
   loadingText: string = 'Entrando...';
   systemParams: SystemParams | null = null;
+  bwaLogoUrl: string;
 
   private loadingTexts: string[] = [
     'Entrando...',
@@ -40,7 +40,8 @@ export class LoginComponent implements OnInit {
   constructor(private sessao: SessaoProvider, private router: Router, private loadingProvider: LoadingProvider,
               private toastService: ToastService, private systemParamsService: SystemParamsService,
               private authProvider: AuthProvider, private translate: TranslateService,
-              private loginLogService: LoginLogService) {
+              private loginLogService: LoginLogService, private logoService: LogoService) {
+    this.bwaLogoUrl = this.logoService.getLogoUrl();
   }
 
   // Estado do fluxo: 'login' | 'reset-request' | 'reset-confirm'
@@ -102,12 +103,14 @@ export class LoginComponent implements OnInit {
       // Inicializa os parâmetros do sistema no primeiro acesso
       // Isso carrega informações como logo, cores, etc. mesmo sem autenticação
       this.systemParams = await this.systemParamsService.initializeSystemParams();
-            // Carrega informações específicas do cliente
+      console.log('systemParams', this.systemParams);
+      // Carrega informações específicas do cliente
       await this.loadClientInfo();
       // await this.setLoginBackgroundUrl();
     } catch (error) {
       // Apenas loga, não bloqueia o login
-            this.clientLogoUrl = '/assets/images/game4u_logo.png';
+      console.warn('Não foi possível carregar parâmetros do sistema. Usando padrões.', error);
+      this.clientLogoUrl = '/assets/images/game4u_logo.png';
       this.clientName = 'Game';
       // Se quiser, defina um fallback para o background também:
       // this.loginBackgroundUrl = null;
@@ -125,8 +128,21 @@ export class LoginComponent implements OnInit {
       // Obtém a URL da logo (tenta logo claro primeiro, depois escuro)
       this.clientLogoUrl = await this.systemParamsService.getParam<string>('client_dark_logo_url') || null;
       
-          } catch (error) {
-          }
+      console.log('Informações do cliente carregadas:', { name: this.clientName, logo: this.clientLogoUrl });
+    } catch (error) {
+      console.error('Erro ao carregar informações do cliente:', error);
+    }
+  }
+
+  /**
+   * Handles logo image load errors by falling back to the default logo.
+   * Includes protection against infinite loops if the default logo also fails.
+   */
+  onLogoError(): void {
+    // Only fallback if not already using default to prevent infinite loops
+    if (this.bwaLogoUrl !== this.logoService.getDefaultLogoUrl()) {
+      this.bwaLogoUrl = this.logoService.getDefaultLogoUrl();
+    }
   }
 
   // private async setLoginBackgroundUrl() {
@@ -138,37 +154,39 @@ export class LoginComponent implements OnInit {
   //   }
   // }
 
-  get maintenanceMode(): boolean {
-    return !!environment.maintenanceMode;
-  }
-
   async submit() {
-    if (!isLoginEmailAllowed(this.username)) {
-      this.toastService.error('Sistema em manutenção. Você será avisado pelos canais oficiais de comunicação quando terminar.');
-      await this.sessao.logout();
-      return;
-    }
-
-                if (this.username && this.password) {
+    console.log('🔐 Submit called - Form valid:', this.form.valid);
+    console.log('🔐 Username:', this.username);
+    console.log('🔐 Password length:', this.password?.length);
+    
+    if (this.username && this.password) {
       this.isLoading = true;
       this.form.disable(); // Disable form controls
       this.startLoadingTextAnimation();
       try {
-                let user = await this.sessao.login(this.username, this.password);
-                        if (user) {
+        console.log('🔐 Calling sessao.login...');
+        let user = await this.sessao.login(this.username, this.password);
+        console.log('🔐 Login response:', user);
+        console.log('🔐 User object:', this.sessao.usuario);
+        if (user) {
           // Track login event in Vercel Analytics (non-blocking)
           this.loginLogService.logLogin(this.username).catch(error => {
             // Silently fail - don't block login if tracking fails
-                      });
+            console.warn('⚠️ Failed to track login event:', error);
+          });
           
           // Wait a bit to ensure state is fully updated
           await new Promise(resolve => setTimeout(resolve, 100));
-                    const navigationResult = await this.router.navigate(['/']);
-                  } else {
+          console.log('🔐 Navigating to dashboard...');
+          const navigationResult = await this.router.navigate(['/']);
+          console.log('🔐 Navigation result:', navigationResult);
+        } else {
           this.toastService.error("Usuário ou senha incorretos");
         }
       } catch (error: any) {
-                // Check if it's a timeout error
+        console.error('🔐 Login error:', error);
+        
+        // Check if it's a timeout error
         if (error?.name === 'TimeoutError' || error?.message?.includes('timeout')) {
           this.toastService.error("Tempo de conexão esgotado. Verifique sua conexão e tente novamente.");
         } else if (error?.status === 401 || error?.status === 403) {
@@ -184,7 +202,8 @@ export class LoginComponent implements OnInit {
         this.form.enable(); // Re-enable form controls
       }
     } else {
-          }
+      console.warn('🔐 Form invalid or missing credentials');
+    }
   }
 
   private startLoadingTextAnimation() {
@@ -221,7 +240,8 @@ export class LoginComponent implements OnInit {
 
   async requestResetCode() {
     if (this.resetRequestForm.valid && this.resetRequestEmail) {
-            this.isLoading = true;
+      console.log('Enviando código de redefinição para:', this.resetRequestEmail);
+      this.isLoading = true;
       this.resetRequestForm.disable(); // Disable form controls
       this.loadingText = this.translate.instant('LOADING_SENDING_CODE');
       try {
@@ -267,4 +287,3 @@ export class LoginComponent implements OnInit {
   //   return { backgroundImage: `url('${this.loginBackgroundUrl}')` };
   // }
 }
-

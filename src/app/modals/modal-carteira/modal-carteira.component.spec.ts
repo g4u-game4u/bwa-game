@@ -46,13 +46,13 @@ describe('ModalCarteiraComponent', () => {
   describe('loadClientes', () => {
     it('should load and enrich clientes with CNPJ names', (done) => {
       const mockClientes = [
-        { cnpj: '1748', actionCount: 5 },
-        { cnpj: 'INCENSE [10010|0001-76]', actionCount: 3 }
+        { cnpj: '1748', actionCount: 5, processCount: 2 },
+        { cnpj: 'INCENSE [10010|0001-76]', actionCount: 3, processCount: 1 }
       ];
 
       const mockEnrichedClientes = [
-        { cnpj: '1748', actionCount: 5, deliveryKpi: null },
-        { cnpj: 'INCENSE [10010|0001-76]', actionCount: 3, deliveryKpi: null }
+        { cnpj: '1748', actionCount: 5, processCount: 2, deliveryKpi: null },
+        { cnpj: 'INCENSE [10010|0001-76]', actionCount: 3, processCount: 1, deliveryKpi: null }
       ];
 
       const mockCnpjNames = new Map([
