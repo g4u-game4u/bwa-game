@@ -212,8 +212,7 @@ describe('CompanyService', () => {
         kpi2,
         kpi3,
         processes: [],
-        activities: [],
-        processos: []
+        activities: []
       };
 
       funifierApiSpy.get.and.returnValue(of(mockApiResponse));
@@ -247,8 +246,7 @@ describe('CompanyService', () => {
           { id: '2', name: 'Process 2', status: 'in-progress', tasks: [] },
           { id: '3', name: 'Process 3', status: 'completed', tasks: [] }
         ],
-        activities: [],
-        processos: []
+        activities: []
       };
 
       funifierApiSpy.get.and.returnValue(of({}));
@@ -280,8 +278,7 @@ describe('CompanyService', () => {
           { id: '1', name: 'Process 1', status: 'pending', tasks: [] },
           { id: '2', name: 'Process 2', status: 'completed', tasks: [] }
         ],
-        activities: [],
-        processos: []
+        activities: []
       };
 
       funifierApiSpy.get.and.returnValue(of({}));

@@ -64,14 +64,44 @@
     flex: 1;
     min-width: 0;
 
+    .player-name-row {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-bottom: 0.25rem;
+    }
+
     .player-name {
       font-size: 1rem;
       font-weight: 600;
       color: #ffffff;
-      margin: 0 0 0.25rem 0;
+      margin: 0;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
+    }
+
+    .kpi-average {
+      font-size: 0.875rem;
+      font-weight: 600;
+      padding: 0.125rem 0.5rem;
+      border-radius: 4px;
+      white-space: nowrap;
+
+      &.level-success {
+        color: #37CC42;
+        background: rgba(55, 204, 66, 0.15);
+      }
+
+      &.level-warning {
+        color: #f5a623;
+        background: rgba(245, 166, 35, 0.15);
+      }
+
+      &.level-danger {
+        color: #C56685;
+        background: rgba(197, 102, 133, 0.15);
+      }
     }
 
     .player-metadata {
@@ -97,8 +127,17 @@
     }
 
     .player-info {
+      .player-name-row {
+        gap: 0.375rem;
+      }
+
       .player-name {
         font-size: 0.875rem;
+      }
+
+      .kpi-average {
+        font-size: 0.75rem;
+        padding: 0.1rem 0.375rem;
       }
 
       .player-metadata {

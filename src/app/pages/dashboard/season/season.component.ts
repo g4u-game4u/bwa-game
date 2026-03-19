@@ -445,8 +445,7 @@ export class SeasonComponent implements OnInit, OnChanges {
       this.seasonDatesLoading = true;
       this.seasonDates = await this.seasonDatesService.getSeasonDates();
     } catch (error) {
-      console.error('Erro ao carregar datas da temporada:', error);
-      // Fallback para datas padrão
+            // Fallback para datas padrão
       this.seasonDates = {
         start: new Date('2025-05-01T03:00:00.000Z'),
         end: new Date('2025-06-30T03:00:00.000Z')
@@ -503,8 +502,7 @@ export class SeasonComponent implements OnInit, OnChanges {
       this.aliasesLoading = true;
       this.aliases = await this.aliasService.getAliases();
     } catch (error) {
-      console.error('Erro ao carregar aliases no componente season:', error);
-    } finally {
+          } finally {
       this.aliasesLoading = false;
     }
   }
@@ -521,8 +519,7 @@ export class SeasonComponent implements OnInit, OnChanges {
     try {
       this.clientLogoUrl = await this.systemParamsService.getParam<string>('client_dark_logo_url') || null;
     } catch (error) {
-      console.error('Erro ao carregar informações do cliente:', error);
-    }
+          }
   }
 
   /**
@@ -536,8 +533,7 @@ export class SeasonComponent implements OnInit, OnChanges {
       const clientName = await this.systemParamsService.getParam<string>('client_name');
       this.clientId = clientName || environment.client_id || null;
     } catch (error) {
-      console.error('Erro ao carregar client_id:', error);
-      // Fallback para o environment caso não consiga carregar do system params
+            // Fallback para o environment caso não consiga carregar do system params
       this.clientId = environment.client_id || null;
     } finally {
       this.clientIdLoading = false;
@@ -553,8 +549,7 @@ export class SeasonComponent implements OnInit, OnChanges {
       const systemParams = await this.systemParamsService.getSystemParams();
       this.freeChallengesAllowedTeams = systemParams.free_challenges_allowed_teams || null;
     } catch (error) {
-      console.error('Erro ao carregar times permitidos para desafios livres:', error);
-      this.freeChallengesAllowedTeams = null;
+            this.freeChallengesAllowedTeams = null;
     } finally {
       this.freeChallengesAllowedTeamsLoading = false;
     }
@@ -570,8 +565,7 @@ export class SeasonComponent implements OnInit, OnChanges {
       this.freeChallengesAllowedRoles = systemParams.free_challenges_allowed_roles || null;
       this.restrictFreeChallengesByRole = systemParams.restrict_free_challenges_by_role?.value === true;
     } catch (error) {
-      console.error('Erro ao carregar roles permitidas para desafios livres:', error);
-      this.freeChallengesAllowedRoles = null;
+            this.freeChallengesAllowedRoles = null;
       this.restrictFreeChallengesByRole = false;
     } finally {
       this.freeChallengesRolesLoading = false;
@@ -681,4 +675,5 @@ export class SeasonComponent implements OnInit, OnChanges {
     this.sessao.logout();
   }
 }
+
 

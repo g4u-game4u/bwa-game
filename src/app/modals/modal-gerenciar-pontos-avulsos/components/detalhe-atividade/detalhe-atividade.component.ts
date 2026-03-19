@@ -86,23 +86,19 @@ export class DetalheAtividadeComponent implements OnInit, OnChanges {
   // ===== MÉTODOS PARA COMPONENTES AUXILIARES =====
 
   onComentarioAdicionado(comentario: Comentario) {
-    console.log('✅ Comentário adicionado:', comentario);
-    // Aqui você pode adicionar lógica adicional se necessário
+        // Aqui você pode adicionar lógica adicional se necessário
   }
 
   onComentariosCarregados(comentarios: Comentario[]) {
-    console.log('✅ Comentários carregados:', comentarios.length);
-    // Aqui você pode adicionar lógica adicional se necessário
+        // Aqui você pode adicionar lógica adicional se necessário
   }
 
   onUploadConcluido() {
-    console.log('✅ Upload de anexos concluído');
-    // Aqui você pode adicionar lógica adicional se necessário
+        // Aqui você pode adicionar lógica adicional se necessário
   }
 
   onDownloadIniciado(anexoId: string) {
-    console.log('📥 Download iniciado para anexo:', anexoId);
-    // Aqui você pode adicionar lógica adicional se necessário
+        // Aqui você pode adicionar lógica adicional se necessário
   }
 
   // ===== MÉTODOS AUXILIARES =====
@@ -208,8 +204,7 @@ export class DetalheAtividadeComponent implements OnInit, OnChanges {
       : this.novoExecutorSelecionado;
 
     if (executorAtual === novoExecutor) {
-      console.log('ℹ️ Executor não foi alterado');
-      return;
+            return;
     }
 
     this.atualizandoExecutor = true;
@@ -260,13 +255,10 @@ export class DetalheAtividadeComponent implements OnInit, OnChanges {
         this.atividade.user_email = novoExecutor || undefined;
       }
 
-      console.log('✅ Executor atualizado com sucesso');
-      
-      // Emitir evento para o componente pai recarregar os dados
+            // Emitir evento para o componente pai recarregar os dados
       this.executorAtualizado.emit();
     } catch (error) {
-      console.error('❌ Erro ao atualizar executor:', error);
-      // Reverter a seleção em caso de erro
+            // Reverter a seleção em caso de erro
       this.novoExecutorSelecionado = executorAtual || 'UNASSIGNED';
     } finally {
       this.atualizandoExecutor = false;

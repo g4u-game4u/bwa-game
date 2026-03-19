@@ -1,7 +1,6 @@
 import { Injectable } from '@angular/core';
 import { SessaoProvider } from '@providers/sessao/sessao.provider';
 import { UserProfile, determineUserProfile, getUserOwnTeamId, getAccessibleTeamIds } from '@utils/user-profile';
-import { TeamCodeService } from './team-code.service';
 
 /**
  * Service to manage user profile and permissions
@@ -11,17 +10,12 @@ import { TeamCodeService } from './team-code.service';
  * - Check if user can access team management
  * - Get user's accessible teams
  * - Get user's own team ID
- * 
- * Uses TeamCodeService to get configurable team codes for role determination.
  */
 @Injectable({
   providedIn: 'root'
 })
 export class UserProfileService {
-  constructor(
-    private sessao: SessaoProvider,
-    private teamCodeService: TeamCodeService
-  ) {}
+  constructor(private sessao: SessaoProvider) {}
 
   /**
    * Get current user's profile
@@ -33,18 +27,24 @@ export class UserProfileService {
     if (!user) {
       return UserProfile.JOGADOR;
     }
-    return determineUserProfile(user.teams, this.teamCodeService.getTeamCodes());
+    return determineUserProfile(user.teams);
   }
 
   /**
    * Check if current user can access team management dashboard
    * 
-   * @returns true if user is SUPERVISOR, GESTOR, or DIRETOR
+   * @returns true if user is SUPERVISOR, GESTOR, DIRETOR, or SUPERVISOR_TECNICO
    */
   canAccessTeamManagement(): boolean {
     const profile = this.getCurrentUserProfile();
-    return profile !== UserProfile.JOGADOR;
+    return (
+      profile === UserProfile.SUPERVISOR ||
+      profile === UserProfile.GESTOR ||
+      profile === UserProfile.DIRETOR ||
+      profile === UserProfile.SUPERVISOR_TECNICO
+    );
   }
+
 
   /**
    * Get current user's own team ID (for SUPERVISOR and GESTOR)
@@ -57,7 +57,7 @@ export class UserProfileService {
       return null;
     }
     const profile = this.getCurrentUserProfile();
-    return getUserOwnTeamId(user.teams, profile, this.teamCodeService.getTeamCodes());
+    return getUserOwnTeamId(user.teams, profile);
   }
 
   /**
@@ -76,7 +76,7 @@ export class UserProfileService {
       return [];
     }
     const profile = this.getCurrentUserProfile();
-    return getAccessibleTeamIds(user.teams, profile, this.teamCodeService.getTeamCodes());
+    return getAccessibleTeamIds(user.teams, profile);
   }
 
   /**
@@ -117,6 +117,16 @@ export class UserProfileService {
   }
 
   /**
+   * Check if current user is a SUPERVISOR TÉCNICO
+   * SUPERVISOR_TECNICO belongs to team Fn2lrg3 (SUPERVISÃO TÉCNICA)
+   * 
+   * @returns true if user is SUPERVISOR_TECNICO
+   */
+  isSupervisorTecnico(): boolean {
+    return this.getCurrentUserProfile() === UserProfile.SUPERVISOR_TECNICO;
+  }
+
+  /**
    * Check if current user is a GESTOR
    * GESTOR belongs to team FkmdnFU (GESTAO)
    * 
@@ -138,9 +148,9 @@ export class UserProfileService {
 
   /**
    * Check if current user has a management profile
-   * (SUPERVISOR, GESTOR, or DIRETOR)
+   * (SUPERVISOR, SUPERVISOR_TECNICO, GESTOR, or DIRETOR)
    * 
-   * @returns true if user is SUPERVISOR, GESTOR, or DIRETOR
+   * @returns true if user is SUPERVISOR, SUPERVISOR_TECNICO, GESTOR, or DIRETOR
    */
   isManagementUser(): boolean {
     return this.canAccessTeamManagement();

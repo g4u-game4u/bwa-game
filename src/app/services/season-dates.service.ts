@@ -196,7 +196,7 @@ export class SeasonDatesService {
       const now = new Date();
       
     } catch (error) {
-      console.error('Erro no debug:', error);
+      // Debug method - silently fail
     }
   }
 

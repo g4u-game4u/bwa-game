@@ -34,8 +34,6 @@ export class DadosMesAnteriorComponent implements OnChanges {
 
   questInfo: Array<PainelInfoModel> = [];
 
-  processInfo: Array<PainelInfoModel> = [];
-
   aliases: SystemAliases | null = null;
 
   constructor(
@@ -78,8 +76,7 @@ export class DadosMesAnteriorComponent implements OnChanges {
 
               return results;
             } catch (error) {
-              console.error('Error fetching data:', error);
-              return []
+                            return []
             }
           }
         }
@@ -95,37 +92,14 @@ export class DadosMesAnteriorComponent implements OnChanges {
       },
     ];
 
-    this.processInfo = [
-      {
-        value: this.dadosMesAnterior?.completedDeliveries || 0,
-        text: translate('LABEL_PROCESSES_QUESTS_FINISHED', {deliveryAlias: this.deliveryAlias}),
-        toolTip: translate('HINT_FINISHED_MACRO_QUESTS', {deliveryAlias: this.deliveryAlias, actionAlias: this.actionAlias}),
 
-        icon: 'icon-new_releases',
-        action: () => {
-          this.abreModal(1, 0);
-        },
-        extras: {
-          showModal: true,
-          textoItem: {
-            label: 'LABEL_PROCESS_COMPLETED_SINCE',
-            param: 'dataUltimaFinalizacao',
-          },
-          dataApi: async (page: number, pageSize: number) => {
-              return this.mesAnteriorService.getGameDeliveries('DELIVERED', page, pageSize, this.mesesAnteriores, this.idUsuario, this.tipoConsulta);
-          }
-        },
-      },
-      
-    ];
   }
 
   async loadAliases() {
     try {
       this.aliases = await this.aliasService.getAliases();
     } catch (error) {
-      console.error('Erro ao carregar aliases:', error);
-    }
+          }
   }
 
   get actionAlias(): string {
@@ -151,10 +125,6 @@ export class DadosMesAnteriorComponent implements OnChanges {
           translate('LABEL_QUESTS', {actionAlias: this.actionAlias}),
           this.questInfo
         ),
-        this.modalDetailsPainelInfo.infoToTypes(
-          translate('LABEL_PROCESSES_QUESTS', {deliveryAlias: this.deliveryAlias}),
-          this.processInfo
-        ),
       ],
     };
   
@@ -170,3 +140,4 @@ export class DadosMesAnteriorComponent implements OnChanges {
     this.defineDadosMesAnterior();
   }
 }
+

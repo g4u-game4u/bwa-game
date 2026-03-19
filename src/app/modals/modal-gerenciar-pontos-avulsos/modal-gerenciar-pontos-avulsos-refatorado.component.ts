@@ -118,8 +118,7 @@ export class ModalGerenciarPontosAvulsosRefatoradoComponent implements OnInit {
 
     // Ensure currentUserEmail is set for actions
     if (!this.currentUserEmail) {
-      console.warn('⚠️ Email do usuário atual não fornecido. As ações de aprovar/reprovar/cancelar podem não funcionar.');
-      this.currentUserEmail = this.userId || 'usuario@exemplo.com';
+            this.currentUserEmail = this.userId || 'usuario@exemplo.com';
     }
   }
 
@@ -128,8 +127,7 @@ export class ModalGerenciarPontosAvulsosRefatoradoComponent implements OnInit {
     try {
       this.atividades = await this.pontosAvulsosService.getActionTemplates();
     } catch (error) {
-      console.error('Erro ao carregar atividades:', error);
-    } finally {
+          } finally {
       this.loadingAtividades = false;
     }
   }
@@ -139,8 +137,7 @@ export class ModalGerenciarPontosAvulsosRefatoradoComponent implements OnInit {
     try {
       if (this.isTeamContext) {
         if (!this.timeId) {
-          console.error('timeId não fornecido para carregar jogadores');
-          return;
+                    return;
         }
         const todosJogadores = await this.pontosAvulsosService.getUsers(this.timeId);
         
@@ -149,11 +146,9 @@ export class ModalGerenciarPontosAvulsosRefatoradoComponent implements OnInit {
           return jogador.deactivated_at === null || jogador.deactivated_at === undefined;
         });
         
-        console.log('Usuários ativos do time carregados:', this.jogadores);
-      } else {
+              } else {
         if (!this.userId || !this.userName) {
-          console.error('userId ou userName não fornecidos para contexto de colaborador');
-          return;
+                    return;
         }
         this.jogadores = [{
           id: this.userId,
@@ -161,18 +156,15 @@ export class ModalGerenciarPontosAvulsosRefatoradoComponent implements OnInit {
           name: this.userName,
           full_name: this.userName
         }];
-        console.log('Colaborador carregado:', this.jogadores);
-      }
+              }
     } catch (error) {
-      console.error('Erro ao carregar jogadores:', error);
-    } finally {
+          } finally {
       this.loadingJogadores = false;
     }
   }
 
   onTypeChange(typeIndex: number) {
-    console.log('🔄 Alterando tipo para:', typeIndex);
-    const currentState = this.modalStateService.currentState;
+        const currentState = this.modalStateService.currentState;
 
     // Fechar detalhes se estiverem abertos
     if (currentState.mostrarDetalhe) {
@@ -194,8 +186,7 @@ export class ModalGerenciarPontosAvulsosRefatoradoComponent implements OnInit {
   }
 
   onAbaChange(aba: AbaType) {
-    console.log('🔄 Aba mudou para:', aba);
-    const currentState = this.modalStateService.currentState;
+        const currentState = this.modalStateService.currentState;
 
     // Fechar detalhes se estiverem abertos
     if (currentState.mostrarDetalhe) {
@@ -214,8 +205,7 @@ export class ModalGerenciarPontosAvulsosRefatoradoComponent implements OnInit {
     if (aba !== 'atribuir') {
       this.carregarDadosAbaAtual();
     } else {
-      console.log('📝 Aba "Atribuir" selecionada - não precisa carregar dados');
-      // The form component itself will handle its reset logic
+            // The form component itself will handle its reset logic
     }
   }
 
@@ -230,12 +220,9 @@ export class ModalGerenciarPontosAvulsosRefatoradoComponent implements OnInit {
         this.jogadores
       );
 
-      console.log('✅ Atividade atribuída com sucesso!');
-
-      const currentState = this.modalStateService.currentState;
+            const currentState = this.modalStateService.currentState;
       if (currentState.retornarParaDelivery && currentState.deliveryParaRetornar) {
-        console.log('🔄 Retornando para detalhe da delivery após atribuição');
-        const deliveryId = currentState.deliveryParaRetornar.id;
+                const deliveryId = currentState.deliveryParaRetornar.id;
 
         this.modalStateService.limparRetornoDelivery(); // Limpar estado de retorno
 
@@ -262,8 +249,7 @@ export class ModalGerenciarPontosAvulsosRefatoradoComponent implements OnInit {
       }
 
     } catch (error) {
-      console.error('Erro ao atribuir atividade:', error);
-    } finally {
+          } finally {
       this.processandoAtribuicao = false;
     }
   }
@@ -300,114 +286,93 @@ export class ModalGerenciarPontosAvulsosRefatoradoComponent implements OnInit {
   async onFinalizarAtividade() {
     const state = this.modalStateService.currentState;
     if (!state.atividadeSelecionada || !this.currentUserEmail) {
-      console.error('❌ Atividade não selecionada ou email não fornecido');
-      return;
+            return;
     }
 
     try {
       await this.modalActionsService.finalizarAtividade(state.atividadeSelecionada, this.currentUserEmail);
-      console.log('✅ Atividade finalizada com sucesso!');
-      
-      // Recarregar dados da aba atual
+            // Recarregar dados da aba atual
       await this.carregarDadosAbaAtual();
       
       // Fechar detalhe
       this.modalStateService.fecharDetalheAtividade();
     } catch (error) {
-      console.error('❌ Erro ao finalizar atividade:', error);
-    }
+          }
   }
 
   async onAprovarAtividade() {
     const state = this.modalStateService.currentState;
     if (!state.atividadeSelecionada || !this.currentUserEmail) {
-      console.error('❌ Atividade não selecionada ou email não fornecido');
-      return;
+            return;
     }
 
     try {
       await this.modalActionsService.aprovarAtividade(state.atividadeSelecionada, this.currentUserEmail);
-      console.log('✅ Atividade aprovada com sucesso!');
-      
-      // Recarregar dados da aba atual
+            // Recarregar dados da aba atual
       await this.carregarDadosAbaAtual();
       
       // Fechar detalhe
       this.modalStateService.fecharDetalheAtividade();
     } catch (error) {
-      console.error('❌ Erro ao aprovar atividade:', error);
-    }
+          }
   }
 
   async onReprovarAtividade() {
     const state = this.modalStateService.currentState;
     if (!state.atividadeSelecionada || !this.currentUserEmail) {
-      console.error('❌ Atividade não selecionada ou email não fornecido');
-      return;
+            return;
     }
 
     try {
       await this.modalActionsService.reprovarAtividade(state.atividadeSelecionada, this.currentUserEmail);
-      console.log('✅ Atividade reprovada com sucesso!');
-      
-      // Recarregar dados da aba atual
+            // Recarregar dados da aba atual
       await this.carregarDadosAbaAtual();
       
       // Fechar detalhe
       this.modalStateService.fecharDetalheAtividade();
     } catch (error) {
-      console.error('❌ Erro ao reprovar atividade:', error);
-    }
+          }
   }
 
   async onCancelarAtividade() {
     const state = this.modalStateService.currentState;
     if (!state.atividadeSelecionada || !this.currentUserEmail) {
-      console.error('❌ Atividade não selecionada ou email não fornecido');
-      return;
+            return;
     }
 
     try {
       await this.modalActionsService.cancelarAtividade(state.atividadeSelecionada, this.currentUserEmail);
-      console.log('✅ Atividade cancelada com sucesso!');
-      
-      // Recarregar dados da aba atual
+            // Recarregar dados da aba atual
       await this.carregarDadosAbaAtual();
       
       // Fechar detalhe
       this.modalStateService.fecharDetalheAtividade();
     } catch (error) {
-      console.error('❌ Erro ao cancelar atividade:', error);
-    }
+          }
   }
 
   async onBloquearAtividade() {
     const state = this.modalStateService.currentState;
     if (!state.atividadeSelecionada || !this.currentUserEmail) {
-      console.error('❌ Atividade não selecionada ou email não fornecido');
-      return;
+            return;
     }
 
     try {
       await this.modalActionsService.bloquearAtividade(state.atividadeSelecionada, this.currentUserEmail);
-      console.log('✅ Atividade bloqueada com sucesso!');
-      
-      // Recarregar dados da aba atual
+            // Recarregar dados da aba atual
       await this.carregarDadosAbaAtual();
       
       // Fechar detalhe
       this.modalStateService.fecharDetalheAtividade();
     } catch (error) {
-      console.error('❌ Erro ao bloquear atividade:', error);
-    }
+          }
   }
 
   /**
    * Método chamado quando o executor da atividade é atualizado
    */
   async onExecutorAtualizado() {
-    console.log('🔄 Executor atualizado, recarregando dados...');
-    // Recarregar os dados da aba atual para refletir a mudança
+        // Recarregar os dados da aba atual para refletir a mudança
     await this.carregarDadosAbaAtual();
   }
 
@@ -419,85 +384,69 @@ export class ModalGerenciarPontosAvulsosRefatoradoComponent implements OnInit {
   async onCancelarDelivery() {
     const state = this.modalStateService.currentState;
     if (!state.deliverySelecionada) {
-      console.error('❌ Delivery não selecionada');
-      return;
+            return;
     }
 
     try {
       await this.modalActionsService.cancelarDelivery(state.deliverySelecionada);
-      console.log('✅ Delivery cancelada com sucesso!');
-      
-      // Recarregar dados da aba atual
+            // Recarregar dados da aba atual
       await this.carregarDadosAbaAtual();
       
       // Fechar detalhe
       this.modalStateService.fecharDetalheDelivery();
     } catch (error) {
-      console.error('❌ Erro ao cancelar delivery:', error);
-    }
+          }
   }
 
   async onCompletarDelivery() {
     const state = this.modalStateService.currentState;
     if (!state.deliverySelecionada) {
-      console.error('❌ Delivery não selecionada');
-      return;
+            return;
     }
 
     try {
       await this.modalActionsService.completarDelivery(state.deliverySelecionada);
-      console.log('✅ Delivery completada com sucesso!');
-      
-      // Recarregar dados da aba atual
+            // Recarregar dados da aba atual
       await this.carregarDadosAbaAtual();
       
       // Fechar detalhe
       this.modalStateService.fecharDetalheDelivery();
     } catch (error) {
-      console.error('❌ Erro ao completar delivery:', error);
-    }
+          }
   }
 
   async onDesfazerDelivery() {
     const state = this.modalStateService.currentState;
     if (!state.deliverySelecionada) {
-      console.error('❌ Delivery não selecionada');
-      return;
+            return;
     }
 
     try {
       await this.modalActionsService.desfazerDelivery(state.deliverySelecionada);
-      console.log('✅ Delivery desfeita com sucesso!');
-      
-      // Recarregar dados da aba atual
+            // Recarregar dados da aba atual
       await this.carregarDadosAbaAtual();
       
       // Fechar detalhe
       this.modalStateService.fecharDetalheDelivery();
     } catch (error) {
-      console.error('❌ Erro ao desfazer delivery:', error);
-    }
+          }
   }
 
   async onRestaurarDelivery() {
     const state = this.modalStateService.currentState;
     if (!state.deliverySelecionada) {
-      console.error('❌ Delivery não selecionada');
-      return;
+            return;
     }
 
     try {
       await this.modalActionsService.restaurarDelivery(state.deliverySelecionada);
-      console.log('✅ Delivery restaurada com sucesso!');
-      
-      // Recarregar dados da aba atual
+            // Recarregar dados da aba atual
       await this.carregarDadosAbaAtual();
       
       // Fechar detalhe
       this.modalStateService.fecharDetalheDelivery();
     } catch (error) {
-      console.error('❌ Erro ao restaurar delivery:', error);
-    }
+          }
   }
 
   // Métodos auxiliares para cores dos detalhes
@@ -534,9 +483,7 @@ export class ModalGerenciarPontosAvulsosRefatoradoComponent implements OnInit {
 
   private async carregarDadosAbaAtual() {
     const currentAba = this.modalStateService.currentState.currentAba;
-    console.log(`📊 Carregando dados para a aba: ${currentAba}`);
-
-    switch (currentAba) {
+        switch (currentAba) {
       case 'pendentes':
         await this.carregarAtividadesPendentes();
         break;
@@ -569,8 +516,7 @@ export class ModalGerenciarPontosAvulsosRefatoradoComponent implements OnInit {
 
   private async recarregarDadosDelivery(deliveryId: string): Promise<void> {
     try {
-      console.log('🔄 Recarregando dados da delivery:', deliveryId);
-      await this.carregarDadosAbaAtual(); // Recarregar a lista de processos baseada na aba atual
+            await this.carregarDadosAbaAtual(); // Recarregar a lista de processos baseada na aba atual
 
       let deliveryAtualizada = null;
       const currentAba = this.modalStateService.currentState.currentAba;
@@ -586,15 +532,12 @@ export class ModalGerenciarPontosAvulsosRefatoradoComponent implements OnInit {
       }
 
       if (deliveryAtualizada) {
-        console.log('✅ Delivery atualizada encontrada:', deliveryAtualizada);
-        this.modalStateService.updateState({ deliveryParaRetornar: deliveryAtualizada });
+                this.modalStateService.updateState({ deliveryParaRetornar: deliveryAtualizada });
       } else {
-        console.warn('⚠️ Delivery não encontrada na lista atualizada, usando dados originais');
-      }
+              }
 
     } catch (error) {
-      console.error('❌ Erro ao recarregar dados da delivery:', error);
-    }
+          }
   }
 
   async carregarAtividadesPendentes() {
@@ -606,8 +549,7 @@ export class ModalGerenciarPontosAvulsosRefatoradoComponent implements OnInit {
         this.isTeamContext
       );
     } catch (error) {
-      console.error('❌ Modal - Erro ao carregar atividades pendentes:', error);
-      this.atividadesPendentes = [];
+            this.atividadesPendentes = [];
     } finally {
       this.loadingAtividadesPendentes = false;
     }
@@ -625,8 +567,7 @@ export class ModalGerenciarPontosAvulsosRefatoradoComponent implements OnInit {
         atividade.approved === false || atividade.approved === null
       );
     } catch (error) {
-      console.error('❌ Modal - Erro ao carregar atividades aguardando aprovação:', error);
-      this.atividadesFinalizadas = [];
+            this.atividadesFinalizadas = [];
     } finally {
       this.loadingAtividadesFinalizadas = false;
     }
@@ -641,8 +582,7 @@ export class ModalGerenciarPontosAvulsosRefatoradoComponent implements OnInit {
         this.isTeamContext
       );
     } catch (error) {
-      console.error('❌ Modal - Erro ao carregar atividades aprovadas:', error);
-      this.atividadesAprovadas = [];
+            this.atividadesAprovadas = [];
     } finally {
       this.loadingAtividadesAprovadas = false;
     }
@@ -657,8 +597,7 @@ export class ModalGerenciarPontosAvulsosRefatoradoComponent implements OnInit {
         this.isTeamContext
       );
     } catch (error) {
-      console.error('❌ Modal - Erro ao carregar atividades canceladas:', error);
-      this.atividadesCanceladas = [];
+            this.atividadesCanceladas = [];
     } finally {
       this.loadingAtividadesCanceladas = false;
     }
@@ -673,8 +612,7 @@ export class ModalGerenciarPontosAvulsosRefatoradoComponent implements OnInit {
         this.isTeamContext
       );
     } catch (error) {
-      console.error('❌ Modal - Erro ao carregar processos pendentes:', error);
-      this.processosPendentes = [];
+            this.processosPendentes = [];
     } finally {
       this.loadingProcessosPendentes = false;
     }
@@ -689,8 +627,7 @@ export class ModalGerenciarPontosAvulsosRefatoradoComponent implements OnInit {
         this.isTeamContext
       );
     } catch (error) {
-      console.error('❌ Modal - Erro ao carregar processos incompletos:', error);
-      this.processosIncompletos = [];
+            this.processosIncompletos = [];
     } finally {
       this.loadingProcessosIncompletos = false;
     }
@@ -705,8 +642,7 @@ export class ModalGerenciarPontosAvulsosRefatoradoComponent implements OnInit {
         this.isTeamContext
       );
     } catch (error) {
-      console.error('❌ Modal - Erro ao carregar processos entregues:', error);
-      this.processosEntregues = [];
+            this.processosEntregues = [];
     } finally {
       this.loadingProcessosEntregues = false;
     }
@@ -721,8 +657,7 @@ export class ModalGerenciarPontosAvulsosRefatoradoComponent implements OnInit {
         this.isTeamContext
       );
     } catch (error) {
-      console.error('❌ Modal - Erro ao carregar processos cancelados:', error);
-      this.processosCancelados = [];
+            this.processosCancelados = [];
     } finally {
       this.loadingProcessosCancelados = false;
     }

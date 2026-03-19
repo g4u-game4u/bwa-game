@@ -83,8 +83,7 @@ export class FeaturesService {
 
       this.featuresSubject.next(features);
     } catch (error) {
-      console.error('Erro ao carregar funcionalidades do sistema:', error);
-      this.featuresSubject.next(this.getDefaultFeatures());
+            this.featuresSubject.next(this.getDefaultFeatures());
     } finally {
       this.isLoadingSubject.next(false);
     }

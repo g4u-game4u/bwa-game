@@ -199,8 +199,7 @@ export class DadosProdutividadeTimeComponent implements OnChanges {
     try {
       this.aliases = await this.aliasService.getAliases();
     } catch (error) {
-      console.error('Erro ao carregar aliases:', error);
-    }
+          }
   }
 
   get pointAlias(): string {
@@ -215,3 +214,4 @@ export class DadosProdutividadeTimeComponent implements OnChanges {
     return this.aliases?.deliveryAlias || 'Entregas';
   }
 }
+

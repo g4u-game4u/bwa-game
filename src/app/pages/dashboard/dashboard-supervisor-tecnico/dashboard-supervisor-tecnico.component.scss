@@ -1,0 +1,494 @@
+@import '../../../../styles/variables.scss';
+@import '../../../../styles/mixins.scss';
+
+.dashboard-supervisor-tecnico {
+  display: flex;
+  min-height: 100vh;
+  gap: $spacing-lg;
+
+  @include fade-in;
+}
+
+// --- Sidebar (read-only — mirrors GESTOR layout, NO goal inputs) ---
+.dashboard-sidebar {
+  width: 280px;
+  flex-shrink: 0;
+  padding: $spacing-lg 0 $spacing-lg $spacing-lg;
+
+  .sidebar-card {
+    position: sticky;
+    top: $spacing-lg;
+    width: 100%;
+  }
+
+  .sidebar-content {
+    padding: $spacing-md;
+    display: flex;
+    flex-direction: column;
+    gap: $spacing-md;
+  }
+
+  .sidebar-section {
+    display: flex;
+    flex-direction: column;
+    gap: $spacing-xs;
+  }
+
+  .selector-label {
+    font-size: $font-size-caption;
+    font-weight: 600;
+    color: $text-secondary;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .form-control {
+    width: 100%;
+    padding: $spacing-xs $spacing-sm;
+    border: 1px solid $border-color;
+    border-radius: $border-radius-sm;
+    font-size: $font-size-small;
+    color: $text-primary;
+    background: #fff;
+    transition: border-color $transition-duration $transition-easing;
+
+    &:focus {
+      outline: none;
+      border-color: $primary-electric-blue;
+      box-shadow: 0 0 0 2px rgba($primary-electric-blue, 0.15);
+    }
+  }
+}
+
+// --- Main Content ---
+.dashboard-main {
+  flex: 1;
+  min-width: 0;
+  padding: $spacing-lg $spacing-lg $spacing-lg 0;
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-lg;
+}
+
+.dashboard-header {
+  flex-shrink: 0;
+
+  .header-row {
+    display: flex;
+    align-items: center;
+    gap: $spacing-md;
+    flex-wrap: wrap;
+  }
+
+  .header-spacer {
+    flex: 1;
+  }
+}
+
+.btn-back {
+  @include button-secondary;
+  font-size: $font-size-small;
+  display: inline-flex;
+  align-items: center;
+  gap: $spacing-xs;
+
+  i {
+    font-size: 1rem;
+  }
+}
+
+// --- Dashboard Sections (mirrors GESTOR) ---
+.dashboard-section {
+  .section-title-wrap {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .section-title {
+    font-size: $font-size-body;
+    font-weight: 600;
+    color: $text-primary;
+    margin: 0 0 $spacing-md 0;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+}
+
+.kpi-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: $spacing-md;
+}
+
+// --- Team Summary ---
+.team-summary {
+  .summary-card {
+    width: 100%;
+  }
+
+  .summary-content {
+    padding: $spacing-md;
+    display: flex;
+    flex-direction: column;
+    gap: $spacing-md;
+  }
+
+  .summary-title {
+    font-size: $font-size-body;
+    font-weight: 600;
+    color: $text-primary;
+    margin: 0;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .summary-metrics {
+    display: flex;
+    flex-wrap: wrap;
+    gap: $spacing-lg;
+  }
+
+  .metric-item {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+
+    .metric-label {
+      font-size: $font-size-caption;
+      color: $text-secondary;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .metric-value {
+      font-size: $font-size-body;
+      font-weight: 600;
+      color: $text-primary;
+    }
+  }
+
+  .summary-kpis {
+    display: flex;
+    flex-wrap: wrap;
+    gap: $spacing-md;
+    padding-top: $spacing-sm;
+    border-top: 1px solid $border-color;
+  }
+}
+
+// --- Player List ---
+.player-list-section {
+  flex: 1;
+}
+
+.list-loading {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-sm;
+}
+
+.list-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+}
+
+.table-wrapper {
+  overflow-x: auto;
+  border-radius: $border-radius-sm;
+  border: 1px solid $border-color;
+}
+
+.player-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: $font-size-small;
+
+  thead {
+    background: rgba($primary-electric-blue, 0.08);
+
+    th {
+      padding: $spacing-sm $spacing-md;
+      text-align: left;
+      font-weight: 600;
+      color: $text-secondary;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-size: $font-size-caption;
+      white-space: nowrap;
+      border-bottom: 1px solid $border-color;
+
+      &.col-metric {
+        text-align: right;
+      }
+    }
+  }
+
+  tbody {
+    .player-row {
+      cursor: pointer;
+      transition: background-color $transition-duration $transition-easing;
+
+      &:hover {
+        background: rgba($primary-electric-blue, 0.06);
+      }
+
+      &:not(:last-child) td {
+        border-bottom: 1px solid $border-color;
+      }
+
+      @include focus-visible;
+    }
+
+    td {
+      padding: $spacing-sm $spacing-md;
+      vertical-align: middle;
+      color: $text-primary;
+    }
+  }
+}
+
+.cell-player {
+  display: flex;
+  align-items: center;
+  gap: $spacing-sm;
+  min-width: 160px;
+
+  .player-icon {
+    font-size: 1.125rem;
+    color: $primary-electric-blue;
+    flex-shrink: 0;
+  }
+
+  .player-name {
+    font-weight: 600;
+    @include text-truncate;
+  }
+}
+
+.cell-teams {
+  min-width: 120px;
+
+  .team-badge {
+    display: inline-block;
+    padding: 2px $spacing-sm;
+    border-radius: $border-radius-xs;
+    background: rgba($primary-electric-blue, 0.15);
+    color: $primary-electric-blue;
+    font-size: $font-size-caption;
+    font-weight: 500;
+    margin-right: $spacing-xs;
+    margin-bottom: 2px;
+  }
+}
+
+.cell-metric {
+  text-align: right;
+  white-space: nowrap;
+
+  .metric-value {
+    font-weight: 500;
+    color: $text-secondary;
+  }
+
+  .points-row {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: $spacing-xs;
+  }
+
+  .points-icon {
+    color: #f5a623;
+    font-size: 1rem;
+  }
+
+  .points-value {
+    font-weight: 600;
+    color: $text-primary;
+  }
+}
+
+// --- Carteira Section (mirrors GESTOR) ---
+.clientes-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 6px;
+  padding: 4px;
+
+  .clientes-tab-btn {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 8px 16px;
+    background: transparent;
+    color: rgba(255, 255, 255, 0.6);
+    border: none;
+    border-radius: 6px;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+
+    i { font-size: 1rem; }
+
+    .tab-count {
+      margin-left: 4px;
+      opacity: 0.85;
+      font-weight: 400;
+    }
+
+    &:hover:not(.active) {
+      background: rgba(59, 130, 246, 0.08);
+      color: #3b82f6;
+    }
+
+    &.active {
+      background: rgba(59, 130, 246, 0.12);
+      color: #fff;
+      border: 1px solid rgba(59, 130, 246, 0.3);
+    }
+  }
+}
+
+.carteira-section {
+  .carteira-card {
+    width: 100%;
+  }
+}
+
+.carteira-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.carteira-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: $spacing-sm $spacing-md;
+  cursor: pointer;
+  transition: background-color $transition-duration $transition-easing;
+  border-bottom: 1px solid rgba($border-color, 0.5);
+
+  &:last-child {
+    border-bottom: none;
+  }
+
+  &:hover {
+    background: rgba($primary-electric-blue, 0.06);
+  }
+
+  @include focus-visible;
+
+  .carteira-item-info {
+    display: flex;
+    align-items: center;
+    gap: $spacing-sm;
+    flex: 1;
+    min-width: 0;
+
+    i {
+      color: $text-secondary;
+      font-size: 1rem;
+      flex-shrink: 0;
+    }
+
+    .carteira-cnpj {
+      font-size: $font-size-small;
+      color: $text-primary;
+      @include text-truncate;
+    }
+  }
+
+  .carteira-item-meta {
+    display: flex;
+    align-items: center;
+    gap: $spacing-md;
+    flex-shrink: 0;
+
+    .carteira-kpi-compact {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px $spacing-sm;
+      border-radius: $border-radius-xs;
+      font-size: $font-size-caption;
+      font-weight: 600;
+
+      &.kpi-green {
+        background: rgba(#4caf50, 0.15);
+        color: #2e7d32;
+      }
+
+      &.kpi-yellow {
+        background: rgba(#ff9800, 0.15);
+        color: #e65100;
+      }
+
+      &.kpi-red {
+        background: rgba(#f44336, 0.15);
+        color: #c62828;
+      }
+
+      &.kpi-default {
+        background: rgba($text-secondary, 0.1);
+        color: $text-secondary;
+      }
+
+      .kpi-icon {
+        font-size: 0.75rem;
+      }
+    }
+
+    .kpi-na {
+      font-size: $font-size-caption;
+      color: $text-secondary;
+    }
+
+    .carteira-action-count {
+      font-size: $font-size-caption;
+      color: $text-secondary;
+      white-space: nowrap;
+    }
+  }
+}
+
+.empty-state {
+  padding: $spacing-lg;
+  text-align: center;
+  color: $text-secondary;
+  font-style: italic;
+}
+
+.placeholder-text {
+  color: $text-secondary;
+  font-style: italic;
+  padding: $spacing-md;
+}
+
+// --- Responsive ---
+@media (max-width: 768px) {
+  .dashboard-supervisor-tecnico {
+    flex-direction: column;
+  }
+
+  .dashboard-sidebar {
+    width: 100%;
+    padding: $spacing-md;
+
+    .sidebar-card {
+      position: static;
+    }
+  }
+
+  .dashboard-main {
+    padding: 0 $spacing-md $spacing-md;
+  }
+}

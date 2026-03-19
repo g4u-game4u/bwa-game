@@ -20,35 +20,35 @@ export class SystemParamsService {
   constructor(private api: ApiProvider, private http: HttpClient) {}
 
   /**
-   * Inicializa os parâmetros do sistema no primeiro acesso
-   * Pode ser chamado mesmo sem autenticação (ex: página de login)
-   * Implementa singleton pattern para evitar múltiplas requisições simultâneas
+   * Inicializa os parÃ¢metros do sistema no primeiro acesso
+   * Pode ser chamado mesmo sem autenticaÃ§Ã£o (ex: pÃ¡gina de login)
+   * Implementa singleton pattern para evitar mÃºltiplas requisiÃ§Ãµes simultÃ¢neas
    */
   public async initializeSystemParams(): Promise<SystemParams> {
-    // Se já foi inicializado e o cache é válido, retorna imediatamente
+    // Se jÃ¡ foi inicializado e o cache Ã© vÃ¡lido, retorna imediatamente
     if (this.isInitialized && this.isCacheValid()) {
       return this.cachedParams!;
     }
 
-    // Se já está inicializando, retorna a promise existente
+    // Se jÃ¡ estÃ¡ inicializando, retorna a promise existente
     if (this.initializationPromise) {
       return this.initializationPromise;
     }
 
-    // Cria nova promise de inicialização
+    // Cria nova promise de inicializaÃ§Ã£o
     this.initializationPromise = this.performInitialization();
 
     try {
       const params = await this.initializationPromise;
       return params;
     } finally {
-      // Limpa a promise após a inicialização
+      // Limpa a promise apÃ³s a inicializaÃ§Ã£o
       this.initializationPromise = null;
     }
   }
 
   /**
-   * Executa a inicialização real dos parâmetros
+   * Executa a inicializaÃ§Ã£o real dos parÃ¢metros
    */
   private async performInitialization(): Promise<SystemParams> {
     try {
@@ -56,12 +56,9 @@ export class SystemParamsService {
       this.isInitialized = true;
       return params;
     } catch (error) {
-      console.error('Erro na inicialização dos parâmetros do sistema:', error);
-      
-      // Se falhar na inicialização, tenta usar cache mesmo que expirado
+      // Se falhar na inicializaÃ§Ã£o, tenta usar cache mesmo que expirado
       const storedData = this.getFromStorage();
       if (storedData) {
-        console.warn('Usando dados do cache para inicialização devido a erro na API');
         this.cachedParams = storedData.params;
         this.lastFetchTime = storedData.timestamp;
         this.isInitialized = true;
@@ -73,15 +70,15 @@ export class SystemParamsService {
   }
 
   /**
-   * Obtém os parâmetros do sistema, garantindo que foram inicializados
+   * ObtÃ©m os parÃ¢metros do sistema, garantindo que foram inicializados
    */
   public async getSystemParams(): Promise<SystemParams> {
-    // Se não foi inicializado, inicializa primeiro
+    // Se nÃ£o foi inicializado, inicializa primeiro
     if (!this.isInitialized) {
       return this.initializeSystemParams();
     }
 
-    // Verifica se há dados em cache válidos
+    // Verifica se hÃ¡ dados em cache vÃ¡lidos
     if (this.isCacheValid()) {
       return this.cachedParams!;
     }
@@ -94,36 +91,36 @@ export class SystemParamsService {
       return this.cachedParams;
     }
 
-    // Se não há cache válido, busca da API
+    // Se nÃ£o hÃ¡ cache vÃ¡lido, busca da API
     return this.fetchFromApi();
   }
 
   /**
-   * Força a atualização dos parâmetros da API
+   * ForÃ§a a atualizaÃ§Ã£o dos parÃ¢metros da API
    */
   public async refreshSystemParams(): Promise<SystemParams> {
     return this.fetchFromApi();
   }
 
   /**
-   * Obtém um parâmetro específico do sistema
-   * Aguarda a inicialização se necessário
+   * ObtÃ©m um parÃ¢metro especÃ­fico do sistema
+   * Aguarda a inicializaÃ§Ã£o se necessÃ¡rio
    */
   public async getParam<T>(paramName: keyof SystemParams): Promise<T | null> {
     const params = await this.getSystemParams();
     const param = params[paramName];
     
-    // Verifica se o parâmetro tem a propriedade 'value' (SystemParamValue)
+    // Verifica se o parÃ¢metro tem a propriedade 'value' (SystemParamValue)
     if (param && typeof param === 'object' && 'value' in param) {
       return (param as SystemParamValue).value;
     }
     
-    // Para parâmetros que não seguem o padrão SystemParamValue (como reward_rules)
+    // Para parÃ¢metros que nÃ£o seguem o padrÃ£o SystemParamValue (como reward_rules)
     return param as T;
   }
 
   /**
-   * Verifica se um recurso está habilitado
+   * Verifica se um recurso estÃ¡ habilitado
    */
   public async isFeatureEnabled(featureName: keyof SystemParams): Promise<boolean> {
     const value = await this.getParam<boolean>(featureName);
@@ -131,21 +128,21 @@ export class SystemParamsService {
   }
 
   /**
-   * Verifica se os parâmetros já foram inicializados
+   * Verifica se os parÃ¢metros jÃ¡ foram inicializados
    */
   public isParamsInitialized(): boolean {
     return this.isInitialized;
   }
 
   /**
-   * Verifica se está carregando os parâmetros
+   * Verifica se estÃ¡ carregando os parÃ¢metros
    */
   public isLoading(): boolean {
     return this.initializationPromise !== null;
   }
 
   /**
-   * Limpa o cache dos parâmetros
+   * Limpa o cache dos parÃ¢metros
    */
   public clearCache(): void {
     this.cachedParams = null;
@@ -156,20 +153,18 @@ export class SystemParamsService {
   }
 
   /**
-   * Busca os parâmetros da API
-   * NOTA: Como migramos para Funifier, não temos mais o endpoint /client/system-params
-   * Retornamos valores padrão para manter a compatibilidade
+   * Busca os parÃ¢metros da API
+   * NOTA: Como migramos para Funifier, nÃ£o temos mais o endpoint /client/system-params
+   * Retornamos valores padrÃ£o para manter a compatibilidade
    */
   private async fetchFromApi(): Promise<SystemParams> {
     try {
-      console.log('⚙️ Usando parâmetros padrão do sistema (Funifier mode)');
-      
-      // Valores padrão para manter a aplicação funcionando
+      // Valores padrÃ£o para manter a aplicaÃ§Ã£o funcionando
       const params: SystemParams = {
         max_level: { value: 100, inherited: false },
         client_name: { value: 'Game4U', inherited: false },
         coins_alias: { value: 'Moedas', inherited: false },
-        action_alias: { value: 'Ações', inherited: false },
+        action_alias: { value: 'AÃ§Ãµes', inherited: false },
         points_alias: { value: 'Pontos', inherited: false },
         reward_rules: { tiers: [] },
         default_theme: { value: 'light', inherited: false },
@@ -210,11 +205,8 @@ export class SystemParamsService {
       
       return params;
     } catch (error) {
-      console.error('Erro ao buscar parâmetros do sistema:', error);
-      
       // Se falhar, tenta retornar dados do cache mesmo que expirados
       if (this.cachedParams) {
-        console.warn('Retornando dados do cache expirado devido a erro na API');
         return this.cachedParams;
       }
       
@@ -223,7 +215,7 @@ export class SystemParamsService {
   }
 
   /**
-   * Verifica se o cache em memória é válido
+   * Verifica se o cache em memÃ³ria Ã© vÃ¡lido
    */
   private isCacheValid(): boolean {
     return this.cachedParams !== null && 
@@ -231,21 +223,20 @@ export class SystemParamsService {
   }
 
   /**
-   * Verifica se os dados do localStorage são válidos
+   * Verifica se os dados do localStorage sÃ£o vÃ¡lidos
    */
   private isStorageValid(timestamp: number): boolean {
     return (Date.now() - timestamp) < this.CACHE_DURATION;
   }
 
   /**
-   * Obtém dados do localStorage
+   * ObtÃ©m dados do localStorage
    */
   private getFromStorage(): { params: SystemParams; timestamp: number } | null {
     try {
       const stored = localStorage.getItem(this.STORAGE_KEY);
       return stored ? JSON.parse(stored) : null;
     } catch (error) {
-      console.error('Erro ao ler parâmetros do localStorage:', error);
       return null;
     }
   }
@@ -261,7 +252,7 @@ export class SystemParamsService {
       };
       localStorage.setItem(this.STORAGE_KEY, JSON.stringify(data));
     } catch (error) {
-      console.error('Erro ao salvar parâmetros no localStorage:', error);
+      // Silently fail - localStorage is not critical
     }
   }
 } 

@@ -244,9 +244,7 @@ export class RankingService {
         success: true
       };
     } catch (error) {
-      console.error('❌ Erro ao buscar dados do ranking:', error);
-      
-      return {
+            return {
         ranking: this.getDefaultRankingData(rankingId),
         success: false,
         message: error instanceof Error ? error.message : 'Erro desconhecido'
@@ -270,8 +268,7 @@ export class RankingService {
       
       return null;
     } catch (error) {
-      console.warn('Erro ao buscar informações do ranking:', error);
-      return null;
+            return null;
     }
   }
 
@@ -292,9 +289,7 @@ export class RankingService {
         totalCount: rankings.length
       };
     } catch (error) {
-      console.error('❌ Erro ao carregar lista de rankings:', error);
-      
-      // Retorna dados padrão em caso de erro
+            // Retorna dados padrão em caso de erro
       return {
         rankings: this.getDefaultRankings(),
         periods: this.getDefaultPeriods(),
@@ -308,8 +303,7 @@ export class RankingService {
    */
   private validateAndFormatRankingsList(response: any): RankingType[] {
     if (!response || !Array.isArray(response)) {
-      console.warn('Resposta da API não é um array:', response);
-      return this.getDefaultRankings();
+            return this.getDefaultRankings();
     }
 
     return response.map((item: ApiRankingType) => ({
@@ -356,8 +350,7 @@ export class RankingService {
    */
   private validateAndFormatRankingResponse(participants: ApiLeaderboardResponse, rankingInfo: ApiRankingType | null, dateRange?: DateRange): RankingData {
     if (!participants || !Array.isArray(participants)) {
-      console.warn('Resposta da API não contém participantes válidos:', participants);
-      return this.getDefaultRankingData('default');
+            return this.getDefaultRankingData('default');
     }
 
     // Se não temos informações do ranking, usa dados padrão
@@ -767,3 +760,4 @@ export class RankingService {
     return this.getRankingsList();
   }
 }
+

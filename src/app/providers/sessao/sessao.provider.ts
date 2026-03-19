@@ -4,6 +4,7 @@ import {ROLES_LIST} from '@utils/constants';
 import {AuthProvider, LoginResponse} from "@providers/auth/auth.provider";
 import {Router} from "@angular/router";
 import {firstValueFrom, timeout, catchError, throwError} from "rxjs";
+import { isLoginEmailAllowed } from '@utils/maintenance-allowlist';
 
 const TKN_KEY = 'g4utkn'
 
@@ -20,18 +21,15 @@ export class SessaoProvider {
     }
 
     public async login(email: string, password: string) {
-        console.log('🔐 SessaoProvider.login called');
-        const loginResponse = await this.auth.login(email, password);
-        console.log('🔐 Login response received:', loginResponse);
-        this.storeLoginInfo(loginResponse)
+                const loginResponse = await this.auth.login(email, password);
+                this.storeLoginInfo(loginResponse)
         return await this.init(true);
     }
 
     public async init(canActivate: boolean): Promise<boolean> {
         // If already initializing, return the existing promise to prevent concurrent calls
         if (this.initPromise) {
-            console.log('🔐 Init already in progress, waiting for existing call...');
-            return this.initPromise;
+                        return this.initPromise;
         }
 
         if (canActivate) {
@@ -40,40 +38,31 @@ export class SessaoProvider {
                 try {
                     // Add timeout to prevent infinite loading (15 seconds)
                     const REQUEST_TIMEOUT = 15000;
-                    console.log('🔐 Starting session initialization...');
-                    let info = await firstValueFrom(
+                                        let info = await firstValueFrom(
                         this.auth.userInfo().pipe(
                             timeout(REQUEST_TIMEOUT),
                             catchError(error => {
-                                console.error('🔐 Error fetching user info:', error);
-                                // Re-throw to be caught by outer try-catch
+                                                                // Re-throw to be caught by outer try-catch
                                 return throwError(() => error);
                             })
                         )
                     );
 
                     if (info) {
-                        await this.getUserAfterValidations(info);
-                        console.log('🔐 Session initialized successfully');
-                        console.log('🔐 Final usuario state:', this._usuario);
-                        console.log('🔐 Final usuario getter:', this.usuario);
-                        return true;
+                        const ok = await this.getUserAfterValidations(info);
+                        return ok;
                     } else {
-                        console.warn('🔐 User info is null or undefined');
-                        await this.logout();
+                                                await this.logout();
                         return false;
                     }
                 } catch (error: any) {
-                    console.error('🔐 Failed to initialize session:', error);
-                    
-                    // For timeout, network errors, or authentication errors, clear token
+                                        // For timeout, network errors, or authentication errors, clear token
                     if (error?.name === 'TimeoutError' || 
                         error?.message?.includes('timeout') ||
                         error?.status === 401 || 
                         error?.status === 403 ||
                         error?.status === 0) {
-                        console.log('🔐 Clearing invalid token due to error');
-                        // Clear token but don't navigate (let guard handle it)
+                                                // Clear token but don't navigate (let guard handle it)
                         this._usuario = null;
                         delete this.loginResponse;
                         sessionStorage.removeItem(TKN_KEY);
@@ -106,17 +95,13 @@ export class SessaoProvider {
         return this.loginResponse?.refresh_token;
     }
 
-    public async getUserAfterValidations(user: any) {
+    public async getUserAfterValidations(user: any): Promise<boolean> {
         if (!user) {
             await this.logout();
-            return;
+            return false;
         }
         
-        console.log('👤 Raw user data from API:', user);
-        console.log('👤 User teams from API:', user.teams);
-        console.log('👤 User extra from API:', user.extra);
-        
-        // Handle Funifier response format - map _id to email if email is not set
+                                // Handle Funifier response format - map _id to email if email is not set
         // Funifier uses _id as the email/player identifier
         if (!user.email && user._id) {
             user.email = user._id;
@@ -125,6 +110,11 @@ export class SessaoProvider {
         // Map name to full_name if full_name is not set
         if (!user.full_name && user.name) {
             user.full_name = user.name;
+        }
+
+        if (!isLoginEmailAllowed(user.email)) {
+            await this.logout();
+            return false;
         }
         
         // Handle Funifier response format - roles might be in different places
@@ -161,13 +151,9 @@ export class SessaoProvider {
             user.teams = [];
         }
         
-        console.log('👤 User data after validation:', user);
-        console.log('👤 User teams:', user.teams);
-        this._usuario = user;
-        console.log('👤 _usuario set to:', this._usuario);
-        console.log('👤 usuario getter returns:', this.usuario);
-        console.log('👤 usuario.teams:', this.usuario?.teams);
-    }
+                        this._usuario = user;
+        return true;
+                            }
 
     async logout() {
         this._usuario = null; // Limpar dados do usuário
@@ -215,3 +201,4 @@ export class SessaoProvider {
         }
     }
 }
+

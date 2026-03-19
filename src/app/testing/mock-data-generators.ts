@@ -415,7 +415,6 @@ export function generateMockCompanyDisplay(overrides?: Partial<CompanyDisplay>):
     cnpj,
     cnpjId,
     actionCount,
-    processCount: overrides?.processCount ?? 5,
     deliveryKpi: overrides?.deliveryKpi === undefined ? deliveryKpi : overrides.deliveryKpi,
     ...overrides
   };

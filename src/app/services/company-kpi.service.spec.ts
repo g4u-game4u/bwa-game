@@ -245,8 +245,8 @@ describe('CompanyKpiService', () => {
   describe('enrichCompaniesWithKpis() - Data Enrichment', () => {
     it('should enrich companies with KPI data', (done) => {
       const companies = [
-        { cnpj: 'COMPANY A l 0001 [2000|0001-60]', actionCount: 5, processCount: 2 },
-        { cnpj: 'COMPANY B l 0002 [1218|0002-45]', actionCount: 3, processCount: 1 }
+        { cnpj: 'COMPANY A l 0001 [2000|0001-60]', actionCount: 5 },
+        { cnpj: 'COMPANY B l 0002 [1218|0002-45]', actionCount: 3 }
       ];
 
       const mockKpiResponse: CnpjKpiData[] = [
@@ -278,7 +278,7 @@ describe('CompanyKpiService', () => {
 
     it('should handle companies without KPI data', (done) => {
       const companies = [
-        { cnpj: 'COMPANY A l 0001 [2000|0001-60]', actionCount: 5, processCount: 2 }
+        { cnpj: 'COMPANY A l 0001 [2000|0001-60]', actionCount: 5 }
       ];
 
       funifierApiSpy.post.and.returnValue(of([])); // No KPI data
@@ -293,8 +293,8 @@ describe('CompanyKpiService', () => {
 
     it('should handle companies with invalid CNPJ format', (done) => {
       const companies = [
-        { cnpj: 'INVALID FORMAT', actionCount: 5, processCount: 2 },
-        { cnpj: 'COMPANY B l 0002 [1218|0002-45]', actionCount: 3, processCount: 1 }
+        { cnpj: 'INVALID FORMAT', actionCount: 5 },
+        { cnpj: 'COMPANY B l 0002 [1218|0002-45]', actionCount: 3 }
       ];
 
       const mockKpiResponse: CnpjKpiData[] = [
@@ -336,9 +336,9 @@ describe('CompanyKpiService', () => {
 
     it('should handle mixed valid and invalid CNPJ formats', (done) => {
       const companies = [
-        { cnpj: 'COMPANY A l 0001 [2000|0001-60]', actionCount: 5, processCount: 2 },
-        { cnpj: 'INVALID', actionCount: 2, processCount: 1 },
-        { cnpj: 'COMPANY C l 0003 [9654|0003-12]', actionCount: 8, processCount: 3 }
+        { cnpj: 'COMPANY A l 0001 [2000|0001-60]', actionCount: 5 },
+        { cnpj: 'INVALID', actionCount: 2 },
+        { cnpj: 'COMPANY C l 0003 [9654|0003-12]', actionCount: 8 }
       ];
 
       const mockKpiResponse: CnpjKpiData[] = [
@@ -359,8 +359,8 @@ describe('CompanyKpiService', () => {
 
     it('should handle duplicate CNPJ IDs', (done) => {
       const companies = [
-        { cnpj: 'COMPANY A l 0001 [2000|0001-60]', actionCount: 5, processCount: 2 },
-        { cnpj: 'COMPANY A BRANCH l 0002 [2000|0002-45]', actionCount: 3, processCount: 1 }
+        { cnpj: 'COMPANY A l 0001 [2000|0001-60]', actionCount: 5 },
+        { cnpj: 'COMPANY A BRANCH l 0002 [2000|0002-45]', actionCount: 3 }
       ];
 
       const mockKpiResponse: CnpjKpiData[] = [
@@ -381,7 +381,7 @@ describe('CompanyKpiService', () => {
 
     it('should preserve all company properties', (done) => {
       const companies = [
-        { cnpj: 'COMPANY A l 0001 [2000|0001-60]', actionCount: 5, processCount: 2 }
+        { cnpj: 'COMPANY A l 0001 [2000|0001-60]', actionCount: 5 }
       ];
 
       const mockKpiResponse: CnpjKpiData[] = [
@@ -486,10 +486,10 @@ describe('CompanyKpiService', () => {
 
     it('should share cached data across enrichCompaniesWithKpis calls', (done) => {
       const companies1 = [
-        { cnpj: 'COMPANY A l 0001 [2000|0001-60]', actionCount: 5, processCount: 2 }
+        { cnpj: 'COMPANY A l 0001 [2000|0001-60]', actionCount: 5 }
       ];
       const companies2 = [
-        { cnpj: 'COMPANY A l 0001 [2000|0001-60]', actionCount: 3, processCount: 1 }
+        { cnpj: 'COMPANY A l 0001 [2000|0001-60]', actionCount: 3 }
       ];
 
       const mockResponse: CnpjKpiData[] = [
@@ -561,7 +561,7 @@ describe('CompanyKpiService', () => {
 
     it('should handle API errors gracefully in enrichCompaniesWithKpis', (done) => {
       const companies = [
-        { cnpj: 'COMPANY A l 0001 [2000|0001-60]', actionCount: 5, processCount: 2 }
+        { cnpj: 'COMPANY A l 0001 [2000|0001-60]', actionCount: 5 }
       ];
 
       funifierApiSpy.post.and.returnValue(
@@ -578,8 +578,8 @@ describe('CompanyKpiService', () => {
 
     it('should not throw error when all companies have invalid CNPJ format', (done) => {
       const companies = [
-        { cnpj: 'INVALID FORMAT 1', actionCount: 5, processCount: 2 },
-        { cnpj: 'INVALID FORMAT 2', actionCount: 3, processCount: 1 }
+        { cnpj: 'INVALID FORMAT 1', actionCount: 5 },
+        { cnpj: 'INVALID FORMAT 2', actionCount: 3 }
       ];
 
       service.enrichCompaniesWithKpis(companies).subscribe(result => {
@@ -623,7 +623,7 @@ describe('CompanyKpiService', () => {
   describe('KPI Data Mapping', () => {
     it('should map KPI data with correct structure', (done) => {
       const companies = [
-        { cnpj: 'COMPANY A l 0001 [2000|0001-60]', actionCount: 5, processCount: 2 }
+        { cnpj: 'COMPANY A l 0001 [2000|0001-60]', actionCount: 5 }
       ];
 
       const mockKpiResponse: CnpjKpiData[] = [
@@ -650,7 +650,7 @@ describe('CompanyKpiService', () => {
 
     it('should calculate percentage correctly', (done) => {
       const companies = [
-        { cnpj: 'COMPANY A l 0001 [2000|0001-60]', actionCount: 5, processCount: 2 }
+        { cnpj: 'COMPANY A l 0001 [2000|0001-60]', actionCount: 5 }
       ];
 
       const mockKpiResponse: CnpjKpiData[] = [
@@ -667,7 +667,7 @@ describe('CompanyKpiService', () => {
 
     it('should cap percentage at 100%', (done) => {
       const companies = [
-        { cnpj: 'COMPANY A l 0001 [2000|0001-60]', actionCount: 5, processCount: 2 }
+        { cnpj: 'COMPANY A l 0001 [2000|0001-60]', actionCount: 5 }
       ];
 
       const mockKpiResponse: CnpjKpiData[] = [
@@ -684,7 +684,7 @@ describe('CompanyKpiService', () => {
 
     it('should assign green color for >= 80% completion', (done) => {
       const companies = [
-        { cnpj: 'COMPANY A l 0001 [2000|0001-60]', actionCount: 5, processCount: 2 }
+        { cnpj: 'COMPANY A l 0001 [2000|0001-60]', actionCount: 5 }
       ];
 
       const mockKpiResponse: CnpjKpiData[] = [
@@ -701,7 +701,7 @@ describe('CompanyKpiService', () => {
 
     it('should assign red color when current is below target (even if percentage would be 50-79%)', (done) => {
       const companies = [
-        { cnpj: 'COMPANY A l 0001 [2000|0001-60]', actionCount: 5, processCount: 2 }
+        { cnpj: 'COMPANY A l 0001 [2000|0001-60]', actionCount: 5 }
       ];
 
       const mockKpiResponse: CnpjKpiData[] = [
@@ -718,7 +718,7 @@ describe('CompanyKpiService', () => {
 
     it('should assign red color when current is exactly at target but below 80% threshold', (done) => {
       const companies = [
-        { cnpj: 'COMPANY A l 0001 [2000|0001-60]', actionCount: 5, processCount: 2 }
+        { cnpj: 'COMPANY A l 0001 [2000|0001-60]', actionCount: 5 }
       ];
 
       // Target is 80, so 80 >= 80 means it's at target
@@ -737,7 +737,7 @@ describe('CompanyKpiService', () => {
 
     it('should assign red color for < 50% completion', (done) => {
       const companies = [
-        { cnpj: 'COMPANY A l 0001 [2000|0001-60]', actionCount: 5, processCount: 2 }
+        { cnpj: 'COMPANY A l 0001 [2000|0001-60]', actionCount: 5 }
       ];
 
       const mockKpiResponse: CnpjKpiData[] = [
@@ -754,7 +754,7 @@ describe('CompanyKpiService', () => {
 
     it('should handle zero entrega value', (done) => {
       const companies = [
-        { cnpj: 'COMPANY A l 0001 [2000|0001-60]', actionCount: 5, processCount: 2 }
+        { cnpj: 'COMPANY A l 0001 [2000|0001-60]', actionCount: 5 }
       ];
 
       const mockKpiResponse: CnpjKpiData[] = [

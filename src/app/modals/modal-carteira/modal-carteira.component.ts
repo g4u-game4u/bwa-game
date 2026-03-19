@@ -1,5 +1,5 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetectorRef, ChangeDetectionStrategy } from '@angular/core';
-import { Subject, forkJoin } from 'rxjs';
+import { Subject, forkJoin, of } from 'rxjs';
 import { takeUntil, switchMap, map } from 'rxjs/operators';
 import { ActionLogService, ClienteActionItem } from '@services/action-log.service';
 import { CompanyKpiService, CompanyDisplay } from '@services/company-kpi.service';
@@ -45,42 +45,41 @@ export class ModalCarteiraComponent implements OnInit, OnDestroy {
     this.isLoading = true;
     this.cdr.markForCheck();
     
-    // Fetch CNPJs with count and enrich with KPI data
-    this.actionLogService.getPlayerCnpjListWithCount(this.playerId, this.month)
+    // Fetch CNPJs assigned to this player (by player actions in action_log time window),
+    // but use GLOBAL executor-independent counts for the "tarefas" label.
+    this.actionLogService.getPlayerCnpjList(this.playerId, this.month)
       .pipe(
-        switchMap(clientes => {
-          console.log('📊 Modal carteira clientes loaded, enriching with KPI data:', clientes);
-          
-          // Extract all CNPJ strings for lookup
-          const cnpjList = clientes.map(c => c.cnpj);
-          
-          // Enrich CNPJs with clean company names and KPI data in parallel
+        switchMap((cnpjList: string[]) => {
+          const normalized = (cnpjList || []).filter(Boolean);
+          if (normalized.length === 0) {
+            return of({ enrichedClientes: [], cnpjNames: new Map<string, string>() });
+          }
+
           return forkJoin({
-            enrichedClientes: this.companyKpiService.enrichCompaniesWithKpis(clientes),
-            cnpjNames: this.cnpjLookupService.enrichCnpjList(cnpjList)
-          });
+            globalCounts: this.actionLogService.getCnpjListWithCountForAllExecutors(normalized, this.month),
+            cnpjNames: this.cnpjLookupService.enrichCnpjList(normalized)
+          }).pipe(
+            switchMap(({ globalCounts, cnpjNames }) =>
+              this.companyKpiService.enrichCompaniesWithKpis(globalCounts).pipe(
+                map(enrichedClientes => ({ enrichedClientes, cnpjNames }))
+              )
+            )
+          );
         }),
         map(({ enrichedClientes, cnpjNames }) => {
-          // Store the CNPJ name map for display
-          console.log('📊 Modal: Received CNPJ name map with', cnpjNames.size, 'entries');
-          console.log('📊 Modal: CNPJ name map entries:', Array.from(cnpjNames.entries()));
           this.cnpjNameMap = cnpjNames;
-          console.log('📊 Modal: Stored cnpjNameMap:', this.cnpjNameMap);
           return enrichedClientes;
         }),
         takeUntil(this.destroy$)
       )
       .subscribe({
         next: (enrichedClientes) => {
-          console.log('📊 Modal carteira clientes enriched with KPI data:', enrichedClientes);
-          console.log('📊 CNPJ name map:', this.cnpjNameMap);
-          this.clientes = enrichedClientes;
+                              this.clientes = enrichedClientes;
           this.isLoading = false;
           this.cdr.markForCheck();
         },
         error: (err: Error) => {
-          console.error('Error loading carteira:', err);
-          this.isLoading = false;
+                    this.isLoading = false;
           this.cdr.markForCheck();
         }
       });
@@ -105,14 +104,12 @@ export class ModalCarteiraComponent implements OnInit, OnDestroy {
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (actions) => {
-          console.log('📊 Actions for CNPJ loaded:', actions);
-          this.selectedClienteActions = actions;
+                    this.selectedClienteActions = actions;
           this.isLoadingActions = false;
           this.cdr.markForCheck();
         },
         error: (err: Error) => {
-          console.error('Error loading actions for CNPJ:', err);
-          this.isLoadingActions = false;
+                    this.isLoadingActions = false;
           this.cdr.markForCheck();
         }
       });
@@ -153,3 +150,6 @@ export class ModalCarteiraComponent implements OnInit, OnDestroy {
     return displayName || cnpj;
   }
 }
+
+
+

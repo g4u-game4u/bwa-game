@@ -84,8 +84,7 @@ export class NotificationService {
         }
       }, 6000); // Aumentado para 6 segundos para garantir que todas as animações terminem
     } catch (error) {
-      console.error('Erro ao criar confetes:', error);
-    }
+          }
   }
 
   private getRandomColor() {
@@ -99,7 +98,6 @@ export class NotificationService {
       audio.volume = 0.5;
       audio.play();
     } catch (e) {
-      console.warn('Não foi possível tocar o áudio de sucesso:', e);
-    }
+          }
   }
 } 

@@ -20,8 +20,7 @@ export class MesAnteriorService {
   public async getDadosMesAnteriorDashboard(id: number, tipo: number, mesesAnteriores: number): Promise<ResumoMes> {
     // Check if backend_url_base is configured - if not, return empty data
     if (!environment.backend_url_base || environment.backend_url_base === 'http://localhost') {
-      console.warn('⚠️ MesAnteriorService: backend_url_base not configured, returning empty data');
-      return this.getEmptyResumoMes();
+            return this.getEmptyResumoMes();
     }
 
     try {
@@ -59,8 +58,7 @@ export class MesAnteriorService {
         completedDeliveries: response?.delivery_stats?.DELIVERED || 0,
       };
     } catch (error) {
-      console.error('❌ MesAnteriorService: Error fetching previous month data:', error);
-      return this.getEmptyResumoMes();
+            return this.getEmptyResumoMes();
     }
   }
 
@@ -140,3 +138,4 @@ export class MesAnteriorService {
   }
 
 }
+

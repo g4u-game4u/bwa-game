@@ -1,7 +1,9 @@
 import {inject, Injectable} from '@angular/core';
-import {ActivatedRouteSnapshot, CanActivateChildFn, Router, RouterStateSnapshot} from "@angular/router";
+import {ActivatedRouteSnapshot, CanActivateChildFn, CanActivateFn, Router, RouterStateSnapshot} from "@angular/router";
 import {SessaoProvider} from "./sessao.provider";
 import {Usuario} from "@model/usuario.model";
+import { environment } from '../../../environments/environment';
+import { getMaintenanceAllowedEmails, isLoginEmailAllowed } from '@utils/maintenance-allowlist';
 
 @Injectable({
     providedIn: 'root'
@@ -28,15 +30,12 @@ export class PermissaoAcessoProvider {
                 const result = await this.sessao.init(true);
                 // If init failed, token was likely invalid - clear it
                 if (!result) {
-                    console.warn('🔐 Session initialization failed, token may be invalid');
-                }
+                                    }
                 return result;
             } catch (error: any) {
-                console.error('🔐 Error initializing session in guard:', error);
-                // If it's a timeout or network error, token is likely invalid
+                                // If it's a timeout or network error, token is likely invalid
                 if (error?.name === 'TimeoutError' || error?.message?.includes('timeout') || error?.status === 0) {
-                    console.warn('🔐 Timeout/network error, treating as invalid session');
-                }
+                                    }
                 return false;
             }
         }
@@ -46,18 +45,44 @@ export class PermissaoAcessoProvider {
     }
 
     async validaTokenAcessoValido(route: ActivatedRouteSnapshot, state: RouterStateSnapshot) {
-        const canActivate = await this.validateSSOUser()
-        setTimeout(() => window.scrollTo(0, 0));
-
-        if (canActivate)
-            return true;
-        else {
-            await this.router.navigate(['login']);
+        // Em modo manutenção: só usuários allowlist podem acessar /dashboard.
+        // Os demais (logados ou não) são enviados para /manutencao e a sessão é limpa.
+        if (environment.maintenanceMode) {
+            const isAuthenticated = await this.validateSSOUser();
+            setTimeout(() => window.scrollTo(0, 0));
+            if (isAuthenticated) {
+                return true;
+            }
+            await this.sessao.logout();
+            await this.router.navigate(['/manutencao']);
             return false;
         }
+
+        const canActivate = await this.validateSSOUser();
+        setTimeout(() => window.scrollTo(0, 0));
+
+        if (canActivate) {
+            if (getMaintenanceAllowedEmails().length > 0) {
+                const email = this.sessao.usuario?.email;
+                if (!isLoginEmailAllowed(email)) {
+                    await this.sessao.logout();
+                    await this.router.navigate(['/manutencao']);
+                    return false;
+                }
+            }
+            return true;
+        }
+        await this.router.navigate(['login']);
+        return false;
     }
 }
 
 export const PermissaoAcessoGeral: CanActivateChildFn = async (route: ActivatedRouteSnapshot, state: RouterStateSnapshot): Promise<boolean> => {
     return inject(PermissaoAcessoProvider).validaTokenAcessoValido(route, state);
-}
+};
+
+/** Guard para a rota pai (ex.: /dashboard) — bloqueia acesso antes de carregar o layout do painel (ex.: em modo manutenção). */
+export const PermissaoAcessoRota: CanActivateFn = async (route: ActivatedRouteSnapshot, state: RouterStateSnapshot): Promise<boolean> => {
+    return inject(PermissaoAcessoProvider).validaTokenAcessoValido(route, state);
+};
+

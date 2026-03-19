@@ -181,12 +181,12 @@ describe('KPIService', () => {
   });
 
   describe('New Metrics from Player Extra Info', () => {
-    it('should extract Número de Empresas from player extra.cnpj', (done) => {
+    it('should extract Número de Empresas from player extra.cnpj_resp', (done) => {
       const mockPlayerStatus = {
         _id: 'test-player',
         name: 'Test Player',
         extra: {
-          cnpj: '10282,2368,10492,10004,330,1110', // 6 companies
+          cnpj_resp: '10282,2368,10492,10004,330,1110', // 6 companies - uses cnpj_resp per migration
           entrega: '85'
         }
       };
@@ -199,10 +199,10 @@ describe('KPIService', () => {
         expect(empresasKPI).toBeDefined();
         expect(empresasKPI!.label).toBe('Número de Empresas');
         expect(empresasKPI!.current).toBe(6);
-        expect(empresasKPI!.target).toBe(10);
-        expect(empresasKPI!.superTarget).toBe(15);
+        expect(empresasKPI!.target).toBe(100);
+        expect(empresasKPI!.superTarget).toBe(150);
         expect(empresasKPI!.unit).toBe('empresas');
-        expect(empresasKPI!.color).toBe('red'); // 6 < 10 (below goal)
+        expect(empresasKPI!.color).toBe('red'); // 6 < 100 (below goal)
         done();
       });
     });
@@ -212,7 +212,7 @@ describe('KPIService', () => {
         _id: 'test-player',
         name: 'Test Player',
         extra: {
-          cnpj: '10282,2368,10492',
+          cnpj_resp: '10282,2368,10492', // uses cnpj_resp per migration
           entrega: '85' // 85%
         }
       };
@@ -248,12 +248,12 @@ describe('KPIService', () => {
       });
     });
 
-    it('should handle empty cnpj string', (done) => {
+    it('should handle empty cnpj_resp string', (done) => {
       const mockPlayerStatus = {
         _id: 'test-player',
         name: 'Test Player',
         extra: {
-          cnpj: '', // Empty string
+          cnpj_resp: '', // Empty string - uses cnpj_resp per migration
           entrega: '75'
         }
       };
@@ -262,7 +262,7 @@ describe('KPIService', () => {
 
       service.getPlayerKPIs('test-player').subscribe(result => {
         const empresasKPI = result.find(kpi => kpi.id === 'numero-empresas');
-        expect(empresasKPI).toBeUndefined(); // Should not create KPI for empty cnpj
+        expect(empresasKPI).toBeUndefined(); // Should not create KPI for empty cnpj_resp
         
         const entregasKPI = result.find(kpi => kpi.id === 'entregas-prazo');
         expect(entregasKPI).toBeDefined();
@@ -275,7 +275,7 @@ describe('KPIService', () => {
         _id: 'test-player',
         name: 'Test Player',
         extra: {
-          cnpj: '10282,2368,10492,10004,330,1110', // 6 companies
+          cnpj_resp: '10282,2368,10492,10004,330,1110', // 6 companies - uses cnpj_resp per migration
           entrega: '85'
         }
       };
@@ -287,8 +287,8 @@ describe('KPIService', () => {
         
         expect(empresasKPI).toBeDefined();
         expect(empresasKPI!.current).toBe(6);
-        expect(empresasKPI!.superTarget).toBe(15);
-        expect(empresasKPI!.percentage).toBe(40); // 6/15 * 100 = 40%
+        expect(empresasKPI!.superTarget).toBe(150);
+        expect(empresasKPI!.percentage).toBe(4); // 6/150 * 100 = 4%
         done();
       });
     });
@@ -298,7 +298,7 @@ describe('KPIService', () => {
         _id: 'test-player',
         name: 'Test Player',
         extra: {
-          cnpj: '10282,2368,10492',
+          cnpj_resp: '10282,2368,10492', // uses cnpj_resp per migration
           entrega: '85' // 85%
         }
       };
@@ -321,7 +321,7 @@ describe('KPIService', () => {
         _id: 'test-player',
         name: 'Test Player',
         extra: {
-          cnpj: '1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20', // 20 companies
+          cnpj_resp: '1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20', // 20 companies - uses cnpj_resp per migration
           entrega: '95' // 95%
         }
       };
