@@ -87,6 +87,26 @@ function extractTimestamp(time: number | { $date: string } | undefined): number 
 }
 
 /**
+ * Extract process label from action_log id string.
+ * Example:
+ * "...pipeConcessão de AposentadoriastageComunicar Concessão (CS)"
+ * -> "Concessão de AposentadoriastageComunicar Concessão (CS)"
+ */
+function extractProcessTitleFromActionLogId(actionLogId: string | undefined): string | undefined {
+  if (typeof actionLogId !== 'string' || actionLogId.trim() === '') {
+    return undefined;
+  }
+
+  const match = actionLogId.match(/pipe(.+)$/i);
+  if (!match || typeof match[1] !== 'string') {
+    return undefined;
+  }
+
+  const parsedTitle = match[1].trim();
+  return parsedTitle !== '' ? parsedTitle : undefined;
+}
+
+/**
  * Helper to generate Funifier date expressions (relative or absolute)
  * Funifier supports: -0d-, -0d+, -1d-, -0M-, -0M+, -0y-, etc.
  * - `-0M-` = start of current month
@@ -672,10 +692,10 @@ export class ActionLogService {
         // Determine status based on action data
         let status: 'finalizado' | 'pendente' | 'dispensado' | undefined;
 
-        // Some deployments encode completion inside attributes.stage (instead of extra.processed/status).
         const stageForStatusRaw = a.attributes?.['stage'];
         const stageForStatus =
           typeof stageForStatusRaw === 'string' ? stageForStatusRaw.trim().toLowerCase() : '';
+        const hasStage = stageForStatus.length > 0;
         const stageIndicatesFinalizado =
           stageForStatus === 'done' ||
           stageForStatus === 'delivered' ||
@@ -694,7 +714,8 @@ export class ActionLogService {
                  a.status === 'DONE' || 
                  a.status === 'DELIVERED' ||
                  a.actionId === 'desbloquear' ||
-                 stageIndicatesFinalizado) {
+                 stageIndicatesFinalizado ||
+                 hasStage) {
           status = 'finalizado';
         }
         // Check if action is pending or in progress
@@ -747,54 +768,95 @@ export class ActionLogService {
 
     const request$ = this.getPlayerActionLogForMonth(playerId, month).pipe(
       switchMap(userActions => {
-        // Group actions by attributes.delivery_id (number)
-        const deliveryMap = new Map<number, { title: string; count: number; cnpj?: string }>();
+        // Group actions by a robust key:
+        // 1) attributes.delivery_id (legacy/structured)
+        // 2) parsed process title from action_log._id (new payload shape)
+        // 3) action_log._id as last fallback
+        const deliveryMap = new Map<string, { title: string; count: number; cnpj?: string; numericDeliveryId?: number }>();
         
         userActions.forEach(action => {
-          const deliveryId = action.attributes?.delivery_id;
-          if (deliveryId != null) {
-            const existing = deliveryMap.get(deliveryId);
-            if (existing) {
-              existing.count++;
-              // Update CNPJ if not set yet and this action has one
-              if (!existing.cnpj) {
-                const deal = action.attributes?.['deal'];
-                if (typeof deal === 'string' && deal.trim() !== '') {
-                  existing.cnpj = deal;
-                }
-              }
-            } else {
-              deliveryMap.set(deliveryId, {
-                title: action.attributes?.delivery_title || `Processo ${deliveryId}`,
-                count: 1,
-                cnpj: typeof action.attributes?.['deal'] === 'string' ? action.attributes?.['deal'] : undefined
-              });
+          const rawDeliveryId = action.attributes?.delivery_id;
+          const numericDeliveryId = typeof rawDeliveryId === 'number' ? rawDeliveryId : undefined;
+          const titleFromActionLogId = extractProcessTitleFromActionLogId(action._id);
+
+          const deliveryKey =
+            numericDeliveryId != null
+              ? String(numericDeliveryId)
+              : (titleFromActionLogId && titleFromActionLogId.trim() !== '')
+                ? `pipe:${titleFromActionLogId}`
+                : `log:${action._id}`;
+
+          const existing = deliveryMap.get(deliveryKey);
+          if (existing) {
+            existing.count++;
+            // Keep numeric delivery id if we discover it later
+            if (existing.numericDeliveryId == null && numericDeliveryId != null) {
+              existing.numericDeliveryId = numericDeliveryId;
             }
+            // Update CNPJ if not set yet and this action has one
+            if (!existing.cnpj) {
+              const deal = action.attributes?.['deal'];
+              if (typeof deal === 'string' && deal.trim() !== '') {
+                existing.cnpj = deal;
+              }
+            }
+          } else {
+            deliveryMap.set(deliveryKey, {
+              title:
+                titleFromActionLogId ||
+                action.attributes?.delivery_title ||
+                (numericDeliveryId != null ? `Processo ${numericDeliveryId}` : 'Processo sem título'),
+              count: 1,
+              cnpj: typeof action.attributes?.['deal'] === 'string' ? action.attributes?.['deal'] : undefined,
+              numericDeliveryId
+            });
           }
         });
 
-        const deliveryIds = [...deliveryMap.keys()];
+        const deliveryKeys = [...deliveryMap.keys()];
+        const numericDeliveryIds = [...new Set(
+          Array.from(deliveryMap.values())
+            .map(info => info.numericDeliveryId)
+            .filter((id): id is number => id != null)
+        )];
         
-        console.log('📊 Process list - unique delivery_ids:', deliveryIds);
+        console.log('📊 Process list - unique process keys:', deliveryKeys);
 
-        if (deliveryIds.length === 0) {
+        if (deliveryKeys.length === 0) {
           return of([]);
         }
 
-        // Check cache for finalization status first
-        const finalizationCacheKey = `${dayjs(targetMonth).format('YYYY-MM')}_finalized_${deliveryIds.sort((a, b) => a - b).join(',')}`;
+        // If we have no numeric delivery IDs, we cannot check desbloquear relation by delivery.
+        // In this case keep all as "not finalized" so they appear in pending list.
+        if (numericDeliveryIds.length === 0) {
+          return of(
+            deliveryKeys.map(deliveryKey => {
+              const info = deliveryMap.get(deliveryKey)!;
+              return {
+                deliveryId: deliveryKey,
+                title: info.title,
+                actionCount: info.count,
+                isFinalized: false,
+                cnpj: info.cnpj
+              };
+            })
+          );
+        }
+
+        // Check cache for finalization status first (numeric delivery ids only)
+        const finalizationCacheKey = `${dayjs(targetMonth).format('YYYY-MM')}_finalized_${numericDeliveryIds.sort((a, b) => a - b).join(',')}`;
         const cachedFinalized = this.getCachedData(this.processFinalizationCache, finalizationCacheKey);
         
         if (cachedFinalized) {
           return cachedFinalized.pipe(
             map(finalizedIds => {
-              return deliveryIds.map(deliveryId => {
-                const info = deliveryMap.get(deliveryId)!;
+              return deliveryKeys.map(deliveryKey => {
+                const info = deliveryMap.get(deliveryKey)!;
                 return {
-                  deliveryId: String(deliveryId),
+                  deliveryId: deliveryKey,
                   title: info.title,
                   actionCount: info.count,
-                  isFinalized: finalizedIds.has(deliveryId),
+                  isFinalized: info.numericDeliveryId != null ? finalizedIds.has(info.numericDeliveryId) : false,
                   cnpj: info.cnpj
                 };
               });
@@ -808,7 +870,7 @@ export class ActionLogService {
           {
             $match: {
               actionId: 'desbloquear',
-              'attributes.delivery': { $in: deliveryIds }
+              'attributes.delivery': { $in: numericDeliveryIds }
             }
           },
           {
@@ -841,13 +903,13 @@ export class ActionLogService {
 
         return finalizationRequest$.pipe(
           map(finalizedIds => {
-            return deliveryIds.map(deliveryId => {
-              const info = deliveryMap.get(deliveryId)!;
+            return deliveryKeys.map(deliveryKey => {
+              const info = deliveryMap.get(deliveryKey)!;
               return {
-                deliveryId: String(deliveryId),
+                deliveryId: deliveryKey,
                 title: info.title,
                 actionCount: info.count,
-                isFinalized: finalizedIds.has(deliveryId),
+                isFinalized: info.numericDeliveryId != null ? finalizedIds.has(info.numericDeliveryId) : false,
                 cnpj: info.cnpj
               };
             });
@@ -1023,6 +1085,7 @@ export class ActionLogService {
           const stageForStatusRaw = a.attributes?.['stage'];
           const stageForStatus =
             typeof stageForStatusRaw === 'string' ? stageForStatusRaw.trim().toLowerCase() : '';
+          const hasStage = stageForStatus.length > 0;
           const stageIndicatesFinalizado =
             stageForStatus === 'done' ||
             stageForStatus === 'delivered' ||
@@ -1041,7 +1104,8 @@ export class ActionLogService {
                    a.status === 'DONE' || 
                    a.status === 'DELIVERED' ||
                    a.actionId === 'desbloquear' ||
-                   stageIndicatesFinalizado) {
+                   stageIndicatesFinalizado ||
+                   hasStage) {
             status = 'finalizado';
           }
           // Check if action is pending or in progress
@@ -1150,6 +1214,19 @@ export class ActionLogService {
         return actions.map(a => {
           // Determine status based on action data
           let status: 'finalizado' | 'pendente' | 'dispensado' | undefined;
+
+          const stageForStatusRaw = a.attributes?.['stage'];
+          const stageForStatus =
+            typeof stageForStatusRaw === 'string' ? stageForStatusRaw.trim().toLowerCase() : '';
+          const hasStage = stageForStatus.length > 0;
+          const stageIndicatesFinalizado =
+            stageForStatus === 'done' ||
+            stageForStatus === 'delivered' ||
+            stageForStatus === 'finalizado' ||
+            stageForStatus === 'finalizada' ||
+            stageForStatus.includes('finaliz') ||
+            stageForStatus.includes('entreg') ||
+            stageForStatus.includes('conclu');
           
           // Check if action is dismissed (highest priority)
           if (a.extra?.['dismissed'] === true || a.attributes?.['dismissed'] === true || a.status === 'CANCELLED') {
@@ -1159,7 +1236,9 @@ export class ActionLogService {
           else if (a.extra?.processed === true || 
                    a.status === 'DONE' || 
                    a.status === 'DELIVERED' ||
-                   a.actionId === 'desbloquear') {
+                   a.actionId === 'desbloquear' ||
+                   stageIndicatesFinalizado ||
+                   hasStage) {
             status = 'finalizado';
           }
           // Check if action is pending or in progress

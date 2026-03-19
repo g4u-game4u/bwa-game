@@ -320,11 +320,25 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
               entry.extra?.['dismissed'] === true ||
               (entry as any).attributes?.['dismissed'] === true ||
               entry.status === 'CANCELLED';
+            const stageRaw = (entry as any).attributes?.['stage'];
+            const stage =
+              typeof stageRaw === 'string' ? stageRaw.trim().toLowerCase() : '';
+            const hasStage = stage.length > 0;
+            const stageIndicatesFinalizado =
+              stage === 'done' ||
+              stage === 'delivered' ||
+              stage === 'finalizado' ||
+              stage === 'finalizada' ||
+              stage.includes('finaliz') ||
+              stage.includes('entreg') ||
+              stage.includes('conclu');
             const isFinalized =
               entry.extra?.processed === true ||
               entry.status === 'DONE' ||
               entry.status === 'DELIVERED' ||
-              entry.actionId === 'desbloquear';
+              entry.actionId === 'desbloquear' ||
+              stageIndicatesFinalizado ||
+              hasStage;
 
             // Check if entry is in the target month
             if (entryYear === year && entryMonth === month && entryDay >= 1 && entryDay <= daysInMonth) {
@@ -499,7 +513,12 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
   private loadProcessActivities(deliveryId: string): void {
     const deliveryIdNum = parseInt(deliveryId, 10);
     if (isNaN(deliveryIdNum)) {
-      console.error('Invalid delivery_id:', deliveryId);
+      // Some new payloads don't provide numeric delivery_id.
+      // Keep accordion stable and show no nested rows instead of breaking.
+      console.warn('Non-numeric process id, skipping nested activities query:', deliveryId);
+      this.processActivities.set(deliveryId, []);
+      this.loadingProcessActivities.delete(deliveryId);
+      this.cdr.markForCheck();
       return;
     }
 

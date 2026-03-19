@@ -824,6 +824,17 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   }
 
   /**
+   * For "Clientes na Carteira", use seasonProgress.clientes (action_log count)
+   * to compare against KPI target in circular progress.
+   */
+  getKpiCurrentValue(kpi: KPIData): number {
+    if (kpi.id === 'numero-empresas') {
+      return this.seasonProgress?.clientes ?? kpi.current;
+    }
+    return kpi.current;
+  }
+
+  /**
    * Get enabled KPIs (excluding commented/disabled ones)
    * Currently excludes 'numero-empresas' (Clientes na Carteira)
    */
