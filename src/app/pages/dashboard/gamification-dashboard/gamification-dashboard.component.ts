@@ -322,6 +322,9 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
    * NOTE: The left sidebar (Progresso da Temporada) shows SEASON-WIDE data.
    * It is NOT affected by the month selector. Only the center-right "Meu Progresso" section
    * is filtered by the month selector.
+   * 
+   * IMPORTANT: Uses player/me endpoint (getCurrentPlayerData) for cnpj_resp to get
+   * the most up-to-date carteira data, not player/me/status.
    */
   private loadSeasonProgressDetails(): void {
     const usuario = this.sessaoProvider.usuario as { _id?: string; email?: string } | null;
@@ -331,29 +334,51 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
       return;
     }
 
-    // Load clientes count from player's extra.cnpj_resp (assigned portfolio count)
-    // cnpj_resp is a comma-separated string of CNPJ IDs
+    // Load clientes count from player/me endpoint (faster and more up-to-date for cnpj_resp)
     // This is SEASON-WIDE data - not affected by month selector
-    if (this.playerStatus?.extra?.cnpj_resp) {
-      const cnpjRespStr = this.playerStatus.extra.cnpj_resp;
-      const cnpjList = cnpjRespStr.split(',').map(s => s.trim()).filter(s => s.length > 0);
-      const clientesCount = cnpjList.length;
-      if (this.seasonProgress) {
-        this.seasonProgress = {
-          ...this.seasonProgress,
-          clientes: clientesCount
-        };
-        this.cdr.markForCheck();
-      }
-    } else {
-      if (this.seasonProgress) {
-        this.seasonProgress = {
-          ...this.seasonProgress,
-          clientes: 0
-        };
-        this.cdr.markForCheck();
-      }
-    }
+    this.playerService.getCurrentPlayerData()
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (player) => {
+          const extra = player?.extra as Record<string, unknown> | undefined;
+          const cnpjRespStr = (extra?.['cnpj_resp'] as string) || '';
+          
+          if (cnpjRespStr) {
+            const cnpjList = cnpjRespStr.split(',').map((s: string) => s.trim()).filter((s: string) => s.length > 0);
+            const clientesCount = cnpjList.length;
+            if (this.seasonProgress) {
+              this.seasonProgress = {
+                ...this.seasonProgress,
+                clientes: clientesCount
+              };
+              this.cdr.markForCheck();
+            }
+          } else {
+            if (this.seasonProgress) {
+              this.seasonProgress = {
+                ...this.seasonProgress,
+                clientes: 0
+              };
+              this.cdr.markForCheck();
+            }
+          }
+        },
+        error: () => {
+          // Fallback to playerStatus if player/me fails
+          if (this.playerStatus?.extra?.cnpj_resp) {
+            const cnpjRespStr = this.playerStatus.extra.cnpj_resp;
+            const cnpjList = cnpjRespStr.split(',').map(s => s.trim()).filter(s => s.length > 0);
+            const clientesCount = cnpjList.length;
+            if (this.seasonProgress) {
+              this.seasonProgress = {
+                ...this.seasonProgress,
+                clientes: clientesCount
+              };
+              this.cdr.markForCheck();
+            }
+          }
+        }
+      });
     
     // Load tarefas finalizadas from action_log WITHOUT date filter (season-wide)
     // Pass undefined for month to get ALL action_log entries
