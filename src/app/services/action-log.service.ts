@@ -3,7 +3,6 @@ import { Observable, of, forkJoin } from 'rxjs';
 import { map, catchError, shareReplay, switchMap } from 'rxjs/operators';
 import { FunifierApiService } from './funifier-api.service';
 import { ActivityMetrics, ProcessMetrics } from '@model/gamification-dashboard.model';
-import dayjs from 'dayjs';
 
 export interface ActionLogEntry {
   _id: string;
@@ -253,11 +252,16 @@ export class ActionLogService {
 
   constructor(private funifierApi: FunifierApiService) {}
 
+  private readonly PAGE_SIZE = 100; // Funifier pagination limit
+
   /**
    * Get ALL action log entries for a player (no time filtering in aggregate)
    * Time filtering is done on the frontend based on selected month
    * Uses userId field to match the user's email
    * Note: action_log uses 'time' field for timestamp, not 'created'
+   * 
+   * IMPORTANT: Uses pagination to handle players with 100+ action logs
+   * Funifier limits to 100 items per request by default
    */
   getPlayerActionLogForMonth(playerId: string, month?: Date): Observable<ActionLogEntry[]> {
     // Cache key without month - we fetch ALL data and filter on frontend
@@ -267,24 +271,8 @@ export class ActionLogService {
       return cached;
     }
 
-    // NO time filtering in aggregate - fetch ALL action logs for this player
-    // Time filtering will be done on the frontend
-    const aggregateBody = [
-      { 
-        $match: { 
-          userId: playerId
-        } 
-      },
-      { $sort: { time: -1 } },
-      { $limit: 10000 } // High limit to get all documents (MongoDB default is 100)
-    ];
-
-    console.log('📊 Action log query (ALL data, no time filter):', JSON.stringify(aggregateBody));
-
-    const request$ = this.funifierApi.post<ActionLogEntry[]>(
-      '/v3/database/action_log/aggregate?strict=true',
-      aggregateBody
-    ).pipe(
+    // Fetch all action logs using pagination
+    const request$ = this.fetchAllActionLogsPaginated(playerId).pipe(
       map(response => {
         console.log('📊 Action log loaded (ALL):', response?.length || 0, 'entries');
         return Array.isArray(response) ? response : [];
@@ -298,6 +286,83 @@ export class ActionLogService {
 
     this.setCachedData(this.actionLogCache, cacheKey, request$);
     return request$;
+  }
+
+  /**
+   * Fetch all action logs for a player using Range header pagination
+   * Funifier Range header format: items={{offset}}-{{count}}
+   * Example: items=0-100, items=100-100, items=200-100
+   * Keeps fetching until we get less than PAGE_SIZE items
+   */
+  private fetchAllActionLogsPaginated(playerId: string): Observable<ActionLogEntry[]> {
+    return this.fetchActionLogPage(playerId, 0).pipe(
+      switchMap(firstPage => {
+        // If first page has less than PAGE_SIZE, we have all data
+        if (firstPage.length < this.PAGE_SIZE) {
+          console.log('📊 All action logs fetched in single page:', firstPage.length);
+          return of(firstPage);
+        }
+
+        // Need to fetch more pages
+        return this.fetchRemainingPages(playerId, firstPage);
+      }),
+      catchError(error => {
+        console.error('Error fetching action logs:', error);
+        return of([]);
+      })
+    );
+  }
+
+  /**
+   * Recursively fetch remaining pages until we get less than PAGE_SIZE
+   */
+  private fetchRemainingPages(playerId: string, accumulatedLogs: ActionLogEntry[], pageIndex: number = 1): Observable<ActionLogEntry[]> {
+    return this.fetchActionLogPage(playerId, pageIndex).pipe(
+      switchMap(page => {
+        const allLogs = [...accumulatedLogs, ...page];
+        
+        // If this page has less than PAGE_SIZE, we're done
+        if (page.length < this.PAGE_SIZE) {
+          console.log('📊 All action logs fetched:', allLogs.length, 'total entries');
+          // Sort by time descending
+          allLogs.sort((a, b) => extractTimestamp(b.time) - extractTimestamp(a.time));
+          return of(allLogs);
+        }
+
+        // Fetch next page
+        return this.fetchRemainingPages(playerId, allLogs, pageIndex + 1);
+      })
+    );
+  }
+
+  /**
+   * Fetch a single page of action logs using Range header
+   * Funifier Range format: items={{offset}}-{{count}}
+   */
+  private fetchActionLogPage(playerId: string, pageIndex: number): Observable<ActionLogEntry[]> {
+    const offset = pageIndex * this.PAGE_SIZE;
+    
+    const aggregateBody = [
+      { $match: { userId: playerId } },
+      { $sort: { time: -1 } }
+    ];
+
+    console.log(`📊 Fetching action log page ${pageIndex} (Range: items=${offset}-${this.PAGE_SIZE})`);
+
+    return this.funifierApi.post<ActionLogEntry[]>(
+      '/v3/database/action_log/aggregate?strict=true',
+      aggregateBody,
+      { headers: { 'Range': `items=${offset}-${this.PAGE_SIZE}` } }
+    ).pipe(
+      map(response => {
+        console.log(`📊 Page ${pageIndex} loaded:`, response?.length || 0, 'entries');
+        return Array.isArray(response) ? response : [];
+      }),
+      catchError(error => {
+        console.error(`Error fetching action log page ${pageIndex}:`, error);
+        return of([]);
+      })
+    );
   }
 
   /**
