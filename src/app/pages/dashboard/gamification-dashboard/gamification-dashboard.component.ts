@@ -830,6 +830,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   
   /**
    * Load participação data from player's extra.cnpj (CNPJs the player has participated with)
+   * Uses the faster player/me endpoint
    */
   private loadParticipacaoData(): void {
     this.isLoadingParticipacao = true;
@@ -843,8 +844,8 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
       return;
     }
     
-    // Get player data to access extra.cnpj
-    this.playerService.getPlayerStatus(playerId)
+    // Get player data using the faster player/me endpoint
+    this.playerService.getCurrentPlayerData()
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (player) => {
