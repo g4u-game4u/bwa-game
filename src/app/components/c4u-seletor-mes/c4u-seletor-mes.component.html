@@ -47,15 +47,13 @@
                 </div>
             </div>
 
-            <!-- Botão "Toda temporada" Desktop (temporariamente desativado) -->
-            <!--
+            <!-- Botão "Toda temporada" Desktop -->
             <button
                 class="px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200"
                 [ngClass]="isTodaTemporada ? 'bg-white/30 text-white ring-2 ring-white/40' : 'bg-white/10 text-white/70 hover:bg-white/20 hover:text-white'"
                 (click)="isTodaTemporada ? selectMonth(selected) : selectTodaTemporada()">
                 Toda temporada
             </button>
-            -->
         </div>
 
         <!-- Layout Mobile (visível apenas no mobile) -->
@@ -93,15 +91,13 @@
                 </button>
             </div>
 
-            <!-- Botão "Toda temporada" Mobile (temporariamente desativado) -->
-            <!--
+            <!-- Botão "Toda temporada" Mobile -->
             <button
                 class="w-full h-12 rounded-lg text-sm font-medium transition-all duration-200"
                 [ngClass]="isTodaTemporada ? 'bg-white/30 text-white ring-2 ring-white/40' : 'bg-white/10 text-white/70 hover:bg-white/20 hover:text-white'"
                 (click)="isTodaTemporada ? selectMonth(selected) : selectTodaTemporada()">
                 Toda temporada
             </button>
-            -->
         </div>
     </div>
 </div>
