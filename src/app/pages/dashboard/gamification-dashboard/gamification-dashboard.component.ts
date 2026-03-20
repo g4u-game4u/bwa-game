@@ -132,12 +132,14 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   }
   
   /**
-   * Get current player ID from query params, session, or use 'me' for Funifier API
+   * Get current player ID from query params or use 'me' for Funifier API
    * 
    * Priority:
    * 1. Query parameter 'playerId' (when viewing another player's dashboard)
-   * 2. Current user from session
-   * 3. 'me' as fallback
+   * 2. 'me' for current authenticated user (uses faster player/me endpoint)
+   * 
+   * NOTE: We always use 'me' for the current user to leverage the faster
+   * player/me endpoint instead of player/{id}/status
    */
   getPlayerId(): string {
     // Check for playerId in query params (when viewing another player's dashboard)
@@ -146,16 +148,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
       return playerIdParam;
     }
     
-    // Try to get from current user session
-    const usuario = this.sessaoProvider.usuario;
-    if (usuario) {
-      const sessionPlayerId = usuario._id || usuario.email;
-      if (sessionPlayerId && typeof sessionPlayerId === 'string') {
-        return sessionPlayerId;
-      }
-    }
-    
-    // Fallback to 'me' (current authenticated user)
+    // Use 'me' for current authenticated user (faster endpoint)
     return 'me';
   }
   
