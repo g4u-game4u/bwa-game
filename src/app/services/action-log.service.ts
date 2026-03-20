@@ -395,6 +395,7 @@ export class ActionLogService {
    * Get ALL achievements for a player (no time filtering in aggregate)
    * Time filtering is done on the frontend based on selected month
    * Cached with shareReplay to avoid duplicate requests
+   * Uses pagination with Range header to handle 100+ achievements
    */
   private getAllAchievements(playerId: string): Observable<{ _id: string; item: string; total: number; time?: number | { $date: string } }[]> {
     const cacheKey = `${playerId}_all_achievements`;
@@ -403,7 +404,62 @@ export class ActionLogService {
       return cached as any;
     }
 
-    // NO time filtering - fetch ALL achievements for this player
+    const request$ = this.fetchAllAchievementsPaginated(playerId).pipe(
+      shareReplay({ bufferSize: 1, refCount: true, windowTime: this.CACHE_DURATION })
+    );
+
+    this.setCachedData(this.pontosForMonthCache as any, cacheKey, request$ as any);
+    return request$;
+  }
+
+  /**
+   * Fetch all achievements for a player using Range header pagination
+   * Funifier Range header format: items={{offset}}-{{count}}
+   */
+  private fetchAllAchievementsPaginated(playerId: string): Observable<{ _id: string; item: string; total: number; time?: number | { $date: string } }[]> {
+    return this.fetchAchievementPage(playerId, 0).pipe(
+      switchMap(firstPage => {
+        if (firstPage.length < this.PAGE_SIZE) {
+          console.log('📊 All achievements fetched in single page:', firstPage.length);
+          return of(firstPage);
+        }
+        return this.fetchRemainingAchievementPages(playerId, firstPage);
+      }),
+      catchError(error => {
+        console.error('Error fetching achievements:', error);
+        return of([]);
+      })
+    );
+  }
+
+  /**
+   * Recursively fetch remaining achievement pages
+   */
+  private fetchRemainingAchievementPages(
+    playerId: string, 
+    accumulatedAchievements: { _id: string; item: string; total: number; time?: number | { $date: string } }[], 
+    pageIndex: number = 1
+  ): Observable<{ _id: string; item: string; total: number; time?: number | { $date: string } }[]> {
+    return this.fetchAchievementPage(playerId, pageIndex).pipe(
+      switchMap(page => {
+        const allAchievements = [...accumulatedAchievements, ...page];
+        
+        if (page.length < this.PAGE_SIZE) {
+          console.log('📊 All achievements fetched:', allAchievements.length, 'total entries');
+          return of(allAchievements);
+        }
+
+        return this.fetchRemainingAchievementPages(playerId, allAchievements, pageIndex + 1);
+      })
+    );
+  }
+
+  /**
+   * Fetch a single page of achievements using Range header
+   */
+  private fetchAchievementPage(playerId: string, pageIndex: number): Observable<{ _id: string; item: string; total: number; time?: number | { $date: string } }[]> {
+    const offset = pageIndex * this.PAGE_SIZE;
+    
     const aggregateBody = [
       {
         $match: {
@@ -420,25 +476,22 @@ export class ActionLogService {
       }
     ];
 
-    console.log('📊 Achievement query (ALL data, no time filter):', JSON.stringify(aggregateBody));
+    console.log(`📊 Fetching achievement page ${pageIndex} (Range: items=${offset}-${this.PAGE_SIZE})`);
 
-    const request$ = this.funifierApi.post<{ _id: string; item: string; total: number; time?: number | { $date: string } }[]>(
+    return this.funifierApi.post<{ _id: string; item: string; total: number; time?: number | { $date: string } }[]>(
       '/v3/database/achievement/aggregate?strict=true',
-      aggregateBody
+      aggregateBody,
+      { headers: { 'Range': `items=${offset}-${this.PAGE_SIZE}` } }
     ).pipe(
       map(response => {
-        console.log('📊 Achievements loaded (ALL):', response?.length || 0, 'entries');
+        console.log(`📊 Achievement page ${pageIndex} loaded:`, response?.length || 0, 'entries');
         return Array.isArray(response) ? response : [];
       }),
       catchError(error => {
-        console.error('Error fetching achievements:', error);
+        console.error(`Error fetching achievement page ${pageIndex}:`, error);
         return of([]);
-      }),
-      shareReplay({ bufferSize: 1, refCount: true, windowTime: this.CACHE_DURATION })
+      })
     );
-
-    this.setCachedData(this.pontosForMonthCache as any, cacheKey, request$ as any);
-    return request$;
   }
 
   /**
