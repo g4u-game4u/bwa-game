@@ -32,15 +32,15 @@ export class PlayerService {
   /**
    * Get raw player data - fetches fresh or returns cached Observable
    * Uses shareReplay to ensure only one HTTP request is made per player
-   * For 'me' playerId, uses the faster player/me endpoint
+   * IMPORTANT: This method uses player/{id}/status endpoint which includes points data
+   * For fast data (cnpj_resp, entrega, goals), use getCurrentPlayerData() instead
    */
   getRawPlayerData(playerId: string, forceRefresh: boolean = false): Observable<any> {
-    // Use faster player/me endpoint for current player
-    if (playerId === 'me') {
-      return this.getCurrentPlayerData(forceRefresh);
-    }
+    // For 'me', use player/me/status to get full status including points
+    const endpoint = playerId === 'me' ? '/v3/player/me/status' : `/v3/player/${playerId}/status`;
+    const cacheKey = `status_${playerId}`;
     
-    const cached = this.cachedRawData.get(playerId);
+    const cached = this.cachedRawData.get(cacheKey);
     const now = Date.now();
     
     // Return cached Observable if valid and not forcing refresh
@@ -49,20 +49,22 @@ export class PlayerService {
     }
 
     // Create new Observable with shareReplay to share the request
-    const request$ = this.funifierApi.get<any>(`/v3/player/${playerId}/status`).pipe(
+    const request$ = this.funifierApi.get<any>(endpoint).pipe(
       timeout(this.REQUEST_TIMEOUT),
       tap(response => {
-        }),
+        console.log(`📊 Player status response (${playerId}):`, response);
+      }),
       shareReplay({ bufferSize: 1, refCount: true, windowTime: this.CACHE_DURATION }),
       catchError(error => {
-                // Remove from cache on error
-        this.cachedRawData.delete(playerId);
+        console.error(`❌ Error fetching player status (${playerId}):`, error);
+        // Remove from cache on error
+        this.cachedRawData.delete(cacheKey);
         return throwError(() => error);
       })
     );
 
     // Cache the Observable
-    this.cachedRawData.set(playerId, {
+    this.cachedRawData.set(cacheKey, {
       data$: request$,
       timestamp: now
     });
