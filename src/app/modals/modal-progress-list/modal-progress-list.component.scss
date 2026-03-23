@@ -85,12 +85,6 @@
   gap: 8px;
 }
 
-.item-points {
-  font-size: 14px;
-  font-weight: 600;
-  color: #10b981;
-}
-
 .item-badge {
   font-size: 11px;
   font-weight: 500;
@@ -223,11 +217,6 @@
     border-radius: 8px 8px 0 0;
     margin-bottom: $spacing-xs;
     
-    // Adjust grid for pontos type
-    &.with-points {
-      grid-template-columns: 2fr 1.5fr 2fr 1.5fr 1fr 1fr;
-    }
-    
     // Adjust grid for processes
     &.process-grid {
       grid-template-columns: 2fr 1fr 1fr;
@@ -255,11 +244,6 @@
 
     &:last-child {
       border-bottom: none;
-    }
-    
-    // Adjust grid for pontos type
-    &.with-points {
-      grid-template-columns: 2fr 1.5fr 2fr 1.5fr 1fr 1fr;
     }
     
     // Adjust grid for processes
@@ -346,14 +330,6 @@
           color: #ef4444;
           border: 1px solid rgba(239, 68, 68, 0.3);
         }
-      }
-    }
-    
-    .task-col-points {
-      .task-points {
-        color: #10b981;
-        font-weight: 600;
-        font-size: 0.875rem;
       }
     }
     

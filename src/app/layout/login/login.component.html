@@ -34,6 +34,12 @@
   <!-- Login Form -->
   <c4u-card *ngIf="resetFlow === 'login'" [title]="'LABEL_LOGIN_SUBTITLE' | translate" align="center">
     <div class="login-form-container">
+      <!-- Session Expired Message -->
+      <div *ngIf="sessionExpiredMessage" class="session-expired-message">
+        <i class="ri-time-line"></i>
+        <span>{{ sessionExpiredMessage }}</span>
+      </div>
+      
       <form class="login-form" (ngSubmit)="submit()" [formGroup]="form">
         <input type="text" placeholder="Login" formControlName="username" />
         <input type="password" placeholder="Senha" formControlName="password" />

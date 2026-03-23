@@ -241,6 +241,13 @@ export class FeaturesService {
     return this.isLoading$;
   }
 
+  /**
+   * Limpa o cache das funcionalidades (útil para logout/login)
+   */
+  clearCache(): void {
+    this.featuresSubject.next(null);
+  }
+
   // Métodos privados auxiliares
 
   private getBooleanParam(systemParams: any, paramName: string): boolean {
