@@ -100,6 +100,23 @@
     @apply flex flex-col items-start gap-8;
   }
   
+  .session-expired-message {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 16px;
+    background: rgba(255, 193, 7, 0.15);
+    border: 1px solid rgba(255, 193, 7, 0.4);
+    border-radius: 8px;
+    color: #ffc107;
+    font-size: 14px;
+    margin-bottom: 8px;
+    
+    i {
+      font-size: 18px;
+    }
+  }
+  
   .login-form {
     display: flex;
     flex-direction: column;

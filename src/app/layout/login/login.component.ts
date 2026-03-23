@@ -1,6 +1,6 @@
-import {Component, OnInit} from '@angular/core';
+import {Component, OnInit, OnDestroy} from '@angular/core';
 import {SessaoProvider} from "@providers/sessao/sessao.provider";
-import {Router} from "@angular/router";
+import {ActivatedRoute, Router} from "@angular/router";
 import {LoadingProvider} from "@providers/loading.provider";
 import {ToastService} from "@services/toast.service";
 import {FormControl, FormGroup, Validators} from "@angular/forms";
@@ -12,19 +12,24 @@ import {TranslateService} from "@ngx-translate/core";
 import { LoginLogService } from '@services/login-log.service';
 import { environment } from '../../../environments/environment';
 import { isLoginEmailAllowed } from '@utils/maintenance-allowlist';
+import { SessionTimeoutService } from '@services/session-timeout.service';
+import { Subscription } from 'rxjs';
 
 @Component({
   selector: 'app-login',
   templateUrl: './login.component.html',
   styleUrls: ['./login.component.scss']
 })
-export class LoginComponent implements OnInit {
+export class LoginComponent implements OnInit, OnDestroy {
 
   clientLogoUrl: string | null = null;
   clientName: string = '';
   isLoading: boolean = false;
   loadingText: string = 'Entrando...';
   systemParams: SystemParams | null = null;
+  sessionExpiredMessage: string | null = null;
+  
+  private sessionExpiredSub: Subscription | null = null;
 
   private loadingTexts: string[] = [
     'Entrando...',
@@ -40,7 +45,8 @@ export class LoginComponent implements OnInit {
   constructor(private sessao: SessaoProvider, private router: Router, private loadingProvider: LoadingProvider,
               private toastService: ToastService, private systemParamsService: SystemParamsService,
               private authProvider: AuthProvider, private translate: TranslateService,
-              private loginLogService: LoginLogService) {
+              private loginLogService: LoginLogService, private route: ActivatedRoute,
+              private sessionTimeoutService: SessionTimeoutService) {
   }
 
   // Estado do fluxo: 'login' | 'reset-request' | 'reset-confirm'
@@ -99,6 +105,18 @@ export class LoginComponent implements OnInit {
 
   async ngOnInit() {
     try {
+      // Check if redirected due to session expiration
+      const reason = this.route.snapshot.queryParamMap.get('reason');
+      if (reason === 'session_expired') {
+        this.sessionExpiredMessage = 'Sua sessão expirou após 12 horas. Por favor, faça login novamente.';
+        this.toastService.warning(this.sessionExpiredMessage);
+      }
+      
+      // Subscribe to session expiration events
+      this.sessionExpiredSub = this.sessionTimeoutService.sessionExpired$.subscribe(() => {
+        this.sessionExpiredMessage = 'Sua sessão expirou após 12 horas. Por favor, faça login novamente.';
+      });
+      
       // Inicializa os parâmetros do sistema no primeiro acesso
       // Isso carrega informações como logo, cores, etc. mesmo sem autenticação
       this.systemParams = await this.systemParamsService.initializeSystemParams();
@@ -111,6 +129,12 @@ export class LoginComponent implements OnInit {
       this.clientName = 'Game';
       // Se quiser, defina um fallback para o background também:
       // this.loginBackgroundUrl = null;
+    }
+  }
+  
+  ngOnDestroy() {
+    if (this.sessionExpiredSub) {
+      this.sessionExpiredSub.unsubscribe();
     }
   }
 

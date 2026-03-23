@@ -527,25 +527,73 @@ export class ActionLogService {
   }
 
   /**
-   * Get points from achievements for the month
-   * Fetches ALL achievements and filters by month on frontend
-   * Note: achievement collection uses 'time' field for timestamp
-   * Cached with shareReplay to avoid duplicate requests
+   * Get points from achievements based on delivery_ids from action_log
+   * 
+   * Flow:
+   * 1. Get action_log entries for the player (filtered by month on frontend)
+   * 2. Extract unique delivery_ids from attributes.delivery_id
+   * 3. Query achievement collection with those delivery_ids using extra.delivery
+   * 4. Sum the total field
+   * 
+   * Achievement query format:
+   * [
+   *   { $match: { type: 0, "extra.delivery": { $in: [delivery_ids...] } } },
+   *   { $group: { _id: null, total_sum: { $sum: "$total" } } }
+   * ]
    */
   getPontosForMonth(playerId: string, month?: Date): Observable<number> {
-    return this.getAllAchievements(playerId).pipe(
-      map(achievements => {
+    return this.getPlayerActionLogForMonth(playerId, month).pipe(
+      switchMap(actions => {
         // Filter by month on frontend
-        const filtered = filterAchievementsByMonth(achievements, month);
+        const filtered = filterByMonth(actions, month);
         
-        // Sum all points
-        const total = filtered.reduce((sum, item) => sum + (item.total || 0), 0);
+        // Extract unique delivery_ids from action_log
+        const deliveryIds = [...new Set(
+          filtered
+            .map(a => a.attributes?.delivery_id)
+            .filter((id): id is number => id != null && typeof id === 'number')
+        )];
         
-        console.log('📊 Achievement points (filtered on frontend):', total);
-        return total;
+        console.log('📊 Delivery IDs for points query:', deliveryIds.length, 'unique IDs');
+        
+        if (deliveryIds.length === 0) {
+          console.log('📊 No delivery IDs found, returning 0 points');
+          return of(0);
+        }
+        
+        // Query achievement collection with delivery_ids
+        const aggregateBody = [
+          {
+            $match: {
+              type: 0, // type 0 = points
+              'extra.delivery': { $in: deliveryIds }
+            }
+          },
+          {
+            $group: {
+              _id: null,
+              total_sum: { $sum: '$total' }
+            }
+          }
+        ];
+        
+        return this.funifierApi.post<{ _id: null; total_sum: number }[]>(
+          '/v3/database/achievement/aggregate?strict=true',
+          aggregateBody
+        ).pipe(
+          map(response => {
+            const total = response?.[0]?.total_sum || 0;
+            console.log('📊 Achievement points from delivery_ids:', total);
+            return total;
+          }),
+          catchError(error => {
+            console.error('Error fetching achievement points:', error);
+            return of(0);
+          })
+        );
       }),
       catchError(error => {
-        console.error('Error fetching achievement points:', error);
+        console.error('Error in getPontosForMonth:', error);
         return of(0);
       })
     );
