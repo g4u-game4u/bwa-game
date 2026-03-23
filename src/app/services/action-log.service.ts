@@ -291,6 +291,15 @@ export class ActionLogService {
    * Uses Funifier's relative date expressions
    * Cached with shareReplay to avoid duplicate requests
    */
+  /**
+   * Get monthly points breakdown for the selected month.
+   * 
+   * Two-step process:
+   * 1. Fetch action_log IDs for the player in the selected month
+   * 2. Use those IDs in an achievement aggregate with extra.id filter to get locked_points total
+   * 
+   * This ensures we only count points that are associated with actions in the selected month.
+   */
   getMonthlyPointsBreakdown(playerId: string, month?: Date): Observable<{ bloqueados: number; desbloqueados: number }> {
     const targetMonth = month || new Date();
     const cacheKey = `${playerId}_${dayjs(targetMonth).format('YYYY-MM')}_points_breakdown`;
@@ -299,48 +308,21 @@ export class ActionLogService {
       return cached;
     }
 
-    // Use Funifier's relative date syntax
-    const startDate = getRelativeDateExpression(month, 'start');
-    const endDate = getRelativeDateExpression(month, 'end');
-
-    const aggregateBody = [
-      {
-        $match: {
-          player: playerId,
-          type: 0, // type 0 = points
-          time: { $gte: startDate, $lte: endDate }
-        }
-      },
-      {
-        $group: {
-          _id: '$item',
-          total: { $sum: '$total' }
-        }
-      }
-    ];
-
-    console.log('📊 Monthly points breakdown query:', JSON.stringify(aggregateBody));
-
-    const request$ = this.funifierApi.post<{ _id: string; total: number }[]>(
-      '/v3/database/achievement/aggregate?strict=true',
-      aggregateBody
-    ).pipe(
-      map(response => {
-        console.log('📊 Monthly points breakdown response:', response);
-        let bloqueados = 0;
-        let desbloqueados = 0;
-
-        if (Array.isArray(response)) {
-          response.forEach(item => {
-            if (item._id === 'locked_points' || item._id === 'bloqueados') {
-              bloqueados = item.total || 0;
-            } else if (item._id === 'points' || item._id === 'unlocked_points' || item._id === 'desbloqueados') {
-              desbloqueados = item.total || 0;
-            }
-          });
+    // Step 1: Get action_log IDs for the selected month
+    const request$ = this.getActionLogIdsForMonth(playerId, month).pipe(
+      switchMap(actionLogIds => {
+        console.log('📊 Action log IDs for month:', actionLogIds.length, 'IDs');
+        
+        if (actionLogIds.length === 0) {
+          // No actions in this month, return zeros
+          return of({ bloqueados: 0, desbloqueados: 0 });
         }
 
-        return { bloqueados, desbloqueados };
+        // Step 2: Aggregate achievements using extra.id filter with action_log IDs
+        return forkJoin({
+          bloqueados: this.getPointsFromAchievementByActionIds(playerId, 'locked_points', actionLogIds),
+          desbloqueados: this.getPointsFromAchievementByActionIds(playerId, 'points', actionLogIds)
+        });
       }),
       catchError(error => {
         console.error('Error fetching monthly points breakdown:', error);
@@ -351,6 +333,98 @@ export class ActionLogService {
 
     this.setCachedData(this.monthlyPointsBreakdownCache, cacheKey, request$);
     return request$;
+  }
+
+  /**
+   * Get action_log IDs for a player in the selected month.
+   * Returns array of _id strings from action_log entries.
+   */
+  private getActionLogIdsForMonth(playerId: string, month?: Date): Observable<string[]> {
+    const startDate = getRelativeDateExpression(month, 'start');
+    const endDate = getRelativeDateExpression(month, 'end');
+
+    const aggregateBody = [
+      {
+        $match: {
+          userId: playerId,
+          time: { $gte: startDate, $lte: endDate }
+        }
+      },
+      {
+        $project: { _id: 1 }
+      },
+      { $limit: 10000 }
+    ];
+
+    console.log('📊 Fetching action_log IDs for month:', JSON.stringify(aggregateBody));
+
+    return this.funifierApi.post<{ _id: string }[]>(
+      '/v3/database/action_log/aggregate?strict=true',
+      aggregateBody
+    ).pipe(
+      map(response => {
+        const ids = Array.isArray(response) ? response.map(item => item._id) : [];
+        console.log('📊 Action log IDs fetched:', ids.length);
+        return ids;
+      }),
+      catchError(error => {
+        console.error('Error fetching action_log IDs:', error);
+        return of([]);
+      })
+    );
+  }
+
+  /**
+   * Get points total from achievement collection filtered by extra.id (action_log IDs).
+   * 
+   * @param playerId - Player ID (email)
+   * @param item - Point category: 'locked_points' or 'points'
+   * @param actionLogIds - Array of action_log _id values to filter by
+   */
+  private getPointsFromAchievementByActionIds(
+    playerId: string,
+    item: 'locked_points' | 'points',
+    actionLogIds: string[]
+  ): Observable<number> {
+    if (actionLogIds.length === 0) {
+      return of(0);
+    }
+
+    const aggregateBody = [
+      {
+        $match: {
+          player: playerId,
+          type: 0, // type 0 = points
+          item: item,
+          'extra.id': { $in: actionLogIds }
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          soma_total: { $sum: '$total' }
+        }
+      }
+    ];
+
+    console.log(`📊 Achievement aggregate for ${item}:`, JSON.stringify(aggregateBody));
+
+    return this.funifierApi.post<{ _id: null; soma_total: number }[]>(
+      '/v3/database/achievement/aggregate?strict=true',
+      aggregateBody
+    ).pipe(
+      map(response => {
+        const total = Array.isArray(response) && response.length > 0 
+          ? (response[0].soma_total || 0) 
+          : 0;
+        console.log(`📊 Achievement ${item} total:`, total);
+        return total;
+      }),
+      catchError(error => {
+        console.error(`Error fetching ${item} from achievement:`, error);
+        return of(0);
+      })
+    );
   }
 
   /**
