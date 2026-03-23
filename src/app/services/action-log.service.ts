@@ -252,6 +252,13 @@ export class ActionLogService {
 
   constructor(private funifierApi: FunifierApiService) {}
 
+  private getMonthCacheKey(month?: Date): string {
+    if (!month) {
+      return 'season';
+    }
+    return `${month.getFullYear()}-${month.getMonth()}`;
+  }
+
   private readonly PAGE_SIZE = 100; // Funifier pagination limit
 
   /**
@@ -1001,7 +1008,8 @@ export class ActionLogService {
     month?: Date
   ): Observable<{ cnpj: string; actionCount: number }[]> {
     const normalized = Array.from(new Set((cnpjList || []).filter(Boolean))).map(String);
-    const cacheKey = `all_global_cnpj_list_count_${normalized.sort().join(',')}`;
+    const monthKey = this.getMonthCacheKey(month);
+    const cacheKey = `all_global_cnpj_list_count_${monthKey}_${normalized.sort().join(',')}`;
 
     const cached = this.getCachedData(this.cnpjListWithCountCache, cacheKey);
     if (cached) {
@@ -1067,8 +1075,8 @@ export class ActionLogService {
    * Cached with shareReplay to avoid duplicate requests
    */
   getActionsByCnpj(cnpj: string, month?: Date): Observable<ClienteActionItem[]> {
-    // Cache key without month - we fetch ALL data
-    const cacheKey = `${cnpj}_all_actions_by_cnpj`;
+    const monthKey = this.getMonthCacheKey(month);
+    const cacheKey = `${cnpj}_actions_by_cnpj_${monthKey}`;
     const cached = this.getCachedData(this.actionsByCnpjCache, cacheKey);
     if (cached) {
       return cached;

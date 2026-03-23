@@ -502,11 +502,6 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
           );
         }),
         switchMap(({ companies, nameMap }) => {
-          // "Toda temporada" => selectedMonth = undefined, so we intentionally skip the monthly count query.
-          if (this.selectedMonth === undefined) {
-            return of({ companies, nameMap, actionCounts: [] as { cnpj: string; actionCount: number }[] });
-          }
-
           const cnpjList = companies.map(c => c.cnpj).filter(Boolean);
 
           return this.actionLogService.getCnpjListWithCountForAllExecutors(cnpjList, this.selectedMonth).pipe(
