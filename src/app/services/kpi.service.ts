@@ -190,6 +190,7 @@ export class KPIService {
       .map(v => parseFloat(v) || 0);
   }
 
+
   /**
    * Get company KPIs from cnpj__c database
    * companyId is the CNPJ

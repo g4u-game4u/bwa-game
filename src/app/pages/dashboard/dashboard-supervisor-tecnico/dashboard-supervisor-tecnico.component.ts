@@ -133,6 +133,7 @@ export class DashboardSupervisorTecnicoComponent implements OnInit, OnDestroy {
   // Clientes sub-tabs
   clientesActiveTab: 'carteira' | 'participacao' = 'carteira';
   teamParticipacaoCnpjs: { cnpj: string; playerName: string; companyName: string }[] = [];
+  teamParticipacaoCount = 0;
   isLoadingParticipacao = false;
   private teamMembersRawData: any[] = [];
 
@@ -259,6 +260,8 @@ export class DashboardSupervisorTecnicoComponent implements OnInit, OnDestroy {
     try {
       this.isLoading = true;
       this.isLoadingPlayers = true;
+      this.teamParticipacaoCount = 0;
+      this.teamParticipacaoCnpjs = [];
       this.cdr.markForCheck();
 
       const dateRange = this.calculateDateRange();
@@ -327,6 +330,7 @@ export class DashboardSupervisorTecnicoComponent implements OnInit, OnDestroy {
       ).catch(() => [] as any[]);
 
       this.teamMembersRawData = Array.isArray(allPlayersStatus) ? allPlayersStatus : [];
+      this.teamParticipacaoCount = this.getParticipacaoCountFromRawPlayers(this.teamMembersRawData);
 
       const memberIds = (Array.isArray(allPlayersStatus) ? allPlayersStatus : [])
         .map((player: any) => String(player._id))
@@ -522,7 +526,7 @@ export class DashboardSupervisorTecnicoComponent implements OnInit, OnDestroy {
 
       this.teamSeasonProgress = {
         metas: { current: 0, target: 0 },
-        clientes: this.teamCarteiraClientes.length,
+        clientes: this.teamCarteiraClientes.length + this.teamParticipacaoCount,
         tarefasFinalizadas: Math.floor(this.teamActivityMetrics.finalizadas),
         seasonDates: this.seasonDates
       };
@@ -775,6 +779,7 @@ export class DashboardSupervisorTecnicoComponent implements OnInit, OnDestroy {
       ).catch(() => cnpjListWithCounts.map(item => ({ cnpj: item.cnpj, actionCount: item.actionCount } as CompanyDisplay)));
 
       this.teamCarteiraClientes = enrichedClientes;
+      this.syncSeasonClientesCount();
       this.isLoadingCarteira = false;
       this.cdr.markForCheck();
     } catch (error) {
@@ -813,6 +818,7 @@ export class DashboardSupervisorTecnicoComponent implements OnInit, OnDestroy {
         const pointCategories = status.point_categories || status.pointCategories || {};
         const points = Number(pointCategories.points) || 0;
         const cnpjMetric = this.getCnpjRespCount(extra);
+        this.teamParticipacaoCount = this.parseCnpjList(extra?.['cnpj']).length;
         const entregaMetric = extra.entrega ? parseFloat(extra.entrega) : 0;
 
         const cnpjGoal = extra.cnpj_goal != null ? Number(extra.cnpj_goal) : 100;
@@ -882,7 +888,7 @@ export class DashboardSupervisorTecnicoComponent implements OnInit, OnDestroy {
 
       this.teamSeasonProgress = {
         metas: { current: 0, target: 0 },
-        clientes: 0,
+        clientes: this.teamParticipacaoCount,
         tarefasFinalizadas: Math.floor(metrics.activity.finalizadas),
         seasonDates: this.seasonDates
       };
@@ -1151,12 +1157,48 @@ export class DashboardSupervisorTecnicoComponent implements OnInit, OnDestroy {
       }
 
       this.teamParticipacaoCnpjs = rows;
+      this.teamParticipacaoCount = rows.length;
+      this.syncSeasonClientesCount();
     } catch (error) {
       console.error('Error loading participacao data:', error);
       this.teamParticipacaoCnpjs = [];
+      this.teamParticipacaoCount = 0;
+      this.syncSeasonClientesCount();
     } finally {
       this.isLoadingParticipacao = false;
       this.cdr.markForCheck();
     }
+  }
+
+  private parseCnpjList(raw: unknown): string[] {
+    if (raw == null) return [];
+    if (typeof raw === 'string') {
+      return raw.split(/[;,]/).map((s: string) => s.trim()).filter((s: string) => s.length > 0);
+    }
+    if (Array.isArray(raw)) {
+      return raw.map((s: unknown) => String(s || '').trim()).filter((s: string) => s.length > 0);
+    }
+    return [];
+  }
+
+  private getParticipacaoCountFromRawPlayers(players: any[]): number {
+    const seen = new Set<string>();
+    for (const player of players) {
+      const cnpjs = this.parseCnpjList(player?.extra?.['cnpj']);
+      for (const cnpj of cnpjs) {
+        seen.add(cnpj);
+      }
+    }
+    return seen.size;
+  }
+
+  private syncSeasonClientesCount(): void {
+    if (!this.teamSeasonProgress) {
+      return;
+    }
+    this.teamSeasonProgress = {
+      ...this.teamSeasonProgress,
+      clientes: this.teamCarteiraClientes.length + this.teamParticipacaoCount
+    };
   }
 }

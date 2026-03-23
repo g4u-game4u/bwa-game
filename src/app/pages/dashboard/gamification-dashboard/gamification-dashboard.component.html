@@ -203,7 +203,7 @@
           <i class="ri-group-line" aria-hidden="true"></i>
           Participação
           <c4u-info-button infoKey="clientes-participacao" position="top" (click)="$event.stopPropagation()"></c4u-info-button>
-          <span class="tab-count" aria-hidden="true">({{ participacaoCnpjs.length }})</span>
+          <span class="tab-count" aria-hidden="true">({{ participacaoCount }})</span>
         </button>
       </div>
 
@@ -225,6 +225,9 @@
               <span class="carteira-cnpj">{{ getCompanyDisplayName(cliente.cnpj) }}</span>
             </div>
             <div class="carteira-item-meta">
+              <span *ngIf="cliente.actionCount > 0" class="carteira-action-count">
+                {{ cliente.actionCount }} tarefas
+              </span>
               <!-- KPI Indicator - Compact Display -->
               <div *ngIf="cliente.deliveryKpi" 
                    class="carteira-kpi-compact" 
@@ -234,11 +237,7 @@
                 <i class="ri-time-line kpi-icon" aria-hidden="true"></i>
               </div>
               <span *ngIf="!cliente.deliveryKpi" class="kpi-na">N/A</span>
-              <!-- Show CNPJ ID for reference -->
-              <span *ngIf="cliente.cnpjId" class="carteira-cnpj-id">{{ cliente.cnpjId }}</span>
-              <span *ngIf="cliente.actionCount > 0" class="carteira-action-count">
-                {{ cliente.actionCount }} tarefas
-              </span>
+              
             </div>
           </div>
         </div>
@@ -259,9 +258,9 @@
               <i class="ri-building-line"></i>
               <span class="carteira-cnpj">{{ item.companyName }}</span>
             </div>
-            <div class="carteira-item-meta">
+            <!-- <div class="carteira-item-meta">
               <span class="carteira-action-count">{{ item.cnpj }}</span>
-            </div>
+            </div> -->
           </div>
         </div>
 
