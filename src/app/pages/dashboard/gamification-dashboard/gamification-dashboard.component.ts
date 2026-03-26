@@ -714,21 +714,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
         }
       });
 
-    // Load monthly points breakdown
-    this.actionLogService.getMonthlyPointsBreakdown(playerId, this.selectedMonth)
-      .pipe(takeUntil(this.destroy$))
-      .subscribe({
-        next: (breakdown) => {
-          console.log('📊 Monthly points breakdown loaded:', breakdown);
-          this.monthlyPointsBreakdown = breakdown;
-          this.cdr.markForCheck();
-        },
-        error: (error) => {
-          console.error('📊 Failed to load monthly points breakdown:', error);
-          this.monthlyPointsBreakdown = { bloqueados: 0, desbloqueados: 0 };
-          this.cdr.markForCheck();
-        }
-      });
+    // Monthly points breakdown removed - bloqueados/desbloqueados no longer used
   }
   
   /**
