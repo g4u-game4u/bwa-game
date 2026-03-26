@@ -59,11 +59,7 @@
       <div class="sidebar-compact" *ngIf="sidebarCollapsed">
         <!-- Point Wallet Compact -->
         <div class="compact-item" *ngIf="pointWallet">
-          <i class="ri-lock-fill compact-icon bloqueados"></i>
-          <span class="compact-value">{{ pointWallet.bloqueados | number:'1.0-0':'pt-BR' }}</span>
-        </div>
-        <div class="compact-item" *ngIf="pointWallet">
-          <i class="ri-lock-unlock-fill compact-icon desbloqueados"></i>
+          <i class="ri-trophy-fill compact-icon pontos"></i>
           <span class="compact-value">{{ pointWallet.desbloqueados | number:'1.0-0':'pt-BR' }}</span>
         </div>
         <div class="compact-item" *ngIf="pointWallet">
