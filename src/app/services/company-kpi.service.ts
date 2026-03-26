@@ -142,7 +142,7 @@ export class CompanyKpiService {
    * @returns Observable of enriched company display data with KPI information
    */
   enrichCompaniesWithKpis(
-    companies: { cnpj: string; actionCount: number; processCount: number }[]
+    companies: { cnpj: string; actionCount: number; processCount?: number }[]
   ): Observable<CompanyDisplay[]> {
     if (!companies || companies.length === 0) {
       return of([]);

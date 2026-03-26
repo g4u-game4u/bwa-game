@@ -165,20 +165,27 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     console.log('🎮 GamificationDashboardComponent ngOnInit STARTED');
     this.checkResponsiveBreakpoints();
     
+    // Track if initial load has been done
+    let initialLoadDone = false;
+    
     // Listen for query param changes (when viewing different players)
+    // This subscription emits immediately with current params, so we use it for initial load too
     this.route.queryParams
       .pipe(takeUntil(this.destroy$))
       .subscribe(params => {
         const playerId = params['playerId'];
-        if (playerId) {
+        if (initialLoadDone) {
+          // Only reload if params changed after initial load
           console.log('📊 Player ID changed via query params:', playerId);
+          this.loadDashboardData();
+        } else {
+          // First emission - do initial load
+          console.log('🎮 Initial load with playerId:', playerId || '(none)');
+          initialLoadDone = true;
           this.loadDashboardData();
         }
       });
     
-    console.log('🎮 About to call loadDashboardData...');
-    this.loadDashboardData();
-    console.log('🎮 loadDashboardData called');
     this.announceToScreenReader('Painel de gamificação carregado');
     this.performanceMonitor.trackChangeDetection('GamificationDashboardComponent');
   }

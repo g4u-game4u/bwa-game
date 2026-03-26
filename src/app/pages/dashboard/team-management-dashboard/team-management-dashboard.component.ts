@@ -2030,7 +2030,7 @@ private calculateCollaboratorTotals(memberData: Array<{
         return carteiraData.map(item => ({
           cnpj: item.cnpj,
           actionCount: item.actionCount,
-          processCount: item.processCount
+          processCount: (item as any).processCount || 0
         } as CompanyDisplay));
       });
       
@@ -2126,7 +2126,7 @@ private calculateCollaboratorTotals(memberData: Array<{
         return cnpjListWithCounts.map(item => ({
           cnpj: item.cnpj,
           actionCount: item.actionCount,
-          processCount: item.processCount
+          processCount: (item as any).processCount || 0
         } as CompanyDisplay));
       });
       
