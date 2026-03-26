@@ -25,11 +25,14 @@ export class C4uSeletorMesComponent implements OnInit, OnChanges {
     @Input()
     playerId: string | null = null;
 
+    static readonly TODA_TEMPORADA_ID = -1;
+
     months: Array<any> = []
     selected: number = 0;
     prevEnabled = true;
     nextEnabled = false;
     isLoading = true;
+    isTodaTemporada = false;
 
     constructor(
       private sessao: SessaoProvider,
@@ -73,8 +76,7 @@ export class C4uSeletorMesComponent implements OnInit, OnChanges {
 
         this.populateFields(this.PREV_MONTHS);
       } catch (error) {
-        console.error('Erro ao inicializar meses:', error);
-        // Fallback para valores padrão
+                // Fallback para valores padrão
         this.PREV_MONTHS = 1;
         this.populateFields(this.PREV_MONTHS);
       } finally {
@@ -117,8 +119,7 @@ export class C4uSeletorMesComponent implements OnInit, OnChanges {
             // precisamos adicionar janeiro (PREV_MONTHS deve ser pelo menos 2)
             if (currentMonth === 1 && this.PREV_MONTHS === 1) {
               this.PREV_MONTHS = 2;
-              console.log('📊 Dados de janeiro encontrados, incluindo janeiro na lista de meses');
-            }
+                          }
             // Para meses posteriores, se PREV_MONTHS não inclui janeiro, garantimos que inclua
             else if (currentMonth > 1) {
               const seasonStart = await this.seasonDatesService.getSeasonStartDate();
@@ -128,15 +129,13 @@ export class C4uSeletorMesComponent implements OnInit, OnChanges {
                 const minMonths = currentMonth + 1;
                 if (this.PREV_MONTHS < minMonths) {
                   this.PREV_MONTHS = minMonths;
-                  console.log('📊 Dados de janeiro encontrados, ajustando lista de meses para incluir janeiro');
-                }
+                                  }
               }
             }
           }
         }
       } catch (error) {
-        console.warn('Erro ao verificar dados de janeiro:', error);
-        // Não bloqueia a inicialização se houver erro
+                // Não bloqueia a inicialização se houver erro
       }
     }
 
@@ -177,6 +176,12 @@ export class C4uSeletorMesComponent implements OnInit, OnChanges {
     }
 
     onChange() {
+        if (this.isTodaTemporada) {
+            this.prevEnabled = false;
+            this.nextEnabled = false;
+            this.onSelectedMonth.emit(C4uSeletorMesComponent.TODA_TEMPORADA_ID);
+            return;
+        }
         if (this.months.length > 0) {
             this.prevEnabled = (this.selected !== this.months.length - 1);
             this.nextEnabled = (this.selected !== 0);
@@ -184,7 +189,29 @@ export class C4uSeletorMesComponent implements OnInit, OnChanges {
         }
     }
 
+    onMonthDropdownChange() {
+        // When user picks a month from the dropdown, exit "Toda temporada" mode
+        this.isTodaTemporada = false;
+        this.onChange();
+    }
+
+    selectTodaTemporada() {
+        this.isTodaTemporada = true;
+        this.onChange();
+    }
+
+    selectMonth(index?: number) {
+        if (this.isTodaTemporada) {
+            this.isTodaTemporada = false;
+            if (index !== undefined) {
+                this.selected = index;
+            }
+            this.onChange();
+        }
+    }
+
     goLeft() {
+        if (this.isTodaTemporada) return;
         if ((this.prevEnabled || this.IS_TESTER) && this.months.length > 0 && this.selected < this.months.length - 1) {
             this.selected++;
             this.onChange();
@@ -192,9 +219,11 @@ export class C4uSeletorMesComponent implements OnInit, OnChanges {
     }
 
     goRight() {
+        if (this.isTodaTemporada) return;
         if ((this.nextEnabled || this.IS_TESTER) && this.months.length > 0 && this.selected > 0) {
             this.selected--;
             this.onChange();
         }
     }
 }
+

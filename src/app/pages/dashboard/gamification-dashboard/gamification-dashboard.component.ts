@@ -83,7 +83,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   isLoadingDeals = true;
   
   // Month selection
-  selectedMonth: Date = new Date();
+  selectedMonth: Date | undefined = new Date();
   
   // Modal state
   isCompanyModalOpen = false;
@@ -649,11 +649,20 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
    * @param monthsAgo - Number of months ago (0 = current month)
    */
   onMonthChange(monthsAgo: number): void {
-    const date = new Date();
-    date.setMonth(date.getMonth() - monthsAgo);
-    this.selectedMonth = date;
-    const monthName = date.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
-    this.announceToScreenReader(`Mês alterado para ${monthName}`);
+    // Handle "Toda temporada" (-1) — undefined means no month filtering (season-wide)
+    if (monthsAgo === -1) {
+      this.selectedMonth = undefined;
+      this.announceToScreenReader('Filtro alterado para toda temporada');
+    } else {
+      const date = new Date();
+      date.setMonth(date.getMonth() - monthsAgo);
+      this.selectedMonth = date;
+      const monthName = date.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+      this.announceToScreenReader(`Mês alterado para ${monthName}`);
+    }
+
+    // Clear caches to force fresh filtered data
+    this.actionLogService.clearCache();
     this.loadDashboardData();
   }
   
