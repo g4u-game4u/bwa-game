@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { Observable, of } from 'rxjs';
-import { map, catchError, shareReplay } from 'rxjs/operators';
+import { map, catchError, shareReplay, switchMap } from 'rxjs/operators';
 import { FunifierApiService } from './funifier-api.service';
 import { KPIData } from '@model/gamification-dashboard.model';
 
@@ -95,37 +95,26 @@ export class CompanyKpiService {
       return cached;
     }
 
-    // Query cnpj__c collection with aggregate
-    // Ensure all IDs are strings for Funifier API
     const stringIds = cnpjIds.map(id => String(id));
     const aggregateBody = [
       { $match: { _id: { $in: stringIds } } }
     ];
 
-    console.log('📊 Fetching KPI data for CNPJ IDs:', cnpjIds);
+    console.log('📊 Fetching KPI data for CNPJ IDs:', cnpjIds.length, 'IDs');
 
-    const request$ = this.funifierApi.post<CnpjKpiData[]>(
-      '/v3/database/cnpj__c/aggregate?strict=true',
-      aggregateBody
-    ).pipe(
-      map(response => {
-        console.log('📊 KPI data response:', response);
-        
-        // Convert array to Map for easy lookup
+    const request$ = this.fetchAllPaginatedKpi(aggregateBody, 100).pipe(
+      map(entries => {
         const kpiMap = new Map<string, CnpjKpiData>();
-        if (Array.isArray(response)) {
-          response.forEach(item => {
-            if (item._id) {
-              kpiMap.set(item._id, item);
-            }
-          });
-        }
-        
+        entries.forEach(item => {
+          if (item._id) {
+            kpiMap.set(String(item._id), item);
+          }
+        });
+        console.log('📊 KPI data map created with', kpiMap.size, 'entries');
         return kpiMap;
       }),
       catchError(error => {
         console.error('📊 Error fetching KPI data:', error);
-        // Return empty map on error - don't break the UI
         return of(new Map<string, CnpjKpiData>());
       }),
       shareReplay({ bufferSize: 1, refCount: true, windowTime: this.CACHE_DURATION })
@@ -133,6 +122,44 @@ export class CompanyKpiService {
 
     this.setCachedData(this.kpiCache, cacheKey, request$);
     return request$;
+  }
+
+  /**
+   * Paginated fetch for cnpj__c aggregate.
+   * Uses Range header: items=startIndex-batchSize
+   * Recursively fetches until a partial batch is returned.
+   */
+  private fetchAllPaginatedKpi(
+    aggregateBody: any[],
+    batchSize: number,
+    startIndex: number = 0,
+    accumulated: CnpjKpiData[] = []
+  ): Observable<CnpjKpiData[]> {
+    const rangeHeader = `items=${startIndex}-${batchSize}`;
+    console.log(`📊 KPI batch: ${rangeHeader} (accumulated: ${accumulated.length})`);
+
+    return this.funifierApi.post<CnpjKpiData[]>(
+      '/v3/database/cnpj__c/aggregate?strict=true',
+      aggregateBody,
+      { headers: { 'Range': rangeHeader } }
+    ).pipe(
+      switchMap(response => {
+        const batch = Array.isArray(response) ? response : [];
+        const all = [...accumulated, ...batch];
+
+        if (batch.length === batchSize) {
+          // Full batch — there might be more
+          return this.fetchAllPaginatedKpi(aggregateBody, batchSize, startIndex + batchSize, all);
+        }
+        // Partial or empty — done
+        console.log(`📊 KPI final batch (${batch.length} items), total: ${all.length}`);
+        return of(all);
+      }),
+      catchError(error => {
+        console.error(`❌ Error fetching KPI batch at index ${startIndex}:`, error);
+        return of(accumulated);
+      })
+    );
   }
 
   /**

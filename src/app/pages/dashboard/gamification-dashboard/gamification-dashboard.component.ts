@@ -469,8 +469,8 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
           // Enrich CNPJs with clean company names and KPI data in parallel
           return this.cnpjLookupService.enrichCnpjList(cnpjList).pipe(
             switchMap(cnpjNames => {
-              // Store the CNPJ name map for display
-              this.cnpjNameMap = cnpjNames;
+              // Merge into the shared name map (don't replace)
+              cnpjNames.forEach((name, key) => this.cnpjNameMap.set(key, name));
               // Enrich companies with KPI data from cnpj__c collection
               return this.companyKpiService.enrichCompaniesWithKpis(clientes);
             })
@@ -531,7 +531,8 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
           // Enrich with names from empid_cnpj__c
           return this.cnpjLookupService.enrichCnpjList(empids).pipe(
             switchMap(cnpjNames => {
-              this.cnpjNameMap = cnpjNames;
+              // Merge into the shared name map (don't replace)
+              cnpjNames.forEach((name, key) => this.cnpjNameMap.set(key, name));
               // Enrich with KPI data from cnpj__c
               return this.companyKpiService.enrichFromCnpjResp(empids);
             })
