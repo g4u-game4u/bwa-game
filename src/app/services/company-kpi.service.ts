@@ -10,16 +10,21 @@ import { KPIData } from '@model/gamification-dashboard.model';
 export interface CnpjKpiData {
   _id: string;
   entrega: number;
+  CNPJ?: string;
+  'Classificação do Cliente'?: string;
 }
 
 /**
  * Interface for company display data with KPI information
  */
 export interface CompanyDisplay {
-  cnpj: string; // Full CNPJ string from action_log
-  cnpjId?: string; // Extracted ID for KPI lookup
+  cnpj: string; // empid from cnpj_resp
+  cnpjId?: string; // Extracted ID for KPI lookup (same as cnpj for cnpj_resp)
+  name?: string; // Company name from empid_cnpj__c
   actionCount: number; // Number of actions for this company
   processCount: number; // Number of unique processes (delivery_id) for this company
+  entrega?: number; // Entregas no Prazo % from cnpj__c
+  classificacao?: string; // Classificação do Cliente from cnpj__c (Ouro, Prata, Diamante)
   deliveryKpi?: KPIData; // Delivery KPI from cnpj__c
 }
 
@@ -131,6 +136,50 @@ export class CompanyKpiService {
   }
 
   /**
+   * Enrich a list of empids (from cnpj_resp) with KPI data from cnpj__c
+   * and names from empid_cnpj__c.
+   * 
+   * @param empids - Array of empid strings from player.extra.cnpj_resp
+   * @returns Observable of enriched CompanyDisplay array
+   */
+  enrichFromCnpjResp(empids: string[]): Observable<CompanyDisplay[]> {
+    if (!empids || empids.length === 0) {
+      return of([]);
+    }
+
+    return this.getKpiData(empids).pipe(
+      map(kpiMap => {
+        return empids.map(empid => {
+          const kpiData = kpiMap.get(empid);
+          const result: CompanyDisplay = {
+            cnpj: empid,
+            cnpjId: empid,
+            actionCount: 0,
+            processCount: 0,
+            entrega: kpiData?.entrega,
+            classificacao: kpiData?.['Classificação do Cliente'],
+          };
+
+          if (kpiData) {
+            result.deliveryKpi = this.mapToKpiData(kpiData);
+          }
+
+          return result;
+        });
+      }),
+      catchError(error => {
+        console.error('📊 Error enriching cnpj_resp with KPIs:', error);
+        return of(empids.map(empid => ({
+          cnpj: empid,
+          cnpjId: empid,
+          actionCount: 0,
+          processCount: 0,
+        } as CompanyDisplay)));
+      })
+    );
+  }
+
+  /**
    * Enrich company display items with KPI data
    * 
    * Takes action_log CNPJ data (CNPJ string + action count) and adds deliveryKpi property
@@ -189,6 +238,8 @@ export class CompanyKpiService {
           if (company.cnpjId && kpiMap.has(company.cnpjId)) {
             const kpiData = kpiMap.get(company.cnpjId)!;
             result.deliveryKpi = this.mapToKpiData(kpiData);
+            result.entrega = kpiData.entrega;
+            result.classificacao = kpiData['Classificação do Cliente'];
           }
 
           return result;

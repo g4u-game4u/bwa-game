@@ -125,6 +125,32 @@ export class PlayerService {
   }
 
   /**
+   * Get player's cnpj_resp list (carteira) from GET /v3/player/{id}
+   * This uses the player endpoint (not /status) to get extra.cnpj_resp
+   */
+  getPlayerCnpjResp(playerId: string): Observable<string[]> {
+    return this.funifierApi.get<any>(`/v3/player/${playerId}`).pipe(
+      timeout(this.REQUEST_TIMEOUT),
+      map(response => {
+        const cnpjResp = response?.extra?.cnpj_resp;
+        console.log('📊 Player cnpj_resp:', cnpjResp);
+        if (Array.isArray(cnpjResp)) {
+          return cnpjResp.filter((id: any) => typeof id === 'string' && id.trim().length > 0);
+        }
+        if (typeof cnpjResp === 'string') {
+          return cnpjResp.split(/[;,]/).map((s: string) => s.trim()).filter((s: string) => s.length > 0);
+        }
+        return [];
+      }),
+      catchError(error => {
+        console.error('📊 Error fetching player cnpj_resp:', error);
+        return of([] as string[]);
+      }),
+      shareReplay({ bufferSize: 1, refCount: true, windowTime: this.CACHE_DURATION })
+    );
+  }
+
+  /**
    * Clear cache
    */
   clearCache(): void {

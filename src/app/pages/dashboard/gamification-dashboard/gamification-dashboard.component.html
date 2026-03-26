@@ -177,24 +177,28 @@
       <div class="section-header">
         <h3 id="company-section-title" class="section-title">
           Clientes
-          <span *ngIf="!isLoadingDeals">({{ uniqueDeals.length }})</span>
+          <span *ngIf="!isLoadingClientes">({{ carteiraClientes.length }})</span>
         </h3>
       </div>
       
       <c4u-card class="carteira-card">
-        <c4u-shimmer *ngIf="isLoadingDeals"></c4u-shimmer>
+        <c4u-shimmer *ngIf="isLoadingClientes"></c4u-shimmer>
 
-        <div *ngIf="!isLoadingDeals && uniqueDeals.length > 0" class="carteira-list">
-          <div *ngFor="let deal of uniqueDeals" class="carteira-item" role="article">
+        <div *ngIf="!isLoadingClientes && carteiraClientes.length > 0" class="carteira-list">
+          <div *ngFor="let cliente of carteiraClientes" class="carteira-item" role="article" (click)="openCompanyDetailModal(cliente)" style="cursor: pointer;">
             <div class="carteira-item-info">
               <i class="ri-building-line"></i>
-              <span class="carteira-cnpj">{{ deal }}</span>
+              <span class="carteira-cnpj">{{ getCompanyDisplayName(cliente.cnpj) || cliente.cnpj }}</span>
+            </div>
+            <div class="carteira-item-meta" *ngIf="cliente.entrega !== undefined || cliente.classificacao">
+              <span class="carteira-entrega" *ngIf="cliente.entrega !== undefined">{{ cliente.entrega }}%</span>
+              <span class="carteira-classificacao" *ngIf="cliente.classificacao">{{ cliente.classificacao }}</span>
             </div>
           </div>
         </div>
         
-        <div *ngIf="!isLoadingDeals && uniqueDeals.length === 0" class="empty-state">
-          <p>Nenhum deal encontrado</p>
+        <div *ngIf="!isLoadingClientes && carteiraClientes.length === 0" class="empty-state">
+          <p>Nenhum cliente encontrado</p>
         </div>
       </c4u-card>
     </section>

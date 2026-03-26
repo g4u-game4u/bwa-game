@@ -1,6 +1,6 @@
 import { Component, OnInit, OnDestroy, HostListener, ChangeDetectionStrategy, ChangeDetectorRef, AfterViewInit } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
-import { Subject } from 'rxjs';
+import { Subject, of } from 'rxjs';
 import { takeUntil, switchMap } from 'rxjs/operators';
 
 import { PlayerService } from '@services/player.service';
@@ -73,14 +73,14 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   companies: Company[] = [];
   selectedCompany: Company | null = null;
   
-  // Carteira data from action_log (CNPJs with action counts and KPI data)
+  // Carteira data from player.extra.cnpj_resp enriched with cnpj__c KPI data
   carteiraClientes: CompanyDisplay[] = [];
   isLoadingCarteira = true;
-  cnpjNameMap = new Map<string, string>(); // Map of original CNPJ → clean empresa name
+  cnpjNameMap = new Map<string, string>(); // Map of empid → clean empresa name from empid_cnpj__c
 
-  // Unique deals from action_log (attributes.deals)
-  uniqueDeals: string[] = [];
-  isLoadingDeals = true;
+  // Clientes from cnpj_resp (empids)
+  cnpjRespIds: string[] = [];
+  isLoadingClientes = true;
   
   // Month selection
   selectedMonth: Date | undefined = new Date();
@@ -248,7 +248,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     this.loadPlayerData();
     this.loadCompanyData();
     this.loadCarteiraData();
-    this.loadDealsData();
+    this.loadClientesData();
     this.loadKPIData();
     this.loadProgressData();
   }
@@ -487,33 +487,61 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   }
 
   /**
-   * Load unique deals from action_log (attributes.deals) for the current player/month.
+   * Load clientes from player.extra.cnpj_resp via GET /v3/player/me
+   * Then enrich with names from empid_cnpj__c and KPI data from cnpj__c
    */
-  private loadDealsData(): void {
-    this.isLoadingDeals = true;
-    this.uniqueDeals = [];
+  private loadClientesData(): void {
+    this.isLoadingClientes = true;
+    this.cnpjRespIds = [];
     this.cdr.markForCheck();
 
     const playerId = this.getPlayerId();
     if (!playerId) {
-      this.isLoadingDeals = false;
+      this.isLoadingClientes = false;
       this.cdr.markForCheck();
       return;
     }
 
-    this.actionLogService
-      .getUniqueDeals(playerId, this.selectedMonth)
-      .pipe(takeUntil(this.destroy$))
+    this.playerService.getPlayerCnpjResp(playerId)
+      .pipe(
+        switchMap(empids => {
+          console.log('📊 Player cnpj_resp empids:', empids);
+          this.cnpjRespIds = empids;
+
+          // Update left sidebar clientes count
+          if (this.seasonProgress) {
+            this.seasonProgress = {
+              ...this.seasonProgress,
+              clientes: empids.length
+            };
+          }
+
+          if (empids.length === 0) {
+            return of([] as CompanyDisplay[]);
+          }
+
+          // Enrich with names from empid_cnpj__c
+          return this.cnpjLookupService.enrichCnpjList(empids).pipe(
+            switchMap(cnpjNames => {
+              this.cnpjNameMap = cnpjNames;
+              // Enrich with KPI data from cnpj__c
+              return this.companyKpiService.enrichFromCnpjResp(empids);
+            })
+          );
+        }),
+        takeUntil(this.destroy$)
+      )
       .subscribe({
-        next: (deals) => {
-          this.uniqueDeals = deals || [];
-          this.isLoadingDeals = false;
+        next: (enrichedClientes: CompanyDisplay[]) => {
+          console.log('📊 Clientes enriched:', enrichedClientes);
+          this.carteiraClientes = enrichedClientes;
+          this.isLoadingClientes = false;
           this.cdr.markForCheck();
         },
         error: (err: Error) => {
-          console.error('📊 Failed to load unique deals:', err);
-          this.uniqueDeals = [];
-          this.isLoadingDeals = false;
+          console.error('📊 Failed to load clientes:', err);
+          this.carteiraClientes = [];
+          this.isLoadingClientes = false;
           this.cdr.markForCheck();
         }
       });
