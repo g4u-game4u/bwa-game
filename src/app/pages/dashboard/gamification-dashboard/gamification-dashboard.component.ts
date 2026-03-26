@@ -78,9 +78,16 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   isLoadingCarteira = true;
   cnpjNameMap = new Map<string, string>(); // Map of empid → clean empresa name from empid_cnpj__c
 
-  // Clientes from cnpj_resp (empids)
+  // Clientes from cnpj_resp (empids) - Carteira tab
   cnpjRespIds: string[] = [];
   isLoadingClientes = true;
+  
+  // Clientes from cnpj (empids) - Participação tab
+  participacaoClientes: CompanyDisplay[] = [];
+  isLoadingParticipacao = true;
+  
+  // Active tab for Clientes section
+  clientesActiveTab: 'carteira' | 'participacao' = 'carteira';
   
   // Month selection
   selectedMonth: Date | undefined = new Date();
@@ -249,6 +256,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     this.loadCompanyData();
     this.loadCarteiraData();
     this.loadClientesData();
+    this.loadParticipacaoData();
     this.loadKPIData();
     this.loadProgressData();
   }
@@ -542,6 +550,56 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
           console.error('📊 Failed to load clientes:', err);
           this.carteiraClientes = [];
           this.isLoadingClientes = false;
+          this.cdr.markForCheck();
+        }
+      });
+  }
+
+  /**
+   * Load participação clients from player.extra.cnpj via GET /v3/player/me
+   * Then enrich with names from empid_cnpj__c and KPI data from cnpj__c
+   */
+  private loadParticipacaoData(): void {
+    this.isLoadingParticipacao = true;
+    this.cdr.markForCheck();
+
+    const playerId = this.getPlayerId();
+    if (!playerId) {
+      this.isLoadingParticipacao = false;
+      this.cdr.markForCheck();
+      return;
+    }
+
+    this.playerService.getPlayerCnpj(playerId)
+      .pipe(
+        switchMap(empids => {
+          console.log('📊 Player cnpj (participação) empids:', empids);
+
+          if (empids.length === 0) {
+            return of([] as CompanyDisplay[]);
+          }
+
+          return this.cnpjLookupService.enrichCnpjList(empids).pipe(
+            switchMap(cnpjNames => {
+              // Merge into the shared name map
+              cnpjNames.forEach((name, key) => this.cnpjNameMap.set(key, name));
+              return this.companyKpiService.enrichFromCnpjResp(empids);
+            })
+          );
+        }),
+        takeUntil(this.destroy$)
+      )
+      .subscribe({
+        next: (enrichedClientes: CompanyDisplay[]) => {
+          console.log('📊 Participação enriched:', enrichedClientes);
+          this.participacaoClientes = enrichedClientes;
+          this.isLoadingParticipacao = false;
+          this.cdr.markForCheck();
+        },
+        error: (err: Error) => {
+          console.error('📊 Failed to load participação:', err);
+          this.participacaoClientes = [];
+          this.isLoadingParticipacao = false;
           this.cdr.markForCheck();
         }
       });

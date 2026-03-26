@@ -175,13 +175,27 @@
     <!-- Company Portfolio Section -->
     <section class="dashboard-section carteira-section" aria-labelledby="company-section-title">
       <div class="section-header">
-        <h3 id="company-section-title" class="section-title">
-          Clientes
-          <span *ngIf="!isLoadingClientes">({{ carteiraClientes.length }})</span>
-        </h3>
+        <h3 id="company-section-title" class="section-title">Clientes</h3>
       </div>
       
-      <c4u-card class="carteira-card">
+      <!-- Tabs -->
+      <div class="clientes-tabs">
+        <button 
+          class="clientes-tab" 
+          [class.active]="clientesActiveTab === 'carteira'"
+          (click)="clientesActiveTab = 'carteira'">
+          Carteira <span *ngIf="!isLoadingClientes">({{ carteiraClientes.length }})</span>
+        </button>
+        <button 
+          class="clientes-tab" 
+          [class.active]="clientesActiveTab === 'participacao'"
+          (click)="clientesActiveTab = 'participacao'">
+          Participação <span *ngIf="!isLoadingParticipacao">({{ participacaoClientes.length }})</span>
+        </button>
+      </div>
+      
+      <!-- Carteira Tab Content -->
+      <c4u-card class="carteira-card" *ngIf="clientesActiveTab === 'carteira'">
         <c4u-shimmer *ngIf="isLoadingClientes"></c4u-shimmer>
 
         <div *ngIf="!isLoadingClientes && carteiraClientes.length > 0" class="carteira-list">
@@ -198,7 +212,29 @@
         </div>
         
         <div *ngIf="!isLoadingClientes && carteiraClientes.length === 0" class="empty-state">
-          <p>Nenhum cliente encontrado</p>
+          <p>Nenhum cliente na carteira</p>
+        </div>
+      </c4u-card>
+      
+      <!-- Participação Tab Content -->
+      <c4u-card class="carteira-card" *ngIf="clientesActiveTab === 'participacao'">
+        <c4u-shimmer *ngIf="isLoadingParticipacao"></c4u-shimmer>
+
+        <div *ngIf="!isLoadingParticipacao && participacaoClientes.length > 0" class="carteira-list">
+          <div *ngFor="let cliente of participacaoClientes" class="carteira-item" role="article" (click)="openCompanyDetailModal(cliente)" style="cursor: pointer;">
+            <div class="carteira-item-info">
+              <i class="ri-building-line"></i>
+              <span class="carteira-cnpj">{{ getCompanyDisplayName(cliente.cnpj) || cliente.cnpj }}</span>
+            </div>
+            <div class="carteira-item-meta" *ngIf="cliente.entrega !== undefined || cliente.classificacao">
+              <span class="carteira-entrega" *ngIf="cliente.entrega !== undefined">{{ cliente.entrega }}%</span>
+              <span class="carteira-classificacao" *ngIf="cliente.classificacao">{{ cliente.classificacao }}</span>
+            </div>
+          </div>
+        </div>
+        
+        <div *ngIf="!isLoadingParticipacao && participacaoClientes.length === 0" class="empty-state">
+          <p>Nenhuma participação encontrada</p>
         </div>
       </c4u-card>
     </section>
