@@ -315,6 +315,13 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
         next: (points) => {
           console.log('📊 Point wallet loaded:', points);
           this.pointWallet = points;
+          
+          // Cap activity pontos if already loaded and exceeds wallet total
+          if (this.activityMetrics && this.activityMetrics.pontos > points.desbloqueados) {
+            console.log('📊 Capping pontos (wallet arrived after):', this.activityMetrics.pontos, '→', points.desbloqueados);
+            this.activityMetrics = { ...this.activityMetrics, pontos: points.desbloqueados };
+          }
+          
           this.cdr.markForCheck();
         },
         error: (error) => {
@@ -700,6 +707,13 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
         next: (metrics) => {
           console.log('📊 Progress metrics loaded:', metrics);
           this.activityMetrics = metrics.activity;
+          
+          // Cap pontos at the left card's total (point_categories.points from player/me/status)
+          if (this.activityMetrics && this.pointWallet && this.activityMetrics.pontos > this.pointWallet.desbloqueados) {
+            console.log('📊 Capping pontos:', this.activityMetrics.pontos, '→', this.pointWallet.desbloqueados);
+            this.activityMetrics = { ...this.activityMetrics, pontos: this.pointWallet.desbloqueados };
+          }
+          
           this.processMetrics = metrics.processo;
           this.isLoadingProgress = false;
           this.cdr.markForCheck();
