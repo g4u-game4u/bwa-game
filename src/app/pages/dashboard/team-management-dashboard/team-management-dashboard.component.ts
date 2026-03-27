@@ -2599,18 +2599,25 @@ private calculateCollaboratorTotals(memberData: Array<{
 
   /**
    * Get team player IDs as comma-separated string for modal
-   * The modal expects a single playerId, but we'll pass all team member IDs
+   * If a collaborator is selected, show that single collaborator only.
+   * Otherwise, show all team members.
    */
   get teamPlayerIdsForModal(): string {
+    if (this.selectedCollaborator) {
+      return this.selectedCollaborator;
+    }
     return this.teamMemberIds.join(',');
   }
 
   /**
    * Get player ID for month selector component
-   * Uses the first team member ID if available, otherwise uses current user ID
+   * Uses selected collaborator first, then team member fallback, then current user.
    * Similar to gamification-dashboard implementation
    */
   getTeamPlayerIdForMonthSelector(): string {
+    if (this.selectedCollaborator) {
+      return this.selectedCollaborator;
+    }
     // If we have team members, use the first one
     if (this.teamMemberIds.length > 0) {
       return this.teamMemberIds[0];
