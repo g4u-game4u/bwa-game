@@ -38,13 +38,23 @@
             <i class="ri-task-line section-icon" aria-hidden="true"></i>
             Tarefas
           </h3>
+
+          <div class="task-search-bar">
+            <input
+              type="text"
+              [value]="searchTerm"
+              (input)="onSearchInput($event)"
+              placeholder="Buscar por título, executor ou data"
+              aria-label="Buscar tarefas"
+              class="search-input" />
+          </div>
           
-          <div *ngIf="activityItems.length === 0" class="empty-state">
+          <div *ngIf="filteredActivityItems.length === 0" class="empty-state">
             <i class="ri-inbox-line empty-icon"></i>
             <span>Nenhuma tarefa encontrada</span>
           </div>
           
-          <div *ngIf="activityItems.length > 0" class="tasks-table">
+          <div *ngIf="filteredActivityItems.length > 0" class="tasks-table">
             <div class="task-header" [class.with-points]="listType === 'pontos'">
               <div class="task-col-title">Tarefa</div>
               <div class="task-col-executor">Executor</div>
@@ -53,7 +63,7 @@
               <div class="task-col-points" *ngIf="listType === 'pontos'">Pontos</div>
             </div>
             <div class="tasks-list">
-              <div *ngFor="let item of activityItems" class="task-row" [class.with-points]="listType === 'pontos'">
+              <div *ngFor="let item of filteredActivityItems" class="task-row" [class.with-points]="listType === 'pontos'">
                 <div class="task-col-title">
                   <span class="task-title">{{ item.title }}</span>
                 </div>

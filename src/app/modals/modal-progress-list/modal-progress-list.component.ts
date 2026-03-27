@@ -35,7 +35,9 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
   isLoading = true;
   isLoadingChart = true;
   activityItems: ActivityListItem[] = [];
+  filteredActivityItems: ActivityListItem[] = [];
   processoItems: ProcessListItem[] = [];
+  searchTerm: string = '';
   
   // Chart data
   chartLabels: string[] = [];
@@ -103,6 +105,28 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
     return this.listType === 'processos-pendentes' || this.listType === 'processos-finalizados';
   }
 
+  onSearchInput(event: Event): void {
+    const value = (event.target as HTMLInputElement).value;
+    this.searchTerm = value;
+    this.filterActivityItems();
+  }
+
+  filterActivityItems(): void {
+    const search = (this.searchTerm || '').trim().toLowerCase();
+    if (!search) {
+      this.filteredActivityItems = [...this.activityItems];
+      return;
+    }
+
+    this.filteredActivityItems = this.activityItems.filter(item => {
+      const title = (item.title || '').toLowerCase();
+      const executor = (item.player || '').toLowerCase();
+      const dateText = this.formatDate(item.created).toLowerCase();
+
+      return title.includes(search) || executor.includes(search) || dateText.includes(search);
+    });
+  }
+
   /**
    * Get array of player IDs from comma-separated string
    */
@@ -160,7 +184,11 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
             
             // Enrich CNPJ names
             await this.enrichCnpjNames(this.activityItems.map(item => item.cnpj).filter(cnpj => cnpj));
-            
+
+            // Apply initial filter
+            this.filteredActivityItems = [...this.activityItems];
+            this.filterActivityItems();
+
             this.isLoading = false;
             this.cdr.markForCheck();
           },
