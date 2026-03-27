@@ -125,54 +125,71 @@ export class PlayerService {
   }
 
   /**
-   * Get player's cnpj list (participação) from GET /v3/player/{id}
-   * This uses the player endpoint (not /status) to get extra.cnpj
+   * Fetch player company associations from player_company__c collection.
+   * Aggregates by type (cnpj_resp, cnpj) and returns arrays of CNPJ/empid strings.
+   * 
+   * @param playerId - Player email/ID
+   * @returns Observable of map: type → cnpj[] (e.g. { cnpj_resp: ["1586", "57.443.329/0001-44"], cnpj: ["1864"] })
    */
-  getPlayerCnpj(playerId: string): Observable<string[]> {
-    return this.funifierApi.get<any>(`/v3/player/${playerId}`).pipe(
+  private getPlayerCompanyData(playerId: string): Observable<Map<string, string[]>> {
+    const cacheKey = `player_company_${playerId}`;
+    const cached = this.cachedRawData.get(cacheKey);
+    const now = Date.now();
+
+    if (cached && (now - cached.timestamp) < this.CACHE_DURATION) {
+      return cached.data$;
+    }
+
+    const aggregateBody = [
+      { $match: { playerId } },
+      { $group: { _id: '$type', cnpjs: { $push: '$cnpj' } } }
+    ];
+
+    const request$ = this.funifierApi.post<any[]>(
+      '/v3/database/player_company__c/aggregate?strict=true',
+      aggregateBody
+    ).pipe(
       timeout(this.REQUEST_TIMEOUT),
       map(response => {
-        const cnpj = response?.extra?.cnpj;
-        console.log('📊 Player cnpj (participação):', cnpj);
-        if (Array.isArray(cnpj)) {
-          return cnpj.filter((id: any) => typeof id === 'string' && id.trim().length > 0);
+        const result = new Map<string, string[]>();
+        if (Array.isArray(response)) {
+          response.forEach(item => {
+            if (item._id && Array.isArray(item.cnpjs)) {
+              result.set(item._id, item.cnpjs.filter((c: any) => typeof c === 'string' && c.trim().length > 0));
+            }
+          });
         }
-        if (typeof cnpj === 'string') {
-          return cnpj.split(/[;,]/).map((s: string) => s.trim()).filter((s: string) => s.length > 0);
-        }
-        return [];
+        console.log('📊 Player company data from player_company__c:', Array.from(result.entries()));
+        return result;
       }),
       catchError(error => {
-        console.error('📊 Error fetching player cnpj:', error);
-        return of([] as string[]);
+        console.error('📊 Error fetching player_company__c:', error);
+        return of(new Map<string, string[]>());
       }),
       shareReplay({ bufferSize: 1, refCount: true, windowTime: this.CACHE_DURATION })
+    );
+
+    this.cachedRawData.set(cacheKey, { data$: request$, timestamp: now });
+    return request$;
+  }
+
+  /**
+   * Get player's cnpj list (participação) from player_company__c where type = "cnpj"
+   */
+  getPlayerCnpj(playerId: string): Observable<string[]> {
+    return this.getPlayerCompanyData(playerId).pipe(
+      map(data => data.get('cnpj') || []),
+      tap(cnpjs => console.log('📊 Player cnpj (participação):', cnpjs))
     );
   }
 
   /**
-   * Get player's cnpj_resp list (carteira) from GET /v3/player/{id}
-   * This uses the player endpoint (not /status) to get extra.cnpj_resp
+   * Get player's cnpj_resp list (carteira) from player_company__c where type = "cnpj_resp"
    */
   getPlayerCnpjResp(playerId: string): Observable<string[]> {
-    return this.funifierApi.get<any>(`/v3/player/${playerId}`).pipe(
-      timeout(this.REQUEST_TIMEOUT),
-      map(response => {
-        const cnpjResp = response?.extra?.cnpj_resp;
-        console.log('📊 Player cnpj_resp:', cnpjResp);
-        if (Array.isArray(cnpjResp)) {
-          return cnpjResp.filter((id: any) => typeof id === 'string' && id.trim().length > 0);
-        }
-        if (typeof cnpjResp === 'string') {
-          return cnpjResp.split(/[;,]/).map((s: string) => s.trim()).filter((s: string) => s.length > 0);
-        }
-        return [];
-      }),
-      catchError(error => {
-        console.error('📊 Error fetching player cnpj_resp:', error);
-        return of([] as string[]);
-      }),
-      shareReplay({ bufferSize: 1, refCount: true, windowTime: this.CACHE_DURATION })
+    return this.getPlayerCompanyData(playerId).pipe(
+      map(data => data.get('cnpj_resp') || []),
+      tap(cnpjs => console.log('📊 Player cnpj_resp:', cnpjs))
     );
   }
 

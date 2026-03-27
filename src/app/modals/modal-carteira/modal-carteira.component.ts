@@ -24,6 +24,7 @@ export class ModalCarteiraComponent implements OnInit, OnDestroy {
   selectedClienteActions: ClienteActionItem[] = [];
   isLoadingActions = false;
   cnpjNameMap = new Map<string, string>(); // Map of original CNPJ → clean empresa name
+  cnpjStatusMap = new Map<string, string>(); // Map of CNPJ → status (Ativa/Inativa)
 
   constructor(
     private actionLogService: ActionLogService,
@@ -54,18 +55,23 @@ export class ModalCarteiraComponent implements OnInit, OnDestroy {
           // Extract all CNPJ strings for lookup
           const cnpjList = clientes.map(c => c.cnpj);
           
-          // Enrich CNPJs with clean company names and KPI data in parallel
+          // Enrich CNPJs with clean company names, status, and KPI data in parallel
           return forkJoin({
             enrichedClientes: this.companyKpiService.enrichCompaniesWithKpis(clientes),
-            cnpjNames: this.cnpjLookupService.enrichCnpjList(cnpjList)
+            cnpjInfo: this.cnpjLookupService.enrichCnpjListFull(cnpjList)
           });
         }),
-        map(({ enrichedClientes, cnpjNames }) => {
-          // Store the CNPJ name map for display
-          console.log('📊 Modal: Received CNPJ name map with', cnpjNames.size, 'entries');
-          console.log('📊 Modal: CNPJ name map entries:', Array.from(cnpjNames.entries()));
-          this.cnpjNameMap = cnpjNames;
-          console.log('📊 Modal: Stored cnpjNameMap:', this.cnpjNameMap);
+        map(({ enrichedClientes, cnpjInfo }) => {
+          // Store the CNPJ name and status maps for display
+          const nameMap = new Map<string, string>();
+          cnpjInfo.forEach((info, key) => {
+            nameMap.set(key, info.empresa);
+            if (info.status) {
+              this.cnpjStatusMap.set(key, info.status);
+            }
+          });
+          this.cnpjNameMap = nameMap;
+          console.log('📊 Modal: Stored cnpjNameMap:', this.cnpjNameMap.size, 'entries, statusMap:', this.cnpjStatusMap.size, 'entries');
           return enrichedClientes;
         }),
         takeUntil(this.destroy$)
@@ -147,9 +153,15 @@ export class ModalCarteiraComponent implements OnInit, OnDestroy {
     if (!cnpj) {
       return '';
     }
-    // Use the enriched name from the map, fallback to original
     const displayName = this.cnpjNameMap.get(cnpj);
-    console.log('📊 getCompanyDisplayName called:', { cnpj, displayName, hasInMap: this.cnpjNameMap.has(cnpj), mapSize: this.cnpjNameMap.size });
     return displayName || cnpj;
+  }
+
+  getCompanyStatus(cnpj: string): string {
+    return this.cnpjStatusMap.get(cnpj) || '';
+  }
+
+  isCompanyActive(cnpj: string): boolean {
+    return this.cnpjStatusMap.get(cnpj)?.toLowerCase() === 'ativa';
   }
 }

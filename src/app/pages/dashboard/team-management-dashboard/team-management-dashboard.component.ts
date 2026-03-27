@@ -156,6 +156,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
   teamCarteiraClientes: CompanyDisplay[] = [];
   isLoadingCarteira: boolean = false;
   cnpjNameMap = new Map<string, string>(); // Map of original CNPJ → clean empresa name
+  cnpjStatusMap = new Map<string, string>(); // Map of CNPJ → status (Ativa/Inativa)
   
   // Monthly points breakdown
   monthlyPointsBreakdown: { bloqueados: number; desbloqueados: number } | null = null;
@@ -2009,15 +2010,22 @@ private calculateCollaboratorTotals(memberData: Array<{
       // Extract all CNPJ strings for lookup
       const cnpjList = carteiraData.map(c => c.cnpj);
       
-      // Enrich CNPJs with clean company names
-      const cnpjNames = await firstValueFrom(
-        this.cnpjLookupService.enrichCnpjList(cnpjList)
+      // Enrich CNPJs with clean company names and status
+      const cnpjInfo = await firstValueFrom(
+        this.cnpjLookupService.enrichCnpjListFull(cnpjList)
           .pipe(takeUntil(this.destroy$))
       ).catch((error) => {
         console.error('Error enriching CNPJ names:', error);
-        return new Map<string, string>();
+        return new Map<string, import('@services/cnpj-lookup.service').CnpjEnrichedInfo>();
       });
-      this.cnpjNameMap = cnpjNames;
+      const nameMap = new Map<string, string>();
+      cnpjInfo.forEach((info, key) => {
+        nameMap.set(key, info.empresa);
+        if (info.status) {
+          this.cnpjStatusMap.set(key, info.status);
+        }
+      });
+      this.cnpjNameMap = nameMap;
       console.log('📊 Collaborator: CNPJ name map loaded with', this.cnpjNameMap.size, 'entries');
       
       // Enrich with KPI data
@@ -2105,15 +2113,22 @@ private calculateCollaboratorTotals(memberData: Array<{
       // Extract all CNPJ strings for lookup
       const cnpjList = cnpjListWithCounts.map(c => c.cnpj);
       
-      // Enrich CNPJs with clean company names
-      const cnpjNames = await firstValueFrom(
-        this.cnpjLookupService.enrichCnpjList(cnpjList)
+      // Enrich CNPJs with clean company names and status
+      const cnpjInfo2 = await firstValueFrom(
+        this.cnpjLookupService.enrichCnpjListFull(cnpjList)
           .pipe(takeUntil(this.destroy$))
       ).catch((error) => {
         console.error('Error enriching CNPJ names:', error);
-        return new Map<string, string>();
+        return new Map<string, import('@services/cnpj-lookup.service').CnpjEnrichedInfo>();
       });
-      this.cnpjNameMap = cnpjNames;
+      const nameMap2 = new Map<string, string>();
+      cnpjInfo2.forEach((info, key) => {
+        nameMap2.set(key, info.empresa);
+        if (info.status) {
+          this.cnpjStatusMap.set(key, info.status);
+        }
+      });
+      this.cnpjNameMap = nameMap2;
       console.log('📊 Team: CNPJ name map loaded with', this.cnpjNameMap.size, 'entries');
       
       // Enrich with KPI data
@@ -2674,6 +2689,14 @@ private calculateCollaboratorTotals(memberData: Array<{
     const displayName = this.cnpjNameMap.get(cnpj);
     console.log('📊 Team getCompanyDisplayName called:', { cnpj, displayName, hasInMap: this.cnpjNameMap.has(cnpj), mapSize: this.cnpjNameMap.size });
     return displayName || cnpj;
+  }
+
+  getCompanyStatus(cnpj: string): string {
+    return this.cnpjStatusMap.get(cnpj) || '';
+  }
+
+  isCompanyActive(cnpj: string): boolean {
+    return this.cnpjStatusMap.get(cnpj)?.toLowerCase() === 'ativa';
   }
 
   /**

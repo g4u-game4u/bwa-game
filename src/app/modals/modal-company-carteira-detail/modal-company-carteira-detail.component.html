@@ -2,6 +2,14 @@
   [modalTitle]="company ? getCompanyDisplayName(company.cnpj) : 'Detalhes da Empresa'" 
   (closed)="onClose()">
   <div class="company-detail-content">
+    <!-- Company Status Badge -->
+    <div *ngIf="companyStatus" class="company-status-row">
+      <span class="status-badge" 
+            [class.active]="isCompanyActive"
+            [class.inactive]="!isCompanyActive">
+        {{ companyStatus }}
+      </span>
+    </div>
     <!-- Loading State -->
     <div *ngIf="isLoading" class="loading-state">
       <i class="ri-loader-4-line loading-icon"></i>

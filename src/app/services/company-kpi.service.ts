@@ -21,6 +21,7 @@ export interface CompanyDisplay {
   cnpj: string; // empid from cnpj_resp
   cnpjId?: string; // Extracted ID for KPI lookup (same as cnpj for cnpj_resp)
   name?: string; // Company name from empid_cnpj__c
+  status?: string; // Company status from empid_cnpj__c (e.g. "Ativa", "Inativa")
   actionCount: number; // Number of actions for this company
   processCount: number; // Number of unique processes (delivery_id) for this company
   entrega?: number; // Entregas no Prazo % from cnpj__c

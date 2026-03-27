@@ -82,6 +82,9 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   cnpjRespIds: string[] = [];
   isLoadingClientes = true;
   
+  // Status map from empid_cnpj__c (cnpj → status string like "Ativa")
+  cnpjStatusMap = new Map<string, string>();
+  
   // Clientes from cnpj (empids) - Participação tab
   participacaoClientes: CompanyDisplay[] = [];
   isLoadingParticipacao = true;
@@ -473,11 +476,16 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
           // Extract all CNPJ strings for lookup
           const cnpjList = clientes.map(c => c.cnpj);
           
-          // Enrich CNPJs with clean company names and KPI data in parallel
-          return this.cnpjLookupService.enrichCnpjList(cnpjList).pipe(
-            switchMap(cnpjNames => {
-              // Merge into the shared name map (don't replace)
-              cnpjNames.forEach((name, key) => this.cnpjNameMap.set(key, name));
+          // Enrich CNPJs with clean company names, status, and KPI data in parallel
+          return this.cnpjLookupService.enrichCnpjListFull(cnpjList).pipe(
+            switchMap(cnpjInfo => {
+              // Merge into the shared name/status maps
+              cnpjInfo.forEach((info, key) => {
+                this.cnpjNameMap.set(key, info.empresa);
+                if (info.status) {
+                  this.cnpjStatusMap.set(key, info.status);
+                }
+              });
               // Enrich companies with KPI data from cnpj__c collection
               return this.companyKpiService.enrichCompaniesWithKpis(clientes);
             })
@@ -502,8 +510,8 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   }
 
   /**
-   * Load clientes from player.extra.cnpj_resp via GET /v3/player/me
-   * Then enrich with names from empid_cnpj__c and KPI data from cnpj__c
+   * Load clientes from player_company__c where type = "cnpj_resp"
+   * Then enrich with names/status from empid_cnpj__c and KPI data from cnpj__c
    */
   private loadClientesData(): void {
     this.isLoadingClientes = true;
@@ -535,11 +543,16 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
             return of([] as CompanyDisplay[]);
           }
 
-          // Enrich with names from empid_cnpj__c
-          return this.cnpjLookupService.enrichCnpjList(empids).pipe(
-            switchMap(cnpjNames => {
-              // Merge into the shared name map (don't replace)
-              cnpjNames.forEach((name, key) => this.cnpjNameMap.set(key, name));
+          // Enrich with names + status from empid_cnpj__c
+          return this.cnpjLookupService.enrichCnpjListFull(empids).pipe(
+            switchMap(cnpjInfo => {
+              // Merge into the shared name/status maps
+              cnpjInfo.forEach((info, key) => {
+                this.cnpjNameMap.set(key, info.empresa);
+                if (info.status) {
+                  this.cnpjStatusMap.set(key, info.status);
+                }
+              });
               // Enrich with KPI data from cnpj__c
               return this.companyKpiService.enrichFromCnpjResp(empids);
             })
@@ -550,6 +563,11 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
       .subscribe({
         next: (enrichedClientes: CompanyDisplay[]) => {
           console.log('📊 Clientes enriched:', enrichedClientes);
+          // Attach status from the status map
+          enrichedClientes.forEach(c => {
+            const status = this.cnpjStatusMap.get(c.cnpj);
+            if (status) c.status = status;
+          });
           this.carteiraClientes = enrichedClientes;
           this.isLoadingClientes = false;
           this.cdr.markForCheck();
@@ -564,8 +582,8 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   }
 
   /**
-   * Load participação clients from player.extra.cnpj via GET /v3/player/me
-   * Then enrich with names from empid_cnpj__c and KPI data from cnpj__c
+   * Load participação clients from player_company__c where type = "cnpj"
+   * Then enrich with names/status from empid_cnpj__c and KPI data from cnpj__c
    */
   private loadParticipacaoData(): void {
     this.isLoadingParticipacao = true;
@@ -587,10 +605,15 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
             return of([] as CompanyDisplay[]);
           }
 
-          return this.cnpjLookupService.enrichCnpjList(empids).pipe(
-            switchMap(cnpjNames => {
-              // Merge into the shared name map
-              cnpjNames.forEach((name, key) => this.cnpjNameMap.set(key, name));
+          return this.cnpjLookupService.enrichCnpjListFull(empids).pipe(
+            switchMap(cnpjInfo => {
+              // Merge into the shared name/status maps
+              cnpjInfo.forEach((info, key) => {
+                this.cnpjNameMap.set(key, info.empresa);
+                if (info.status) {
+                  this.cnpjStatusMap.set(key, info.status);
+                }
+              });
               return this.companyKpiService.enrichFromCnpjResp(empids);
             })
           );
@@ -600,6 +623,11 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
       .subscribe({
         next: (enrichedClientes: CompanyDisplay[]) => {
           console.log('📊 Participação enriched:', enrichedClientes);
+          // Attach status from the status map
+          enrichedClientes.forEach(c => {
+            const status = this.cnpjStatusMap.get(c.cnpj);
+            if (status) c.status = status;
+          });
           this.participacaoClientes = enrichedClientes;
           this.isLoadingParticipacao = false;
           this.cdr.markForCheck();
@@ -983,6 +1011,21 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     const displayName = this.cnpjNameMap.get(cnpj);
     console.log('📊 getCompanyDisplayName called:', { cnpj, displayName, hasInMap: this.cnpjNameMap.has(cnpj), mapSize: this.cnpjNameMap.size });
     return displayName || cnpj;
+  }
+
+  /**
+   * Get company status (Ativa/Inativa) from the status map
+   */
+  getCompanyStatus(cnpj: string): string {
+    return this.cnpjStatusMap.get(cnpj) || '';
+  }
+
+  /**
+   * Check if a company is active based on empid_cnpj__c status
+   */
+  isCompanyActive(cnpj: string): boolean {
+    const status = this.cnpjStatusMap.get(cnpj);
+    return status?.toLowerCase() === 'ativa';
   }
   
   /**

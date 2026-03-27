@@ -198,6 +198,11 @@
             <div class="carteira-item-info">
               <i class="ri-building-line"></i>
               <span class="carteira-cnpj">{{ getCompanyDisplayName(cliente.cnpj) || cliente.cnpj }}</span>
+              <span class="status-badge" *ngIf="getCompanyStatus(cliente.cnpj)" 
+                    [class.active]="isCompanyActive(cliente.cnpj)"
+                    [class.inactive]="!isCompanyActive(cliente.cnpj)">
+                {{ getCompanyStatus(cliente.cnpj) }}
+              </span>
             </div>
             <div class="carteira-item-meta" *ngIf="cliente.entrega !== undefined || cliente.classificacao">
               <span class="carteira-entrega" *ngIf="cliente.entrega !== undefined">{{ cliente.entrega }}%</span>
@@ -220,6 +225,11 @@
             <div class="carteira-item-info">
               <i class="ri-building-line"></i>
               <span class="carteira-cnpj">{{ getCompanyDisplayName(cliente.cnpj) || cliente.cnpj }}</span>
+              <span class="status-badge" *ngIf="getCompanyStatus(cliente.cnpj)" 
+                    [class.active]="isCompanyActive(cliente.cnpj)"
+                    [class.inactive]="!isCompanyActive(cliente.cnpj)">
+                {{ getCompanyStatus(cliente.cnpj) }}
+              </span>
             </div>
             <div class="carteira-item-meta" *ngIf="cliente.entrega !== undefined || cliente.classificacao">
               <span class="carteira-entrega" *ngIf="cliente.entrega !== undefined">{{ cliente.entrega }}%</span>

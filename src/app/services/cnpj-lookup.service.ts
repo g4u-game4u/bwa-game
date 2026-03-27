@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
-import { Observable, of } from 'rxjs';
+import { Observable, of, forkJoin } from 'rxjs';
 import { map, catchError, tap, switchMap } from 'rxjs/operators';
 import { environment } from '../../environments/environment';
 
@@ -8,6 +8,15 @@ export interface CnpjEntry {
   _id: number;
   cnpj: string;
   empresa: string;
+  status?: string; // e.g. "Ativa", "Inativa"
+}
+
+/**
+ * Enriched company info returned by enrichCnpjListFull
+ */
+export interface CnpjEnrichedInfo {
+  empresa: string;
+  status?: string; // "Ativa", "Inativa", etc.
 }
 
 @Injectable({
@@ -128,6 +137,55 @@ export class CnpjLookupService {
   }
 
   /**
+   * Check if a string is a full CNPJ (14 digits with formatting like 57.443.329/0001-44)
+   */
+  isFullCnpj(value: string): boolean {
+    if (!value) return false;
+    // Full CNPJ has dots, slashes, dashes — e.g. "57.443.329/0001-44"
+    return /^\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}$/.test(value.trim());
+  }
+
+  /**
+   * Fetch CNPJ entries from empid_cnpj__c by matching the cnpj field (for full CNPJs)
+   * Returns a map of full CNPJ string → CnpjEntry
+   */
+  private fetchCnpjByFullCnpj(fullCnpjs: string[]): Observable<Map<string, CnpjEntry>> {
+    if (fullCnpjs.length === 0) {
+      return of(new Map<string, CnpjEntry>());
+    }
+
+    console.log('📊 Fetching CNPJ entries by full CNPJ:', fullCnpjs.length, 'items');
+
+    const headers = new HttpHeaders({
+      'Authorization': `Basic ${this.basicToken}`,
+      'Content-Type': 'application/json'
+    });
+
+    const aggregateBody = [
+      { $match: { cnpj: { $in: fullCnpjs } } }
+    ];
+
+    const aggregateUrl = `${this.apiUrl}/aggregate?strict=true`;
+
+    return this.fetchAllPaginatedCnpj(aggregateUrl, aggregateBody, headers, 100).pipe(
+      map(entries => {
+        const cnpjMap = new Map<string, CnpjEntry>();
+        entries.forEach(entry => {
+          if (entry.cnpj) {
+            cnpjMap.set(entry.cnpj, entry);
+          }
+        });
+        console.log('📊 Full CNPJ map created with', cnpjMap.size, 'entries');
+        return cnpjMap;
+      }),
+      catchError(error => {
+        console.error('❌ Error fetching CNPJ entries by full CNPJ:', error);
+        return of(new Map<string, CnpjEntry>());
+      })
+    );
+  }
+
+  /**
    * Extract empid from CNPJ string
    * 
    * Logic:
@@ -202,68 +260,100 @@ export class CnpjLookupService {
   /**
    * Enrich multiple CNPJ strings with company names
    * Returns a map of original CNPJ → empresa name
+   * Handles both empid-based (≤8 digits) and full CNPJ (XX.XXX.XXX/XXXX-XX) lookups
    */
   enrichCnpjList(cnpjList: string[]): Observable<Map<string, string>> {
+    return this.enrichCnpjListFull(cnpjList).pipe(
+      map(fullMap => {
+        const result = new Map<string, string>();
+        fullMap.forEach((info, key) => result.set(key, info.empresa));
+        return result;
+      })
+    );
+  }
+
+  /**
+   * Enrich multiple CNPJ strings with company names AND status
+   * Returns a map of original CNPJ → { empresa, status }
+   * Handles both empid-based (≤8 digits) and full CNPJ (XX.XXX.XXX/XXXX-XX) lookups
+   */
+  enrichCnpjListFull(cnpjList: string[]): Observable<Map<string, CnpjEnrichedInfo>> {
     if (cnpjList.length === 0) {
-      console.log('📊 enrichCnpjList: empty list provided');
-      return of(new Map<string, string>());
+      console.log('📊 enrichCnpjListFull: empty list provided');
+      return of(new Map<string, CnpjEnrichedInfo>());
     }
 
-    console.log('📊 enrichCnpjList: processing', cnpjList.length, 'CNPJs:', cnpjList);
+    console.log('📊 enrichCnpjListFull: processing', cnpjList.length, 'CNPJs:', cnpjList);
 
-    // Extract all empids from the CNPJ list
+    // Separate into empid-based and full CNPJ-based
     const empidMap = new Map<number, string[]>(); // empid → original CNPJs
     const cnpjToEmpid = new Map<string, number>(); // CNPJ → empid
+    const fullCnpjList: string[] = []; // Full CNPJs to look up by cnpj field
 
     cnpjList.forEach(cnpj => {
-      const empid = this.extractEmpid(cnpj);
-      console.log('📊 enrichCnpjList: processing CNPJ:', cnpj, '→ empid:', empid);
-      
-      if (empid !== null) {
-        cnpjToEmpid.set(cnpj, empid);
-        if (!empidMap.has(empid)) {
-          empidMap.set(empid, []);
+      if (this.isFullCnpj(cnpj)) {
+        fullCnpjList.push(cnpj);
+        console.log('📊 enrichCnpjListFull: full CNPJ detected:', cnpj);
+      } else {
+        const empid = this.extractEmpid(cnpj);
+        console.log('📊 enrichCnpjListFull: processing CNPJ:', cnpj, '→ empid:', empid);
+        if (empid !== null) {
+          cnpjToEmpid.set(cnpj, empid);
+          if (!empidMap.has(empid)) {
+            empidMap.set(empid, []);
+          }
+          empidMap.get(empid)!.push(cnpj);
         }
-        empidMap.get(empid)!.push(cnpj);
       }
     });
 
     const uniqueEmpids = Array.from(empidMap.keys());
-    console.log('📊 enrichCnpjList: unique empids to fetch:', uniqueEmpids);
+    console.log('📊 enrichCnpjListFull: empids to fetch:', uniqueEmpids.length, ', full CNPJs to fetch:', fullCnpjList.length);
 
-    if (uniqueEmpids.length === 0) {
-      // No valid empids extracted, return original CNPJs
-      const result = new Map<string, string>();
-      cnpjList.forEach(cnpj => result.set(cnpj, cnpj));
-      return of(result);
-    }
+    // Fetch both in parallel
+    const empidFetch$ = uniqueEmpids.length > 0
+      ? this.fetchCnpjByEmpids(uniqueEmpids)
+      : of(new Map<number, CnpjEntry>());
 
-    // Fetch CNPJ entries for all unique empids
-    return this.fetchCnpjByEmpids(uniqueEmpids).pipe(
-      map(cnpjMap => {
-        const result = new Map<string, string>();
-        
-        console.log('📊 enrichCnpjList: database returned', cnpjMap.size, 'entries');
-        
+    const fullCnpjFetch$ = fullCnpjList.length > 0
+      ? this.fetchCnpjByFullCnpj(fullCnpjList)
+      : of(new Map<string, CnpjEntry>());
+
+    return forkJoin({ empidResults: empidFetch$, fullCnpjResults: fullCnpjFetch$ }).pipe(
+      map(({ empidResults, fullCnpjResults }) => {
+        const result = new Map<string, CnpjEnrichedInfo>();
+
+        console.log('📊 enrichCnpjListFull: empid results:', empidResults.size, ', full CNPJ results:', fullCnpjResults.size);
+
+        // Process empid-based lookups
         cnpjList.forEach(cnpj => {
-          const empid = cnpjToEmpid.get(cnpj);
-          
-          if (empid !== undefined) {
-            const entry = cnpjMap.get(empid);
+          if (this.isFullCnpj(cnpj)) {
+            // Full CNPJ lookup
+            const entry = fullCnpjResults.get(cnpj);
             if (entry) {
-              console.log('📊 enrichCnpjList: MATCH FOUND -', cnpj, '→', entry.empresa);
-              result.set(cnpj, entry.empresa);
+              console.log('📊 enrichCnpjListFull: FULL CNPJ MATCH -', cnpj, '→', entry.empresa, 'status:', entry.status);
+              result.set(cnpj, { empresa: entry.empresa, status: entry.status });
             } else {
-              console.log('📊 enrichCnpjList: NO MATCH - empid', empid, 'not in database, using original');
-              result.set(cnpj, cnpj); // Fallback to original
+              console.log('📊 enrichCnpjListFull: FULL CNPJ NO MATCH -', cnpj);
+              result.set(cnpj, { empresa: cnpj });
             }
           } else {
-            console.log('📊 enrichCnpjList: EXTRACTION FAILED - using original');
-            result.set(cnpj, cnpj); // Fallback to original
+            const empid = cnpjToEmpid.get(cnpj);
+            if (empid !== undefined) {
+              const entry = empidResults.get(empid);
+              if (entry) {
+                console.log('📊 enrichCnpjListFull: EMPID MATCH -', cnpj, '→', entry.empresa, 'status:', entry.status);
+                result.set(cnpj, { empresa: entry.empresa, status: entry.status });
+              } else {
+                result.set(cnpj, { empresa: cnpj });
+              }
+            } else {
+              result.set(cnpj, { empresa: cnpj });
+            }
           }
         });
 
-        console.log('📊 enrichCnpjList: final result map:', Array.from(result.entries()));
+        console.log('📊 enrichCnpjListFull: final result map:', Array.from(result.entries()));
         return result;
       })
     );
