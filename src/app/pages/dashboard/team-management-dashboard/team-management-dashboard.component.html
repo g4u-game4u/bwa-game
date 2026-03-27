@@ -273,7 +273,7 @@
               <div class="kpi-grid" *ngIf="teamKPIs.length > 0" role="group" aria-labelledby="kpi-section-title">
                 <!-- KPI de Clientes na Carteira - Comentado temporariamente -->
                 <ng-container *ngFor="let kpi of teamKPIs; let i = index; trackBy: trackByKpiId">
-                  <!-- <c4u-kpi-circular-progress
+                  <c4u-kpi-circular-progress
                     *ngIf="kpi.id === 'numero-empresas'"
                     [label]="kpi.label"
                     [current]="roundValue(kpi.current)"
@@ -282,7 +282,7 @@
                     [color]="kpi.color"
                     [unit]="kpi.unit"
                     [colorIndex]="i">
-                  </c4u-kpi-circular-progress> -->
+                  </c4u-kpi-circular-progress>
                   <c4u-kpi-circular-progress
                     *ngIf="kpi.id !== 'numero-empresas'"
                     [label]="kpi.label"
