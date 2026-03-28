@@ -35,7 +35,14 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
   isLoading = true;
   isLoadingChart = true;
   activityItems: ActivityListItem[] = [];
+  filteredActivityItems: ActivityListItem[] = [];
   processoItems: ProcessListItem[] = [];
+  filteredProcessoItems: ProcessListItem[] = [];
+
+  // Search/filter state
+  searchTerm = '';
+  filterExecutor = '';
+  availableExecutors: string[] = [];
   
   // Chart data
   chartLabels: string[] = [];
@@ -104,6 +111,57 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
   }
 
   /**
+   * Filter activities/processes based on search term and executor filter
+   */
+  applyFilters(): void {
+    const term = this.searchTerm.toLowerCase().trim();
+    const executor = this.filterExecutor;
+
+    if (this.isActivityList) {
+      this.filteredActivityItems = this.activityItems.filter(item => {
+        const matchesSearch = !term ||
+          item.title.toLowerCase().includes(term) ||
+          (item.player && item.player.toLowerCase().includes(term)) ||
+          (item.cnpj && item.cnpj.toLowerCase().includes(term));
+        const matchesExecutor = !executor || item.player === executor;
+        return matchesSearch && matchesExecutor;
+      });
+    } else if (this.isProcessList) {
+      this.filteredProcessoItems = this.processoItems.filter(item => {
+        const matchesSearch = !term ||
+          item.title.toLowerCase().includes(term) ||
+          item.deliveryId.toLowerCase().includes(term) ||
+          (item.cnpj && item.cnpj.toLowerCase().includes(term));
+        return matchesSearch;
+      });
+    }
+  }
+
+  onSearchChange(value: string): void {
+    this.searchTerm = value;
+    this.applyFilters();
+  }
+
+  onExecutorFilterChange(value: string): void {
+    this.filterExecutor = value;
+    this.applyFilters();
+  }
+
+  clearFilters(): void {
+    this.searchTerm = '';
+    this.filterExecutor = '';
+    this.applyFilters();
+  }
+
+  private extractExecutors(): void {
+    const executorSet = new Set<string>();
+    this.activityItems.forEach(item => {
+      if (item.player) executorSet.add(item.player);
+    });
+    this.availableExecutors = Array.from(executorSet).sort();
+  }
+
+  /**
    * Get array of player IDs from comma-separated string
    */
   private getPlayerIds(): string[] {
@@ -161,6 +219,8 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
             // Enrich CNPJ names
             await this.enrichCnpjNames(this.activityItems.map(item => item.cnpj).filter(cnpj => cnpj));
             
+            this.extractExecutors();
+            this.applyFilters();
             this.isLoading = false;
             this.cdr.markForCheck();
           },
@@ -226,6 +286,7 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
             // Enrich CNPJ names
             await this.enrichCnpjNames(this.processoItems.map(item => item.cnpj).filter(cnpj => cnpj));
             
+            this.applyFilters();
             this.isLoading = false;
             this.cdr.markForCheck();
           },

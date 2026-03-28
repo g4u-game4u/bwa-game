@@ -8,6 +8,37 @@
 
     <!-- Content -->
     <div *ngIf="!isLoading" class="content-wrapper">
+      <!-- Search & Filter Bar -->
+      <div class="modal-filter-bar">
+        <div class="filter-search">
+          <i class="ri-search-line" aria-hidden="true"></i>
+          <input
+            type="text"
+            [value]="searchTerm"
+            (input)="onSearchChange($any($event.target).value)"
+            placeholder="Buscar por título, executor ou CNPJ..."
+            class="filter-search-input"
+            aria-label="Buscar tarefas" />
+          <button *ngIf="searchTerm" type="button" class="filter-clear-btn" (click)="onSearchChange('')" aria-label="Limpar busca">
+            <i class="ri-close-line"></i>
+          </button>
+        </div>
+        <div class="filter-executor" *ngIf="isActivityList && availableExecutors.length > 1">
+          <select
+            [value]="filterExecutor"
+            (change)="onExecutorFilterChange($any($event.target).value)"
+            class="filter-executor-select"
+            aria-label="Filtrar por executor">
+            <option value="">Todos os executores</option>
+            <option *ngFor="let exec of availableExecutors" [value]="exec">{{ formatEmailToName(exec) }}</option>
+          </select>
+        </div>
+        <button *ngIf="searchTerm || filterExecutor" type="button" class="filter-clear-all-btn" (click)="clearFilters()">
+          <i class="ri-filter-off-line" aria-hidden="true"></i>
+          Limpar filtros
+        </button>
+      </div>
+
       <!-- Chart Section (only for activities) -->
       <div *ngIf="isActivityList" class="chart-section">
         <h3 class="section-title">
@@ -37,23 +68,27 @@
           <h3 class="section-title">
             <i class="ri-task-line section-icon" aria-hidden="true"></i>
             Tarefas
+            <span class="result-count" *ngIf="filteredActivityItems.length !== activityItems.length">
+              ({{ filteredActivityItems.length }} de {{ activityItems.length }})
+            </span>
           </h3>
           
-          <div *ngIf="activityItems.length === 0" class="empty-state">
+          <div *ngIf="filteredActivityItems.length === 0" class="empty-state">
             <i class="ri-inbox-line empty-icon"></i>
-            <span>Nenhuma tarefa encontrada</span>
+            <span *ngIf="activityItems.length === 0">Nenhuma tarefa encontrada</span>
+            <span *ngIf="activityItems.length > 0">Nenhum resultado para os filtros aplicados</span>
           </div>
           
-          <div *ngIf="activityItems.length > 0" class="tasks-table">
-            <div class="task-header" [class.with-points]="listType === 'pontos'">
+          <div *ngIf="filteredActivityItems.length > 0" class="tasks-table">
+            <div class="task-header with-points">
               <div class="task-col-title">Tarefa</div>
               <div class="task-col-executor">Executor</div>
               <div class="task-col-date">Data</div>
               <div class="task-col-status">Status</div>
-              <div class="task-col-points" *ngIf="listType === 'pontos'">Pontos</div>
+              <div class="task-col-points">Pontos</div>
             </div>
             <div class="tasks-list">
-              <div *ngFor="let item of activityItems" class="task-row" [class.with-points]="listType === 'pontos'">
+              <div *ngFor="let item of filteredActivityItems" class="task-row with-points">
                 <div class="task-col-title">
                   <span class="task-title">{{ item.title }}</span>
                 </div>
@@ -68,7 +103,7 @@
                     {{ getStatusLabel(item) }}
                   </span>
                 </div>
-                <div class="task-col-points" *ngIf="listType === 'pontos'">
+                <div class="task-col-points">
                   <span class="task-points">+{{ item.points }} pts</span>
                 </div>
               </div>
@@ -83,15 +118,19 @@
           <h3 class="section-title">
             <i class="ri-folder-line section-icon" aria-hidden="true"></i>
             Processos
+            <span class="result-count" *ngIf="filteredProcessoItems.length !== processoItems.length">
+              ({{ filteredProcessoItems.length }} de {{ processoItems.length }})
+            </span>
           </h3>
           
-          <div *ngIf="processoItems.length === 0" class="empty-state">
+          <div *ngIf="filteredProcessoItems.length === 0" class="empty-state">
             <i class="ri-inbox-line empty-icon"></i>
-            <span>Nenhum processo encontrado</span>
+            <span *ngIf="processoItems.length === 0">Nenhum processo encontrado</span>
+            <span *ngIf="processoItems.length > 0">Nenhum resultado para os filtros aplicados</span>
           </div>
           
-          <div *ngIf="processoItems.length > 0" class="process-accordion">
-            <div *ngFor="let item of processoItems" class="process-accordion-item">
+          <div *ngIf="filteredProcessoItems.length > 0" class="process-accordion">
+            <div *ngFor="let item of filteredProcessoItems" class="process-accordion-item">
               <!-- Process Header (Clickable) -->
               <div 
                 class="process-header" 
