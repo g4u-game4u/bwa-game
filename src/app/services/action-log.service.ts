@@ -1037,21 +1037,21 @@ export class ActionLogService {
       return cached;
     }
 
-    // Build match condition - use regex for short empids, exact match for full CNPJ strings
-    const isShortEmpid = /^\d+$/.test(cnpj) && cnpj.length <= 6;
-    const cnpjMatch = isShortEmpid
-      ? { $regex: `\\[${cnpj}\\|` } // Match empid inside "[ID|..." pattern
+    // attributes.cnpj contains the empid (e.g. "1553")
+    // Match both string and number formats since DB may store either
+    const cnpjNum = parseInt(cnpj, 10);
+    const cnpjMatchCondition = !isNaN(cnpjNum)
+      ? { $in: [cnpj, cnpjNum] }
       : cnpj;
 
-    // NO time filtering - fetch ALL actions for this CNPJ
     const aggregateBody = [
       {
         $match: {
-          'attributes.cnpj': cnpjMatch
+          'attributes.cnpj': cnpjMatchCondition
         }
       },
       { $sort: { time: -1 } },
-      { $limit: 1000 } // Increased limit since we're fetching all data
+      { $limit: 1000 }
     ];
 
     console.log('📊 Actions by CNPJ query (ALL data, no time filter):', JSON.stringify(aggregateBody));
@@ -1063,45 +1063,15 @@ export class ActionLogService {
       map(actions => {
         console.log('📊 Actions by CNPJ response (ALL):', actions?.length || 0, 'entries');
         
-        // Filter by month on frontend
         const filtered = filterByMonth(actions, month);
         
-        return filtered.map(a => {
-          // Determine status based on action data
-          let status: 'finalizado' | 'pendente' | 'dispensado' | undefined;
-          
-          // Check if action is dismissed (highest priority)
-          if (a.extra?.['dismissed'] === true || a.attributes?.['dismissed'] === true || a.status === 'CANCELLED') {
-            status = 'dispensado';
-          }
-          // Check if action is completed/finalized
-          else if (a.extra?.processed === true || 
-                   a.status === 'DONE' || 
-                   a.status === 'DELIVERED' ||
-                   a.actionId === 'desbloquear') {
-            status = 'finalizado';
-          }
-          // Check if action is pending or in progress
-          else if (a.status === 'PENDING' || 
-                   a.status === 'DOING' || 
-                   a.status === 'INCOMPLETE' ||
-                   !a.status) {
-            status = 'pendente';
-          }
-          // Default to pendente if status is unknown
-          else {
-            status = 'pendente';
-          }
-          
-          return {
-            id: a._id,
-            title: a.attributes?.acao || a.action_title || a.actionId || 'Ação sem título',
-            player: a.userId || '',
-            created: extractTimestamp(a.time as number | { $date: string } | undefined),
-            status,
-            cnpj: a.attributes?.cnpj || undefined
-          };
-        });
+        return filtered.map(a => ({
+          id: a._id,
+          title: a.attributes?.acao || a.action_title || a.actionId || 'Ação sem título',
+          player: a.userId || '',
+          created: extractTimestamp(a.time as number | { $date: string } | undefined),
+          cnpj: a.attributes?.cnpj || undefined
+        }));
       }),
       catchError(error => {
         console.error('Error fetching actions by CNPJ:', error);
