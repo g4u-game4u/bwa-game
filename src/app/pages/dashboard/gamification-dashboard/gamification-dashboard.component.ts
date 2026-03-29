@@ -370,9 +370,8 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   
   /**
    * Load additional season progress details:
-   * - Metas: count of KPIs above target from metric_targets__c
-   * - Clientes: count of unique CNPJs from action_log aggregate
    * - Tarefas finalizadas: count of actions from action_log
+   * Note: Clientes count comes from player_company__c (cnpj_resp) via loadClientesData()
    */
   private loadSeasonProgressDetails(): void {
     const usuario = this.sessaoProvider.usuario as { _id?: string; email?: string } | null;
@@ -382,25 +381,6 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
       return;
     }
 
-    // Load clientes count from unique CNPJs in action_log
-    this.actionLogService.getUniqueClientesCount(playerId)
-      .pipe(takeUntil(this.destroy$))
-      .subscribe({
-        next: (count: number) => {
-          console.log('📊 Unique CNPJs (Clientes) count:', count);
-          if (this.seasonProgress) {
-            this.seasonProgress = {
-              ...this.seasonProgress,
-              clientes: count
-            };
-            this.cdr.markForCheck();
-          }
-        },
-        error: (err: Error) => {
-          console.error('📊 Failed to load clientes count:', err);
-        }
-      });
-    
     // Load tarefas finalizadas from action_log
     this.actionLogService.getCompletedTasksCount(playerId)
       .pipe(takeUntil(this.destroy$))

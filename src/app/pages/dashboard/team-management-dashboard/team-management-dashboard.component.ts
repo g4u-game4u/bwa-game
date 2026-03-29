@@ -2774,9 +2774,46 @@ private calculateCollaboratorTotals(memberData: Array<{
           return;
         }
         
-        // 1. Clientes na Carteira: use already-loaded teamCarteiraClientes
-        // This data was loaded by loadTeamCarteiraData() using optimized aggregate query
-        const totalEmpresasAtual = this.teamCarteiraClientes.length;
+        // 1. Clientes na Carteira: count from player_company__c where type = "cnpj_resp"
+        // Use aggregate query to count all cnpj_resp entries for team members
+        let totalEmpresasAtual = 0;
+        try {
+          const cnpjRespAggregate = [
+            {
+              $match: {
+                playerId: { $in: this.teamMemberIds },
+                type: 'cnpj_resp'
+              }
+            },
+            {
+              $group: {
+                _id: null,
+                uniqueCnpjs: { $addToSet: '$cnpj' }
+              }
+            },
+            {
+              $project: {
+                _id: 0,
+                count: { $size: '$uniqueCnpjs' }
+              }
+            }
+          ];
+          
+          const cnpjRespResult = await firstValueFrom(
+            this.funifierApi.post<any[]>(
+              '/v3/database/player_company__c/aggregate?strict=true',
+              cnpjRespAggregate
+            ).pipe(takeUntil(this.destroy$))
+          ).catch(error => {
+            console.error('Error fetching team cnpj_resp count:', error);
+            return [];
+          });
+          
+          totalEmpresasAtual = cnpjRespResult.length > 0 ? (cnpjRespResult[0].count || 0) : 0;
+          console.log('📊 Team clientes na carteira (from player_company__c cnpj_resp):', totalEmpresasAtual);
+        } catch (error) {
+          console.error('Error loading team cnpj_resp count:', error);
+        }
         
         // Fetch client_goals from all team members using aggregate query
         let somaMetasEmpresas = 0;
@@ -2832,11 +2869,11 @@ private calculateCollaboratorTotals(memberData: Array<{
         } catch (error) {
           console.error('Error loading team client_goals:', error);
           // Fallback to default if error
-          somaMetasEmpresas = this.teamMemberIds.length * 10;
+          somaMetasEmpresas = this.teamMemberIds.length * 100;
         }
         
         // Use sum of goals, or fallback to default if no goals set
-        const targetEmpresas = somaMetasEmpresas > 0 ? somaMetasEmpresas : (this.teamMemberIds.length * 10);
+        const targetEmpresas = somaMetasEmpresas > 0 ? somaMetasEmpresas : (this.teamMemberIds.length * 100);
         const superTargetEmpresas = Math.ceil(targetEmpresas * 1.5);
         
         teamKPIs.push({
@@ -2850,66 +2887,59 @@ private calculateCollaboratorTotals(memberData: Array<{
           percentage: Math.min((totalEmpresasAtual / superTargetEmpresas) * 100, 100)
         });
         
-        // 2. Entregas no Prazo: fetch from player data using single aggregate query
-        // Only fetch if we're looking at current month (entrega is only valid for current month)
-        const now = new Date();
-        const isCurrentMonth = this.selectedMonth.getFullYear() === now.getFullYear() && 
-                               this.selectedMonth.getMonth() === now.getMonth();
-        
-        if (isCurrentMonth) {
-          try {
-            // Use single aggregate query to get all team members' entrega values
-            const aggregateQuery = [
-              {
-                $match: {
-                  _id: { $in: this.teamMemberIds }
-                }
-              },
-              {
-                $project: {
-                  _id: 1,
-                  entrega: '$extra.entrega'
-                }
+        // 2. Entregas no Prazo: fetch from player.extra.entrega using single aggregate query
+        try {
+          // Use single aggregate query to get all team members' entrega values
+          const aggregateQuery = [
+            {
+              $match: {
+                _id: { $in: this.teamMemberIds }
               }
-            ];
-            
-            const playerEntregas = await firstValueFrom(
-              this.funifierApi.post<{ _id: string; entrega?: string }[]>(
-                '/database/player_status/aggregate?strict=true',
-                aggregateQuery
-              ).pipe(takeUntil(this.destroy$))
-            ).catch(error => {
-              console.error('Error fetching team entrega data:', error);
-              return [];
-            });
-            
-            // Calculate average entrega percentage
-            const validEntregas = playerEntregas
-              .filter(p => p.entrega != null && p.entrega !== '')
-              .map(p => parseFloat(p.entrega || '0'))
-              .filter(v => !isNaN(v));
-            
-            if (validEntregas.length > 0) {
-              const mediaEntregas = validEntregas.reduce((sum, v) => sum + v, 0) / validEntregas.length;
-              const targetEntregas = 90;
-              const superTargetEntregas = 100;
-              
-              teamKPIs.push({
-                id: 'entregas-prazo',
-                label: 'Entregas no Prazo',
-                current: Math.round(mediaEntregas * 100) / 100,
-                target: targetEntregas,
-                superTarget: superTargetEntregas,
-                unit: '%',
-                color: this.getKPIColorByGoals(mediaEntregas, targetEntregas, superTargetEntregas),
-                percentage: Math.min((mediaEntregas / superTargetEntregas) * 100, 100)
-              });
+            },
+            {
+              $project: {
+                _id: 1,
+                entrega: '$extra.entrega'
+              }
             }
+          ];
+          
+          const playerEntregas = await firstValueFrom(
+            this.funifierApi.post<{ _id: string; entrega?: string }[]>(
+              '/database/player_status/aggregate?strict=true',
+              aggregateQuery
+            ).pipe(takeUntil(this.destroy$))
+          ).catch(error => {
+            console.error('Error fetching team entrega data:', error);
+            return [];
+          });
+          
+          // Calculate average entrega percentage
+          const validEntregas = playerEntregas
+            .filter(p => p.entrega != null && p.entrega !== '')
+            .map(p => parseFloat(p.entrega || '0'))
+            .filter(v => !isNaN(v));
+          
+          if (validEntregas.length > 0) {
+            const mediaEntregas = validEntregas.reduce((sum, v) => sum + v, 0) / validEntregas.length;
+            const targetEntregas = 90;
+            const superTargetEntregas = 100;
             
-            console.log('✅ Team KPIs loaded (OPTIMIZED - 1 API call instead of', this.teamMemberIds.length, ')');
-          } catch (error) {
-            console.error('Error loading team entrega KPI:', error);
+            teamKPIs.push({
+              id: 'entregas-prazo',
+              label: 'Entregas no Prazo',
+              current: Math.round(mediaEntregas * 100) / 100,
+              target: targetEntregas,
+              superTarget: superTargetEntregas,
+              unit: '%',
+              color: this.getKPIColorByGoals(mediaEntregas, targetEntregas, superTargetEntregas),
+              percentage: Math.min((mediaEntregas / superTargetEntregas) * 100, 100)
+            });
           }
+          
+          console.log('✅ Team KPIs loaded (OPTIMIZED - 2 API calls instead of', this.teamMemberIds.length, ')');
+        } catch (error) {
+          console.error('Error loading team entrega KPI:', error);
         }
         
         this.teamKPIs = teamKPIs;
@@ -2953,11 +2983,10 @@ private calculateCollaboratorTotals(memberData: Array<{
   }
 
   /**
-   * Get enabled KPIs (excluding commented/disabled ones)
-   * Currently excludes 'numero-empresas' (Clientes na Carteira)
+   * Get enabled KPIs (all KPIs)
    */
   get enabledKPIs(): KPIData[] {
-    return this.teamKPIs.filter(kpi => kpi.id !== 'numero-empresas');
+    return this.teamKPIs;
   }
 
   /**
@@ -2981,9 +3010,10 @@ private calculateCollaboratorTotals(memberData: Array<{
     // Convert progressMetrics to SeasonProgress format
     // For teams, we use:
     // - metas: Calculated from teamKPIs (number of KPIs achieved / total KPIs)
-    // - clientes: Count of unique CNPJs from teamCarteiraClientes
+    // - clientes: Count from player_company__c cnpj_resp (from numero-empresas KPI)
     // - tarefasFinalizadas: atividadesFinalizadas from progressMetrics
-    const uniqueClientes = this.teamCarteiraClientes?.length || 0;
+    const empresasKpi = this.teamKPIs?.find(kpi => kpi.id === 'numero-empresas');
+    const uniqueClientes = empresasKpi ? empresasKpi.current : (this.teamCarteiraClientes?.length || 0);
     
     this.teamSeasonProgress = {
       metas: {
