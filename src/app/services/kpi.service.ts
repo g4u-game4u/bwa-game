@@ -128,15 +128,15 @@ export class KPIService {
         });
 
         // Entregas no Prazo - from player.extra.entrega
-        if (playerStatus.extra?.entrega) {
+        // Get entrega target from player's extra.entrega_goal, fallback to default 90
+        const entregaGoalRaw = playerStatus.extra?.entrega_goal;
+        const entregaTarget = (entregaGoalRaw !== undefined && entregaGoalRaw !== null)
+          ? (typeof entregaGoalRaw === 'number' ? entregaGoalRaw : parseFloat(String(entregaGoalRaw)))
+          : 90;
+        const entregaSuperTarget = 100;
+
+        if (playerStatus.extra?.entrega != null && playerStatus.extra.entrega !== '') {
           const deliveryPercentage = parseFloat(playerStatus.extra.entrega);
-          
-          // Get entrega target from player's extra.entrega_goal, fallback to default 90
-          const entregaGoalRaw = playerStatus.extra?.entrega_goal;
-          const entregaTarget = (entregaGoalRaw !== undefined && entregaGoalRaw !== null)
-            ? (typeof entregaGoalRaw === 'number' ? entregaGoalRaw : parseFloat(String(entregaGoalRaw)))
-            : 90;
-          const entregaSuperTarget = 100;
           
           kpis.push({
             id: 'entregas-prazo',
@@ -147,6 +147,19 @@ export class KPIService {
             unit: '%',
             color: this.getKPIColorByGoals(deliveryPercentage, entregaTarget, entregaSuperTarget),
             percentage: Math.min(deliveryPercentage / 100 * 100, 100)
+          });
+        } else {
+          // Data missing - show KPI with "?" and pink color
+          kpis.push({
+            id: 'entregas-prazo',
+            label: 'Entregas no Prazo',
+            current: 0,
+            target: entregaTarget,
+            superTarget: entregaSuperTarget,
+            unit: '%',
+            color: 'pink',
+            percentage: 0,
+            isMissing: true
           });
         }
 

@@ -2935,11 +2935,36 @@ private calculateCollaboratorTotals(memberData: Array<{
               color: this.getKPIColorByGoals(mediaEntregas, targetEntregas, superTargetEntregas),
               percentage: Math.min((mediaEntregas / superTargetEntregas) * 100, 100)
             });
+          } else {
+            // No entrega data available - show as missing with pink
+            teamKPIs.push({
+              id: 'entregas-prazo',
+              label: 'Entregas no Prazo',
+              current: 0,
+              target: 90,
+              superTarget: 100,
+              unit: '%',
+              color: 'pink',
+              percentage: 0,
+              isMissing: true
+            });
           }
           
           console.log('✅ Team KPIs loaded (OPTIMIZED - 2 API calls instead of', this.teamMemberIds.length, ')');
         } catch (error) {
           console.error('Error loading team entrega KPI:', error);
+          // API error - show as missing with pink
+          teamKPIs.push({
+            id: 'entregas-prazo',
+            label: 'Entregas no Prazo',
+            current: 0,
+            target: 90,
+            superTarget: 100,
+            unit: '%',
+            color: 'pink',
+            percentage: 0,
+            isMissing: true
+          });
         }
         
         this.teamKPIs = teamKPIs;

@@ -141,7 +141,8 @@
             [superTarget]="kpi.superTarget ? roundValue(kpi.superTarget) : undefined"
             [color]="kpi.color"
             [unit]="kpi.unit"
-            [colorIndex]="i">
+            [colorIndex]="i"
+            [isMissing]="!!kpi.isMissing">
           </c4u-kpi-circular-progress>
         </ng-container>
       </div>
