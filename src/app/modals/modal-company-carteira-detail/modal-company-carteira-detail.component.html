@@ -57,7 +57,6 @@
               <div class="task-col-title">Tarefa</div>
               <div class="task-col-executor">Executor</div>
               <div class="task-col-date">Data</div>
-              <div class="task-col-status">Status</div>
             </div>
             <div *ngFor="let task of tasks" class="task-row">
               <div class="task-col-title">
@@ -68,11 +67,6 @@
               </div>
               <div class="task-col-date">
                 <span class="task-date">{{ formatDate(task.created) }}</span>
-              </div>
-              <div class="task-col-status">
-                <span class="task-status" [ngClass]="getStatusClass(task.status)">
-                  {{ getStatusLabel(task.status) }}
-                </span>
               </div>
             </div>
           </div>

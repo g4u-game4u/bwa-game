@@ -96,21 +96,16 @@ function extractTimestamp(time: number | { $date: string } | undefined): number 
  * Also supports absolute dates: { $date: "2026-01-01T00:00:00.000Z" }
  * 
  * Logic:
- * - When month is undefined (Toda temporada), returns full season range (01/01/2026 to 30/04/2026)
+ * - When month is undefined (Toda temporada), returns no date boundary (all data)
  * - When a specific month is selected, returns only that month's range
- * - Minimum date is always 01/01/2026
  */
 function getRelativeDateExpression(month: Date | undefined, position: 'start' | 'end'): { $date: string } | number {
-  // Season dates
-  const seasonStartDate = new Date('2026-01-01T00:00:00.000Z');
-  const seasonEndDate = new Date('2026-04-30T23:59:59.999Z');
-  
-  // If month is undefined, return full season range
+  // If month is undefined (Toda temporada), return extreme boundaries (effectively no filter)
   if (!month) {
     if (position === 'start') {
-      return { $date: seasonStartDate.toISOString() };
+      return { $date: new Date('2000-01-01T00:00:00.000Z').toISOString() };
     } else {
-      return { $date: seasonEndDate.toISOString() };
+      return { $date: new Date('2099-12-31T23:59:59.999Z').toISOString() };
     }
   }
   
@@ -120,10 +115,6 @@ function getRelativeDateExpression(month: Date | undefined, position: 'start' | 
   // Calculate the start or end of the selected month
   if (position === 'start') {
     const monthStart = new Date(targetYear, targetMonthNum, 1, 0, 0, 0, 0);
-    // Ensure we don't go before season start
-    if (monthStart < seasonStartDate) {
-      return { $date: seasonStartDate.toISOString() };
-    }
     return { $date: monthStart.toISOString() };
   } else {
     // End of the selected month
@@ -138,16 +129,12 @@ function getRelativeDateExpression(month: Date | undefined, position: 'start' | 
  * that match both { $date: "..." } and raw epoch number formats.
  */
 function getEpochMs(month: Date | undefined, position: 'start' | 'end'): number {
-  // Season dates
-  const seasonStartDate = new Date('2026-01-01T00:00:00.000Z');
-  const seasonEndDate = new Date('2026-04-30T23:59:59.999Z');
-  
-  // If month is undefined, return full season range
+  // If month is undefined (Toda temporada), return extreme boundaries (effectively no filter)
   if (!month) {
     if (position === 'start') {
-      return seasonStartDate.getTime();
+      return 0;
     } else {
-      return seasonEndDate.getTime();
+      return new Date('2099-12-31T23:59:59.999Z').getTime();
     }
   }
 
@@ -156,7 +143,7 @@ function getEpochMs(month: Date | undefined, position: 'start' | 'end'): number 
 
   if (position === 'start') {
     const monthStart = new Date(targetYear, targetMonthNum, 1, 0, 0, 0, 0);
-    return monthStart < seasonStartDate ? seasonStartDate.getTime() : monthStart.getTime();
+    return monthStart.getTime();
   } else {
     const monthEnd = new Date(targetYear, targetMonthNum + 1, 0, 23, 59, 59, 999);
     return monthEnd.getTime();
@@ -188,23 +175,17 @@ function buildTimeMatch(month: Date | undefined): Record<string, unknown> {
 
 /**
  * Filter an array of action log entries by month on the frontend.
- * If month is undefined, returns all entries within the season (01/01/2026 to 30/04/2026).
+ * If month is undefined (Toda temporada), returns ALL entries with no date filter.
  * If month is specified, returns only entries from that month.
  * 
  * @param entries - Array of entries with a 'time' field
- * @param month - Target month to filter by (undefined = entire season)
+ * @param month - Target month to filter by (undefined = all data, no filter)
  * @returns Filtered array of entries
  */
 function filterByMonth<T extends { time?: number | { $date: string } }>(entries: T[], month: Date | undefined): T[] {
-  const seasonStartMs = new Date('2026-01-01T00:00:00.000Z').getTime();
-  const seasonEndMs = new Date('2026-04-30T23:59:59.999Z').getTime();
-  
   if (!month) {
-    // Filter by entire season
-    return entries.filter(entry => {
-      const timestamp = extractTimestamp(entry.time);
-      return timestamp >= seasonStartMs && timestamp <= seasonEndMs;
-    });
+    // No date filter — return all entries
+    return entries;
   }
   
   // Filter by specific month
@@ -774,42 +755,16 @@ export class ActionLogService {
   getActivityList(playerId: string, month?: Date): Observable<ActivityListItem[]> {
     return this.getPlayerActionLogForMonth(playerId, month).pipe(
       map(actions => {
-        // Filter by month on frontend
         const filtered = filterByMonth(actions, month);
         
-        return filtered.map(a => {
-          // Determine status based on action data
-          let status: 'finalizado' | 'pendente' | 'dispensado' | undefined;
-          
-          // Check if action is dismissed (highest priority)
-          if (a.extra?.['dismissed'] === true || a.attributes?.['dismissed'] === true || a.status === 'CANCELLED') {
-            status = 'dispensado';
-          }
-          // Check if action is completed/finalized
-          else if (a.extra?.processed === true || 
-                   a.status === 'DONE' || 
-                   a.status === 'DELIVERED' ||
-                   a.actionId === 'desbloquear') {
-            status = 'finalizado';
-          }
-          // Check if action is pending or in progress
-          else if (a.status === 'PENDING' || 
-                   a.status === 'DOING' || 
-                   a.status === 'INCOMPLETE' ||
-                   !a.status) {
-            status = 'pendente';
-          }
-
-          return {
-            id: a._id,
-            title: a.attributes?.acao || a.action_title || a.actionId || 'Ação sem título',
-            points: a.points || 0,
-            created: extractTimestamp(a.time as number | { $date: string } | undefined),
-            player: a.userId || '',
-            status,
-            cnpj: a.attributes?.cnpj || undefined
-          };
-        });
+        return filtered.map(a => ({
+          id: a._id,
+          title: a.attributes?.acao || a.action_title || a.actionId || 'Ação sem título',
+          points: a.points || 0,
+          created: extractTimestamp(a.time as number | { $date: string } | undefined),
+          player: a.userId || '',
+          cnpj: a.attributes?.cnpj || undefined
+        }));
       }),
       catchError(error => {
         console.error('Error fetching activity list:', error);
@@ -1082,11 +1037,17 @@ export class ActionLogService {
       return cached;
     }
 
+    // Build match condition - use regex for short empids, exact match for full CNPJ strings
+    const isShortEmpid = /^\d+$/.test(cnpj) && cnpj.length <= 6;
+    const cnpjMatch = isShortEmpid
+      ? { $regex: `\\[${cnpj}\\|` } // Match empid inside "[ID|..." pattern
+      : cnpj;
+
     // NO time filtering - fetch ALL actions for this CNPJ
     const aggregateBody = [
       {
         $match: {
-          'attributes.cnpj': cnpj
+          'attributes.cnpj': cnpjMatch
         }
       },
       { $sort: { time: -1 } },

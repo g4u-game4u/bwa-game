@@ -78,7 +78,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
     const monthsDiff = now.diff(feb2026, 'month', true); // Use true for fractional months
     return Math.max(0, Math.round(monthsDiff));
   })();
-  selectedMonth: Date = new Date(2026, 1, 1); // February 2026 (month is 0-indexed: 1 = February)
+  selectedMonth: Date | undefined = new Date(2026, 1, 1); // February 2026 (month is 0-indexed: 1 = February)
   activeTab: 'goals' | 'productivity' = 'goals';
   
   // Loading states
@@ -536,8 +536,16 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       let validMembers = 0;
       
       // Calculate points for the selected month using achievement aggregate
-      const monthStart = dayjs(this.selectedMonth).startOf('month');
-      const monthEnd = dayjs(this.selectedMonth).endOf('month');
+      // When selectedMonth is undefined (Toda temporada), don't filter by time
+      const timeMatch: Record<string, any> = {};
+      if (this.selectedMonth) {
+        const monthStart = dayjs(this.selectedMonth).startOf('month');
+        const monthEnd = dayjs(this.selectedMonth).endOf('month');
+        timeMatch['time'] = {
+          $gte: { $date: monthStart.toISOString() },
+          $lte: { $date: monthEnd.toISOString() }
+        };
+      }
       
       // Fetch points for all team members in one aggregate query
       const pointsAggregatePayload = [
@@ -545,10 +553,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
           $match: {
             player: { $in: memberIds },
             type: 0, // type 0 = points
-            time: {
-              $gte: { $date: monthStart.toISOString() },
-              $lte: { $date: monthEnd.toISOString() }
-            }
+            ...timeMatch
           }
         },
         {
@@ -835,6 +840,14 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
    * // Returns: { start: Date(2026-01-01), end: Date(2026-01-31) }
    */
   private calculateDateRange(): { start: Date; end: Date } {
+    // Toda temporada: no date boundaries
+    if (!this.selectedMonth) {
+      return {
+        start: new Date('2000-01-01T00:00:00.000Z'),
+        end: new Date('2099-12-31T23:59:59.999Z')
+      };
+    }
+    
     const now = dayjs();
     const targetMonth = now.subtract(this.selectedMonthsAgo, 'month');
     const seasonStartDate = dayjs('2026-01-01');
@@ -2085,9 +2098,13 @@ private calculateCollaboratorTotals(memberData: Array<{
         return;
       }
       
-      // Calculate date range for the selected month
-      const monthStart = dayjs(this.selectedMonth).startOf('month').toDate();
-      const monthEnd = dayjs(this.selectedMonth).endOf('month').toDate();
+      // Calculate date range for the selected month (or wide range for Toda temporada)
+      const monthStart = this.selectedMonth 
+        ? dayjs(this.selectedMonth).startOf('month').toDate() 
+        : new Date('2000-01-01T00:00:00.000Z');
+      const monthEnd = this.selectedMonth 
+        ? dayjs(this.selectedMonth).endOf('month').toDate() 
+        : new Date('2099-12-31T23:59:59.999Z');
       
       // OPTIMIZED: Use single aggregate query with $lookup - 1 API call instead of N
       const cnpjListWithCounts = await firstValueFrom(
@@ -2359,12 +2376,19 @@ private calculateCollaboratorTotals(memberData: Array<{
    */
   onMonthChange(monthsAgo: number): void {
     this.selectedMonthsAgo = monthsAgo;
-    // Calculate the target month date (similar to gamification-dashboard)
-    const date = new Date();
-    date.setMonth(date.getMonth() - monthsAgo);
-    this.selectedMonth = date;
-    const monthName = date.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
-    this.announceToScreenReader(`Mês alterado para ${monthName}`);
+    
+    // Handle "Toda temporada" (-1) — undefined means no month filtering
+    if (monthsAgo === -1) {
+      this.selectedMonth = undefined;
+      this.announceToScreenReader('Filtro alterado para toda temporada');
+    } else {
+      const date = new Date();
+      date.setMonth(date.getMonth() - monthsAgo);
+      this.selectedMonth = date;
+      const monthName = date.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+      this.announceToScreenReader(`Mês alterado para ${monthName}`);
+    }
+    
     this.loadTeamData();
   }
 
@@ -2584,9 +2608,13 @@ private calculateCollaboratorTotals(memberData: Array<{
           return;
         }
         
-        // Calculate date range for the selected month
-        const monthStart = dayjs(this.selectedMonth).startOf('month').toDate();
-        const monthEnd = dayjs(this.selectedMonth).endOf('month').toDate();
+        // Calculate date range for the selected month (or wide range for Toda temporada)
+        const monthStart = this.selectedMonth 
+          ? dayjs(this.selectedMonth).startOf('month').toDate() 
+          : new Date('2000-01-01T00:00:00.000Z');
+        const monthEnd = this.selectedMonth 
+          ? dayjs(this.selectedMonth).endOf('month').toDate() 
+          : new Date('2099-12-31T23:59:59.999Z');
         
         // Use optimized team aggregate service - single API call instead of N calls
         const breakdown = await firstValueFrom(

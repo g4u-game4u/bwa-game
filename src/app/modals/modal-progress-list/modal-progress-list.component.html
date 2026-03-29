@@ -49,7 +49,6 @@
               <div class="task-col-title">Tarefa</div>
               <div class="task-col-executor">Executor</div>
               <div class="task-col-date">Data</div>
-              <div class="task-col-status">Status</div>
               <div class="task-col-points" *ngIf="listType === 'pontos'">Pontos</div>
             </div>
             <div class="tasks-list">
@@ -62,11 +61,6 @@
                 </div>
                 <div class="task-col-date">
                   <span class="task-date">{{ formatDate(item.created) }}</span>
-                </div>
-                <div class="task-col-status">
-                  <span class="task-status" [ngClass]="getStatusClass(item)">
-                    {{ getStatusLabel(item) }}
-                  </span>
                 </div>
                 <div class="task-col-points" *ngIf="listType === 'pontos'">
                   <span class="task-points">+{{ item.points }} pts</span>
