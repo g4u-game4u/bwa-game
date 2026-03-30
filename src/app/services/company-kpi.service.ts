@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { Observable, of } from 'rxjs';
+import { Observable, of, forkJoin } from 'rxjs';
 import { map, catchError, shareReplay, switchMap } from 'rxjs/operators';
 import { FunifierApiService } from './funifier-api.service';
 import { KPIData } from '@model/gamification-dashboard.model';
@@ -171,18 +171,77 @@ export class CompanyKpiService {
    * @param empids - Array of empid strings from player.extra.cnpj_resp
    * @returns Observable of enriched CompanyDisplay array
    */
+  /**
+   * Check if a value is a full CNPJ (14 digits with formatting like 57.443.329/0001-44)
+   */
+  private isFullCnpj(value: string): boolean {
+    if (!value) return false;
+    return /^\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}$/.test(value.trim());
+  }
+
+  /**
+   * Fetch KPI data from cnpj__c by the CNPJ field (for full CNPJ numbers)
+   * instead of by _id (for empids)
+   */
+  private getKpiDataByCnpjField(fullCnpjs: string[]): Observable<Map<string, CnpjKpiData>> {
+    if (!fullCnpjs || fullCnpjs.length === 0) {
+      return of(new Map());
+    }
+
+    const aggregateBody = [
+      { $match: { CNPJ: { $in: fullCnpjs } } }
+    ];
+
+    console.warn('📊 Fetching KPI data by CNPJ field for', fullCnpjs.length, 'full CNPJs');
+
+    return this.fetchAllPaginatedKpi(aggregateBody, 100).pipe(
+      map(entries => {
+        const kpiMap = new Map<string, CnpjKpiData>();
+        entries.forEach(item => {
+          if (item.CNPJ) {
+            kpiMap.set(item.CNPJ, item);
+          }
+        });
+        console.warn('📊 KPI data by CNPJ field: map created with', kpiMap.size, 'entries');
+        return kpiMap;
+      }),
+      catchError(error => {
+        console.error('📊 Error fetching KPI data by CNPJ field:', error);
+        return of(new Map<string, CnpjKpiData>());
+      })
+    );
+  }
+
   enrichFromCnpjResp(empids: string[]): Observable<CompanyDisplay[]> {
     if (!empids || empids.length === 0) {
       return of([]);
     }
 
-    return this.getKpiData(empids).pipe(
-      map(kpiMap => {
-        console.warn('📊 enrichFromCnpjResp: empids:', empids.length, 'kpiMap size:', kpiMap.size);
+    // Separate empids into short (lookup by _id) and full CNPJ (lookup by CNPJ field)
+    const shortIds: string[] = [];
+    const fullCnpjs: string[] = [];
+    empids.forEach(id => {
+      if (this.isFullCnpj(id)) {
+        fullCnpjs.push(id);
+      } else {
+        shortIds.push(id);
+      }
+    });
+
+    console.warn('📊 enrichFromCnpjResp: shortIds:', shortIds.length, 'fullCnpjs:', fullCnpjs.length);
+
+    // Fetch both in parallel
+    const shortFetch$ = shortIds.length > 0 ? this.getKpiData(shortIds) : of(new Map<string, CnpjKpiData>());
+    const fullFetch$ = fullCnpjs.length > 0 ? this.getKpiDataByCnpjField(fullCnpjs) : of(new Map<string, CnpjKpiData>());
+
+    return forkJoin({ shortMap: shortFetch$, fullMap: fullFetch$ }).pipe(
+      map(({ shortMap, fullMap }) => {
+        console.warn('📊 enrichFromCnpjResp: shortMap size:', shortMap.size, 'fullMap size:', fullMap.size);
         return empids.map(empid => {
-          const kpiData = kpiMap.get(empid);
+          // Try short ID lookup first, then full CNPJ lookup
+          const kpiData = this.isFullCnpj(empid) ? fullMap.get(empid) : shortMap.get(empid);
           if (!kpiData) {
-            console.warn('📊 enrichFromCnpjResp: NO KPI for empid', empid);
+            console.warn('📊 enrichFromCnpjResp: NO KPI for', empid);
           }
           const result: CompanyDisplay = {
             cnpj: empid,
