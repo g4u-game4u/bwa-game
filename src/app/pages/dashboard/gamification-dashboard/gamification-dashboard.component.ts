@@ -698,6 +698,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
       this.announceToScreenReader('Filtro alterado para toda temporada');
     } else {
       const date = new Date();
+      date.setDate(1); // Set to 1st to avoid month rollover (e.g. March 30 → setMonth(1) = March 2)
       date.setMonth(date.getMonth() - monthsAgo);
       this.selectedMonth = date;
       console.warn('⚠️ selectedMonth set to:', date.toISOString());
