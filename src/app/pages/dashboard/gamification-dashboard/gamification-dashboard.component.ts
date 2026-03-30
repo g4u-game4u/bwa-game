@@ -257,7 +257,6 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     // This allows the page to render immediately while data loads
     this.loadPlayerData();
     this.loadCompanyData();
-    this.loadCarteiraData();
     this.loadClientesData();
     this.loadParticipacaoData();
     this.loadKPIData();
@@ -426,64 +425,6 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
           console.error('📊 Failed to load companies:', error);
           this.toastService.error('Erro ao carregar carteira de empresas');
           this.isLoadingCompanies = false;
-          this.cdr.markForCheck();
-        }
-      });
-  }
-
-  /**
-   * Load carteira data from action_log (CNPJs with action counts)
-   * and enrich with KPI data from cnpj__c collection
-   */
-  private loadCarteiraData(): void {
-    this.isLoadingCarteira = true;
-    
-    const usuario = this.sessaoProvider.usuario as { _id?: string; email?: string } | null;
-    const playerId: string = (usuario?._id || usuario?.email || '') as string;
-    
-    if (!playerId) {
-      console.warn('📊 No player ID available for carteira data');
-      this.isLoadingCarteira = false;
-      this.cdr.markForCheck();
-      return;
-    }
-    
-    this.actionLogService.getPlayerCnpjListWithCount(playerId, this.selectedMonth)
-      .pipe(
-        switchMap(clientes => {
-          console.log('📊 Carteira clientes loaded, enriching with KPI data:', clientes);
-          
-          // Extract all CNPJ strings for lookup
-          const cnpjList = clientes.map(c => c.cnpj);
-          
-          // Enrich CNPJs with clean company names, status, and KPI data in parallel
-          return this.cnpjLookupService.enrichCnpjListFull(cnpjList).pipe(
-            switchMap(cnpjInfo => {
-              // Merge into the shared name/status maps
-              cnpjInfo.forEach((info, key) => {
-                this.cnpjNameMap.set(key, info.empresa);
-                if (info.status) {
-                  this.cnpjStatusMap.set(key, info.status);
-                }
-              });
-              // Enrich companies with KPI data from cnpj__c collection
-              return this.companyKpiService.enrichCompaniesWithKpis(clientes);
-            })
-          );
-        }),
-        takeUntil(this.destroy$)
-      )
-      .subscribe({
-        next: (enrichedClientes) => {
-          console.log('📊 Carteira clientes enriched with KPI data:', enrichedClientes);
-          console.log('📊 CNPJ name map:', this.cnpjNameMap);
-          this.carteiraClientes = enrichedClientes;
-          this.isLoadingCarteira = false;
-          this.cdr.markForCheck();
-        },
-        error: (error) => {
-          console.error('📊 Failed to load carteira data:', error);
-          this.isLoadingCarteira = false;
           this.cdr.markForCheck();
         }
       });
