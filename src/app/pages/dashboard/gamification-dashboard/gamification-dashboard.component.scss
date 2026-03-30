@@ -496,6 +496,14 @@
       .section-header & {
         margin-bottom: 0;
       }
+      
+      .clientes-info-icon {
+        font-size: 0.85em;
+        opacity: 0.5;
+        cursor: help;
+        margin-left: 4px;
+        vertical-align: middle;
+      }
     }
     
     .carteira-expand-btn {
