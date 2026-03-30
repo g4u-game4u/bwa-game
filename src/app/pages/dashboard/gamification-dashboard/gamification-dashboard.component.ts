@@ -33,6 +33,7 @@ import { ProgressListType } from '@modals/modal-progress-list/modal-progress-lis
 })
 export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterViewInit {
   private destroy$ = new Subject<void>();
+  private monthChange$ = new Subject<void>(); // Cancels in-flight month-dependent requests
   private endRenderMeasurement: (() => void) | null = null;
   
   // Responsive properties
@@ -241,6 +242,8 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   }
   
   ngOnDestroy(): void {
+    this.monthChange$.next();
+    this.monthChange$.complete();
     this.destroy$.next();
     this.destroy$.complete();
   }
@@ -572,7 +575,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     
     // Pass selectedMonth and actionLogService to getPlayerKPIs
     this.kpiService.getPlayerKPIs(playerId, this.selectedMonth, this.actionLogService)
-      .pipe(takeUntil(this.destroy$))
+      .pipe(takeUntil(this.destroy$), takeUntil(this.monthChange$))
       .subscribe({
         next: (kpis) => {
           console.log('📊 KPIs loaded:', kpis, `(${kpis?.length || 0} KPIs)`);
@@ -651,7 +654,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     }
 
     this.actionLogService.getProgressMetrics(playerId, this.selectedMonth)
-      .pipe(takeUntil(this.destroy$))
+      .pipe(takeUntil(this.destroy$), takeUntil(this.monthChange$))
       .subscribe({
         next: (metrics) => {
           console.log('📊 Progress metrics loaded:', metrics);
@@ -699,7 +702,26 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
 
     // Clear caches to force fresh filtered data
     this.actionLogService.clearCache();
-    this.loadDashboardData();
+    // Only reload date-dependent data (KPIs + progress metrics)
+    // Clientes, player data, companies are NOT date-filtered
+    this.loadMonthDependentData();
+  }
+
+  /**
+   * Load only data that depends on the selected month.
+   * Called on month change to avoid reloading static data (player, clientes, companies).
+   */
+  private loadMonthDependentData(): void {
+    // Cancel any in-flight month-dependent requests
+    this.monthChange$.next();
+
+    // Show loading states immediately
+    this.isLoadingKPIs = true;
+    this.isLoadingProgress = true;
+    this.cdr.markForCheck();
+
+    this.loadKPIData();
+    this.loadProgressData();
   }
   
   /**
