@@ -955,12 +955,11 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
         processosFinalizados: Math.floor(metrics.processo.finalizadas)
       };
       
-      // Set team metrics to match collaborator metrics for display consistency
       this.teamActivityMetrics = {
         pendentes: metrics.activity.pendentes,
         emExecucao: metrics.activity.emExecucao,
         finalizadas: metrics.activity.finalizadas,
-        pontos: metrics.activity.pontos
+        pontos: Math.floor(metrics.activity.pontos)
       };
       
       this.teamProcessMetrics = {
@@ -1976,7 +1975,7 @@ private calculateCollaboratorTotals(memberData: Array<{
         pendentes: 0,
         emExecucao: 0,
         finalizadas: metrics.finalizadas,
-        pontos: totalPoints
+        pontos: Math.floor(totalPoints)
       };
       
       this.teamProcessMetrics = {
@@ -3050,8 +3049,8 @@ private calculateCollaboratorTotals(memberData: Array<{
     // Convert seasonPoints to PointWallet format
     // Note: moedas is not available for teams, so we set it to 0
     this.teamPointWallet = {
-      bloqueados: this.seasonPoints?.bloqueados || 0,
-      desbloqueados: this.seasonPoints?.desbloqueados || 0,
+      bloqueados: Math.floor(this.seasonPoints?.bloqueados || 0),
+      desbloqueados: Math.floor(this.seasonPoints?.desbloqueados || 0),
       moedas: 0 // Teams don't have moedas, only individual players
     };
     
