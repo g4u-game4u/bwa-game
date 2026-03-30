@@ -700,8 +700,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
       this.announceToScreenReader(`Mês alterado para ${monthName}`);
     }
 
-    // Clear caches to force fresh filtered data
-    this.actionLogService.clearCache();
+    // No need to clear cache - data is ALL data, filtering happens on frontend
     // Only reload date-dependent data (KPIs + progress metrics)
     // Clientes, player data, companies are NOT date-filtered
     this.loadMonthDependentData();
