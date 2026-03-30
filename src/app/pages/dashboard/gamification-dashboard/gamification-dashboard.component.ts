@@ -715,6 +715,11 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     // Cancel any in-flight month-dependent requests
     this.monthChange$.next();
 
+    // Clear stale data immediately to prevent mismatched display
+    this.activityMetrics = null;
+    this.processMetrics = null;
+    this.playerKPIs = [];
+
     // Show loading states immediately
     this.isLoadingKPIs = true;
     this.isLoadingProgress = true;
