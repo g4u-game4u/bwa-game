@@ -180,33 +180,64 @@ export class CompanyKpiService {
   }
 
   /**
-   * Fetch KPI data from cnpj__c by the CNPJ field (for full CNPJ numbers)
-   * instead of by _id (for empids)
+   * Fetch KPI data for full CNPJ numbers by first resolving them to empids via empid_cnpj__c,
+   * then querying cnpj__c by _id with those empids.
+   * 
+   * Flow: full CNPJ → empid_cnpj__c (by cnpj field) → get _id → cnpj__c (by _id)
    */
   private getKpiDataByCnpjField(fullCnpjs: string[]): Observable<Map<string, CnpjKpiData>> {
     if (!fullCnpjs || fullCnpjs.length === 0) {
       return of(new Map());
     }
 
-    const aggregateBody = [
-      { $match: { CNPJ: { $in: fullCnpjs } } }
+    console.warn('📊 Resolving', fullCnpjs.length, 'full CNPJs → empids via empid_cnpj__c');
+
+    // Step 1: Query empid_cnpj__c by cnpj field to get empids (_id)
+    const empidLookupBody = [
+      { $match: { cnpj: { $in: fullCnpjs } } },
+      { $project: { _id: 1, cnpj: 1 } }
     ];
 
-    console.warn('📊 Fetching KPI data by CNPJ field for', fullCnpjs.length, 'full CNPJs');
+    return this.funifierApi.post<{ _id: string | number; cnpj: string }[]>(
+      '/v3/database/empid_cnpj__c/aggregate?strict=true',
+      empidLookupBody,
+      { headers: { 'Range': 'items=0-100' } }
+    ).pipe(
+      switchMap(empidResults => {
+        if (!empidResults || empidResults.length === 0) {
+          console.warn('📊 No empids found for full CNPJs');
+          return of(new Map<string, CnpjKpiData>());
+        }
 
-    return this.fetchAllPaginatedKpi(aggregateBody, 100).pipe(
-      map(entries => {
-        const kpiMap = new Map<string, CnpjKpiData>();
-        entries.forEach(item => {
-          if (item.CNPJ) {
-            kpiMap.set(item.CNPJ, item);
-          }
+        // Build mapping: full CNPJ → empid string
+        const cnpjToEmpid = new Map<string, string>();
+        const empids: string[] = [];
+        empidResults.forEach(r => {
+          const empid = String(r._id);
+          cnpjToEmpid.set(r.cnpj, empid);
+          empids.push(empid);
         });
-        console.warn('📊 KPI data by CNPJ field: map created with', kpiMap.size, 'entries');
-        return kpiMap;
+
+        console.warn('📊 Resolved', empids.length, 'empids from full CNPJs');
+
+        // Step 2: Query cnpj__c by _id with the resolved empids
+        return this.getKpiData(empids).pipe(
+          map(kpiMap => {
+            // Re-map: full CNPJ → KPI data (using the empid as intermediary)
+            const result = new Map<string, CnpjKpiData>();
+            fullCnpjs.forEach(cnpj => {
+              const empid = cnpjToEmpid.get(cnpj);
+              if (empid && kpiMap.has(empid)) {
+                result.set(cnpj, kpiMap.get(empid)!);
+              }
+            });
+            console.warn('📊 KPI data resolved for', result.size, '/', fullCnpjs.length, 'full CNPJs');
+            return result;
+          })
+        );
       }),
       catchError(error => {
-        console.error('📊 Error fetching KPI data by CNPJ field:', error);
+        console.error('📊 Error resolving full CNPJs to KPI data:', error);
         return of(new Map<string, CnpjKpiData>());
       })
     );
