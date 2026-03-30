@@ -184,12 +184,10 @@ function buildTimeMatch(month: Date | undefined): Record<string, unknown> {
  */
 function filterByMonth<T extends { time?: number | { $date: string } }>(entries: T[], month: Date | undefined): T[] {
   if (!month) {
-    // No date filter — return all entries
-    console.log('📊 filterByMonth: no month filter, returning all', entries.length, 'entries');
+    console.warn('📊 filterByMonth: no month filter, returning all', entries.length, 'entries');
     return entries;
   }
   
-  // Filter by specific month
   const targetMonthNum = month.getMonth();
   const targetYear = month.getFullYear();
   const monthStart = new Date(targetYear, targetMonthNum, 1, 0, 0, 0, 0).getTime();
@@ -200,7 +198,7 @@ function filterByMonth<T extends { time?: number | { $date: string } }>(entries:
     return timestamp >= monthStart && timestamp <= monthEnd;
   });
   
-  console.log('📊 filterByMonth:', targetYear, '-', targetMonthNum + 1, '→', filtered.length, '/', entries.length, 'entries');
+  console.warn('📊 filterByMonth:', targetYear, '-', targetMonthNum + 1, '→', filtered.length, '/', entries.length, 'entries');
   return filtered;
 }
 

@@ -690,16 +690,17 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
    */
   onMonthChange(monthsAgo: number): void {
     console.log('📊 onMonthChange called with monthsAgo:', monthsAgo);
+    console.warn('⚠️ MONTH CHANGE:', monthsAgo); // Use warn so it's visible even with filters
     // Handle "Toda temporada" (-1) — undefined means no month filtering (season-wide)
     if (monthsAgo === -1) {
       this.selectedMonth = undefined;
-      console.log('📊 selectedMonth set to undefined (Toda temporada)');
+      console.warn('⚠️ selectedMonth set to undefined (Toda temporada)');
       this.announceToScreenReader('Filtro alterado para toda temporada');
     } else {
       const date = new Date();
       date.setMonth(date.getMonth() - monthsAgo);
       this.selectedMonth = date;
-      console.log('📊 selectedMonth set to:', date.toISOString(), 'month:', date.getMonth(), 'year:', date.getFullYear());
+      console.warn('⚠️ selectedMonth set to:', date.toISOString());
       const monthName = date.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
       this.announceToScreenReader(`Mês alterado para ${monthName}`);
     }
