@@ -17,6 +17,7 @@ export interface CnpjEntry {
 export interface CnpjEnrichedInfo {
   empresa: string;
   status?: string; // "Ativa", "Inativa", etc.
+  cnpj?: string; // Actual CNPJ number from empid_cnpj__c
 }
 
 @Injectable({
@@ -332,7 +333,7 @@ export class CnpjLookupService {
             const entry = fullCnpjResults.get(cnpj);
             if (entry) {
               console.log('📊 enrichCnpjListFull: FULL CNPJ MATCH -', cnpj, '→', entry.empresa, 'status:', entry.status);
-              result.set(cnpj, { empresa: entry.empresa, status: entry.status });
+              result.set(cnpj, { empresa: entry.empresa, status: entry.status, cnpj: entry.cnpj });
             } else {
               console.log('📊 enrichCnpjListFull: FULL CNPJ NO MATCH -', cnpj);
               result.set(cnpj, { empresa: cnpj });
@@ -343,7 +344,7 @@ export class CnpjLookupService {
               const entry = empidResults.get(empid);
               if (entry) {
                 console.log('📊 enrichCnpjListFull: EMPID MATCH -', cnpj, '→', entry.empresa, 'status:', entry.status);
-                result.set(cnpj, { empresa: entry.empresa, status: entry.status });
+                result.set(cnpj, { empresa: entry.empresa, status: entry.status, cnpj: entry.cnpj });
               } else {
                 result.set(cnpj, { empresa: cnpj });
               }
@@ -362,6 +363,44 @@ export class CnpjLookupService {
   /**
    * Clear cache (useful for testing or manual refresh)
    */
+  /**
+   * Get full CnpjEntry data for a list of empids.
+   * Returns a Map of empid string → CnpjEntry with _id, cnpj, empresa, status.
+   */
+  getFullEntries(cnpjList: string[]): Observable<Map<string, CnpjEntry>> {
+    if (cnpjList.length === 0) {
+      return of(new Map<string, CnpjEntry>());
+    }
+
+    const empids: number[] = [];
+    const empidToOriginal = new Map<number, string>();
+
+    cnpjList.forEach(cnpj => {
+      const empid = this.extractEmpid(cnpj);
+      if (empid !== null) {
+        empids.push(empid);
+        empidToOriginal.set(empid, cnpj);
+      }
+    });
+
+    if (empids.length === 0) {
+      return of(new Map<string, CnpjEntry>());
+    }
+
+    return this.fetchCnpjByEmpids([...new Set(empids)]).pipe(
+      map(cnpjMap => {
+        const result = new Map<string, CnpjEntry>();
+        cnpjList.forEach(cnpj => {
+          const empid = this.extractEmpid(cnpj);
+          if (empid !== null && cnpjMap.has(empid)) {
+            result.set(cnpj, cnpjMap.get(empid)!);
+          }
+        });
+        return result;
+      })
+    );
+  }
+
   clearCache(): void {
     // No cache to clear in this implementation
     console.log('📊 clearCache: no cache to clear (using direct aggregate queries)');

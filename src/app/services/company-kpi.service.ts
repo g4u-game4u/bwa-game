@@ -20,6 +20,7 @@ export interface CnpjKpiData {
 export interface CompanyDisplay {
   cnpj: string; // empid from cnpj_resp
   cnpjId?: string; // Extracted ID for KPI lookup (same as cnpj for cnpj_resp)
+  cnpjNumber?: string; // Actual CNPJ number from empid_cnpj__c (e.g. "00.063.263/0009-05")
   name?: string; // Company name from empid_cnpj__c
   status?: string; // Company status from empid_cnpj__c (e.g. "Ativa", "Inativa")
   actionCount: number; // Number of actions for this company

@@ -202,7 +202,7 @@
         <c4u-shimmer *ngIf="isLoadingClientes"></c4u-shimmer>
 
         <div *ngIf="!isLoadingClientes && carteiraClientes.length > 0" class="carteira-list">
-          <div *ngFor="let cliente of carteiraClientes" class="carteira-item" role="article" (click)="openCompanyDetailModal(cliente)" style="cursor: pointer;">
+          <div *ngFor="let cliente of carteiraClientes" class="carteira-item" role="article" (click)="openCompanyDetailModal(cliente)" style="cursor: pointer;" [title]="getCompanyTooltip(cliente.cnpj)">
             <div class="carteira-item-info">
               <i class="ri-building-line"></i>
               <span class="carteira-cnpj">{{ getCompanyDisplayName(cliente.cnpj) || cliente.cnpj }}</span>
@@ -229,7 +229,7 @@
         <c4u-shimmer *ngIf="isLoadingParticipacao"></c4u-shimmer>
 
         <div *ngIf="!isLoadingParticipacao && participacaoClientes.length > 0" class="carteira-list">
-          <div *ngFor="let cliente of participacaoClientes" class="carteira-item" role="article" (click)="openCompanyDetailModal(cliente)" style="cursor: pointer;">
+          <div *ngFor="let cliente of participacaoClientes" class="carteira-item" role="article" (click)="openCompanyDetailModal(cliente)" style="cursor: pointer;" [title]="getCompanyTooltip(cliente.cnpj)">
             <div class="carteira-item-info">
               <i class="ri-building-line"></i>
               <span class="carteira-cnpj">{{ getCompanyDisplayName(cliente.cnpj) || cliente.cnpj }}</span>

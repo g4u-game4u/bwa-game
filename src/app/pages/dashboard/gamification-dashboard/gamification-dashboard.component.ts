@@ -85,6 +85,8 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   
   // Status map from empid_cnpj__c (cnpj → status string like "Ativa")
   cnpjStatusMap = new Map<string, string>();
+  // CNPJ number map from empid_cnpj__c (empid → actual CNPJ number)
+  cnpjNumberMap = new Map<string, string>();
   
   // Clientes from cnpj (empids) - Participação tab
   participacaoClientes: CompanyDisplay[] = [];
@@ -470,11 +472,14 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
           // Enrich with names + status from empid_cnpj__c
           return this.cnpjLookupService.enrichCnpjListFull(empids).pipe(
             switchMap(cnpjInfo => {
-              // Merge into the shared name/status maps
+              // Merge into the shared name/status/cnpjNumber maps
               cnpjInfo.forEach((info, key) => {
                 this.cnpjNameMap.set(key, info.empresa);
                 if (info.status) {
                   this.cnpjStatusMap.set(key, info.status);
+                }
+                if (info.cnpj) {
+                  this.cnpjNumberMap.set(key, info.cnpj);
                 }
               });
               // Enrich with KPI data from cnpj__c
@@ -531,11 +536,14 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
 
           return this.cnpjLookupService.enrichCnpjListFull(empids).pipe(
             switchMap(cnpjInfo => {
-              // Merge into the shared name/status maps
+              // Merge into the shared name/status/cnpjNumber maps
               cnpjInfo.forEach((info, key) => {
                 this.cnpjNameMap.set(key, info.empresa);
                 if (info.status) {
                   this.cnpjStatusMap.set(key, info.status);
+                }
+                if (info.cnpj) {
+                  this.cnpjNumberMap.set(key, info.cnpj);
                 }
               });
               return this.companyKpiService.enrichFromCnpjResp(empids);
@@ -971,6 +979,19 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
    */
   getCompanyStatus(cnpj: string): string {
     return this.cnpjStatusMap.get(cnpj) || '';
+  }
+
+  /**
+   * Build hover tooltip text for a company showing _id, cnpj and status from empid_cnpj__c
+   */
+  getCompanyTooltip(empid: string): string {
+    const name = this.cnpjNameMap.get(empid) || '';
+    const cnpjNumber = this.cnpjNumberMap.get(empid) || '';
+    const status = this.cnpjStatusMap.get(empid) || '';
+    const parts = [`ID: ${empid}`];
+    if (cnpjNumber) parts.push(`CNPJ: ${cnpjNumber}`);
+    if (status) parts.push(`Status: ${status}`);
+    return parts.join(' | ');
   }
 
   /**
