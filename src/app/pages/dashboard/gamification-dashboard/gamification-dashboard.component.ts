@@ -637,6 +637,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
    */
   private loadProgressData(): void {
     this.isLoadingProgress = true;
+    console.log('📊 loadProgressData called with selectedMonth:', this.selectedMonth?.toISOString() || 'undefined (toda temporada)');
     
     // Get player email/id for action log query
     // Funifier uses email as the player ID
@@ -688,14 +689,17 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
    * @param monthsAgo - Number of months ago (0 = current month)
    */
   onMonthChange(monthsAgo: number): void {
+    console.log('📊 onMonthChange called with monthsAgo:', monthsAgo);
     // Handle "Toda temporada" (-1) — undefined means no month filtering (season-wide)
     if (monthsAgo === -1) {
       this.selectedMonth = undefined;
+      console.log('📊 selectedMonth set to undefined (Toda temporada)');
       this.announceToScreenReader('Filtro alterado para toda temporada');
     } else {
       const date = new Date();
       date.setMonth(date.getMonth() - monthsAgo);
       this.selectedMonth = date;
+      console.log('📊 selectedMonth set to:', date.toISOString(), 'month:', date.getMonth(), 'year:', date.getFullYear());
       const monthName = date.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
       this.announceToScreenReader(`Mês alterado para ${monthName}`);
     }
