@@ -138,7 +138,7 @@ export class CompanyKpiService {
     accumulated: CnpjKpiData[] = []
   ): Observable<CnpjKpiData[]> {
     const rangeHeader = `items=${startIndex}-${batchSize}`;
-    console.log(`📊 KPI batch: ${rangeHeader} (accumulated: ${accumulated.length})`);
+    console.warn(`📊 KPI batch: ${rangeHeader} (accumulated: ${accumulated.length})`);
 
     return this.funifierApi.post<CnpjKpiData[]>(
       '/v3/database/cnpj__c/aggregate?strict=true',
@@ -178,8 +178,12 @@ export class CompanyKpiService {
 
     return this.getKpiData(empids).pipe(
       map(kpiMap => {
+        console.warn('📊 enrichFromCnpjResp: empids:', empids.length, 'kpiMap size:', kpiMap.size);
         return empids.map(empid => {
           const kpiData = kpiMap.get(empid);
+          if (!kpiData) {
+            console.warn('📊 enrichFromCnpjResp: NO KPI for empid', empid);
+          }
           const result: CompanyDisplay = {
             cnpj: empid,
             cnpjId: empid,
