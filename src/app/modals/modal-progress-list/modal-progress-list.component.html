@@ -72,6 +72,16 @@
               ({{ filteredActivityItems.length }} de {{ activityItems.length }})
             </span>
           </h3>
+
+          <div class="task-search-bar">
+            <input
+              type="text"
+              [value]="searchTerm"
+              (input)="onSearchInput($event)"
+              placeholder="Buscar por título, executor ou data"
+              aria-label="Buscar tarefas"
+              class="search-input" />
+          </div>
           
           <div *ngIf="filteredActivityItems.length === 0" class="empty-state">
             <i class="ri-inbox-line empty-icon"></i>
@@ -80,15 +90,15 @@
           </div>
           
           <div *ngIf="filteredActivityItems.length > 0" class="tasks-table">
-            <div class="task-header with-points">
+            <div class="task-header" [class.with-points]="showPointsColumn">
               <div class="task-col-title">Tarefa</div>
               <div class="task-col-executor">Executor</div>
               <div class="task-col-date">Data</div>
               <div class="task-col-status">Status</div>
-              <div class="task-col-points">Pontos</div>
+              <div class="task-col-points" *ngIf="showPointsColumn">Pontos</div>
             </div>
             <div class="tasks-list">
-              <div *ngFor="let item of filteredActivityItems" class="task-row with-points">
+              <div *ngFor="let item of filteredActivityItems" class="task-row" [class.with-points]="showPointsColumn">
                 <div class="task-col-title">
                   <span class="task-title">{{ item.title }}</span>
                 </div>
@@ -103,8 +113,8 @@
                     {{ getStatusLabel(item) }}
                   </span>
                 </div>
-                <div class="task-col-points">
-                  <span class="task-points">+{{ item.points }} pts</span>
+                <div class="task-col-points" *ngIf="showPointsColumn">
+                  <span class="task-points" [class.locked]="item.pointsLocked">+{{ item.points }} pts</span>
                 </div>
               </div>
             </div>

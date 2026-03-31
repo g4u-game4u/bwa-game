@@ -37,12 +37,7 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
   activityItems: ActivityListItem[] = [];
   filteredActivityItems: ActivityListItem[] = [];
   processoItems: ProcessListItem[] = [];
-  filteredProcessoItems: ProcessListItem[] = [];
-
-  // Search/filter state
-  searchTerm = '';
-  filterExecutor = '';
-  availableExecutors: string[] = [];
+  searchTerm: string = '';
   
   // Chart data
   chartLabels: string[] = [];
@@ -108,6 +103,32 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
 
   get isProcessList(): boolean {
     return this.listType === 'processos-pendentes' || this.listType === 'processos-finalizados';
+  }
+
+  get showPointsColumn(): boolean {
+    return this.listType === 'atividades' || this.listType === 'pontos';
+  }
+
+  onSearchInput(event: Event): void {
+    const value = (event.target as HTMLInputElement).value;
+    this.searchTerm = value;
+    this.filterActivityItems();
+  }
+
+  filterActivityItems(): void {
+    const search = (this.searchTerm || '').trim().toLowerCase();
+    if (!search) {
+      this.filteredActivityItems = [...this.activityItems];
+      return;
+    }
+
+    this.filteredActivityItems = this.activityItems.filter(item => {
+      const title = (item.title || '').toLowerCase();
+      const executor = (item.player || '').toLowerCase();
+      const dateText = this.formatDate(item.created).toLowerCase();
+
+      return title.includes(search) || executor.includes(search) || dateText.includes(search);
+    });
   }
 
   /**
@@ -218,9 +239,11 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
             
             // Enrich CNPJ names
             await this.enrichCnpjNames(this.activityItems.map(item => item.cnpj).filter(cnpj => cnpj));
-            
-            this.extractExecutors();
-            this.applyFilters();
+
+            // Apply initial filter
+            this.filteredActivityItems = [...this.activityItems];
+            this.filterActivityItems();
+
             this.isLoading = false;
             this.cdr.markForCheck();
           },

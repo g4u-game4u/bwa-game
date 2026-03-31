@@ -15,6 +15,9 @@ export interface ActionLogEntry {
     delivery_id?: number; // Process ID (number)
     delivery?: number; // Used in desbloquear action to reference delivery_id
     acao?: string; // Action title to display
+    stage?: string; // Stage of action (used to match achievements)
+    deal?: string; // Deal/CNPJ reference
+    id?: string | number; // Action identifier used in achievement.extra.id
     cnpj?: string; // Client CNPJ
     integration_id?: number;
     [key: string]: unknown;
@@ -40,6 +43,7 @@ export interface ActivityListItem {
   id: string;
   title: string; // attributes.acao
   points: number;
+  pointsLocked?: boolean; // true when achievement.item === 'locked_points'
   created: number;
   player?: string; // userId (email do executor)
   status?: 'finalizado' | 'pendente' | 'dispensado'; // Status da atividade
@@ -165,6 +169,100 @@ export class ActionLogService {
   private monthlyPointsBreakdownCache = new Map<string, CacheEntry<{ bloqueados: number; desbloqueados: number }>>();
 
   constructor(private funifierApi: FunifierApiService) {}
+
+  private normalizeStringValue(value: unknown): string | undefined {
+    if (typeof value !== 'string') {
+      return undefined;
+    }
+
+    const normalized = value.trim();
+    return normalized.length > 0 ? normalized : undefined;
+  }
+
+  /**
+   * Fetch points for actions by matching achievement.extra fields:
+   * - extra.id    <= action.attributes.id
+   * - extra.acao  <= action.attributes.stage
+   */
+  private getAchievementPointsByActions(actions: ActionLogEntry[]): Observable<Map<string, { total: number; locked: boolean }>> {
+    type MatchTuple = {
+      id: string;
+      acao: string;
+    };
+
+    const tuplesByActionId = new Map<string, MatchTuple>();
+    const uniqueTuples = new Map<string, MatchTuple>();
+
+    actions.forEach(action => {
+      const acao = this.normalizeStringValue(action.attributes?.stage);
+      const rawId = action.attributes?.id;
+      const id = rawId != null ? String(rawId).trim() : '';
+
+      if (!acao || !id) {
+        return;
+      }
+
+      const tuple: MatchTuple = { id, acao };
+      const tupleKey = `${id}__${acao}`;
+      tuplesByActionId.set(action._id, tuple);
+      uniqueTuples.set(tupleKey, tuple);
+    });
+
+    if (uniqueTuples.size === 0) {
+      return of(new Map<string, { total: number; locked: boolean }>());
+    }
+
+    const tupleRequests = Array.from(uniqueTuples.entries()).map(([tupleKey, tuple]) => {
+      const aggregateBody = [
+        {
+          $match: {
+            'extra.id': tuple.id,
+            'extra.acao': tuple.acao
+          }
+        }
+      ];
+
+      return this.funifierApi.post<Array<{ total?: number; item?: string }>>(
+        '/v3/database/achievement/aggregate?strict=true',
+        aggregateBody
+      ).pipe(
+        map(response => ({
+          tupleKey,
+          total: Array.isArray(response)
+            ? response.reduce((sum, doc) => sum + Number(doc?.total || 0), 0)
+            : 0,
+          locked: Array.isArray(response)
+            ? response.some(doc => String((doc as any)?.item || '').trim() === 'locked_points')
+            : false
+        })),
+        catchError(error => {
+          console.error('Error fetching achievement points by tuple:', tuple, error);
+          return of({ tupleKey, total: 0, locked: false });
+        })
+      );
+    });
+
+    return forkJoin(tupleRequests).pipe(
+      map(tupleTotals => {
+        const tuplePoints = new Map<string, { total: number; locked: boolean }>();
+        tupleTotals.forEach(result => {
+          tuplePoints.set(result.tupleKey, { total: result.total, locked: result.locked });
+        });
+
+        const pointsByActionId = new Map<string, { total: number; locked: boolean }>();
+        tuplesByActionId.forEach((tuple, actionId) => {
+          const tupleKey = `${tuple.id}__${tuple.acao}`;
+          pointsByActionId.set(actionId, tuplePoints.get(tupleKey) || { total: 0, locked: false });
+        });
+
+        return pointsByActionId;
+      }),
+      catchError(error => {
+        console.error('Error fetching achievement points by action tuple:', error);
+        return of(new Map<string, { total: number; locked: boolean }>());
+      })
+    );
+  }
 
   /**
    * Get action log entries for a player for the current month
@@ -762,7 +860,8 @@ export class ActionLogService {
    */
   getActivityList(playerId: string, month?: Date): Observable<ActivityListItem[]> {
     return this.getPlayerActionLogForMonth(playerId, month).pipe(
-      map(actions => actions.map(a => {
+      switchMap(actions => this.getAchievementPointsByActions(actions).pipe(
+        map(pointsByActionId => actions.map(a => {
         // Determine status based on action data
         let status: 'finalizado' | 'pendente' | 'dispensado' | undefined;
 
@@ -809,16 +908,20 @@ export class ActionLogService {
               ? acaoFromAttributes
               : (a.action_title || a.actionId || 'Ação sem título');
 
-        return {
+          const pointsInfo = pointsByActionId.get(a._id);
+
+          return {
           id: a._id,
           title,
-          points: a.points || 0,
+          points: pointsInfo?.total ?? (a.points || 0),
+          pointsLocked: pointsInfo?.locked ?? false,
           created: extractTimestamp(a.time as number | { $date: string } | undefined),
           player: a.userId || '',
           status,
           cnpj: typeof a.attributes?.['deal'] === 'string' ? a.attributes?.['deal'] : undefined
-        };
-      })),
+          };
+        }))
+      )),
       catchError(error => {
         console.error('Error fetching activity list:', error);
         return of([]);
