@@ -22,10 +22,11 @@ export class AuthProvider {
     console.log('🔐 Username:', email);
     
     // Use Funifier authentication
+    // Trim username to prevent spaces from breaking the Funifier profile
     const authBody = {
       apiKey: this.funifierApiKey,
       grant_type: 'password',
-      username: email,
+      username: email.trim(),
       password: password
     };
 
