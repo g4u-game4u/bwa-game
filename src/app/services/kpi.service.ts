@@ -77,7 +77,7 @@ export class KPIService {
    * 1. Clientes na Carteira - count from action_log filtered by selected month
    * 2. Porcentagem de Entregas no Prazo - value from extra.entrega (only for current month)
    * 
-   * @param playerId - Player ID
+   * @param playerId - Player ID or 'me' for current player
    * @param selectedMonth - Selected month for filtering (optional, defaults to current month)
    * @param actionLogService - ActionLogService instance (passed to avoid circular dependency)
    */
@@ -90,8 +90,12 @@ export class KPIService {
       return cached;
     }
 
-    // Use PlayerService to get raw player data (shared cache)
-    const request$: Observable<KPIData[]> = this.playerService.getRawPlayerData(playerId).pipe(
+    // Use faster getCurrentPlayerData for 'me' or current player
+    const playerData$ = playerId === 'me'
+      ? this.playerService.getCurrentPlayerData()
+      : this.playerService.getRawPlayerData(playerId);
+
+    const request$: Observable<KPIData[]> = playerData$.pipe(
       switchMap((playerStatus): Observable<KPIData[]> => {
         console.log('📊 Player status received:', playerStatus);
         

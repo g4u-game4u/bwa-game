@@ -38,6 +38,9 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
   filteredActivityItems: ActivityListItem[] = [];
   processoItems: ProcessListItem[] = [];
   searchTerm: string = '';
+  filterExecutor: string = '';
+  availableExecutors: string[] = [];
+  filteredProcessoItems: ProcessListItem[] = [];
   
   // Chart data
   chartLabels: string[] = [];
