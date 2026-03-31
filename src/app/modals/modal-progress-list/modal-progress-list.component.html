@@ -55,15 +55,15 @@
           </div>
           
           <div *ngIf="filteredActivityItems.length > 0" class="tasks-table">
-            <div class="task-header" [class.with-points]="listType === 'pontos'">
+            <div class="task-header" [class.with-points]="showPointsColumn">
               <div class="task-col-title">Tarefa</div>
               <div class="task-col-executor">Executor</div>
               <div class="task-col-date">Data</div>
               <div class="task-col-status">Status</div>
-              <div class="task-col-points" *ngIf="listType === 'pontos'">Pontos</div>
+              <div class="task-col-points" *ngIf="showPointsColumn">Pontos</div>
             </div>
             <div class="tasks-list">
-              <div *ngFor="let item of filteredActivityItems" class="task-row" [class.with-points]="listType === 'pontos'">
+              <div *ngFor="let item of filteredActivityItems" class="task-row" [class.with-points]="showPointsColumn">
                 <div class="task-col-title">
                   <span class="task-title">{{ item.title }}</span>
                 </div>
@@ -78,8 +78,8 @@
                     {{ getStatusLabel(item) }}
                   </span>
                 </div>
-                <div class="task-col-points" *ngIf="listType === 'pontos'">
-                  <span class="task-points">+{{ item.points }} pts</span>
+                <div class="task-col-points" *ngIf="showPointsColumn">
+                  <span class="task-points" [class.locked]="item.pointsLocked">+{{ item.points }} pts</span>
                 </div>
               </div>
             </div>

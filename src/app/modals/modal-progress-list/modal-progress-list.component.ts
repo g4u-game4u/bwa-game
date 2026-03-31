@@ -105,6 +105,10 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
     return this.listType === 'processos-pendentes' || this.listType === 'processos-finalizados';
   }
 
+  get showPointsColumn(): boolean {
+    return this.listType === 'atividades' || this.listType === 'pontos';
+  }
+
   onSearchInput(event: Event): void {
     const value = (event.target as HTMLInputElement).value;
     this.searchTerm = value;
