@@ -57,9 +57,11 @@ export class LoginComponent implements OnInit, OnDestroy {
     this.bwaLogoUrl = this.logoService.getLogoUrl();
   }
 
-  // Estado do fluxo: 'login' | 'reset-request' | 'reset-confirm'
-  resetFlow: 'login' | 'reset-request' | 'reset-confirm' = 'login';
+  // Estado do fluxo: 'login' | 'reset-request' | 'reset-confirm' | 'reset-from-email'
+  resetFlow: 'login' | 'reset-request' | 'reset-confirm' | 'reset-from-email' = 'login';
   resetEmail: string = '';
+  resetToken: string = '';
+  resetUserId: string = '';
 
   form: FormGroup = new FormGroup({
     username: new FormControl('', Validators.required),
@@ -71,7 +73,12 @@ export class LoginComponent implements OnInit, OnDestroy {
   });
 
   resetConfirmForm: FormGroup = new FormGroup({
-    code: new FormControl('', [Validators.required, Validators.minLength(6)]),
+    newPassword: new FormControl('', [Validators.required, Validators.minLength(6)]),
+    confirmPassword: new FormControl('', [Validators.required])
+  }, { validators: this.passwordMatchValidator });
+
+  // Form for reset from email link (no code needed, uses token from URL)
+  resetFromEmailForm: FormGroup = new FormGroup({
     newPassword: new FormControl('', [Validators.required, Validators.minLength(6)]),
     confirmPassword: new FormControl('', [Validators.required])
   }, { validators: this.passwordMatchValidator });
@@ -118,6 +125,18 @@ export class LoginComponent implements OnInit, OnDestroy {
       if (reason === 'session_expired') {
         this.sessionExpiredMessage = 'Sua sessão expirou após 12 horas. Por favor, faça login novamente.';
         this.toastService.warning(this.sessionExpiredMessage);
+      }
+      
+      // Check for password reset token from email link
+      const token = this.route.snapshot.queryParamMap.get('token');
+      const userId = this.route.snapshot.queryParamMap.get('user');
+      
+      if (token && userId) {
+        console.log('🔐 Password reset link detected:', { token, userId });
+        this.resetToken = token;
+        this.resetUserId = userId;
+        this.resetFlow = 'reset-from-email';
+        this.resetFromEmailForm.reset();
       }
       
       // Subscribe to session expiration events
@@ -266,7 +285,11 @@ export class LoginComponent implements OnInit, OnDestroy {
     this.resetRequestForm.enable(); // Ensure form is enabled
     this.resetConfirmForm.reset();
     this.resetConfirmForm.enable(); // Ensure form is enabled
+    this.resetFromEmailForm.reset();
+    this.resetFromEmailForm.enable();
     this.resetEmail = '';
+    this.resetToken = '';
+    this.resetUserId = '';
   }
 
   async requestResetCode() {
@@ -278,11 +301,15 @@ export class LoginComponent implements OnInit, OnDestroy {
       try {
         await this.authProvider.requestPasswordReset(this.resetRequestEmail);
         this.resetEmail = this.resetRequestEmail;
-        this.resetFlow = 'reset-confirm';
-        this.resetConfirmForm.reset();
-        this.toastService.success(this.translate.instant('MESSAGE_CODE_SENT'));
+        
+        // Show success message and inform user to check email
+        this.toastService.success(this.translate.instant('MESSAGE_RESET_EMAIL_SENT'));
+        
+        // Return to login - user will click link in email
+        this.backToLogin();
       } catch (error: any) {
-        const errorMessage = error?.error?.message || this.translate.instant('ERROR_RESET_CODE_REQUEST');
+        console.error('Password reset request error:', error);
+        const errorMessage = error?.error?.message || error?.message || this.translate.instant('ERROR_RESET_CODE_REQUEST');
         this.toastService.error(errorMessage);
       } finally {
         this.isLoading = false;
@@ -297,12 +324,10 @@ export class LoginComponent implements OnInit, OnDestroy {
       this.resetConfirmForm.disable(); // Disable form controls
       this.loadingText = this.translate.instant('LOADING_RESETTING_PASSWORD');
       try {
-        await this.authProvider.resetPassword(
-          this.resetEmail,
-          this.resetConfirmCode,
-          this.resetConfirmNewPassword
-        );
-        this.toastService.success(this.translate.instant('MESSAGE_PASSWORD_RESET_SUCCESS'));
+        // Note: Funifier's passwordreset endpoint sends an email with a link
+        // The user should click the link in their email to complete the reset
+        // This old flow with code input is deprecated
+        this.toastService.success(this.translate.instant('MESSAGE_CHECK_EMAIL_FOR_LINK'));
         this.backToLogin();
       } catch (error: any) {
         const errorMessage = error?.error?.message || this.translate.instant('ERROR_RESET_PASSWORD');
@@ -310,6 +335,37 @@ export class LoginComponent implements OnInit, OnDestroy {
       } finally {
         this.isLoading = false;
         this.resetConfirmForm.enable(); // Re-enable form controls
+      }
+    }
+  }
+
+  async confirmResetFromEmail() {
+    if (this.resetFromEmailForm.valid && !this.resetFromEmailForm.hasError('passwordMismatch')) {
+      this.isLoading = true;
+      this.resetFromEmailForm.disable();
+      this.loadingText = this.translate.instant('LOADING_RESETTING_PASSWORD');
+      
+      try {
+        const newPassword = this.resetFromEmailForm.get('newPassword')?.value;
+        
+        await this.authProvider.resetPassword(
+          this.resetUserId,
+          this.resetToken,
+          newPassword
+        );
+        
+        this.toastService.success(this.translate.instant('MESSAGE_PASSWORD_RESET_SUCCESS'));
+        
+        // Clear query params and return to login
+        this.router.navigate(['/login'], { replaceUrl: true });
+        this.backToLogin();
+      } catch (error: any) {
+        console.error('Password reset error:', error);
+        const errorMessage = error?.error?.message || error?.message || this.translate.instant('ERROR_RESET_PASSWORD');
+        this.toastService.error(errorMessage);
+      } finally {
+        this.isLoading = false;
+        this.resetFromEmailForm.enable();
       }
     }
   }
