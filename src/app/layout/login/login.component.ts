@@ -327,7 +327,7 @@ export class LoginComponent implements OnInit, OnDestroy {
         // Note: Funifier's passwordreset endpoint sends an email with a link
         // The user should click the link in their email to complete the reset
         // This old flow with code input is deprecated
-        this.toastService.info(this.translate.instant('MESSAGE_CHECK_EMAIL_FOR_LINK'));
+        this.toastService.success(this.translate.instant('MESSAGE_CHECK_EMAIL_FOR_LINK'));
         this.backToLogin();
       } catch (error: any) {
         const errorMessage = error?.error?.message || this.translate.instant('ERROR_RESET_PASSWORD');
