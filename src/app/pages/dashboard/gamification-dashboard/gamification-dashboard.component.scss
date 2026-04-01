@@ -538,8 +538,8 @@
   .kpi-grid {
     display: flex;
     flex-wrap: wrap;
-    gap: $spacing-xxl; // Increased spacing between KPIs for better horizontal distribution
-    justify-content: center; // Center the KPI circles
+    gap: $spacing-xxl;
+    justify-content: center;
     
     c4u-kpi-circular-progress {
       flex: 0 0 auto;
