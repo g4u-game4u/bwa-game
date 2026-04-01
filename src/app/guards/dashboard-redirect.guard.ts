@@ -67,49 +67,50 @@ export class DashboardRedirectGuardService {
     
     // Check current route to avoid infinite redirect loops
     const currentUrl = state.url;
-    const isOnDashboard = currentUrl === '/dashboard' || currentUrl.startsWith('/dashboard/');
     const isOnTeamManagement = currentUrl.startsWith('/dashboard/team-management');
-    const isOnDashboardRoot = currentUrl === '/dashboard' || currentUrl === '/dashboard/';
+    const isSupervisorUrl = currentUrl === '/dashboard/supervisor' || currentUrl.startsWith('/dashboard/supervisor/') || currentUrl.startsWith('/dashboard/supervisor?');
+    const isSupervisorTecnicoUrl = currentUrl.startsWith('/dashboard/supervisor-tecnico');
+    const isManagementUrl = isOnTeamManagement || isSupervisorUrl || isSupervisorTecnicoUrl;
     
     console.log('🛡️ DashboardRedirectGuard: Route checks:', {
       currentUrl,
-      isOnDashboard,
       isOnTeamManagement,
-      isOnDashboardRoot
+      isSupervisorUrl,
+      isSupervisorTecnicoUrl
     });
     
     // Redirect based on profile
-    if (profile === UserProfile.JOGADOR) {
-      // JOGADOR goes to their own dashboard
-      if (isOnTeamManagement) {
-        // JOGADOR is on team management, redirect to dashboard
-        console.log('🛡️ DashboardRedirectGuard: JOGADOR on team management, redirecting to /dashboard');
-        await this.router.navigate(['/dashboard']);
-        return false;
-      } else if (isOnDashboard && !isOnTeamManagement) {
-        // JOGADOR is already on dashboard (but not team management), allow access
-        console.log('🛡️ DashboardRedirectGuard: JOGADOR already on dashboard, allowing access');
+    switch (profile) {
+      case UserProfile.JOGADOR:
+        // JOGADOR goes to their own dashboard — block management URLs
+        if (isManagementUrl) {
+          console.log('🛡️ JOGADOR on management URL, redirecting to /dashboard');
+          await this.router.navigate(['/dashboard']);
+          return false;
+        }
         return true;
-      } else {
-        // JOGADOR is somewhere else, redirect to dashboard
-        console.log('🛡️ DashboardRedirectGuard: Redirecting JOGADOR to /dashboard');
-        await this.router.navigate(['/dashboard']);
-        return false;
-      }
-    } else {
-      // SUPERVISOR, GESTOR, and DIRETOR go to team management dashboard
-      if (!isOnTeamManagement) {
-        // Management user is not on team management, redirect
-        console.log('🛡️ DashboardRedirectGuard: Management user (profile:', profile, ') not on team management, redirecting...');
-        console.log('🛡️ DashboardRedirectGuard: Current URL:', currentUrl);
-        const navigationResult = await this.router.navigate(['/dashboard/team-management']);
-        console.log('🛡️ DashboardRedirectGuard: Navigation result:', navigationResult);
-        return false;
-      } else {
-        // Management user is already on team management, allow access
-        console.log('🛡️ DashboardRedirectGuard: Management user already on team management, allowing access');
+
+      case UserProfile.SUPERVISOR:
+        // SUPERVISOR → supervisor dashboard (cards view)
+        if (!isSupervisorUrl) {
+          console.log('🛡️ SUPERVISOR not on supervisor URL, redirecting to /dashboard/supervisor');
+          await this.router.navigate(['/dashboard/supervisor']);
+          return false;
+        }
         return true;
-      }
+
+      case UserProfile.GESTOR:
+      case UserProfile.DIRETOR:
+        // GESTOR/DIRETOR → team management dashboard
+        if (!isOnTeamManagement) {
+          console.log('🛡️ Management user (', profile, ') not on team management, redirecting');
+          await this.router.navigate(['/dashboard/team-management']);
+          return false;
+        }
+        return true;
+
+      default:
+        return true;
     }
   }
 }

@@ -1,0 +1,418 @@
+<div class="dashboard-supervisor" role="main" aria-label="Painel do Supervisor">
+
+    <!-- Left Info Card: SUPERVISOR's own metrics -->
+    <aside class="info-card-section" aria-label="Métricas do supervisor">
+      <c4u-card class="info-card">
+        <div class="info-card-content">
+
+          <!-- Loading state -->
+          <c4u-shimmer *ngIf="isLoadingInfoCard && !supervisorInfo"></c4u-shimmer>
+
+          <!-- Supervisor info -->
+          <ng-container *ngIf="supervisorInfo">
+            <!-- Name -->
+            <div class="supervisor-name" aria-label="Nome do supervisor">
+              <i class="ri-user-star-line name-icon" aria-hidden="true"></i>
+              <span class="name-text">{{ supervisorInfo.name }}</span>
+            </div>
+
+            <!-- Points & Coins -->
+            <div class="wallet-section">
+              <div class="wallet-row">
+                <div class="wallet-label">
+                  <i class="ri-star-fill icon pontos" aria-hidden="true"></i>
+                  <span>Pontos</span>
+                </div>
+                <span class="wallet-value">{{ supervisorInfo.points | number:'1.0-0':'pt-BR' }}</span>
+              </div>
+              <div class="wallet-row">
+                <div class="wallet-label">
+                  <i class="ri-coin-fill icon moedas" aria-hidden="true"></i>
+                  <span>Moedas</span>
+                </div>
+                <span class="wallet-value">{{ supervisorInfo.coins | number:'1.0-0':'pt-BR' }}</span>
+              </div>
+            </div>
+
+            <!-- KPIs -->
+            <div class="kpi-section" *ngIf="supervisorKPIs.length > 0" role="group" aria-label="KPIs do supervisor">
+              <ng-container *ngFor="let kpi of supervisorKPIs; let i = index; trackBy: trackByKpiId">
+                <c4u-kpi-circular-progress
+                  [label]="kpi.label"
+                  [current]="roundValue(kpi.current)"
+                  [target]="roundValue(kpi.target)"
+                  [superTarget]="kpi.superTarget ? roundValue(kpi.superTarget) : undefined"
+                  [color]="kpi.color"
+                  [unit]="kpi.unit"
+                  [colorIndex]="i"
+                  size="small">
+                </c4u-kpi-circular-progress>
+              </ng-container>
+            </div>
+
+            <!-- Goals summary -->
+            <div class="goals-section" aria-label="Metas do supervisor">
+              <h4 class="goals-title">Metas</h4>
+              <div class="goal-row">
+                <span class="goal-label">Clientes</span>
+                <span class="goal-value" [class.achieved]="supervisorInfo.cnpjMetric >= supervisorInfo.cnpjGoal">
+                  {{ roundValue(supervisorInfo.cnpjMetric) }} / {{ supervisorInfo.cnpjGoal }}
+                </span>
+              </div>
+              <div class="goal-row">
+                <span class="goal-label">Entregas</span>
+                <span class="goal-value" [class.achieved]="supervisorInfo.entregaMetric >= supervisorInfo.entregaGoal">
+                  {{ roundValue(supervisorInfo.entregaMetric) }}% / {{ supervisorInfo.entregaGoal }}%
+                </span>
+              </div>
+            </div>
+
+            <!-- Team Averages -->
+            <div class="averages-section" *ngIf="playerCards.length > 0" aria-label="Médias da equipe">
+              <h4 class="averages-title">Médias da Equipe</h4>
+              <div class="wallet-row">
+                <div class="wallet-label">
+                  <i class="ri-bar-chart-grouped-fill icon pontos" aria-hidden="true"></i>
+                  <span>Pontos</span>
+                </div>
+                <span class="wallet-value">{{ roundValue(averagePoints) | number:'1.0-0':'pt-BR' }}</span>
+              </div>
+              <div class="goal-row">
+                <span class="goal-label">Clientes</span>
+                <span class="goal-value">{{ roundValue(averageCnpjMetric) }}</span>
+              </div>
+              <div class="goal-row">
+                <span class="goal-label">Entregas</span>
+                <span class="goal-value">{{ roundValue(averageEntregaMetric) }}%</span>
+              </div>
+              <div class="average-kpis" *ngIf="averageKPIs.length > 0" role="group" aria-label="KPIs médios da equipe">
+                <ng-container *ngFor="let kpi of averageKPIs; let i = index; trackBy: trackByKpiId">
+                  <c4u-kpi-circular-progress
+                    [label]="kpi.label"
+                    [current]="roundValue(kpi.current)"
+                    [target]="roundValue(kpi.target)"
+                    [superTarget]="kpi.superTarget ? roundValue(kpi.superTarget) : undefined"
+                    [color]="kpi.color"
+                    [unit]="kpi.unit"
+                    [colorIndex]="i"
+                    size="small">
+                  </c4u-kpi-circular-progress>
+                </ng-container>
+              </div>
+            </div>
+          </ng-container>
+
+        </div>
+      </c4u-card>
+    </aside>
+
+    <!-- Main Content Area -->
+    <section class="main-content">
+
+      <!-- Month Filter -->
+      <header class="dashboard-header">
+        <c4u-seletor-mes
+          (onSelectedMonth)="onMonthChange($event)"
+          aria-label="Filtro de mês">
+        </c4u-seletor-mes>
+        <div class="header-spacer"></div>
+        <button 
+          class="logout-button"
+          (click)="logout()"
+          aria-label="Sair do sistema"
+          title="Sair">
+          <i class="ri-logout-box-line" aria-hidden="true"></i>
+          <span>Sair</span>
+        </button>
+      </header>
+
+      <!-- View Toggle: Card / Table -->
+      <div class="view-toggle" role="tablist" aria-label="Modo de visualização">
+        <button
+          role="tab"
+          [attr.aria-selected]="viewMode === 'card'"
+          [class.active]="viewMode === 'card'"
+          (click)="toggleViewMode('card')">
+          Cards
+        </button>
+        <button
+          role="tab"
+          [attr.aria-selected]="viewMode === 'table'"
+          [class.active]="viewMode === 'table'"
+          (click)="toggleViewMode('table')">
+          Tabela
+        </button>
+      </div>
+
+      <!-- Card View (default) -->
+      <div class="player-view card-view" *ngIf="viewMode === 'card'" role="tabpanel" aria-label="Visualização em cards">
+        <!-- Loading state -->
+        <div class="cards-loading" *ngIf="isLoadingPlayers">
+          <c4u-shimmer *ngFor="let i of [1,2,3,4,5,6]"></c4u-shimmer>
+        </div>
+
+        <!-- Empty state -->
+        <div class="cards-empty" *ngIf="!isLoadingPlayers && playerCards.length === 0">
+          <p class="placeholder-text">Nenhum jogador encontrado nas equipes acessíveis.</p>
+        </div>
+
+        <!-- Player cards grid -->
+        <div class="cards-grid" *ngIf="!isLoadingPlayers && playerCards.length > 0">
+          <c4u-card
+            *ngFor="let player of playerCards; trackBy: trackByPlayerId"
+            class="player-card"
+            role="button"
+            tabindex="0"
+            [attr.aria-label]="'Jogador ' + player.playerName"
+            (click)="openPlayerDetail(player)"
+            (keydown.enter)="openPlayerDetail(player)">
+            <div class="player-card-content">
+              <!-- Player name -->
+              <div class="player-card-header">
+                <i class="ri-user-line player-icon" aria-hidden="true"></i>
+                <span class="player-name">{{ player.playerName }}</span>
+              </div>
+
+              <!-- Teams -->
+              <div class="player-teams" aria-label="Equipes">
+                <span class="team-badge" *ngFor="let team of player.teams">{{ team }}</span>
+              </div>
+
+              <!-- KPIs -->
+              <div class="player-kpis" role="group" aria-label="KPIs do jogador">
+                <ng-container *ngFor="let kpi of player.kpis; let i = index; trackBy: trackByKpiId">
+                  <c4u-kpi-circular-progress
+                    [label]="kpi.label"
+                    [current]="roundValue(kpi.current)"
+                    [target]="roundValue(kpi.target)"
+                    [superTarget]="kpi.superTarget ? roundValue(kpi.superTarget) : undefined"
+                    [color]="kpi.color"
+                    [unit]="kpi.unit"
+                    [colorIndex]="i"
+                    size="small">
+                  </c4u-kpi-circular-progress>
+                </ng-container>
+              </div>
+
+              <!-- Goals -->
+              <div class="player-goals">
+                <div class="goal-row">
+                  <span class="goal-label">Clientes</span>
+                  <span class="goal-value" [class.achieved]="player.cnpjMetric >= player.cnpjGoal">
+                    {{ roundValue(player.cnpjMetric) }} / {{ player.cnpjGoal }}
+                  </span>
+                </div>
+                <div class="goal-row">
+                  <span class="goal-label">Entregas</span>
+                  <span class="goal-value" [class.achieved]="player.entregaMetric >= player.entregaGoal">
+                    {{ roundValue(player.entregaMetric) }}% / {{ player.entregaGoal }}%
+                  </span>
+                </div>
+              </div>
+
+              <!-- Points -->
+              <div class="player-points">
+                <div class="points-row">
+                  <i class="ri-star-fill points-icon" aria-hidden="true"></i>
+                  <span class="points-value">{{ player.points | number:'1.0-0':'pt-BR' }} pts</span>
+                </div>
+              </div>
+            </div>
+          </c4u-card>
+        </div>
+      </div>
+
+      <!-- Table View -->
+      <div class="player-view table-view" *ngIf="viewMode === 'table'" role="tabpanel" aria-label="Visualização em tabela">
+        <!-- Loading state -->
+        <div class="cards-loading" *ngIf="isLoadingPlayers">
+          <c4u-shimmer *ngFor="let i of [1,2,3]"></c4u-shimmer>
+        </div>
+
+        <!-- Empty state -->
+        <div class="cards-empty" *ngIf="!isLoadingPlayers && playerCards.length === 0">
+          <p class="placeholder-text">Nenhum jogador encontrado nas equipes acessíveis.</p>
+        </div>
+
+        <!-- Player table -->
+        <div class="table-wrapper" *ngIf="!isLoadingPlayers && playerCards.length > 0">
+          <table class="player-table" aria-label="Tabela de jogadores">
+            <thead>
+              <tr>
+                <th scope="col">Jogador</th>
+                <th scope="col">Equipes</th>
+                <th scope="col" class="col-metric">Clientes</th>
+                <th scope="col" class="col-metric">Entregas</th>
+                <th scope="col" class="col-metric">Pontos</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                *ngFor="let player of playerCards; trackBy: trackByPlayerId"
+                class="player-row"
+                role="button"
+                tabindex="0"
+                [attr.aria-label]="'Jogador ' + player.playerName"
+                (click)="openPlayerDetail(player)"
+                (keydown.enter)="openPlayerDetail(player)">
+                <td class="cell-player">
+                  <i class="ri-user-line player-icon" aria-hidden="true"></i>
+                  <span class="player-name">{{ player.playerName }}</span>
+                </td>
+                <td class="cell-teams">
+                  <span class="team-badge" *ngFor="let team of player.teams">{{ team }}</span>
+                </td>
+                <td class="cell-metric">
+                  <span class="metric-value" [class.achieved]="player.cnpjMetric >= player.cnpjGoal">
+                    {{ roundValue(player.cnpjMetric) }} / {{ player.cnpjGoal }}
+                  </span>
+                </td>
+                <td class="cell-metric">
+                  <span class="metric-value" [class.achieved]="player.entregaMetric >= player.entregaGoal">
+                    {{ roundValue(player.entregaMetric) }}% / {{ player.entregaGoal }}%
+                  </span>
+                </td>
+                <td class="cell-metric">
+                  <div class="points-row">
+                    <i class="ri-star-fill points-icon" aria-hidden="true"></i>
+                    <span class="points-value">{{ player.points | number:'1.0-0':'pt-BR' }}</span>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Navigation to Legacy Management Dashboard -->
+      <div class="legacy-nav">
+        <button
+          class="btn-legacy-dashboard"
+          (click)="navigateToLegacyDashboard()"
+          aria-label="Ir para o dashboard de gestão de equipe">
+          <i class="ri-team-line" aria-hidden="true"></i>
+          <span>Gestão de Equipe</span>
+        </button>
+      </div>
+
+      <!-- Client List Section -->
+      <section class="client-list-section" aria-label="Lista de clientes do supervisor">
+        <h3 class="client-list-title">Meus Clientes</h3>
+
+        <!-- Clientes Sub-Tabs -->
+        <div class="clientes-tabs" role="tablist" aria-label="Tipo de clientes">
+          <button type="button" class="clientes-tab-btn"
+            [class.active]="clientesActiveTab === 'carteira'"
+            (click)="switchClientesTab('carteira')"
+            role="tab" [attr.aria-selected]="clientesActiveTab === 'carteira'">
+            <i class="ri-briefcase-line" aria-hidden="true"></i> Carteira
+            <c4u-info-button infoKey="clientes-carteira" position="top" (click)="$event.stopPropagation()"></c4u-info-button>
+            <span class="tab-count" aria-hidden="true">({{ clientRows.length }})</span>
+          </button>
+          <button type="button" class="clientes-tab-btn"
+            [class.active]="clientesActiveTab === 'participacao'"
+            (click)="switchClientesTab('participacao')"
+            role="tab" [attr.aria-selected]="clientesActiveTab === 'participacao'">
+            <i class="ri-group-line" aria-hidden="true"></i> Participação
+            <c4u-info-button infoKey="clientes-participacao" position="top" (click)="$event.stopPropagation()"></c4u-info-button>
+            <span class="tab-count" aria-hidden="true">({{ participacaoCnpjs.length }})</span>
+          </button>
+        </div>
+
+        <!-- Carteira Tab -->
+        <div *ngIf="clientesActiveTab === 'carteira'">
+          <div class="client-list-loading" *ngIf="isLoadingClients">
+            <c4u-shimmer *ngFor="let i of [1,2,3]"></c4u-shimmer>
+          </div>
+
+          <div class="client-list-empty" *ngIf="!isLoadingClients && clientRows.length === 0">
+            <p class="placeholder-text">Nenhum cliente encontrado na carteira.</p>
+          </div>
+
+          <div class="client-table-wrapper" *ngIf="!isLoadingClients && clientRows.length > 0">
+            <table class="client-table" aria-label="Tabela de clientes do supervisor">
+              <thead>
+                <tr>
+                  <th scope="col">Empresa</th>
+                  <th scope="col">CNPJ</th>
+                  <th scope="col" class="col-metric">Entregas no Prazo</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr
+                  *ngFor="let client of clientRows; trackBy: trackByClientCnpj"
+                  class="client-row"
+                  role="button"
+                  tabindex="0"
+                  [attr.aria-label]="'Cliente ' + client.companyName"
+                  (click)="onClientRowClick(client)"
+                  (keydown.enter)="onClientRowClick(client)">
+                  <td class="cell-company">
+                    <i class="ri-building-line company-icon" aria-hidden="true"></i>
+                    <span class="company-name">{{ client.companyName }}</span>
+                  </td>
+                  <td class="cell-cnpj">{{ client.cnpj }}</td>
+                  <td class="cell-metric">
+                    <span class="metric-value"
+                      [class.achieved]="client.healthScore >= 90">
+                      {{ roundValue(client.healthScore) }}%
+                    </span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Participação Tab -->
+        <div *ngIf="clientesActiveTab === 'participacao'">
+          <div class="client-list-loading" *ngIf="isLoadingParticipacao">
+            <c4u-shimmer *ngFor="let i of [1,2,3]"></c4u-shimmer>
+          </div>
+
+          <div class="client-list-empty" *ngIf="!isLoadingParticipacao && participacaoCnpjs.length === 0">
+            <p class="placeholder-text">Nenhum CNPJ de participação encontrado.</p>
+          </div>
+
+          <div class="client-table-wrapper" *ngIf="!isLoadingParticipacao && participacaoCnpjs.length > 0">
+            <table class="client-table" aria-label="Tabela de participação">
+              <thead>
+                <tr>
+                  <th scope="col">Empresa</th>
+                  <th scope="col">CNPJ</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr *ngFor="let item of participacaoCnpjs" class="client-row">
+                  <td class="cell-company">
+                    <i class="ri-building-line company-icon" aria-hidden="true"></i>
+                    <span class="company-name">{{ item.companyName }}</span>
+                  </td>
+                  <td class="cell-cnpj">{{ item.cnpj }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+    </section>
+
+  <!-- Player Detail Modal -->
+  <modal-player-detail
+    *ngIf="isPlayerDetailModalOpen && selectedPlayerForDetail"
+    [playerId]="selectedPlayerForDetail.playerId"
+    [playerName]="selectedPlayerForDetail.playerName"
+    [monthsAgo]="selectedMonthsAgo"
+    (closed)="onPlayerDetailClosed()"
+    (cnpjSelected)="onCnpjSelectedFromPlayerDetail($event)">
+  </modal-player-detail>
+
+  <!-- Company Detail Modal (opened from CNPJ row in player detail) -->
+  <modal-company-detail
+    *ngIf="isCompanyDetailModalOpen && selectedCompanyForDetail"
+    [company]="selectedCompanyForDetail"
+    (closed)="onCompanyDetailClosed()">
+  </modal-company-detail>
+
+</div>

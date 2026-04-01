@@ -12,6 +12,18 @@ export const PagesRoutes: Routes = [
     loadChildren: () => import('./dashboard/team-management-dashboard/team-management-dashboard.module').then(m => m.TeamManagementDashboardModule)
   },
   {
+    path: 'supervisor',
+    loadChildren: () => import('./dashboard/dashboard-supervisor/dashboard-supervisor.module')
+      .then(m => m.DashboardSupervisorModule),
+    canActivate: [DashboardRedirectGuard]
+  },
+  {
+    path: 'supervisor-tecnico',
+    loadChildren: () => import('./dashboard/dashboard-supervisor-tecnico/dashboard-supervisor-tecnico.module')
+      .then(m => m.DashboardSupervisorTecnicoModule),
+    canActivate: [DashboardRedirectGuard]
+  },
+  {
     path: 'rewards',
     loadChildren: () => import('./recompensas/rewards.module').then(m => m.RewardsModule)
   },
