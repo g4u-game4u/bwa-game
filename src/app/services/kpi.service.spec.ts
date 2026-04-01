@@ -270,7 +270,7 @@ describe('KPIService', () => {
       });
     });
 
-    it('should calculate percentage based on super goal for companies', (done) => {
+    it('should calculate companies percentage from current over meta (target)', (done) => {
       const mockPlayerStatus = {
         _id: 'test-player',
         name: 'Test Player',
@@ -288,7 +288,7 @@ describe('KPIService', () => {
         expect(empresasKPI).toBeDefined();
         expect(empresasKPI!.current).toBe(6);
         expect(empresasKPI!.superTarget).toBe(15);
-        expect(empresasKPI!.percentage).toBe(40); // 6/15 * 100 = 40%
+        expect(empresasKPI!.percentage).toBe(60); // default meta 10 → 6/10 * 100
         done();
       });
     });
@@ -316,7 +316,7 @@ describe('KPIService', () => {
       });
     });
 
-    it('should cap percentage at 100% when exceeding super goal', (done) => {
+    it('should allow companies percentage above 100% when exceeding meta; cap entregas at 100%', (done) => {
       const mockPlayerStatus = {
         _id: 'test-player',
         name: 'Test Player',
@@ -332,7 +332,7 @@ describe('KPIService', () => {
         const empresasKPI = result.find(kpi => kpi.id === 'numero-empresas');
         const entregasKPI = result.find(kpi => kpi.id === 'entregas-prazo');
         
-        expect(empresasKPI!.percentage).toBe(100); // Capped at 100% (20/15 = 133% -> 100%)
+        expect(empresasKPI!.percentage).toBe(200); // 20/10 * 100 (meta default 10)
         expect(entregasKPI!.percentage).toBe(100); // Capped at 100% (95/90 = 105% -> 100%)
         done();
       });

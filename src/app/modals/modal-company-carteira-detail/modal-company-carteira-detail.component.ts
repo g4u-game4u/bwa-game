@@ -25,6 +25,8 @@ export class ModalCompanyCarteiraDetailComponent implements OnInit, OnDestroy {
   isLoadingTasks = false;
   companyKPIs: KPIData[] = [];
   tasks: ClienteActionItem[] = [];
+  filteredTasks: ClienteActionItem[] = [];
+  searchTerm = '';
   cnpjNameMap = new Map<string, string>(); // Map of original CNPJ → clean empresa name
 
   constructor(
@@ -123,12 +125,14 @@ export class ModalCompanyCarteiraDetailComponent implements OnInit, OnDestroy {
         next: (tasks) => {
           console.log('📊 Tasks loaded for company:', tasks);
           this.tasks = tasks;
+          this.filterTasks();
           this.isLoadingTasks = false;
           this.cdr.markForCheck();
         },
         error: (error) => {
           console.error('Error loading tasks:', error);
           this.tasks = [];
+          this.filteredTasks = [];
           this.isLoadingTasks = false;
           this.cdr.markForCheck();
         }
@@ -143,6 +147,33 @@ export class ModalCompanyCarteiraDetailComponent implements OnInit, OnDestroy {
     const displayName = this.cnpjNameMap.get(cnpj);
     console.log('📊 Modal detail getCompanyDisplayName called:', { cnpj, displayName, hasInMap: this.cnpjNameMap.has(cnpj), mapSize: this.cnpjNameMap.size });
     return displayName || cnpj;
+  }
+
+  onSearchInput(event: Event): void {
+    const value = (event.target as HTMLInputElement).value;
+    this.searchTerm = value;
+    this.filterTasks();
+    this.cdr.markForCheck();
+  }
+
+  private filterTasks(): void {
+    const search = (this.searchTerm || '').trim().toLowerCase();
+    if (!search) {
+      this.filteredTasks = [...this.tasks];
+      return;
+    }
+    this.filteredTasks = this.tasks.filter(task => {
+      const title = (task.title || '').toLowerCase();
+      const executor = (task.player || '').toLowerCase();
+      const dateText = this.formatDate(task.created).toLowerCase();
+      const statusLabel = this.getStatusLabel(task.status).toLowerCase();
+      return (
+        title.includes(search) ||
+        executor.includes(search) ||
+        dateText.includes(search) ||
+        statusLabel.includes(search)
+      );
+    });
   }
 
   formatDate(timestamp: number): string {

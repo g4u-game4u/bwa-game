@@ -2,6 +2,7 @@ import { Injectable } from '@angular/core';
 import { Observable, of, throwError } from 'rxjs';
 import { map, catchError, tap, switchMap } from 'rxjs/operators';
 import { FunifierApiService } from './funifier-api.service';
+import { ATTRIBUTES_DEAL_UNWIND_STAGES } from './action-log-deal-aggregate.util';
 import { AggregateQueryBuilderService, AggregateQuery } from './aggregate-query-builder.service';
 import { PerformanceMonitorService } from './performance-monitor.service';
 
@@ -773,13 +774,13 @@ export class TeamAggregateService {
           time: {
             $gte: { $date: startDate.toISOString() },
             $lte: { $date: endDate.toISOString() }
-          },
-          'attributes.deal': { $ne: null }
+          }
         }
       },
+      ...ATTRIBUTES_DEAL_UNWIND_STAGES,
       {
         $group: {
-          _id: '$attributes.deal',
+          _id: '$dealValues',
           actionCount: { $sum: 1 },
           uniqueProcesses: { $addToSet: '$attributes.delivery_id' }
         }

@@ -425,8 +425,7 @@ describe('C4uKpiCircularProgressComponent - Visual Polish', () => {
       fixture.detectChanges();
       
       const ariaValueText = component.ariaValueText;
-      expect(ariaValueText).toContain('89 de 100');
-      expect(ariaValueText).toContain('89 por cento');
+      expect(ariaValueText).toBe('89% da meta');
     });
   });
 

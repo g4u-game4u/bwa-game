@@ -28,6 +28,8 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
   @Input() playerId = '';
   @Input() listType: ProgressListType = 'atividades';
   @Input() month?: Date;
+  /** When false, hides the Pontos column for "Tarefas Finalizadas" (listType atividades). Gestor dashboards keep default true. */
+  @Input() showPointsInActivityList = true;
   @Output() closed = new EventEmitter<void>();
 
   private destroy$ = new Subject<void>();
@@ -109,7 +111,13 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
   }
 
   get showPointsColumn(): boolean {
-    return this.listType === 'atividades' || this.listType === 'pontos';
+    if (this.listType === 'pontos') {
+      return true;
+    }
+    if (this.listType === 'atividades') {
+      return this.showPointsInActivityList;
+    }
+    return false;
   }
 
   onSearchInput(event: Event): void {

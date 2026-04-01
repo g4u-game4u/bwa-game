@@ -140,7 +140,7 @@
         <ng-container *ngFor="let kpi of playerKPIs; let i = index; trackBy: trackByKpiId">
           <c4u-kpi-circular-progress
             [label]="kpi.label"
-            [current]="roundValue(getKpiCurrentValue(kpi))"
+            [current]="roundValue(kpi.current)"
             [target]="roundValue(kpi.target)"
             [superTarget]="kpi.superTarget ? roundValue(kpi.superTarget) : undefined"
             [color]="kpi.color"
@@ -177,24 +177,43 @@
       <div class="section-header">
         <h3 id="company-section-title" class="section-title">
           Clientes
-          <span *ngIf="!isLoadingDeals">({{ uniqueDeals.length }})</span>
+          <span *ngIf="!isLoadingCarteira">({{ carteiraClientes.length }})</span>
         </h3>
+        <!-- <button
+          type="button"
+          class="carteira-expand-btn"
+          (click)="openCarteiraModal()"
+          aria-label="Ver todos os clientes">
+          <i class="ri-external-link-line"></i>
+          Ver todos
+        </button> -->
       </div>
       
       <c4u-card class="carteira-card">
-        <c4u-shimmer *ngIf="isLoadingDeals"></c4u-shimmer>
-
-        <div *ngIf="!isLoadingDeals && uniqueDeals.length > 0" class="carteira-list">
-          <div *ngFor="let deal of uniqueDeals" class="carteira-item" role="article">
+        <div *ngIf="carteiraClientes.length > 0" class="carteira-list">
+          <div
+            *ngFor="let cliente of carteiraClientes"
+            class="carteira-item"
+            (click)="openCompanyDetailModal(cliente)"
+            role="button"
+            tabindex="0"
+            [attr.aria-label]="'Ver tarefas de ' + getCompanyDisplayName(cliente.cnpj)"
+            (keydown.enter)="openCompanyDetailModal(cliente)"
+            (keydown.space)="openCompanyDetailModal(cliente); $event.preventDefault()">
             <div class="carteira-item-info">
               <i class="ri-building-line"></i>
-              <span class="carteira-cnpj">{{ deal }}</span>
+              <span class="carteira-cnpj">{{ getCompanyDisplayName(cliente.cnpj) }}</span>
+            </div>
+            <div class="carteira-item-meta">
+              <span class="carteira-action-count">{{ formatClienteTasksLabel(cliente.actionCount) }}</span>
             </div>
           </div>
         </div>
-        
-        <div *ngIf="!isLoadingDeals && uniqueDeals.length === 0" class="empty-state">
-          <p>Nenhum deal encontrado</p>
+
+        <c4u-shimmer *ngIf="isLoadingCarteira"></c4u-shimmer>
+
+        <div *ngIf="!isLoadingCarteira && carteiraClientes.length === 0" class="empty-state">
+          <p>Nenhum cliente encontrado na carteira</p>
         </div>
       </c4u-card>
     </section>
@@ -213,6 +232,7 @@
     [playerId]="currentPlayerId"
     [listType]="progressModalType"
     [month]="selectedMonth"
+    [showPointsInActivityList]="false"
     (closed)="onProgressModalClosed()">
   </modal-progress-list>
   

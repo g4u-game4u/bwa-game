@@ -51,6 +51,33 @@ describe('C4uKpiCircularProgressComponent', () => {
       component.target = 100;
       expect(component.percentage).toBe(33);
     });
+
+    it('should use meta (target) for clientes KPI percentage, not superTarget', () => {
+      component.unit = 'clientes';
+      component.current = 10;
+      component.target = 10;
+      component.superTarget = 15;
+      expect(component.percentage).toBe(100);
+      expect(component.ariaValueMax).toBe(10);
+    });
+
+    it('should show percentage above 100% when current exceeds meta', () => {
+      component.unit = 'clientes';
+      component.current = 20;
+      component.target = 10;
+      component.superTarget = 15;
+      expect(component.percentage).toBe(200);
+      expect(component.ariaValueMax).toBe(20);
+    });
+
+    it('should reach 100% when current equals target (with or without superTarget)', () => {
+      component.unit = 'clientes';
+      component.current = 50;
+      component.target = 50;
+      component.superTarget = undefined;
+      expect(component.percentage).toBe(100);
+      expect(component.ariaValueMax).toBe(50);
+    });
   });
 
   describe('color determination', () => {

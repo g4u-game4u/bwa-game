@@ -322,14 +322,14 @@
               <section class="dashboard-section carteira-section" aria-labelledby="company-section-title">
                 <div class="section-header">
                   <h3 id="company-section-title" class="section-title">Clientes</h3>
-                  <button 
+                  <!-- <button 
                     type="button" 
                     class="carteira-expand-btn"
                     (click)="openCarteiraModal()"
                     aria-label="Ver todos os clientes">
                     <i class="ri-external-link-line"></i>
                     Ver todos
-                  </button>
+                  </button> -->
                 </div>
                 
                 <c4u-card class="carteira-card">
@@ -348,17 +348,7 @@
                         <span class="carteira-cnpj">{{ getCompanyDisplayName(cliente.cnpj) }}</span>
                       </div>
                       <div class="carteira-item-meta">
-                        <!-- KPI Indicator - Compact Display -->
-                        <div *ngIf="cliente.deliveryKpi" 
-                             class="carteira-kpi-compact" 
-                             [ngClass]="'kpi-' + (cliente.deliveryKpi.color || 'default')"
-                             [title]="getKpiTooltip(cliente.deliveryKpi)">
-                          <span class="kpi-value">{{ formatKpiValue(cliente.deliveryKpi) }}</span>
-                          <i class="ri-time-line kpi-icon" aria-hidden="true"></i>
-                        </div>
-                        <span *ngIf="!cliente.deliveryKpi" class="kpi-na">N/A</span>
-                        <span class="carteira-action-count">{{ cliente.actionCount }} tarefas</span>
-                        <span class="carteira-process-count">{{ cliente.processCount }} processos</span>
+                        <span class="carteira-action-count">{{ formatClienteTasksLabel(cliente.actionCount) }}</span>
                       </div>
                     </div>
                   </div>

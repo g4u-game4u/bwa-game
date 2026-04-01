@@ -2,6 +2,7 @@ import { Injectable } from '@angular/core';
 import { Observable, of, forkJoin } from 'rxjs';
 import { map, catchError, shareReplay, switchMap } from 'rxjs/operators';
 import { FunifierApiService } from './funifier-api.service';
+import { ATTRIBUTES_DEAL_UNWIND_STAGES } from './action-log-deal-aggregate.util';
 import { ActivityMetrics, ProcessMetrics } from '@model/gamification-dashboard.model';
 import dayjs from 'dayjs';
 
@@ -16,7 +17,7 @@ export interface ActionLogEntry {
     delivery?: number; // Used in desbloquear action to reference delivery_id
     acao?: string; // Action title to display
     stage?: string; // Stage of action (used to match achievements)
-    deal?: string; // Deal/CNPJ reference
+    deal?: string | string[]; // Deal/CNPJ reference (string or array from API)
     id?: string | number; // Action identifier used in achievement.extra.id
     cnpj?: string; // Client CNPJ
     integration_id?: number;
@@ -88,6 +89,18 @@ function extractTimestamp(time: number | { $date: string } | undefined): number 
     return isNaN(date.getTime()) ? 0 : date.getTime();
   }
   return 0;
+}
+
+/** First non-empty deal string from attributes.deal (scalar or array). */
+function normalizeAttributesDealToString(deal: unknown): string | undefined {
+  if (typeof deal === 'string' && deal.trim() !== '') {
+    return deal;
+  }
+  if (Array.isArray(deal)) {
+    const first = deal.find((x): x is string => typeof x === 'string' && x.trim() !== '');
+    return first;
+  }
+  return undefined;
 }
 
 /**
@@ -608,9 +621,10 @@ export class ActionLogService {
           time: { $gte: startDate, $lte: endDate }
         }
       },
+      ...ATTRIBUTES_DEAL_UNWIND_STAGES,
       {
         $group: {
-          _id: '$attributes.deal'
+          _id: '$dealValues'
         }
       },
       {
@@ -669,27 +683,7 @@ export class ActionLogService {
           time: { $gte: startDate, $lte: endDate }
         }
       },
-      // Normalize attributes.deal into an array so we can unwind reliably.
-      {
-        $project: {
-          dealValues: {
-            $cond: [
-              { $isArray: '$attributes.deal' },
-              '$attributes.deal',
-              ['$attributes.deal']
-            ]
-          }
-        }
-      },
-      { $unwind: '$dealValues' },
-      {
-        $match: {
-          $and: [
-            { dealValues: { $ne: null } },
-            { dealValues: { $ne: '' } }
-          ]
-        }
-      },
+      ...ATTRIBUTES_DEAL_UNWIND_STAGES,
       {
         $group: {
           _id: null,
@@ -918,7 +912,7 @@ export class ActionLogService {
           created: extractTimestamp(a.time as number | { $date: string } | undefined),
           player: a.userId || '',
           status,
-          cnpj: typeof a.attributes?.['deal'] === 'string' ? a.attributes?.['deal'] : undefined
+          cnpj: normalizeAttributesDealToString(a.attributes?.['deal'])
           };
         }))
       )),
@@ -972,9 +966,9 @@ export class ActionLogService {
             }
             // Update CNPJ if not set yet and this action has one
             if (!existing.cnpj) {
-              const deal = action.attributes?.['deal'];
-              if (typeof deal === 'string' && deal.trim() !== '') {
-                existing.cnpj = deal;
+              const cnpj = normalizeAttributesDealToString(action.attributes?.['deal']);
+              if (cnpj) {
+                existing.cnpj = cnpj;
               }
             }
           } else {
@@ -984,7 +978,7 @@ export class ActionLogService {
                 action.attributes?.delivery_title ||
                 (numericDeliveryId != null ? `Processo ${numericDeliveryId}` : 'Processo sem título'),
               count: 1,
-              cnpj: typeof action.attributes?.['deal'] === 'string' ? action.attributes?.['deal'] : undefined,
+              cnpj: normalizeAttributesDealToString(action.attributes?.['deal']),
               numericDeliveryId
             });
           }
@@ -1122,37 +1116,37 @@ export class ActionLogService {
     const startDate = getRelativeDateExpression(month, 'start');
     const endDate = getRelativeDateExpression(month, 'end');
 
-    // First query: get action count per Deal
+    // First query: get action count per deal (attributes.deal string or array)
     const actionCountBody = [
       {
         $match: {
           userId: playerId,
-          time: { $gte: startDate, $lte: endDate },
-          'attributes.deal': { $ne: null }
+          time: { $gte: startDate, $lte: endDate }
         }
       },
+      ...ATTRIBUTES_DEAL_UNWIND_STAGES,
       {
         $group: {
-          _id: '$attributes.deal',
+          _id: '$dealValues',
           count: { $sum: 1 }
         }
       }
     ];
 
-    // Second query: get unique process count (delivery_id) per Deal
+    // Second query: get unique process count (delivery_id) per deal
     const processCountBody = [
       {
         $match: {
           userId: playerId,
           time: { $gte: startDate, $lte: endDate },
-          'attributes.deal': { $ne: null },
           'attributes.delivery_id': { $ne: null }
         }
       },
+      ...ATTRIBUTES_DEAL_UNWIND_STAGES,
       {
         $group: {
           _id: {
-            cnpj: '$attributes.deal',
+            cnpj: '$dealValues',
             delivery_id: '$attributes.delivery_id'
           }
         }
@@ -1312,7 +1306,7 @@ export class ActionLogService {
             player: a.userId || '',
             created: extractTimestamp(a.time as number | { $date: string } | undefined),
             status,
-            cnpj: typeof a.attributes?.['deal'] === 'string' ? a.attributes?.['deal'] : undefined
+            cnpj: normalizeAttributesDealToString(a.attributes?.['deal'])
           };
         });
       }),
@@ -1442,7 +1436,7 @@ export class ActionLogService {
             created: extractTimestamp(a.time as number | { $date: string } | undefined),
             player: a.userId || '',
             status,
-            cnpj: typeof a.attributes?.['deal'] === 'string' ? a.attributes?.['deal'] : undefined
+            cnpj: normalizeAttributesDealToString(a.attributes?.['deal'])
           };
         });
       }),
@@ -1755,13 +1749,13 @@ export class ActionLogService {
       {
         $match: {
           'playerData.teams': teamId,
-          time: { $gte: startDate, $lte: endDate },
-          'attributes.deal': { $ne: null }
+          time: { $gte: startDate, $lte: endDate }
         }
       },
+      ...ATTRIBUTES_DEAL_UNWIND_STAGES,
       {
         $group: {
-          _id: '$attributes.deal',
+          _id: '$dealValues',
           count: { $sum: 1 }
         }
       }
@@ -1784,14 +1778,14 @@ export class ActionLogService {
         $match: {
           'playerData.teams': teamId,
           time: { $gte: startDate, $lte: endDate },
-          'attributes.deal': { $ne: null },
           'attributes.delivery_id': { $ne: null }
         }
       },
+      ...ATTRIBUTES_DEAL_UNWIND_STAGES,
       {
         $group: {
           _id: {
-            cnpj: '$attributes.deal',
+            cnpj: '$dealValues',
             delivery_id: '$attributes.delivery_id'
           }
         }
