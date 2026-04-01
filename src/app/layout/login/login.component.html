@@ -11,29 +11,27 @@
       <div *ngIf="!clientLogoUrl" class="default-logo"></div>
     </div>
 
-    <img src="/assets/images/logo-bwa-white-inteira-full.png" alt="BWA Global" class="bwa-logo" draggable="false">
+    <img 
+      [src]="bwaLogoUrl" 
+      alt="BWA Global" 
+      class="bwa-logo" 
+      draggable="false"
+      (error)="onLogoError()">
 
     <h2 class="text-center md:text-left">Bem-vindo de volta ao {{clientName}}!</h2>
 
     <h1 class="hidden md:!block">Ligando o Modo Turbo.</h1>
   </div>
 
-  <!-- Manutenção -->
-  <c4u-card *ngIf="maintenanceMode" title="Sistema em manutenção" align="center">
-    <div class="maintenance-message">
-      <div class="maintenance-icon" aria-hidden="true">
-        <i class="ri-tools-fill"></i>
-      </div>
-      <p>Estamos realizando melhorias. Você será avisado pelos canais oficiais de comunicação quando a manutenção terminar.</p>
-      <div class="maintenance-dots" aria-hidden="true">
-        <span></span><span></span><span></span>
-      </div>
-    </div>
-  </c4u-card>
-
   <!-- Login Form -->
-  <c4u-card *ngIf="resetFlow === 'login' && !maintenanceMode" [title]="'LABEL_LOGIN_SUBTITLE' | translate" align="center">
+  <c4u-card *ngIf="resetFlow === 'login'" [title]="'LABEL_LOGIN_SUBTITLE' | translate" align="center">
     <div class="login-form-container">
+      <!-- Session Expired Message -->
+      <div *ngIf="sessionExpiredMessage" class="session-expired-message">
+        <i class="ri-time-line"></i>
+        <span>{{ sessionExpiredMessage }}</span>
+      </div>
+      
       <form class="login-form" (ngSubmit)="submit()" [formGroup]="form">
         <input type="text" placeholder="Login" formControlName="username" />
         <input type="password" placeholder="Senha" formControlName="password" />
@@ -54,7 +52,7 @@
   </c4u-card>
 
   <!-- Reset Request Form -->
-  <c4u-card *ngIf="resetFlow === 'reset-request' && !maintenanceMode" [title]="'LABEL_PASSWORD_RESET' | translate" align="center">
+  <c4u-card *ngIf="resetFlow === 'reset-request'" [title]="'LABEL_PASSWORD_RESET' | translate" align="center">
     <div class="login-form-container">
       <form class="login-form" (ngSubmit)="requestResetCode()" [formGroup]="resetRequestForm">
         <p class="reset-instructions">{{ 'LABEL_PASSWORD_RESET_INSTRUCTIONS' | translate }}</p>
@@ -80,7 +78,7 @@
   </c4u-card>
 
   <!-- Reset Confirm Form -->
-  <c4u-card *ngIf="resetFlow === 'reset-confirm' && !maintenanceMode" [title]="'LABEL_PASSWORD_RESET' | translate" align="center">
+  <c4u-card *ngIf="resetFlow === 'reset-confirm'" [title]="'LABEL_PASSWORD_RESET' | translate" align="center">
     <div class="login-form-container">
       <form class="login-form" (ngSubmit)="confirmResetPassword()" [formGroup]="resetConfirmForm">
         <p class="reset-instructions">{{ 'LABEL_CODE_SENT_TO' | translate }}: <strong>{{resetEmail}}</strong></p>

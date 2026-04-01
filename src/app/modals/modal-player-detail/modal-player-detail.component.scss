@@ -1,0 +1,223 @@
+:host {
+  display: block;
+}
+
+// Tab Navigation
+.tabs-container {
+  display: flex;
+  width: 100%;
+  margin-bottom: 24px;
+
+  .tab-item {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    padding-bottom: 12px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border-bottom: 2px solid transparent;
+
+    .tab-icon {
+      font-size: 20px;
+      color: #83878b;
+      transition: color 0.2s ease;
+    }
+
+    .tab-label {
+      font-family: 'Urbanist', sans-serif;
+      font-weight: 400;
+      font-size: 15px;
+      color: #83878b;
+      letter-spacing: 0.3px;
+      transition: color 0.2s ease;
+    }
+
+    &:hover {
+      .tab-icon,
+      .tab-label {
+        color: #b2b2b2;
+      }
+    }
+
+    &.active {
+      border-bottom-color: #eeeeee;
+
+      .tab-icon {
+        color: #eeeeee;
+      }
+
+      .tab-label {
+        font-weight: 700;
+        color: #eeeeee;
+      }
+    }
+
+    &:focus {
+      outline: none;
+    }
+
+    &:focus-visible {
+      outline: 2px solid #4a90d9;
+      outline-offset: 2px;
+      border-radius: 4px;
+    }
+  }
+}
+
+// Modal Content
+.modal-content {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 250px;
+  padding: 0 4px;
+}
+
+.tab-panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+// Table styles
+.table-wrapper {
+  overflow-x: auto;
+}
+
+.detail-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: 'Urbanist', sans-serif;
+
+  thead {
+    tr {
+      border-bottom: 1px solid #444;
+    }
+
+    th {
+      font-weight: 600;
+      font-size: 13px;
+      color: #aaa;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      padding: 8px 12px;
+      text-align: left;
+
+      &.col-metric {
+        text-align: center;
+        white-space: nowrap;
+      }
+    }
+  }
+
+  tbody {
+    tr {
+      border-bottom: 1px solid #333;
+      transition: background-color 0.15s ease;
+
+      &:last-child {
+        border-bottom: none;
+      }
+    }
+
+    .clickable-row {
+      cursor: pointer;
+
+      &:hover {
+        background-color: rgba(255, 255, 255, 0.05);
+      }
+
+      &:focus-visible {
+        outline: 2px solid #4a90d9;
+        outline-offset: -2px;
+        border-radius: 2px;
+      }
+    }
+
+    td {
+      font-size: 14px;
+      color: #eee;
+      padding: 10px 12px;
+
+      &.cell-name {
+        max-width: 220px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      &.cell-metric {
+        text-align: center;
+        white-space: nowrap;
+      }
+    }
+  }
+}
+
+// Loading
+.loading-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  min-height: 180px;
+}
+
+// Empty state
+.empty-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  min-height: 180px;
+
+  p {
+    font-family: 'Urbanist', sans-serif;
+    font-weight: 400;
+    font-size: 15px;
+    color: #83878b;
+    margin: 0;
+  }
+}
+
+// Responsive
+@media (max-width: 768px) {
+  .tabs-container {
+    .tab-item {
+      flex-direction: row;
+      justify-content: center;
+      gap: 8px;
+      padding: 10px;
+      border-bottom: none;
+      border-left: 2px solid transparent;
+
+      &.active {
+        border-left-color: #eeeeee;
+        border-bottom-color: transparent;
+      }
+    }
+  }
+
+  .detail-table {
+    thead th,
+    tbody td {
+      padding: 8px 6px;
+      font-size: 13px;
+    }
+
+    tbody td.cell-name {
+      max-width: 140px;
+    }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tab-item,
+  .tab-item .tab-icon,
+  .tab-item .tab-label,
+  tbody tr {
+    transition: none;
+  }
+}

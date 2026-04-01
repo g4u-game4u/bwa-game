@@ -22,10 +22,11 @@ export class AuthProvider {
     console.log('🔐 Username:', email);
     
     // Use Funifier authentication
+    // Trim username to prevent spaces from breaking the Funifier profile
     const authBody = {
       apiKey: this.funifierApiKey,
       grant_type: 'password',
-      username: email,
+      username: email.trim(),
       password: password
     };
 
@@ -39,9 +40,19 @@ export class AuthProvider {
   }
 
   userInfo(): Observable<any> {
-    // Get user info from Funifier player status
-    // baseUrl already includes /v3/, so just use player/me/status
+    // Get user info from Funifier player/me endpoint (faster than player/me/status)
+    // This returns cnpj_resp, entrega, goals directly in the extra field
+    // baseUrl already includes /v3/, so just use player/me
     // The interceptor will add the Bearer token from sessionStorage
+    return this.http.get(`${this.funifierBaseUrl}player/me`);
+  }
+
+  /**
+   * Get full player status (slower, use only when needed)
+   * @deprecated Use userInfo() for faster response with essential data
+   */
+  userInfoFull(): Observable<any> {
+    // Get full user info from Funifier player/me/status (slower)
     return this.http.get(`${this.funifierBaseUrl}player/me/status`);
   }
 

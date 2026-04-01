@@ -203,6 +203,11 @@
     background-color: rgba(244, 67, 54, 0.1);
   }
 
+  &.status-pink {
+    color: #EC4899;
+    background-color: rgba(236, 72, 153, 0.1);
+  }
+
   // Golden color for achieved goals (especially in modals)
   &.status-goal-achieved {
     color: #d4af37; // Golden color like in the prototype

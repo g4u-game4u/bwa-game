@@ -78,7 +78,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
     const monthsDiff = now.diff(feb2026, 'month', true); // Use true for fractional months
     return Math.max(0, Math.round(monthsDiff));
   })();
-  selectedMonth: Date = new Date(2026, 1, 1); // February 2026 (month is 0-indexed: 1 = February)
+  selectedMonth: Date | undefined = new Date(2026, 1, 1); // February 2026 (month is 0-indexed: 1 = February)
   activeTab: 'goals' | 'productivity' = 'goals';
   
   // Loading states
@@ -156,6 +156,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
   teamCarteiraClientes: CompanyDisplay[] = [];
   isLoadingCarteira: boolean = false;
   cnpjNameMap = new Map<string, string>(); // Map of original CNPJ → clean empresa name
+  cnpjStatusMap = new Map<string, string>(); // Map of CNPJ → status (Ativa/Inativa)
   
   // Monthly points breakdown
   monthlyPointsBreakdown: { bloqueados: number; desbloqueados: number } | null = null;
@@ -535,8 +536,16 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       let validMembers = 0;
       
       // Calculate points for the selected month using achievement aggregate
-      const monthStart = dayjs(this.selectedMonth).startOf('month');
-      const monthEnd = dayjs(this.selectedMonth).endOf('month');
+      // When selectedMonth is undefined (Toda temporada), don't filter by time
+      const timeMatch: Record<string, any> = {};
+      if (this.selectedMonth) {
+        const monthStart = dayjs(this.selectedMonth).startOf('month');
+        const monthEnd = dayjs(this.selectedMonth).endOf('month');
+        timeMatch['time'] = {
+          $gte: { $date: monthStart.toISOString() },
+          $lte: { $date: monthEnd.toISOString() }
+        };
+      }
       
       // Fetch points for all team members in one aggregate query
       const pointsAggregatePayload = [
@@ -544,10 +553,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
           $match: {
             player: { $in: memberIds },
             type: 0, // type 0 = points
-            time: {
-              $gte: { $date: monthStart.toISOString() },
-              $lte: { $date: monthEnd.toISOString() }
-            }
+            ...timeMatch
           }
         },
         {
@@ -834,6 +840,14 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
    * // Returns: { start: Date(2026-01-01), end: Date(2026-01-31) }
    */
   private calculateDateRange(): { start: Date; end: Date } {
+    // Toda temporada: no date boundaries
+    if (!this.selectedMonth) {
+      return {
+        start: new Date('2000-01-01T00:00:00.000Z'),
+        end: new Date('2099-12-31T23:59:59.999Z')
+      };
+    }
+    
     const now = dayjs();
     const targetMonth = now.subtract(this.selectedMonthsAgo, 'month');
     const seasonStartDate = dayjs('2026-01-01');
@@ -941,12 +955,11 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
         processosFinalizados: Math.floor(metrics.processo.finalizadas)
       };
       
-      // Set team metrics to match collaborator metrics for display consistency
       this.teamActivityMetrics = {
         pendentes: metrics.activity.pendentes,
         emExecucao: metrics.activity.emExecucao,
         finalizadas: metrics.activity.finalizadas,
-        pontos: metrics.activity.pontos
+        pontos: Math.floor(metrics.activity.pontos)
       };
       
       this.teamProcessMetrics = {
@@ -1962,7 +1975,7 @@ private calculateCollaboratorTotals(memberData: Array<{
         pendentes: 0,
         emExecucao: 0,
         finalizadas: metrics.finalizadas,
-        pontos: totalPoints
+        pontos: Math.floor(totalPoints)
       };
       
       this.teamProcessMetrics = {
@@ -2009,15 +2022,22 @@ private calculateCollaboratorTotals(memberData: Array<{
       // Extract all CNPJ strings for lookup
       const cnpjList = carteiraData.map(c => c.cnpj);
       
-      // Enrich CNPJs with clean company names
-      const cnpjNames = await firstValueFrom(
-        this.cnpjLookupService.enrichCnpjList(cnpjList)
+      // Enrich CNPJs with clean company names and status
+      const cnpjInfo = await firstValueFrom(
+        this.cnpjLookupService.enrichCnpjListFull(cnpjList)
           .pipe(takeUntil(this.destroy$))
       ).catch((error) => {
         console.error('Error enriching CNPJ names:', error);
-        return new Map<string, string>();
+        return new Map<string, import('@services/cnpj-lookup.service').CnpjEnrichedInfo>();
       });
-      this.cnpjNameMap = cnpjNames;
+      const nameMap = new Map<string, string>();
+      cnpjInfo.forEach((info, key) => {
+        nameMap.set(key, info.empresa);
+        if (info.status) {
+          this.cnpjStatusMap.set(key, info.status);
+        }
+      });
+      this.cnpjNameMap = nameMap;
       console.log('📊 Collaborator: CNPJ name map loaded with', this.cnpjNameMap.size, 'entries');
       
       // Enrich with KPI data
@@ -2030,7 +2050,7 @@ private calculateCollaboratorTotals(memberData: Array<{
         return carteiraData.map(item => ({
           cnpj: item.cnpj,
           actionCount: item.actionCount,
-          processCount: item.processCount
+          processCount: (item as any).processCount || 0
         } as CompanyDisplay));
       });
       
@@ -2077,9 +2097,13 @@ private calculateCollaboratorTotals(memberData: Array<{
         return;
       }
       
-      // Calculate date range for the selected month
-      const monthStart = dayjs(this.selectedMonth).startOf('month').toDate();
-      const monthEnd = dayjs(this.selectedMonth).endOf('month').toDate();
+      // Calculate date range for the selected month (or wide range for Toda temporada)
+      const monthStart = this.selectedMonth 
+        ? dayjs(this.selectedMonth).startOf('month').toDate() 
+        : new Date('2000-01-01T00:00:00.000Z');
+      const monthEnd = this.selectedMonth 
+        ? dayjs(this.selectedMonth).endOf('month').toDate() 
+        : new Date('2099-12-31T23:59:59.999Z');
       
       // OPTIMIZED: Use single aggregate query with $lookup - 1 API call instead of N
       const cnpjListWithCounts = await firstValueFrom(
@@ -2105,15 +2129,22 @@ private calculateCollaboratorTotals(memberData: Array<{
       // Extract all CNPJ strings for lookup
       const cnpjList = cnpjListWithCounts.map(c => c.cnpj);
       
-      // Enrich CNPJs with clean company names
-      const cnpjNames = await firstValueFrom(
-        this.cnpjLookupService.enrichCnpjList(cnpjList)
+      // Enrich CNPJs with clean company names and status
+      const cnpjInfo2 = await firstValueFrom(
+        this.cnpjLookupService.enrichCnpjListFull(cnpjList)
           .pipe(takeUntil(this.destroy$))
       ).catch((error) => {
         console.error('Error enriching CNPJ names:', error);
-        return new Map<string, string>();
+        return new Map<string, import('@services/cnpj-lookup.service').CnpjEnrichedInfo>();
       });
-      this.cnpjNameMap = cnpjNames;
+      const nameMap2 = new Map<string, string>();
+      cnpjInfo2.forEach((info, key) => {
+        nameMap2.set(key, info.empresa);
+        if (info.status) {
+          this.cnpjStatusMap.set(key, info.status);
+        }
+      });
+      this.cnpjNameMap = nameMap2;
       console.log('📊 Team: CNPJ name map loaded with', this.cnpjNameMap.size, 'entries');
       
       // Enrich with KPI data
@@ -2126,7 +2157,7 @@ private calculateCollaboratorTotals(memberData: Array<{
         return cnpjListWithCounts.map(item => ({
           cnpj: item.cnpj,
           actionCount: item.actionCount,
-          processCount: item.processCount
+          processCount: (item as any).processCount || 0
         } as CompanyDisplay));
       });
       
@@ -2344,12 +2375,19 @@ private calculateCollaboratorTotals(memberData: Array<{
    */
   onMonthChange(monthsAgo: number): void {
     this.selectedMonthsAgo = monthsAgo;
-    // Calculate the target month date (similar to gamification-dashboard)
-    const date = new Date();
-    date.setMonth(date.getMonth() - monthsAgo);
-    this.selectedMonth = date;
-    const monthName = date.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
-    this.announceToScreenReader(`Mês alterado para ${monthName}`);
+    
+    // Handle "Toda temporada" (-1) — undefined means no month filtering
+    if (monthsAgo === -1) {
+      this.selectedMonth = undefined;
+      this.announceToScreenReader('Filtro alterado para toda temporada');
+    } else {
+      const date = new Date();
+      date.setMonth(date.getMonth() - monthsAgo);
+      this.selectedMonth = date;
+      const monthName = date.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+      this.announceToScreenReader(`Mês alterado para ${monthName}`);
+    }
+    
     this.loadTeamData();
   }
 
@@ -2569,9 +2607,13 @@ private calculateCollaboratorTotals(memberData: Array<{
           return;
         }
         
-        // Calculate date range for the selected month
-        const monthStart = dayjs(this.selectedMonth).startOf('month').toDate();
-        const monthEnd = dayjs(this.selectedMonth).endOf('month').toDate();
+        // Calculate date range for the selected month (or wide range for Toda temporada)
+        const monthStart = this.selectedMonth 
+          ? dayjs(this.selectedMonth).startOf('month').toDate() 
+          : new Date('2000-01-01T00:00:00.000Z');
+        const monthEnd = this.selectedMonth 
+          ? dayjs(this.selectedMonth).endOf('month').toDate() 
+          : new Date('2099-12-31T23:59:59.999Z');
         
         // Use optimized team aggregate service - single API call instead of N calls
         const breakdown = await firstValueFrom(
@@ -2676,6 +2718,14 @@ private calculateCollaboratorTotals(memberData: Array<{
     return displayName || cnpj;
   }
 
+  getCompanyStatus(cnpj: string): string {
+    return this.cnpjStatusMap.get(cnpj) || '';
+  }
+
+  isCompanyActive(cnpj: string): boolean {
+    return this.cnpjStatusMap.get(cnpj)?.toLowerCase() === 'ativa';
+  }
+
   /**
    * Open company detail modal
    */
@@ -2751,9 +2801,46 @@ private calculateCollaboratorTotals(memberData: Array<{
           return;
         }
         
-        // 1. Clientes na Carteira: use already-loaded teamCarteiraClientes
-        // This data was loaded by loadTeamCarteiraData() using optimized aggregate query
-        const totalEmpresasAtual = this.teamCarteiraClientes.length;
+        // 1. Clientes na Carteira: count from player_company__c where type = "cnpj_resp"
+        // Use aggregate query to count all cnpj_resp entries for team members
+        let totalEmpresasAtual = 0;
+        try {
+          const cnpjRespAggregate = [
+            {
+              $match: {
+                playerId: { $in: this.teamMemberIds },
+                type: 'cnpj_resp'
+              }
+            },
+            {
+              $group: {
+                _id: null,
+                uniqueCnpjs: { $addToSet: '$cnpj' }
+              }
+            },
+            {
+              $project: {
+                _id: 0,
+                count: { $size: '$uniqueCnpjs' }
+              }
+            }
+          ];
+          
+          const cnpjRespResult = await firstValueFrom(
+            this.funifierApi.post<any[]>(
+              '/v3/database/player_company__c/aggregate?strict=true',
+              cnpjRespAggregate
+            ).pipe(takeUntil(this.destroy$))
+          ).catch(error => {
+            console.error('Error fetching team cnpj_resp count:', error);
+            return [];
+          });
+          
+          totalEmpresasAtual = cnpjRespResult.length > 0 ? (cnpjRespResult[0].count || 0) : 0;
+          console.log('📊 Team clientes na carteira (from player_company__c cnpj_resp):', totalEmpresasAtual);
+        } catch (error) {
+          console.error('Error loading team cnpj_resp count:', error);
+        }
         
         // Fetch client_goals from all team members using aggregate query
         let somaMetasEmpresas = 0;
@@ -2809,11 +2896,11 @@ private calculateCollaboratorTotals(memberData: Array<{
         } catch (error) {
           console.error('Error loading team client_goals:', error);
           // Fallback to default if error
-          somaMetasEmpresas = this.teamMemberIds.length * 10;
+          somaMetasEmpresas = this.teamMemberIds.length * 100;
         }
         
         // Use sum of goals, or fallback to default if no goals set
-        const targetEmpresas = somaMetasEmpresas > 0 ? somaMetasEmpresas : (this.teamMemberIds.length * 10);
+        const targetEmpresas = somaMetasEmpresas > 0 ? somaMetasEmpresas : (this.teamMemberIds.length * 100);
         const superTargetEmpresas = Math.ceil(targetEmpresas * 1.5);
         
         teamKPIs.push({
@@ -2827,66 +2914,84 @@ private calculateCollaboratorTotals(memberData: Array<{
           percentage: Math.min((totalEmpresasAtual / superTargetEmpresas) * 100, 100)
         });
         
-        // 2. Entregas no Prazo: fetch from player data using single aggregate query
-        // Only fetch if we're looking at current month (entrega is only valid for current month)
-        const now = new Date();
-        const isCurrentMonth = this.selectedMonth.getFullYear() === now.getFullYear() && 
-                               this.selectedMonth.getMonth() === now.getMonth();
-        
-        if (isCurrentMonth) {
-          try {
-            // Use single aggregate query to get all team members' entrega values
-            const aggregateQuery = [
-              {
-                $match: {
-                  _id: { $in: this.teamMemberIds }
-                }
-              },
-              {
-                $project: {
-                  _id: 1,
-                  entrega: '$extra.entrega'
-                }
+        // 2. Entregas no Prazo: fetch from player.extra.entrega using single aggregate query
+        try {
+          // Use single aggregate query to get all team members' entrega values
+          const aggregateQuery = [
+            {
+              $match: {
+                _id: { $in: this.teamMemberIds }
               }
-            ];
-            
-            const playerEntregas = await firstValueFrom(
-              this.funifierApi.post<{ _id: string; entrega?: string }[]>(
-                '/database/player_status/aggregate?strict=true',
-                aggregateQuery
-              ).pipe(takeUntil(this.destroy$))
-            ).catch(error => {
-              console.error('Error fetching team entrega data:', error);
-              return [];
-            });
-            
-            // Calculate average entrega percentage
-            const validEntregas = playerEntregas
-              .filter(p => p.entrega != null && p.entrega !== '')
-              .map(p => parseFloat(p.entrega || '0'))
-              .filter(v => !isNaN(v));
-            
-            if (validEntregas.length > 0) {
-              const mediaEntregas = validEntregas.reduce((sum, v) => sum + v, 0) / validEntregas.length;
-              const targetEntregas = 90;
-              const superTargetEntregas = 100;
-              
-              teamKPIs.push({
-                id: 'entregas-prazo',
-                label: 'Entregas no Prazo',
-                current: Math.round(mediaEntregas * 100) / 100,
-                target: targetEntregas,
-                superTarget: superTargetEntregas,
-                unit: '%',
-                color: this.getKPIColorByGoals(mediaEntregas, targetEntregas, superTargetEntregas),
-                percentage: Math.min((mediaEntregas / superTargetEntregas) * 100, 100)
-              });
+            },
+            {
+              $project: {
+                _id: 1,
+                entrega: '$extra.entrega'
+              }
             }
+          ];
+          
+          const playerEntregas = await firstValueFrom(
+            this.funifierApi.post<{ _id: string; entrega?: string }[]>(
+              '/database/player_status/aggregate?strict=true',
+              aggregateQuery
+            ).pipe(takeUntil(this.destroy$))
+          ).catch(error => {
+            console.error('Error fetching team entrega data:', error);
+            return [];
+          });
+          
+          // Calculate average entrega percentage
+          const validEntregas = playerEntregas
+            .filter(p => p.entrega != null && p.entrega !== '')
+            .map(p => parseFloat(p.entrega || '0'))
+            .filter(v => !isNaN(v));
+          
+          if (validEntregas.length > 0) {
+            const mediaEntregas = validEntregas.reduce((sum, v) => sum + v, 0) / validEntregas.length;
+            const targetEntregas = 90;
+            const superTargetEntregas = 100;
             
-            console.log('✅ Team KPIs loaded (OPTIMIZED - 1 API call instead of', this.teamMemberIds.length, ')');
-          } catch (error) {
-            console.error('Error loading team entrega KPI:', error);
+            teamKPIs.push({
+              id: 'entregas-prazo',
+              label: 'Entregas no Prazo',
+              current: Math.round(mediaEntregas * 100) / 100,
+              target: targetEntregas,
+              superTarget: superTargetEntregas,
+              unit: '%',
+              color: this.getKPIColorByGoals(mediaEntregas, targetEntregas, superTargetEntregas),
+              percentage: Math.min((mediaEntregas / superTargetEntregas) * 100, 100)
+            });
+          } else {
+            // No entrega data available - show as missing with pink
+            teamKPIs.push({
+              id: 'entregas-prazo',
+              label: 'Entregas no Prazo',
+              current: 0,
+              target: 90,
+              superTarget: 100,
+              unit: '%',
+              color: 'pink',
+              percentage: 0,
+              isMissing: true
+            });
           }
+          
+          console.log('✅ Team KPIs loaded (OPTIMIZED - 2 API calls instead of', this.teamMemberIds.length, ')');
+        } catch (error) {
+          console.error('Error loading team entrega KPI:', error);
+          // API error - show as missing with pink
+          teamKPIs.push({
+            id: 'entregas-prazo',
+            label: 'Entregas no Prazo',
+            current: 0,
+            target: 90,
+            superTarget: 100,
+            unit: '%',
+            color: 'pink',
+            percentage: 0,
+            isMissing: true
+          });
         }
         
         this.teamKPIs = teamKPIs;
@@ -2930,11 +3035,10 @@ private calculateCollaboratorTotals(memberData: Array<{
   }
 
   /**
-   * Get enabled KPIs (excluding commented/disabled ones)
-   * Currently excludes 'numero-empresas' (Clientes na Carteira)
+   * Get enabled KPIs (all KPIs)
    */
   get enabledKPIs(): KPIData[] {
-    return this.teamKPIs.filter(kpi => kpi.id !== 'numero-empresas');
+    return this.teamKPIs;
   }
 
   /**
@@ -2945,8 +3049,8 @@ private calculateCollaboratorTotals(memberData: Array<{
     // Convert seasonPoints to PointWallet format
     // Note: moedas is not available for teams, so we set it to 0
     this.teamPointWallet = {
-      bloqueados: this.seasonPoints?.bloqueados || 0,
-      desbloqueados: this.seasonPoints?.desbloqueados || 0,
+      bloqueados: Math.floor(this.seasonPoints?.bloqueados || 0),
+      desbloqueados: Math.floor(this.seasonPoints?.desbloqueados || 0),
       moedas: 0 // Teams don't have moedas, only individual players
     };
     
@@ -2958,9 +3062,10 @@ private calculateCollaboratorTotals(memberData: Array<{
     // Convert progressMetrics to SeasonProgress format
     // For teams, we use:
     // - metas: Calculated from teamKPIs (number of KPIs achieved / total KPIs)
-    // - clientes: Count of unique CNPJs from teamCarteiraClientes
+    // - clientes: Count from player_company__c cnpj_resp (from numero-empresas KPI)
     // - tarefasFinalizadas: atividadesFinalizadas from progressMetrics
-    const uniqueClientes = this.teamCarteiraClientes?.length || 0;
+    const empresasKpi = this.teamKPIs?.find(kpi => kpi.id === 'numero-empresas');
+    const uniqueClientes = empresasKpi ? empresasKpi.current : (this.teamCarteiraClientes?.length || 0);
     
     this.teamSeasonProgress = {
       metas: {

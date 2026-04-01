@@ -774,12 +774,12 @@ export class TeamAggregateService {
             $gte: { $date: startDate.toISOString() },
             $lte: { $date: endDate.toISOString() }
           },
-          'attributes.cnpj': { $ne: null }
+          'attributes.deal': { $ne: null }
         }
       },
       {
         $group: {
-          _id: '$attributes.cnpj',
+          _id: '$attributes.deal',
           actionCount: { $sum: 1 },
           uniqueProcesses: { $addToSet: '$attributes.delivery_id' }
         }

@@ -26,6 +26,7 @@ export class ModalCompanyCarteiraDetailComponent implements OnInit, OnDestroy {
   companyKPIs: KPIData[] = [];
   tasks: ClienteActionItem[] = [];
   cnpjNameMap = new Map<string, string>(); // Map of original CNPJ → clean empresa name
+  companyStatus = ''; // Company status from empid_cnpj__c (e.g. "Ativa")
 
   constructor(
     private actionLogService: ActionLogService,
@@ -52,12 +53,19 @@ export class ModalCompanyCarteiraDetailComponent implements OnInit, OnDestroy {
     if (!this.company) return;
     
     try {
-      const cnpjNames = await firstValueFrom(
-        this.cnpjLookupService.enrichCnpjList([this.company.cnpj])
+      const cnpjInfo = await firstValueFrom(
+        this.cnpjLookupService.enrichCnpjListFull([this.company.cnpj])
           .pipe(takeUntil(this.destroy$))
       );
-      this.cnpjNameMap = cnpjNames;
-      console.log('📊 Modal detail: CNPJ name map loaded with', this.cnpjNameMap.size, 'entries');
+      const nameMap = new Map<string, string>();
+      cnpjInfo.forEach((info, key) => {
+        nameMap.set(key, info.empresa);
+        if (info.status) {
+          this.companyStatus = info.status;
+        }
+      });
+      this.cnpjNameMap = nameMap;
+      console.log('📊 Modal detail: CNPJ name map loaded with', this.cnpjNameMap.size, 'entries, status:', this.companyStatus);
       this.cdr.markForCheck();
     } catch (error) {
       console.error('Error enriching company name:', error);
@@ -139,10 +147,12 @@ export class ModalCompanyCarteiraDetailComponent implements OnInit, OnDestroy {
     if (!cnpj) {
       return '';
     }
-    // Use the enriched name from the map, fallback to original
     const displayName = this.cnpjNameMap.get(cnpj);
-    console.log('📊 Modal detail getCompanyDisplayName called:', { cnpj, displayName, hasInMap: this.cnpjNameMap.has(cnpj), mapSize: this.cnpjNameMap.size });
     return displayName || cnpj;
+  }
+
+  get isCompanyActive(): boolean {
+    return this.companyStatus?.toLowerCase() === 'ativa';
   }
 
   formatDate(timestamp: number): string {

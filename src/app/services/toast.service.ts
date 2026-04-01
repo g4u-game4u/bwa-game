@@ -36,4 +36,12 @@ export class ToastService {
       ...this.defaultConfig,
     });
   }
+
+  warning(message = '') {
+    this._snackBar.open(message, '', {
+      panelClass: ['snackbar-warning'],
+      ...this.defaultConfig,
+      duration: 5000,
+    });
+  }
 }

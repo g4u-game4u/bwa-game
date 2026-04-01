@@ -1,7 +1,7 @@
 export const environment = {
   production: false,
   // client_id: 'cidadania4u',
-  client_id: 'bwa',
+  client_id: 'revisaprev',
   // backend_url_base: 'https://integrador-n8n.grupo4u.com.br/webhook/game4u/taxall',
   backend_url_base: 'http://localhost',
   // backend_url_base: 'https://g4u-mvp-api.onrender.com',
@@ -11,16 +11,22 @@ export const environment = {
   
   // Funifier API Configuration
   funifier_api_url: 'https://service2.funifier.com/v3/',
-  funifier_api_key: '690a785ce179d46fce59ed65',
+  funifier_api_key: '69b1ff7c607db81962c1fa86',
   funifier_base_url: 'https://service2.funifier.com/v3/',
-  funifier_basic_token: 'NjkwYTc4NWNlMTc5ZDQ2ZmNlNTllZDY1OjY3ZWM0ZTRhMjMyN2Y3NGYzYTJmOTZmNQ==',
+  funifier_basic_token: 'NjliMWZmN2M2MDdkYjgxOTYyYzFmYTg2OjY3ZWM0ZTRhMjMyN2Y3NGYzYTJmOTZmNQ==',
   
   // Cache Configuration
   cacheTimeout: 300000, // 5 minutes in milliseconds
   
   // Feature Flags
   enableAnalytics: false,
-
-  // Modo manutenção: bloqueia login e redireciona usuários logados para página de manutenção
-  maintenanceMode: true
+  
+  // Logo Configuration
+  logoUrl: '', // Empty string means use default logo
+  
+  // Team Code Configuration (hardcoded defaults for development)
+  supervisorTeamCode: 'Fkmdmko',
+  gestorTeamCode: 'FkmdnFU',
+  diretorTeamCode: 'FkmdhZ9',
+  logo_url: 'https://i.ibb.co/Fk92q8hv/Logo-Revisa-Prev-removebg-preview.png'
 };

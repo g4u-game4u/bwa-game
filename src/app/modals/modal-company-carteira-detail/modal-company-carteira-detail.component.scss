@@ -8,6 +8,28 @@
   flex-direction: column;
   overflow: visible; // Remove overflow hidden
 
+  .company-status-row {
+    margin-bottom: $spacing-md;
+
+    .status-badge {
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 3px 8px;
+      border-radius: 4px;
+      display: inline-block;
+
+      &.active {
+        background-color: rgba(16, 185, 129, 0.2);
+        color: #34d399;
+      }
+
+      &.inactive {
+        background-color: rgba(239, 68, 68, 0.2);
+        color: #f87171;
+      }
+    }
+  }
+
   .loading-state {
     display: flex;
     flex-direction: column;

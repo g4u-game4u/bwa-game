@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
-import { Observable, of } from 'rxjs';
-import { map, catchError, shareReplay } from 'rxjs/operators';
+import { Observable, of, forkJoin } from 'rxjs';
+import { map, catchError, shareReplay, switchMap } from 'rxjs/operators';
 import { FunifierApiService } from './funifier-api.service';
 import { KPIData } from '@model/gamification-dashboard.model';
 
@@ -10,16 +10,23 @@ import { KPIData } from '@model/gamification-dashboard.model';
 export interface CnpjKpiData {
   _id: string;
   entrega: number;
+  CNPJ?: string;
+  'Classificação do Cliente'?: string;
 }
 
 /**
  * Interface for company display data with KPI information
  */
 export interface CompanyDisplay {
-  cnpj: string; // Full CNPJ string from action_log
-  cnpjId?: string; // Extracted ID for KPI lookup
+  cnpj: string; // empid from cnpj_resp
+  cnpjId?: string; // Extracted ID for KPI lookup (same as cnpj for cnpj_resp)
+  cnpjNumber?: string; // Actual CNPJ number from empid_cnpj__c (e.g. "00.063.263/0009-05")
+  name?: string; // Company name from empid_cnpj__c
+  status?: string; // Company status from empid_cnpj__c (e.g. "Ativa", "Inativa")
   actionCount: number; // Number of actions for this company
   processCount: number; // Number of unique processes (delivery_id) for this company
+  entrega?: number; // Entregas no Prazo % from cnpj__c
+  classificacao?: string; // Classificação do Cliente from cnpj__c (Ouro, Prata, Diamante)
   deliveryKpi?: KPIData; // Delivery KPI from cnpj__c
 }
 
@@ -90,37 +97,26 @@ export class CompanyKpiService {
       return cached;
     }
 
-    // Query cnpj__c collection with aggregate
-    // Ensure all IDs are strings for Funifier API
     const stringIds = cnpjIds.map(id => String(id));
     const aggregateBody = [
       { $match: { _id: { $in: stringIds } } }
     ];
 
-    console.log('📊 Fetching KPI data for CNPJ IDs:', cnpjIds);
+    console.log('📊 Fetching KPI data for CNPJ IDs:', cnpjIds.length, 'IDs');
 
-    const request$ = this.funifierApi.post<CnpjKpiData[]>(
-      '/v3/database/cnpj__c/aggregate?strict=true',
-      aggregateBody
-    ).pipe(
-      map(response => {
-        console.log('📊 KPI data response:', response);
-        
-        // Convert array to Map for easy lookup
+    const request$ = this.fetchAllPaginatedKpi(aggregateBody, 100).pipe(
+      map(entries => {
         const kpiMap = new Map<string, CnpjKpiData>();
-        if (Array.isArray(response)) {
-          response.forEach(item => {
-            if (item._id) {
-              kpiMap.set(item._id, item);
-            }
-          });
-        }
-        
+        entries.forEach(item => {
+          if (item._id) {
+            kpiMap.set(String(item._id), item);
+          }
+        });
+        console.log('📊 KPI data map created with', kpiMap.size, 'entries');
         return kpiMap;
       }),
       catchError(error => {
         console.error('📊 Error fetching KPI data:', error);
-        // Return empty map on error - don't break the UI
         return of(new Map<string, CnpjKpiData>());
       }),
       shareReplay({ bufferSize: 1, refCount: true, windowTime: this.CACHE_DURATION })
@@ -128,6 +124,182 @@ export class CompanyKpiService {
 
     this.setCachedData(this.kpiCache, cacheKey, request$);
     return request$;
+  }
+
+  /**
+   * Paginated fetch for cnpj__c aggregate.
+   * Uses Range header: items=startIndex-batchSize
+   * Recursively fetches until a partial batch is returned.
+   */
+  private fetchAllPaginatedKpi(
+    aggregateBody: any[],
+    batchSize: number,
+    startIndex: number = 0,
+    accumulated: CnpjKpiData[] = []
+  ): Observable<CnpjKpiData[]> {
+    const rangeHeader = `items=${startIndex}-${batchSize}`;
+    console.warn(`📊 KPI batch: ${rangeHeader} (accumulated: ${accumulated.length})`);
+
+    return this.funifierApi.post<CnpjKpiData[]>(
+      '/v3/database/cnpj__c/aggregate?strict=true',
+      aggregateBody,
+      { headers: { 'Range': rangeHeader } }
+    ).pipe(
+      switchMap(response => {
+        const batch = Array.isArray(response) ? response : [];
+        const all = [...accumulated, ...batch];
+
+        if (batch.length === batchSize) {
+          // Full batch — there might be more
+          return this.fetchAllPaginatedKpi(aggregateBody, batchSize, startIndex + batchSize, all);
+        }
+        // Partial or empty — done
+        console.log(`📊 KPI final batch (${batch.length} items), total: ${all.length}`);
+        return of(all);
+      }),
+      catchError(error => {
+        console.error(`❌ Error fetching KPI batch at index ${startIndex}:`, error);
+        return of(accumulated);
+      })
+    );
+  }
+
+  /**
+   * Enrich a list of empids (from cnpj_resp) with KPI data from cnpj__c
+   * and names from empid_cnpj__c.
+   * 
+   * @param empids - Array of empid strings from player.extra.cnpj_resp
+   * @returns Observable of enriched CompanyDisplay array
+   */
+  /**
+   * Check if a value is a full CNPJ (14 digits with formatting like 57.443.329/0001-44)
+   */
+  private isFullCnpj(value: string): boolean {
+    if (!value) return false;
+    return /^\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}$/.test(value.trim());
+  }
+
+  /**
+   * Fetch KPI data for full CNPJ numbers by first resolving them to empids via empid_cnpj__c,
+   * then querying cnpj__c by _id with those empids.
+   * 
+   * Flow: full CNPJ → empid_cnpj__c (by cnpj field) → get _id → cnpj__c (by _id)
+   */
+  private getKpiDataByCnpjField(fullCnpjs: string[]): Observable<Map<string, CnpjKpiData>> {
+    if (!fullCnpjs || fullCnpjs.length === 0) {
+      return of(new Map());
+    }
+
+    console.warn('📊 Resolving', fullCnpjs.length, 'full CNPJs → empids via empid_cnpj__c');
+
+    // Step 1: Query empid_cnpj__c by cnpj field to get empids (_id)
+    const empidLookupBody = [
+      { $match: { cnpj: { $in: fullCnpjs } } },
+      { $project: { _id: 1, cnpj: 1 } }
+    ];
+
+    return this.funifierApi.post<{ _id: string | number; cnpj: string }[]>(
+      '/v3/database/empid_cnpj__c/aggregate?strict=true',
+      empidLookupBody,
+      { headers: { 'Range': 'items=0-100' } }
+    ).pipe(
+      switchMap(empidResults => {
+        if (!empidResults || empidResults.length === 0) {
+          console.warn('📊 No empids found for full CNPJs');
+          return of(new Map<string, CnpjKpiData>());
+        }
+
+        // Build mapping: full CNPJ → empid string
+        const cnpjToEmpid = new Map<string, string>();
+        const empids: string[] = [];
+        empidResults.forEach(r => {
+          const empid = String(r._id);
+          cnpjToEmpid.set(r.cnpj, empid);
+          empids.push(empid);
+        });
+
+        console.warn('📊 Resolved', empids.length, 'empids from full CNPJs');
+
+        // Step 2: Query cnpj__c by _id with the resolved empids
+        return this.getKpiData(empids).pipe(
+          map(kpiMap => {
+            // Re-map: full CNPJ → KPI data (using the empid as intermediary)
+            const result = new Map<string, CnpjKpiData>();
+            fullCnpjs.forEach(cnpj => {
+              const empid = cnpjToEmpid.get(cnpj);
+              if (empid && kpiMap.has(empid)) {
+                result.set(cnpj, kpiMap.get(empid)!);
+              }
+            });
+            console.warn('📊 KPI data resolved for', result.size, '/', fullCnpjs.length, 'full CNPJs');
+            return result;
+          })
+        );
+      }),
+      catchError(error => {
+        console.error('📊 Error resolving full CNPJs to KPI data:', error);
+        return of(new Map<string, CnpjKpiData>());
+      })
+    );
+  }
+
+  enrichFromCnpjResp(empids: string[]): Observable<CompanyDisplay[]> {
+    if (!empids || empids.length === 0) {
+      return of([]);
+    }
+
+    // Separate empids into short (lookup by _id) and full CNPJ (lookup by CNPJ field)
+    const shortIds: string[] = [];
+    const fullCnpjs: string[] = [];
+    empids.forEach(id => {
+      if (this.isFullCnpj(id)) {
+        fullCnpjs.push(id);
+      } else {
+        shortIds.push(id);
+      }
+    });
+
+    console.warn('📊 enrichFromCnpjResp: shortIds:', shortIds.length, 'fullCnpjs:', fullCnpjs.length);
+
+    // Fetch both in parallel
+    const shortFetch$ = shortIds.length > 0 ? this.getKpiData(shortIds) : of(new Map<string, CnpjKpiData>());
+    const fullFetch$ = fullCnpjs.length > 0 ? this.getKpiDataByCnpjField(fullCnpjs) : of(new Map<string, CnpjKpiData>());
+
+    return forkJoin({ shortMap: shortFetch$, fullMap: fullFetch$ }).pipe(
+      map(({ shortMap, fullMap }) => {
+        console.warn('📊 enrichFromCnpjResp: shortMap size:', shortMap.size, 'fullMap size:', fullMap.size);
+        return empids.map(empid => {
+          // Try short ID lookup first, then full CNPJ lookup
+          const kpiData = this.isFullCnpj(empid) ? fullMap.get(empid) : shortMap.get(empid);
+          if (!kpiData) {
+            console.warn('📊 enrichFromCnpjResp: NO KPI for', empid);
+          }
+          const result: CompanyDisplay = {
+            cnpj: empid,
+            cnpjId: empid,
+            actionCount: 0,
+            processCount: 0,
+            entrega: kpiData?.entrega,
+            classificacao: kpiData?.['Classificação do Cliente'],
+          };
+
+          if (kpiData) {
+            result.deliveryKpi = this.mapToKpiData(kpiData);
+          }
+
+          return result;
+        });
+      }),
+      catchError(error => {
+        console.error('📊 Error enriching cnpj_resp with KPIs:', error);
+        return of(empids.map(empid => ({
+          cnpj: empid,
+          cnpjId: empid,
+          actionCount: 0,
+          processCount: 0,
+        } as CompanyDisplay)));
+      })
+    );
   }
 
   /**
@@ -142,7 +314,7 @@ export class CompanyKpiService {
    * @returns Observable of enriched company display data with KPI information
    */
   enrichCompaniesWithKpis(
-    companies: { cnpj: string; actionCount: number; processCount: number }[]
+    companies: { cnpj: string; actionCount: number; processCount?: number }[]
   ): Observable<CompanyDisplay[]> {
     if (!companies || companies.length === 0) {
       return of([]);
@@ -189,6 +361,8 @@ export class CompanyKpiService {
           if (company.cnpjId && kpiMap.has(company.cnpjId)) {
             const kpiData = kpiMap.get(company.cnpjId)!;
             result.deliveryKpi = this.mapToKpiData(kpiData);
+            result.entrega = kpiData.entrega;
+            result.classificacao = kpiData['Classificação do Cliente'];
           }
 
           return result;

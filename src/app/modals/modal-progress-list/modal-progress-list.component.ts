@@ -145,6 +145,7 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
           next: async (results: ActivityListItem[][]) => {
             // Aggregate all activities from all players
             this.activityItems = results.flat();
+
             // Sort by created date (newest first)
             this.activityItems.sort((a, b) => b.created - a.created);
             
@@ -473,7 +474,12 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
   private loadProcessActivities(deliveryId: string): void {
     const deliveryIdNum = parseInt(deliveryId, 10);
     if (isNaN(deliveryIdNum)) {
-      console.error('Invalid delivery_id:', deliveryId);
+      // Some new payloads don't provide numeric delivery_id.
+      // Keep accordion stable and show no nested rows instead of breaking.
+      console.warn('Non-numeric process id, skipping nested activities query:', deliveryId);
+      this.processActivities.set(deliveryId, []);
+      this.loadingProcessActivities.delete(deliveryId);
+      this.cdr.markForCheck();
       return;
     }
 

@@ -2,15 +2,13 @@ import {NgModule} from '@angular/core';
 import {RouterModule, Routes} from '@angular/router';
 import {MainComponent} from "@layout/main/main.component";
 import {SemPermissaoComponent} from "@layout/sem-permissao/sem-permissao.component";
-import {PermissaoAcessoGeral, PermissaoAcessoRota} from "@providers/sessao/permissao-acesso.provider";
+import {PermissaoAcessoGeral} from "@providers/sessao/permissao-acesso.provider";
 import {BreveComponent} from "@layout/breve/breve.component";
-import {ManutencaoComponent} from "@layout/manutencao/manutencao.component";
-import { environment } from '../environments/environment';
 
 const routes: Routes = [
   {
     path: '',
-    redirectTo: environment.maintenanceMode ? 'manutencao' : 'dashboard',
+    redirectTo: 'dashboard',
     pathMatch: 'full',
   },
   {
@@ -23,7 +21,6 @@ const routes: Routes = [
   {
     path: 'dashboard',
     component: MainComponent,
-    canActivate: [PermissaoAcessoRota],
     children: [{
       path: '',
       loadChildren: () => import('./layout/main/main.module').then(m => m.MainModule),
@@ -37,10 +34,6 @@ const routes: Routes = [
   {
     path: 'breve',
     component: BreveComponent
-  },
-  {
-    path: 'manutencao',
-    component: ManutencaoComponent
   }
 ];
 

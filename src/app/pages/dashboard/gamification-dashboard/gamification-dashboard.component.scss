@@ -496,6 +496,14 @@
       .section-header & {
         margin-bottom: 0;
       }
+      
+      .clientes-info-icon {
+        font-size: 0.85em;
+        opacity: 0.5;
+        cursor: help;
+        margin-left: 4px;
+        vertical-align: middle;
+      }
     }
     
     .carteira-expand-btn {
@@ -530,8 +538,8 @@
   .kpi-grid {
     display: flex;
     flex-wrap: wrap;
-    gap: $spacing-xxl; // Increased spacing between KPIs for better horizontal distribution
-    justify-content: center; // Center the KPI circles
+    gap: $spacing-xxl;
+    justify-content: center;
     
     c4u-kpi-circular-progress {
       flex: 0 0 auto;
@@ -549,6 +557,40 @@
   
   // Carteira section with card background
   .carteira-section {
+    .clientes-tabs {
+      display: flex;
+      gap: $spacing-xs;
+      margin-bottom: $spacing-md;
+      
+      .clientes-tab {
+        padding: $spacing-xs $spacing-md;
+        border: none;
+        border-radius: $border-radius-sm;
+        background: rgba(255, 255, 255, 0.08);
+        color: $text-secondary;
+        font-size: 0.85rem;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        
+        &:hover {
+          background: rgba(255, 255, 255, 0.15);
+          color: $text-primary;
+        }
+        
+        &.active {
+          background: rgba(255, 255, 255, 0.2);
+          color: $text-primary;
+          font-weight: 600;
+        }
+        
+        span {
+          opacity: 0.7;
+          font-size: 0.8rem;
+        }
+      }
+    }
+    
     .carteira-card {
       display: block;
       width: 100%;
@@ -648,6 +690,25 @@
                 white-space: normal; // Allow wrapping on mobile
                 overflow: visible;
                 text-overflow: clip;
+              }
+            }
+
+            .status-badge {
+              font-size: 0.6875rem;
+              font-weight: 600;
+              padding: 2px 6px;
+              border-radius: 4px;
+              white-space: nowrap;
+              flex-shrink: 0;
+
+              &.active {
+                background-color: rgba(16, 185, 129, 0.15);
+                color: #059669;
+              }
+
+              &.inactive {
+                background-color: rgba(239, 68, 68, 0.15);
+                color: #dc2626;
               }
             }
           }

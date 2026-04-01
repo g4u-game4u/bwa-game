@@ -1,9 +1,11 @@
-import {Injectable} from '@angular/core';
+import {Injectable, Injector} from '@angular/core';
 import {Usuario} from '@model/usuario.model';
 import {ROLES_LIST} from '@utils/constants';
 import {AuthProvider, LoginResponse} from "@providers/auth/auth.provider";
 import {Router} from "@angular/router";
 import {firstValueFrom, timeout, catchError, throwError} from "rxjs";
+import {CacheManagerService} from "@services/cache-manager.service";
+import {SessionTimeoutService} from "@services/session-timeout.service";
 
 const TKN_KEY = 'g4utkn'
 
@@ -14,9 +16,31 @@ export class SessaoProvider {
     private _usuario: Usuario | null = null;
     private loginResponse?: LoginResponse;
     private initPromise: Promise<boolean> | null = null; // Prevent concurrent init calls
+    
+    // Lazy-loaded services to avoid circular dependencies
+    private _cacheManager: CacheManagerService | null = null;
+    private _sessionTimeout: SessionTimeoutService | null = null;
 
-    constructor(private auth: AuthProvider, private router: Router) {
+    constructor(
+        private auth: AuthProvider, 
+        private router: Router,
+        private injector: Injector
+    ) {
         this.loginResponse = this.getStoredLoginInfo()
+    }
+    
+    private get cacheManager(): CacheManagerService {
+        if (!this._cacheManager) {
+            this._cacheManager = this.injector.get(CacheManagerService);
+        }
+        return this._cacheManager;
+    }
+    
+    private get sessionTimeout(): SessionTimeoutService {
+        if (!this._sessionTimeout) {
+            this._sessionTimeout = this.injector.get(SessionTimeoutService);
+        }
+        return this._sessionTimeout;
     }
 
     public async login(email: string, password: string) {
@@ -170,9 +194,19 @@ export class SessaoProvider {
     }
 
     async logout() {
-        this._usuario = null; // Limpar dados do usuário
+        console.log('🔐 Logout initiated - clearing all caches...');
+        
+        // Clear all application caches
+        this.cacheManager.fullCleanup();
+        
+        // End session timeout tracking
+        this.sessionTimeout.endSession();
+        
+        // Clear user data
+        this._usuario = null;
         delete this.loginResponse;
         sessionStorage.removeItem(TKN_KEY);
+        
         return this.router.navigate(['/login']);
     }
 

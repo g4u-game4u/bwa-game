@@ -11,9 +11,10 @@ export class C4uKpiCircularProgressComponent {
   @Input() target: number = 0;
   @Input() superTarget?: number;
   @Input() colorIndex: number = 0;
-  @Input() color?: 'red' | 'yellow' | 'green';
+  @Input() color?: 'red' | 'yellow' | 'green' | 'pink';
   @Input() unit?: string = '';
   @Input() size: 'small' | 'medium' | 'large' = 'medium';
+  @Input() isMissing: boolean = false;
   
   @HostBinding('class')
   get hostClasses(): string {
@@ -26,6 +27,11 @@ export class C4uKpiCircularProgressComponent {
   ];
 
   get percentage(): number {
+    // When data is missing, show a small slice to indicate "unknown"
+    if (this.isMissing) {
+      return 0;
+    }
+    
     // For percentage KPIs (like "Entregas no Prazo"), use the raw value as the percentage
     // capped at 100 for the progress bar visual
     if (this.unit === '%') {
@@ -39,7 +45,12 @@ export class C4uKpiCircularProgressComponent {
     return Math.round((this.current / this.target) * 100);
   }
 
-  get progressColor(): 'green' | 'blue' | 'purple' | 'gold' | 'red' {
+  get progressColor(): 'green' | 'blue' | 'purple' | 'gold' | 'red' | 'pink' {
+    // If data is missing, always show pink
+    if (this.isMissing) {
+      return 'pink';
+    }
+    
     // If current is below target, always show red
     if (this.target > 0 && this.current < this.target) {
       return 'red';
@@ -57,6 +68,7 @@ export class C4uKpiCircularProgressComponent {
         case 'green': return 'green';
         case 'yellow': return 'gold';
         case 'red': return 'red';
+        case 'pink': return 'pink';
         default: return 'blue';
       }
     }
@@ -71,6 +83,11 @@ export class C4uKpiCircularProgressComponent {
    * For count-based KPIs, show the raw count (not percentage)
    */
   get displayValue(): string {
+    // When data is missing, show "?"
+    if (this.isMissing) {
+      return '?';
+    }
+    
     // For percentage KPIs (like "Entregas no Prazo"), show the raw value with %
     if (this.unit === '%') {
       return `${Math.round(this.current)}%`;
@@ -115,6 +132,10 @@ export class C4uKpiCircularProgressComponent {
   }
 
   get goalStatus(): string {
+    if (this.isMissing) {
+      return 'Dado indisponível';
+    }
+    
     if (!this.superTarget) {
       return this.current >= this.target ? 'Meta atingida' : 'Abaixo da meta';
     }
@@ -161,6 +182,9 @@ export class C4uKpiCircularProgressComponent {
     
     // Only add custom text for these specific KPIs
     if (key === 'clientes-na-carteira' || key === 'entregas-no-prazo') {
+      if (this.isMissing) {
+        return 'Dado não disponível';
+      }
       const unitText = this.unit ? ` ${this.unit}` : '';
       return `${this.current}${unitText} de ${this.target}${unitText}`;
     }
@@ -173,6 +197,9 @@ export class C4uKpiCircularProgressComponent {
    * Generate accessible ARIA label for screen readers
    */
   get ariaLabel(): string {
+    if (this.isMissing) {
+      return `${this.label}: dado indisponível`;
+    }
     const unitText = this.unit ? ` ${this.unit}` : '';
     return `${this.label}: ${this.percentage}% da meta (${this.current}${unitText} de ${this.target}${unitText}). ${this.goalStatus}`;
   }
