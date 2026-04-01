@@ -32,6 +32,10 @@
   &.purple {
     stroke: url(#purpleColor);
   }
+
+  &.pink {
+    stroke: url(#pinkColor);
+  }
 }
 
 .centro {
@@ -55,6 +59,10 @@
 
   &.purple .valor {
     color: #A855F7;
+  }
+
+  &.pink .valor {
+    color: #EC4899;
   }
 }
 

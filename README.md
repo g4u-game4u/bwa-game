@@ -33,7 +33,12 @@ cd game4u-front
 npm install
 ```
 
-3. Install Angular CLI globally (if not already installed):
+3. Enable git hooks (required — protects critical dashboards from accidental deletion):
+```bash
+git config core.hooksPath .githooks
+```
+
+4. Install Angular CLI globally (if not already installed):
 ```bash
 npm install -g @angular/cli
 ```

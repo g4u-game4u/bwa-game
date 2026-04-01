@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { Observable, throwError, of } from 'rxjs';
+import { Observable, throwError, of, forkJoin } from 'rxjs';
 import { map, catchError, shareReplay, switchMap } from 'rxjs/operators';
 import { FunifierApiService } from './funifier-api.service';
 import { KPIMapper } from './kpi-mapper.service';
@@ -54,13 +54,16 @@ export class KPIService {
       aggregateBody
     ).pipe(
       map(response => {
-                if (Array.isArray(response) && response.length > 0) {
+        console.log('📊 Metric targets loaded from database:', response);
+        if (Array.isArray(response) && response.length > 0) {
           return response;
         }
-                return [];
+        console.warn('📊 No metric targets found in database, returning empty array');
+        return [];
       }),
       catchError(error => {
-                // Return empty array - no hardcoded fallback
+        console.error('📊 Error fetching metric targets from database:', error);
+        // Return empty array - no hardcoded fallback
         return of([]);
       }),
       shareReplay({ bufferSize: 1, refCount: true, windowTime: this.CACHE_DURATION })
@@ -89,86 +92,85 @@ export class KPIService {
       return cached;
     }
 
-    // Use faster getCurrentPlayerData for 'me' or current player
-    const playerData$ = playerId === 'me' 
-      ? this.playerService.getCurrentPlayerData()
-      : this.playerService.getRawPlayerData(playerId);
+    // Use PlayerService to get raw player data and cnpj_resp count from player_company__c
+    const request$: Observable<KPIData[]> = forkJoin({
+      playerStatus: this.playerService.getRawPlayerData(playerId),
+      cnpjRespList: this.playerService.getPlayerCnpjResp(playerId)
+    }).pipe(
+      map(({ playerStatus, cnpjRespList }) => {
+        console.log('📊 Player status received:', playerStatus);
+        console.log('📊 Player cnpj_resp count from player_company__c:', cnpjRespList.length);
+        
+        const kpis: KPIData[] = [];
 
-    const request$: Observable<KPIData[]> = playerData$.pipe(
-      switchMap((playerStatus): Observable<KPIData[]> => {
-                                const kpis: KPIData[] = [];
-        const now = new Date();
-        const isCurrentMonth = !selectedMonth || 
-          (selectedMonth.getFullYear() === now.getFullYear() && 
-           selectedMonth.getMonth() === now.getMonth());
+        // Clientes na Carteira - count from player_company__c where type = "cnpj_resp"
+        const companyCount = cnpjRespList.length;
+        
+        // Get target from player's extra.client_goals (number), fallback to default 100
+        const clientGoals = playerStatus.extra?.client_goals;
+        const goalValue = typeof clientGoals === 'number' 
+          ? clientGoals 
+          : clientGoals?.goalValue;
+        const target = goalValue !== undefined && goalValue !== null
+          ? (typeof goalValue === 'number' 
+              ? goalValue 
+              : parseInt(String(goalValue), 10)) 
+          : 100;
+        const superTarget = Math.ceil(target * 1.5);
+        
+        kpis.push({
+          id: 'numero-empresas',
+          label: 'Clientes na Carteira',
+          current: companyCount,
+          target: target,
+          superTarget: superTarget,
+          unit: 'clientes',
+          color: this.getKPIColorByGoals(companyCount, target, superTarget),
+          percentage: Math.min((companyCount / superTarget) * 100, 100)
+        });
 
-        // Helper function to build both KPIs
-        const buildKPIs = (companyCount: number) => {
-          // Get target from player's extra.cnpj_goal, fallback to default 100
-          const cnpjGoal = playerStatus.extra?.cnpj_goal;
-          const target = cnpjGoal !== undefined && cnpjGoal !== null
-            ? (typeof cnpjGoal === 'number' ? cnpjGoal : parseInt(String(cnpjGoal), 10))
-            : 100;
-          const superTarget = Math.ceil(target * 1.5); // Super target is 50% above target
-          
-          // KPI 1: Clientes na Carteira - always show
-          kpis.push({
-            id: 'numero-empresas',
-            label: 'Clientes na Carteira',
-            current: companyCount,
-            target: target,
-            superTarget: superTarget,
-            unit: 'clientes',
-            color: this.getKPIColorByGoals(companyCount, target, superTarget),
-            percentage: Math.min((companyCount / superTarget) * 100, 100)
-          });
+        // Entregas no Prazo - from player.extra.entrega
+        // Get entrega target from player's extra.entrega_goal, fallback to default 90
+        const entregaGoalRaw = playerStatus.extra?.entrega_goal;
+        const entregaTarget = (entregaGoalRaw !== undefined && entregaGoalRaw !== null)
+          ? (typeof entregaGoalRaw === 'number' ? entregaGoalRaw : parseFloat(String(entregaGoalRaw)))
+          : 90;
+        const entregaSuperTarget = 100;
 
-          // KPI 2: Entregas no Prazo - always show (use 0 if entrega doesn't exist)
-          const deliveryPercentage = playerStatus.extra?.entrega 
-            ? parseFloat(playerStatus.extra.entrega) 
-            : 0;
-          
-          // Get target from player's extra.entrega_goal, fallback to default 90
-          const entregaGoal = playerStatus.extra?.entrega_goal;
-          const entregaTarget = entregaGoal !== undefined && entregaGoal !== null
-            ? (typeof entregaGoal === 'number' ? entregaGoal : parseFloat(String(entregaGoal)))
-            : 90;
+        if (playerStatus.extra?.entrega != null && playerStatus.extra.entrega !== '') {
+          const deliveryPercentage = parseFloat(playerStatus.extra.entrega);
           
           kpis.push({
             id: 'entregas-prazo',
             label: 'Entregas no Prazo',
             current: deliveryPercentage,
             target: entregaTarget,
-            superTarget: 100,
+            superTarget: entregaSuperTarget,
             unit: '%',
-            color: this.getKPIColorByGoals(deliveryPercentage, entregaTarget, 100),
+            color: this.getKPIColorByGoals(deliveryPercentage, entregaTarget, entregaSuperTarget),
             percentage: Math.min(deliveryPercentage / 100 * 100, 100)
           });
-
-          console.log('📊 Generated KPIs:', kpis, `(${kpis.length} KPIs)`, isCurrentMonth ? '(current month)' : '(previous month)');
-          return kpis;
-        };
-
-        // Company count comes from extra.cnpj_resp (total allocated)
-        const companyCount = playerStatus.extra?.cnpj_resp 
-          ? playerStatus.extra.cnpj_resp.split(/[;,]/).map((s: string) => s.trim()).filter((s: string) => s.length > 0).length 
-          : 0;
-
-        // If actionLogService is provided, we can use it for additional data
-        // but the KPIs are built from player.extra values
-        if (actionLogService && selectedMonth) {
-          return actionLogService.getPlayerCnpjListWithCount(playerId, selectedMonth).pipe(
-            map(() => buildKPIs(companyCount)),
-            catchError(error => {
-                            return of(buildKPIs(companyCount));
-            })
-          );
         } else {
-          return of(buildKPIs(companyCount));
+          // Data missing - show KPI with "?" and pink color
+          kpis.push({
+            id: 'entregas-prazo',
+            label: 'Entregas no Prazo',
+            current: 0,
+            target: entregaTarget,
+            superTarget: entregaSuperTarget,
+            unit: '%',
+            color: 'pink',
+            percentage: 0,
+            isMissing: true
+          });
         }
+
+        console.log('📊 Generated KPIs:', kpis, `(${kpis.length} KPIs)`);
+        return kpis;
       }),
       catchError(error => {
-                // Return empty array instead of throwing - don't block the UI
+        console.error('📊 Error fetching player KPIs:', error);
+        // Return empty array instead of throwing - don't block the UI
         return of([]);
       }),
       shareReplay({ bufferSize: 1, refCount: true, windowTime: this.CACHE_DURATION })
@@ -192,7 +194,7 @@ export class KPIService {
 
 
   /**
-   * Get company KPIs from cnpj__c database
+   * Get company KPIs from cnpj_performance__c database
    * companyId is the CNPJ
    */
   getCompanyKPIs(companyId: string): Observable<KPIData[]> {
@@ -208,7 +210,7 @@ export class KPIService {
     ];
 
     const request$ = this.funifierApi.post<any[]>(
-      `/v3/database/cnpj__c/aggregate?strict=true`,
+      `/v3/database/cnpj_performance__c/aggregate?strict=true`,
       aggregateBody
     ).pipe(
       map(response => {
@@ -216,14 +218,16 @@ export class KPIService {
         const companyData = response && response.length > 0 ? response[0] : null;
         
         if (!companyData) {
-                    return [];
+          console.warn(`Company KPI data not found for CNPJ ${companyId}`);
+          return [];
         }
         
         // Extract KPIs from company data (nps, multas, eficiencia, extra, prazo)
         return this.mapper.toKPIDataArray(companyData);
       }),
       catchError(error => {
-                return throwError(() => error);
+        console.error('Error fetching company KPIs:', error);
+        return throwError(() => error);
       }),
       shareReplay({ bufferSize: 1, refCount: true, windowTime: this.CACHE_DURATION })
     );
@@ -307,6 +311,3 @@ export class KPIService {
     });
   }
 }
-
-
-

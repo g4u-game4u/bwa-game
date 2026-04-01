@@ -70,7 +70,8 @@ export class LoginLogService {
         data: eventData
       });
       
-          } catch (error) {
+      console.log('✅ Login event tracked in Vercel Analytics:', email);
+    } catch (error) {
       // Silently fail - don't block login if tracking fails
       console.warn('⚠️ Error tracking login event (non-critical):', error);
     }
@@ -124,7 +125,4 @@ export class LoginLogService {
     return sanitized;
   }
 }
-
-
-
 

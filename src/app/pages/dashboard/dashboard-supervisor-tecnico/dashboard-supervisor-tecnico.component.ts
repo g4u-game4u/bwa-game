@@ -124,7 +124,7 @@ export class DashboardSupervisorTecnicoComponent implements OnInit, OnDestroy {
   progressMetrics = { processosIncompletos: 0, atividadesFinalizadas: 0, processosFinalizados: 0 };
 
   /** Monthly points breakdown */
-  monthlyPointsBreakdown: { desbloqueados: number } | null = null;
+  monthlyPointsBreakdown: { bloqueados: number; desbloqueados: number } | null = null;
 
   /** Company/Carteira data */
   teamCarteiraClientes: CompanyDisplay[] = [];
@@ -930,8 +930,7 @@ export class DashboardSupervisorTecnicoComponent implements OnInit, OnDestroy {
         ).pipe(takeUntil(this.destroy$))
       ).catch(() => ({ bloqueados: 0, desbloqueados: 0 }));
 
-      // No locked points displayed (Requirement 16.4) — only pass desbloqueados
-      this.monthlyPointsBreakdown = { desbloqueados: breakdown.desbloqueados || 0 };
+      this.monthlyPointsBreakdown = { bloqueados: 0, desbloqueados: breakdown.desbloqueados || 0 };
       this.cdr.markForCheck();
     } catch (error) {
       this.monthlyPointsBreakdown = null;

@@ -1,9 +1,7 @@
-import maintenanceAllowedEmails from '../../maintenance-allowed-emails.json';
-
 export const environment = {
   production: false,
   // client_id: 'cidadania4u',
-  client_id: 'bwa',
+  client_id: 'revisaprev',
   // backend_url_base: 'https://integrador-n8n.grupo4u.com.br/webhook/game4u/taxall',
   backend_url_base: 'http://localhost',
   // backend_url_base: 'https://g4u-mvp-api.onrender.com',
@@ -22,13 +20,13 @@ export const environment = {
   
   // Feature Flags
   enableAnalytics: false,
-
-  // Modo manutenção: bloqueia login e redireciona usuários logados para página de manutenção
-  maintenanceMode: false,
-
-  /**
-   * Lista allowlist (JSON string). Preencha em `maintenance-allowed-emails.json` na raiz do projeto.
-   * Com lista não vazia, só esses e-mails conseguem logar.
-   */
-  maintenanceAllowedEmailsJson: JSON.stringify(maintenanceAllowedEmails as string[])
+  
+  // Logo Configuration
+  logoUrl: '', // Empty string means use default logo
+  
+  // Team Code Configuration (hardcoded defaults for development)
+  supervisorTeamCode: 'Fkmdmko',
+  gestorTeamCode: 'FkmdnFU',
+  diretorTeamCode: 'FkmdhZ9',
+  logo_url: 'https://i.ibb.co/Fk92q8hv/Logo-Revisa-Prev-removebg-preview.png'
 };

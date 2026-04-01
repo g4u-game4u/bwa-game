@@ -4,6 +4,7 @@ import { ActivityMetrics, ProcessMetrics } from '@model/gamification-dashboard.m
 export type ProgressCardType = 'atividades-finalizadas' | 'atividades-pontos' | 'processos-pendentes' | 'processos-finalizados';
 
 export interface MonthlyPointsBreakdown {
+  bloqueados: number;
   desbloqueados: number;
 }
 
@@ -49,7 +50,8 @@ export class C4uActivityProgressComponent {
     if (!this.monthlyPointsBreakdown) {
       return '';
     }
+    const bloqueados = this.formatNumber(this.monthlyPointsBreakdown.bloqueados);
     const desbloqueados = this.formatNumber(this.monthlyPointsBreakdown.desbloqueados);
-    return `Pontos mensais: ${desbloqueados} pontos.`;
+    return `Pontos mensais: ${bloqueados} bloqueados e ${desbloqueados} desbloqueados.`;
   }
 }

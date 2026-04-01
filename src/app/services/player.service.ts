@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { Observable, throwError } from 'rxjs';
+import { Observable, of, throwError } from 'rxjs';
 import { map, catchError, tap, timeout, shareReplay } from 'rxjs/operators';
 import { FunifierApiService } from './funifier-api.service';
 import { PlayerMapper } from './player-mapper.service';
@@ -45,20 +45,23 @@ export class PlayerService {
     
     // Return cached Observable if valid and not forcing refresh
     if (!forceRefresh && cached && (now - cached.timestamp) < this.CACHE_DURATION) {
+      console.log('📊 Using cached Observable for:', playerId);
       return cached.data$;
     }
 
+    console.log('📊 Fetching fresh player data for:', playerId);
+    
     // Create new Observable with shareReplay to share the request
     const request$ = this.funifierApi.get<any>(endpoint).pipe(
       timeout(this.REQUEST_TIMEOUT),
       tap(response => {
-        console.log(`📊 Player status response (${playerId}):`, response);
+        console.log('📊 Raw player data received:', response);
       }),
       shareReplay({ bufferSize: 1, refCount: true, windowTime: this.CACHE_DURATION }),
       catchError(error => {
-        console.error(`❌ Error fetching player status (${playerId}):`, error);
+        console.error('📊 Error fetching player data:', error);
         // Remove from cache on error
-        this.cachedRawData.delete(cacheKey);
+        this.cachedRawData.delete(playerId);
         return throwError(() => error);
       })
     );
@@ -126,10 +129,12 @@ export class PlayerService {
     return this.fetchPlayerData(playerId).pipe(
       map(response => {
         const status = this.mapper.toPlayerStatus(response);
+        console.log('📊 Mapped player status:', status);
         return status;
       }),
       catchError(error => {
-                return throwError(() => error);
+        console.error('Error mapping player status:', error);
+        return throwError(() => error);
       })
     );
   }
@@ -141,10 +146,12 @@ export class PlayerService {
     return this.fetchPlayerData(playerId).pipe(
       map(response => {
         const points = this.mapper.toPointWallet(response);
+        console.log('📊 Mapped point wallet:', points);
         return points;
       }),
       catchError(error => {
-                return throwError(() => error);
+        console.error('Error mapping point wallet:', error);
+        return throwError(() => error);
       })
     );
   }
@@ -156,11 +163,82 @@ export class PlayerService {
     return this.fetchPlayerData(playerId).pipe(
       map(response => {
         const progress = this.mapper.toSeasonProgress(response, seasonDates);
+        console.log('📊 Mapped season progress:', progress);
         return progress;
       }),
       catchError(error => {
-                return throwError(() => error);
+        console.error('Error mapping season progress:', error);
+        return throwError(() => error);
       })
+    );
+  }
+
+  /**
+   * Fetch player company associations from player_company__c collection.
+   * Aggregates by type (cnpj_resp, cnpj) and returns arrays of CNPJ/empid strings.
+   * 
+   * @param playerId - Player email/ID
+   * @returns Observable of map: type → cnpj[] (e.g. { cnpj_resp: ["1586", "57.443.329/0001-44"], cnpj: ["1864"] })
+   */
+  private getPlayerCompanyData(playerId: string): Observable<Map<string, string[]>> {
+    const cacheKey = `player_company_${playerId}`;
+    const cached = this.cachedRawData.get(cacheKey);
+    const now = Date.now();
+
+    if (cached && (now - cached.timestamp) < this.CACHE_DURATION) {
+      return cached.data$;
+    }
+
+    const aggregateBody = [
+      { $match: { playerId } },
+      { $group: { _id: '$type', cnpjs: { $push: '$cnpj' } } }
+    ];
+
+    const request$: Observable<Map<string, string[]>> = this.funifierApi.post<any[]>(
+      '/v3/database/player_company__c/aggregate?strict=true',
+      aggregateBody
+    ).pipe(
+      timeout(this.REQUEST_TIMEOUT),
+      map(response => {
+        const result = new Map<string, string[]>();
+        if (Array.isArray(response)) {
+          response.forEach(item => {
+            if (item._id && Array.isArray(item.cnpjs)) {
+              result.set(item._id, item.cnpjs.filter((c: any) => typeof c === 'string' && c.trim().length > 0));
+            }
+          });
+        }
+        console.log('📊 Player company data from player_company__c:', Array.from(result.entries()));
+        return result;
+      }),
+      catchError(error => {
+        console.error('📊 Error fetching player_company__c:', error);
+        return of(new Map<string, string[]>());
+      }),
+      shareReplay({ bufferSize: 1, refCount: true, windowTime: this.CACHE_DURATION })
+    );
+
+    this.cachedRawData.set(cacheKey, { data$: request$, timestamp: now });
+    return request$;
+  }
+
+  /**
+   * Get player's cnpj list (participação) from player_company__c where type = "cnpj"
+   */
+  getPlayerCnpj(playerId: string): Observable<string[]> {
+    return this.getPlayerCompanyData(playerId).pipe(
+      map(data => data.get('cnpj') || []),
+      tap(cnpjs => console.log('📊 Player cnpj (participação):', cnpjs))
+    );
+  }
+
+  /**
+   * Get player's cnpj_resp list (carteira) from player_company__c where type = "cnpj_resp"
+   */
+  getPlayerCnpjResp(playerId: string): Observable<string[]> {
+    return this.getPlayerCompanyData(playerId).pipe(
+      map(data => data.get('cnpj_resp') || []),
+      tap(cnpjs => console.log('📊 Player cnpj_resp:', cnpjs))
     );
   }
 
@@ -178,4 +256,3 @@ export class PlayerService {
     this.cachedRawData.delete(playerId);
   }
 }
-

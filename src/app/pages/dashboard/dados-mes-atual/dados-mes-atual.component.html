@@ -2,4 +2,7 @@
   <c4u-painel-info [info]="questInfo" [title]="'LABEL_QUESTS' | translate : {actionAlias: actionAlias}" flexItem="{{showVertical ? '100%' : '1'}}"
                    [isVerticalItem]="showVertical"
                    *enableShimmer="[!dadosMesAtual, {height: 200, width: 'calc('+ showVertical ? '100' : '50' +'% - 28px)', borderRadius: 16}]"></c4u-painel-info>
+  <c4u-painel-info [info]="processInfo" [title]="'LABEL_PROCESSES_QUESTS' | translate : {deliveryAlias: deliveryAlias}" flexItem="{{showVertical ? '100%' : '1'}}"
+                   [isVerticalItem]="showVertical"
+                   *enableShimmer="[!dadosMesAtual, {height: 200, width: 'calc('+ showVertical ? '100' : '50' +'% - 28px)', borderRadius: 16}]"></c4u-painel-info>
 </div>

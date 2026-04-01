@@ -23,7 +23,8 @@ export class KPIMapper {
    * Dynamically extracts all KPIs from the API response
    */
   toKPIDataArray(apiResponses: any[] | any): KPIData[] {
-        console.log('📊 KPI Mapper - Keys:', apiResponses ? Object.keys(apiResponses) : []);
+    console.log('📊 KPI Mapper - Input:', apiResponses);
+    console.log('📊 KPI Mapper - Keys:', apiResponses ? Object.keys(apiResponses) : []);
     
     // If it's an array, map each item
     if (Array.isArray(apiResponses)) {
@@ -32,16 +33,15 @@ export class KPIMapper {
       );
     }
     
-    // If it's an object (from cnpj__c), extract KPI fields
+    // If it's an object (from cnpj_performance__c), extract KPI fields
     if (typeof apiResponses === 'object' && apiResponses !== null) {
       const kpis: KPIData[] = [];
       const addedIds = new Set<string>();
       
       // Named KPIs to look for (check these first as they have meaningful labels)
-      // Based on cnpj__c structure: entrega, nps, multas, eficiencia, extra, prazo
-      const namedKpis = ['entrega', 'nps', 'multas', 'eficiencia', 'extra', 'prazo', 'qualidade', 'produtividade', 'satisfacao', 'saude'];
+      // Based on cnpj_performance__c structure: nps, multas, eficiencia, extra, prazo
+      const namedKpis = ['nps', 'multas', 'eficiencia', 'extra', 'prazo', 'qualidade', 'produtividade', 'satisfacao', 'saude'];
       const namedKpiLabels: { [key: string]: string } = {
-        entrega: 'Entregas no Prazo',
         nps: 'NPS',
         multas: 'Multas',
         eficiencia: 'Eficiência',
@@ -52,40 +52,12 @@ export class KPIMapper {
         satisfacao: 'Satisfação',
         saude: 'Saúde'
       };
-      const namedKpiUnits: { [key: string]: string } = {
-        entrega: '%',
-        nps: '',
-        multas: '',
-        eficiencia: '%',
-        extra: '',
-        prazo: '%',
-        qualidade: '%',
-        produtividade: '%',
-        satisfacao: '%',
-        saude: '%'
-      };
-      const namedKpiTargets: { [key: string]: number } = {
-        entrega: 90, // Default target for entregas no prazo
-        nps: 100,
-        multas: 0,
-        eficiencia: 100,
-        extra: 100,
-        prazo: 100,
-        qualidade: 100,
-        produtividade: 100,
-        satisfacao: 100,
-        saude: 100
-      };
       
       // First, check for named KPIs (these have meaningful labels)
       for (const kpiName of namedKpis) {
         if (kpiName in apiResponses && !addedIds.has(kpiName)) {
           const kpiData = apiResponses[kpiName];
-                    // Skip null/undefined values
-          if (kpiData === null || kpiData === undefined) {
-            continue;
-          }
-          
+          console.log(`📊 Found named KPI '${kpiName}':`, kpiData);
           addedIds.add(kpiName);
           
           if (typeof kpiData === 'object' && kpiData !== null) {
@@ -93,16 +65,16 @@ export class KPIMapper {
               id: kpiName,
               label: kpiData.label || namedKpiLabels[kpiName] || kpiName,
               current: kpiData.current || kpiData.value || 0,
-              target: kpiData.target || namedKpiTargets[kpiName] || 10,
-              unit: kpiData.unit || namedKpiUnits[kpiName] || ''
+              target: kpiData.target || 10,
+              unit: kpiData.unit || ''
             });
-          } else if (typeof kpiData === 'number') {
+          } else if (kpiData !== undefined && kpiData !== null) {
             kpis.push({
               id: kpiName,
               label: namedKpiLabels[kpiName] || kpiName,
-              current: kpiData,
-              target: namedKpiTargets[kpiName] || 10,
-              unit: namedKpiUnits[kpiName] || ''
+              current: typeof kpiData === 'number' ? kpiData : 0,
+              target: 10,
+              unit: ''
             });
           }
         }
@@ -117,7 +89,9 @@ export class KPIMapper {
           return numA - numB;
         });
       
-            for (const key of numberedKpiKeys) {
+      console.log('📊 Found numbered KPI keys:', numberedKpiKeys);
+      
+      for (const key of numberedKpiKeys) {
         if (addedIds.has(key)) continue;
         
         const kpiData = apiResponses[key];
@@ -143,18 +117,20 @@ export class KPIMapper {
         }
       }
       
-      // If no KPIs found, return empty array (don't create defaults)
+      // If still no KPIs, create default 3 KPIs
       if (kpis.length === 0) {
-              } else {
-        console.log('📊 Final KPIs extracted:', kpis.map(k => k.label));
+        console.log('📊 No KPIs found, using defaults');
+        kpis.push(
+          { id: 'kpi1', label: 'KPI 1', current: 0, target: 10, unit: '' },
+          { id: 'kpi2', label: 'KPI 2', current: 0, target: 10, unit: '' },
+          { id: 'kpi3', label: 'KPI 3', current: 0, target: 10, unit: '' }
+        );
       }
       
+      console.log('📊 Final KPIs extracted:', kpis.map(k => k.label));
       return kpis;
     }
     
     return [];
   }
 }
-
-
-

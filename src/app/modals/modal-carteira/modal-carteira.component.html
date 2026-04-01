@@ -27,6 +27,11 @@
           <div class="cliente-info">
             <i class="ri-building-2-line cliente-icon"></i>
             <span class="cliente-cnpj">{{ getCompanyDisplayName(cliente.cnpj) }}</span>
+            <span class="status-badge" *ngIf="getCompanyStatus(cliente.cnpj)" 
+                  [class.active]="isCompanyActive(cliente.cnpj)"
+                  [class.inactive]="!isCompanyActive(cliente.cnpj)">
+              {{ getCompanyStatus(cliente.cnpj) }}
+            </span>
           </div>
           <div class="cliente-meta">
             <span class="action-count">{{ cliente.actionCount }} ações</span>

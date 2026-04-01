@@ -6,33 +6,6 @@ import { AggregateQueryBuilderService, AggregateQuery } from './aggregate-query-
 import { PerformanceMonitorService } from './performance-monitor.service';
 
 /**
- * Helper to generate Funifier date expressions using ISO format
- * 
- * NOTE: Funifier's relative date shortcuts (-0M-, -0M+, etc.) were found to be
- * unreliable in aggregate queries. Using ISO date strings instead for consistency.
- * 
- * @param date - Target date
- * @param position - 'start' for beginning of period, 'end' for end of period
- * @returns Funifier date expression with ISO string like { $date: "2026-03-01T00:00:00.000Z" }
- */
-function toFunifierDate(date: Date, position: 'start' | 'end' = 'start'): { $date: string } {
-  const year = date.getFullYear();
-  const month = date.getMonth();
-  
-  let resultDate: Date;
-  if (position === 'start') {
-    // Start of month: first day at 00:00:00.000 UTC
-    resultDate = new Date(Date.UTC(year, month, 1, 0, 0, 0, 0));
-  } else {
-    // End of month: last day at 23:59:59.999 UTC
-    resultDate = new Date(Date.UTC(year, month + 1, 1, 0, 0, 0, 0));
-    resultDate = new Date(resultDate.getTime() - 1);
-  }
-  
-  return { $date: resultDate.toISOString() };
-}
-
-/**
  * Team season points model
  */
 export interface TeamSeasonPoints {
@@ -104,7 +77,8 @@ export class TeamAggregateService {
    * 
    * @example
    * getTeamSeasonPoints('Departamento Pessoal', startDate, endDate)
-   *   .subscribe(points => */
+   *   .subscribe(points => console.log(points.total));
+   */
   getTeamSeasonPoints(
     teamId: string,
     seasonStart: Date,
@@ -142,7 +116,8 @@ export class TeamAggregateService {
    * 
    * @example
    * getTeamProgressMetrics('Departamento Pessoal', startDate, endDate)
-   *   .subscribe(metrics => */
+   *   .subscribe(metrics => console.log(metrics.processosFinalizados));
+   */
   getTeamProgressMetrics(
     teamId: string,
     seasonStart: Date,
@@ -177,7 +152,8 @@ export class TeamAggregateService {
    * 
    * @example
    * getTeamMembers('Departamento Pessoal')
-   *   .subscribe(members => */
+   *   .subscribe(members => console.log(members.length));
+   */
   getTeamMembers(teamId: string): Observable<Collaborator[]> {
     const cacheKey = `members_${teamId}`;
     
@@ -207,7 +183,8 @@ export class TeamAggregateService {
    * 
    * @example
    * getTeamPlayersStatus('pessoal--rn--andreza-soares')
-   *   .subscribe(players => */
+   *   .subscribe(players => console.log(players.length));
+   */
   getTeamPlayersStatus(teamId: string, batchSize: number = 100): Observable<any[]> {
     const cacheKey = `players_status_${teamId}`;
     
@@ -245,7 +222,8 @@ export class TeamAggregateService {
    * 
    * @example
    * getTeamActionLogs('pessoal--rn--andreza-soares', startDate, endDate)
-   *   .subscribe(logs => */
+   *   .subscribe(logs => console.log(logs.length));
+   */
   getTeamActionLogs(
     teamId: string,
     startDate?: Date,
@@ -284,10 +262,10 @@ export class TeamAggregateService {
     if (startDate || endDate) {
       const dateMatch: any = {};
       if (startDate) {
-        dateMatch.$gte = toFunifierDate(startDate, 'start');
+        dateMatch.$gte = { $date: startDate.toISOString() };
       }
       if (endDate) {
-        dateMatch.$lte = toFunifierDate(endDate, 'end');
+        dateMatch.$lte = { $date: endDate.toISOString() };
       }
       
       // Insert date match after the team match
@@ -319,7 +297,8 @@ export class TeamAggregateService {
    * 
    * @example
    * getCollaboratorData('user@example.com', startDate, endDate)
-   *   .subscribe(data => */
+   *   .subscribe(data => console.log(data));
+   */
   getCollaboratorData(
     userId: string,
     startDate: Date,
@@ -340,8 +319,8 @@ export class TeamAggregateService {
           $match: {
             userId: userId,
             time: {
-              $gte: toFunifierDate(startDate, 'start'),
-              $lte: toFunifierDate(endDate, 'end')
+              $gte: { $date: startDate.toISOString() },
+              $lte: { $date: endDate.toISOString() }
             }
           }
         },
@@ -407,6 +386,8 @@ export class TeamAggregateService {
     // Send query.aggregate (the array of stages) instead of the whole query object
     const aggregatePipeline = query.aggregate;
     
+    console.log(`🔍 Executing aggregate query on ${collection}:`, JSON.stringify(aggregatePipeline));
+    
     return this.funifierApi.post<T[] | { result: T[] }>(endpoint, aggregatePipeline).pipe(
       map(response => {
         // Funifier may return results in a 'result' property or directly as an array
@@ -418,11 +399,19 @@ export class TeamAggregateService {
           return (response as any).result;
         }
         // Return empty array if no valid result
+        console.warn('Unexpected aggregate response format:', response);
         return [];
       }),
       tap(() => {
         // End performance monitoring
         endMeasure();
+        const endTime = performance.now();
+        const duration = endTime - startTime;
+        
+        // Log slow queries (> 1 second)
+        if (duration > 1000) {
+          console.warn(`Slow aggregate query on ${collection}: ${duration.toFixed(2)}ms`);
+        }
       })
     );
   }
@@ -443,9 +432,12 @@ export class TeamAggregateService {
   ): Observable<T[]> {
     const endpoint = `/database/${collection}/aggregate?strict=true`;
     
+    console.log(`🔍 Executing paginated aggregate query on ${collection} with batch size ${batchSize}`);
+    
     // Start with first batch
     return this.fetchBatch<T>(endpoint, aggregatePipeline, 0, batchSize).pipe(
       map(allResults => {
+        console.log(`✅ Fetched ${allResults.length} total items from ${collection}`);
         return allResults;
       })
     );
@@ -472,6 +464,8 @@ export class TeamAggregateService {
     // Example: "items=0-100" for first 100, "items=100-100" for next 100
     const rangeHeader = `items=${startIndex}-${batchSize}`;
     
+    console.log(`📦 Fetching batch: ${rangeHeader}`);
+    
     return this.funifierApi.post<T[]>(
       endpoint,
       aggregatePipeline,
@@ -494,6 +488,7 @@ export class TeamAggregateService {
         
         // If we got a full batch, there might be more data
         if (batchResults.length === batchSize) {
+          console.log(`📦 Batch complete (${batchResults.length} items), fetching next batch...`);
           // Fetch next batch
           return this.fetchBatch<T>(
             endpoint,
@@ -504,10 +499,12 @@ export class TeamAggregateService {
           );
         } else {
           // Last batch (partial or empty), return all accumulated results
+          console.log(`✅ Final batch (${batchResults.length} items), total: ${allResults.length}`);
           return of(allResults);
         }
       }),
-      catchError(() => {
+      catchError(error => {
+        console.error(`Error fetching batch at index ${startIndex}:`, error);
         // Return accumulated results so far on error
         return of(accumulatedResults);
       })
@@ -643,6 +640,8 @@ export class TeamAggregateService {
    * @returns Observable that throws formatted error
    */
   private handleAggregateError(methodName: string, error: any): Observable<never> {
+    console.error(`TeamAggregateService.${methodName} error:`, error);
+    
     let errorMessage = 'Erro ao carregar dados da equipe';
     
     if (error.message) {
@@ -690,8 +689,8 @@ export class TeamAggregateService {
         $match: {
           'playerData.teams': teamId,
           time: {
-            $gte: toFunifierDate(startDate, 'start'),
-            $lte: toFunifierDate(endDate, 'end')
+            $gte: { $date: startDate.toISOString() },
+            $lte: { $date: endDate.toISOString() }
           }
         }
       },
@@ -709,6 +708,8 @@ export class TeamAggregateService {
       }
     ];
 
+    console.log('🔍 Team activity metrics aggregate query');
+
     return this.funifierApi.post<any[]>(
       '/database/action_log/aggregate?strict=true',
       aggregateQuery
@@ -721,10 +722,12 @@ export class TeamAggregateService {
           processosFinalizados: result.desbloqueados || 0,
           processosIncompletos: (result.uniqueProcesses?.length || 0) - (result.desbloqueados || 0)
         };
+        console.log('✅ Team activity metrics (OPTIMIZED):', metrics);
         return metrics;
       }),
       tap(data => this.setCache(cacheKey, data)),
-      catchError(() => {
+      catchError(error => {
+        console.error('Error in getTeamActivityMetrics:', error);
         return of({ finalizadas: 0, pontos: 0, processosFinalizados: 0, processosIncompletos: 0 });
       })
     );
@@ -740,72 +743,84 @@ export class TeamAggregateService {
    * @returns Observable of CNPJ list with aggregated counts
    */
   getTeamCnpjListWithCount(
-      teamId: string,
-      startDate: Date,
-      endDate: Date
-    ): Observable<{ cnpj: string; actionCount: number }[]> {
-      const cacheKey = `team_cnpj_${teamId}_${startDate.getTime()}_${endDate.getTime()}`;
-
-      const cached = this.getFromCache<any[]>(cacheKey);
-      if (cached) {
-        return of(cached);
-      }
-
-      // Single aggregate query with $lookup to get all CNPJs for team members
-      const actionCountQuery = [
-        {
-          $lookup: {
-            from: 'player',
-            localField: 'userId',
-            foreignField: '_id',
-            as: 'playerData'
-          }
-        },
-        {
-          $unwind: '$playerData'
-        },
-        {
-          $match: {
-            'playerData.teams': teamId,
-            time: {
-              $gte: toFunifierDate(startDate, 'start'),
-              $lte: toFunifierDate(endDate, 'end')
-            },
-            'attributes.cnpj': { $ne: null }
-          }
-        },
-        {
-          $group: {
-            _id: '$attributes.cnpj',
-            actionCount: { $sum: 1 }
-          }
-        },
-        {
-          $sort: { actionCount: -1 }
-        }
-      ];
-
-      return this.funifierApi.post<any[]>(
-        '/database/action_log/aggregate?strict=true',
-        actionCountQuery
-      ).pipe(
-        map(response => {
-          const result = Array.isArray(response) ? response : [];
-          const cnpjList = result
-            .filter(item => item._id != null)
-            .map(item => ({
-              cnpj: item._id,
-              actionCount: item.actionCount || 0
-            }));
-          return cnpjList;
-        }),
-        tap(data => this.setCache(cacheKey, data)),
-        catchError(() => {
-          return of([]);
-        })
-      );
+    teamId: string,
+    startDate: Date,
+    endDate: Date
+  ): Observable<{ cnpj: string; actionCount: number; processCount: number }[]> {
+    const cacheKey = `team_cnpj_${teamId}_${startDate.getTime()}_${endDate.getTime()}`;
+    
+    const cached = this.getFromCache<any[]>(cacheKey);
+    if (cached) {
+      return of(cached);
     }
 
+    // Single aggregate query with $lookup to get all CNPJs for team members
+    const actionCountQuery = [
+      {
+        $lookup: {
+          from: 'player',
+          localField: 'userId',
+          foreignField: '_id',
+          as: 'playerData'
+        }
+      },
+      {
+        $unwind: '$playerData'
+      },
+      {
+        $match: {
+          'playerData.teams': teamId,
+          time: {
+            $gte: { $date: startDate.toISOString() },
+            $lte: { $date: endDate.toISOString() }
+          },
+          'attributes.deal': { $ne: null }
+        }
+      },
+      {
+        $group: {
+          _id: '$attributes.deal',
+          actionCount: { $sum: 1 },
+          uniqueProcesses: { $addToSet: '$attributes.delivery_id' }
+        }
+      },
+      {
+        $project: {
+          _id: 1,
+          actionCount: 1,
+          processCount: { $size: '$uniqueProcesses' }
+        }
+      },
+      {
+        $sort: { actionCount: -1 }
+      }
+    ];
+
+    console.log('🔍 Team CNPJ list aggregate query');
+
+    return this.funifierApi.post<any[]>(
+      '/database/action_log/aggregate?strict=true',
+      actionCountQuery
+    ).pipe(
+      map(response => {
+        const result = Array.isArray(response) ? response : [];
+        const cnpjList = result
+          .filter(item => item._id != null)
+          .map(item => ({
+            cnpj: item._id,
+            actionCount: item.actionCount || 0,
+            processCount: item.processCount || 0
+          }));
+        console.log('✅ Team CNPJ list (OPTIMIZED):', cnpjList.length, 'unique CNPJs');
+        return cnpjList;
+      }),
+      tap(data => this.setCache(cacheKey, data)),
+      catchError(error => {
+        console.error('Error in getTeamCnpjListWithCount:', error);
+        return of([]);
+      })
+    );
+  }
 
   /**
    * OPTIMIZED: Get monthly points breakdown for all team members in a single aggregate query.
@@ -839,8 +854,8 @@ export class TeamAggregateService {
           player: { $in: memberIds },
           type: 0, // type 0 = points
           time: {
-            $gte: toFunifierDate(startDate, 'start'),
-            $lte: toFunifierDate(endDate, 'end')
+            $gte: { $date: startDate.toISOString() },
+            $lte: { $date: endDate.toISOString() }
           }
         }
       },
@@ -851,6 +866,8 @@ export class TeamAggregateService {
         }
       }
     ];
+
+    console.log('🔍 Team monthly points breakdown aggregate query');
 
     return this.funifierApi.post<any[]>(
       '/database/achievement/aggregate?strict=true',
@@ -871,10 +888,12 @@ export class TeamAggregateService {
         }
 
         const result = { bloqueados, desbloqueados };
+        console.log('✅ Team monthly points breakdown (OPTIMIZED):', result);
         return result;
       }),
       tap(data => this.setCache(cacheKey, data)),
-      catchError(() => {
+      catchError(error => {
+        console.error('Error in getTeamMonthlyPointsBreakdown:', error);
         return of({ bloqueados: 0, desbloqueados: 0 });
       })
     );
@@ -911,8 +930,8 @@ export class TeamAggregateService {
           player: { $in: memberIds },
           type: 0, // type 0 = points
           time: {
-            $gte: toFunifierDate(startDate, 'start'),
-            $lte: toFunifierDate(endDate, 'end')
+            $gte: { $date: startDate.toISOString() },
+            $lte: { $date: endDate.toISOString() }
           }
         }
       },
@@ -924,6 +943,8 @@ export class TeamAggregateService {
       }
     ];
 
+    console.log('🔍 Team total points aggregate query');
+
     return this.funifierApi.post<any[]>(
       '/database/achievement/aggregate?strict=true',
       aggregateQuery
@@ -932,10 +953,12 @@ export class TeamAggregateService {
         const total = Array.isArray(response) && response.length > 0 
           ? Math.floor(response[0].total || 0) 
           : 0;
+        console.log('✅ Team total points (OPTIMIZED):', total);
         return total;
       }),
       tap(data => this.setCache(cacheKey, data)),
-      catchError(() => {
+      catchError(error => {
+        console.error('Error in getTeamTotalPoints:', error);
         return of(0);
       })
     );

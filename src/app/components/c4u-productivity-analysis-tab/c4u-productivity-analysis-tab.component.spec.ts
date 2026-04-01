@@ -71,23 +71,19 @@ describe('C4uProductivityAnalysisTabComponent', () => {
 
   describe('Chart Type Toggle - Requirement 8.3', () => {
     it('should toggle from line to bar chart', () => {
-      // Use externalChartType input or ensure internal state starts at 'line'
-      component.externalChartType = null; // Use internal state
-      component['_internalChartType'] = 'line';
+      component.chartType = 'line';
       component.toggleChartType();
       expect(component.chartType).toBe('bar');
     });
 
     it('should toggle from bar to line chart', () => {
-      component.externalChartType = null; // Use internal state
-      component['_internalChartType'] = 'bar';
+      component.chartType = 'bar';
       component.toggleChartType();
       expect(component.chartType).toBe('line');
     });
 
     it('should emit chartTypeChanged event on toggle', (done) => {
-      component.externalChartType = null; // Use internal state
-      component['_internalChartType'] = 'line';
+      component.chartType = 'line';
       
       component.chartTypeChanged.subscribe((type) => {
         expect(type).toBe('bar');
@@ -98,8 +94,7 @@ describe('C4uProductivityAnalysisTabComponent', () => {
     });
 
     it('should toggle multiple times correctly', () => {
-      component.externalChartType = null; // Use internal state
-      component['_internalChartType'] = 'line';
+      component.chartType = 'line';
       
       component.toggleChartType();
       expect(component.chartType).toBe('bar');
@@ -112,19 +107,19 @@ describe('C4uProductivityAnalysisTabComponent', () => {
     });
 
     it('should update chart component selector based on type', () => {
-      component.externalChartType = 'line';
+      component.chartType = 'line';
       expect(component.chartComponentSelector).toBe('c4u-grafico-linhas');
       
-      component.externalChartType = 'bar';
+      component.chartType = 'bar';
       expect(component.chartComponentSelector).toBe('c4u-grafico-barras');
     });
 
     it('should have correct isLineChart getter', () => {
-      component.externalChartType = 'line';
+      component.chartType = 'line';
       expect(component.isLineChart).toBe(true);
       expect(component.isBarChart).toBe(false);
       
-      component.externalChartType = 'bar';
+      component.chartType = 'bar';
       expect(component.isLineChart).toBe(false);
       expect(component.isBarChart).toBe(true);
     });
@@ -253,7 +248,7 @@ describe('C4uProductivityAnalysisTabComponent', () => {
 
   describe('Chart Display - Requirements 8.1, 8.2', () => {
     it('should display line chart when chartType is line', () => {
-      component.externalChartType = 'line';
+      component.chartType = 'line';
       component.graphData = mockGraphData;
       component.isLoading = false;
       fixture.detectChanges();
@@ -266,7 +261,7 @@ describe('C4uProductivityAnalysisTabComponent', () => {
     });
 
     it('should display bar chart when chartType is bar', () => {
-      component.externalChartType = 'bar';
+      component.chartType = 'bar';
       component.graphData = mockGraphData;
       component.isLoading = false;
       fixture.detectChanges();
@@ -327,7 +322,7 @@ describe('C4uProductivityAnalysisTabComponent', () => {
     });
 
     it('should highlight active chart type button', () => {
-      component.externalChartType = 'line';
+      component.chartType = 'line';
       fixture.detectChanges();
 
       const toggleButtons = fixture.nativeElement.querySelectorAll('.toggle-btn');
@@ -336,8 +331,7 @@ describe('C4uProductivityAnalysisTabComponent', () => {
     });
 
     it('should switch active button on toggle', () => {
-      component.externalChartType = null; // Use internal state
-      component['_internalChartType'] = 'line';
+      component.chartType = 'line';
       fixture.detectChanges();
 
       component.toggleChartType();

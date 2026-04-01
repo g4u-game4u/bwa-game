@@ -75,11 +75,11 @@
           </div>
         </ng-template>
         
-        <!-- Meta Configuration Section (Requirements: 4.1, 4.7) -->
+        <!-- Meta Configuration Section -->
         <div class="sidebar-section meta-config-section" role="region" aria-labelledby="meta-config-section-title">
-          <h4 id="meta-config-section-title" class="selector-label">Configurar Metas</h4>
+          <h4 id="meta-config-section-title" class="selector-label">Configurar Meta de Clientes</h4>
           
-          <form class="meta-config-form" (ngSubmit)="saveGoals()" #metaForm="ngForm">
+          <form class="meta-config-form" (ngSubmit)="saveClientesMeta()" #metaForm="ngForm">
             <div class="form-group">
               <label for="meta-collaborator-select" class="form-label">Colaborador</label>
               <select 
@@ -95,42 +95,26 @@
               </select>
             </div>
             
-            <!-- CNPJ Goal Input (Requirement 4.2, 4.7) -->
             <div class="form-group">
-              <label for="meta-cnpj-goal-input" class="form-label">Meta de Clientes</label>
+              <label for="meta-value-input" class="form-label">Meta de Clientes</label>
               <input 
                 type="number"
-                id="meta-cnpj-goal-input"
+                id="meta-value-input"
                 class="form-control"
-                [(ngModel)]="metaConfig.cnpjGoalValue"
-                name="cnpjGoalValue"
+                [(ngModel)]="metaConfig.targetValue"
+                name="targetValue"
                 min="0"
                 step="1"
-                placeholder="Ex: 10">
-              <small class="form-text text-muted">Número de clientes na carteira (inteiro ≥ 0)</small>
-            </div>
-            
-            <!-- Entrega Goal Input (Requirement 4.3, 4.7) -->
-            <div class="form-group">
-              <label for="meta-entrega-goal-input" class="form-label">Meta de Entregas no Prazo (%)</label>
-              <input 
-                type="number"
-                id="meta-entrega-goal-input"
-                class="form-control"
-                [(ngModel)]="metaConfig.entregaGoalValue"
-                name="entregaGoalValue"
-                min="0"
-                max="100"
-                step="1"
-                placeholder="Ex: 90">
-              <small class="form-text text-muted">Percentual de entregas no prazo (0-100)</small>
+                placeholder="Ex: 10"
+                required>
+              <small class="form-text text-muted">Número de clientes na carteira</small>
             </div>
             
             <div class="form-actions">
               <button 
                 type="submit"
                 class="btn btn-primary"
-                [disabled]="(metaConfig.cnpjGoalValue === null && metaConfig.entregaGoalValue === null) || isSavingMeta">
+                [disabled]="!metaForm.valid || isSavingMeta">
                 <i class="ri-save-line" *ngIf="!isSavingMeta" aria-hidden="true"></i>
                 <i class="ri-loader-4-line spinning" *ngIf="isSavingMeta" aria-hidden="true"></i>
                 <span>{{ isSavingMeta ? 'Salvando...' : 'Salvar' }}</span>
@@ -163,16 +147,21 @@
       <div class="sidebar-compact" *ngIf="sidebarCollapsed">
         <!-- Point Wallet Compact -->
         <div class="compact-item" *ngIf="teamPointWallet">
-          <i class="ri-star-fill compact-icon desbloqueados"></i>
+          <i class="ri-lock-fill compact-icon bloqueados"></i>
+          <span class="compact-value">{{ teamPointWallet.bloqueados | number:'1.0-0':'pt-BR' }}</span>
+        </div>
+        <div class="compact-item" *ngIf="teamPointWallet">
+          <i class="ri-lock-unlock-fill compact-icon desbloqueados"></i>
           <span class="compact-value">{{ teamPointWallet.desbloqueados | number:'1.0-0':'pt-BR' }}</span>
         </div>
         
         <!-- Circular KPIs Compact - Show only enabled KPIs -->
         <ng-container *ngFor="let kpi of enabledKPIs">
-          <div class="compact-item" [title]="kpi.label + ': ' + roundValue(kpi.current) + ' / ' + roundValue(kpi.target) + (kpi.unit ? ' ' + kpi.unit : '')">
+          <div class="compact-item" [title]="kpi.isMissing ? kpi.label + ': dado indisponível' : kpi.label + ': ' + roundValue(kpi.current) + ' / ' + roundValue(kpi.target) + (kpi.unit ? ' ' + kpi.unit : '')">
             <i class="ri-time-line compact-icon entregas" *ngIf="kpi.id === 'entregas-prazo'"></i>
             <i class="ri-building-line compact-icon clientes" *ngIf="kpi.id === 'numero-empresas'"></i>
-            <span class="compact-value">{{ roundValue(kpi.current) }}{{ kpi.unit || '' }}</span>
+            <span class="compact-value" *ngIf="!kpi.isMissing">{{ roundValue(kpi.current) }}{{ kpi.unit || '' }}</span>
+            <span class="compact-value" *ngIf="kpi.isMissing">?</span>
           </div>
         </ng-container>
         
@@ -210,15 +199,6 @@
     <!-- Header -->
     <div class="dashboard-header" role="banner">
       <c4u-dashboard-navigation></c4u-dashboard-navigation>
-      <!-- Return to Supervisor Dashboard button (only for SUPERVISOR) -->
-      <button
-        *ngIf="isSupervisorUser"
-        class="btn-return-supervisor"
-        (click)="navigateToSupervisorDashboard()"
-        aria-label="Voltar ao Dashboard Supervisor">
-        <i class="ri-arrow-left-line" aria-hidden="true"></i>
-        <span>Voltar ao Dashboard Supervisor</span>
-      </button>
       <div class="header-spacer"></div>
       <c4u-seletor-mes 
         [playerId]="getTeamPlayerIdForMonthSelector()" 
@@ -292,27 +272,16 @@
               <h3 id="kpi-section-title" class="section-title">Carteira da Equipe</h3>
               
               <div class="kpi-grid" *ngIf="teamKPIs.length > 0" role="group" aria-labelledby="kpi-section-title">
-                <!-- KPI de Clientes na Carteira - Comentado temporariamente -->
                 <ng-container *ngFor="let kpi of teamKPIs; let i = index; trackBy: trackByKpiId">
-                  <!-- <c4u-kpi-circular-progress
-                    *ngIf="kpi.id === 'numero-empresas'"
-                    [label]="kpi.label"
-                    [current]="roundValue(kpi.current)"
-                    [target]="roundValue(kpi.target)"
-                    [superTarget]="kpi.superTarget ? roundValue(kpi.superTarget) : undefined"
-                    [color]="kpi.color"
-                    [unit]="kpi.unit"
-                    [colorIndex]="i">
-                  </c4u-kpi-circular-progress> -->
                   <c4u-kpi-circular-progress
-                    *ngIf="kpi.id !== 'numero-empresas'"
                     [label]="kpi.label"
                     [current]="roundValue(kpi.current)"
                     [target]="roundValue(kpi.target)"
                     [superTarget]="kpi.superTarget ? roundValue(kpi.superTarget) : undefined"
                     [color]="kpi.color"
                     [unit]="kpi.unit"
-                    [colorIndex]="i">
+                    [colorIndex]="i"
+                    [isMissing]="!!kpi.isMissing">
                   </c4u-kpi-circular-progress>
                 </ng-container>
               </div>
@@ -338,105 +307,65 @@
               <c4u-shimmer *ngIf="isLoadingGoals"></c4u-shimmer>
             </section>
             
-            <!-- Company Portfolio Section -->
-            <section class="dashboard-section carteira-section" aria-labelledby="company-section-title">
-              <div class="section-header">
-                <h3 id="company-section-title" class="section-title">Clientes</h3>
-              </div>
-
-              <!-- Clientes Sub-Tabs -->
-              <div class="clientes-tabs" role="tablist" aria-label="Tipo de clientes">
-                <button
-                  type="button"
-                  class="clientes-tab-btn"
-                  [class.active]="clientesActiveTab === 'carteira'"
-                  (click)="switchClientesTab('carteira')"
-                  role="tab"
-                  [attr.aria-selected]="clientesActiveTab === 'carteira'"
-                  aria-controls="clientes-carteira-panel"
-                  id="clientes-carteira-tab">
-                  <i class="ri-briefcase-line" aria-hidden="true"></i>
-                  Carteira
-                  <c4u-info-button infoKey="clientes-carteira" position="top" (click)="$event.stopPropagation()"></c4u-info-button>
-                  <span class="tab-count" aria-hidden="true">({{ teamCarteiraClientes.length }})</span>
-                </button>
-                <button
-                  type="button"
-                  class="clientes-tab-btn"
-                  [class.active]="clientesActiveTab === 'participacao'"
-                  (click)="switchClientesTab('participacao')"
-                  role="tab"
-                  [attr.aria-selected]="clientesActiveTab === 'participacao'"
-                  aria-controls="clientes-participacao-panel"
-                  id="clientes-participacao-tab">
-                  <i class="ri-group-line" aria-hidden="true"></i>
-                  Participação
-                  <c4u-info-button infoKey="clientes-participacao" position="top" (click)="$event.stopPropagation()"></c4u-info-button>
-                  <span class="tab-count" aria-hidden="true">({{ teamParticipacaoCnpjs.length }})</span>
-                </button>
-              </div>
-
-              <!-- Carteira Tab Content -->
-              <c4u-card class="carteira-card" *ngIf="clientesActiveTab === 'carteira'"
-                        id="clientes-carteira-panel" role="tabpanel" aria-labelledby="clientes-carteira-tab">
-                <div *ngIf="teamCarteiraClientes.length > 0" class="carteira-list">
-                  <div *ngFor="let cliente of teamCarteiraClientes" 
-                       class="carteira-item"
-                       (click)="openCompanyDetailModal(cliente)"
-                       role="button"
-                       tabindex="0"
-                       [attr.aria-label]="'Ver detalhes de ' + getCompanyDisplayName(cliente.cnpj)"
-                       (keydown.enter)="openCompanyDetailModal(cliente)"
-                       (keydown.space)="openCompanyDetailModal(cliente); $event.preventDefault()">
-                    <div class="carteira-item-info">
-                      <i class="ri-building-line"></i>
-                      <span class="carteira-cnpj">{{ getCompanyDisplayName(cliente.cnpj) }}</span>
-                    </div>
-                    <div class="carteira-item-meta">
-                      <div *ngIf="cliente.deliveryKpi" 
-                           class="carteira-kpi-compact" 
-                           [ngClass]="'kpi-' + (cliente.deliveryKpi.color || 'default')"
-                           [title]="getKpiTooltip(cliente.deliveryKpi)">
-                        <span class="kpi-value">{{ formatKpiValue(cliente.deliveryKpi) }}</span>
-                        <i class="ri-time-line kpi-icon" aria-hidden="true"></i>
+            <!-- Company Portfolio Section (commented out) -->
+            <ng-container *ngIf="false">
+              <section class="dashboard-section carteira-section" aria-labelledby="company-section-title">
+                <div class="section-header">
+                  <h3 id="company-section-title" class="section-title">Clientes</h3>
+                  <!-- <button 
+                    type="button" 
+                    class="carteira-expand-btn"
+                    (click)="openCarteiraModal()"
+                    aria-label="Ver todos os clientes">
+                    <i class="ri-external-link-line"></i>
+                    Ver todos
+                  </button> -->
+                </div>
+                
+                <c4u-card class="carteira-card">
+                  <!-- Carteira list from action_log CNPJs -->
+                  <div *ngIf="teamCarteiraClientes.length > 0" class="carteira-list">
+                    <div *ngFor="let cliente of teamCarteiraClientes" 
+                         class="carteira-item"
+                         (click)="openCompanyDetailModal(cliente)"
+                         role="button"
+                         tabindex="0"
+                         [attr.aria-label]="'Ver detalhes de ' + getCompanyDisplayName(cliente.cnpj)"
+                         (keydown.enter)="openCompanyDetailModal(cliente)"
+                         (keydown.space)="openCompanyDetailModal(cliente); $event.preventDefault()">
+                      <div class="carteira-item-info">
+                        <i class="ri-building-line"></i>
+                        <span class="carteira-cnpj">{{ getCompanyDisplayName(cliente.cnpj) }}</span>
+                        <span class="status-badge" *ngIf="getCompanyStatus(cliente.cnpj)" 
+                              [class.active]="isCompanyActive(cliente.cnpj)"
+                              [class.inactive]="!isCompanyActive(cliente.cnpj)">
+                          {{ getCompanyStatus(cliente.cnpj) }}
+                        </span>
                       </div>
-                      <span *ngIf="!cliente.deliveryKpi" class="kpi-na">N/A</span>
-                      <span *ngIf="cliente.actionCount > 0" class="carteira-action-count">
-                        {{ cliente.actionCount }} tarefas
-                      </span>
+                      <div class="carteira-item-meta">
+                        <!-- KPI Indicator - Compact Display -->
+                        <div *ngIf="cliente.deliveryKpi" 
+                             class="carteira-kpi-compact" 
+                             [ngClass]="'kpi-' + (cliente.deliveryKpi.color || 'default')"
+                             [title]="getKpiTooltip(cliente.deliveryKpi)">
+                          <span class="kpi-value">{{ formatKpiValue(cliente.deliveryKpi) }}</span>
+                          <i class="ri-time-line kpi-icon" aria-hidden="true"></i>
+                        </div>
+                        <span *ngIf="!cliente.deliveryKpi" class="kpi-na">N/A</span>
+                        <span class="carteira-action-count">{{ cliente.actionCount }} tarefas</span>
+                        <span class="carteira-process-count">{{ cliente.processCount }} processos</span>
+                      </div>
                     </div>
                   </div>
-                </div>
-                
-                <c4u-shimmer *ngIf="isLoadingCarteira"></c4u-shimmer>
-                
-                <div *ngIf="!isLoadingCarteira && teamCarteiraClientes.length === 0" class="empty-state">
-                  <p>Nenhum cliente encontrado na carteira da equipe</p>
-                </div>
-              </c4u-card>
-
-              <!-- Participação Tab Content -->
-              <c4u-card class="carteira-card" *ngIf="clientesActiveTab === 'participacao'"
-                        id="clientes-participacao-panel" role="tabpanel" aria-labelledby="clientes-participacao-tab">
-                <div *ngIf="teamParticipacaoCnpjs.length > 0" class="carteira-list">
-                  <div *ngFor="let item of teamParticipacaoCnpjs" class="carteira-item">
-                    <div class="carteira-item-info">
-                      <i class="ri-building-line"></i>
-                      <span class="carteira-cnpj">{{ item.companyName }}</span>
-                    </div>
-                    <div class="carteira-item-meta">
-                      <span class="carteira-action-count">{{ item.cnpj }}</span>
-                    </div>
+                  
+                  <c4u-shimmer *ngIf="isLoadingCarteira"></c4u-shimmer>
+                  
+                  <div *ngIf="!isLoadingCarteira && teamCarteiraClientes.length === 0" class="empty-state">
+                    <p>Nenhum cliente encontrado na carteira da equipe</p>
                   </div>
-                </div>
-
-                <c4u-shimmer *ngIf="isLoadingParticipacao"></c4u-shimmer>
-
-                <div *ngIf="!isLoadingParticipacao && teamParticipacaoCnpjs.length === 0" class="empty-state">
-                  <p>Nenhum CNPJ de participação encontrado para a equipe</p>
-                </div>
-              </c4u-card>
-            </section>
+                </c4u-card>
+              </section>
+            </ng-container>
           </div>
 
           <c4u-shimmer *ngIf="isLoadingGoals"></c4u-shimmer>
@@ -562,13 +491,12 @@
     </div>
   </main>
 
-  <!-- Progress List Modal: quando um colaborador está selecionado, passa só o ID dele e o filtro para exibir apenas as tarefas dessa pessoa -->
+  <!-- Progress List Modal -->
   <modal-progress-list
     *ngIf="isProgressModalOpen"
     [playerId]="teamPlayerIdsForModal"
     [listType]="progressModalType"
     [month]="selectedMonth"
-    [filterByUserId]="selectedCollaborator"
     (closed)="onProgressModalClosed()">
   </modal-progress-list>
   
@@ -577,7 +505,6 @@
     *ngIf="isCompanyCarteiraDetailModalOpen && selectedCarteiraCompany"
     [company]="selectedCarteiraCompany"
     [month]="selectedMonth"
-    [entregaGoal]="90"
     (closed)="onCompanyCarteiraDetailModalClosed()">
   </modal-company-carteira-detail>
   

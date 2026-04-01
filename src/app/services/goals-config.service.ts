@@ -82,6 +82,8 @@ export class GoalsConfigService {
 
       return config;
     } catch (error) {
+      console.error('Erro ao carregar configurações de metas:', error);
+      
       // Retorna valores padrão em caso de erro
       return {
         individualMonthlyGoal: 100,

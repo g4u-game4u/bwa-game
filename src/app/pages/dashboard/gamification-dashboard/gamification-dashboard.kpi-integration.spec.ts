@@ -899,7 +899,7 @@ describe('GamificationDashboard - Company KPI Integration Tests', () => {
 
       // Assert
       expect(actionLogService.getPlayerCnpjListWithCount.calls.count()).toBeGreaterThan(initialCallCount);
-      expect(component.selectedMonth!.getMonth()).not.toBe(new Date().getMonth());
+      expect(component.selectedMonth.getMonth()).not.toBe(new Date().getMonth());
     }));
   });
 

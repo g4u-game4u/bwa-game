@@ -74,11 +74,11 @@ export class C4uSeletorMesComponent implements OnInit, OnChanges {
         // Verifica se há dados de janeiro e inclui janeiro se necessário
         await this.checkAndIncludeJanuary();
 
-        this.populateFields(this.PREV_MONTHS);
+        this.populateFields(this.PREV_MONTHS, true); // Suppress initial emit - dashboard already loads data
       } catch (error) {
                 // Fallback para valores padrão
         this.PREV_MONTHS = 1;
-        this.populateFields(this.PREV_MONTHS);
+        this.populateFields(this.PREV_MONTHS, true);
       } finally {
         // Garante que loading seja desativado mesmo em caso de erro
         setTimeout(() => {
@@ -139,7 +139,7 @@ export class C4uSeletorMesComponent implements OnInit, OnChanges {
       }
     }
 
-    private populateFields(value: number) {
+    private populateFields(value: number, suppressEmit: boolean = false) {
         this.months = []; // Limpa meses anteriores
         
         if (value && value > 0) {
@@ -154,8 +154,16 @@ export class C4uSeletorMesComponent implements OnInit, OnChanges {
         }
 
         setTimeout(() => {
-            this.onChange();
-            this.isLoading = false; // Garante que loading seja desativado após popular
+            if (!suppressEmit) {
+                this.onChange();
+            } else {
+                // Still update prev/next button states without emitting
+                if (this.months.length > 0) {
+                    this.prevEnabled = (this.selected !== this.months.length - 1);
+                    this.nextEnabled = (this.selected !== 0);
+                }
+            }
+            this.isLoading = false;
         }, 150);
     }
 

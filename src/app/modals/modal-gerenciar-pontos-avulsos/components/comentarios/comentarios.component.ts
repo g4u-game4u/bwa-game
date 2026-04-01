@@ -72,8 +72,11 @@ export class ComentariosComponent implements OnInit {
       // Limpar campo
       this.novoComentario = '';
 
-          } catch (error) {
-          } finally {
+      console.log('✅ Comentário adicionado com sucesso');
+
+    } catch (error) {
+      console.error('❌ Erro ao adicionar comentário:', error);
+    } finally {
       this.adicionandoComentario = false;
     }
   }
@@ -111,8 +114,11 @@ export class ComentariosComponent implements OnInit {
       this.comentarios = comentariosSimulados;
       this.comentariosCarregados.emit(this.comentarios);
 
-          } catch (error) {
-            this.comentarios = [];
+      console.log('✅ Comentários carregados:', this.comentarios.length);
+
+    } catch (error) {
+      console.error('❌ Erro ao carregar comentários:', error);
+      this.comentarios = [];
     }
   }
 

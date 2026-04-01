@@ -245,7 +245,7 @@ export class DashboardSupervisorComponent implements OnInit, OnDestroy {
         }
 
         // Fetch members for all teams in parallel
-        const teamRequests = teamIds.map(teamId =>
+        const teamRequests = teamIds.map((teamId: string) =>
           this.fetchTeamMembers(teamId).pipe(
             map(members => ({ teamId, members })),
             catchError(() => of({ teamId, members: [] as any[] }))

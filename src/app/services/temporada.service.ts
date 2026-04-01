@@ -22,6 +22,7 @@ export class TemporadaService {
     // Check if backend_url_base is configured - if not, return empty data
     // This prevents calls to non-existent endpoints in production
     if (!environment.backend_url_base || environment.backend_url_base === 'http://localhost') {
+      console.warn('⚠️ TemporadaService: backend_url_base not configured, returning empty data');
       return this.getEmptyTemporadaDashboard();
     }
 
@@ -53,6 +54,7 @@ export class TemporadaService {
         completedDeliveries: response?.delivery_stats?.DELIVERED || 0,
       };
     } catch (error) {
+      console.error('❌ TemporadaService: Error fetching season data:', error);
       return this.getEmptyTemporadaDashboard();
     }
   }

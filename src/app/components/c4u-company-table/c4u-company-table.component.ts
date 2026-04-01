@@ -84,6 +84,3 @@ export class C4uCompanyTableComponent {
     return company.id;
   }
 }
-
-
-

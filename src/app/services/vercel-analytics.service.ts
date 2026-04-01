@@ -28,6 +28,7 @@ export class VercelAnalyticsService {
 
     // Only initialize in production or if analytics is explicitly enabled
     if (!environment.production && !environment.enableAnalytics) {
+      console.log('📊 Vercel Analytics skipped (development mode)');
       return;
     }
 
@@ -39,8 +40,12 @@ export class VercelAnalyticsService {
       });
       
       this.initialized = true;
+      console.log('✅ Vercel Analytics initialized successfully', {
+        mode: environment.production ? 'production' : 'development',
+        debug: !environment.production
+      });
     } catch (error) {
-      // Silently fail - analytics is not critical
+      console.error('❌ Error initializing Vercel Analytics:', error);
     }
   }
 }
