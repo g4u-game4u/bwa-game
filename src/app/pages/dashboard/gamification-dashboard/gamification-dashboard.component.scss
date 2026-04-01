@@ -247,6 +247,44 @@
     }
   }
   
+  .sidebar-faq-button {
+    cursor: pointer;
+    width: 100%;
+    padding: $spacing-sm $spacing-md;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    outline: none;
+    background: rgba(255, 255, 255, 0.06);
+    border-radius: $border-radius-sm;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: $spacing-xs;
+    transition: all 0.2s ease;
+    color: $text-secondary;
+    font-size: $font-size-small;
+    font-weight: $font-weight-medium;
+
+    .sidebar-faq-icon {
+      font-size: 18px;
+      color: $primary-electric-blue;
+    }
+
+    &:hover {
+      background: rgba($primary-electric-blue, 0.12);
+      border-color: rgba($primary-electric-blue, 0.35);
+      color: $text-primary;
+    }
+
+    &:focus-visible {
+      outline: 2px solid $primary-electric-blue;
+      outline-offset: 2px;
+    }
+
+    @include mobile-only {
+      display: none;
+    }
+  }
+
   // Sidebar toggle button - subtle button at the end of sidebar
   .sidebar-toggle {
     cursor: pointer;
@@ -296,6 +334,24 @@
     }
   }
   
+  .compact-faq {
+    cursor: pointer;
+
+    .compact-icon {
+      color: $primary-electric-blue;
+      font-size: 22px;
+    }
+
+    &:hover {
+      background: rgba($primary-electric-blue, 0.12);
+    }
+
+    &:focus-visible {
+      outline: 2px solid $primary-electric-blue;
+      outline-offset: 2px;
+    }
+  }
+
   // Compact toggle button in collapsed sidebar
   .compact-toggle {
     margin-top: auto;

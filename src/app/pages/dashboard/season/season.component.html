@@ -96,6 +96,13 @@
 
     <!-- Botões de ação -->
     <div [marginTop]="12" flex hAlign="center" direction="column" [gap]="1" *ngIf="!isCSLayout">
+        <button
+            type="button"
+            class="sidenav-shortcut"
+            (click)="abrirModalFaq()">
+            <i class="icon-info"></i>
+            Perguntas frequentes
+        </button>
         <!-- Botão Gerenciar Realizações - condicionado por permissão -->
         <button 
             class="sidenav-shortcut" 

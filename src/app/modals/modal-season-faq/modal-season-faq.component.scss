@@ -1,0 +1,33 @@
+:host {
+  display: block;
+  max-width: min(640px, 100vw - 2rem);
+  max-height: min(85vh, 720px);
+}
+
+.faq-body {
+  max-height: min(60vh, 520px);
+  padding-right: 0.25rem;
+}
+
+.faq-video {
+  width: 100%;
+  border-radius: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.faq-answer {
+  margin: 0;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.85);
+  white-space: pre-line;
+}
+
+.faq-empty {
+  margin: 0;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.6);
+  text-align: center;
+  padding: 1.5rem 0.5rem;
+}

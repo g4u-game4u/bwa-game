@@ -22,6 +22,8 @@ import { ModalCompanyDetailModule } from '@modals/modal-company-detail/modal-com
 import { ModalProgressListModule } from '@modals/modal-progress-list/modal-progress-list.module';
 import { ModalCarteiraModule } from '@modals/modal-carteira/modal-carteira.module';
 import { ModalCompanyCarteiraDetailModule } from '@modals/modal-company-carteira-detail/modal-company-carteira-detail.module';
+import { ModalSeasonFaqModule } from '@modals/modal-season-faq/modal-season-faq.module';
+import { NgbModule } from '@ng-bootstrap/ng-bootstrap';
 
 const routes: Routes = [
   {
@@ -54,7 +56,9 @@ const routes: Routes = [
     ModalCompanyDetailModule,
     ModalProgressListModule,
     ModalCarteiraModule,
-    ModalCompanyCarteiraDetailModule
+    ModalCompanyCarteiraDetailModule,
+    ModalSeasonFaqModule,
+    NgbModule,
   ],
   exports: [
     GamificationDashboardComponent

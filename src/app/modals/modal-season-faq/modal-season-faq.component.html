@@ -1,0 +1,20 @@
+<c4u-modal modalTitle="Perguntas frequentes">
+  <div class="faq-body" flex direction="column" flexItem="1" scroll>
+    <video
+      controls
+      class="faq-video"
+      [attr.aria-label]="'Vídeo de onboarding da gamificação'">
+      <source src="assets/video/Onboarding bwa participante.mp4" type="video/mp4" />
+      Seu navegador não suporta a reprodução de vídeos.
+    </video>
+
+    <c4u-accordion *ngIf="faqItems.length > 0">
+      <c4u-accordion-item *ngFor="let item of faqItems" [itemTitle]="item.title">
+        <p class="faq-answer">{{ item.body }}</p>
+      </c4u-accordion-item>
+    </c4u-accordion>
+    <p *ngIf="faqItems.length === 0" class="faq-empty">
+      O conteúdo desta seção será publicado em breve.
+    </p>
+  </div>
+</c4u-modal>
