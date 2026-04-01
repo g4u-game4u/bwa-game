@@ -128,13 +128,15 @@ export class DashboardSupervisorTecnicoComponent implements OnInit, OnDestroy {
 
   /** Company/Carteira data */
   teamCarteiraClientes: CompanyDisplay[] = [];
+  supervisorCarteiraClientes: CompanyDisplay[] = [];
   cnpjNameMap = new Map<string, string>();
 
   // Clientes sub-tabs
-  clientesActiveTab: 'carteira' | 'participacao' = 'carteira';
-  teamParticipacaoCnpjs: { cnpj: string; playerName: string; companyName: string }[] = [];
+  clientesActiveTab: 'carteira' | 'participacao' | 'carteira-individual' = 'carteira';
+  teamParticipacaoCnpjs: CompanyDisplay[] = [];
   teamParticipacaoCount = 0;
   isLoadingParticipacao = false;
+  isLoadingCarteiraIndividual = false;
   private teamMembersRawData: any[] = [];
 
   /** Team member IDs and data */
@@ -722,7 +724,7 @@ export class DashboardSupervisorTecnicoComponent implements OnInit, OnDestroy {
     }
   }
 
-  /** Load team carteira (company portfolio) data */
+  /** Load team carteira (company portfolio) data from player_company__c */
   private async loadTeamCarteiraData(dateRange: { start: Date; end: Date }): Promise<void> {
     try {
       this.isLoadingCarteira = true;
@@ -733,47 +735,108 @@ export class DashboardSupervisorTecnicoComponent implements OnInit, OnDestroy {
         return;
       }
 
-      const monthStart = dayjs(dateRange.start).startOf('day').toDate();
-      const monthEnd = dayjs(dateRange.end).endOf('day').toDate();
-
-      let cnpjListWithCounts = await firstValueFrom(
-        this.teamAggregateService.getTeamCnpjListWithCount(
-          this.selectedTeamId,
-          monthStart,
-          monthEnd
-        ).pipe(takeUntil(this.destroy$))
-      ).catch(() => []);
-
-      if (cnpjListWithCounts.length === 0) {
+      if (this.teamMemberIds.length === 0) {
         this.teamCarteiraClientes = [];
         this.isLoadingCarteira = false;
         this.cdr.markForCheck();
         return;
       }
 
-      // Replace executor-limited counts (team) with global counts (all users) for the same CNPJs.
-      if (this.selectedMonthsAgo !== -1) {
-        const cnpjList = cnpjListWithCounts.map(c => c.cnpj);
+      // Fetch all cnpj_resp from player_company__c for all team members
+      const aggregateQuery = [
+        {
+          $match: {
+            playerId: { $in: this.teamMemberIds },
+            type: 'cnpj_resp'
+          }
+        },
+        {
+          $group: {
+            _id: '$cnpj',
+            count: { $sum: 1 }
+          }
+        }
+      ];
+
+      const cnpjRespResult = await firstValueFrom(
+        this.funifierApi.post<any[]>(
+          '/v3/database/player_company__c/aggregate?strict=true',
+          aggregateQuery
+        ).pipe(takeUntil(this.destroy$))
+      ).catch(() => []);
+
+      if (cnpjRespResult.length === 0) {
+        this.teamCarteiraClientes = [];
+        this.isLoadingCarteira = false;
+        this.cdr.markForCheck();
+        return;
+      }
+
+      const cnpjList = cnpjRespResult.map((item: any) => item._id).filter((id: string) => id != null);
+
+      // Get action counts for each CNPJ
+      const monthStart = dayjs(dateRange.start).startOf('day').toDate();
+      const monthEnd = dayjs(dateRange.end).endOf('day').toDate();
+
+      let cnpjListWithCounts: { cnpj: string; actionCount: number }[] = [];
+
+      if (this.selectedMonthsAgo === -1) {
+        // For "Toda temporada", get counts from action_log
+        const actionCountQuery = [
+          {
+            $match: {
+              userId: { $in: this.teamMemberIds },
+              'attributes.deal': { $in: cnpjList },
+              time: {
+                $gte: { $date: monthStart.toISOString() },
+                $lte: { $date: monthEnd.toISOString() }
+              }
+            }
+          },
+          {
+            $group: {
+              _id: '$attributes.deal',
+              actionCount: { $sum: 1 }
+            }
+          }
+        ];
+
+        const actionCounts = await firstValueFrom(
+          this.funifierApi.post<any[]>(
+            '/database/action_log/aggregate?strict=true',
+            actionCountQuery
+          ).pipe(takeUntil(this.destroy$))
+        ).catch(() => []);
+
+        const actionCountMap = new Map(actionCounts.map((item: any) => [item._id, item.actionCount || 0]));
+        cnpjListWithCounts = cnpjList.map(cnpj => ({
+          cnpj,
+          actionCount: actionCountMap.get(cnpj) || 0
+        }));
+      } else {
+        // For specific month, get global counts for all executors
         const globalCounts = await firstValueFrom(
           this.actionLogService
             .getCnpjListWithCountForAllExecutors(cnpjList, this.selectedMonth)
             .pipe(takeUntil(this.destroy$))
         ).catch(() => []);
 
-        const globalCountByCnpj = new Map(globalCounts.map(c => [c.cnpj, c.actionCount]));
-        cnpjListWithCounts = cnpjListWithCounts.map(item => ({
-          ...item,
-          actionCount: globalCountByCnpj.get(item.cnpj) || 0
-        }));
+        cnpjListWithCounts = cnpjList.map(cnpj => {
+          const found = globalCounts.find(c => c.cnpj === cnpj);
+          return {
+            cnpj,
+            actionCount: found?.actionCount || 0
+          };
+        });
       }
 
-      const cnpjList = cnpjListWithCounts.map(c => c.cnpj);
-
+      // Enrich with company names
       const cnpjNames = await firstValueFrom(
         this.cnpjLookupService.enrichCnpjList(cnpjList).pipe(takeUntil(this.destroy$))
       ).catch(() => new Map<string, string>());
       this.cnpjNameMap = cnpjNames;
 
+      // Enrich with KPI data
       const enrichedClientes = await firstValueFrom(
         this.companyKpiService.enrichCompaniesWithKpis(cnpjListWithCounts).pipe(takeUntil(this.destroy$))
       ).catch(() => cnpjListWithCounts.map(item => ({ cnpj: item.cnpj, actionCount: item.actionCount } as CompanyDisplay)));
@@ -985,6 +1048,7 @@ export class DashboardSupervisorTecnicoComponent implements OnInit, OnDestroy {
   async onTeamChange(teamId: string): Promise<void> {
     this.selectedTeamId = teamId;
     this.teamParticipacaoCnpjs = [];
+    this.supervisorCarteiraClientes = [];
     this.clientesActiveTab = 'carteira';
     this.selectedCollaborator = null;
     await this.loadTeamData();
@@ -1109,54 +1173,61 @@ export class DashboardSupervisorTecnicoComponent implements OnInit, OnDestroy {
     return this.teamKPIs.filter(kpi => kpi.id !== 'numero-empresas');
   }
 
-  /** Switch between Carteira and Participação sub-tabs */
-  switchClientesTab(tab: 'carteira' | 'participacao'): void {
+  /** Switch between Carteira, Carteira Individual, and Participação sub-tabs */
+  switchClientesTab(tab: 'carteira' | 'participacao' | 'carteira-individual'): void {
     this.clientesActiveTab = tab;
     if (tab === 'participacao' && this.teamParticipacaoCnpjs.length === 0 && !this.isLoadingParticipacao) {
       this.loadParticipacaoData();
     }
+    if (tab === 'carteira-individual' && this.supervisorCarteiraClientes.length === 0 && !this.isLoadingCarteiraIndividual) {
+      this.loadCarteiraIndividualData();
+    }
     this.cdr.markForCheck();
   }
 
-  /** Load CNPJs from extra.cnpj of each team member for the Participação tab */
+  /** Load supervisor's own CNPJs from player_company__c where type = "cnpj" for Participação tab */
   private async loadParticipacaoData(): Promise<void> {
     this.isLoadingParticipacao = true;
     this.cdr.markForCheck();
 
     try {
-      const seen = new Set<string>();
-      const rows: { cnpj: string; playerName: string; companyName: string }[] = [];
+      const playerId = this.getPlayerId();
 
-      for (const player of this.teamMembersRawData) {
-        const raw: string = player?.extra?.cnpj || '';
-        if (!raw) continue;
+      // Fetch supervisor's cnpj (participação) from player_company__c
+      const cnpjList = await firstValueFrom(
+        this.playerService.getPlayerCnpj(playerId).pipe(takeUntil(this.destroy$))
+      ).catch(() => []);
 
-        const cnpjs = raw.split(/[;,]/).map((s: string) => s.trim()).filter((s: string) => s.length > 0);
-        for (const cnpj of cnpjs) {
-          if (seen.has(cnpj)) continue;
-          seen.add(cnpj);
-          rows.push({
-            cnpj,
-            playerName: player.name || player._id || '',
-            companyName: this.cnpjNameMap.get(cnpj) || cnpj
-          });
-        }
+      if (cnpjList.length === 0) {
+        this.teamParticipacaoCnpjs = [];
+        this.teamParticipacaoCount = 0;
+        this.syncSeasonClientesCount();
+        this.isLoadingParticipacao = false;
+        this.cdr.markForCheck();
+        return;
       }
 
-      // Enrich unknown company names
-      const unknownCnpjs = rows.filter(r => r.companyName === r.cnpj).map(r => r.cnpj);
+      // Enrich with names from empid_cnpj__c and KPI data from cnpj__c
+      const enrichedClientes = await firstValueFrom(
+        this.companyKpiService.enrichFromCnpjResp(cnpjList).pipe(takeUntil(this.destroy$))
+      ).catch(() => cnpjList.map(cnpj => ({ cnpj } as CompanyDisplay)));
+
+      // Enrich company names if not already present
+      const unknownCnpjs = enrichedClientes.filter(c => !c.name).map(c => c.cnpj);
       if (unknownCnpjs.length > 0) {
         const names = await firstValueFrom(
           this.cnpjLookupService.enrichCnpjList(unknownCnpjs).pipe(takeUntil(this.destroy$))
         ).catch(() => new Map<string, string>());
-        for (const row of rows) {
-          const name = names.get(row.cnpj);
-          if (name) row.companyName = name;
-        }
+        enrichedClientes.forEach(c => {
+          if (!c.name) {
+            const name = names.get(c.cnpj);
+            if (name) c.name = name;
+          }
+        });
       }
 
-      this.teamParticipacaoCnpjs = rows;
-      this.teamParticipacaoCount = rows.length;
+      this.teamParticipacaoCnpjs = enrichedClientes;
+      this.teamParticipacaoCount = enrichedClientes.length;
       this.syncSeasonClientesCount();
     } catch (error) {
       console.error('Error loading participacao data:', error);
@@ -1165,6 +1236,55 @@ export class DashboardSupervisorTecnicoComponent implements OnInit, OnDestroy {
       this.syncSeasonClientesCount();
     } finally {
       this.isLoadingParticipacao = false;
+      this.cdr.markForCheck();
+    }
+  }
+
+  /** Load supervisor's own carteira from player_company__c where type = "cnpj_resp" for Carteira Individual tab */
+  private async loadCarteiraIndividualData(): Promise<void> {
+    this.isLoadingCarteiraIndividual = true;
+    this.cdr.markForCheck();
+
+    try {
+      const playerId = this.getPlayerId();
+
+      // Fetch supervisor's cnpj_resp from player_company__c
+      const cnpjRespList = await firstValueFrom(
+        this.playerService.getPlayerCnpjResp(playerId).pipe(takeUntil(this.destroy$))
+      ).catch(() => []);
+
+      if (cnpjRespList.length === 0) {
+        this.supervisorCarteiraClientes = [];
+        this.isLoadingCarteiraIndividual = false;
+        this.cdr.markForCheck();
+        return;
+      }
+
+      // Enrich with names from empid_cnpj__c and KPI data from cnpj__c
+      const enrichedClientes = await firstValueFrom(
+        this.companyKpiService.enrichFromCnpjResp(cnpjRespList).pipe(takeUntil(this.destroy$))
+      ).catch(() => cnpjRespList.map(cnpj => ({ cnpj } as CompanyDisplay)));
+
+      // Enrich company names if not already present
+      const unknownCnpjs = enrichedClientes.filter(c => !c.name).map(c => c.cnpj);
+      if (unknownCnpjs.length > 0) {
+        const names = await firstValueFrom(
+          this.cnpjLookupService.enrichCnpjList(unknownCnpjs).pipe(takeUntil(this.destroy$))
+        ).catch(() => new Map<string, string>());
+        enrichedClientes.forEach(c => {
+          if (!c.name) {
+            const name = names.get(c.cnpj);
+            if (name) c.name = name;
+          }
+        });
+      }
+
+      this.supervisorCarteiraClientes = enrichedClientes;
+    } catch (error) {
+      console.error('Error loading carteira individual data:', error);
+      this.supervisorCarteiraClientes = [];
+    } finally {
+      this.isLoadingCarteiraIndividual = false;
       this.cdr.markForCheck();
     }
   }

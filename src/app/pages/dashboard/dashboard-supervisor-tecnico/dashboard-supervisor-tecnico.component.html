@@ -241,6 +241,14 @@
           <span class="tab-count" aria-hidden="true">({{ teamCarteiraClientes.length }})</span>
         </button>
         <button type="button" class="clientes-tab-btn"
+          [class.active]="clientesActiveTab === 'carteira-individual'"
+          (click)="switchClientesTab('carteira-individual')"
+          role="tab" [attr.aria-selected]="clientesActiveTab === 'carteira-individual'">
+          <i class="ri-user-line" aria-hidden="true"></i> Carteira Individual
+          <c4u-info-button infoKey="clientes-carteira-individual" position="top" (click)="$event.stopPropagation()"></c4u-info-button>
+          <span class="tab-count" aria-hidden="true">({{ supervisorCarteiraClientes.length }})</span>
+        </button>
+        <button type="button" class="clientes-tab-btn"
           [class.active]="clientesActiveTab === 'participacao'"
           (click)="switchClientesTab('participacao')"
           role="tab" [attr.aria-selected]="clientesActiveTab === 'participacao'">
@@ -286,16 +294,65 @@
         </div>
       </c4u-card>
 
+      <!-- Carteira Individual Tab -->
+      <c4u-card class="carteira-card" *ngIf="clientesActiveTab === 'carteira-individual'">
+        <div *ngIf="supervisorCarteiraClientes.length > 0" class="carteira-list">
+          <div *ngFor="let cliente of supervisorCarteiraClientes"
+               class="carteira-item"
+               (click)="openCompanyDetailModal(cliente)"
+               role="button"
+               tabindex="0"
+               [attr.aria-label]="'Ver detalhes de ' + getCompanyDisplayName(cliente.cnpj)"
+               (keydown.enter)="openCompanyDetailModal(cliente)"
+               (keydown.space)="openCompanyDetailModal(cliente); $event.preventDefault()">
+            <div class="carteira-item-info">
+              <i class="ri-building-line"></i>
+              <span class="carteira-cnpj">{{ getCompanyDisplayName(cliente.cnpj) }}</span>
+            </div>
+            <div class="carteira-item-meta">
+              <div *ngIf="cliente.deliveryKpi"
+                   class="carteira-kpi-compact"
+                   [ngClass]="'kpi-' + (cliente.deliveryKpi.color || 'default')"
+                   [title]="getKpiTooltip(cliente.deliveryKpi)">
+                <span class="kpi-value">{{ formatKpiValue(cliente.deliveryKpi) }}</span>
+                <i class="ri-time-line kpi-icon" aria-hidden="true"></i>
+              </div>
+              <span *ngIf="!cliente.deliveryKpi" class="kpi-na">N/A</span>
+            </div>
+          </div>
+        </div>
+
+        <c4u-shimmer *ngIf="isLoadingCarteiraIndividual"></c4u-shimmer>
+
+        <div *ngIf="!isLoadingCarteiraIndividual && supervisorCarteiraClientes.length === 0" class="empty-state">
+          <p>Nenhum cliente encontrado na sua carteira individual</p>
+        </div>
+      </c4u-card>
+
       <!-- Participação Tab -->
       <c4u-card class="carteira-card" *ngIf="clientesActiveTab === 'participacao'">
         <div *ngIf="teamParticipacaoCnpjs.length > 0" class="carteira-list">
-          <div *ngFor="let item of teamParticipacaoCnpjs" class="carteira-item">
+          <div *ngFor="let cliente of teamParticipacaoCnpjs"
+               class="carteira-item"
+               (click)="openCompanyDetailModal(cliente)"
+               role="button"
+               tabindex="0"
+               [attr.aria-label]="'Ver detalhes de ' + getCompanyDisplayName(cliente.cnpj)"
+               (keydown.enter)="openCompanyDetailModal(cliente)"
+               (keydown.space)="openCompanyDetailModal(cliente); $event.preventDefault()">
             <div class="carteira-item-info">
               <i class="ri-building-line"></i>
-              <span class="carteira-cnpj">{{ item.companyName }}</span>
+              <span class="carteira-cnpj">{{ getCompanyDisplayName(cliente.cnpj) }}</span>
             </div>
             <div class="carteira-item-meta">
-              <span class="carteira-action-count">{{ item.cnpj }}</span>
+              <div *ngIf="cliente.deliveryKpi"
+                   class="carteira-kpi-compact"
+                   [ngClass]="'kpi-' + (cliente.deliveryKpi.color || 'default')"
+                   [title]="getKpiTooltip(cliente.deliveryKpi)">
+                <span class="kpi-value">{{ formatKpiValue(cliente.deliveryKpi) }}</span>
+                <i class="ri-time-line kpi-icon" aria-hidden="true"></i>
+              </div>
+              <span *ngIf="!cliente.deliveryKpi" class="kpi-na">N/A</span>
             </div>
           </div>
         </div>
@@ -303,7 +360,7 @@
         <c4u-shimmer *ngIf="isLoadingParticipacao"></c4u-shimmer>
 
         <div *ngIf="!isLoadingParticipacao && teamParticipacaoCnpjs.length === 0" class="empty-state">
-          <p>Nenhum CNPJ de participação encontrado para a equipe</p>
+          <p>Nenhum CNPJ de participação encontrado</p>
         </div>
       </c4u-card>
     </section>
