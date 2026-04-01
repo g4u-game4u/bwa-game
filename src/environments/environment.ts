@@ -11,9 +11,9 @@ export const environment = {
   
   // Funifier API Configuration
   funifier_api_url: 'https://service2.funifier.com/v3/',
-  funifier_api_key: '698f8813434ba0101756e314',
+  funifier_api_key: '69b1ff7c607db81962c1fa86',
   funifier_base_url: 'https://service2.funifier.com/v3/',
-  funifier_basic_token: 'Njk4Zjg4MTM0MzRiYTAxMDE3NTZlMzE0OjY3ZWM0ZTRhMjMyN2Y3NGYzYTJmOTZmNQ==',
+  funifier_basic_token: 'NjliMWZmN2M2MDdkYjgxOTYyYzFmYTg2OjY3ZWM0ZTRhMjMyN2Y3NGYzYTJmOTZmNQ==',
   
   // Cache Configuration
   cacheTimeout: 300000, // 5 minutes in milliseconds
