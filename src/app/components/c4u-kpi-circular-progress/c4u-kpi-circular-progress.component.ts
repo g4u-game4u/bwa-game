@@ -25,15 +25,26 @@ export class C4uKpiCircularProgressComponent {
     'green', 'blue', 'purple', 'gold', 'red'
   ];
 
+  /**
+   * Progressbar max so aria-valuenow (current count) does not exceed aria-valuemax.
+   */
+  get ariaValueMax(): number {
+    if (this.unit === '%') {
+      return this.target > 0 ? this.target : 100;
+    }
+    const t = this.target > 0 ? this.target : 1;
+    return Math.max(t, Math.ceil(this.current));
+  }
+
+  /**
+   * Shown % = current / target (uncapped; e.g. 40 vs meta 10 → 400%).
+   * unit '%' KPIs keep raw value, capped at 100 for the child ring stroke.
+   */
   get percentage(): number {
-    // For percentage KPIs (like "Entregas no Prazo"), use the raw value as the percentage
-    // capped at 100 for the progress bar visual
     if (this.unit === '%') {
       return Math.min(Math.round(this.current), 100);
     }
-    
-    // For count-based KPIs, calculate goal completion percentage
-    if (this.target === 0) {
+    if (this.target <= 0) {
       return 0;
     }
     return Math.round((this.current / this.target) * 100);
@@ -141,7 +152,10 @@ export class C4uKpiCircularProgressComponent {
   get helpTextKey(): string {
     const labelLower = this.label.toLowerCase();
     
-    if ((labelLower.includes('clientes') || labelLower.includes('empresas')) && labelLower.includes('carteira')) {
+    if (
+      (labelLower.includes('clientes') || labelLower.includes('empresas')) &&
+      (labelLower.includes('carteira') || labelLower.includes('atendidos'))
+    ) {
       return 'clientes-na-carteira';
     } else if (labelLower.includes('entregas') && labelLower.includes('prazo')) {
       return 'entregas-no-prazo';
@@ -174,7 +188,9 @@ export class C4uKpiCircularProgressComponent {
    */
   get ariaLabel(): string {
     const unitText = this.unit ? ` ${this.unit}` : '';
-    return `${this.label}: ${this.percentage}% da meta (${this.current}${unitText} de ${this.target}${unitText}). ${this.goalStatus}`;
+    const metaRef =
+      this.unit === '%' ? (this.target > 0 ? this.target : 100) : this.target;
+    return `${this.label}: ${this.percentage}% da meta (${this.current}${unitText} de ${metaRef}${unitText}). ${this.goalStatus}`;
   }
 
   /**

@@ -35,7 +35,7 @@ describe('C4uKpiCircularProgressComponent - Accessibility', () => {
                [attr.aria-label]="ariaLabel"
                [attr.aria-valuenow]="current"
                [attr.aria-valuemin]="0"
-               [attr.aria-valuemax]="target"
+               [attr.aria-valuemax]="ariaValueMax"
                [attr.aria-valuetext]="ariaValueText">
             <div class="kpi-label" aria-hidden="true">{{ label }}</div>
             <div class="kpi-progress-wrapper" aria-hidden="true">
@@ -110,11 +110,21 @@ describe('C4uKpiCircularProgressComponent - Accessibility', () => {
       expect(valueMax).toBe('100');
     });
 
+    it('should set aria-valuemax at least to meta for monthly clientes (deals) KPI', () => {
+      component.label = 'Clientes atendidos';
+      component.unit = 'clientes';
+      component.current = 8;
+      component.target = 10;
+      component.superTarget = 15;
+      fixture.detectChanges();
+      expect(progressElement.nativeElement.getAttribute('aria-valuemax')).toBe('10');
+    });
+
     it('should have aria-valuetext for screen readers', () => {
       const valueText = progressElement.nativeElement.getAttribute('aria-valuetext');
       expect(valueText).toBeTruthy();
-      expect(valueText).toContain('89');
-      expect(valueText).toContain('100');
+      expect(valueText).toContain('89%');
+      expect(valueText).toContain('da meta');
     });
 
     it('should update aria-valuenow when current value changes', () => {
@@ -168,9 +178,8 @@ describe('C4uKpiCircularProgressComponent - Accessibility', () => {
 
     it('should provide meaningful aria-valuetext', () => {
       const valueText = progressElement.nativeElement.getAttribute('aria-valuetext');
-      
-      expect(valueText).toContain('89 de 100');
-      expect(valueText).toContain('por cento');
+      expect(valueText).toContain('89%');
+      expect(valueText).toContain('da meta');
     });
 
     it('should announce super target achievement', () => {

@@ -2642,32 +2642,6 @@ private calculateCollaboratorTotals(memberData: Array<{
   }
 
   /**
-   * Format KPI value as integer with percentage sign
-   */
-  /**
-   * Format KPI value for display in company list
-   * For percentage-based KPIs (unit === '%'), show the raw value directly
-   * For other KPIs, show percentage of target achievement
-   */
-  formatKpiValue(kpi: KPIData): string {
-    // Show current value instead of achievement percentage
-    const current = Math.round(kpi.current);
-    const unit = kpi.unit || '%';
-    return `${current}${unit}`;
-  }
-
-  /**
-   * Get tooltip text showing current value vs target
-   * Format: "75% de 80%" (valor alcançado de meta)
-   */
-  getKpiTooltip(kpi: KPIData): string {
-    const current = Math.round(kpi.current);
-    const target = Math.round(kpi.target);
-    const unit = kpi.unit || '';
-    return `${current}${unit} de ${target}${unit}`;
-  }
-
-  /**
    * Get clean company display name from CNPJ
    * Uses the enriched CNPJ name map from the lookup service
    * Format: "COMPANY NAME l CODE [ID|SUFFIX]"
@@ -2681,6 +2655,15 @@ private calculateCollaboratorTotals(memberData: Array<{
     const displayName = this.cnpjNameMap.get(cnpj);
     console.log('📊 Team getCompanyDisplayName called:', { cnpj, displayName, hasInMap: this.cnpjNameMap.has(cnpj), mapSize: this.cnpjNameMap.size });
     return displayName || cnpj;
+  }
+
+  /** Texto do contador na lista de clientes: singular/plural com "sua(s)". */
+  formatClienteTasksLabel(actionCount: number): string {
+    const n = Math.round(Number(actionCount)) || 0;
+    if (n === 1) {
+      return '1 tarefa sua';
+    }
+    return `${n} tarefas suas`;
   }
 
   /**
@@ -2825,13 +2808,15 @@ private calculateCollaboratorTotals(memberData: Array<{
         
         teamKPIs.push({
           id: 'numero-empresas',
-          label: 'Clientes na Carteira',
+          label: 'Clientes atendidos',
           current: totalEmpresasAtual,
           target: targetEmpresas,
           superTarget: superTargetEmpresas,
           unit: 'clientes',
           color: this.getKPIColorByGoals(totalEmpresasAtual, targetEmpresas, superTargetEmpresas),
-          percentage: Math.min((totalEmpresasAtual / superTargetEmpresas) * 100, 100)
+          percentage: targetEmpresas > 0
+            ? Math.round((totalEmpresasAtual / targetEmpresas) * 100)
+            : 0
         });
         
         // 2. Entregas no Prazo: fetch from player data using single aggregate query

@@ -77,10 +77,6 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   carteiraClientes: CompanyDisplay[] = [];
   isLoadingCarteira = true;
   cnpjNameMap = new Map<string, string>(); // Map of original CNPJ → clean empresa name
-
-  // Unique deals from action_log (attributes.deals)
-  uniqueDeals: string[] = [];
-  isLoadingDeals = true;
   
   // Month selection
   selectedMonth: Date = new Date();
@@ -241,7 +237,6 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     this.loadPlayerData();
     this.loadCompanyData();
     this.loadCarteiraData();
-    this.loadDealsData();
     this.loadKPIData();
     this.loadProgressData();
   }
@@ -357,8 +352,8 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
       return;
     }
 
-    // Load clientes count from unique CNPJs in action_log
-    this.actionLogService.getUniqueClientesCount(playerId)
+    // Load clientes count from action_log (same month as KPIs / carteira)
+    this.actionLogService.getUniqueClientesCount(playerId, this.selectedMonth)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (count: number) => {
@@ -479,39 +474,6 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
       });
   }
 
-  /**
-   * Load unique deals from action_log (attributes.deals) for the current player/month.
-   */
-  private loadDealsData(): void {
-    this.isLoadingDeals = true;
-    this.uniqueDeals = [];
-    this.cdr.markForCheck();
-
-    const playerId = this.getPlayerId();
-    if (!playerId) {
-      this.isLoadingDeals = false;
-      this.cdr.markForCheck();
-      return;
-    }
-
-    this.actionLogService
-      .getUniqueDeals(playerId, this.selectedMonth)
-      .pipe(takeUntil(this.destroy$))
-      .subscribe({
-        next: (deals) => {
-          this.uniqueDeals = deals || [];
-          this.isLoadingDeals = false;
-          this.cdr.markForCheck();
-        },
-        error: (err: Error) => {
-          console.error('📊 Failed to load unique deals:', err);
-          this.uniqueDeals = [];
-          this.isLoadingDeals = false;
-          this.cdr.markForCheck();
-        }
-      });
-  }
-  
   /**
    * Load KPI data
    */
@@ -824,17 +786,6 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   }
 
   /**
-   * For "Clientes na Carteira", use seasonProgress.clientes (action_log count)
-   * to compare against KPI target in circular progress.
-   */
-  getKpiCurrentValue(kpi: KPIData): number {
-    if (kpi.id === 'numero-empresas') {
-      return this.seasonProgress?.clientes ?? kpi.current;
-    }
-    return kpi.current;
-  }
-
-  /**
    * Get enabled KPIs (excluding commented/disabled ones)
    * Currently excludes 'numero-empresas' (Clientes na Carteira)
    */
@@ -842,32 +793,6 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     return this.playerKPIs;
   }
 
-  /**
-   * Format KPI value as integer with percentage symbol for compact display
-   */
-  /**
-   * Format KPI value for display in company list
-   * For percentage-based KPIs (unit === '%'), show the raw value directly
-   * For other KPIs, show percentage of target achievement
-   */
-  formatKpiValue(kpi: KPIData): string {
-    // Show current value instead of achievement percentage
-    const current = Math.round(kpi.current);
-    const unit = kpi.unit || '%';
-    return `${current}${unit}`;
-  }
-
-  /**
-   * Get tooltip text showing current value vs target
-   * Format: "75% de 80%" (valor alcançado de meta)
-   */
-  getKpiTooltip(kpi: KPIData): string {
-    const current = Math.round(kpi.current);
-    const target = Math.round(kpi.target);
-    const unit = kpi.unit || '';
-    return `${current}${unit} de ${target}${unit}`;
-  }
-  
   /**
    * Get clean company display name from CNPJ
    * Uses the enriched CNPJ name map from the lookup service
@@ -880,6 +805,15 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     const displayName = this.cnpjNameMap.get(cnpj);
     console.log('📊 getCompanyDisplayName called:', { cnpj, displayName, hasInMap: this.cnpjNameMap.has(cnpj), mapSize: this.cnpjNameMap.size });
     return displayName || cnpj;
+  }
+
+  /** Texto do contador na lista de clientes: singular/plural com "sua(s)". */
+  formatClienteTasksLabel(actionCount: number): string {
+    const n = Math.round(Number(actionCount)) || 0;
+    if (n === 1) {
+      return '1 tarefa sua';
+    }
+    return `${n} tarefas suas`;
   }
   
   /**

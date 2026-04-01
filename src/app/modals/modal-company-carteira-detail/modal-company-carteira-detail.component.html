@@ -29,7 +29,12 @@
 
       <!-- Tasks Section -->
       <div class="tasks-section">
-        <h3 class="section-title">Tarefas</h3>
+        <h3 class="section-title">
+          Tarefas
+          <span class="result-count" *ngIf="tasks.length > 0 && filteredTasks.length !== tasks.length">
+            ({{ filteredTasks.length }} de {{ tasks.length }})
+          </span>
+        </h3>
         
         <!-- Loading Tasks -->
         <div *ngIf="isLoadingTasks" class="loading-tasks">
@@ -44,14 +49,30 @@
             <span>Nenhuma tarefa encontrada</span>
           </div>
 
-          <div *ngIf="tasks.length > 0" class="tasks-table">
+          <ng-container *ngIf="tasks.length > 0">
+            <div class="task-search-bar">
+              <input
+                type="text"
+                [value]="searchTerm"
+                (input)="onSearchInput($event)"
+                placeholder="Buscar por título, executor ou data"
+                aria-label="Buscar tarefas"
+                class="search-input" />
+            </div>
+
+            <div *ngIf="filteredTasks.length === 0" class="empty-state empty-state-filter">
+              <i class="ri-inbox-line empty-icon"></i>
+              <span>Nenhum resultado para a busca</span>
+            </div>
+
+            <div *ngIf="filteredTasks.length > 0" class="tasks-table">
             <div class="task-header">
               <div class="task-col-title">Tarefa</div>
               <div class="task-col-executor">Executor</div>
               <div class="task-col-date">Data</div>
               <div class="task-col-status">Status</div>
             </div>
-            <div *ngFor="let task of tasks" class="task-row">
+            <div *ngFor="let task of filteredTasks" class="task-row">
               <div class="task-col-title">
                 <span class="task-title">{{ task.title }}</span>
               </div>
@@ -67,7 +88,8 @@
                 </span>
               </div>
             </div>
-          </div>
+            </div>
+          </ng-container>
         </div>
       </div>
     </div>

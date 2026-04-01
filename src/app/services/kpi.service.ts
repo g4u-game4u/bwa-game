@@ -74,7 +74,7 @@ export class KPIService {
 
   /**
    * Get player KPIs from player's extra info:
-   * 1. Clientes na Carteira - count from action_log filtered by selected month
+   * 1. Clientes na Carteira - when month + actionLogService are provided, count unique deals (CNPJs) from action_log in that month; otherwise count from extra.cnpj allocation
    * 2. Porcentagem de Entregas no Prazo - value from extra.entrega (only for current month)
    * 
    * @param playerId - Player ID or 'me' for current player
@@ -105,15 +105,12 @@ export class KPIService {
           (selectedMonth.getFullYear() === now.getFullYear() && 
            selectedMonth.getMonth() === now.getMonth());
 
-        // Clientes na Carteira - count from extra.cnpj (allocated companies)
+        // Clientes na Carteira - unique CNPJs with activity in the selected month (action_log)
         if (actionLogService && selectedMonth) {
-          // Use action_log to count companies for the selected month (for carteira display)
           return actionLogService.getPlayerCnpjListWithCount(playerId, selectedMonth).pipe(
             map((cnpjList: { cnpj: string; actionCount: number }[]) => {
-              // Company count comes from extra.cnpj (total allocated), not action_log
-              const companyCount = playerStatus.extra?.cnpj 
-                ? playerStatus.extra.cnpj.split(',').filter((item: string) => item.trim()).length 
-                : 0;
+              // Current value must match carteira: one row per cliente (deal) with actions in the month
+              const companyCount = cnpjList.length;
               
               // Get target from player's extra.client_goals (number), fallback to default 10
               const clientGoals = playerStatus.extra?.client_goals;
@@ -130,13 +127,13 @@ export class KPIService {
               // Always add Clientes na Carteira KPI, even if count is 0
               kpis.push({
                 id: 'numero-empresas',
-                label: 'Clientes na Carteira',
+                label: 'Clientes atendidos',
                 current: companyCount,
                 target: target,
                 superTarget: superTarget,
                 unit: 'clientes',
                 color: this.getKPIColorByGoals(companyCount, target, superTarget),
-                percentage: Math.min((companyCount / superTarget) * 100, 100)
+                percentage: target > 0 ? Math.round((companyCount / target) * 100) : 0
               });
 
               // Porcentagem de Entregas no Prazo - only for current month
@@ -181,7 +178,7 @@ export class KPIService {
               
               const errorKpis: KPIData[] = [{
                  id: 'numero-empresas',
-                 label: 'Clientes na Carteira',
+                 label: 'Clientes atendidos',
                 current: errorCompanyCount,
                 target: target,
                 superTarget: superTarget,
@@ -230,13 +227,13 @@ export class KPIService {
                  
                  kpis.push({
                    id: 'numero-empresas',
-                   label: 'Clientes na Carteira',
+                   label: 'Clientes atendidos',
             current: companyCount,
             target: target,
             superTarget: superTarget,
             unit: 'empresas',
             color: this.getKPIColorByGoals(companyCount, target, superTarget),
-            percentage: Math.min((companyCount / superTarget) * 100, 100)
+            percentage: target > 0 ? Math.round((companyCount / target) * 100) : 0
           });
 
           // Porcentagem de Entregas no Prazo - only for current month

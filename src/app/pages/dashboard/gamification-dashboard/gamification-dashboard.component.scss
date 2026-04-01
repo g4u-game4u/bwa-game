@@ -296,9 +296,10 @@
     }
   }
   
-  // Compact toggle button in collapsed sidebar
+  // Compact toggle button in collapsed sidebar (stack under last icon, not footer of viewport)
   .compact-toggle {
-    margin-top: auto;
+    margin-top: $spacing-sm;
+    flex-shrink: 0;
     padding: $spacing-sm;
     padding-top: $spacing-md;
     border-top: 1px solid rgba(255, 255, 255, 0.15);

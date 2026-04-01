@@ -44,6 +44,12 @@
     margin-bottom: $spacing-lg;
   }
 
+  .result-count {
+    font-size: 0.875rem;
+    font-weight: 400;
+    color: $text-secondary;
+  }
+
   // KPIs Section
   .kpis-section {
     .kpis-grid {
@@ -91,6 +97,39 @@
       .empty-icon {
         font-size: 3rem;
         opacity: 0.5;
+      }
+
+      &.empty-state-filter {
+        padding: $spacing-lg $spacing-xxl;
+      }
+    }
+
+    .task-search-bar {
+      margin-bottom: $spacing-md;
+      display: flex;
+      justify-content: flex-start;
+      align-items: center;
+
+      .search-input {
+        width: 100%;
+        max-width: 360px;
+        padding: $spacing-sm $spacing-md;
+        border: 1px solid rgba(156, 163, 175, 0.35);
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.04);
+        color: $text-primary;
+        font-size: 0.9rem;
+
+        &::placeholder {
+          color: $text-secondary;
+        }
+
+        &:focus {
+          outline: 2px solid rgba(59, 130, 246, 0.3);
+          outline-offset: 0;
+          border-color: rgba(59, 130, 246, 0.6);
+          box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.2);
+        }
       }
     }
 
