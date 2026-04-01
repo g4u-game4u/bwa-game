@@ -77,7 +77,9 @@ export class KPIService {
    * 1. Clientes na Carteira - count from action_log filtered by selected month
    * 2. Porcentagem de Entregas no Prazo - value from extra.entrega (only for current month)
    * 
-   * @param playerId - Player ID
+   * Uses the faster player/me endpoint when playerId is 'me' or matches current user
+   * 
+   * @param playerId - Player ID or 'me' for current player
    * @param selectedMonth - Selected month for filtering (optional, defaults to current month)
    * @param actionLogService - ActionLogService instance (passed to avoid circular dependency)
    */
@@ -189,6 +191,7 @@ export class KPIService {
       .filter(v => v.length > 0)
       .map(v => parseFloat(v) || 0);
   }
+
 
   /**
    * Get company KPIs from cnpj_performance__c database

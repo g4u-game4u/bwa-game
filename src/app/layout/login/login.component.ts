@@ -1,6 +1,6 @@
-import {Component, OnInit} from '@angular/core';
+import {Component, OnInit, OnDestroy} from '@angular/core';
 import {SessaoProvider} from "@providers/sessao/sessao.provider";
-import {Router} from "@angular/router";
+import {ActivatedRoute, Router} from "@angular/router";
 import {LoadingProvider} from "@providers/loading.provider";
 import {ToastService} from "@services/toast.service";
 import {FormControl, FormGroup, Validators} from "@angular/forms";
@@ -11,13 +11,15 @@ import {AbstractControl, ValidationErrors} from "@angular/forms";
 import {TranslateService} from "@ngx-translate/core";
 import { LoginLogService } from '@services/login-log.service';
 import { LogoService } from '@services/logo.service';
+import { SessionTimeoutService } from '@services/session-timeout.service';
+import { Subscription } from 'rxjs';
 
 @Component({
   selector: 'app-login',
   templateUrl: './login.component.html',
   styleUrls: ['./login.component.scss']
 })
-export class LoginComponent implements OnInit {
+export class LoginComponent implements OnInit, OnDestroy {
 
   clientLogoUrl: string | null = null;
   clientName: string = '';
@@ -36,11 +38,22 @@ export class LoginComponent implements OnInit {
   ];
   private loadingTextInterval: any;
   loginBackgroundUrl: string | null = null;
+  sessionExpiredMessage: string | null = null;
+  private sessionExpiredSub?: Subscription;
 
-  constructor(private sessao: SessaoProvider, private router: Router, private loadingProvider: LoadingProvider,
-              private toastService: ToastService, private systemParamsService: SystemParamsService,
-              private authProvider: AuthProvider, private translate: TranslateService,
-              private loginLogService: LoginLogService, private logoService: LogoService) {
+  constructor(
+    private sessao: SessaoProvider,
+    private router: Router,
+    private route: ActivatedRoute,
+    private loadingProvider: LoadingProvider,
+    private toastService: ToastService,
+    private systemParamsService: SystemParamsService,
+    private authProvider: AuthProvider,
+    private translate: TranslateService,
+    private loginLogService: LoginLogService,
+    private logoService: LogoService,
+    private sessionTimeoutService: SessionTimeoutService
+  ) {
     this.bwaLogoUrl = this.logoService.getLogoUrl();
   }
 
@@ -100,6 +113,18 @@ export class LoginComponent implements OnInit {
 
   async ngOnInit() {
     try {
+      // Check if redirected due to session expiration
+      const reason = this.route.snapshot.queryParamMap.get('reason');
+      if (reason === 'session_expired') {
+        this.sessionExpiredMessage = 'Sua sessão expirou após 12 horas. Por favor, faça login novamente.';
+        this.toastService.warning(this.sessionExpiredMessage);
+      }
+      
+      // Subscribe to session expiration events
+      this.sessionExpiredSub = this.sessionTimeoutService.sessionExpired$.subscribe(() => {
+        this.sessionExpiredMessage = 'Sua sessão expirou após 12 horas. Por favor, faça login novamente.';
+      });
+      
       // Inicializa os parâmetros do sistema no primeiro acesso
       // Isso carrega informações como logo, cores, etc. mesmo sem autenticação
       this.systemParams = await this.systemParamsService.initializeSystemParams();
@@ -114,6 +139,12 @@ export class LoginComponent implements OnInit {
       this.clientName = 'Game';
       // Se quiser, defina um fallback para o background também:
       // this.loginBackgroundUrl = null;
+    }
+  }
+  
+  ngOnDestroy() {
+    if (this.sessionExpiredSub) {
+      this.sessionExpiredSub.unsubscribe();
     }
   }
 

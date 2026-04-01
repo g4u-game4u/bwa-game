@@ -144,12 +144,14 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   }
   
   /**
-   * Get current player ID from query params, session, or use 'me' for Funifier API
+   * Get current player ID from query params or use 'me' for Funifier API
    * 
    * Priority:
    * 1. Query parameter 'playerId' (when viewing another player's dashboard)
-   * 2. Current user from session
-   * 3. 'me' as fallback
+   * 2. 'me' for current authenticated user (uses faster player/me endpoint)
+   * 
+   * NOTE: We always use 'me' for the current user to leverage the faster
+   * player/me endpoint instead of player/{id}/status
    */
   getPlayerId(): string {
     // Check for playerId in query params (when viewing another player's dashboard)
@@ -576,6 +578,37 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   /**
    * Load KPI data
    */
+  /**
+   * Keeps the "numero-empresas" KPI in sync with the client list for the active Clientes tab
+   * once that tab's data has finished loading (avoids overwriting API values while loading).
+   */
+  private syncClientesKpiWithTabs(): void {
+    const idx = this.playerKPIs.findIndex(k => k.id === 'numero-empresas');
+    if (idx === -1) {
+      return;
+    }
+
+    const loading =
+      this.clientesActiveTab === 'participacao' ? this.isLoadingParticipacao : this.isLoadingClientes;
+    if (loading) {
+      return;
+    }
+
+    const count =
+      this.clientesActiveTab === 'participacao'
+        ? this.participacaoClientes.length
+        : this.carteiraClientes.length;
+
+    const kpi = this.playerKPIs[idx];
+    const superTarget = kpi.superTarget ?? Math.ceil((kpi.target || 100) * 1.5);
+    const updated: KPIData = {
+      ...kpi,
+      current: count,
+      percentage: Math.min((count / superTarget) * 100, 100)
+    };
+    this.playerKPIs = this.playerKPIs.map((k, i) => (i === idx ? updated : k));
+  }
+
   private loadKPIData(): void {
     this.isLoadingKPIs = true;
     
@@ -588,6 +621,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
         next: (kpis) => {
           console.log('📊 KPIs loaded:', kpis, `(${kpis?.length || 0} KPIs)`);
           this.playerKPIs = kpis || [];
+          this.syncClientesKpiWithTabs();
           this.isLoadingKPIs = false;
           
           // Always update metas if we have KPIs (even if empty, to show 0/0)

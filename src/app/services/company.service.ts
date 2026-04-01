@@ -36,8 +36,13 @@ export class CompanyService {
       return cached;
     }
 
-    // Use PlayerService to get raw player data (shared cache), then fetch company data
-    const request$ = this.playerService.getRawPlayerData(playerId).pipe(
+    // Use getCurrentPlayerData for 'me' (faster player/me endpoint with up-to-date cnpj_resp)
+    // Use getRawPlayerData for other players (player/{id}/status endpoint)
+    const playerData$ = playerId === 'me' 
+      ? this.playerService.getCurrentPlayerData()
+      : this.playerService.getRawPlayerData(playerId);
+
+    const request$ = playerData$.pipe(
       switchMap((playerResponse) => {
         const companiesStr = playerResponse?.extra?.companies || '';
         const companyIds = companiesStr.split(/[;,]/)

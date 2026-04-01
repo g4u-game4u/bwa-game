@@ -77,6 +77,14 @@ h1 {
   }
 }
 
+.snackbar-warning {
+  @include snackbarStyles();
+
+  .mdc-snackbar__surface {
+    background-color: #ff9800 !important;
+  }
+}
+
 small {
   font-size: 14px;
   line-height: 16.8px;
