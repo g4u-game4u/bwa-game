@@ -1,0 +1,61 @@
+<!-- Botão flutuante "?" -->
+<button class="help-fab" (click)="toggle()"
+        [attr.aria-label]="isOpen ? 'Fechar formulário de ajuda' : 'Abrir formulário de ajuda'"
+        [attr.aria-expanded]="isOpen">
+  ?
+</button>
+
+<!-- Overlay do formulário -->
+<div class="help-overlay" *ngIf="isOpen"
+     (click)="onOverlayClick($event)"
+     (keydown)="onKeydown($event)"
+     role="dialog"
+     aria-labelledby="help-form-title">
+  <div class="help-form-container" (click)="$event.stopPropagation()">
+    <h2 id="help-form-title">Reportar Problema</h2>
+    <button class="help-close-btn" (click)="close()" aria-label="Fechar">&times;</button>
+
+    <form [formGroup]="helpForm" (ngSubmit)="onSubmit()">
+      <!-- Campo Nome -->
+      <div class="help-field">
+        <label for="help-nome">Nome</label>
+        <input id="help-nome" #nomeInput formControlName="nome" type="text" />
+        <div class="help-validation" *ngIf="helpForm.get('nome')?.invalid && helpForm.get('nome')?.touched">
+          <span *ngIf="helpForm.get('nome')?.hasError('required')">Nome é obrigatório</span>
+          <span *ngIf="helpForm.get('nome')?.hasError('minlength')">Nome deve ter pelo menos 2 caracteres</span>
+        </div>
+      </div>
+
+      <!-- Campo E-mail -->
+      <div class="help-field">
+        <label for="help-email">E-mail</label>
+        <input id="help-email" formControlName="email" type="email" />
+        <div class="help-validation" *ngIf="helpForm.get('email')?.invalid && helpForm.get('email')?.touched">
+          <span *ngIf="helpForm.get('email')?.hasError('required')">E-mail é obrigatório</span>
+          <span *ngIf="helpForm.get('email')?.hasError('email')">Formato de e-mail inválido</span>
+        </div>
+      </div>
+
+      <!-- Campo Descrição -->
+      <div class="help-field">
+        <label for="help-descricao">Descrição do Problema</label>
+        <textarea id="help-descricao" formControlName="descricao"></textarea>
+        <div class="help-validation" *ngIf="helpForm.get('descricao')?.invalid && helpForm.get('descricao')?.touched">
+          <span *ngIf="helpForm.get('descricao')?.hasError('required')">Descrição é obrigatória</span>
+          <span *ngIf="helpForm.get('descricao')?.hasError('minlength')">Descrição deve ter pelo menos 10 caracteres</span>
+        </div>
+      </div>
+
+      <!-- Botão Enviar -->
+      <button type="submit" class="help-submit-btn" [disabled]="helpForm.invalid || isSubmitting">
+        {{ isSubmitting ? 'Enviando...' : 'Enviar' }}
+      </button>
+    </form>
+
+    <!-- Mensagem de sucesso -->
+    <div class="help-success" *ngIf="submitSuccess" role="alert">Reporte enviado com sucesso!</div>
+
+    <!-- Mensagem de erro -->
+    <div class="help-error" *ngIf="submitError" role="alert">Erro ao enviar. Tente novamente.</div>
+  </div>
+</div>

@@ -21,6 +21,7 @@ import { C4uSpinnerModule } from '@components/c4u-spinner/c4u-spinner.module';
 import { AuthInterceptor } from './providers/auth.interceptor';
 import { NotificationService } from './services/notification.service';
 import { OverlayModule } from '@angular/cdk/overlay';
+import { HelpButtonComponent } from './components/c4u-help-button/c4u-help-button.component';
 
 Chart.register(...registerables);
 
@@ -46,6 +47,7 @@ Chart.register(...registerables);
     MatSnackBarModule,
     C4uSpinnerModule,
     OverlayModule,
+    HelpButtonComponent,
     // ToastrModule.forRoot({
     //   timeOut: 5000,
     //   positionClass: 'toast-top-right',
