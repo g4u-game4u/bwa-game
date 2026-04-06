@@ -199,7 +199,6 @@ export class ActionLogService {
    * Returns a Map from action _id to its points value.
    */
   private getPointsByActionTemplate(actions: ActionLogEntry[]): Observable<Map<string, number>> {
-    // Collect unique acao values and map action _ids to their acao
     const acaoByActionId = new Map<string, string>();
     const uniqueAcaos = new Set<string>();
 
@@ -217,24 +216,21 @@ export class ActionLogService {
 
     const acaoList = Array.from(uniqueAcaos);
     const aggregateBody = [
-      { $match: { _id: { $in: acaoList } } },
-      { $project: { _id: 1, points: 1 } }
+      { $match: { _id: { $in: acaoList } } }
     ];
-
-    return this.funifierApi.post<Array<{ _id: string; points: number }>>(
+    return this.funifierApi.post<any>(
       '/v3/database/action_template__c/aggregate?strict=true',
       aggregateBody
     ).pipe(
       map(response => {
+        console.log('🔍 getPointsByActionTemplate raw response:', JSON.stringify(response).slice(0, 1000));
         const pointsByAcao = new Map<string, number>();
-        if (Array.isArray(response)) {
-          response.forEach(doc => {
-            if (doc._id && doc.points != null) {
-              pointsByAcao.set(doc._id, Number(doc.points));
-            }
-          });
-        }
-
+        const docs = Array.isArray(response) ? response : [];
+        docs.forEach((doc: any) => {
+          if (doc?._id && doc?.points != null) {
+            pointsByAcao.set(doc._id, Number(doc.points));
+          }
+        });
         const pointsByActionId = new Map<string, number>();
         acaoByActionId.forEach((acao, actionId) => {
           const pts = pointsByAcao.get(acao);
@@ -258,84 +254,74 @@ export class ActionLogService {
    * - extra.acao  <= action.attributes.stage
    */
   private getAchievementPointsByActions(actions: ActionLogEntry[]): Observable<Map<string, { total: number; locked: boolean }>> {
-    type MatchTuple = {
-      id: string;
-      acao: string;
-    };
+      type MatchTuple = { id: string; acao: string };
 
-    const tuplesByActionId = new Map<string, MatchTuple>();
-    const uniqueTuples = new Map<string, MatchTuple>();
+      const tuplesByActionId = new Map<string, MatchTuple>();
+      const uniqueTuples = new Map<string, MatchTuple>();
 
-    actions.forEach(action => {
-      const acao = this.normalizeStringValue(action.attributes?.stage);
-      const rawId = action.attributes?.id;
-      const id = rawId != null ? String(rawId).trim() : '';
+      actions.forEach(action => {
+        const acao = this.normalizeStringValue(action.attributes?.stage);
+        const rawId = action.attributes?.id;
+        const id = rawId != null ? String(rawId).trim() : '';
+        if (!acao || !id) return;
 
-      if (!acao || !id) {
-        return;
+        const tuple: MatchTuple = { id, acao };
+        const tupleKey = `${id}__${acao}`;
+        tuplesByActionId.set(action._id, tuple);
+        uniqueTuples.set(tupleKey, tuple);
+      });
+
+      if (uniqueTuples.size === 0) {
+        return of(new Map<string, { total: number; locked: boolean }>());
       }
 
-      const tuple: MatchTuple = { id, acao };
-      const tupleKey = `${id}__${acao}`;
-      tuplesByActionId.set(action._id, tuple);
-      uniqueTuples.set(tupleKey, tuple);
-    });
+      // Single aggregate with $or for all tuples
+      const orConditions = Array.from(uniqueTuples.values()).map(t => ({
+        'extra.id': t.id,
+        'extra.acao': t.acao
+      }));
 
-    if (uniqueTuples.size === 0) {
-      return of(new Map<string, { total: number; locked: boolean }>());
-    }
-
-    const tupleRequests = Array.from(uniqueTuples.entries()).map(([tupleKey, tuple]) => {
       const aggregateBody = [
-        {
-          $match: {
-            'extra.id': tuple.id,
-            'extra.acao': tuple.acao
-          }
-        }
+        { $match: { $or: orConditions } }
       ];
-
-      return this.funifierApi.post<Array<{ total?: number; item?: string }>>(
+      return this.funifierApi.post<Array<{ total?: number; item?: string; extra?: { id?: string; acao?: string } }>>(
         '/v3/database/achievement/aggregate?strict=true',
         aggregateBody
       ).pipe(
-        map(response => ({
-          tupleKey,
-          total: Array.isArray(response)
-            ? response.reduce((sum, doc) => sum + Number(doc?.total || 0), 0)
-            : 0,
-          locked: Array.isArray(response)
-            ? response.some(doc => String((doc as any)?.item || '').trim() === 'locked_points')
-            : false
-        })),
+        map(response => {
+          const docs = Array.isArray(response) ? response : [];
+          // Group results by tuple key
+          const tuplePoints = new Map<string, { total: number; locked: boolean }>();
+
+          docs.forEach(doc => {
+            const docId = String((doc as any)?.extra?.id || '').trim();
+            const docAcao = String((doc as any)?.extra?.acao || '').trim();
+            if (!docId || !docAcao) return;
+
+            const tupleKey = `${docId}__${docAcao}`;
+            const existing = tuplePoints.get(tupleKey) || { total: 0, locked: false };
+            existing.total += Number(doc?.total || 0);
+            if (String(doc?.item || '').trim() === 'locked_points') {
+              existing.locked = true;
+            }
+            tuplePoints.set(tupleKey, existing);
+          });
+
+          const pointsByActionId = new Map<string, { total: number; locked: boolean }>();
+          tuplesByActionId.forEach((tuple, actionId) => {
+            const tupleKey = `${tuple.id}__${tuple.acao}`;
+            pointsByActionId.set(actionId, tuplePoints.get(tupleKey) || { total: 0, locked: false });
+          });
+
+          return pointsByActionId;
+        }),
         catchError(error => {
-          console.error('Error fetching achievement points by tuple:', tuple, error);
-          return of({ tupleKey, total: 0, locked: false });
+          console.error('Error fetching achievement points:', error);
+          return of(new Map<string, { total: number; locked: boolean }>());
         })
       );
-    });
+    }
 
-    return forkJoin(tupleRequests).pipe(
-      map(tupleTotals => {
-        const tuplePoints = new Map<string, { total: number; locked: boolean }>();
-        tupleTotals.forEach(result => {
-          tuplePoints.set(result.tupleKey, { total: result.total, locked: result.locked });
-        });
-
-        const pointsByActionId = new Map<string, { total: number; locked: boolean }>();
-        tuplesByActionId.forEach((tuple, actionId) => {
-          const tupleKey = `${tuple.id}__${tuple.acao}`;
-          pointsByActionId.set(actionId, tuplePoints.get(tupleKey) || { total: 0, locked: false });
-        });
-
-        return pointsByActionId;
-      }),
-      catchError(error => {
-        console.error('Error fetching achievement points by action tuple:', error);
-        return of(new Map<string, { total: number; locked: boolean }>());
-      })
-    );
-  }
 
   /**
    * Get action log entries for a player for the current month
@@ -376,7 +362,6 @@ export class ActionLogService {
       aggregateBody
     ).pipe(
       map(response => {
-        console.log('📊 Action log loaded for month:', response);
         return Array.isArray(response) ? response : [];
       }),
       catchError(error => {
@@ -427,7 +412,6 @@ export class ActionLogService {
       aggregateBody
     ).pipe(
       map(response => {
-        console.log('📊 Activity count response:', response);
         // $count returns array with single object: [{ total: number }]
         if (Array.isArray(response) && response.length > 0 && response[0]?.total !== undefined) {
           return response[0].total;
@@ -482,8 +466,6 @@ export class ActionLogService {
     // Step 1: Get action_log IDs for the selected month
     const request$ = this.getActionLogIdsForMonth(playerId, month).pipe(
       switchMap(actionLogIds => {
-        console.log('📊 Action log IDs for month:', actionLogIds.length, 'IDs');
-        
         if (actionLogIds.length === 0) {
           // No actions in this month, return zeros
           return of({ bloqueados: 0, desbloqueados: 0 });
@@ -535,7 +517,6 @@ export class ActionLogService {
     ).pipe(
       map(response => {
         const ids = Array.isArray(response) ? response.map(item => item._id) : [];
-        console.log('📊 Action log IDs fetched:', ids.length);
         return ids;
       }),
       catchError(error => {
@@ -588,7 +569,6 @@ export class ActionLogService {
         const total = Array.isArray(response) && response.length > 0 
           ? (response[0].soma_total || 0) 
           : 0;
-        console.log(`📊 Achievement ${item} total:`, total);
         return total;
       }),
       catchError(error => {
@@ -640,7 +620,6 @@ export class ActionLogService {
       aggregateBody
     ).pipe(
       map(response => {
-        console.log('📊 Achievement points response:', response);
         if (Array.isArray(response) && response.length > 0) {
           return response[0].total || 0;
         }
@@ -704,7 +683,6 @@ export class ActionLogService {
       aggregateBody
     ).pipe(
       map(response => {
-        console.log('📊 Unique CNPJs response:', response);
         if (Array.isArray(response) && response.length > 0) {
           return response[0].total || 0;
         }
@@ -804,9 +782,6 @@ export class ActionLogService {
             .map(a => a.attributes?.delivery_id)
             .filter((id): id is number => id != null)
         )];
-
-        console.log('📊 Unique delivery_ids found:', deliveryIds);
-
         if (deliveryIds.length === 0) {
           return of({ pendentes: 0, incompletas: 0, finalizadas: 0 });
         }
@@ -835,9 +810,6 @@ export class ActionLogService {
         ).pipe(
           map(desbloqueados => {
             const desbloqueadosIds = new Set(desbloqueados.map(d => d._id));
-            
-            console.log('📊 Desbloqueados delivery_ids:', [...desbloqueadosIds]);
-
             // Count finalizadas (have desbloquear action)
             const finalizadas = deliveryIds.filter(id => desbloqueadosIds.has(id)).length;
             
@@ -1054,9 +1026,6 @@ export class ActionLogService {
             .map(info => info.numericDeliveryId)
             .filter((id): id is number => id != null)
         )];
-        
-        console.log('📊 Process list - unique process keys:', deliveryKeys);
-
         if (deliveryKeys.length === 0) {
           return of([]);
         }
@@ -1123,7 +1092,6 @@ export class ActionLogService {
         ).pipe(
           map(desbloqueados => {
             const finalizedIds = new Set(desbloqueados.map(d => d._id));
-            console.log('📊 Finalized delivery_ids:', [...finalizedIds]);
             return finalizedIds;
           }),
           catchError(() => {
@@ -1237,9 +1205,6 @@ export class ActionLogService {
       )
     ]).pipe(
       map(([actionResponse, processResponse]) => {
-        console.log('📊 Player CNPJs with count response:', actionResponse);
-        console.log('📊 Player CNPJs process count response:', processResponse);
-        
         // Create a map of CNPJ to process count
         const processCountMap = new Map<string, number>();
         processResponse
@@ -1312,7 +1277,6 @@ export class ActionLogService {
     ).pipe(
       switchMap(actions => this.getAchievementPointsByActions(actions).pipe(
         map(pointsByActionId => {
-          console.log('📊 Actions by CNPJ response:', actions);
           return actions.map(a => {
             // Determine status based on action data
             let status: 'finalizado' | 'pendente' | 'dispensado' | undefined;
@@ -1451,7 +1415,6 @@ export class ActionLogService {
       aggregateBody
     ).pipe(
       map(actions => {
-        console.log('📊 Activities by process response:', actions);
         return actions.map(a => {
           // Determine status based on action data
           let status: 'finalizado' | 'pendente' | 'dispensado' | undefined;
@@ -1584,9 +1547,7 @@ export class ActionLogService {
       aggregateBody
     ).pipe(
       map(response => {
-        console.log('📊 Activities by day response:', response);
         const result = response.map(r => ({ day: r._id, count: r.count }));
-        console.log('📊 Activities by day mapped result:', result);
         return result;
       }),
       catchError(error => {
@@ -1734,9 +1695,6 @@ export class ActionLogService {
         $count: 'total'
       }
     ];
-
-    console.log('📊 Team progress metrics query for team:', teamId);
-
     const request$ = forkJoin([
       this.funifierApi.post<any[]>('/v3/database/action_log/aggregate?strict=true', activityAggregateBody),
       this.funifierApi.post<any[]>('/v3/database/action_log/aggregate?strict=true', processAggregateBody),
@@ -1867,9 +1825,6 @@ export class ActionLogService {
         }
       }
     ];
-
-    console.log('📊 Team CNPJ list query for team:', teamId);
-
     const request$ = forkJoin([
       this.funifierApi.post<{ _id: string; count: number }[]>('/v3/database/action_log/aggregate?strict=true', actionCountBody),
       this.funifierApi.post<{ _id: string; processCount: number }[]>('/v3/database/action_log/aggregate?strict=true', processCountBody)
@@ -1978,9 +1933,6 @@ export class ActionLogService {
         }
       }
     ];
-
-    console.log('📊 Team monthly points breakdown query for team:', teamId);
-
     const request$ = forkJoin([
       this.funifierApi.post<any[]>('/v3/database/action_log/aggregate?strict=true', bloqueadosBody),
       this.funifierApi.post<any[]>('/v3/database/action_log/aggregate?strict=true', desbloqueadosBody)
