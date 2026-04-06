@@ -354,9 +354,6 @@ export class ActionLogService {
       { $sort: { time: -1 } },
       { $limit: 10000 } // High limit to get all documents (MongoDB default is 100)
     ];
-
-    console.log('📊 Action log query for month:', JSON.stringify(aggregateBody));
-
     const request$ = this.funifierApi.post<ActionLogEntry[]>(
       '/v3/database/action_log/aggregate?strict=true',
       aggregateBody
@@ -404,9 +401,6 @@ export class ActionLogService {
         $count: 'total'
       }
     ];
-
-    console.log('📊 Activity count query for month:', JSON.stringify(aggregateBody));
-
     const request$ = this.funifierApi.post<{ total: number }[]>(
       '/v3/database/action_log/aggregate?strict=true',
       aggregateBody
@@ -508,9 +502,6 @@ export class ActionLogService {
       },
       { $limit: 10000 }
     ];
-
-    console.log('📊 Fetching action_log IDs for month:', JSON.stringify(aggregateBody));
-
     return this.funifierApi.post<{ _id: string }[]>(
       '/v3/database/action_log/aggregate?strict=true',
       aggregateBody
@@ -558,9 +549,6 @@ export class ActionLogService {
         }
       }
     ];
-
-    console.log(`📊 Achievement aggregate for ${item}:`, JSON.stringify(aggregateBody));
-
     return this.funifierApi.post<{ _id: null; soma_total: number }[]>(
       '/v3/database/achievement/aggregate?strict=true',
       aggregateBody
@@ -612,9 +600,6 @@ export class ActionLogService {
         }
       }
     ];
-
-    console.log('📊 Achievement points query:', JSON.stringify(aggregateBody));
-
     const request$ = this.funifierApi.post<{ _id: null; total: number }[]>(
       '/v3/database/achievement/aggregate?strict=true',
       aggregateBody
@@ -675,9 +660,6 @@ export class ActionLogService {
         $count: 'total'
       }
     ];
-
-    console.log('📊 Unique CNPJs query:', JSON.stringify(aggregateBody));
-
     const request$ = this.funifierApi.post<{ total: number }[]>(
       '/v3/database/action_log/aggregate?strict=true',
       aggregateBody
@@ -730,9 +712,6 @@ export class ActionLogService {
       },
       { $project: { _id: 0, deals: 1 } }
     ];
-
-    console.log('📊 Unique deals query:', JSON.stringify(aggregateBody));
-
     const request$ = this.funifierApi
       .post<{ deals: unknown[] }[]>(
         '/v3/database/action_log/aggregate?strict=true',
@@ -801,9 +780,6 @@ export class ActionLogService {
             }
           }
         ];
-
-        console.log('📊 Desbloquear query:', JSON.stringify(aggregateBody));
-
         return this.funifierApi.post<{ _id: number }[]>(
           '/v3/database/action_log/aggregate?strict=true',
           aggregateBody
@@ -1083,9 +1059,6 @@ export class ActionLogService {
             }
           }
         ];
-
-        console.log('📊 Process finalization query:', JSON.stringify(aggregateBody));
-
         const finalizationRequest$ = this.funifierApi.post<{ _id: number }[]>(
           '/v3/database/action_log/aggregate?strict=true',
           aggregateBody
@@ -1190,10 +1163,6 @@ export class ActionLogService {
         }
       }
     ];
-
-    console.log('📊 Player CNPJs with count query:', JSON.stringify(actionCountBody));
-    console.log('📊 Player CNPJs process count query:', JSON.stringify(processCountBody));
-
     const request$ = forkJoin([
       this.funifierApi.post<{ _id: string; count: number }[]>(
         '/v3/database/action_log/aggregate?strict=true',
@@ -1268,9 +1237,6 @@ export class ActionLogService {
       { $sort: { time: -1 } },
       { $limit: 100 }
     ];
-
-    console.log('📊 Actions by CNPJ query:', JSON.stringify(aggregateBody));
-
     const request$ = this.funifierApi.post<ActionLogEntry[]>(
       '/v3/database/action_log/aggregate?strict=true',
       aggregateBody
@@ -1407,9 +1373,6 @@ export class ActionLogService {
       },
       { $sort: { time: -1 } }
     ];
-
-    console.log('📊 Activities by process query:', JSON.stringify(aggregateBody));
-
     const request$ = this.funifierApi.post<ActionLogEntry[]>(
       '/v3/database/action_log/aggregate?strict=true',
       aggregateBody
@@ -1539,9 +1502,6 @@ export class ActionLogService {
         $sort: { _id: 1 }
       }
     ];
-
-    console.log('📊 Activities by day query:', JSON.stringify(aggregateBody, null, 2));
-
     const request$ = this.funifierApi.post<{ _id: number; count: number }[]>(
       '/v3/database/action_log/aggregate?strict=true',
       aggregateBody
@@ -1705,15 +1665,6 @@ export class ActionLogService {
         const processosFinalizados = processResult[0]?.finalizados || 0;
         const totalProcessos = uniqueProcessResult[0]?.total || 0;
         const processosIncompletos = Math.max(0, totalProcessos - processosFinalizados);
-
-        console.log('✅ Team progress metrics loaded (OPTIMIZED):', {
-          finalizadas,
-          processosFinalizados,
-          totalProcessos,
-          processosIncompletos,
-          apiCalls: 3 // Instead of 3*N calls
-        });
-
         return {
           activity: {
             pendentes: 0,
@@ -1844,8 +1795,6 @@ export class ActionLogService {
             actionCount: r.count,
             processCount: processCountMap.get(r._id) || 0
           }));
-
-        console.log('✅ Team CNPJ list loaded (OPTIMIZED):', result.length, 'unique CNPJs, apiCalls: 2');
         return result;
       }),
       catchError(error => {
@@ -1940,13 +1889,6 @@ export class ActionLogService {
       map(([bloqueadosResult, desbloqueadosResult]) => {
         const bloqueados = Math.floor(bloqueadosResult[0]?.total || 0);
         const desbloqueados = Math.floor(desbloqueadosResult[0]?.total || 0);
-
-        console.log('✅ Team monthly points breakdown loaded (OPTIMIZED):', {
-          bloqueados,
-          desbloqueados,
-          apiCalls: 2 // Instead of 2*N calls
-        });
-
         return { bloqueados, desbloqueados };
       }),
       catchError(error => {

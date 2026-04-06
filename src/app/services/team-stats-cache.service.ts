@@ -39,12 +39,10 @@ export class TeamStatsCacheService {
     // Verifica se há dados em cache válidos
     const cached = this.cache.get(cacheKey);
     if (cached && Date.now() - cached.timestamp < this.CACHE_DURATION) {
-      console.log(`📊 Usando cache para team-stats: ${cacheKey}`);
       return cached.data;
     }
 
     // Faz a requisição
-    console.log(`📊 Fazendo requisição para team-stats: ${cacheKey}`);
     const promise = this.fetchTeamStats(teamId, tipo, monthsAgo);
     this.loadingPromises.set(cacheKey, promise);
 

@@ -103,7 +103,6 @@ export class LoginComponent implements OnInit {
       // Inicializa os parâmetros do sistema no primeiro acesso
       // Isso carrega informações como logo, cores, etc. mesmo sem autenticação
       this.systemParams = await this.systemParamsService.initializeSystemParams();
-      console.log('systemParams', this.systemParams);
       // Carrega informações específicas do cliente
       await this.loadClientInfo();
       // await this.setLoginBackgroundUrl();
@@ -127,8 +126,6 @@ export class LoginComponent implements OnInit {
       
       // Obtém a URL da logo (tenta logo claro primeiro, depois escuro)
       this.clientLogoUrl = await this.systemParamsService.getParam<string>('client_dark_logo_url') || null;
-      
-      console.log('Informações do cliente carregadas:', { name: this.clientName, logo: this.clientLogoUrl });
     } catch (error) {
       console.error('Erro ao carregar informações do cliente:', error);
     }
@@ -155,19 +152,12 @@ export class LoginComponent implements OnInit {
   // }
 
   async submit() {
-    console.log('🔐 Submit called - Form valid:', this.form.valid);
-    console.log('🔐 Username:', this.username);
-    console.log('🔐 Password length:', this.password?.length);
-    
     if (this.username && this.password) {
       this.isLoading = true;
       this.form.disable(); // Disable form controls
       this.startLoadingTextAnimation();
       try {
-        console.log('🔐 Calling sessao.login...');
         let user = await this.sessao.login(this.username, this.password);
-        console.log('🔐 Login response:', user);
-        console.log('🔐 User object:', this.sessao.usuario);
         if (user) {
           // Track login event in Vercel Analytics (non-blocking)
           this.loginLogService.logLogin(this.username).catch(error => {
@@ -177,9 +167,7 @@ export class LoginComponent implements OnInit {
           
           // Wait a bit to ensure state is fully updated
           await new Promise(resolve => setTimeout(resolve, 100));
-          console.log('🔐 Navigating to dashboard...');
           const navigationResult = await this.router.navigate(['/']);
-          console.log('🔐 Navigation result:', navigationResult);
         } else {
           this.toastService.error("Usuário ou senha incorretos");
         }
@@ -240,7 +228,6 @@ export class LoginComponent implements OnInit {
 
   async requestResetCode() {
     if (this.resetRequestForm.valid && this.resetRequestEmail) {
-      console.log('Enviando código de redefinição para:', this.resetRequestEmail);
       this.isLoading = true;
       this.resetRequestForm.disable(); // Disable form controls
       this.loadingText = this.translate.instant('LOADING_SENDING_CODE');

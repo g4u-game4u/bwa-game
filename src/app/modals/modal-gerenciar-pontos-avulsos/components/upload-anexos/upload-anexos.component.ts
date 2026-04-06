@@ -105,7 +105,6 @@ export class UploadAnexosComponent implements OnInit {
 
   async fazerUpload(): Promise<void> {
     if (!this.userActionId || this.arquivosSelecionados.length === 0) {
-      console.log('ℹ️ Nenhum arquivo para upload ou ID não fornecido');
       return;
     }
 
@@ -113,8 +112,6 @@ export class UploadAnexosComponent implements OnInit {
     this.progressoUpload = 0;
 
     try {
-      console.log('📎 Iniciando upload de anexos:', this.arquivosSelecionados.length);
-      
       // Simular progresso (em uma implementação real, você usaria um Observable)
       const interval = setInterval(() => {
         this.progressoUpload += 10;
@@ -131,9 +128,6 @@ export class UploadAnexosComponent implements OnInit {
       
       clearInterval(interval);
       this.progressoUpload = 100;
-
-      console.log('✅ Upload de anexos concluído');
-      
       // Recarregar anexos após upload
       await this.carregarAnexos();
       
@@ -167,16 +161,11 @@ export class UploadAnexosComponent implements OnInit {
     this.downloadIniciado.emit(anexo.id);
 
     try {
-      console.log('📥 Iniciando download:', anexo.original_name || anexo.filename);
-      
       // Aqui você faria a chamada real para o serviço
       // const downloadUrl = await this.pontosAvulsosService.getDownloadUrl(anexo.id);
       
       // Simular delay do download
       await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      console.log('✅ Download concluído:', anexo.original_name || anexo.filename);
-      
     } catch (error: any) {
       console.error('❌ Erro ao fazer download:', error);
     } finally {
@@ -189,8 +178,6 @@ export class UploadAnexosComponent implements OnInit {
   private async carregarAnexos(): Promise<void> {
     try {
       this.loadingAnexos = true;
-      console.log('📎 Carregando anexos para atividade:', this.userActionId);
-      
       // Aqui você faria a chamada real para o serviço
       // const response = await this.pontosAvulsosService.buscarAnexos(this.userActionId);
       
@@ -213,9 +200,6 @@ export class UploadAnexosComponent implements OnInit {
           created_at: new Date().toISOString()
         }
       ];
-      
-      console.log('✅ Anexos carregados:', this.anexosExistentes.length);
-      
     } catch (error) {
       console.error('❌ Erro ao carregar anexos:', error);
       this.anexosExistentes = [];

@@ -54,7 +54,6 @@ export class KPIService {
       aggregateBody
     ).pipe(
       map(response => {
-        console.log('📊 Metric targets loaded from database:', response);
         if (Array.isArray(response) && response.length > 0) {
           return response;
         }
@@ -97,8 +96,6 @@ export class KPIService {
 
     const request$: Observable<KPIData[]> = playerData$.pipe(
       switchMap((playerStatus): Observable<KPIData[]> => {
-        console.log('📊 Player status received:', playerStatus);
-        
         const kpis: KPIData[] = [];
         const now = new Date();
         const isCurrentMonth = !selectedMonth || 

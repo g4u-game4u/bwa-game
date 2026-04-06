@@ -23,9 +23,6 @@ export class KPIMapper {
    * Dynamically extracts all KPIs from the API response
    */
   toKPIDataArray(apiResponses: any[] | any): KPIData[] {
-    console.log('📊 KPI Mapper - Input:', apiResponses);
-    console.log('📊 KPI Mapper - Keys:', apiResponses ? Object.keys(apiResponses) : []);
-    
     // If it's an array, map each item
     if (Array.isArray(apiResponses)) {
       return apiResponses.map((response, index) => 
@@ -57,7 +54,6 @@ export class KPIMapper {
       for (const kpiName of namedKpis) {
         if (kpiName in apiResponses && !addedIds.has(kpiName)) {
           const kpiData = apiResponses[kpiName];
-          console.log(`📊 Found named KPI '${kpiName}':`, kpiData);
           addedIds.add(kpiName);
           
           if (typeof kpiData === 'object' && kpiData !== null) {
@@ -88,9 +84,6 @@ export class KPIMapper {
           const numB = parseInt(b.replace(/\D/g, ''), 10);
           return numA - numB;
         });
-      
-      console.log('📊 Found numbered KPI keys:', numberedKpiKeys);
-      
       for (const key of numberedKpiKeys) {
         if (addedIds.has(key)) continue;
         
@@ -119,15 +112,12 @@ export class KPIMapper {
       
       // If still no KPIs, create default 3 KPIs
       if (kpis.length === 0) {
-        console.log('📊 No KPIs found, using defaults');
         kpis.push(
           { id: 'kpi1', label: 'KPI 1', current: 0, target: 10, unit: '' },
           { id: 'kpi2', label: 'KPI 2', current: 0, target: 10, unit: '' },
           { id: 'kpi3', label: 'KPI 3', current: 0, target: 10, unit: '' }
         );
       }
-      
-      console.log('📊 Final KPIs extracted:', kpis.map(k => k.label));
       return kpis;
     }
     

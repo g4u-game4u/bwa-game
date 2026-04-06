@@ -117,7 +117,6 @@ export class C4uSeletorMesComponent implements OnInit, OnChanges {
             // precisamos adicionar janeiro (PREV_MONTHS deve ser pelo menos 2)
             if (currentMonth === 1 && this.PREV_MONTHS === 1) {
               this.PREV_MONTHS = 2;
-              console.log('📊 Dados de janeiro encontrados, incluindo janeiro na lista de meses');
             }
             // Para meses posteriores, se PREV_MONTHS não inclui janeiro, garantimos que inclua
             else if (currentMonth > 1) {
@@ -128,7 +127,6 @@ export class C4uSeletorMesComponent implements OnInit, OnChanges {
                 const minMonths = currentMonth + 1;
                 if (this.PREV_MONTHS < minMonths) {
                   this.PREV_MONTHS = minMonths;
-                  console.log('📊 Dados de janeiro encontrados, ajustando lista de meses para incluir janeiro');
                 }
               }
             }

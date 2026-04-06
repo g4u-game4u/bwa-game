@@ -240,18 +240,10 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
   private async initializeDashboard(): Promise<void> {
     try {
       this.isLoading = true;
-      console.log('🚀 Initializing team management dashboard...');
-      
       // Load season dates first
-      console.log('📅 Loading season dates...');
       await this.loadSeasonDates();
-      console.log('✅ Season dates loaded');
-      
       // Load available teams that the user has access to
-      console.log('👥 Loading available teams...');
       await this.loadAvailableTeams();
-      console.log('✅ Available teams loaded:', this.teams.length);
-      
       // Select the first available team or previously selected team
       if (this.teams.length > 0) {
         const savedTeamId = localStorage.getItem('selectedTeamId');
@@ -260,7 +252,6 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
           : this.teams[0].id;
         
         await this.onTeamChange(teamToSelect);
-        console.log('✅ Initial team selected:', teamToSelect);
       } else {
         console.error('❌ No teams available for user');
         this.toastService.error('Usuário não tem acesso a nenhum time');
@@ -270,7 +261,6 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       this.toastService.error('Erro ao carregar dashboard');
     } finally {
       this.isLoading = false;
-      console.log('🏁 Dashboard initialization complete, isLoading:', this.isLoading);
       this.cdr.markForCheck();
     }
   }
@@ -341,12 +331,8 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       this.isLoadingTeams = true;
       
       const profile = this.userProfileService.getCurrentUserProfile();
-      console.log('👤 User profile:', profile);
-      
       // Debug: Log user's teams from session
       const userTeams = this.sessaoProvider.usuario?.teams;
-      console.log('👤 User teams from session:', userTeams);
-      
       // Fetch all teams from Funifier
       const allTeams = await firstValueFrom(
         this.funifierApi.get<any[]>(`/v3/team`).pipe(takeUntil(this.destroy$))
@@ -354,9 +340,6 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
         console.error('Error loading teams from Funifier:', error);
         return [];
       });
-      
-      console.log('📊 All teams from Funifier:', allTeams.length, 'teams');
-      
       let availableTeams: any[] = [];
       
       if (profile === UserProfile.DIRETOR) {
@@ -366,12 +349,9 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
           name: team.name || team._id || team.id,
           memberCount: 0 // Will be updated below
         }));
-        console.log('✅ DIRETOR: Showing all teams:', availableTeams.length);
       } else {
         // Get accessible team IDs based on profile
         let accessibleTeamIds = this.userProfileService.getAccessibleTeamIds();
-        console.log('👤 Accessible team IDs from service:', accessibleTeamIds);
-        
         // If no accessible teams found, use ALL user's teams (except management team)
         if (accessibleTeamIds.length === 0 && userTeams && Array.isArray(userTeams)) {
           // Extract team IDs from user's teams
@@ -380,9 +360,6 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
             if (team && typeof team === 'object' && team._id) return team._id;
             return null;
           }).filter(Boolean) as string[];
-          
-          console.log('👤 User team IDs extracted:', userTeamIds);
-          
           // For GESTOR, filter out the GESTAO team
           if (profile === UserProfile.GESTOR) {
             accessibleTeamIds = userTeamIds.filter(id => id !== 'FkmdnFU');
@@ -391,8 +368,6 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
           } else {
             accessibleTeamIds = userTeamIds;
           }
-          
-          console.log('👤 Accessible team IDs after filtering:', accessibleTeamIds);
         }
         
         // If still no accessible teams, try to get their own team
@@ -400,7 +375,6 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
           const ownTeamId = this.userProfileService.getCurrentUserOwnTeamId();
           if (ownTeamId) {
             accessibleTeamIds.push(ownTeamId);
-            console.log('👤 Using own team ID as fallback:', ownTeamId);
           }
         }
         
@@ -415,9 +389,6 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
             name: team.name || team._id || team.id,
             memberCount: 0 // Will be updated below
           }));
-        
-        console.log('✅ Available teams for profile:', profile, availableTeams.length, 'teams');
-        console.log('✅ Available team IDs:', availableTeams.map(t => t.id));
       }
       
       // Load member count for each team using aggregate queries
@@ -457,8 +428,6 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       const teamsWithCounts = await Promise.all(memberCountPromises);
       
       this.teams = teamsWithCounts;
-      console.log('✅ Available teams loaded with member counts:', this.teams);
-      
       this.isLoadingTeams = false;
     } catch (error) {
       console.error('Error in loadAvailableTeams:', error);
@@ -485,8 +454,6 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
    */
   private async loadTeamMembersData(teamId: string): Promise<void> {
     try {
-      console.log('👥 Loading team members data for team:', teamId);
-      
       // OPTIMIZED: Use single aggregate query on player_status to get all team members' data
       // This replaces individual player status requests with one batched request
       const aggregatePayload = [
@@ -503,9 +470,6 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
         aggregatePayload,
         100 // batch size
       );
-      
-      console.log('✅ Player status aggregate returned:', allPlayersStatus.length, 'players');
-      
       // Store full player data from aggregate (includes extra.cnpj, name, email, point_categories, etc.)
       this.teamMembersData = allPlayersStatus;
       
@@ -515,8 +479,6 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
         .filter((id: string) => id != null && id !== 'null' && id !== 'undefined');
       
       this.teamMemberIds = memberIds;
-      console.log('✅ Team member IDs loaded via aggregate:', memberIds.length, 'members');
-      
       if (memberIds.length === 0) {
         console.warn('⚠️ No members found in team');
         this.teamTotalPoints = 0;
@@ -600,7 +562,6 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
         totalBlockedPoints += blockedPoints;
         
         validMembers++;
-        console.log(`📊 Member ${memberId}: ${pointsForMonth} points (month), ${tasks} tasks, ${blockedPoints} blocked points`);
       });
       
       // Calculate aggregated metrics (round down all values)
@@ -608,17 +569,6 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       this.teamAveragePoints = validMembers > 0 ? Math.floor(totalPoints / validMembers) : 0;
       this.teamTotalTasks = Math.floor(totalTasks);
       this.teamTotalBlockedPoints = Math.floor(totalBlockedPoints);
-      
-      console.log('✅ Team aggregated data from members (OPTIMIZED):', {
-        totalPoints: this.teamTotalPoints,
-        averagePoints: this.teamAveragePoints,
-        totalTasks: this.teamTotalTasks,
-        totalBlockedPoints: this.teamTotalBlockedPoints,
-        validMembers,
-        selectedMonth: this.selectedMonth,
-        apiCalls: 2 // Only 2 aggregate calls instead of N individual calls
-      });
-      
       this.cdr.markForCheck();
     } catch (error) {
       console.error('Error in loadTeamMembersData:', error);
@@ -650,8 +600,6 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
     
     while (hasMore) {
       const rangeHeader = `items=${startIndex}-${batchSize}`;
-      console.log(`📦 Fetching batch: ${rangeHeader}`);
-      
       try {
         const batchResults = await firstValueFrom(
           this.funifierApi.post<T[]>(
@@ -678,8 +626,6 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
         hasMore = false;
       }
     }
-    
-    console.log(`✅ Total items fetched: ${allResults.length}`);
     return allResults;
   }
 
@@ -721,11 +667,9 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       
       // If a collaborator is selected, load only that collaborator's data
       if (this.selectedCollaborator) {
-        console.log('👤 Loading data for selected collaborator:', this.selectedCollaborator);
         await this.loadCollaboratorData(this.selectedCollaborator, dateRange);
       } else {
         // Otherwise, load team aggregated data
-        console.log('👥 Loading team aggregated data');
         // First, reload team members data to recalculate points for the selected month
         // This is important when the month changes, as points need to be recalculated
         await this.loadTeamMembersData(this.selectedTeamId);
@@ -774,8 +718,6 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
    */
   private async loadCollaboratorData(collaboratorId: string, dateRange: { start: Date; end: Date }): Promise<void> {
     try {
-      console.log('👤 Loading data for collaborator:', collaboratorId);
-      
       // Load collaborator-specific data in parallel
       await Promise.all([
         this.loadCollaboratorSidebarData(collaboratorId, dateRange),
@@ -796,8 +738,6 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       this.updateTeamNameDisplay();
       
       this.cdr.markForCheck();
-      
-      console.log('✅ Collaborator data loaded for:', collaboratorId);
     } catch (error) {
       console.error('Error loading collaborator data:', error);
       this.toastService.error('Erro ao carregar dados do colaborador');
@@ -885,9 +825,6 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       this.isLoadingSidebar = true;
       this.hasSidebarError = false;
       this.sidebarErrorMessage = '';
-      
-      console.log('📊 Loading sidebar data for collaborator:', collaboratorId);
-      
       // Get progress metrics and points for the collaborator
       const metrics = await firstValueFrom(
         this.actionLogService.getProgressMetrics(collaboratorId, this.selectedMonth)
@@ -966,12 +903,6 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       this.updateFormattedSidebarData();
       
       this.isLoadingSidebar = false;
-      
-      console.log('✅ Collaborator sidebar data loaded:', {
-        points: this.seasonPoints,
-        metrics: this.progressMetrics,
-        collaboratorId
-      });
       this.cdr.markForCheck();
     } catch (error) {
       console.error('Error in loadCollaboratorSidebarData:', error);
@@ -990,9 +921,6 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       this.isLoadingSidebar = true;
       this.hasSidebarError = false;
       this.sidebarErrorMessage = '';
-      
-      console.log('📊 Loading sidebar data for team:', this.selectedTeam);
-      
       // Load season points and progress metrics in parallel
       const [points, metrics] = await Promise.all([
         firstValueFrom(
@@ -1051,17 +979,6 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       this.updateFormattedSidebarData();
       
       this.isLoadingSidebar = false;
-      
-      console.log('✅ Sidebar data loaded (aggregated from team members):', { 
-        points: this.seasonPoints, 
-        metrics: this.progressMetrics,
-        teamTotalPoints: this.teamTotalPoints,
-        teamTotalBlockedPoints: this.teamTotalBlockedPoints,
-        teamAveragePoints: this.teamAveragePoints,
-        teamTotalTasks: this.teamTotalTasks,
-        teamActivityMetrics: this.teamActivityMetrics,
-        teamProcessMetrics: this.teamProcessMetrics
-      });
       this.cdr.markForCheck();
     } catch (error) {
       console.error('Error in loadSidebarData:', error);
@@ -1080,8 +997,6 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
   private async loadCollaborators(): Promise<void> {
     try {
       this.isLoadingCollaborators = true;
-      console.log('👥 Loading collaborators for team:', this.selectedTeam);
-      
       // Preservar o selectedCollaborator ANTES de carregar
       const preservedCollaboratorId = this.selectedCollaborator || localStorage.getItem('selectedCollaboratorId');
       
@@ -1094,8 +1009,6 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
           name: playerStatus.name || playerStatus._id,
           email: playerStatus._id
         }));
-        
-        console.log('✅ Collaborators loaded from aggregate data (OPTIMIZED):', this.collaborators.length, 'no additional API calls');
       } else if (this.teamMemberIds.length === 0) {
         console.warn('⚠️ No member data available, trying to load from aggregate query');
         // Fallback: try to load from aggregate query
@@ -1117,7 +1030,6 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
           name: memberId,
           email: memberId
         }));
-        console.log('⚠️ Using fallback collaborator data from member IDs');
       }
       
       // Validate current selection exists in the list
@@ -1130,8 +1042,6 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       }
       
       this.isLoadingCollaborators = false;
-      console.log('✅ Collaborators loaded:', this.collaborators.length);
-      
       this.cdr.markForCheck();
     } catch (error) {
       console.error('Error in loadCollaborators:', error);
@@ -1154,9 +1064,6 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       this.isLoadingGoals = true;
       this.hasGoalsError = false;
       this.goalsErrorMessage = '';
-      
-      console.log('📊 Loading goals data for collaborator:', collaboratorId);
-      
       // Get progress metrics for the collaborator
       const metrics = await firstValueFrom(
         this.actionLogService.getProgressMetrics(collaboratorId, this.selectedMonth)
@@ -1188,7 +1095,6 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       ];
       
       this.isLoadingGoals = false;
-      console.log('✅ Collaborator goals data loaded:', this.goalMetrics);
       this.cdr.markForCheck();
     } catch (error) {
       console.error('Error loading collaborator goals data:', error);
@@ -1253,9 +1159,6 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       this.isLoadingProductivity = true;
       this.hasProductivityError = false;
       this.productivityErrorMessage = '';
-      
-      console.log('📈 Loading productivity data for collaborator:', collaboratorId);
-      
       // Get collaborator name for the label
       const collaborator = this.collaborators.find(c => c.userId === collaboratorId);
       const memberName = this.formatCollaboratorName(collaboratorId, collaborator?.name);
@@ -1497,9 +1400,6 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       this.isLoadingProductivity = true;
       this.hasProductivityError = false;
       this.productivityErrorMessage = '';
-      
-      console.log('📈 Loading productivity data for team members (OPTIMIZED)...');
-      
       if (this.teamMemberIds.length === 0) {
         console.warn('⚠️ No team members to load productivity data for');
         this.graphData = [];
@@ -1611,10 +1511,6 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
             return [];
           })
         ]);
-        
-        console.log('✅ Action logs aggregate returned:', allActionLogs.length, 'records');
-        console.log('✅ Points aggregate returned:', allPointsData.length, 'records');
-        
         // Process action logs into per-member data
         const memberActivitiesMap = new Map<string, Map<string, number>>();
         allActionLogs.forEach((item: any) => {
@@ -1754,13 +1650,6 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
           
           // Calculate totals by collaborator for bar charts
           this.calculateCollaboratorTotals(validMemberData);
-          
-          console.log('✅ Productivity data loaded (OPTIMIZED):', {
-            members: validMemberData.length,
-            apiCalls: 2, // Only 2 aggregate calls instead of 2*N individual calls
-            totalActionLogs: allActionLogs.length,
-            totalPointsRecords: allPointsData.length
-          });
         } else {
           this.graphData = [];
           this.graphDatasets = [];
@@ -1773,7 +1662,6 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
         }
         
         this.hasProductivityError = false;
-        console.log('✅ Productivity data loaded for', validMemberData.length, 'members');
         this.cdr.markForCheck();
       } catch (error) {
         console.error('Error loading productivity data:', error);
@@ -1896,13 +1784,6 @@ private calculateCollaboratorTotals(memberData: Array<{
     const percentage = totalPoints > 0 ? Math.round((item.total / totalPoints) * 100) : 0;
     return `${item.name} - ${item.total} (${percentage}%)`;
   });
-  
-  console.log('✅ Collaborator totals calculated:', {
-    activities: activitiesTotals,
-    points: pointsTotals,
-    activitiesLabels: this.activitiesByCollaboratorLabels,
-    pointsLabels: this.pointsByCollaboratorLabels
-  });
 }
 
   /**
@@ -1926,8 +1807,6 @@ private calculateCollaboratorTotals(memberData: Array<{
    */
   private async loadTeamActivityAndMacroData(dateRange: { start: Date; end: Date }): Promise<void> {
     try {
-      console.log('📊 Loading team activity and process data (OPTIMIZED)...');
-      
       if (this.teamMemberIds.length === 0) {
         console.warn('⚠️ No team members to aggregate data from');
         return;
@@ -1970,13 +1849,6 @@ private calculateCollaboratorTotals(memberData: Array<{
         incompletas: Math.max(0, metrics.processosIncompletos),
         finalizadas: metrics.processosFinalizados
       };
-      
-      console.log('✅ Team activity and process data (OPTIMIZED - 2 API calls instead of', this.teamMemberIds.length, '):', {
-        activities: this.teamActivityMetrics,
-        processos: this.teamProcessMetrics,
-        selectedMonth: this.selectedMonth
-      });
-      
       this.cdr.markForCheck();
     } catch (error) {
       console.error('Error loading team activity and process data:', error);
@@ -1995,8 +1867,6 @@ private calculateCollaboratorTotals(memberData: Array<{
   private async loadCollaboratorCarteiraData(collaboratorId: string, dateRange: { start: Date; end: Date }): Promise<void> {
     try {
       this.isLoadingCarteira = true;
-      console.log('📊 Loading carteira data for collaborator:', collaboratorId);
-      
       // Get CNPJ list with action counts and process counts for the collaborator
       const carteiraData = await firstValueFrom(
         this.actionLogService.getPlayerCnpjListWithCount(collaboratorId, this.selectedMonth)
@@ -2018,8 +1888,6 @@ private calculateCollaboratorTotals(memberData: Array<{
         return new Map<string, string>();
       });
       this.cnpjNameMap = cnpjNames;
-      console.log('📊 Collaborator: CNPJ name map loaded with', this.cnpjNameMap.size, 'entries');
-      
       // Enrich with KPI data
       const enrichedClientes = await firstValueFrom(
         this.companyKpiService.enrichCompaniesWithKpis(carteiraData)
@@ -2038,8 +1906,6 @@ private calculateCollaboratorTotals(memberData: Array<{
       
       // Update formatted sidebar data after carteira is loaded (for clientes count)
       this.updateFormattedSidebarData();
-      
-      console.log('✅ Collaborator carteira data loaded:', this.teamCarteiraClientes.length, 'unique CNPJs');
       console.log('✅ Total actions across all CNPJs:', 
         this.teamCarteiraClientes.reduce((sum, item) => sum + item.actionCount, 0));
       
@@ -2067,8 +1933,6 @@ private calculateCollaboratorTotals(memberData: Array<{
   private async loadTeamCarteiraData(dateRange: { start: Date; end: Date }): Promise<void> {
     try {
       this.isLoadingCarteira = true;
-      console.log('📊 Loading team carteira data (OPTIMIZED)...');
-      
       if (!this.selectedTeamId) {
         console.warn('⚠️ No team selected for carteira data');
         this.teamCarteiraClientes = [];
@@ -2092,9 +1956,6 @@ private calculateCollaboratorTotals(memberData: Array<{
         console.error('Error loading team carteira data (optimized):', error);
         return [];
       });
-      
-      console.log('✅ Team CNPJ list loaded (OPTIMIZED - 1 API call):', cnpjListWithCounts.length, 'unique CNPJs');
-      
       if (cnpjListWithCounts.length === 0) {
         this.teamCarteiraClientes = [];
         this.isLoadingCarteira = false;
@@ -2114,8 +1975,6 @@ private calculateCollaboratorTotals(memberData: Array<{
         return new Map<string, string>();
       });
       this.cnpjNameMap = cnpjNames;
-      console.log('📊 Team: CNPJ name map loaded with', this.cnpjNameMap.size, 'entries');
-      
       // Enrich with KPI data
       const enrichedClientes = await firstValueFrom(
         this.companyKpiService.enrichCompaniesWithKpis(cnpjListWithCounts)
@@ -2134,9 +1993,6 @@ private calculateCollaboratorTotals(memberData: Array<{
       
       // Update formatted sidebar data after carteira is loaded (for clientes count)
       this.updateFormattedSidebarData();
-      
-      console.log('✅ Team carteira data loaded (OPTIMIZED - 1 API call instead of', this.teamMemberIds.length, 'members):', 
-        this.teamCarteiraClientes.length, 'unique CNPJs');
       console.log('✅ Total actions across all CNPJs:', 
         this.teamCarteiraClientes.reduce((sum, item) => sum + item.actionCount, 0));
       
@@ -2171,8 +2027,6 @@ private calculateCollaboratorTotals(memberData: Array<{
    */
   async onTeamChange(teamId: string): Promise<void> {
     try {
-      console.log('🔄 Team changed to:', teamId);
-      
       // Find the team in the teams array to get the name
       const team = this.teams.find(t => t.id === teamId);
       if (!team) {
@@ -2249,11 +2103,9 @@ private calculateCollaboratorTotals(memberData: Array<{
     // When no collaborator is selected (showing all), switch back to team view
     if (userId) {
       this.activeTab = 'goals';
-      console.log('👤 Filtering data for collaborator:', userId);
     } else {
       // Reset to team view when "Redefinir seleção" is selected
       this.activeTab = 'goals'; // Keep on goals tab to show team KPIs and progress
-      console.log('👥 Showing team data (no collaborator selected)');
     }
     
     // Update team name display immediately
@@ -2586,7 +2438,6 @@ private calculateCollaboratorTotals(memberData: Array<{
         });
         
         this.monthlyPointsBreakdown = breakdown;
-        console.log('✅ Monthly points breakdown loaded (OPTIMIZED - 1 API call instead of', this.teamMemberIds.length, '):', this.monthlyPointsBreakdown);
       }
       
       this.cdr.markForCheck();
@@ -2653,7 +2504,6 @@ private calculateCollaboratorTotals(memberData: Array<{
     }
     // Use the enriched name from the map, fallback to original
     const displayName = this.cnpjNameMap.get(cnpj);
-    console.log('📊 Team getCompanyDisplayName called:', { cnpj, displayName, hasInMap: this.cnpjNameMap.has(cnpj), mapSize: this.cnpjNameMap.size });
     return displayName || cnpj;
   }
 
@@ -2794,8 +2644,6 @@ private calculateCollaboratorTotals(memberData: Array<{
             
             return sum;
           }, 0);
-          
-          console.log('📊 Team client_goals sum:', somaMetasEmpresas, 'from', playerClientGoals.length, 'members');
         } catch (error) {
           console.error('Error loading team client_goals:', error);
           // Fallback to default if error
@@ -2874,8 +2722,6 @@ private calculateCollaboratorTotals(memberData: Array<{
                 percentage: Math.min((mediaEntregas / superTargetEntregas) * 100, 100)
               });
             }
-            
-            console.log('✅ Team KPIs loaded (OPTIMIZED - 1 API call instead of', this.teamMemberIds.length, ')');
           } catch (error) {
             console.error('Error loading team entrega KPI:', error);
           }
@@ -2963,9 +2809,6 @@ private calculateCollaboratorTotals(memberData: Array<{
       tarefasFinalizadas: this.progressMetrics?.atividadesFinalizadas || 0,
       seasonDates: this.seasonDates
     };
-    
-    console.log('📊 Team metas updated from KPIs:', this.teamSeasonProgress.metas, `(${metasAchieved}/${totalKPIs})`, `from ${totalKPIs} KPIs`);
-    
     this.cdr.markForCheck();
   }
 
@@ -3099,8 +2942,6 @@ private calculateCollaboratorTotals(memberData: Array<{
       await firstValueFrom(
         this.funifierApi.put<any>(`player/${playerId}`, updatePayload)
       );
-
-      console.log(`✅ Updated client_goals for ${playerId}:`, targetValue);
     } catch (error: any) {
       console.error(`❌ Error updating client_goals for ${playerId}:`, error);
       throw new Error(`Erro ao atualizar meta para ${playerId}: ${error.message}`);

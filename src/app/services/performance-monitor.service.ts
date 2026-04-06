@@ -92,13 +92,9 @@ export class PerformanceMonitorService {
    */
   logPerformanceReport(): void {
     console.group('Performance Report');
-    console.log('Total Change Detection Cycles:', this.changeDetectionCount);
     console.log('Memory Usage:', `${this.measureMemoryUsage().toFixed(2)} MB`);
     
     this.metrics.forEach((metrics, componentName) => {
-      console.log(`\n${componentName}:`);
-      console.log(`  Render Time: ${metrics.componentRenderTime.toFixed(2)}ms`);
-      console.log(`  Change Detection Cycles: ${metrics.changeDetectionCycles}`);
     });
     
     console.groupEnd();

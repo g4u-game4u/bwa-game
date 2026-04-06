@@ -54,14 +54,10 @@ export class AppComponent implements OnInit {
 
   private async initializeSystem() {
     try {
-      console.log('🚀 Iniciando aplicação (modo simplificado)...');
-      
       // Skip system initialization to avoid errors
       // Just set the page title with default value
       this.titleService.setTitle('Game Revisaprev');
       this.paramReady = true;
-      
-      console.log('✅ Aplicação pronta!');
     } catch (error) {
       console.error('❌ Erro ao inicializar:', error);
       this.paramReady = true;
