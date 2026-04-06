@@ -406,9 +406,8 @@ export class TeamAggregateService {
         const endTime = performance.now();
         const duration = endTime - startTime;
         
-        // Log slow queries (> 1 second)
         if (duration > 1000) {
-          console.warn(`Slow aggregate query on ${collection}: ${duration.toFixed(2)}ms`);
+          // Slow query detected - silent in production
         }
       })
     );

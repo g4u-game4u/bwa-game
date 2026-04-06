@@ -36,8 +36,8 @@ export class PerformanceMonitorService {
         componentRenderTime: renderTime
       });
       
-      if (renderTime > 16) { // More than one frame (60fps)
-        console.warn(`${componentName} render time: ${renderTime.toFixed(2)}ms (exceeds 16ms threshold)`);
+      if (renderTime > 16) {
+        // Performance threshold exceeded - silent in production
       }
     };
   }
