@@ -2,7 +2,6 @@ import { Component, OnInit, OnDestroy, ChangeDetectionStrategy, ChangeDetectorRe
 import { Router } from '@angular/router';
 import { Subject, forkJoin, of } from 'rxjs';
 import { takeUntil, switchMap, catchError, map } from 'rxjs/operators';
-import { firstValueFrom } from 'rxjs';
 
 import { ACLService, AclMetadata } from '@services/acl.service';
 import { UserProfileService } from '@services/user-profile.service';
@@ -11,17 +10,9 @@ import { KPIService } from '@services/kpi.service';
 import { FunifierApiService } from '@services/funifier-api.service';
 import { ToastService } from '@services/toast.service';
 import { CnpjLookupService } from '@services/cnpj-lookup.service';
-import { CompanyService } from '@services/company.service';
+import { CompanyKpiService, CompanyDisplay } from '@services/company-kpi.service';
 import { SessaoProvider } from '@providers/sessao/sessao.provider';
 import { Company, KPIData } from '@model/gamification-dashboard.model';
-
-/** Client row data for the client list section */
-export interface SupervisorClientRow {
-  cnpj: string;
-  companyName: string;
-  kpis: KPIData[];
-  healthScore: number;
-}
 
 /** View mode toggle for the main content area */
 export type SupervisorViewMode = 'card' | 'table';
@@ -29,8 +20,6 @@ export type SupervisorViewMode = 'card' | 'table';
 /** SUPERVISOR's own info card data */
 export interface SupervisorInfoCard {
   name: string;
-  points: number;
-  coins: number;
   cnpjMetric: number;
   entregaMetric: number;
   cnpjGoal: number;
@@ -75,9 +64,6 @@ export class DashboardSupervisorComponent implements OnInit, OnDestroy {
   /** SUPERVISOR's own info card data */
   supervisorInfo: SupervisorInfoCard | null = null;
 
-  /** SUPERVISOR's KPIs for the info card */
-  supervisorKPIs: KPIData[] = [];
-
   /** Deduplicated player cards for Card View / Table View */
   playerCards: SupervisorPlayerCard[] = [];
 
@@ -95,14 +81,25 @@ export class DashboardSupervisorComponent implements OnInit, OnDestroy {
   averageEntregaMetric = 0;
   averageKPIs: KPIData[] = [];
 
-  /** Client list data for the bottom section */
-  clientRows: SupervisorClientRow[] = [];
-  isLoadingClients = true;
+  /** Clientes sub-tabs: 3 tabs with enrichment pipeline */
+  clientesActiveTab: 'carteira-equipe' | 'participacao-equipe' | 'carteira-supervisor' = 'carteira-equipe';
 
-  // Clientes sub-tabs
-  clientesActiveTab: 'carteira' | 'participacao' = 'carteira';
-  participacaoCnpjs: { cnpj: string; playerName: string; companyName: string }[] = [];
-  isLoadingParticipacao = false;
+  /** Carteira equipe: aggregated cnpj_resp from all team members */
+  carteiraEquipeClientes: CompanyDisplay[] = [];
+  isLoadingCarteiraEquipe = false;
+
+  /** Participação equipe: aggregated cnpj from all team members */
+  participacaoEquipeClientes: CompanyDisplay[] = [];
+  isLoadingParticipacaoEquipe = false;
+
+  /** Carteira supervisor: supervisor's own cnpj_resp */
+  carteiraSupervisorClientes: CompanyDisplay[] = [];
+  isLoadingCarteiraSupervisor = false;
+
+  /** Shared maps for CNPJ enrichment (same pattern as gamification dashboard) */
+  cnpjNameMap = new Map<string, string>();
+  cnpjStatusMap = new Map<string, string>();
+  cnpjNumberMap = new Map<string, string>();
 
   /** ACL metadata for resolving team display names */
   private aclMetadata: AclMetadata[] = [];
@@ -115,7 +112,7 @@ export class DashboardSupervisorComponent implements OnInit, OnDestroy {
     private funifierApi: FunifierApiService,
     private toastService: ToastService,
     private cnpjLookupService: CnpjLookupService,
-    private companyService: CompanyService,
+    private companyKpiService: CompanyKpiService,
     private sessaoProvider: SessaoProvider,
     private router: Router,
     private cdr: ChangeDetectorRef
@@ -124,7 +121,7 @@ export class DashboardSupervisorComponent implements OnInit, OnDestroy {
   ngOnInit(): void {
     this.loadSupervisorInfoCard();
     this.loadTeamPlayers();
-    this.loadClientList();
+    this.loadCarteiraSupervisor();
   }
 
   ngOnDestroy(): void {
@@ -150,12 +147,6 @@ export class DashboardSupervisorComponent implements OnInit, OnDestroy {
       .subscribe({
         next: (playerData) => {
           const extra = playerData.extra || {};
-          const pointCategories = playerData.point_categories || playerData.pointCategories || {};
-
-          // SUPERVISOR reads pontos_supervisor for points (not points)
-          const points = Number(pointCategories.pontos_supervisor) || 0;
-          // Coins from coins field
-          const coins = Number(pointCategories.coins) || 0;
 
           // Volume de clientes = quantidade de itens no array cnpj_resp do jogador
           const cnpjMetric = this.getCnpjRespCount(extra);
@@ -167,16 +158,11 @@ export class DashboardSupervisorComponent implements OnInit, OnDestroy {
 
           this.supervisorInfo = {
             name: playerData.name || '',
-            points,
-            coins,
             cnpjMetric,
             entregaMetric,
             cnpjGoal,
             entregaGoal
           };
-
-          // Build KPIs for the info card using SUPERVISOR-specific fields
-          this.supervisorKPIs = this.buildSupervisorKPIs(cnpjMetric, cnpjGoal, entregaMetric, entregaGoal);
 
           this.isLoadingInfoCard = false;
           this.isLoading = false;
@@ -192,33 +178,6 @@ export class DashboardSupervisorComponent implements OnInit, OnDestroy {
       });
   }
 
-  /** Build KPI data for the SUPERVISOR's info card using _sup fields */
-  private buildSupervisorKPIs(cnpjMetric: number, cnpjGoal: number, entregaMetric: number, entregaGoal: number): KPIData[] {
-    const cnpjSuperTarget = Math.ceil(cnpjGoal * 1.5);
-
-    return [
-      {
-        id: 'numero-empresas',
-        label: 'Clientes na Carteira',
-        current: cnpjMetric,
-        target: cnpjGoal,
-        superTarget: cnpjSuperTarget,
-        unit: 'clientes',
-        color: this.kpiService.getKPIColorByGoals(cnpjMetric, cnpjGoal, cnpjSuperTarget),
-        percentage: cnpjGoal > 0 ? Math.min((cnpjMetric / cnpjSuperTarget) * 100, 100) : 0
-      },
-      {
-        id: 'entregas-prazo',
-        label: 'Entregas no Prazo',
-        current: entregaMetric,
-        target: entregaGoal,
-        superTarget: 100,
-        unit: '%',
-        color: this.kpiService.getKPIColorByGoals(entregaMetric, entregaGoal, 100),
-        percentage: Math.min(entregaMetric, 100)
-      }
-    ];
-  }
 
   /**
    * Load players from all accessible teams, deduplicate, and build card data.
@@ -264,6 +223,9 @@ export class DashboardSupervisorComponent implements OnInit, OnDestroy {
         this.calculateAverages();
         this.isLoadingPlayers = false;
         this.cdr.markForCheck();
+        // Now that playerCards are loaded, fetch all client tabs
+        this.loadCarteiraEquipe();
+        this.loadParticipacaoEquipe();
       },
       error: (error) => {
         console.error('Error loading team players:', error);
@@ -499,103 +461,70 @@ export class DashboardSupervisorComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Load the SUPERVISOR's own client list from cnpj_resp.
-   * Fetches companies from cnpj__c and enriches names from empid_cnpj__c.
-   * Applies the current month filter.
+   * Load the SUPERVISOR's own client list from cnpj_resp using the enrichment pipeline.
+   * Same pattern as gamification dashboard's loadClientesData():
+   * playerService.getPlayerCnpjResp() → cnpjLookupService.enrichCnpjListFull() → companyKpiService.enrichFromCnpjResp()
    */
-  loadClientList(): void {
-    this.isLoadingClients = true;
+  loadCarteiraSupervisor(): void {
+    this.isLoadingCarteiraSupervisor = true;
     this.cdr.markForCheck();
 
     const playerId = this.getPlayerId();
 
-    // Use CompanyService to get companies from cnpj_resp → cnpj__c
-    this.companyService.getCompanies(playerId)
+    this.playerService.getPlayerCnpjResp(playerId)
       .pipe(
-        switchMap(companies => {
-          if (companies.length === 0) {
-            return of({ companies, nameMap: new Map<string, string>() });
+        switchMap(empids => {
+          console.log('📊 Supervisor cnpj_resp empids:', empids);
+          if (empids.length === 0) {
+            return of([] as CompanyDisplay[]);
           }
-          // Enrich company names from empid_cnpj__c
-          const cnpjIds = companies.map(c => c.cnpj).filter(id => id);
-          if (cnpjIds.length === 0) {
-            return of({ companies, nameMap: new Map<string, string>() });
-          }
-          return this.cnpjLookupService.enrichCnpjList(cnpjIds).pipe(
-            map(nameMap => ({ companies, nameMap })),
-            catchError(() => of({ companies, nameMap: new Map<string, string>() }))
+          return this.cnpjLookupService.enrichCnpjListFull(empids).pipe(
+            switchMap(cnpjInfo => {
+              cnpjInfo.forEach((info, key) => {
+                this.cnpjNameMap.set(key, info.empresa);
+                if (info.status) this.cnpjStatusMap.set(key, info.status);
+                if (info.cnpj) this.cnpjNumberMap.set(key, info.cnpj);
+              });
+              return this.companyKpiService.enrichFromCnpjResp(empids);
+            })
           );
         }),
         takeUntil(this.destroy$)
       )
       .subscribe({
-        next: ({ companies, nameMap }) => {
-          this.clientRows = companies.map(company => {
-            const enrichedName = nameMap.get(company.cnpj) || company.name || company.cnpj;
-            return {
-              cnpj: company.cnpj,
-              companyName: enrichedName,
-              kpis: company.kpis || [],
-              healthScore: company.healthScore || 0
-            };
+        next: (enriched: CompanyDisplay[]) => {
+          enriched.forEach(c => {
+            const status = this.cnpjStatusMap.get(c.cnpj);
+            if (status) c.status = status;
           });
-          this.isLoadingClients = false;
+          this.carteiraSupervisorClientes = enriched;
+          this.isLoadingCarteiraSupervisor = false;
           this.cdr.markForCheck();
         },
-        error: (error) => {
-          console.error('Error loading client list:', error);
-          this.toastService.error('Erro ao carregar lista de clientes');
-          this.clientRows = [];
-          this.isLoadingClients = false;
+        error: (err) => {
+          console.error('Error loading carteira supervisor:', err);
+          this.carteiraSupervisorClientes = [];
+          this.isLoadingCarteiraSupervisor = false;
           this.cdr.markForCheck();
         }
       });
   }
 
-  /** Handle click on a client row — open company detail modal */
-  onClientRowClick(row: SupervisorClientRow): void {
-    const company: Company = {
-      id: row.cnpj,
-      name: row.companyName,
-      cnpj: row.cnpj,
-      healthScore: row.healthScore,
-      kpis: row.kpis
-    };
-    this.onCnpjSelectedFromPlayerDetail(company);
-  }
-
-  /** Track client rows by cnpj for ngFor */
-  trackByClientCnpj(_index: number, row: SupervisorClientRow): string {
-    return row.cnpj;
-  }
-
-  /** Track player cards by playerId for ngFor */
-  trackByPlayerId(_index: number, card: SupervisorPlayerCard): string {
-    return card.playerId;
-  }
-
-  /** Switch between Carteira and Participação sub-tabs */
-  switchClientesTab(tab: 'carteira' | 'participacao'): void {
-    this.clientesActiveTab = tab;
-    if (tab === 'participacao' && this.participacaoCnpjs.length === 0 && !this.isLoadingParticipacao) {
-      this.loadParticipacaoData();
-    }
-    this.cdr.markForCheck();
-  }
-
-  /** Load CNPJs from extra.cnpj of each player for the Participação tab */
-  private loadParticipacaoData(): void {
-    this.isLoadingParticipacao = true;
+  /**
+   * Load aggregated cnpj_resp from ALL team members (carteira equipe).
+   * Collects cnpj_resp from all playerCards, deduplicates, then enriches with the pipeline.
+   */
+  loadCarteiraEquipe(): void {
+    this.isLoadingCarteiraEquipe = true;
     this.cdr.markForCheck();
 
-    const seen = new Set<string>();
-    const rows: { cnpj: string; playerName: string; companyName: string }[] = [];
-
-    // Fetch raw player data to get extra.cnpj
+    // Aggregate cnpj_resp from all team players via aggregate query
     const playerIds = this.playerCards.map(p => p.playerId);
     if (playerIds.length === 0) {
-      this.participacaoCnpjs = [];
-      this.isLoadingParticipacao = false;
+      // If players haven't loaded yet, we'll retry after they load
+      // For now, just set empty
+      this.carteiraEquipeClientes = [];
+      this.isLoadingCarteiraEquipe = false;
       this.cdr.markForCheck();
       return;
     }
@@ -609,44 +538,164 @@ export class DashboardSupervisorComponent implements OnInit, OnDestroy {
       takeUntil(this.destroy$),
       switchMap(players => {
         const allPlayers = Array.isArray(players) ? players : [];
+        const seen = new Set<string>();
+        const allEmpids: string[] = [];
+
+        for (const player of allPlayers) {
+          const raw: string = player?.extra?.cnpj_resp || '';
+          if (!raw) continue;
+          const empids = raw.split(/[;,]/).map((s: string) => s.trim()).filter((s: string) => s.length > 0);
+          for (const empid of empids) {
+            if (!seen.has(empid)) {
+              seen.add(empid);
+              allEmpids.push(empid);
+            }
+          }
+        }
+
+        console.log('📊 Carteira equipe aggregated empids:', allEmpids.length);
+        if (allEmpids.length === 0) {
+          return of([] as CompanyDisplay[]);
+        }
+
+        return this.cnpjLookupService.enrichCnpjListFull(allEmpids).pipe(
+          switchMap(cnpjInfo => {
+            cnpjInfo.forEach((info, key) => {
+              this.cnpjNameMap.set(key, info.empresa);
+              if (info.status) this.cnpjStatusMap.set(key, info.status);
+              if (info.cnpj) this.cnpjNumberMap.set(key, info.cnpj);
+            });
+            return this.companyKpiService.enrichFromCnpjResp(allEmpids);
+          })
+        );
+      })
+    ).subscribe({
+      next: (enriched: CompanyDisplay[]) => {
+        enriched.forEach(c => {
+          const status = this.cnpjStatusMap.get(c.cnpj);
+          if (status) c.status = status;
+        });
+        this.carteiraEquipeClientes = enriched;
+        this.isLoadingCarteiraEquipe = false;
+        this.cdr.markForCheck();
+      },
+      error: (err) => {
+        console.error('Error loading carteira equipe:', err);
+        this.carteiraEquipeClientes = [];
+        this.isLoadingCarteiraEquipe = false;
+        this.cdr.markForCheck();
+      }
+    });
+  }
+
+  /**
+   * Load aggregated cnpj (extra.cnpj) from ALL team members (participação equipe).
+   * Uses the enrichment pipeline: cnpjLookupService.enrichCnpjListFull() → companyKpiService.enrichFromCnpjResp()
+   */
+  loadParticipacaoEquipe(): void {
+    this.isLoadingParticipacaoEquipe = true;
+    this.cdr.markForCheck();
+
+    const playerIds = this.playerCards.map(p => p.playerId);
+    if (playerIds.length === 0) {
+      this.participacaoEquipeClientes = [];
+      this.isLoadingParticipacaoEquipe = false;
+      this.cdr.markForCheck();
+      return;
+    }
+
+    const aggregatePayload = [{ $match: { _id: { $in: playerIds } } }];
+    this.funifierApi.post<any[]>(
+      '/database/player_status/aggregate?strict=true',
+      aggregatePayload,
+      { headers: { 'Range': 'items=0-200' } }
+    ).pipe(
+      takeUntil(this.destroy$),
+      switchMap(players => {
+        const allPlayers = Array.isArray(players) ? players : [];
+        const seen = new Set<string>();
+        const allCnpjs: string[] = [];
+
         for (const player of allPlayers) {
           const raw: string = player?.extra?.cnpj || '';
           if (!raw) continue;
           const cnpjs = raw.split(/[;,]/).map((s: string) => s.trim()).filter((s: string) => s.length > 0);
           for (const cnpj of cnpjs) {
-            if (seen.has(cnpj)) continue;
-            seen.add(cnpj);
-            rows.push({
-              cnpj,
-              playerName: player.name || player._id || '',
-              companyName: cnpj
-            });
+            if (!seen.has(cnpj)) {
+              seen.add(cnpj);
+              allCnpjs.push(cnpj);
+            }
           }
         }
 
-        // Enrich company names
-        const cnpjIds = rows.map(r => r.cnpj);
-        if (cnpjIds.length === 0) return of(new Map<string, string>());
-        return this.cnpjLookupService.enrichCnpjList(cnpjIds).pipe(
-          catchError(() => of(new Map<string, string>()))
+        console.log('📊 Participação equipe aggregated cnpjs:', allCnpjs.length);
+        if (allCnpjs.length === 0) {
+          return of([] as CompanyDisplay[]);
+        }
+
+        return this.cnpjLookupService.enrichCnpjListFull(allCnpjs).pipe(
+          switchMap(cnpjInfo => {
+            cnpjInfo.forEach((info, key) => {
+              this.cnpjNameMap.set(key, info.empresa);
+              if (info.status) this.cnpjStatusMap.set(key, info.status);
+              if (info.cnpj) this.cnpjNumberMap.set(key, info.cnpj);
+            });
+            return this.companyKpiService.enrichFromCnpjResp(allCnpjs);
+          })
         );
       })
     ).subscribe({
-      next: (nameMap) => {
-        for (const row of rows) {
-          const name = nameMap.get(row.cnpj);
-          if (name) row.companyName = name;
-        }
-        this.participacaoCnpjs = rows;
-        this.isLoadingParticipacao = false;
+      next: (enriched: CompanyDisplay[]) => {
+        enriched.forEach(c => {
+          const status = this.cnpjStatusMap.get(c.cnpj);
+          if (status) c.status = status;
+        });
+        this.participacaoEquipeClientes = enriched;
+        this.isLoadingParticipacaoEquipe = false;
         this.cdr.markForCheck();
       },
-      error: () => {
-        this.participacaoCnpjs = [];
-        this.isLoadingParticipacao = false;
+      error: (err) => {
+        console.error('Error loading participação equipe:', err);
+        this.participacaoEquipeClientes = [];
+        this.isLoadingParticipacaoEquipe = false;
         this.cdr.markForCheck();
       }
     });
+  }
+
+  /** Handle click on a company display row — open company detail modal */
+  onCompanyDisplayClick(item: CompanyDisplay): void {
+    const company: Company = {
+      id: item.cnpj,
+      name: this.cnpjNameMap.get(item.cnpj) || item.cnpj,
+      cnpj: this.cnpjNumberMap.get(item.cnpj) || item.cnpj,
+      healthScore: item.entrega || 0,
+      kpis: item.deliveryKpi ? [item.deliveryKpi] : []
+    };
+    this.onCnpjSelectedFromPlayerDetail(company);
+  }
+
+  /** Track company display items by cnpj for ngFor */
+  trackByCompanyDisplayCnpj(_index: number, item: CompanyDisplay): string {
+    return item.cnpj;
+  }
+
+  /** Track player cards by playerId for ngFor */
+  trackByPlayerId(_index: number, card: SupervisorPlayerCard): string {
+    return card.playerId;
+  }
+
+  /** Switch between the 3 Clientes sub-tabs with lazy loading */
+  switchClientesTab(tab: 'carteira-equipe' | 'participacao-equipe' | 'carteira-supervisor'): void {
+    this.clientesActiveTab = tab;
+    if (tab === 'carteira-equipe' && this.carteiraEquipeClientes.length === 0 && !this.isLoadingCarteiraEquipe) {
+      this.loadCarteiraEquipe();
+    } else if (tab === 'participacao-equipe' && this.participacaoEquipeClientes.length === 0 && !this.isLoadingParticipacaoEquipe) {
+      this.loadParticipacaoEquipe();
+    } else if (tab === 'carteira-supervisor' && this.carteiraSupervisorClientes.length === 0 && !this.isLoadingCarteiraSupervisor) {
+      this.loadCarteiraSupervisor();
+    }
+    this.cdr.markForCheck();
   }
 
     /** Handle month filter changes from c4u-seletor-mes */
@@ -658,11 +707,12 @@ export class DashboardSupervisorComponent implements OnInit, OnDestroy {
     this.loadSupervisorInfoCard();
     // Reload team players with new month filter
     this.loadTeamPlayers();
-    // Reload client list with new month filter
-    this.loadClientList();
-    // Reset participação data
-    this.participacaoCnpjs = [];
-    this.clientesActiveTab = 'carteira';
+    // Reset all clientes tab data and reload the active tab
+    this.carteiraEquipeClientes = [];
+    this.participacaoEquipeClientes = [];
+    this.carteiraSupervisorClientes = [];
+    this.clientesActiveTab = 'carteira-equipe';
+    this.loadCarteiraEquipe();
   }
 
   /** Toggle between Card View and Table View */
@@ -683,6 +733,11 @@ export class DashboardSupervisorComponent implements OnInit, OnDestroy {
   /** Round a value for display */
   roundValue(value: number): number {
     return Math.round(value);
+  }
+
+  /** Get clean company display name from CNPJ using the enriched name map */
+  getCompanyDisplayName(cnpj: string): string {
+    return this.cnpjNameMap.get(cnpj) || cnpj;
   }
 
   /**

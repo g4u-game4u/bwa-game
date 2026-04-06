@@ -32,6 +32,12 @@ export class C4uDashboardNavigationComponent implements OnInit {
       route: '/dashboard/team-management',
       icon: 'ri-team-line',
       requiresRole: ROLES_LIST.ACCESS_TEAM_MANAGEMENT
+    },
+    {
+      label: 'Supervisor',
+      route: '/dashboard/supervisor',
+      icon: 'ri-user-star-line',
+      requiresRole: ROLES_LIST.ACCESS_TEAM_MANAGEMENT
     }
   ];
   
@@ -85,15 +91,21 @@ export class C4uDashboardNavigationComponent implements OnInit {
    * Filter dashboards based on user role
    * - "Meu Painel" is only available for JOGADOR profile
    * - "Gestão de Equipe" is only available for management profiles (SUPERVISOR, GESTOR, DIRETOR)
+   * - "Supervisor" is only available for SUPERVISOR profile
    */
   private filterAvailableDashboards(): void {
-    const userProfile = this.userProfileService.getCurrentUserProfile();
     const isJogador = this.userProfileService.isJogador();
+    const isSupervisor = this.userProfileService.isSupervisor();
     
     this.availableDashboards = this.dashboards.filter(dashboard => {
       // "Meu Painel" should only be shown to JOGADOR
       if (dashboard.route === '/dashboard' && dashboard.label === 'Meu Painel') {
         return isJogador;
+      }
+      
+      // "Supervisor" should only be shown to SUPERVISOR users
+      if (dashboard.label === 'Supervisor') {
+        return isSupervisor;
       }
       
       // Dashboards with role requirement (e.g., "Gestão de Equipe")
