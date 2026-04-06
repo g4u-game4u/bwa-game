@@ -5,17 +5,45 @@ import { Subject } from 'rxjs';
 
 import { C4uDashboardNavigationComponent } from './c4u-dashboard-navigation.component';
 import { SessaoProvider } from '@providers/sessao/sessao.provider';
-import { TeamRoleGuardService } from '@guards/team-role.guard';
+import { UserProfileService } from '@services/user-profile.service';
 import { ROLES_LIST } from '@utils/constants';
 
 describe('C4uDashboardNavigationComponent', () => {
   let component: C4uDashboardNavigationComponent;
   let fixture: ComponentFixture<C4uDashboardNavigationComponent>;
   let mockRouter: jasmine.SpyObj<Router>;
-  let mockSessaoProvider: jasmine.SpyObj<SessaoProvider>;
-  let mockTeamRoleGuard: jasmine.SpyObj<TeamRoleGuardService>;
+  let mockSessaoProvider: any;
+  let mockUserProfileService: jasmine.SpyObj<UserProfileService>;
   let mockChangeDetectorRef: jasmine.SpyObj<ChangeDetectorRef>;
   let routerEventsSubject: Subject<any>;
+
+  function configureForJogador() {
+    mockUserProfileService.canAccessTeamManagement.and.returnValue(false);
+    mockUserProfileService.isJogador.and.returnValue(true);
+    mockUserProfileService.isSupervisor.and.returnValue(false);
+    mockUserProfileService.getCurrentUserProfile.and.returnValue('JOGADOR' as any);
+  }
+
+  function configureForSupervisor() {
+    mockUserProfileService.canAccessTeamManagement.and.returnValue(true);
+    mockUserProfileService.isJogador.and.returnValue(false);
+    mockUserProfileService.isSupervisor.and.returnValue(true);
+    mockUserProfileService.getCurrentUserProfile.and.returnValue('SUPERVISOR' as any);
+  }
+
+  function configureForGestor() {
+    mockUserProfileService.canAccessTeamManagement.and.returnValue(true);
+    mockUserProfileService.isJogador.and.returnValue(false);
+    mockUserProfileService.isSupervisor.and.returnValue(false);
+    mockUserProfileService.getCurrentUserProfile.and.returnValue('GESTOR' as any);
+  }
+
+  function configureForDiretor() {
+    mockUserProfileService.canAccessTeamManagement.and.returnValue(true);
+    mockUserProfileService.isJogador.and.returnValue(false);
+    mockUserProfileService.isSupervisor.and.returnValue(false);
+    mockUserProfileService.getCurrentUserProfile.and.returnValue('DIRETOR' as any);
+  }
 
   beforeEach(async () => {
     routerEventsSubject = new Subject();
@@ -25,16 +53,26 @@ describe('C4uDashboardNavigationComponent', () => {
       url: '/dashboard'
     });
     
-    mockSessaoProvider = jasmine.createSpyObj('SessaoProvider', [], {
+    mockSessaoProvider = {
       usuario: {
         email: 'test@example.com',
         roles: [ROLES_LIST.ACCESS_PLAYER_PANEL],
         teams: []
       }
-    });
+    };
     
-    mockTeamRoleGuard = jasmine.createSpyObj('TeamRoleGuardService', ['hasGestaoRole']);
-    mockTeamRoleGuard.hasGestaoRole.and.returnValue(false);
+    mockUserProfileService = jasmine.createSpyObj('UserProfileService', [
+      'getCurrentUserProfile',
+      'canAccessTeamManagement',
+      'isJogador',
+      'isSupervisor',
+      'isGestor',
+      'isDiretor',
+      'isManagementUser'
+    ]);
+    
+    // Default: JOGADOR
+    configureForJogador();
     
     mockChangeDetectorRef = jasmine.createSpyObj('ChangeDetectorRef', ['markForCheck']);
 
@@ -43,7 +81,7 @@ describe('C4uDashboardNavigationComponent', () => {
       providers: [
         { provide: Router, useValue: mockRouter },
         { provide: SessaoProvider, useValue: mockSessaoProvider },
-        { provide: TeamRoleGuardService, useValue: mockTeamRoleGuard },
+        { provide: UserProfileService, useValue: mockUserProfileService },
         { provide: ChangeDetectorRef, useValue: mockChangeDetectorRef }
       ]
     }).compileComponents();
@@ -61,252 +99,270 @@ describe('C4uDashboardNavigationComponent', () => {
       expect(component).toBeTruthy();
     });
 
-    it('should initialize with default dashboards', () => {
-      expect(component.dashboards.length).toBe(2);
+    it('should initialize with 3 dashboard options in the array', () => {
+      expect(component.dashboards.length).toBe(3);
       expect(component.dashboards[0].label).toBe('Meu Painel');
       expect(component.dashboards[1].label).toBe('Gestão de Equipe');
+      expect(component.dashboards[2].label).toBe('Supervisor');
+    });
+
+    it('should have Supervisor option with correct route and icon', () => {
+      const supervisorDashboard = component.dashboards.find(d => d.label === 'Supervisor');
+      expect(supervisorDashboard).toBeDefined();
+      expect(supervisorDashboard!.route).toBe('/dashboard/supervisor');
+      expect(supervisorDashboard!.icon).toBe('ri-user-star-line');
+      expect(supervisorDashboard!.requiresRole).toBe(ROLES_LIST.ACCESS_TEAM_MANAGEMENT);
     });
   });
 
-  describe('Role-Based Access - GESTAO Users', () => {
-    /**
-     * Test: Navigation menu displays for GESTAO users
-     * Validates: Requirements 18.1, 18.2
-     */
-    it('should display navigation menu for GESTAO users', () => {
-      // Arrange: User with GESTAO team (FkgMSNO)
-      mockTeamRoleGuard.hasGestaoRole.and.returnValue(true);
-
-      // Act
+  describe('Role-Based Access - JOGADOR Users', () => {
+    it('should show only "Meu Painel" for JOGADOR users', () => {
+      configureForJogador();
       fixture.detectChanges();
 
-      // Assert
-      expect(component.hasGestaoRole).toBe(true);
-      expect(component.availableDashboards.length).toBe(2);
-      expect(component.hasMultipleDashboards).toBe(true);
-    });
-
-    it('should include team management dashboard in available dashboards for GESTAO users', () => {
-      // Arrange: User with GESTAO team (FkgMSNO)
-      mockTeamRoleGuard.hasGestaoRole.and.returnValue(true);
-
-      // Act
-      fixture.detectChanges();
-
-      // Assert
-      const teamDashboard = component.availableDashboards.find(
-        d => d.route === '/dashboard/team-management'
-      );
-      expect(teamDashboard).toBeDefined();
-      expect(teamDashboard?.label).toBe('Gestão de Equipe');
-    });
-  });
-
-  describe('Role-Based Access - Non-GESTAO Users', () => {
-    /**
-     * Test: Navigation menu hidden for non-GESTAO users
-     * Validates: Requirements 18.1, 18.2
-     */
-    it('should hide navigation menu for non-GESTAO users', () => {
-      // Arrange: User without GESTAO team
-      mockTeamRoleGuard.hasGestaoRole.and.returnValue(false);
-
-      // Act
-      fixture.detectChanges();
-
-      // Assert
-      expect(component.hasGestaoRole).toBe(false);
       expect(component.availableDashboards.length).toBe(1);
+      expect(component.availableDashboards[0].label).toBe('Meu Painel');
       expect(component.hasMultipleDashboards).toBe(false);
     });
 
-    it('should only show personal dashboard for non-GESTAO users', () => {
-      // Arrange: User without GESTAO team
-      mockTeamRoleGuard.hasGestaoRole.and.returnValue(false);
-
-      // Act
+    it('should NOT show "Supervisor" option for JOGADOR users', () => {
+      configureForJogador();
       fixture.detectChanges();
 
-      // Assert
-      expect(component.availableDashboards.length).toBe(1);
-      expect(component.availableDashboards[0].route).toBe('/dashboard');
-      expect(component.availableDashboards[0].label).toBe('Meu Painel');
+      const supervisorOption = component.availableDashboards.find(d => d.label === 'Supervisor');
+      expect(supervisorOption).toBeUndefined();
     });
 
-    it('should handle user with no teams', () => {
-      // Arrange: User without teams
-      mockTeamRoleGuard.hasGestaoRole.and.returnValue(false);
-
-      // Act
+    it('should NOT show "Gestão de Equipe" for JOGADOR users', () => {
+      configureForJogador();
       fixture.detectChanges();
 
-      // Assert
-      expect(component.hasGestaoRole).toBe(false);
-      expect(component.availableDashboards.length).toBe(1);
+      const gestaoOption = component.availableDashboards.find(d => d.label === 'Gestão de Equipe');
+      expect(gestaoOption).toBeUndefined();
+    });
+  });
+
+  describe('Role-Based Access - SUPERVISOR Users', () => {
+    it('should show "Supervisor" and "Gestão de Equipe" for SUPERVISOR users', () => {
+      configureForSupervisor();
+      fixture.detectChanges();
+
+      expect(component.hasGestaoRole).toBe(true);
+      expect(component.availableDashboards.length).toBe(2);
+
+      const labels = component.availableDashboards.map(d => d.label);
+      expect(labels).toContain('Gestão de Equipe');
+      expect(labels).toContain('Supervisor');
     });
 
-    it('should handle null user', () => {
-      // Arrange: Null user
-      mockTeamRoleGuard.hasGestaoRole.and.returnValue(false);
-
-      // Act
+    it('should NOT show "Meu Painel" for SUPERVISOR users', () => {
+      configureForSupervisor();
       fixture.detectChanges();
 
-      // Assert
-      expect(component.hasGestaoRole).toBe(false);
+      const meuPainel = component.availableDashboards.find(d => d.label === 'Meu Painel');
+      expect(meuPainel).toBeUndefined();
+    });
+
+    it('should have Supervisor option navigating to /dashboard/supervisor', () => {
+      configureForSupervisor();
+      fixture.detectChanges();
+
+      const supervisorOption = component.availableDashboards.find(d => d.label === 'Supervisor');
+      expect(supervisorOption).toBeDefined();
+      expect(supervisorOption!.route).toBe('/dashboard/supervisor');
+    });
+  });
+
+  describe('Role-Based Access - GESTOR Users', () => {
+    it('should show only "Gestão de Equipe" for GESTOR users (no Supervisor)', () => {
+      configureForGestor();
+      fixture.detectChanges();
+
+      expect(component.hasGestaoRole).toBe(true);
       expect(component.availableDashboards.length).toBe(1);
+      expect(component.availableDashboards[0].label).toBe('Gestão de Equipe');
+    });
+
+    it('should NOT show "Supervisor" option for GESTOR users', () => {
+      configureForGestor();
+      fixture.detectChanges();
+
+      const supervisorOption = component.availableDashboards.find(d => d.label === 'Supervisor');
+      expect(supervisorOption).toBeUndefined();
+    });
+  });
+
+  describe('Role-Based Access - DIRETOR Users', () => {
+    it('should show only "Gestão de Equipe" for DIRETOR users (no Supervisor)', () => {
+      configureForDiretor();
+      fixture.detectChanges();
+
+      expect(component.hasGestaoRole).toBe(true);
+      expect(component.availableDashboards.length).toBe(1);
+      expect(component.availableDashboards[0].label).toBe('Gestão de Equipe');
+    });
+
+    it('should NOT show "Supervisor" option for DIRETOR users', () => {
+      configureForDiretor();
+      fixture.detectChanges();
+
+      const supervisorOption = component.availableDashboards.find(d => d.label === 'Supervisor');
+      expect(supervisorOption).toBeUndefined();
     });
   });
 
   describe('Dashboard Navigation', () => {
-    /**
-     * Test: Dashboard switcher navigates correctly
-     * Validates: Requirements 18.4
-     */
     it('should navigate to selected dashboard', () => {
-      // Arrange: User with GESTAO team
-      mockTeamRoleGuard.hasGestaoRole.and.returnValue(true);
+      configureForSupervisor();
+      // Set URL to supervisor dashboard so current dashboard is supervisor
+      Object.defineProperty(mockRouter, 'url', {
+        get: () => '/dashboard/supervisor',
+        configurable: true
+      });
       fixture.detectChanges();
 
       const teamDashboard = component.availableDashboards.find(
         d => d.route === '/dashboard/team-management'
       );
 
-      // Act
       component.navigateToDashboard(teamDashboard!);
 
-      // Assert
       expect(mockRouter.navigate).toHaveBeenCalledWith(['/dashboard/team-management']);
     });
 
-    it('should not navigate if already on selected dashboard', () => {
-      // Arrange: User with GESTAO team
-      mockTeamRoleGuard.hasGestaoRole.and.returnValue(true);
-      Object.defineProperty(mockRouter, 'url', {
-        get: () => '/dashboard',
-        configurable: true
-      });
+    it('should navigate to supervisor dashboard', () => {
+      configureForSupervisor();
       fixture.detectChanges();
 
-      const personalDashboard = component.availableDashboards.find(
-        d => d.route === '/dashboard'
+      const supervisorDashboard = component.availableDashboards.find(
+        d => d.route === '/dashboard/supervisor'
       );
-      component.currentDashboard = personalDashboard!;
 
-      // Act
-      component.navigateToDashboard(personalDashboard!);
+      component.navigateToDashboard(supervisorDashboard!);
 
-      // Assert
+      expect(mockRouter.navigate).toHaveBeenCalledWith(['/dashboard/supervisor']);
+    });
+
+    it('should not navigate if already on selected dashboard', () => {
+      configureForSupervisor();
+      fixture.detectChanges();
+
+      const supervisorDashboard = component.availableDashboards.find(
+        d => d.route === '/dashboard/supervisor'
+      );
+      component.currentDashboard = supervisorDashboard!;
+
+      component.navigateToDashboard(supervisorDashboard!);
+
       expect(mockRouter.navigate).not.toHaveBeenCalled();
     });
 
     it('should detect current dashboard from URL', () => {
-      // Arrange: User with GESTAO team
-      mockTeamRoleGuard.hasGestaoRole.and.returnValue(true);
+      configureForGestor();
       Object.defineProperty(mockRouter, 'url', {
         get: () => '/dashboard/team-management',
         configurable: true
       });
 
-      // Act
       fixture.detectChanges();
 
-      // Assert
       expect(component.currentDashboard?.route).toBe('/dashboard/team-management');
       expect(component.currentDashboardName).toBe('Gestão de Equipe');
     });
 
-    it('should update current dashboard on route change', () => {
-      // Arrange: User with GESTAO team
-      mockTeamRoleGuard.hasGestaoRole.and.returnValue(true);
+    it('should detect supervisor dashboard from URL', () => {
+      configureForSupervisor();
+      Object.defineProperty(mockRouter, 'url', {
+        get: () => '/dashboard/supervisor',
+        configurable: true
+      });
+
       fixture.detectChanges();
 
-      // Act: Simulate navigation event
+      expect(component.currentDashboard?.route).toBe('/dashboard/supervisor');
+      expect(component.currentDashboardName).toBe('Supervisor');
+    });
+
+    it('should update current dashboard on route change', () => {
+      configureForSupervisor();
+      fixture.detectChanges();
+
+      // Spy on the component's actual ChangeDetectorRef (Angular provides its own)
+      const cdr = (component as any).cdr;
+      const markForCheckSpy = spyOn(cdr, 'markForCheck').and.callThrough();
+
       Object.defineProperty(mockRouter, 'url', {
         get: () => '/dashboard/team-management',
         configurable: true
       });
       routerEventsSubject.next(new NavigationEnd(1, '/dashboard/team-management', '/dashboard/team-management'));
 
-      // Assert
       expect(component.currentDashboard?.route).toBe('/dashboard/team-management');
-      expect(mockChangeDetectorRef.markForCheck).toHaveBeenCalled();
+      expect(markForCheckSpy).toHaveBeenCalled();
     });
   });
 
   describe('Session Storage - Last Visited Dashboard', () => {
-    /**
-     * Test: Last visited dashboard is remembered
-     * Validates: Requirements 18.5
-     */
     it('should save last visited dashboard to session storage', () => {
-      // Arrange: User with GESTAO team
-      mockTeamRoleGuard.hasGestaoRole.and.returnValue(true);
+      configureForSupervisor();
+      // Set URL to supervisor dashboard so current dashboard is supervisor
+      Object.defineProperty(mockRouter, 'url', {
+        get: () => '/dashboard/supervisor',
+        configurable: true
+      });
       fixture.detectChanges();
 
       const teamDashboard = component.availableDashboards.find(
         d => d.route === '/dashboard/team-management'
       );
 
-      // Act
       component.navigateToDashboard(teamDashboard!);
 
-      // Assert
       const saved = sessionStorage.getItem('lastVisitedDashboard');
       expect(saved).toBe('/dashboard/team-management');
     });
 
     it('should restore last visited dashboard on initialization', () => {
-      // Arrange: User with GESTAO team
-      mockTeamRoleGuard.hasGestaoRole.and.returnValue(true);
+      configureForGestor();
       sessionStorage.setItem('lastVisitedDashboard', '/dashboard/team-management');
       Object.defineProperty(mockRouter, 'url', {
         get: () => '/dashboard',
         configurable: true
       });
 
-      // Act
       fixture.detectChanges();
 
-      // Assert
       expect(mockRouter.navigate).toHaveBeenCalledWith(['/dashboard/team-management']);
     });
 
     it('should not restore last visited dashboard if not on default route', () => {
-      // Arrange: User with GESTAO team
-      mockTeamRoleGuard.hasGestaoRole.and.returnValue(true);
+      configureForGestor();
       sessionStorage.setItem('lastVisitedDashboard', '/dashboard/team-management');
       Object.defineProperty(mockRouter, 'url', {
         get: () => '/dashboard/team-management',
         configurable: true
       });
 
-      // Act
       fixture.detectChanges();
 
-      // Assert
       expect(mockRouter.navigate).not.toHaveBeenCalled();
     });
 
     it('should not restore dashboard if user does not have access', () => {
-      // Arrange: User without GESTAO team
-      mockTeamRoleGuard.hasGestaoRole.and.returnValue(false);
+      configureForJogador();
       sessionStorage.setItem('lastVisitedDashboard', '/dashboard/team-management');
       Object.defineProperty(mockRouter, 'url', {
         get: () => '/dashboard',
         configurable: true
       });
 
-      // Act
       fixture.detectChanges();
 
-      // Assert
       expect(mockRouter.navigate).not.toHaveBeenCalled();
     });
 
     it('should handle session storage errors gracefully', () => {
-      // Arrange: User with GESTAO team
-      mockTeamRoleGuard.hasGestaoRole.and.returnValue(true);
+      configureForSupervisor();
       spyOn(sessionStorage, 'setItem').and.throwError('Storage error');
       fixture.detectChanges();
 
@@ -314,97 +370,56 @@ describe('C4uDashboardNavigationComponent', () => {
         d => d.route === '/dashboard/team-management'
       );
 
-      // Act & Assert - should not throw
       expect(() => component.navigateToDashboard(teamDashboard!)).not.toThrow();
     });
   });
 
   describe('Current Dashboard Display', () => {
-    /**
-     * Test: Display current dashboard name
-     * Validates: Requirements 18.3
-     */
-    it('should display current dashboard name', () => {
-      // Arrange: User without GESTAO team
-      mockTeamRoleGuard.hasGestaoRole.and.returnValue(false);
+    it('should display current dashboard name for JOGADOR', () => {
+      configureForJogador();
       Object.defineProperty(mockRouter, 'url', {
         get: () => '/dashboard',
         configurable: true
       });
 
-      // Act
       fixture.detectChanges();
 
-      // Assert
       expect(component.currentDashboardName).toBe('Meu Painel');
     });
 
-    it('should update dashboard name when navigating', () => {
-      // Arrange: User with GESTAO team
-      mockTeamRoleGuard.hasGestaoRole.and.returnValue(true);
-      fixture.detectChanges();
-
-      // Act
-      Object.defineProperty(mockRouter, 'url', {
-        get: () => '/dashboard/team-management',
-        configurable: true
-      });
-      routerEventsSubject.next(new NavigationEnd(1, '/dashboard/team-management', '/dashboard/team-management'));
-
-      // Assert
-      expect(component.currentDashboardName).toBe('Gestão de Equipe');
-    });
-
     it('should return default name if no dashboard is detected', () => {
-      // Arrange
       component.currentDashboard = null;
 
-      // Act
       const name = component.currentDashboardName;
 
-      // Assert
       expect(name).toBe('Painel');
     });
   });
 
   describe('Edge Cases', () => {
-    it('should handle user with GESTAO team', () => {
-      // Arrange: User with GESTAO team (FkgMSNO)
-      mockTeamRoleGuard.hasGestaoRole.and.returnValue(true);
-
-      // Act
-      fixture.detectChanges();
-
-      // Assert
-      expect(component.hasGestaoRole).toBe(true);
-      expect(component.availableDashboards.length).toBe(2);
-    });
-
-    it('should handle user without teams', () => {
-      // Arrange: User without teams
-      mockTeamRoleGuard.hasGestaoRole.and.returnValue(false);
-
-      // Act
-      fixture.detectChanges();
-
-      // Assert
-      expect(component.hasGestaoRole).toBe(false);
-      expect(component.availableDashboards.length).toBe(1);
-    });
-
     it('should match longest route first for nested routes', () => {
-      // Arrange: User with GESTAO team
-      mockTeamRoleGuard.hasGestaoRole.and.returnValue(true);
+      configureForGestor();
       Object.defineProperty(mockRouter, 'url', {
         get: () => '/dashboard/team-management/details',
         configurable: true
       });
 
-      // Act
       fixture.detectChanges();
 
-      // Assert
       expect(component.currentDashboard?.route).toBe('/dashboard/team-management');
+    });
+
+    it('should match supervisor route correctly over base dashboard route', () => {
+      configureForSupervisor();
+      Object.defineProperty(mockRouter, 'url', {
+        get: () => '/dashboard/supervisor',
+        configurable: true
+      });
+
+      fixture.detectChanges();
+
+      expect(component.currentDashboard?.route).toBe('/dashboard/supervisor');
+      expect(component.currentDashboard?.label).toBe('Supervisor');
     });
   });
 });
