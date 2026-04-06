@@ -57,16 +57,24 @@ export class AuthProvider {
   }
 
   async requestPasswordReset(email: string) {
-    return firstValueFrom(this.http.post(`${environment.backend_url_base}/auth/password-reset/request`, {
+    // Use Funifier's public password reset endpoint
+    const apiKey = environment.funifier_api_key;
+    const resetUrl = `${this.funifierBaseUrl}pub/${apiKey}/passwordreset`;
+    
+    return firstValueFrom(this.http.post(resetUrl, {
       email: email
     }));
   }
 
-  async resetPassword(email: string, code: string, newPassword: string) {
-    return firstValueFrom(this.http.post(`${environment.backend_url_base}/auth/password-reset/confirm`, {
-      email: email,
-      code: code,
-      new_password: newPassword
+  async resetPassword(userId: string, token: string, newPassword: string) {
+    // Use Funifier's public update password endpoint
+    const apiKey = environment.funifier_api_key;
+    const updateUrl = `${this.funifierBaseUrl}pub/${apiKey}/updatepassword`;
+    
+    return firstValueFrom(this.http.post(updateUrl, {
+      user: userId,
+      token: token,
+      password: newPassword
     }));
   }
 }
