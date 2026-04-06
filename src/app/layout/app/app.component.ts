@@ -64,7 +64,7 @@ export class AppComponent implements OnInit {
       
       // Skip system initialization to avoid errors
       // Just set the page title with default value
-      this.titleService.setTitle('Game Revisaprev');
+      this.titleService.setTitle('Game BWA');
       this.paramReady = true;
       
       console.log('✅ Aplicação pronta!');
@@ -85,12 +85,12 @@ export class AppComponent implements OnInit {
         this.titleService.setTitle(newTitle);
       } else {
         // Fallback para título padrão se não conseguir obter o nome do cliente
-        this.titleService.setTitle('Game | Sistema');
+        this.titleService.setTitle('Game BWA');
       }
     } catch (error) {
       console.error('Erro ao atualizar título da página:', error);
       // Mantém o título padrão em caso de erro
-      this.titleService.setTitle('Game | Sistema');
+      this.titleService.setTitle('Game BWA');
     }
   }
 
