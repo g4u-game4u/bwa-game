@@ -203,10 +203,10 @@ export class ActionLogService {
     const uniqueAcaos = new Set<string>();
 
     actions.forEach(action => {
-      const acao = this.normalizeStringValue(action.attributes?.acao);
-      if (acao) {
-        acaoByActionId.set(action._id, acao);
-        uniqueAcaos.add(acao);
+      const stage = this.normalizeStringValue(action.attributes?.stage);
+      if (stage) {
+        acaoByActionId.set(action._id, stage);
+        uniqueAcaos.add(stage);
       }
     });
 
@@ -223,7 +223,6 @@ export class ActionLogService {
       aggregateBody
     ).pipe(
       map(response => {
-        console.log('🔍 getPointsByActionTemplate raw response:', JSON.stringify(response).slice(0, 1000));
         const pointsByAcao = new Map<string, number>();
         const docs = Array.isArray(response) ? response : [];
         docs.forEach((doc: any) => {

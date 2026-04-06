@@ -148,7 +148,6 @@ export class CnpjLookupService {
     }
 
     // If no pattern found, return null
-    console.warn('📊 extractEmpid: Could not extract empid from CNPJ:', cnpj);
     return null;
   }
 
