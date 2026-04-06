@@ -1240,8 +1240,11 @@ export class ActionLogService {
       '/v3/database/action_log/aggregate?strict=true',
       aggregateBody
     ).pipe(
-      switchMap(actions => this.getAchievementPointsByActions(actions).pipe(
-        map(pointsByActionId => {
+      switchMap(actions => forkJoin({
+        achievementPoints: this.getAchievementPointsByActions(actions),
+        templatePoints: this.getPointsByActionTemplate(actions)
+      }).pipe(
+        map(({ achievementPoints, templatePoints }) => {
           return actions.map(a => {
             // Determine status based on action data
             let status: 'finalizado' | 'pendente' | 'dispensado' | undefined;
@@ -1294,7 +1297,8 @@ export class ActionLogService {
                   ? acaoFromAttributes
                   : (a.action_title || a.actionId || 'Ação sem título');
 
-            const pointsInfo = pointsByActionId.get(a._id);
+            const pointsInfo = achievementPoints.get(a._id);
+            const templatePts = templatePoints.get(a._id);
 
             return {
               id: a._id,
@@ -1303,7 +1307,7 @@ export class ActionLogService {
               created: extractTimestamp(a.time as number | { $date: string } | undefined),
               status,
               cnpj: normalizeAttributesDealToString(a.attributes?.['deal']),
-              points: pointsInfo?.total ?? 0,
+              points: templatePts ?? pointsInfo?.total ?? 0,
               pointsLocked: pointsInfo?.locked ?? false
             };
           });
