@@ -12,6 +12,7 @@ import { FreeChallengeAllowedTeam, FreeChallengeAllowedRole } from 'src/app/mode
 import { ModalGerenciarPontosAvulsosProvider } from "../../../providers/modal-gerenciar-pontos-avulsos.provider";
 import { TIPO_CONSULTA_TIME } from "../dashboard.component";
 import { ModalDetalheExecutorComponent } from "./modal-detalhe-executor/modal-detalhe-executor.component";
+import { ModalSeasonFaqComponent } from "@modals/modal-season-faq/modal-season-faq.component";
 import { environment } from 'src/environments/environment';
 
 @Component({
@@ -136,6 +137,10 @@ export class SeasonComponent implements OnInit, OnChanges {
   extratoTemporadaBeta() {
     let md = this.modal.open(ModalDetalheExecutorComponent, {size: 'xl'});
     md.componentInstance.idConsulta = this.idConsulta;
+  }
+
+  abrirModalFaq() {
+    this.modal.open(ModalSeasonFaqComponent, { size: 'lg', scrollable: true });
   }
 
   abrirModalInserirAtividade() {

@@ -45,6 +45,17 @@
           
           <c4u-shimmer *ngIf="isLoadingPlayer && !seasonProgress"></c4u-shimmer>
         </div>
+
+        <div class="sidebar-section">
+          <button
+            type="button"
+            class="sidebar-faq-button"
+            (click)="abrirModalFaq()"
+            aria-label="Abrir perguntas frequentes">
+            <i class="ri-question-line sidebar-faq-icon" aria-hidden="true"></i>
+            <span>Perguntas frequentes</span>
+          </button>
+        </div>
         
         <!-- Sidebar Toggle Button - At the end of sidebar content -->
         <div class="sidebar-section sidebar-toggle-section">
@@ -89,6 +100,18 @@
         <div class="compact-item" *ngIf="seasonProgress">
           <i class="ri-checkbox-circle-line compact-icon tarefas"></i>
           <span class="compact-value">{{ seasonProgress.tarefasFinalizadas | number:'1.0-0':'pt-BR' }}</span>
+        </div>
+
+        <div
+          class="compact-item compact-faq"
+          (click)="abrirModalFaq()"
+          role="button"
+          tabindex="0"
+          aria-label="Abrir perguntas frequentes"
+          title="Perguntas frequentes"
+          (keydown.enter)="abrirModalFaq()"
+          (keydown.space)="abrirModalFaq(); $event.preventDefault()">
+          <i class="ri-question-line compact-icon"></i>
         </div>
         
         <!-- Sidebar Toggle Button - Compact View -->

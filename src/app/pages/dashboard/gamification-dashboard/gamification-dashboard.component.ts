@@ -1,5 +1,6 @@
 import { Component, OnInit, OnDestroy, HostListener, ChangeDetectionStrategy, ChangeDetectorRef, AfterViewInit } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
+import { NgbModal } from '@ng-bootstrap/ng-bootstrap';
 import { Subject, of } from 'rxjs';
 import { takeUntil, switchMap } from 'rxjs/operators';
 
@@ -24,6 +25,7 @@ import {
 import { CompanyDisplay } from '@services/company-kpi.service';
 import { ProgressCardType } from '@components/c4u-activity-progress/c4u-activity-progress.component';
 import { ProgressListType } from '@modals/modal-progress-list/modal-progress-list.component';
+import { ModalSeasonFaqComponent } from '@modals/modal-season-faq/modal-season-faq.component';
 
 @Component({
   selector: 'app-gamification-dashboard',
@@ -137,7 +139,8 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     private cnpjLookupService: CnpjLookupService,
     private sessaoProvider: SessaoProvider,
     private route: ActivatedRoute,
-    private router: Router
+    private router: Router,
+    private ngbModal: NgbModal
   ) {
     // Start measuring render time
     this.endRenderMeasurement = this.performanceMonitor.measureRenderTime('GamificationDashboardComponent');
@@ -927,6 +930,13 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     this.loadDashboardData();
   }
   
+  /**
+   * Abre o modal de perguntas frequentes da temporada / painel.
+   */
+  abrirModalFaq(): void {
+    this.ngbModal.open(ModalSeasonFaqComponent, { size: 'lg', scrollable: true });
+  }
+
   /**
    * Toggle sidebar collapsed state
    */

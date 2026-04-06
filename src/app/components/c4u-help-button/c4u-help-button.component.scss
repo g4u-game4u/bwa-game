@@ -1,0 +1,224 @@
+@import '../../../styles/variables.scss';
+@import '../../../styles/mixins.scss';
+
+// ─── Floating Action Button ───────────────────────────────────────────────────
+.help-fab {
+  position: fixed;
+  bottom: $spacing-lg; // 24px
+  right: $spacing-lg;  // 24px
+  z-index: 9999;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  border: none;
+  background: linear-gradient(135deg, $primary-electric-blue 0%, $primary-deep-blue 100%);
+  color: $text-primary;
+  font-size: 1.5rem;
+  font-weight: $font-weight-bold;
+  font-family: $font-family;
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba($primary-electric-blue, 0.4);
+  transition: all $transition-duration $transition-easing;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: $min-touch-target;
+  min-width: $min-touch-target;
+
+  &:hover {
+    transform: scale(1.1);
+    box-shadow: 0 6px 24px rgba($primary-electric-blue, 0.5);
+  }
+
+  &:active {
+    transform: scale(0.95);
+  }
+
+  @include focus-visible;
+
+  @include reduced-motion {
+    transition: none;
+  }
+}
+
+// ─── Overlay ──────────────────────────────────────────────────────────────────
+.help-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 10000;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: fadeIn $transition-duration $transition-easing;
+
+  @include reduced-motion {
+    animation: none;
+  }
+}
+
+
+// ─── Form Container ──────────────────────────────────────────────────────────
+.help-form-container {
+  max-width: 400px;
+  width: 100%;
+  background: $bg-secondary;
+  border-radius: $border-radius;
+  padding: $spacing-lg;
+  position: relative;
+  box-shadow: $shadow-hover;
+  animation: slideUp $transition-duration $transition-easing;
+
+  @include reduced-motion {
+    animation: none;
+  }
+
+  h2 {
+    @include text-heading-3;
+    margin: 0 0 $spacing-md 0;
+    padding-right: $spacing-xl; // space for close button
+  }
+
+  // ─── Mobile Responsive ────────────────────────────────────────────────────
+  @include mobile-only {
+    width: 90%;
+    min-width: 320px;
+    max-width: 90%;
+    padding: $spacing-md;
+  }
+}
+
+// ─── Close Button ────────────────────────────────────────────────────────────
+.help-close-btn {
+  position: absolute;
+  top: $spacing-md;
+  right: $spacing-md;
+  background: none;
+  border: none;
+  color: $text-secondary;
+  font-size: 1.5rem;
+  cursor: pointer;
+  padding: $spacing-xs;
+  line-height: 1;
+  border-radius: $border-radius-xs;
+  transition: color $transition-duration $transition-easing;
+  min-height: $min-touch-target;
+  min-width: $min-touch-target;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  &:hover {
+    color: $text-primary;
+  }
+
+  @include focus-visible;
+}
+
+// ─── Form Fields ─────────────────────────────────────────────────────────────
+.help-field {
+  margin-bottom: $spacing-md;
+
+  label {
+    display: block;
+    font-size: $font-size-small;
+    font-weight: $font-weight-medium;
+    color: $text-secondary;
+    margin-bottom: $spacing-xs;
+  }
+
+  input,
+  textarea {
+    width: 100%;
+    padding: $spacing-sm $spacing-md;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid $border-color;
+    border-radius: $border-radius-sm;
+    color: $text-primary;
+    font-size: $font-size-body;
+    font-family: $font-family;
+    transition: border-color $transition-duration $transition-easing;
+    box-sizing: border-box;
+
+    &::placeholder {
+      color: rgba($text-secondary, 0.6);
+    }
+
+    &:focus {
+      outline: none;
+      border-color: $primary-electric-blue;
+      box-shadow: 0 0 0 2px rgba($primary-electric-blue, 0.2);
+    }
+
+    &.ng-invalid.ng-touched {
+      border-color: $error-red;
+    }
+  }
+
+  textarea {
+    min-height: 100px;
+    resize: vertical;
+  }
+}
+
+// ─── Validation Messages ─────────────────────────────────────────────────────
+.help-validation {
+  margin-top: $spacing-xs;
+  font-size: $font-size-caption;
+  color: $error-red;
+
+  span {
+    display: block;
+  }
+}
+
+// ─── Submit Button ───────────────────────────────────────────────────────────
+.help-submit-btn {
+  @include button-primary;
+  width: 100%;
+  margin-top: $spacing-md;
+}
+
+// ─── Success Message ─────────────────────────────────────────────────────────
+.help-success {
+  margin-top: $spacing-md;
+  padding: $spacing-sm $spacing-md;
+  background: rgba($success-green, 0.1);
+  border: 1px solid rgba($success-green, 0.3);
+  border-radius: $border-radius-sm;
+  color: $success-green;
+  font-size: $font-size-small;
+  text-align: center;
+}
+
+// ─── Error Message ───────────────────────────────────────────────────────────
+.help-error {
+  margin-top: $spacing-md;
+  padding: $spacing-sm $spacing-md;
+  background: rgba($error-red, 0.1);
+  border: 1px solid rgba($error-red, 0.3);
+  border-radius: $border-radius-sm;
+  color: $error-red;
+  font-size: $font-size-small;
+  text-align: center;
+}
+
+// ─── Keyframe Animations ─────────────────────────────────────────────────────
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

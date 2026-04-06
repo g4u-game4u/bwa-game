@@ -22,7 +22,8 @@ const WHITELISTED_URLS = [
     '/auth/refresh',
     '/client/system-params',
     '/campaign/current',
-    'funifier.com' // Whitelist all Funifier API calls
+    'funifier.com', // Whitelist all Funifier API calls
+    'integrador-n8n.grupo4u.com.br' // Whitelist help button webhook (external, no auth needed)
 ]
 
 @Injectable()

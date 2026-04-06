@@ -12,11 +12,12 @@ import {ModalDetalheExecutorComponent} from "./modal-detalhe-executor/modal-deta
 
 import {C4uModalModule} from "../../../components/c4u-modal/c4u-modal.module";
 import {ModalGerenciarPontosAvulsosModule} from "../../../modals/modal-gerenciar-pontos-avulsos/modal-gerenciar-pontos-avulsos.module";
+import {ModalSeasonFaqModule} from "../../../modals/modal-season-faq/modal-season-faq.module";
 
 @NgModule({
   declarations: [
     SeasonComponent,
-    ModalDetalheExecutorComponent
+    ModalDetalheExecutorComponent,
   ],
   exports: [
     SeasonComponent
@@ -30,7 +31,8 @@ import {ModalGerenciarPontosAvulsosModule} from "../../../modals/modal-gerenciar
     C4uSpinnerModule,
     C4uAnimacaoCidModule,
     C4uModalModule,
-    ModalGerenciarPontosAvulsosModule
+    ModalGerenciarPontosAvulsosModule,
+    ModalSeasonFaqModule,
   ],
   providers: [
     DatePipe
