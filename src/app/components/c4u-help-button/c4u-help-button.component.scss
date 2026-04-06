@@ -1,5 +1,7 @@
 @import '../../../styles/variables.scss';
 @import '../../../styles/mixins.scss';
+// Caminho relativo: builds (ex.: Vercel) podem não aplicar includePaths do Angular ao sass-loader
+@import '../../../assets/styles/variables';
 
 // ─── Floating Action Button ───────────────────────────────────────────────────
 .help-fab {
