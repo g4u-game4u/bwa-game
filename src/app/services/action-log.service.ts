@@ -195,6 +195,64 @@ export class ActionLogService {
   }
 
   /**
+   * Fetch points from action_template__c by matching attributes.acao as _id.
+   * Returns a Map from action _id to its points value.
+   */
+  private getPointsByActionTemplate(actions: ActionLogEntry[]): Observable<Map<string, number>> {
+    // Collect unique acao values and map action _ids to their acao
+    const acaoByActionId = new Map<string, string>();
+    const uniqueAcaos = new Set<string>();
+
+    actions.forEach(action => {
+      const acao = this.normalizeStringValue(action.attributes?.acao);
+      if (acao) {
+        acaoByActionId.set(action._id, acao);
+        uniqueAcaos.add(acao);
+      }
+    });
+
+    if (uniqueAcaos.size === 0) {
+      return of(new Map<string, number>());
+    }
+
+    const acaoList = Array.from(uniqueAcaos);
+    const aggregateBody = [
+      { $match: { _id: { $in: acaoList } } },
+      { $project: { _id: 1, points: 1 } }
+    ];
+
+    return this.funifierApi.post<Array<{ _id: string; points: number }>>(
+      '/v3/database/action_template__c/aggregate?strict=true',
+      aggregateBody
+    ).pipe(
+      map(response => {
+        const pointsByAcao = new Map<string, number>();
+        if (Array.isArray(response)) {
+          response.forEach(doc => {
+            if (doc._id && doc.points != null) {
+              pointsByAcao.set(doc._id, Number(doc.points));
+            }
+          });
+        }
+
+        const pointsByActionId = new Map<string, number>();
+        acaoByActionId.forEach((acao, actionId) => {
+          const pts = pointsByAcao.get(acao);
+          if (pts != null) {
+            pointsByActionId.set(actionId, pts);
+          }
+        });
+
+        return pointsByActionId;
+      }),
+      catchError(error => {
+        console.error('Error fetching points from action_template__c:', error);
+        return of(new Map<string, number>());
+      })
+    );
+  }
+
+  /**
    * Fetch points for actions by matching achievement.extra fields:
    * - extra.id    <= action.attributes.id
    * - extra.acao  <= action.attributes.stage
@@ -856,8 +914,11 @@ export class ActionLogService {
    */
   getActivityList(playerId: string, month?: Date): Observable<ActivityListItem[]> {
     return this.getPlayerActionLogForMonth(playerId, month).pipe(
-      switchMap(actions => this.getAchievementPointsByActions(actions).pipe(
-        map(pointsByActionId => actions.map(a => {
+      switchMap(actions => forkJoin({
+        achievementPoints: this.getAchievementPointsByActions(actions),
+        templatePoints: this.getPointsByActionTemplate(actions)
+      }).pipe(
+        map(({ achievementPoints, templatePoints }) => actions.map(a => {
         // Determine status based on action data
         let status: 'finalizado' | 'pendente' | 'dispensado' | undefined;
 
@@ -904,12 +965,13 @@ export class ActionLogService {
               ? acaoFromAttributes
               : (a.action_title || a.actionId || 'Ação sem título');
 
-          const pointsInfo = pointsByActionId.get(a._id);
+          const pointsInfo = achievementPoints.get(a._id);
+          const templatePts = templatePoints.get(a._id);
 
           return {
           id: a._id,
           title,
-          points: pointsInfo?.total ?? (a.points || 0),
+          points: templatePts ?? pointsInfo?.total ?? (a.points || 0),
           pointsLocked: pointsInfo?.locked ?? false,
           created: extractTimestamp(a.time as number | { $date: string } | undefined),
           player: a.userId || '',
