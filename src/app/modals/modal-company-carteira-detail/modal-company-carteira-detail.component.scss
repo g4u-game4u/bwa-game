@@ -151,7 +151,7 @@
 
       .task-header {
         display: grid;
-        grid-template-columns: 2fr 1.5fr 1.5fr 1fr;
+        grid-template-columns: 2fr 1.5fr 1.5fr 1fr 1fr;
         gap: $spacing-md;
         padding: $spacing-md $spacing-lg;
         background: #323339;
@@ -169,7 +169,7 @@
 
       .task-row {
         display: grid;
-        grid-template-columns: 2fr 1.5fr 1.5fr 1fr;
+        grid-template-columns: 2fr 1.5fr 1.5fr 1fr 1fr;
         gap: $spacing-md;
         padding: $spacing-md $spacing-lg;
         background: rgba(255, 255, 255, 0.02);
@@ -239,6 +239,25 @@
             }
           }
         }
+
+        .task-col-points {
+          .task-points {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 0.875rem;
+            font-weight: 600;
+            background: rgba(34, 197, 94, 0.2);
+            color: #22c55e;
+            border: 1px solid rgba(34, 197, 94, 0.3);
+
+            &.locked {
+              background: rgba(234, 179, 8, 0.2);
+              color: #eab308;
+              border: 1px solid rgba(234, 179, 8, 0.3);
+            }
+          }
+        }
       }
     }
   }
@@ -282,6 +301,12 @@
 
         .task-col-status::before {
           content: 'Status: ';
+          font-weight: 600;
+          color: $text-secondary;
+        }
+
+        .task-col-points::before {
+          content: 'Pontos: ';
           font-weight: 600;
           color: $text-secondary;
         }

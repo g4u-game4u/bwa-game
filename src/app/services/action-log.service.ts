@@ -70,6 +70,8 @@ export interface ClienteActionItem {
   player: string; // userId (email do executor)
   created: number; // timestamp
   status?: 'finalizado' | 'pendente' | 'dispensado'; // Status da tarefa
+  points?: number; // Points from achievement
+  pointsLocked?: boolean; // true when achievement.item === 'locked_points'
 }
 
 interface CacheEntry<T> {
@@ -1246,70 +1248,76 @@ export class ActionLogService {
       '/v3/database/action_log/aggregate?strict=true',
       aggregateBody
     ).pipe(
-      map(actions => {
-        console.log('📊 Actions by CNPJ response:', actions);
-        return actions.map(a => {
-          // Determine status based on action data
-          let status: 'finalizado' | 'pendente' | 'dispensado' | undefined;
+      switchMap(actions => this.getAchievementPointsByActions(actions).pipe(
+        map(pointsByActionId => {
+          console.log('📊 Actions by CNPJ response:', actions);
+          return actions.map(a => {
+            // Determine status based on action data
+            let status: 'finalizado' | 'pendente' | 'dispensado' | undefined;
 
-          // Some deployments encode completion inside attributes.stage (instead of extra.processed/status).
-          const stageForStatusRaw = a.attributes?.['stage'];
-          const stageForStatus =
-            typeof stageForStatusRaw === 'string' ? stageForStatusRaw.trim().toLowerCase() : '';
-          const hasStage = stageForStatus.length > 0;
-          const stageIndicatesFinalizado =
-            stageForStatus === 'done' ||
-            stageForStatus === 'delivered' ||
-            stageForStatus === 'finalizado' ||
-            stageForStatus === 'finalizada' ||
-            stageForStatus.includes('finaliz') ||
-            stageForStatus.includes('entreg') ||
-            stageForStatus.includes('conclu');
-          
-          // Check if action is dismissed (highest priority)
-          if (a.extra?.['dismissed'] === true || a.attributes?.['dismissed'] === true || a.status === 'CANCELLED') {
-            status = 'dispensado';
-          }
-          // Check if action is completed/finalized
-          else if (a.extra?.processed === true || 
-                   a.status === 'DONE' || 
-                   a.status === 'DELIVERED' ||
-                   a.actionId === 'desbloquear' ||
-                   stageIndicatesFinalizado ||
-                   hasStage) {
-            status = 'finalizado';
-          }
-          // Check if action is pending or in progress
-          else if (a.status === 'PENDING' || 
-                   a.status === 'DOING' || 
-                   a.status === 'INCOMPLETE' ||
-                   !a.status) {
-            status = 'pendente';
-          }
-          // Default to pendente if status is unknown
-          else {
-            status = 'pendente';
-          }
-          
-          const stageFromAttributes = a.attributes?.['stage'];
-          const acaoFromAttributes = a.attributes?.['acao'];
-          const title =
-            (typeof stageFromAttributes === 'string' && stageFromAttributes.trim() !== '')
-              ? stageFromAttributes
-              : (typeof acaoFromAttributes === 'string' && acaoFromAttributes.trim() !== '')
-                ? acaoFromAttributes
-                : (a.action_title || a.actionId || 'Ação sem título');
+            // Some deployments encode completion inside attributes.stage (instead of extra.processed/status).
+            const stageForStatusRaw = a.attributes?.['stage'];
+            const stageForStatus =
+              typeof stageForStatusRaw === 'string' ? stageForStatusRaw.trim().toLowerCase() : '';
+            const hasStage = stageForStatus.length > 0;
+            const stageIndicatesFinalizado =
+              stageForStatus === 'done' ||
+              stageForStatus === 'delivered' ||
+              stageForStatus === 'finalizado' ||
+              stageForStatus === 'finalizada' ||
+              stageForStatus.includes('finaliz') ||
+              stageForStatus.includes('entreg') ||
+              stageForStatus.includes('conclu');
+            
+            // Check if action is dismissed (highest priority)
+            if (a.extra?.['dismissed'] === true || a.attributes?.['dismissed'] === true || a.status === 'CANCELLED') {
+              status = 'dispensado';
+            }
+            // Check if action is completed/finalized
+            else if (a.extra?.processed === true || 
+                     a.status === 'DONE' || 
+                     a.status === 'DELIVERED' ||
+                     a.actionId === 'desbloquear' ||
+                     stageIndicatesFinalizado ||
+                     hasStage) {
+              status = 'finalizado';
+            }
+            // Check if action is pending or in progress
+            else if (a.status === 'PENDING' || 
+                     a.status === 'DOING' || 
+                     a.status === 'INCOMPLETE' ||
+                     !a.status) {
+              status = 'pendente';
+            }
+            // Default to pendente if status is unknown
+            else {
+              status = 'pendente';
+            }
+            
+            const stageFromAttributes = a.attributes?.['stage'];
+            const acaoFromAttributes = a.attributes?.['acao'];
+            const title =
+              (typeof stageFromAttributes === 'string' && stageFromAttributes.trim() !== '')
+                ? stageFromAttributes
+                : (typeof acaoFromAttributes === 'string' && acaoFromAttributes.trim() !== '')
+                  ? acaoFromAttributes
+                  : (a.action_title || a.actionId || 'Ação sem título');
 
-          return {
-            id: a._id,
-            title,
-            player: a.userId || '',
-            created: extractTimestamp(a.time as number | { $date: string } | undefined),
-            status,
-            cnpj: normalizeAttributesDealToString(a.attributes?.['deal'])
-          };
-        });
-      }),
+            const pointsInfo = pointsByActionId.get(a._id);
+
+            return {
+              id: a._id,
+              title,
+              player: a.userId || '',
+              created: extractTimestamp(a.time as number | { $date: string } | undefined),
+              status,
+              cnpj: normalizeAttributesDealToString(a.attributes?.['deal']),
+              points: pointsInfo?.total ?? 0,
+              pointsLocked: pointsInfo?.locked ?? false
+            };
+          });
+        })
+      )),
       catchError(error => {
         console.error('Error fetching actions by CNPJ:', error);
         return of([]);

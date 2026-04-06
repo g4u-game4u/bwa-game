@@ -71,6 +71,7 @@
               <div class="task-col-executor">Executor</div>
               <div class="task-col-date">Data</div>
               <div class="task-col-status">Status</div>
+              <div class="task-col-points">Pontos</div>
             </div>
             <div *ngFor="let task of filteredTasks" class="task-row">
               <div class="task-col-title">
@@ -86,6 +87,9 @@
                 <span class="task-status" [ngClass]="getStatusClass(task.status)">
                   {{ getStatusLabel(task.status) }}
                 </span>
+              </div>
+              <div class="task-col-points">
+                <span class="task-points" [class.locked]="task.pointsLocked">+{{ task.points || 0 }} pts</span>
               </div>
             </div>
             </div>
