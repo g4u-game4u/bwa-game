@@ -138,7 +138,6 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     // Check for playerId in query params (when viewing another player's dashboard)
     const playerIdParam = this.route.snapshot.queryParams['playerId'];
     if (playerIdParam && typeof playerIdParam === 'string') {
-      console.log('📊 Using player ID from query params:', playerIdParam);
       return playerIdParam;
     }
     
@@ -147,18 +146,15 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     if (usuario) {
       const sessionPlayerId = usuario._id || usuario.email;
       if (sessionPlayerId && typeof sessionPlayerId === 'string') {
-        console.log('📊 Using player ID from session:', sessionPlayerId);
         return sessionPlayerId;
       }
     }
     
     // Fallback to 'me' (current authenticated user)
-    console.log('📊 Using default player ID: me');
     return 'me';
   }
   
   ngOnInit(): void {
-    console.log('🎮 GamificationDashboardComponent ngOnInit STARTED');
     this.checkResponsiveBreakpoints();
     
     // Listen for query param changes (when viewing different players)
@@ -167,14 +163,10 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
       .subscribe(params => {
         const playerId = params['playerId'];
         if (playerId) {
-          console.log('📊 Player ID changed via query params:', playerId);
           this.loadDashboardData();
         }
       });
-    
-    console.log('🎮 About to call loadDashboardData...');
     this.loadDashboardData();
-    console.log('🎮 loadDashboardData called');
     this.announceToScreenReader('Painel de gamificação carregado');
     this.performanceMonitor.trackChangeDetection('GamificationDashboardComponent');
   }
@@ -251,10 +243,6 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     const playerId = this.getPlayerId();
     
     // Load player status
-    console.log('📊 Loading player data for:', playerId);
-    console.log('📊 Token available:', !!this.sessaoProvider.token);
-    console.log('📊 Token value:', this.sessaoProvider.token?.substring(0, 20) + '...');
-    
     // Safety timeout to prevent infinite loading state
     const loadingTimeout = setTimeout(() => {
       if (this.isLoadingPlayer) {
@@ -268,7 +256,6 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (status) => {
-          console.log('📊 Player status loaded:', status);
           clearTimeout(loadingTimeout);
           this.playerStatus = status;
           this.isLoadingPlayer = false;
@@ -282,18 +269,15 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
           this.cdr.markForCheck();
         },
         complete: () => {
-          console.log('📊 Player status request completed');
           clearTimeout(loadingTimeout);
         }
       });
     
     // Load point wallet
-    console.log('📊 Starting point wallet request...');
     this.playerService.getPlayerPoints(playerId)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (points) => {
-          console.log('📊 Point wallet loaded:', points);
           this.pointWallet = points;
           this.cdr.markForCheck();
         },
@@ -304,17 +288,14 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
           this.cdr.markForCheck();
         },
         complete: () => {
-          console.log('📊 Point wallet request completed');
         }
       });
     
     // Load season progress (basic data from player status)
-    console.log('📊 Starting season progress request...');
     this.playerService.getSeasonProgress(playerId, this.seasonDates)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (progress) => {
-          console.log('📊 Season progress loaded:', progress);
           this.seasonProgress = progress;
           this.cdr.markForCheck();
           
@@ -333,7 +314,6 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
           this.cdr.markForCheck();
         },
         complete: () => {
-          console.log('📊 Season progress request completed');
         }
       });
   }
@@ -357,7 +337,6 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (count: number) => {
-          console.log('📊 Unique CNPJs (Clientes) count:', count);
           if (this.seasonProgress) {
             this.seasonProgress = {
               ...this.seasonProgress,
@@ -376,7 +355,6 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (count: number) => {
-          console.log('📊 Tarefas finalizadas count:', count);
           if (this.seasonProgress) {
             this.seasonProgress = {
               ...this.seasonProgress,
@@ -403,7 +381,6 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (companies) => {
-          console.log('📊 Companies loaded:', companies);
           this.companies = companies;
           this.isLoadingCompanies = false;
           
@@ -441,8 +418,6 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     this.actionLogService.getPlayerCnpjListWithCount(playerId, this.selectedMonth)
       .pipe(
         switchMap(clientes => {
-          console.log('📊 Carteira clientes loaded, enriching with KPI data:', clientes);
-          
           // Extract all CNPJ strings for lookup
           const cnpjList = clientes.map(c => c.cnpj);
           
@@ -460,8 +435,6 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
       )
       .subscribe({
         next: (enrichedClientes) => {
-          console.log('📊 Carteira clientes enriched with KPI data:', enrichedClientes);
-          console.log('📊 CNPJ name map:', this.cnpjNameMap);
           this.carteiraClientes = enrichedClientes;
           this.isLoadingCarteira = false;
           this.cdr.markForCheck();
@@ -487,7 +460,6 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (kpis) => {
-          console.log('📊 KPIs loaded:', kpis, `(${kpis?.length || 0} KPIs)`);
           this.playerKPIs = kpis || [];
           this.isLoadingKPIs = false;
           
@@ -496,7 +468,6 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
           if (kpis !== null && kpis !== undefined) {
             this.updateMetasFromKPIs(kpis);
           } else {
-            console.log('📊 KPIs is null/undefined, skipping metas update to preserve existing values');
           }
           
           this.cdr.markForCheck();
@@ -537,8 +508,6 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
         target: totalKPIs
       }
     };
-    
-    console.log('📊 Metas updated from KPIs:', this.seasonProgress.metas, `(${metasAchieved}/${totalKPIs})`, `from ${totalKPIs} KPIs`);
   }
   
   /**
@@ -566,7 +535,6 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (metrics) => {
-          console.log('📊 Progress metrics loaded:', metrics);
           this.activityMetrics = metrics.activity;
           this.processMetrics = metrics.processo;
           this.isLoadingProgress = false;
@@ -587,7 +555,6 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (breakdown) => {
-          console.log('📊 Monthly points breakdown loaded:', breakdown);
           this.monthlyPointsBreakdown = breakdown;
           this.cdr.markForCheck();
         },
@@ -803,7 +770,6 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     }
     // Use the enriched name from the map, fallback to original
     const displayName = this.cnpjNameMap.get(cnpj);
-    console.log('📊 getCompanyDisplayName called:', { cnpj, displayName, hasInMap: this.cnpjNameMap.has(cnpj), mapSize: this.cnpjNameMap.size });
     return displayName || cnpj;
   }
 

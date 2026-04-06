@@ -21,7 +21,6 @@ export class RewardRedeemModalComponent {
     private notificationService: NotificationService,
     private recompensasService: RecompensasService
   ) {
-    console.log('NotificationService injetado:', !!this.notificationService);
   }
 
   close() {
@@ -56,21 +55,13 @@ export class RewardRedeemModalComponent {
       this.isProcessing = false;
       return;
     }
-
-    console.log('Iniciando processamento do resgate via API...');
-    
     // Obtém o e-mail do usuário
     const userEmail = this.sessao.usuario?.email || 'unknown';
-    console.log('Email do usuário:', userEmail);
-
     // Prepara o payload para a API
     const purchaseRequest: PurchaseRequest = {
       player: userEmail,
       item: this.reward.id
     };
-
-    console.log('Payload para API:', purchaseRequest);
-
     // Chama a API para criar a compra
     this.recompensasService.createPurchase(purchaseRequest).subscribe({
       next: (response) => {
@@ -94,8 +85,6 @@ export class RewardRedeemModalComponent {
 
           // Atualiza a lista de recompensas resgatadas
           this.updateRedeemedRewards(userEmail);
-
-          console.log('Resgate realizado com sucesso via API');
           this.notificationService.showSuccess(`Parabéns! Você resgatou ${this.reward.title} com sucesso!`);
           
           // Fecha o modal com sucesso

@@ -162,7 +162,6 @@ export class PontosAvulsosService {
   public clearUserEmailCache(): void {
     this.cachedUserEmail = null;
     this.userEmailPromise = null;
-    console.log('🧹 Cache do e-mail do usuário limpo');
   }
 
   /**
@@ -314,8 +313,6 @@ export class PontosAvulsosService {
 
       if (isTeamContext && timeId) {
         // Contexto de time - usar /user-action/search com team_id
-        console.log('👥 Buscando atividades do time:', timeId);
-        
         // Buscar PENDING e DOING em uma única requisição (dismissed=false)
         const response = await this.getUserActions(
           ['PENDING', 'DOING'], 
@@ -328,9 +325,6 @@ export class PontosAvulsosService {
           timeId, // Passar teamId para usar team_id no query param
           filtros
         );
-
-        console.log('📊 Modal - Atividades do time encontradas:', response.items.length, 'de', response.total);
-        
         return {
           items: response.items || [],
           total: response.total || 0,
@@ -341,8 +335,6 @@ export class PontosAvulsosService {
       } else if (!isTeamContext && userId) {
         // Contexto de colaborador - usar /user-action/search com paginação
         // Otimizado: uma única requisição com múltiplos status (status=PENDING&status=DOING)
-        console.log('👤 Buscando atividades do colaborador:', userId);
-        
         // Buscar PENDING e DOING em uma única requisição (dismissed=false)
         const response = await this.getUserActions(
           ['PENDING', 'DOING'], 
@@ -355,9 +347,6 @@ export class PontosAvulsosService {
           undefined, // Não passar teamId para contexto de colaborador
           filtros
         );
-
-        console.log('📊 Modal - Atividades encontradas:', response.items.length, 'de', response.total);
-        
         return {
           items: response.items || [],
           total: response.total || 0,
@@ -410,8 +399,6 @@ export class PontosAvulsosService {
       // Buscar atividades com status DONE
       if (isTeamContext && timeId) {
         // Contexto de time - usar /user-action/search com team_id
-        console.log('👥 Buscando atividades finalizadas do time:', timeId);
-        
         // Buscar todas as atividades DONE para filtrar corretamente por approved=false
         // Usar um limite alto (1000) para buscar a maioria dos casos em uma única chamada
         const allDoneResponse = await this.getUserActions(
@@ -565,21 +552,8 @@ export class PontosAvulsosService {
     try {
       const startDateISO = await this.seasonDatesService.getSeasonStartDateISO();
       const endDateISO = await this.seasonDatesService.getSeasonEndDateISO();
-
-      console.log('✅ Modal - Buscando atividades aprovadas:', { 
-        timeId, 
-        userId, 
-        isTeamContext, 
-        startDateISO, 
-        endDateISO,
-        page,
-        limit
-      });
-
       if (isTeamContext && timeId) {
         // Contexto de time - usar /user-action/search com team_id
-        console.log('👥 Buscando atividades aprovadas do time:', timeId);
-        
         // Buscar atividades DELIVERED e DONE aprovadas usando /user-action/search
         const [deliveredResponse, doneResponse] = await Promise.all([
           this.getUserActions(
@@ -787,8 +761,6 @@ export class PontosAvulsosService {
 
       if (isTeamContext && timeId) {
         // Contexto de time - usar /user-action/search com team_id
-        console.log('👥 Buscando atividades canceladas do time:', timeId);
-        
         // Para cancelados: dismissed=true e todos os status possíveis
         const allStatuses = ['PENDING', 'DOING', 'DONE', 'DELIVERED', 'CANCELLED', 'INCOMPLETE'];
         return await this.getUserActions(
@@ -1075,24 +1047,10 @@ export class PontosAvulsosService {
         start: startDate,
         end: endDate
       };
-
-      console.log('🔗 Requisição GET /game/team-actions:', { url, params });
-      
       const response = await this.api.get<any>(url, { params });
-      
-      console.log('📥 Resposta /game/team-actions:', response);
-      
       // Transformar a resposta para o formato AtividadeDetalhe
       if (Array.isArray(response)) {
         return response.map(item => {
-          console.log('🔍 Item da API (Team):', {
-            id: item.id,
-            action_title: item.action_title,
-            title: item.title,
-            action_id: item.action_id,
-            actionId: item.actionId,
-            action_template_id: item.action_template_id
-          });
           return {
             id: item.id,
             approved: item.approved,
@@ -1215,14 +1173,8 @@ export class PontosAvulsosService {
           paramsObj[key] = values[0]; // Valor único
         }
       });
-
-      console.log('🔗 Requisição GET /user-action/search:', { url, params: paramsObj });
-      
       // Usar ApiProvider.get para fazer GET com query params
       const response: UserActionSearchResponse = await this.api.get<any>(url, { params: paramsObj });
-      
-      console.log('📥 Resposta /user-action/search:', response);
-      
       // Transformar a resposta para o formato AtividadeDetalhe
       if (response && response.items && Array.isArray(response.items)) {
         const items = response.items.map(item => ({
@@ -1305,12 +1257,10 @@ export class PontosAvulsosService {
     if (this.cachedUserEmail) {
       // Se não há usuário na sessão (logout), limpar cache
       if (!hasUserInSession) {
-        console.log('🔄 Usuário fez logout. Limpando cache do e-mail.');
         this.clearUserEmailCache();
       }
       // Se há usuário na sessão mas o e-mail mudou (novo login), limpar cache
       else if (currentSessionEmail && this.cachedUserEmail !== currentSessionEmail) {
-        console.log('🔄 Novo usuário fez login. Limpando cache do e-mail anterior.');
         this.clearUserEmailCache();
       }
       // Se o cache ainda é válido, retornar imediatamente
@@ -1336,7 +1286,6 @@ export class PontosAvulsosService {
         }
 
         // Se não estiver na sessão, buscar do endpoint /auth/user
-        console.log('📡 Buscando e-mail do usuário do endpoint /auth/user...');
         const userInfo = await firstValueFrom(this.auth.userInfo());
         
         if (userInfo && userInfo.email) {
@@ -1346,7 +1295,6 @@ export class PontosAvulsosService {
             this.sessao.usuario.email = userInfo.email;
           }
           this.userEmailPromise = null;
-          console.log('✅ E-mail do usuário obtido do endpoint:', userInfo.email);
           return userInfo.email;
         }
 
@@ -1377,12 +1325,8 @@ export class PontosAvulsosService {
       const payloadParaEnviar: any = { ...payload };
       if (payloadParaEnviar.updated_by !== undefined) {
         delete payloadParaEnviar.updated_by;
-        console.log('⚠️ Campo updated_by removido do payload (não suportado pelo backend)');
       }
-      
-      console.log('📤 POST /game/action/process com payload:', JSON.stringify(payloadParaEnviar, null, 2));
       const response = await this.api.post<any>('/game/action/process', payloadParaEnviar);
-      console.log('✅ Resposta de /game/action/process:', response);
       return response;
     } catch (error) {
       console.error('❌ Erro ao processar ação:', error);
@@ -1409,12 +1353,7 @@ export class PontosAvulsosService {
         user_email: userEmail,
         updated_at: new Date().toISOString()
       };
-
-      console.log('🔄 Atualizando status da atividade:', { atividadeId, novoStatus, userEmail });
-      
       const response = await this.api.put<any>('/game/action/status', payload);
-      
-      console.log('✅ Status da atividade atualizado:', response);
       return response;
     } catch (error) {
       console.error('Erro ao atualizar status da atividade:', error);
@@ -1541,10 +1480,7 @@ export class PontosAvulsosService {
         approved_by: currentUserEmail || userEmail // Email do usuário que está aprovando (fallback para userEmail se não houver sessão)
         // updated_by será adicionado automaticamente pelo processAction com o e-mail do usuário atual
       };
-
-      console.log('✅ Aprovando atividade:', payload);
       const response = await this.processAction(payload);
-      console.log('✅ Atividade aprovada:', response);
       return response;
     } catch (error) {
       console.error('Erro ao aprovar atividade:', error);
@@ -1590,10 +1526,7 @@ export class PontosAvulsosService {
         dismissed: false // Atividade não é dismissed
         // updated_by será adicionado automaticamente pelo processAction com o e-mail do usuário atual
       };
-
-      console.log('✅ Finalizando atividade:', payload);
       const response = await this.processAction(payload);
-      console.log('✅ Atividade finalizada:', response);
       return response;
     } catch (error) {
       console.error('Erro ao finalizar atividade:', error);
@@ -1612,12 +1545,7 @@ export class PontosAvulsosService {
       const payload = {
         finished_at: finishedAt
       };
-
-      console.log('🔓 Desbloqueando atividade:', { deliveryId, finishedAt });
-      
       const response = await this.api.post<any>(`/game/delivery/${deliveryId}/complete`, payload);
-      
-      console.log('✅ Atividade desbloqueada:', response);
       return response;
     } catch (error) {
       console.error('Erro ao desbloquear atividade:', error);
@@ -1630,12 +1558,7 @@ export class PontosAvulsosService {
       const payload = {
         user_email: userEmail
       };
-
-      console.log('🔒 Bloquear atividade:', { deliveryId, userEmail });
-
       const response = await this.api.post<any>(`/game/delivery/${deliveryId}/restore`, payload);
-
-      console.log('✅ Atividade bloqueada:', response);
       return response;
     } catch (error) {
       console.error('Erro ao bloquear atividade:', error);
@@ -1680,24 +1603,18 @@ export class PontosAvulsosService {
         approved_by: null // Ninguém aprovou uma atividade cancelada
         // updated_by será adicionado automaticamente pelo processAction com o e-mail do usuário atual
       };
-
-      console.log('❌ Cancelando atividade (dismissed):', payload);
-      
       try {
         const response = await this.processAction(payload);
         // Se a resposta for null ou undefined (status 204), tratar como sucesso
         if (response === null || response === undefined) {
-          console.log('✅ Atividade cancelada (status 204 - No Content, resposta vazia)');
           return { success: true, status: 204 };
         }
-        console.log('✅ Atividade cancelada (dismissed):', response);
         return response;
       } catch (error: any) {
         // Status 204 (No Content) é sucesso - a operação foi concluída
         // Pode ser que o HttpClient lance erro ou retorne null para 204 dependendo da configuração
         if (error?.status === 204 || error?.response?.status === 204 || 
             error === null || error === undefined) {
-          console.log('✅ Atividade cancelada (status 204 - No Content)');
           return { success: true, status: 204 };
         }
         // Re-lançar outros erros
@@ -1745,10 +1662,7 @@ export class PontosAvulsosService {
         approved_by: null // Ninguém aprovou ainda
         // updated_by será adicionado automaticamente pelo processAction com o e-mail do usuário atual
       };
-
-      console.log('🔒 Bloqueando atividade:', payload);
       const response = await this.processAction(payload);
-      console.log('✅ Atividade bloqueada:', response);
       return response;
     } catch (error) {
       console.error('Erro ao bloquear atividade:', error);
@@ -1791,10 +1705,7 @@ export class PontosAvulsosService {
         approved_by: null // Ninguém aprovou uma atividade reprovada
         // updated_by será adicionado automaticamente pelo processAction com o e-mail do usuário atual
       };
-
-      console.log('🔄 Reprovando atividade:', payload);
       const response = await this.processAction(payload);
-      console.log('✅ Atividade reprovada:', response);
       return response;
     } catch (error) {
       console.error('Erro ao reprovar atividade:', error);
@@ -1811,9 +1722,7 @@ export class PontosAvulsosService {
    */
   public async cancelarDelivery(deliveryId: string): Promise<any> {
     try {
-      console.log('❌ Cancelando delivery:', deliveryId);
       const response = await this.api.post<any>(`/game/delivery/${deliveryId}/cancel`, {});
-      console.log('✅ Delivery cancelada com sucesso');
       return response;
     } catch (error) {
       console.error('Erro ao cancelar delivery:', error);
@@ -1828,9 +1737,7 @@ export class PontosAvulsosService {
    */
   public async completarDelivery(deliveryId: string): Promise<any> {
     try {
-      console.log('✅ Completando delivery:', deliveryId);
       const response = await this.api.post<any>(`/game/delivery/${deliveryId}/complete`, {});
-      console.log('✅ Delivery completada com sucesso');
       return response;
     } catch (error) {
       console.error('Erro ao completar delivery:', error);
@@ -1845,9 +1752,7 @@ export class PontosAvulsosService {
    */
   public async desfazerDelivery(deliveryId: string): Promise<any> {
     try {
-      console.log('🔄 Desfazendo delivery:', deliveryId);
       const response = await this.api.post<any>(`/game/delivery/${deliveryId}/undeliver`, {});
-      console.log('✅ Delivery desfeita com sucesso');
       return response;
     } catch (error) {
       console.error('Erro ao desfazer delivery:', error);
@@ -1862,9 +1767,7 @@ export class PontosAvulsosService {
    */
   public async restaurarDelivery(deliveryId: string): Promise<any> {
     try {
-      console.log('🔄 Restaurando delivery:', deliveryId);
       const response = await this.api.post<any>(`/game/delivery/${deliveryId}/restore`, {});
-      console.log('✅ Delivery restaurada com sucesso');
       return response;
     } catch (error) {
       console.error('Erro ao restaurar delivery:', error);
@@ -1878,8 +1781,6 @@ export class PontosAvulsosService {
    * @returns Objeto com os resultados dos filtros
    */
   public testarFiltros(atividades: AtividadeDetalhe[]): any {
-    console.log('🧪 Testando filtros com', atividades.length, 'atividades');
-    
     // Filtrar atividades aguardando aprovação (DONE com approved: false ou null)
     const aguardandoAprovacao = atividades.filter(atividade => 
       atividade.status === 'DONE' && (atividade.approved === false || atividade.approved === null)
@@ -1944,8 +1845,6 @@ export class PontosAvulsosService {
         }
       }
     };
-    
-    console.log('�� Resultado dos testes:', resultado);
     return resultado;
   }
 
@@ -1955,8 +1854,6 @@ export class PontosAvulsosService {
    * @returns Objeto com os resultados do teste
    */
   public testarFiltroAguardandoAprovacao(atividades: AtividadeDetalhe[]): any {
-    console.log('🧪 Testando filtro de atividades aguardando aprovação...');
-    
     // Contar atividades por status
     const porStatus = atividades.reduce((acc, atividade) => {
       acc[atividade.status] = (acc[atividade.status] || 0) + 1;
@@ -1995,13 +1892,9 @@ export class PontosAvulsosService {
         atividades: naoDeveriamEstar.map(a => ({ id: a.id, status: a.status, approved: a.approved }))
       }
     };
-    
-    console.log('🧪 Resultado do teste de filtro aguardando aprovação:', resultado);
-    
     if (resultado.naoDeveriamEstar.count > 0) {
       console.error('❌ PROBLEMA: Encontradas atividades que não deveriam estar na aba aguardando aprovação!');
     } else {
-      console.log('✅ Filtro funcionando corretamente!');
     }
     
     return resultado;
@@ -2054,12 +1947,7 @@ export class PontosAvulsosService {
         created_by: userEmail,
         type: commentType
       };
-
-      console.log('💬 Adicionando comentário:', { userActionId, payload });
-      
       const response = await this.api.post<any>(`/user-action/${userActionId}/comment`, payload);
-      
-      console.log('✅ Comentário adicionado:', response);
       return response;
     } catch (error) {
       console.error('Erro ao adicionar comentário:', error);
@@ -2084,17 +1972,12 @@ export class PontosAvulsosService {
       files.forEach((file, index) => {
         formData.append('files', file);
       });
-
-      console.log('📎 Fazendo upload de anexos:', { userActionId, filesCount: files.length });
-      
       // Para upload de arquivos, usar HttpClient diretamente para evitar headers padrão
       // que incluem Content-Type: application/json
       const url = `${environment.backend_url_base}/user-action/${userActionId}/attachment`;
       
       // Usar HttpClient diretamente para ter controle total sobre os headers
       const response = await firstValueFrom(this.http.put<any>(url, formData));
-      
-      console.log('✅ Anexos enviados:', response);
       return response;
     } catch (error: any) {
       console.error('Erro ao fazer upload de anexos:', error);
@@ -2134,26 +2017,10 @@ export class PontosAvulsosService {
     userActionId: string
   ): Promise<any> {
     try {
-      console.log('📎 Buscando anexos:', { userActionId });
-      
       const response = await this.api.get<any>(`/user-action/${userActionId}/attachment`);
-      
-      console.log('✅ Anexos encontrados:', response);
-      
       // Log detalhado da estrutura dos anexos
       if (Array.isArray(response)) {
         response.forEach((anexo, index) => {
-          console.log(`📋 Anexo ${index + 1}:`, {
-            id: anexo.id,
-            filename: anexo.filename,
-            original_name: anexo.original_name,
-            name: anexo.name,
-            size: anexo.size,
-            mime_type: anexo.mime_type,
-            type: anexo.type,
-            created_at: anexo.created_at,
-            createdAt: anexo.createdAt
-          });
         });
       }
       
@@ -2173,8 +2040,6 @@ export class PontosAvulsosService {
     attachmentId: string
   ): Promise<string> {
     try {
-      console.log('📥 Obtendo URL de download do anexo:', { attachmentId });
-      
       const url = `${environment.backend_url_base}/user-action/download-attachment/${attachmentId}`;
       
       // Usar HttpClient diretamente para obter a resposta JSON
@@ -2188,8 +2053,6 @@ export class PontosAvulsosService {
       if (!downloadUrl) {
         throw new Error('URL de download não encontrada na resposta');
       }
-      
-      console.log('✅ URL de download obtida:', downloadUrl);
       return downloadUrl;
     } catch (error) {
       console.error('Erro ao obter URL de download do anexo:', error);
@@ -2201,8 +2064,6 @@ export class PontosAvulsosService {
    * Método de teste para simular os dados reais fornecidos
    */
   public testarComDadosReais() {
-    console.log('🧪 TESTE COM DADOS REAIS - Iniciando...');
-    
     // Simular os dados exatos fornecidos pelo usuário
     const dadosReais = [
       {
@@ -2256,51 +2117,20 @@ export class PontosAvulsosService {
         "approved_by": "cesar.domingos@cidadania4u.com.br"
       }
     ];
-    
-    console.log('📊 Dados reais fornecidos:', dadosReais);
-    
     // Testar filtro para "aguardando aprovação"
     const aguardandoAprovacao = dadosReais.filter(atividade => {
       const isNotApproved = atividade.approved === false || atividade.approved === null;
-      console.log(`🔍 TESTE - Atividade ${atividade.id}:`, {
-        approved: atividade.approved,
-        approved_type: typeof atividade.approved,
-        isNotApproved: isNotApproved,
-        action_title: atividade.action_title
-      });
       return isNotApproved;
     });
-    
-    console.log('✅ TESTE - Atividades que deveriam estar em "aguardando aprovação":', aguardandoAprovacao.length);
     aguardandoAprovacao.forEach((atividade, index) => {
-      console.log(`✅ TESTE - Incluída ${index + 1}:`, {
-        id: atividade.id,
-        approved: atividade.approved,
-        action_title: atividade.action_title
-      });
     });
     
     // Testar filtro para "aprovados"
     const aprovados = dadosReais.filter(atividade => {
       const isApproved = this.isAtividadeAprovada(atividade);
-      console.log(`🔍 TESTE - Atividade ${atividade.id}:`, {
-        approved: atividade.approved,
-        approved_type: typeof atividade.approved,
-        isApproved: isApproved,
-        action_title: atividade.action_title
-      });
       return isApproved;
     });
-    
-    console.log('✅ TESTE - Atividades que deveriam estar em "aprovados":', aprovados.length);
     aprovados.forEach((atividade, index) => {
-      console.log(`✅ TESTE - Incluída ${index + 1}:`, {
-        id: atividade.id,
-        approved: atividade.approved,
-        action_title: atividade.action_title
-      });
     });
-    
-    console.log('🏁 TESTE COM DADOS REAIS - Finalizado');
   }
 } 

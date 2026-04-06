@@ -60,7 +60,6 @@ export class AuthInterceptor implements HttpInterceptor {
             // Don't modify requests that already have Authorization header (e.g., Basic Auth for database)
             // Also explicitly skip database endpoints - they use Basic Auth set by the service
             if (request.headers.has('Authorization') || isDatabaseEndpoint) {
-                console.log('🔐 Interceptor: Passing through request with existing auth or database endpoint:', requestUrl);
                 return next.handle(request);
             }
             
@@ -129,7 +128,6 @@ export class AuthInterceptor implements HttpInterceptor {
             // Funifier tokens use GZIP compression and can't be decoded with jwtDecode
             // For Funifier tokens, we rely on the expires_in from the login response
             // which is stored in sessionStorage. Check if we have a valid session.
-            console.log('Token is not a standard JWT (likely Funifier compressed token)');
             return false; // Assume not expired, let the API handle it
         }
     }

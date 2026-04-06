@@ -98,7 +98,6 @@ export class ModalPendingQuestsComponent implements OnChanges, OnInit {
   }
 
   openDetailLink(url: string | undefined) {
-    console.log('🔗 openDetailLink chamado com URL:', url);
     if (url) {
       window.open(url, "_blank");
     }
@@ -114,16 +113,12 @@ export class ModalPendingQuestsComponent implements OnChanges, OnInit {
   handleLinkClick(event: Event, item: any, isUserAction: boolean) {
     event.preventDefault();
     event.stopPropagation();
-    
-    console.log('🖱️ handleLinkClick chamado:', { event, item, isUserAction, aliases: this.aliases });
-    
     if (!this.aliases) {
       console.error('❌ Aliases não carregados ainda!');
       return;
     }
     
     if (!this.getRedirectUrl(isUserAction, item)) {
-      console.log('❌ URL não configurada para este item');
       return;
     }
 
@@ -135,23 +130,19 @@ export class ModalPendingQuestsComponent implements OnChanges, OnInit {
       // Extrai apenas o conteúdo após o underline se houver
       idToUse = this.extractIdAfterUnderline(integrationId);
       url = this.userActionRedirectUrl(idToUse);
-      console.log('🔗 URL de ação do usuário gerada:', url);
     } else {
       // Extrai apenas o conteúdo após o underline se houver
       idToUse = this.extractIdAfterUnderline(item.id);
       url = this.deliveryRedirectUrl(idToUse);
-      console.log('🔗 URL de entrega gerada:', url);
     }
 
     if (url && url.trim().length > 0) {
-      console.log('✅ Abrindo URL:', url);
       const newWindow = window.open(url, "_blank");
       if (!newWindow) {
         console.error('❌ Pop-up bloqueada pelo navegador!');
         alert('Pop-up bloqueada. Por favor, permita pop-ups para este site.');
       }
     } else {
-      console.log('⚠️ URL vazia ou inválida:', url);
     }
   }
 
@@ -176,12 +167,9 @@ export class ModalPendingQuestsComponent implements OnChanges, OnInit {
       // Usa regex para capturar apenas o conteúdo após o último underline
       const match = idString.match(/_([^_]+)$/);
       if (match && match[1]) {
-        console.log(`🔍 ID extraído: "${idString}" -> "${match[1]}"`);
         return match[1];
       }
     }
-    
-    console.log(`🔍 ID original mantido: "${idString}"`);
     return id;
   }
 
@@ -228,8 +216,6 @@ export class ModalPendingQuestsComponent implements OnChanges, OnInit {
 
   async loadAliases() {
     this.aliases = await this.aliasService.getAliases();
-    console.log('📋 ModalPendingQuests - Aliases carregados:', this.aliases);
-    console.log('📋 ModalPendingQuests - teamRedirectUrl:', this.aliases?.teamRedirectUrl);
   }
 
   /**
@@ -241,9 +227,6 @@ export class ModalPendingQuestsComponent implements OnChanges, OnInit {
   userActionRedirectUrl(integrationId: string | number): string {
     const teamId = this.getFormattedTeamId();
     const baseUrl = teamId ? this.aliases?.teamRedirectUrl?.[teamId]?.userActionRedirectUrl : '';
-    
-    console.log('🔗 userActionRedirectUrl:', { teamId, baseUrl, integrationId, aliases: this.aliases });
-    
     if (!baseUrl || !integrationId) {
       return '';
     }
@@ -260,9 +243,6 @@ export class ModalPendingQuestsComponent implements OnChanges, OnInit {
   deliveryRedirectUrl(deliveryId: string | number): string {
     const teamId = this.getFormattedTeamId();
     const baseUrl = teamId ? this.aliases?.teamRedirectUrl?.[teamId]?.deliveryRedirectUrl : '';
-    
-    console.log('🔗 deliveryRedirectUrl:', { teamId, baseUrl, deliveryId, aliases: this.aliases });
-    
     if (!baseUrl || !deliveryId) {
       return '';
     }
@@ -335,21 +315,16 @@ export class ModalPendingQuestsComponent implements OnChanges, OnInit {
    */
   getRedirectUrl(isUserAction: boolean, item: any): boolean {
     if (!this.aliases) {
-      console.log('⚠️ Aliases ainda não foram carregados');
       return false;
     }
 
     const teamId = this.getFormattedTeamId();
-    console.log('🔍 getRedirectUrl:', { teamId, isUserAction, item, aliases: this.aliases });
-
     if (isUserAction) {
       const integrationId = item.integration_id || item.delivery_id;
       const hasUrl = !!(teamId && this.aliases?.teamRedirectUrl?.[teamId!]?.userActionRedirectUrl && integrationId);
-      console.log('🔍 userAction check:', { teamId, userActionUrl: teamId ? this.aliases?.teamRedirectUrl?.[teamId!]?.userActionRedirectUrl : undefined, integrationId, hasUrl });
       return hasUrl;
     } else {
       const hasUrl = !!(teamId && this.aliases?.teamRedirectUrl?.[teamId!]?.deliveryRedirectUrl && item.id);
-      console.log('🔍 delivery check:', { teamId, deliveryUrl: teamId ? this.aliases?.teamRedirectUrl?.[teamId!]?.deliveryRedirectUrl : undefined, itemId: item.id, hasUrl });
       return hasUrl;
     }
   }

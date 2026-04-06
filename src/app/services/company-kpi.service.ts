@@ -96,16 +96,11 @@ export class CompanyKpiService {
     const aggregateBody = [
       { $match: { _id: { $in: stringIds } } }
     ];
-
-    console.log('📊 Fetching KPI data for CNPJ IDs:', cnpjIds);
-
     const request$ = this.funifierApi.post<CnpjKpiData[]>(
       '/v3/database/cnpj__c/aggregate?strict=true',
       aggregateBody
     ).pipe(
       map(response => {
-        console.log('📊 KPI data response:', response);
-        
         // Convert array to Map for easy lookup
         const kpiMap = new Map<string, CnpjKpiData>();
         if (Array.isArray(response)) {
@@ -160,9 +155,6 @@ export class CompanyKpiService {
         .map(c => c.cnpjId)
         .filter((id): id is string => id !== null)
     )];
-
-    console.log('📊 Extracted CNPJ IDs:', validCnpjIds);
-
     if (validCnpjIds.length === 0) {
       // No valid IDs, return companies without KPI data
       return of(companiesWithIds.map(c => ({

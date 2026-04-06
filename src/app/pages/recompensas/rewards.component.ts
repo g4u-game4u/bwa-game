@@ -91,7 +91,6 @@ export class RewardsComponent implements AfterViewInit, OnInit {
 
   private listAchievements() {
     this.recompensasService.listAchievements().subscribe((response) => {
-      console.log('Achievements:', response);
     });
   }
 
@@ -177,7 +176,6 @@ export class RewardsComponent implements AfterViewInit, OnInit {
   }
 
   onMenuItemHover(label: string) {
-    console.log('Mouse entered on:', label);
   }
 
   // Método para verificar se uma imagem é o placeholder
@@ -204,7 +202,6 @@ export class RewardsComponent implements AfterViewInit, OnInit {
     this.recompensasService.listCatalogs().subscribe({
       next: (catalogResponse: CatalogResponse | Catalog[]) => {
         const catalogs = Array.isArray(catalogResponse) ? catalogResponse : (catalogResponse?.data || []);
-        console.log('CatalogResponse:', catalogs);
         const catalogMap = new Map<string, string>();
         catalogs.forEach(cat => {
           catalogMap.set(String(cat._id).trim(), cat.catalog);
@@ -229,14 +226,10 @@ export class RewardsComponent implements AfterViewInit, OnInit {
             if (this.categories.length === 0 && items.length > 0) {
               this.categories = ['Outros'];
             }
-            console.log('Categorias finais:', this.categories);
             this.processItems(items, catalogMap);
-            console.log('Rewards disponíveis para mapeamento:', this.rewards);
             // Após processar os itens, buscar achievements e mapear
             this.recompensasService.listAchievements().subscribe((achievements: Achievement[]) => {
-              console.log('Achievements recebidos da API:', achievements);
               this.playerRedeemLogs = this.mapAchievementsToCards(achievements, this.rewards);
-              console.log('Logs de resgate mapeados para cards:', this.playerRedeemLogs);
               this.isLoadingRewards = false;
             });
           },

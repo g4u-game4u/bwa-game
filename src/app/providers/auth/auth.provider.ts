@@ -14,13 +14,8 @@ export class AuthProvider {
   }
 
   async login(email: string, password: string) {
-    console.log('🔐 AuthProvider.login called');
     // baseUrl already includes /v3/, so just use auth/token
     const authUrl = `${this.funifierBaseUrl}auth/token`;
-    console.log('🔐 Funifier URL:', authUrl);
-    console.log('🔐 API Key:', this.funifierApiKey);
-    console.log('🔐 Username:', email);
-    
     // Use Funifier authentication
     // Trim username to prevent spaces from breaking the Funifier profile
     const authBody = {
@@ -29,9 +24,6 @@ export class AuthProvider {
       username: email.trim(),
       password: password
     };
-
-    console.log('🔐 Making POST request to Funifier...');
-    
     // Don't add custom headers - Funifier blocks them via CORS
     // The interceptor will recognize Funifier URLs by domain
     return firstValueFrom(

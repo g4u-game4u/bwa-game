@@ -55,7 +55,6 @@ export class C4uCollaboratorSelectorComponent implements OnChanges, AfterViewChe
       // Só atualizar se o valor estiver diferente
       if (select.value !== expectedValue) {
         select.value = expectedValue;
-        console.log('🔄 Forced select update to:', expectedValue);
       }
       
       this.needsUpdate = false;

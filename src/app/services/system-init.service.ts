@@ -151,8 +151,6 @@ export class SystemInitService {
       allReady: false
     };
     this.initPromise = null;
-    
-    console.log('🧹 Cache de todos os serviços limpo');
   }
 
   /**

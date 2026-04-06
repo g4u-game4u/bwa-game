@@ -162,8 +162,6 @@ export class SystemParamsService {
    */
   private async fetchFromApi(): Promise<SystemParams> {
     try {
-      console.log('⚙️ Usando parâmetros padrão do sistema (Funifier mode)');
-      
       // Valores padrão para manter a aplicação funcionando
       const params: SystemParams = {
         max_level: { value: 100, inherited: false },

@@ -36,8 +36,8 @@ export class PerformanceMonitorService {
         componentRenderTime: renderTime
       });
       
-      if (renderTime > 16) { // More than one frame (60fps)
-        console.warn(`${componentName} render time: ${renderTime.toFixed(2)}ms (exceeds 16ms threshold)`);
+      if (renderTime > 16) {
+        // Performance threshold exceeded - silent in production
       }
     };
   }
@@ -92,13 +92,9 @@ export class PerformanceMonitorService {
    */
   logPerformanceReport(): void {
     console.group('Performance Report');
-    console.log('Total Change Detection Cycles:', this.changeDetectionCount);
     console.log('Memory Usage:', `${this.measureMemoryUsage().toFixed(2)} MB`);
     
     this.metrics.forEach((metrics, componentName) => {
-      console.log(`\n${componentName}:`);
-      console.log(`  Render Time: ${metrics.componentRenderTime.toFixed(2)}ms`);
-      console.log(`  Change Detection Cycles: ${metrics.changeDetectionCycles}`);
     });
     
     console.groupEnd();

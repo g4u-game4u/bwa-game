@@ -49,8 +49,6 @@ export class ModalCarteiraComponent implements OnInit, OnDestroy {
     this.actionLogService.getPlayerCnpjListWithCount(this.playerId, this.month)
       .pipe(
         switchMap(clientes => {
-          console.log('📊 Modal carteira clientes loaded, enriching with KPI data:', clientes);
-          
           // Extract all CNPJ strings for lookup
           const cnpjList = clientes.map(c => c.cnpj);
           
@@ -62,18 +60,14 @@ export class ModalCarteiraComponent implements OnInit, OnDestroy {
         }),
         map(({ enrichedClientes, cnpjNames }) => {
           // Store the CNPJ name map for display
-          console.log('📊 Modal: Received CNPJ name map with', cnpjNames.size, 'entries');
           console.log('📊 Modal: CNPJ name map entries:', Array.from(cnpjNames.entries()));
           this.cnpjNameMap = cnpjNames;
-          console.log('📊 Modal: Stored cnpjNameMap:', this.cnpjNameMap);
           return enrichedClientes;
         }),
         takeUntil(this.destroy$)
       )
       .subscribe({
         next: (enrichedClientes) => {
-          console.log('📊 Modal carteira clientes enriched with KPI data:', enrichedClientes);
-          console.log('📊 CNPJ name map:', this.cnpjNameMap);
           this.clientes = enrichedClientes;
           this.isLoading = false;
           this.cdr.markForCheck();
@@ -105,7 +99,6 @@ export class ModalCarteiraComponent implements OnInit, OnDestroy {
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (actions) => {
-          console.log('📊 Actions for CNPJ loaded:', actions);
           this.selectedClienteActions = actions;
           this.isLoadingActions = false;
           this.cdr.markForCheck();
@@ -149,7 +142,6 @@ export class ModalCarteiraComponent implements OnInit, OnDestroy {
     }
     // Use the enriched name from the map, fallback to original
     const displayName = this.cnpjNameMap.get(cnpj);
-    console.log('📊 getCompanyDisplayName called:', { cnpj, displayName, hasInMap: this.cnpjNameMap.has(cnpj), mapSize: this.cnpjNameMap.size });
     return displayName || cnpj;
   }
 }

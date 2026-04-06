@@ -352,9 +352,6 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
     const today = new Date();
     const isCurrentMonth = year === today.getFullYear() && month === today.getMonth();
     const currentDay = isCurrentMonth ? today.getDate() : daysInMonth;
-
-    console.log('📊 Loading chart data for month:', year, month + 1, 'Days in month:', daysInMonth, 'Current day:', currentDay);
-
     // Initialize all days with 0 - create new array
     const dailyCounts: number[] = Array.from({ length: daysInMonth }, () => 0);
 
@@ -386,10 +383,6 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
         next: (results: ActionLogEntry[][]) => {
           // Aggregate all action log entries from all players
           const allActionLogEntries = results.flat();
-          
-          console.log('📊 Action log entries received:', allActionLogEntries);
-          console.log('📊 Total entries:', allActionLogEntries.length);
-          
           // Process entries to count activities by day
           const newDailyCounts = [...dailyCounts];
           
@@ -446,8 +439,6 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
               }
             }
           });
-
-          console.log('📊 Daily counts array:', newDailyCounts);
           console.log('📊 Total activities:', newDailyCounts.reduce((sum, count) => sum + count, 0));
 
           // Generate labels (day numbers) - create new array reference
@@ -647,8 +638,6 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
           const allActivities = results.flat();
           // Sort by created date (newest first)
           allActivities.sort((a, b) => b.created - a.created);
-          
-          console.log('📊 Activities loaded for process:', deliveryId, allActivities);
           this.processActivities.set(deliveryId, allActivities);
           this.loadingProcessActivities.delete(deliveryId);
           this.cdr.markForCheck();
@@ -688,7 +677,6 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
         this.cnpjLookupService.enrichCnpjList(validCnpjs)
       );
       this.cnpjNameMap = cnpjNames;
-      console.log('📊 Modal progress list: CNPJ name map loaded with', this.cnpjNameMap.size, 'entries');
     } catch (error) {
       console.error('Error enriching CNPJ names:', error);
     }

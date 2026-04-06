@@ -148,8 +148,6 @@ export class ModalGerenciarPontosAvulsosRefatoradoComponent implements OnInit {
         this.jogadores = todosJogadores.filter((jogador: any) => {
           return jogador.deactivated_at === null || jogador.deactivated_at === undefined;
         });
-        
-        console.log('Usuários ativos do time carregados:', this.jogadores);
       } else {
         if (!this.userId || !this.userName) {
           console.error('userId ou userName não fornecidos para contexto de colaborador');
@@ -161,7 +159,6 @@ export class ModalGerenciarPontosAvulsosRefatoradoComponent implements OnInit {
           name: this.userName,
           full_name: this.userName
         }];
-        console.log('Colaborador carregado:', this.jogadores);
       }
     } catch (error) {
       console.error('Erro ao carregar jogadores:', error);
@@ -171,7 +168,6 @@ export class ModalGerenciarPontosAvulsosRefatoradoComponent implements OnInit {
   }
 
   onTypeChange(typeIndex: number) {
-    console.log('🔄 Alterando tipo para:', typeIndex);
     const currentState = this.modalStateService.currentState;
 
     // Fechar detalhes se estiverem abertos
@@ -194,7 +190,6 @@ export class ModalGerenciarPontosAvulsosRefatoradoComponent implements OnInit {
   }
 
   onAbaChange(aba: AbaType) {
-    console.log('🔄 Aba mudou para:', aba);
     const currentState = this.modalStateService.currentState;
 
     // Fechar detalhes se estiverem abertos
@@ -214,7 +209,6 @@ export class ModalGerenciarPontosAvulsosRefatoradoComponent implements OnInit {
     if (aba !== 'atribuir') {
       this.carregarDadosAbaAtual();
     } else {
-      console.log('📝 Aba "Atribuir" selecionada - não precisa carregar dados');
       // The form component itself will handle its reset logic
     }
   }
@@ -229,12 +223,8 @@ export class ModalGerenciarPontosAvulsosRefatoradoComponent implements OnInit {
         this.atividades,
         this.jogadores
       );
-
-      console.log('✅ Atividade atribuída com sucesso!');
-
       const currentState = this.modalStateService.currentState;
       if (currentState.retornarParaDelivery && currentState.deliveryParaRetornar) {
-        console.log('🔄 Retornando para detalhe da delivery após atribuição');
         const deliveryId = currentState.deliveryParaRetornar.id;
 
         this.modalStateService.limparRetornoDelivery(); // Limpar estado de retorno
@@ -306,8 +296,6 @@ export class ModalGerenciarPontosAvulsosRefatoradoComponent implements OnInit {
 
     try {
       await this.modalActionsService.finalizarAtividade(state.atividadeSelecionada, this.currentUserEmail);
-      console.log('✅ Atividade finalizada com sucesso!');
-      
       // Recarregar dados da aba atual
       await this.carregarDadosAbaAtual();
       
@@ -327,8 +315,6 @@ export class ModalGerenciarPontosAvulsosRefatoradoComponent implements OnInit {
 
     try {
       await this.modalActionsService.aprovarAtividade(state.atividadeSelecionada, this.currentUserEmail);
-      console.log('✅ Atividade aprovada com sucesso!');
-      
       // Recarregar dados da aba atual
       await this.carregarDadosAbaAtual();
       
@@ -348,8 +334,6 @@ export class ModalGerenciarPontosAvulsosRefatoradoComponent implements OnInit {
 
     try {
       await this.modalActionsService.reprovarAtividade(state.atividadeSelecionada, this.currentUserEmail);
-      console.log('✅ Atividade reprovada com sucesso!');
-      
       // Recarregar dados da aba atual
       await this.carregarDadosAbaAtual();
       
@@ -369,8 +353,6 @@ export class ModalGerenciarPontosAvulsosRefatoradoComponent implements OnInit {
 
     try {
       await this.modalActionsService.cancelarAtividade(state.atividadeSelecionada, this.currentUserEmail);
-      console.log('✅ Atividade cancelada com sucesso!');
-      
       // Recarregar dados da aba atual
       await this.carregarDadosAbaAtual();
       
@@ -390,8 +372,6 @@ export class ModalGerenciarPontosAvulsosRefatoradoComponent implements OnInit {
 
     try {
       await this.modalActionsService.bloquearAtividade(state.atividadeSelecionada, this.currentUserEmail);
-      console.log('✅ Atividade bloqueada com sucesso!');
-      
       // Recarregar dados da aba atual
       await this.carregarDadosAbaAtual();
       
@@ -406,7 +386,6 @@ export class ModalGerenciarPontosAvulsosRefatoradoComponent implements OnInit {
    * Método chamado quando o executor da atividade é atualizado
    */
   async onExecutorAtualizado() {
-    console.log('🔄 Executor atualizado, recarregando dados...');
     // Recarregar os dados da aba atual para refletir a mudança
     await this.carregarDadosAbaAtual();
   }
@@ -425,8 +404,6 @@ export class ModalGerenciarPontosAvulsosRefatoradoComponent implements OnInit {
 
     try {
       await this.modalActionsService.cancelarDelivery(state.deliverySelecionada);
-      console.log('✅ Delivery cancelada com sucesso!');
-      
       // Recarregar dados da aba atual
       await this.carregarDadosAbaAtual();
       
@@ -446,8 +423,6 @@ export class ModalGerenciarPontosAvulsosRefatoradoComponent implements OnInit {
 
     try {
       await this.modalActionsService.completarDelivery(state.deliverySelecionada);
-      console.log('✅ Delivery completada com sucesso!');
-      
       // Recarregar dados da aba atual
       await this.carregarDadosAbaAtual();
       
@@ -467,8 +442,6 @@ export class ModalGerenciarPontosAvulsosRefatoradoComponent implements OnInit {
 
     try {
       await this.modalActionsService.desfazerDelivery(state.deliverySelecionada);
-      console.log('✅ Delivery desfeita com sucesso!');
-      
       // Recarregar dados da aba atual
       await this.carregarDadosAbaAtual();
       
@@ -488,8 +461,6 @@ export class ModalGerenciarPontosAvulsosRefatoradoComponent implements OnInit {
 
     try {
       await this.modalActionsService.restaurarDelivery(state.deliverySelecionada);
-      console.log('✅ Delivery restaurada com sucesso!');
-      
       // Recarregar dados da aba atual
       await this.carregarDadosAbaAtual();
       
@@ -534,8 +505,6 @@ export class ModalGerenciarPontosAvulsosRefatoradoComponent implements OnInit {
 
   private async carregarDadosAbaAtual() {
     const currentAba = this.modalStateService.currentState.currentAba;
-    console.log(`📊 Carregando dados para a aba: ${currentAba}`);
-
     switch (currentAba) {
       case 'pendentes':
         await this.carregarAtividadesPendentes();
@@ -569,7 +538,6 @@ export class ModalGerenciarPontosAvulsosRefatoradoComponent implements OnInit {
 
   private async recarregarDadosDelivery(deliveryId: string): Promise<void> {
     try {
-      console.log('🔄 Recarregando dados da delivery:', deliveryId);
       await this.carregarDadosAbaAtual(); // Recarregar a lista de processos baseada na aba atual
 
       let deliveryAtualizada = null;
@@ -586,7 +554,6 @@ export class ModalGerenciarPontosAvulsosRefatoradoComponent implements OnInit {
       }
 
       if (deliveryAtualizada) {
-        console.log('✅ Delivery atualizada encontrada:', deliveryAtualizada);
         this.modalStateService.updateState({ deliveryParaRetornar: deliveryAtualizada });
       } else {
         console.warn('⚠️ Delivery não encontrada na lista atualizada, usando dados originais');

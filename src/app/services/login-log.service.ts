@@ -35,7 +35,6 @@ export class LoginLogService {
 
     // Only track in production or if analytics is explicitly enabled
     if (!environment.production && !environment.enableAnalytics) {
-      console.log('📝 Login event tracking skipped (development mode):', email);
       return;
     }
 
@@ -69,8 +68,6 @@ export class LoginLogService {
         name: 'login',
         data: eventData
       });
-      
-      console.log('✅ Login event tracked in Vercel Analytics:', email);
     } catch (error) {
       // Silently fail - don't block login if tracking fails
       console.warn('⚠️ Error tracking login event (non-critical):', error);

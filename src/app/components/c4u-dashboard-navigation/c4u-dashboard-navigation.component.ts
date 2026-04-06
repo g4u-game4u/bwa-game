@@ -71,10 +71,7 @@ export class C4uDashboardNavigationComponent implements OnInit {
     
     // Log profile for debugging
     if (usuario && usuario.teams && Array.isArray(usuario.teams)) {
-      console.log('👤 User logged in - Profile:', profile);
-      console.log('👤 User logged in - Team IDs:', usuario.teams);
     } else {
-      console.log('👤 User logged in - No teams found, Profile:', profile);
     }
     
     // Check if user can access team management (not JOGADOR)

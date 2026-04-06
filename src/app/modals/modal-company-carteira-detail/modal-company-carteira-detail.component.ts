@@ -59,7 +59,6 @@ export class ModalCompanyCarteiraDetailComponent implements OnInit, OnDestroy {
           .pipe(takeUntil(this.destroy$))
       );
       this.cnpjNameMap = cnpjNames;
-      console.log('📊 Modal detail: CNPJ name map loaded with', this.cnpjNameMap.size, 'entries');
       this.cdr.markForCheck();
     } catch (error) {
       console.error('Error enriching company name:', error);
@@ -123,7 +122,6 @@ export class ModalCompanyCarteiraDetailComponent implements OnInit, OnDestroy {
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (tasks) => {
-          console.log('📊 Tasks loaded for company:', tasks);
           this.tasks = tasks;
           this.filterTasks();
           this.isLoadingTasks = false;
@@ -145,7 +143,6 @@ export class ModalCompanyCarteiraDetailComponent implements OnInit, OnDestroy {
     }
     // Use the enriched name from the map, fallback to original
     const displayName = this.cnpjNameMap.get(cnpj);
-    console.log('📊 Modal detail getCompanyDisplayName called:', { cnpj, displayName, hasInMap: this.cnpjNameMap.has(cnpj), mapSize: this.cnpjNameMap.size });
     return displayName || cnpj;
   }
 

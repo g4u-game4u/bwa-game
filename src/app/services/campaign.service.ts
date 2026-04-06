@@ -55,8 +55,6 @@ export class CampaignService {
    */
   private async fetchCurrentCampaign(): Promise<Campaign> {
     try {
-      console.log('⚙️ Usando campanha padrão (Funifier mode)');
-      
       // Retorna campanha padrão para o ano atual
       const defaultCampaign = this.getDefaultCampaign();
       return defaultCampaign;
@@ -87,8 +85,6 @@ export class CampaignService {
       finishes_at: this.formatToDateString(endDate),
       isDefault: true // Indica que é uma campanha padrão de fallback
     };
-
-    console.log('📅 Campanha padrão criada:', defaultCampaign);
     return defaultCampaign;
   }
 
