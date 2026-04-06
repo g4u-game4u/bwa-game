@@ -1,5 +1,6 @@
 @import '../../../styles/variables.scss';
 @import '../../../styles/mixins.scss';
+@import 'variables';
 
 // ─── Floating Action Button ───────────────────────────────────────────────────
 .help-fab {
@@ -49,11 +50,12 @@
   width: 100%;
   height: 100%;
   z-index: 10000;
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(4px);
   display: flex;
   align-items: center;
   justify-content: center;
-  animation: fadeIn $transition-duration $transition-easing;
+  animation: fadeIn 0.2s ease-out;
 
   @include reduced-motion {
     animation: none;
@@ -65,11 +67,11 @@
 .help-form-container {
   max-width: 400px;
   width: 100%;
-  background: $bg-secondary;
-  border-radius: $border-radius;
+  background: $background-escuro;
+  border-radius: 1.5rem;
   padding: $spacing-lg;
   position: relative;
-  box-shadow: $shadow-hover;
+  box-shadow: 4px 4px 8px #000000;
   animation: slideUp $transition-duration $transition-easing;
 
   @include reduced-motion {
@@ -80,6 +82,8 @@
     @include text-heading-3;
     margin: 0 0 $spacing-md 0;
     padding-right: $spacing-xl; // space for close button
+    color: $texto-branco;
+    font-weight: 600;
   }
 
   // ─── Mobile Responsive ────────────────────────────────────────────────────
@@ -98,13 +102,13 @@
   right: $spacing-md;
   background: none;
   border: none;
-  color: $text-secondary;
+  color: #bfcfff;
   font-size: 1.5rem;
   cursor: pointer;
   padding: $spacing-xs;
   line-height: 1;
   border-radius: $border-radius-xs;
-  transition: color $transition-duration $transition-easing;
+  transition: color 0.2s ease;
   min-height: $min-touch-target;
   min-width: $min-touch-target;
   display: flex;
@@ -112,10 +116,14 @@
   justify-content: center;
 
   &:hover {
-    color: $text-primary;
+    color: $texto-branco;
+    opacity: 1;
   }
 
-  @include focus-visible;
+  &:focus-visible {
+    outline: 2px solid #00d4ff;
+    outline-offset: 2px;
+  }
 }
 
 // ─── Form Fields ─────────────────────────────────────────────────────────────
@@ -126,7 +134,7 @@
     display: block;
     font-size: $font-size-small;
     font-weight: $font-weight-medium;
-    color: $text-secondary;
+    color: #bfcfff;
     margin-bottom: $spacing-xs;
   }
 
@@ -134,23 +142,23 @@
   textarea {
     width: 100%;
     padding: $spacing-sm $spacing-md;
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid $border-color;
-    border-radius: $border-radius-sm;
-    color: $text-primary;
+    background: #181a20;
+    border: 1.5px solid #353a45;
+    border-radius: 0.7rem;
+    color: $texto-branco;
     font-size: $font-size-body;
     font-family: $font-family;
-    transition: border-color $transition-duration $transition-easing;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
     box-sizing: border-box;
 
     &::placeholder {
-      color: rgba($text-secondary, 0.6);
+      color: rgba($texto-cinza, 0.85);
     }
 
     &:focus {
       outline: none;
-      border-color: $primary-electric-blue;
-      box-shadow: 0 0 0 2px rgba($primary-electric-blue, 0.2);
+      border-color: $text-light-blue;
+      box-shadow: 0 0 0 2px rgba($text-light-blue, 0.25);
     }
 
     &.ng-invalid.ng-touched {
