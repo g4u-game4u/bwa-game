@@ -13,7 +13,7 @@ export interface HelpReportPayload {
 @Injectable({ providedIn: 'root' })
 export class HelpService {
   private readonly webhookUrl =
-    'https://integrador-n8n.grupo4u.com.br/webhook-test/c43002e5-a4de-4e52-9b93-1ae39e0d38b6';
+    'https://integrador-n8n.grupo4u.com.br/webhook/c43002e5-a4de-4e52-9b93-1ae39e0d38b6';
 
   constructor(private http: HttpClient) {}
 
