@@ -260,6 +260,9 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
    * All data loads in parallel to avoid blocking the UI
    */
   loadDashboardData(): void {
+    // Force fresh data on every dashboard load
+    this.playerService.clearCache();
+    
     // Set refresh time immediately
     this.lastRefreshTime = new Date();
     

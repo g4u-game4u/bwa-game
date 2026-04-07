@@ -213,6 +213,9 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
   ) {}
 
   ngOnInit(): void {
+    // Force fresh data on every dashboard load
+    this.playerService.clearCache();
+    
     this.initializeDashboard();
   }
 

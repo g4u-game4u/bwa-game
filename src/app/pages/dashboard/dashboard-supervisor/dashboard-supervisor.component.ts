@@ -119,6 +119,9 @@ export class DashboardSupervisorComponent implements OnInit, OnDestroy {
   ) {}
 
   ngOnInit(): void {
+    // Force fresh data on every dashboard load
+    this.playerService.clearCache();
+    
     this.loadSupervisorInfoCard();
     this.loadTeamPlayers();
     this.loadCarteiraSupervisor();
