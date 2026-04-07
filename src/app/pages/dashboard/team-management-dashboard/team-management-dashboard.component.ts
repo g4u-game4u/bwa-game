@@ -12,6 +12,7 @@ import { GraphDataProcessorService } from '@services/graph-data-processor.servic
 import { SeasonDatesService } from '@services/season-dates.service';
 import { ToastService } from '@services/toast.service';
 import { SessaoProvider } from '@providers/sessao/sessao.provider';
+import { CacheManagerService } from '@services/cache-manager.service';
 import { FunifierApiService } from '@services/funifier-api.service';
 import { PlayerService } from '@services/player.service';
 import { ActionLogService } from '@services/action-log.service';
@@ -201,6 +202,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
     private seasonDatesService: SeasonDatesService,
     private toastService: ToastService,
     private sessaoProvider: SessaoProvider,
+    private cacheManagerService: CacheManagerService,
     private funifierApi: FunifierApiService,
     private playerService: PlayerService,
     private actionLogService: ActionLogService,
@@ -213,6 +215,9 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
   ) {}
 
   ngOnInit(): void {
+    // Force fresh data on every dashboard load
+    this.cacheManagerService.clearAllCaches();
+    
     this.initializeDashboard();
   }
 

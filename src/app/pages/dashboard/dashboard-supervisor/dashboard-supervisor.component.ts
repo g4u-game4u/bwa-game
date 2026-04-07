@@ -12,6 +12,7 @@ import { ToastService } from '@services/toast.service';
 import { CnpjLookupService } from '@services/cnpj-lookup.service';
 import { CompanyKpiService, CompanyDisplay } from '@services/company-kpi.service';
 import { SessaoProvider } from '@providers/sessao/sessao.provider';
+import { CacheManagerService } from '@services/cache-manager.service';
 import { Company, KPIData } from '@model/gamification-dashboard.model';
 
 /** View mode toggle for the main content area */
@@ -114,11 +115,15 @@ export class DashboardSupervisorComponent implements OnInit, OnDestroy {
     private cnpjLookupService: CnpjLookupService,
     private companyKpiService: CompanyKpiService,
     private sessaoProvider: SessaoProvider,
+    private cacheManagerService: CacheManagerService,
     private router: Router,
     private cdr: ChangeDetectorRef
   ) {}
 
   ngOnInit(): void {
+    // Force fresh data on every dashboard load
+    this.cacheManagerService.clearAllCaches();
+    
     this.loadSupervisorInfoCard();
     this.loadTeamPlayers();
     this.loadCarteiraSupervisor();

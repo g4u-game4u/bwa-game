@@ -13,6 +13,7 @@ import { ActionLogService } from '@services/action-log.service';
 import { CompanyKpiService } from '@services/company-kpi.service';
 import { CnpjLookupService } from '@services/cnpj-lookup.service';
 import { SessaoProvider } from '@providers/sessao/sessao.provider';
+import { CacheManagerService } from '@services/cache-manager.service';
 import { 
   PlayerStatus, 
   PointWallet, 
@@ -138,6 +139,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     private companyKpiService: CompanyKpiService,
     private cnpjLookupService: CnpjLookupService,
     private sessaoProvider: SessaoProvider,
+    private cacheManagerService: CacheManagerService,
     private route: ActivatedRoute,
     private router: Router,
     private ngbModal: NgbModal
@@ -260,6 +262,9 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
    * All data loads in parallel to avoid blocking the UI
    */
   loadDashboardData(): void {
+    // Force fresh data on every dashboard load
+    this.cacheManagerService.clearAllCaches();
+    
     // Set refresh time immediately
     this.lastRefreshTime = new Date();
     
