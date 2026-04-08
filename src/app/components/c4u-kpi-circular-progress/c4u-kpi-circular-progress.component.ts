@@ -15,10 +15,13 @@ export class C4uKpiCircularProgressComponent {
   @Input() unit?: string = '';
   @Input() size: 'small' | 'medium' | 'large' = 'medium';
   @Input() isMissing: boolean = false;
+  /** Só o valor percentual visível (sem rótulo, meta nem status) — ex.: entregas no prazo. */
+  @Input() compactPercentOnly = false;
   
   @HostBinding('class')
   get hostClasses(): string {
-    return `size-${this.size}`;
+    const compact = this.compactPercentOnly ? ' compact-percent-only' : '';
+    return `size-${this.size}${compact}`;
   }
 
   // Color palette for different KPIs (fallback)
@@ -90,7 +93,9 @@ export class C4uKpiCircularProgressComponent {
     
     // For percentage KPIs (like "Entregas no Prazo"), show the raw value with %
     if (this.unit === '%') {
-      return `${Math.round(this.current)}%`;
+      const n = Math.round(this.current * 100) / 100;
+      const text = Number.isInteger(n) ? String(n) : n.toFixed(2).replace(/\.?0+$/, '');
+      return `${text}%`;
     }
     
     // For count-based KPIs (like "Clientes na Carteira"), show the raw count
@@ -199,6 +204,9 @@ export class C4uKpiCircularProgressComponent {
   get ariaLabel(): string {
     if (this.isMissing) {
       return `${this.label}: dado indisponível`;
+    }
+    if (this.compactPercentOnly && this.unit === '%') {
+      return `${this.displayValue} (meta ${this.target}${this.unit})`;
     }
     const unitText = this.unit ? ` ${this.unit}` : '';
     return `${this.label}: ${this.percentage}% da meta (${this.current}${unitText} de ${this.target}${unitText}). ${this.goalStatus}`;

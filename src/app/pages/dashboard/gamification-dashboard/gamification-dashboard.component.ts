@@ -467,6 +467,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     const playerId = this.getPlayerId();
     if (!playerId) {
       this.isLoadingClientes = false;
+      this.syncClientesKpiWithTabs();
       this.cdr.markForCheck();
       return;
     }
@@ -522,12 +523,14 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
           });
           this.carteiraClientes = enrichedClientes;
           this.isLoadingClientes = false;
+          this.syncClientesKpiWithTabs();
           this.cdr.markForCheck();
         },
         error: (err: Error) => {
           console.error('📊 Failed to load clientes:', err);
           this.carteiraClientes = [];
           this.isLoadingClientes = false;
+          this.syncClientesKpiWithTabs();
           this.cdr.markForCheck();
         }
       });
@@ -616,30 +619,74 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
    * once that tab's data has finished loading (avoids overwriting API values while loading).
    */
   private syncClientesKpiWithTabs(): void {
-    const idx = this.playerKPIs.findIndex(k => k.id === 'numero-empresas');
-    if (idx === -1) {
-      return;
-    }
-
-    const loading =
+    const tabLoading =
       this.clientesActiveTab === 'participacao' ? this.isLoadingParticipacao : this.isLoadingClientes;
-    if (loading) {
+    if (!tabLoading) {
+      const idxEmpresas = this.playerKPIs.findIndex(k => k.id === 'numero-empresas');
+      if (idxEmpresas !== -1) {
+        const count =
+          this.clientesActiveTab === 'participacao'
+            ? this.participacaoClientes.length
+            : this.carteiraClientes.length;
+
+        const kpi = this.playerKPIs[idxEmpresas];
+        const superTarget = kpi.superTarget ?? Math.ceil((kpi.target || 100) * 1.5);
+        const updated: KPIData = {
+          ...kpi,
+          current: count,
+          percentage: Math.min((count / superTarget) * 100, 100)
+        };
+        this.playerKPIs = this.playerKPIs.map((k, i) => (i === idxEmpresas ? updated : k));
+      }
+    }
+
+    // Média da carteira: não depende da aba ativa, só do fim do load da carteira.
+    this.syncEntregasPrazoKpiFromCarteira();
+  }
+
+  /**
+   * KPI "entregas-prazo": média da % de entregas no prazo só das empresas da carteira (com dado válido).
+   */
+  private syncEntregasPrazoKpiFromCarteira(): void {
+    const idx = this.playerKPIs.findIndex(k => k.id === 'entregas-prazo');
+    if (idx === -1 || this.isLoadingClientes) {
       return;
     }
 
-    const count =
-      this.clientesActiveTab === 'participacao'
-        ? this.participacaoClientes.length
-        : this.carteiraClientes.length;
+    const base = this.playerKPIs[idx];
+    const values = this.carteiraClientes
+      .map(c => this.getListaEntregaPercent(c))
+      .filter((v): v is number => v !== null && Number.isFinite(v));
 
-    const kpi = this.playerKPIs[idx];
-    const superTarget = kpi.superTarget ?? Math.ceil((kpi.target || 100) * 1.5);
+    if (values.length === 0) {
+      const updated: KPIData = {
+        ...base,
+        current: 0,
+        percentage: 0,
+        color: 'pink',
+        isMissing: true
+      };
+      this.playerKPIs = this.playerKPIs.map((k, i) => (i === idx ? updated : k));
+      if (this.seasonProgress) {
+        this.updateMetasFromKPIs(this.playerKPIs);
+      }
+      return;
+    }
+
+    const avg = values.reduce((a, b) => a + b, 0) / values.length;
+    const target = base.target;
+    const superTarget = base.superTarget ?? 100;
     const updated: KPIData = {
-      ...kpi,
-      current: count,
-      percentage: Math.min((count / superTarget) * 100, 100)
+      ...base,
+      current: Math.round(avg * 100) / 100,
+      isMissing: false,
+      percentage: Math.min(avg, 100),
+      color: this.kpiService.getKPIColorByGoals(avg, target, superTarget)
     };
     this.playerKPIs = this.playerKPIs.map((k, i) => (i === idx ? updated : k));
+    if (this.seasonProgress) {
+      this.updateMetasFromKPIs(this.playerKPIs);
+    }
   }
 
   private loadKPIData(): void {
@@ -994,6 +1041,23 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
    */
   roundValue(value: number): number {
     return Math.round(value);
+  }
+
+  /** Sidebar recolhida: entregas no prazo só como % (média carteira). */
+  kpiSidebarValue(kpi: KPIData): string {
+    if (kpi.id === 'entregas-prazo' && kpi.unit === '%') {
+      const n = Math.round(kpi.current * 100) / 100;
+      const text = Number.isInteger(n) ? String(n) : n.toFixed(2).replace(/\.?0+$/, '');
+      return `${text}%`;
+    }
+    return `${this.roundValue(kpi.current)}${kpi.unit || ''}`;
+  }
+
+  kpiSidebarTitle(kpi: KPIData): string {
+    if (kpi.id === 'entregas-prazo') {
+      return this.kpiSidebarValue(kpi);
+    }
+    return `${kpi.label}: ${this.roundValue(kpi.current)} / ${this.roundValue(kpi.target)}${kpi.unit ? ' ' + kpi.unit : ''}`;
   }
 
   /**
