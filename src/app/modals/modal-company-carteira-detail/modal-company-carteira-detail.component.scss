@@ -134,7 +134,7 @@
 
       .task-header {
         display: grid;
-        grid-template-columns: 2fr 1.5fr 1.5fr 1fr;
+        grid-template-columns: 1.4fr 2fr 1.25fr 1fr;
         gap: $spacing-md;
         padding: $spacing-md $spacing-lg;
         background: #323339;
@@ -152,7 +152,7 @@
 
       .task-row {
         display: grid;
-        grid-template-columns: 2fr 1.5fr 1.5fr 1fr;
+        grid-template-columns: 1.4fr 2fr 1.25fr 1fr;
         gap: $spacing-md;
         padding: $spacing-md $spacing-lg;
         background: rgba(255, 255, 255, 0.02);
@@ -244,6 +244,12 @@
         padding: $spacing-md;
         border-radius: 8px;
         margin-bottom: $spacing-sm;
+
+        .task-col-process::before {
+          content: 'Processo: ';
+          font-weight: 600;
+          color: $text-secondary;
+        }
 
         .task-col-title::before {
           content: 'Tarefa: ';

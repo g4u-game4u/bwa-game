@@ -13,6 +13,7 @@ import { CnpjLookupService } from '@services/cnpj-lookup.service';
 import { CompanyKpiService, CompanyDisplay } from '@services/company-kpi.service';
 import { SessaoProvider } from '@providers/sessao/sessao.provider';
 import { CacheManagerService } from '@services/cache-manager.service';
+import { SupabaseCompaniesService } from '@services/supabase-companies.service';
 import { Company, KPIData } from '@model/gamification-dashboard.model';
 
 /** View mode toggle for the main content area */
@@ -85,7 +86,7 @@ export class DashboardSupervisorComponent implements OnInit, OnDestroy {
   /** Clientes sub-tabs: 3 tabs with enrichment pipeline */
   clientesActiveTab: 'carteira-equipe' | 'participacao-equipe' | 'carteira-supervisor' = 'carteira-equipe';
 
-  /** Carteira equipe: aggregated cnpj_resp from all team members */
+  /** Carteira equipe: companies from Supabase for all team member emails */
   carteiraEquipeClientes: CompanyDisplay[] = [];
   isLoadingCarteiraEquipe = false;
 
@@ -93,7 +94,7 @@ export class DashboardSupervisorComponent implements OnInit, OnDestroy {
   participacaoEquipeClientes: CompanyDisplay[] = [];
   isLoadingParticipacaoEquipe = false;
 
-  /** Carteira supervisor: supervisor's own cnpj_resp */
+  /** Carteira supervisor: supervisor's own companies (Supabase/mock) */
   carteiraSupervisorClientes: CompanyDisplay[] = [];
   isLoadingCarteiraSupervisor = false;
 
@@ -116,6 +117,7 @@ export class DashboardSupervisorComponent implements OnInit, OnDestroy {
     private companyKpiService: CompanyKpiService,
     private sessaoProvider: SessaoProvider,
     private cacheManagerService: CacheManagerService,
+    private supabaseCompaniesService: SupabaseCompaniesService,
     private router: Router,
     private cdr: ChangeDetectorRef
   ) {}
@@ -466,9 +468,7 @@ export class DashboardSupervisorComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Load the SUPERVISOR's own client list from cnpj_resp using the enrichment pipeline.
-   * Same pattern as gamification dashboard's loadClientesData():
-   * playerService.getPlayerCnpjResp() → cnpjLookupService.enrichCnpjListFull() → companyKpiService.enrichFromCnpjResp()
+   * Carteira do supervisor: Supabase `companies` (mock) + KPI Funifier opcional.
    */
   loadCarteiraSupervisor(): void {
     this.isLoadingCarteiraSupervisor = true;
@@ -476,23 +476,21 @@ export class DashboardSupervisorComponent implements OnInit, OnDestroy {
 
     const playerId = this.getPlayerId();
 
-    this.playerService.getPlayerCnpjResp(playerId)
+    this.supabaseCompaniesService.getCompaniesForPlayer(playerId)
       .pipe(
-        switchMap(empids => {
-          console.log('📊 Supervisor cnpj_resp empids:', empids);
-          if (empids.length === 0) {
+        switchMap(rows => {
+          const cnpjs = rows.map(r => r.cnpj).filter(c => !!c && c.trim().length > 0);
+          console.log('📊 Supervisor carteira CNPJs (Supabase/mock):', cnpjs);
+          if (cnpjs.length === 0) {
             return of([] as CompanyDisplay[]);
           }
-          return this.cnpjLookupService.enrichCnpjListFull(empids).pipe(
-            switchMap(cnpjInfo => {
-              cnpjInfo.forEach((info, key) => {
-                this.cnpjNameMap.set(key, info.empresa);
-                if (info.status) this.cnpjStatusMap.set(key, info.status);
-                if (info.cnpj) this.cnpjNumberMap.set(key, info.cnpj);
-              });
-              return this.companyKpiService.enrichFromCnpjResp(empids);
-            })
+          this.supabaseCompaniesService.applyRowsToCnpjMaps(
+            rows,
+            this.cnpjNameMap,
+            this.cnpjStatusMap,
+            this.cnpjNumberMap
           );
+          return this.companyKpiService.enrichFromCnpjResp(cnpjs);
         }),
         takeUntil(this.destroy$)
       )
@@ -516,63 +514,35 @@ export class DashboardSupervisorComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Load aggregated cnpj_resp from ALL team members (carteira equipe).
-   * Collects cnpj_resp from all playerCards, deduplicates, then enriches with the pipeline.
+   * Carteira da equipe: empresas no Supabase onde `responsaveis` inclui email de qualquer membro.
    */
   loadCarteiraEquipe(): void {
     this.isLoadingCarteiraEquipe = true;
     this.cdr.markForCheck();
 
-    // Aggregate cnpj_resp from all team players via aggregate query
-    const playerIds = this.playerCards.map(p => p.playerId);
-    if (playerIds.length === 0) {
-      // If players haven't loaded yet, we'll retry after they load
-      // For now, just set empty
+    const emails = this.playerCards.map(p => p.playerId).filter(id => !!id && String(id).trim().length > 0);
+    if (emails.length === 0) {
       this.carteiraEquipeClientes = [];
       this.isLoadingCarteiraEquipe = false;
       this.cdr.markForCheck();
       return;
     }
 
-    const aggregatePayload = [{ $match: { _id: { $in: playerIds } } }];
-    this.funifierApi.post<any[]>(
-      '/database/player_status/aggregate?strict=true',
-      aggregatePayload,
-      { headers: { 'Range': 'items=0-200' } }
-    ).pipe(
+    this.supabaseCompaniesService.getCompaniesForEmails(emails, true).pipe(
       takeUntil(this.destroy$),
-      switchMap(players => {
-        const allPlayers = Array.isArray(players) ? players : [];
-        const seen = new Set<string>();
-        const allEmpids: string[] = [];
-
-        for (const player of allPlayers) {
-          const raw: string = player?.extra?.cnpj_resp || '';
-          if (!raw) continue;
-          const empids = raw.split(/[;,]/).map((s: string) => s.trim()).filter((s: string) => s.length > 0);
-          for (const empid of empids) {
-            if (!seen.has(empid)) {
-              seen.add(empid);
-              allEmpids.push(empid);
-            }
-          }
-        }
-
-        console.log('📊 Carteira equipe aggregated empids:', allEmpids.length);
-        if (allEmpids.length === 0) {
+      switchMap(rows => {
+        console.log('📊 Carteira equipe companies (Supabase/mock):', rows.length);
+        const cnpjs = rows.map(r => r.cnpj).filter(c => !!c && c.trim().length > 0);
+        if (cnpjs.length === 0) {
           return of([] as CompanyDisplay[]);
         }
-
-        return this.cnpjLookupService.enrichCnpjListFull(allEmpids).pipe(
-          switchMap(cnpjInfo => {
-            cnpjInfo.forEach((info, key) => {
-              this.cnpjNameMap.set(key, info.empresa);
-              if (info.status) this.cnpjStatusMap.set(key, info.status);
-              if (info.cnpj) this.cnpjNumberMap.set(key, info.cnpj);
-            });
-            return this.companyKpiService.enrichFromCnpjResp(allEmpids);
-          })
+        this.supabaseCompaniesService.applyRowsToCnpjMaps(
+          rows,
+          this.cnpjNameMap,
+          this.cnpjStatusMap,
+          this.cnpjNumberMap
         );
+        return this.companyKpiService.enrichFromCnpjResp(cnpjs);
       })
     ).subscribe({
       next: (enriched: CompanyDisplay[]) => {

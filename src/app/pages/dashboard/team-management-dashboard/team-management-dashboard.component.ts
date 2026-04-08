@@ -22,6 +22,7 @@ import { CompanyDisplay, CompanyKpiService } from '@services/company-kpi.service
 import { KPIData } from '@app/model/gamification-dashboard.model';
 import { KPIService } from '@services/kpi.service';
 import { CnpjLookupService } from '@services/cnpj-lookup.service';
+import { PONTOS_POR_ATIVIDADE_FINALIZADA_ACTION_LOG } from '@app/constants/pontos-por-atividade-action-log';
 
 // Models
 import { Team } from '@components/c4u-team-selector/c4u-team-selector.component';
@@ -480,7 +481,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
    * Uses POST aggregate query to /database/player/aggregate?strict=true
    * to filter players by team membership, then fetches status data and points for each member.
    * 
-   * Points are calculated for the selected month using achievement collection.
+   * Points are calculated from action_log (escopo equipe + intervalo) × pontos por atividade (regra provisória).
    * Tasks are taken from extra.tarefas_finalizadas in player status.
    * Blocked points are taken from point_categories.locked_points in player status.
    * 
@@ -489,7 +490,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
    * @param teamId - The Funifier team ID (e.g., 'FkmdnFU')
    * @returns Promise that resolves when team members data is loaded
    */
-  private async loadTeamMembersData(teamId: string): Promise<void> {
+  private async loadTeamMembersData(teamId: string, dateRange: { start: Date; end: Date }): Promise<void> {
     try {
       console.log('👥 Loading team members data for team:', teamId);
       
@@ -540,57 +541,23 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       let totalBlockedPoints = 0;
       let validMembers = 0;
       
-      // Calculate points for the selected month using achievement aggregate
-      // When selectedMonth is undefined (Toda temporada), don't filter by time
-      const timeMatch: Record<string, any> = {};
-      if (this.selectedMonth) {
-        const monthStart = dayjs(this.selectedMonth).startOf('month');
-        const monthEnd = dayjs(this.selectedMonth).endOf('month');
-        timeMatch['time'] = {
-          $gte: { $date: monthStart.toISOString() },
-          $lte: { $date: monthEnd.toISOString() }
-        };
-      }
-      
-      // Fetch points for all team members in one aggregate query
-      const pointsAggregatePayload = [
-        {
-          $match: {
-            player: { $in: memberIds },
-            type: 0, // type 0 = points
-            ...timeMatch
-          }
-        },
-        {
-          $group: {
-            _id: '$player',
-            totalPoints: { $sum: '$total' }
-          }
-        }
-      ];
-      
-      const pointsByPlayer = await firstValueFrom(
-        this.funifierApi.post<any[]>(
-          '/database/achievement/aggregate?strict=true',
-          pointsAggregatePayload
-        ).pipe(takeUntil(this.destroy$))
+      const actionCountByMember = await firstValueFrom(
+        this.teamAggregateService
+          .getTeamMemberActionLogCounts(teamId, dateRange.start, dateRange.end)
+          .pipe(takeUntil(this.destroy$))
       ).catch((error) => {
-        console.error('Error loading points aggregate:', error);
-        return [];
+        console.error('Error loading per-member action_log counts:', error);
+        return new Map<string, number>();
       });
-      
-      // Create a map of player -> points for quick lookup
-      const pointsMap = new Map<string, number>();
-      pointsByPlayer.forEach((item: any) => {
-        pointsMap.set(item._id, item.totalPoints || 0);
-      });
-      
+
       // Process each player's data from the aggregate result
       allPlayersStatus.forEach((status: any) => {
         const memberId = status._id;
-        
-        // Get points for this player from the points aggregate
-        const pointsForMonth = pointsMap.get(memberId) || 0;
+
+        const actionCount = actionCountByMember.get(String(memberId)) || 0;
+        const pointsForMonth = Math.floor(
+          actionCount * PONTOS_POR_ATIVIDADE_FINALIZADA_ACTION_LOG
+        );
         totalPoints += pointsForMonth;
         
         // Get tasks completed from extra.tarefas_finalizadas
@@ -611,7 +578,9 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
         totalBlockedPoints += blockedPoints;
         
         validMembers++;
-        console.log(`📊 Member ${memberId}: ${pointsForMonth} points (month), ${tasks} tasks, ${blockedPoints} blocked points`);
+        console.log(
+          `📊 Member ${memberId}: ${pointsForMonth} points (action_log×${PONTOS_POR_ATIVIDADE_FINALIZADA_ACTION_LOG}), ${tasks} tasks, ${blockedPoints} blocked points`
+        );
       });
       
       // Calculate aggregated metrics (round down all values)
@@ -739,7 +708,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
         console.log('👥 Loading team aggregated data');
         // First, reload team members data to recalculate points for the selected month
         // This is important when the month changes, as points need to be recalculated
-        await this.loadTeamMembersData(this.selectedTeamId);
+        await this.loadTeamMembersData(this.selectedTeamId, dateRange);
         
         // Then, load team activity and macro data (needed for sidebar aggregation)
         await this.loadTeamActivityAndMacroData(dateRange);
@@ -1366,7 +1335,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       this.activitiesByCollaboratorLabels = [`${memberName} - ${activitiesTotal} (100%)`];
       
       // Load points data for the same period
-      await this.loadCollaboratorPointsData(collaboratorId, startDate, endDate, memberName);
+      await this.loadCollaboratorPointsData(startDate, endDate, memberName, dataMap);
       
       this.isLoadingProductivity = false;
       console.log('✅ Collaborator productivity data loaded:', {
@@ -1394,78 +1363,24 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Load daily points data for a specific collaborator
-   * 
-   * @private
-   * @async
-   * @param collaboratorId - The user ID (email) of the collaborator
-   * @param startDate - Start date for the period
-   * @param endDate - End date for the period
-   * @param memberName - Name of the collaborator for the label
-   * @returns Promise that resolves when points data is loaded
+   * Pontos diários = atividades no action_log (já agregadas em dailyActivities) × constante (regra provisória).
    */
   private async loadCollaboratorPointsData(
-    collaboratorId: string, 
-    startDate: dayjs.Dayjs, 
+    startDate: dayjs.Dayjs,
     endDate: dayjs.Dayjs,
-    memberName: string
+    memberName: string,
+    dailyActivities: Map<string, number>
   ): Promise<void> {
     try {
-      // Query achievement collection for daily points earned
-      const aggregateBody = [
-        {
-          $match: {
-            player: collaboratorId,
-            type: 0, // type 0 = points
-            time: {
-              $gte: { $date: startDate.toISOString() },
-              $lte: { $date: endDate.toISOString() }
-            }
-          }
-        },
-        {
-          $group: {
-            _id: {
-              $dateToString: {
-                format: '%Y-%m-%d',
-                date: { $toDate: '$time' }
-              }
-            },
-            total: { $sum: '$total' }
-          }
-        },
-        {
-          $sort: { _id: 1 }
-        }
-      ];
-      
-      const dailyPointsData = await firstValueFrom(
-        this.funifierApi.post<any[]>(
-          '/v3/database/achievement/aggregate?strict=true',
-          aggregateBody
-        ).pipe(takeUntil(this.destroy$))
-      ).catch((error) => {
-        console.error(`Error loading points for collaborator ${collaboratorId}:`, error);
-        return [];
-      });
-      
-      // Convert to GraphDataPoint format
       const pointsDataPoints: GraphDataPoint[] = [];
-      const pointsDataMap = new Map<string, number>();
-      
-      dailyPointsData.forEach((item: any) => {
-        const dateStr = item._id;
-        const points = item.total || 0;
-        pointsDataMap.set(dateStr, points);
-      });
-      
-      // Fill all dates in range
+
       let currentDate = startDate;
       while (currentDate.isBefore(endDate) || currentDate.isSame(endDate, 'day')) {
         const dateStr = currentDate.format('YYYY-MM-DD');
+        const count = dailyActivities.get(dateStr) || 0;
         pointsDataPoints.push({
           date: currentDate.toDate(),
-          value: Math.floor(pointsDataMap.get(dateStr) || 0) // Round down points
+          value: Math.floor(count * PONTOS_POR_ATIVIDADE_FINALIZADA_ACTION_LOG)
         });
         currentDate = currentDate.add(1, 'day');
       }
@@ -1581,57 +1496,13 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
           }
         ];
         
-        // OPTIMIZED: Single aggregate query for points
-        const pointsAggregateBody = [
-          {
-            $match: {
-              player: { $in: this.teamMemberIds },
-              type: 0, // type 0 = points
-              time: {
-                $gte: { $date: startDate.toISOString() },
-                $lte: { $date: endDate.toISOString() }
-              }
-            }
-          },
-          {
-            $group: {
-              _id: {
-                player: '$player',
-                date: {
-                  $dateToString: {
-                    format: '%Y-%m-%d',
-                    date: { $toDate: '$time' }
-                  }
-                }
-              },
-              total: { $sum: '$total' }
-            }
-          },
-          {
-            $sort: { '_id.date': 1 }
-          }
-        ];
-        
-        // Fetch both activities and points in parallel (2 requests instead of 2*N)
-        const [allActionLogs, allPointsData] = await Promise.all([
-          this.fetchAllPaginatedData<any>(
-            '/database/action_log/aggregate?strict=true',
-            actionLogsAggregateBody,
-            100
-          ),
-          firstValueFrom(
-            this.funifierApi.post<any[]>(
-              '/database/achievement/aggregate?strict=true',
-              pointsAggregateBody
-            ).pipe(takeUntil(this.destroy$))
-          ).catch((error) => {
-            console.error('Error loading points aggregate:', error);
-            return [];
-          })
-        ]);
-        
+        const allActionLogs = await this.fetchAllPaginatedData<any>(
+          '/database/action_log/aggregate?strict=true',
+          actionLogsAggregateBody,
+          100
+        );
+
         console.log('✅ Action logs aggregate returned:', allActionLogs.length, 'records');
-        console.log('✅ Points aggregate returned:', allPointsData.length, 'records');
         
         // Process action logs into per-member data
         const memberActivitiesMap = new Map<string, Map<string, number>>();
@@ -1648,21 +1519,6 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
           }
         });
         
-        // Process points into per-member data
-        const memberPointsMap = new Map<string, Map<string, number>>();
-        allPointsData.forEach((item: any) => {
-          const player = item._id?.player;
-          const dateStr = item._id?.date;
-          const total = item.total || 0;
-          
-          if (player && dateStr) {
-            if (!memberPointsMap.has(player)) {
-              memberPointsMap.set(player, new Map());
-            }
-            memberPointsMap.get(player)!.set(dateStr, total);
-          }
-        });
-        
         // Build member data from the aggregated results
         const validMemberData: Array<{ 
           memberId: string; 
@@ -1676,22 +1532,21 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
           const memberName = this.formatCollaboratorName(memberId, collaborator?.name);
           
           const activitiesMap = memberActivitiesMap.get(memberId) || new Map();
-          const pointsMap = memberPointsMap.get(memberId) || new Map();
-          
+
           const activitiesDataPoints: GraphDataPoint[] = [];
           const pointsDataPoints: GraphDataPoint[] = [];
-          
-          // Fill all dates in range
+
           let currentDate = startDate;
           while (currentDate.isBefore(endDate) || currentDate.isSame(endDate, 'day')) {
             const dateStr = currentDate.format('YYYY-MM-DD');
+            const act = activitiesMap.get(dateStr) || 0;
             activitiesDataPoints.push({
               date: currentDate.toDate(),
-              value: activitiesMap.get(dateStr) || 0
+              value: act
             });
             pointsDataPoints.push({
               date: currentDate.toDate(),
-              value: Math.floor(pointsMap.get(dateStr) || 0)
+              value: Math.floor(act * PONTOS_POR_ATIVIDADE_FINALIZADA_ACTION_LOG)
             });
             currentDate = currentDate.add(1, 'day');
           }
@@ -1775,9 +1630,8 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
           
           console.log('✅ Productivity data loaded (OPTIMIZED):', {
             members: validMemberData.length,
-            apiCalls: 2, // Only 2 aggregate calls instead of 2*N individual calls
-            totalActionLogs: allActionLogs.length,
-            totalPointsRecords: allPointsData.length
+            apiCalls: 1,
+            totalActionLogs: allActionLogs.length
           });
         } else {
           this.graphData = [];
@@ -1962,34 +1816,21 @@ private calculateCollaboratorTotals(memberData: Array<{
         console.error('Error loading team activity metrics:', error);
         return { finalizadas: 0, pontos: 0, processosFinalizados: 0, processosIncompletos: 0 };
       });
-      
-      // Get total points from achievement aggregate
-      const totalPoints = await firstValueFrom(
-        this.teamAggregateService.getTeamTotalPoints(
-          this.teamMemberIds,
-          dateRange.start,
-          dateRange.end
-        ).pipe(takeUntil(this.destroy$))
-      ).catch((error) => {
-        console.error('Error loading team total points:', error);
-        return 0;
-      });
-      
-      // Set aggregated team metrics
+
       this.teamActivityMetrics = {
         pendentes: 0,
         emExecucao: 0,
         finalizadas: metrics.finalizadas,
-        pontos: Math.floor(totalPoints)
+        pontos: Math.floor(metrics.pontos)
       };
-      
+
       this.teamProcessMetrics = {
         pendentes: 0,
         incompletas: Math.max(0, metrics.processosIncompletos),
         finalizadas: metrics.processosFinalizados
       };
-      
-      console.log('✅ Team activity and process data (OPTIMIZED - 2 API calls instead of', this.teamMemberIds.length, '):', {
+
+      console.log('✅ Team activity and process data (OPTIMIZED - 1 API call instead of', this.teamMemberIds.length, '):', {
         activities: this.teamActivityMetrics,
         processos: this.teamProcessMetrics,
         selectedMonth: this.selectedMonth
@@ -2233,7 +2074,7 @@ private calculateCollaboratorTotals(memberData: Array<{
       localStorage.setItem('selectedTeamId', teamId);
       
       // Load team members data first (this sets teamTotalPoints, etc.)
-      await this.loadTeamMembersData(teamId);
+      await this.loadTeamMembersData(teamId, this.calculateDateRange());
       
       // Then load all other team data
       await this.loadTeamData();
@@ -2612,20 +2453,14 @@ private calculateCollaboratorTotals(memberData: Array<{
           return;
         }
         
-        // Calculate date range for the selected month (or wide range for Toda temporada)
-        const monthStart = this.selectedMonth 
-          ? dayjs(this.selectedMonth).startOf('month').toDate() 
-          : new Date('2000-01-01T00:00:00.000Z');
-        const monthEnd = this.selectedMonth 
-          ? dayjs(this.selectedMonth).endOf('month').toDate() 
-          : new Date('2099-12-31T23:59:59.999Z');
-        
-        // Use optimized team aggregate service - single API call instead of N calls
+        const range = this.calculateDateRange();
+
         const breakdown = await firstValueFrom(
           this.teamAggregateService.getTeamMonthlyPointsBreakdown(
+            this.selectedTeamId,
             this.teamMemberIds,
-            monthStart,
-            monthEnd
+            range.start,
+            range.end
           ).pipe(takeUntil(this.destroy$))
         ).catch((error) => {
           console.error('Error loading team monthly points breakdown (optimized):', error);

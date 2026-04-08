@@ -2,6 +2,8 @@ import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testin
 import { NO_ERRORS_SCHEMA } from '@angular/core';
 import { of, throwError } from 'rxjs';
 import { delay } from 'rxjs/operators';
+import { ActivatedRoute, Router } from '@angular/router';
+import { NgbModal } from '@ng-bootstrap/ng-bootstrap';
 
 import { GamificationDashboardComponent } from './gamification-dashboard.component';
 import { PlayerService } from '@services/player.service';
@@ -12,6 +14,10 @@ import { ActionLogService } from '@services/action-log.service';
 import { CompanyKpiService, CompanyDisplay } from '@services/company-kpi.service';
 import { PerformanceMonitorService } from '@services/performance-monitor.service';
 import { SessaoProvider } from '@providers/sessao/sessao.provider';
+import { CacheManagerService } from '@services/cache-manager.service';
+import { CnpjLookupService } from '@services/cnpj-lookup.service';
+import { SupabaseCompaniesService } from '@services/supabase-companies.service';
+import { SupabaseCompanyRow } from '@model/supabase-company.model';
 import { 
   generatePlayerStatus, 
   generatePointWallet, 
@@ -19,6 +25,31 @@ import {
   generateCompany,
   generateKPIData
 } from '@app/testing/mock-data-generators';
+
+function rowsFromCnpjList(list: { cnpj: string }[]): SupabaseCompanyRow[] {
+  return list.map((item, i) => {
+    const name = item.cnpj.includes(' l ') ? item.cnpj.split(' l ')[0].trim() : `Empresa ${i}`;
+    return {
+      id: i + 1,
+      cnpj: item.cnpj,
+      razao_social: name,
+      fantasia: name,
+      status: 'Ativa',
+      client_type_id: null,
+      synced_at: '',
+      created_at: '',
+      responsaveis: []
+    };
+  });
+}
+
+function carteiraKpiPayloadFromRows(rows: SupabaseCompanyRow[]) {
+  return rows.map(r => ({
+    cnpj: r.cnpj,
+    supabaseId: r.id,
+    empId: r.emp_id
+  }));
+}
 
 describe('GamificationDashboardComponent - Integration Tests', () => {
   let component: GamificationDashboardComponent;
@@ -28,13 +59,16 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
   let kpiService: jasmine.SpyObj<KPIService>;
   let toastService: jasmine.SpyObj<ToastService>;
   let actionLogService: jasmine.SpyObj<ActionLogService>;
+  let supabaseCompaniesService: jasmine.SpyObj<SupabaseCompaniesService>;
 
   beforeEach(async () => {
     // Create spy objects for services
     const playerServiceSpy = jasmine.createSpyObj('PlayerService', [
       'getPlayerStatus',
       'getPlayerPoints',
-      'getSeasonProgress'
+      'getSeasonProgress',
+      'getPlayerCnpj',
+      'clearCache'
     ]);
     
     const companyServiceSpy = jasmine.createSpyObj('CompanyService', [
@@ -55,23 +89,52 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
       'getProgressMetrics',
       'getPlayerCnpjListWithCount',
       'getUniqueClientesCount',
-      'getCompletedTasksCount'
+      'getCompletedTasksCount',
+      'getPontosForMonth'
     ]);
     actionLogServiceSpy.getProgressMetrics.and.returnValue(of({
       activity: { pendentes: 0, emExecucao: 0, finalizadas: 0, pontos: 0 },
-      macro: { pendentes: 0, incompletas: 0, finalizadas: 0 }
+      processo: { pendentes: 0, incompletas: 0, finalizadas: 0 }
     }));
     actionLogServiceSpy.getPlayerCnpjListWithCount.and.returnValue(of([]));
     actionLogServiceSpy.getUniqueClientesCount.and.returnValue(of(0));
     actionLogServiceSpy.getCompletedTasksCount.and.returnValue(of(0));
+    actionLogServiceSpy.getPontosForMonth.and.returnValue(of(500));
 
+    const emptyGamificacaoMaps = { byEmpId: new Map(), byCnpjNorm: new Map() };
     const companyKpiServiceSpy = jasmine.createSpyObj('CompanyKpiService', [
       'extractCnpjId',
       'getKpiData',
       'enrichCompaniesWithKpis',
+      'enrichFromCnpjResp',
+      'fetchGamificacaoMapsAsync',
+      'enrichCarteiraRowsWithMaps',
+      'enrichCarteiraFromSupabase',
+      'prefetchGamificacaoSnapshot',
       'clearCache'
     ]);
     companyKpiServiceSpy.enrichCompaniesWithKpis.and.returnValue(of([]));
+    companyKpiServiceSpy.enrichFromCnpjResp.and.returnValue(of([]));
+    companyKpiServiceSpy.enrichCarteiraFromSupabase.and.returnValue(of([]));
+    companyKpiServiceSpy.fetchGamificacaoMapsAsync.and.returnValue(
+      Promise.resolve(emptyGamificacaoMaps)
+    );
+    companyKpiServiceSpy.enrichCarteiraRowsWithMaps.and.returnValue([]);
+
+    const cacheManagerSpy = jasmine.createSpyObj('CacheManagerService', ['clearAllCaches']);
+    const cnpjLookupSpy = jasmine.createSpyObj('CnpjLookupService', ['enrichCnpjListFull']);
+    const supabaseCompaniesSpy = jasmine.createSpyObj('SupabaseCompaniesService', [
+      'getCompaniesForPlayer',
+      'applyRowsToCnpjMaps'
+    ]);
+    supabaseCompaniesSpy.getCompaniesForPlayer.and.returnValue(of([]));
+
+    const ngbModalSpy = jasmine.createSpyObj('NgbModal', ['open']);
+    const activatedRouteSpy = {
+      snapshot: { queryParams: {} },
+      queryParams: of({})
+    };
+    const routerSpy = jasmine.createSpyObj('Router', ['navigate']);
 
     const performanceMonitorSpy = jasmine.createSpyObj('PerformanceMonitorService', [
       'measureRenderTime',
@@ -81,8 +144,11 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
     performanceMonitorSpy.measureRenderTime.and.returnValue(() => {});
 
     const sessaoProviderSpy = jasmine.createSpyObj('SessaoProvider', [], {
-      usuario: { _id: 'test-user', email: 'test@example.com', roles: [] }
+      usuario: { _id: 'test-user', email: 'test@example.com', roles: [] },
+      token: 'test-token'
     });
+
+    cnpjLookupSpy.enrichCnpjListFull.and.returnValue(of(new Map()));
 
     await TestBed.configureTestingModule({
       declarations: [GamificationDashboardComponent],
@@ -94,7 +160,13 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
         { provide: ActionLogService, useValue: actionLogServiceSpy },
         { provide: CompanyKpiService, useValue: companyKpiServiceSpy },
         { provide: PerformanceMonitorService, useValue: performanceMonitorSpy },
-        { provide: SessaoProvider, useValue: sessaoProviderSpy }
+        { provide: SessaoProvider, useValue: sessaoProviderSpy },
+        { provide: CacheManagerService, useValue: cacheManagerSpy },
+        { provide: CnpjLookupService, useValue: cnpjLookupSpy },
+        { provide: SupabaseCompaniesService, useValue: supabaseCompaniesSpy },
+        { provide: NgbModal, useValue: ngbModalSpy },
+        { provide: ActivatedRoute, useValue: activatedRouteSpy },
+        { provide: Router, useValue: routerSpy }
       ],
       schemas: [NO_ERRORS_SCHEMA]
     }).compileComponents();
@@ -104,6 +176,9 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
     kpiService = TestBed.inject(KPIService) as jasmine.SpyObj<KPIService>;
     toastService = TestBed.inject(ToastService) as jasmine.SpyObj<ToastService>;
     actionLogService = TestBed.inject(ActionLogService) as jasmine.SpyObj<ActionLogService>;
+    supabaseCompaniesService = TestBed.inject(SupabaseCompaniesService) as jasmine.SpyObj<SupabaseCompaniesService>;
+
+    playerService.getPlayerCnpj.and.returnValue(of([]));
 
     fixture = TestBed.createComponent(GamificationDashboardComponent);
     component = fixture.componentInstance;
@@ -279,10 +354,9 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
       fixture.detectChanges();
       tick();
 
-      // Reset call counts
-      playerService.getPlayerStatus.calls.reset();
-      companyService.getCompanies.calls.reset();
+      // Reset call counts (month change only reloads KPIs + progress)
       kpiService.getPlayerKPIs.calls.reset();
+      actionLogService.getProgressMetrics.calls.reset();
 
       const monthsAgo = 1; // 1 month ago
 
@@ -293,10 +367,9 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
       // Assert
       const expectedMonth = new Date();
       expectedMonth.setMonth(expectedMonth.getMonth() - monthsAgo);
-      expect(component.selectedMonth.getMonth()).toEqual(expectedMonth.getMonth());
-      expect(playerService.getPlayerStatus).toHaveBeenCalled();
-      expect(companyService.getCompanies).toHaveBeenCalled();
+      expect(component.selectedMonth!.getMonth()).toEqual(expectedMonth.getMonth());
       expect(kpiService.getPlayerKPIs).toHaveBeenCalled();
+      expect(actionLogService.getProgressMetrics).toHaveBeenCalled();
     }));
 
     it('should update selectedMonth property when month changes', fakeAsync(() => {
@@ -316,7 +389,7 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
       // Assert
       const expectedMonth = new Date();
       expectedMonth.setMonth(expectedMonth.getMonth() - monthsAgo);
-      expect(component.selectedMonth.getMonth()).toEqual(expectedMonth.getMonth());
+      expect(component.selectedMonth!.getMonth()).toEqual(expectedMonth.getMonth());
     }));
   });
 
@@ -1041,270 +1114,233 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
     });
 
     /**
-     * Test loadCarteiraData loads CNPJ list with action counts and enriches with KPI data
-     * Validates: Task 4.3 - Call enrichCompaniesWithKpis() to add KPI data
+     * Carteira: fetchGamificacaoMapsAsync → Supabase → enrichCarteiraRowsWithMaps.
      */
-    it('should load carteira data from action_log and enrich with KPI data on initialization', fakeAsync(() => {
-      // Arrange
-      const mockCarteiraData = [
-        { cnpj: 'COMPANY A l 0001 [2000|0001-60]', actionCount: 5 },
-        { cnpj: 'COMPANY B l 0002 [1218|0002-45]', actionCount: 3 },
-        { cnpj: 'COMPANY C l 0003 [9654|0003-12]', actionCount: 8 }
+    it('should load carteira rows from Supabase service and enrich with KPI data on initialization', fakeAsync(() => {
+      const mockList = [
+        { cnpj: 'COMPANY A l 0001 [2000|0001-60]' },
+        { cnpj: 'COMPANY B l 0002 [1218|0002-45]' },
+        { cnpj: 'COMPANY C l 0003 [9654|0003-12]' }
       ];
+      const supabaseRows = rowsFromCnpjList(mockList);
       const mockEnrichedData: CompanyDisplay[] = [
-        { cnpj: 'COMPANY A l 0001 [2000|0001-60]', cnpjId: '2000', actionCount: 5, deliveryKpi: { id: 'delivery', label: 'Entregas', current: 89, target: 100, unit: 'entregas', percentage: 89 } },
-        { cnpj: 'COMPANY B l 0002 [1218|0002-45]', cnpjId: '1218', actionCount: 3, deliveryKpi: { id: 'delivery', label: 'Entregas', current: 45, target: 100, unit: 'entregas', percentage: 45 } },
-        { cnpj: 'COMPANY C l 0003 [9654|0003-12]', cnpjId: '9654', actionCount: 8, deliveryKpi: { id: 'delivery', label: 'Entregas', current: 102, target: 100, unit: 'entregas', percentage: 100 } }
+        {
+          cnpj: 'COMPANY A l 0001 [2000|0001-60]',
+          cnpjId: '2000',
+          actionCount: 0,
+          processCount: 0,
+          deliveryKpi: { id: 'delivery', label: 'Entregas', current: 89, target: 100, unit: 'entregas', percentage: 89, color: 'green' }
+        },
+        {
+          cnpj: 'COMPANY B l 0002 [1218|0002-45]',
+          cnpjId: '1218',
+          actionCount: 0,
+          processCount: 0,
+          deliveryKpi: { id: 'delivery', label: 'Entregas', current: 45, target: 100, unit: 'entregas', percentage: 45, color: 'yellow' }
+        },
+        {
+          cnpj: 'COMPANY C l 0003 [9654|0003-12]',
+          cnpjId: '9654',
+          actionCount: 0,
+          processCount: 0,
+          deliveryKpi: { id: 'delivery', label: 'Entregas', current: 102, target: 100, unit: 'entregas', percentage: 100, color: 'green' }
+        }
       ];
-      actionLogService.getPlayerCnpjListWithCount.and.returnValue(of(mockCarteiraData));
-      
-      const companyKpiService = TestBed.inject(CompanyKpiService) as jasmine.SpyObj<CompanyKpiService>;
-      companyKpiService.enrichCompaniesWithKpis.and.returnValue(of(mockEnrichedData));
+      supabaseCompaniesService.getCompaniesForPlayer.and.returnValue(of(supabaseRows));
 
-      // Act
+      const companyKpiService = TestBed.inject(CompanyKpiService) as jasmine.SpyObj<CompanyKpiService>;
+      companyKpiService.enrichCarteiraRowsWithMaps.and.returnValue(mockEnrichedData);
+
       fixture.detectChanges();
       tick();
 
-      // Assert
-      expect(actionLogService.getPlayerCnpjListWithCount).toHaveBeenCalled();
-      expect(companyKpiService.enrichCompaniesWithKpis).toHaveBeenCalledWith(mockCarteiraData);
+      expect(supabaseCompaniesService.getCompaniesForPlayer).toHaveBeenCalled();
+      expect(companyKpiService.fetchGamificacaoMapsAsync).toHaveBeenCalled();
+      expect(companyKpiService.enrichCarteiraRowsWithMaps).toHaveBeenCalledWith(
+        carteiraKpiPayloadFromRows(supabaseRows),
+        jasmine.any(Object)
+      );
       expect(component.carteiraClientes).toEqual(mockEnrichedData);
       expect(component.carteiraClientes.length).toBe(3);
-      expect(component.isLoadingCarteira).toBe(false);
+      expect(component.isLoadingClientes).toBe(false);
     }));
 
-    /**
-     * Test loadCarteiraData handles empty results
-     * Validates: Task 4.3 - Handle loading states appropriately
-     */
     it('should handle empty carteira data', fakeAsync(() => {
-      // Arrange
-      actionLogService.getPlayerCnpjListWithCount.and.returnValue(of([]));
-      
-      const companyKpiService = TestBed.inject(CompanyKpiService) as jasmine.SpyObj<CompanyKpiService>;
-      companyKpiService.enrichCompaniesWithKpis.and.returnValue(of([]));
+      supabaseCompaniesService.getCompaniesForPlayer.and.returnValue(of([]));
 
-      // Act
+      const companyKpiService = TestBed.inject(CompanyKpiService) as jasmine.SpyObj<CompanyKpiService>;
       fixture.detectChanges();
       tick();
 
-      // Assert
       expect(component.carteiraClientes).toEqual([]);
-      expect(component.isLoadingCarteira).toBe(false);
+      expect(component.isLoadingClientes).toBe(false);
+      expect(companyKpiService.fetchGamificacaoMapsAsync).toHaveBeenCalled();
+      expect(companyKpiService.enrichCarteiraRowsWithMaps).not.toHaveBeenCalled();
     }));
 
-    /**
-     * Test loadCarteiraData handles errors gracefully
-     * Validates: Task 4.3 - Handle loading states appropriately
-     */
     it('should handle carteira data loading errors gracefully', fakeAsync(() => {
-      // Arrange
       const error = new Error('Failed to load carteira data');
-      actionLogService.getPlayerCnpjListWithCount.and.returnValue(throwError(() => error));
+      supabaseCompaniesService.getCompaniesForPlayer.and.returnValue(throwError(() => error));
 
-      // Act
       fixture.detectChanges();
       tick();
 
-      // Assert
       expect(component.carteiraClientes).toEqual([]);
-      expect(component.isLoadingCarteira).toBe(false);
-      // Note: No toast error is shown for carteira loading failures (silent failure)
+      expect(component.isLoadingClientes).toBe(false);
     }));
 
-    /**
-     * Test loadCarteiraData sets loading state correctly
-     * Validates: Task 4.3 - Handle loading states appropriately
-     */
     it('should set loading state correctly during carteira data load', fakeAsync(() => {
-      // Arrange
-      const mockCarteiraData = [
-        { cnpj: 'COMPANY A l 0001 [2000|0001-60]', actionCount: 5 }
-      ];
+      const mockList = [{ cnpj: 'COMPANY A l 0001 [2000|0001-60]' }];
+      const supabaseRows = rowsFromCnpjList(mockList);
       const mockEnrichedData: CompanyDisplay[] = [
-        { cnpj: 'COMPANY A l 0001 [2000|0001-60]', cnpjId: '2000', actionCount: 5, deliveryKpi: { id: 'delivery', label: 'Entregas', current: 89, target: 100, unit: 'entregas', percentage: 89 } }
+        {
+          cnpj: 'COMPANY A l 0001 [2000|0001-60]',
+          cnpjId: '2000',
+          actionCount: 0,
+          processCount: 0,
+          deliveryKpi: { id: 'delivery', label: 'Entregas', current: 89, target: 100, unit: 'entregas', percentage: 89, color: 'green' }
+        }
       ];
-      actionLogService.getPlayerCnpjListWithCount.and.returnValue(of(mockCarteiraData).pipe(delay(100)));
-      
-      const companyKpiService = TestBed.inject(CompanyKpiService) as jasmine.SpyObj<CompanyKpiService>;
-      companyKpiService.enrichCompaniesWithKpis.and.returnValue(of(mockEnrichedData));
+      supabaseCompaniesService.getCompaniesForPlayer.and.returnValue(of(supabaseRows).pipe(delay(100)));
 
-      // Act
+      const companyKpiService = TestBed.inject(CompanyKpiService) as jasmine.SpyObj<CompanyKpiService>;
+      companyKpiService.enrichCarteiraRowsWithMaps.and.returnValue(mockEnrichedData);
+
       fixture.detectChanges();
 
-      // Assert - Initially loading
-      expect(component.isLoadingCarteira).toBe(true);
+      expect(component.isLoadingClientes).toBe(true);
 
-      // Wait for observable to complete
       tick(150);
 
-      // Assert - Loading complete
-      expect(component.isLoadingCarteira).toBe(false);
+      expect(component.isLoadingClientes).toBe(false);
       expect(component.carteiraClientes).toEqual(mockEnrichedData);
     }));
 
-    /**
-     * Test loadCarteiraData uses correct player ID
-     * Validates: Task 4.3 - Load company data from action_log
-     */
-    it('should call getPlayerCnpjListWithCount with correct player ID', fakeAsync(() => {
-      // Arrange
-      actionLogService.getPlayerCnpjListWithCount.and.returnValue(of([]));
-      
-      const companyKpiService = TestBed.inject(CompanyKpiService) as jasmine.SpyObj<CompanyKpiService>;
-      companyKpiService.enrichCompaniesWithKpis.and.returnValue(of([]));
+    it('should call getCompaniesForPlayer with session player id', fakeAsync(() => {
+      supabaseCompaniesService.getCompaniesForPlayer.and.returnValue(of([]));
 
-      // Act
+      const companyKpiService = TestBed.inject(CompanyKpiService) as jasmine.SpyObj<CompanyKpiService>;
+
       fixture.detectChanges();
       tick();
 
-      // Assert
-      expect(actionLogService.getPlayerCnpjListWithCount).toHaveBeenCalledWith(
-        'test@example.com', // From sessaoProvider mock
-        jasmine.any(Date)
-      );
+      expect(supabaseCompaniesService.getCompaniesForPlayer).toHaveBeenCalledWith('test-user', jasmine.anything());
     }));
 
-    /**
-     * Test loadCarteiraData uses selected month
-     * Validates: Task 4.3 - Load company data from action_log
-     */
-    it('should call getPlayerCnpjListWithCount with selected month', fakeAsync(() => {
-      // Arrange
-      actionLogService.getPlayerCnpjListWithCount.and.returnValue(of([]));
-      
-      const companyKpiService = TestBed.inject(CompanyKpiService) as jasmine.SpyObj<CompanyKpiService>;
-      companyKpiService.enrichCompaniesWithKpis.and.returnValue(of([]));
-      
-      const testMonth = new Date('2024-01-15');
-      component.selectedMonth = testMonth;
+    it('should not pass selected month to Supabase carteira load', fakeAsync(() => {
+      supabaseCompaniesService.getCompaniesForPlayer.and.returnValue(of([]));
 
-      // Act
-      component['loadCarteiraData']();
+      const companyKpiService = TestBed.inject(CompanyKpiService) as jasmine.SpyObj<CompanyKpiService>;
+
+      component.selectedMonth = new Date('2024-01-15');
+      supabaseCompaniesService.getCompaniesForPlayer.calls.reset();
+
+      component['loadClientesData']();
       tick();
 
-      // Assert
-      expect(actionLogService.getPlayerCnpjListWithCount).toHaveBeenCalledWith(
-        jasmine.any(String),
-        testMonth
-      );
+      expect(supabaseCompaniesService.getCompaniesForPlayer).toHaveBeenCalledWith('test-user', jasmine.anything());
     }));
 
-    /**
-     * Test loadCarteiraData reloads on month change
-     * Validates: Task 4.3 - Load company data from action_log
-     */
-    it('should reload carteira data when month changes', fakeAsync(() => {
-      // Arrange
-      const initialData = [{ cnpj: 'COMPANY A l 0001 [2000|0001-60]', actionCount: 5 }];
-      const newData = [{ cnpj: 'COMPANY B l 0002 [1218|0002-45]', actionCount: 3 }];
-      const initialEnrichedData = [{ cnpj: 'COMPANY A l 0001 [2000|0001-60]', cnpjId: '2000', actionCount: 5 }];
-      const newEnrichedData = [{ cnpj: 'COMPANY B l 0002 [1218|0002-45]', cnpjId: '1218', actionCount: 3 }];
-      
+    it('should not reload carteira when month changes', fakeAsync(() => {
+      const initialList = [{ cnpj: 'COMPANY A l 0001 [2000|0001-60]' }];
+      const initialEnriched: CompanyDisplay[] = [
+        {
+          cnpj: 'COMPANY A l 0001 [2000|0001-60]',
+          cnpjId: '2000',
+          actionCount: 0,
+          processCount: 0
+        }
+      ];
+
       const companyKpiService = TestBed.inject(CompanyKpiService) as jasmine.SpyObj<CompanyKpiService>;
-      
-      actionLogService.getPlayerCnpjListWithCount.and.returnValue(of(initialData));
-      companyKpiService.enrichCompaniesWithKpis.and.returnValue(of(initialEnrichedData));
-      
+      supabaseCompaniesService.getCompaniesForPlayer.and.returnValue(of(rowsFromCnpjList(initialList)));
+      companyKpiService.enrichCarteiraRowsWithMaps.and.returnValue(initialEnriched);
+
       fixture.detectChanges();
       tick();
-      
-      expect(component.carteiraClientes).toEqual(initialEnrichedData);
-      
-      // Reset and set new data
-      actionLogService.getPlayerCnpjListWithCount.calls.reset();
-      actionLogService.getPlayerCnpjListWithCount.and.returnValue(of(newData));
-      companyKpiService.enrichCompaniesWithKpis.calls.reset();
-      companyKpiService.enrichCompaniesWithKpis.and.returnValue(of(newEnrichedData));
 
-      // Act - Change month
-      component.onMonthChange(1); // 1 month ago
+      expect(component.carteiraClientes).toEqual(initialEnriched);
+
+      const callsAfterInit = supabaseCompaniesService.getCompaniesForPlayer.calls.count();
+
+      component.onMonthChange(1);
       tick();
 
-      // Assert
-      expect(actionLogService.getPlayerCnpjListWithCount).toHaveBeenCalled();
-      expect(companyKpiService.enrichCompaniesWithKpis).toHaveBeenCalledWith(newData);
-      expect(component.carteiraClientes).toEqual(newEnrichedData);
+      expect(supabaseCompaniesService.getCompaniesForPlayer.calls.count()).toBe(callsAfterInit);
+      expect(component.carteiraClientes).toEqual(initialEnriched);
     }));
 
-    /**
-     * Test loadCarteiraData handles no player ID gracefully
-     * Validates: Task 4.3 - Handle loading states appropriately
-     */
-    it('should handle missing player ID gracefully', fakeAsync(() => {
-      // Arrange
+    it('should clear carteira when session has no user for me→email resolution', fakeAsync(() => {
       const sessaoProviderSpy = TestBed.inject(SessaoProvider) as jasmine.SpyObj<SessaoProvider>;
       Object.defineProperty(sessaoProviderSpy, 'usuario', {
         get: () => null
       });
-      
-      const companyKpiService = TestBed.inject(CompanyKpiService) as jasmine.SpyObj<CompanyKpiService>;
 
-      // Act
-      component['loadCarteiraData']();
+      const companyKpiService = TestBed.inject(CompanyKpiService) as jasmine.SpyObj<CompanyKpiService>;
+      supabaseCompaniesService.getCompaniesForPlayer.calls.reset();
+      supabaseCompaniesService.getCompaniesForPlayer.and.returnValue(of([]));
+
+      component['loadClientesData']();
       tick();
 
-      // Assert
-      expect(component.isLoadingCarteira).toBe(false);
+      expect(component.isLoadingClientes).toBe(false);
       expect(component.carteiraClientes).toEqual([]);
-      expect(actionLogService.getPlayerCnpjListWithCount).not.toHaveBeenCalled();
-      expect(companyKpiService.enrichCompaniesWithKpis).not.toHaveBeenCalled();
+      expect(companyKpiService.fetchGamificacaoMapsAsync).not.toHaveBeenCalled();
+      expect(companyKpiService.enrichCarteiraRowsWithMaps).not.toHaveBeenCalled();
     }));
 
-    /**
-     * Test loadCarteiraData enriches companies with KPI data using switchMap
-     * Validates: Task 4.3 - Call enrichCompaniesWithKpis() to add KPI data
-     */
-    it('should enrich companies with KPI data using switchMap', fakeAsync(() => {
-      // Arrange
-      const mockCarteiraData = [
-        { cnpj: 'COMPANY A l 0001 [2000|0001-60]', actionCount: 5 },
-        { cnpj: 'COMPANY B l 0002 [1218|0002-45]', actionCount: 3 }
+    it('should enrich companies with KPI data after Supabase rows', fakeAsync(() => {
+      const mockList = [
+        { cnpj: 'COMPANY A l 0001 [2000|0001-60]' },
+        { cnpj: 'COMPANY B l 0002 [1218|0002-45]' }
       ];
+      const supabaseRows = rowsFromCnpjList(mockList);
       const mockEnrichedData: CompanyDisplay[] = [
-        { 
-          cnpj: 'COMPANY A l 0001 [2000|0001-60]', 
-          cnpjId: '2000', 
-          actionCount: 5, 
-          deliveryKpi: { 
-            id: 'delivery', 
-            label: 'Entregas', 
-            current: 89, 
-            target: 100, 
-            unit: 'entregas', 
+        {
+          cnpj: 'COMPANY A l 0001 [2000|0001-60]',
+          cnpjId: '2000',
+          actionCount: 0,
+          processCount: 0,
+          deliveryKpi: {
+            id: 'delivery',
+            label: 'Entregas',
+            current: 89,
+            target: 100,
+            unit: 'entregas',
             percentage: 89,
             color: 'green' as const
-          } 
+          }
         },
-        { 
-          cnpj: 'COMPANY B l 0002 [1218|0002-45]', 
-          cnpjId: '1218', 
-          actionCount: 3, 
-          deliveryKpi: { 
-            id: 'delivery', 
-            label: 'Entregas', 
-            current: 45, 
-            target: 100, 
-            unit: 'entregas', 
+        {
+          cnpj: 'COMPANY B l 0002 [1218|0002-45]',
+          cnpjId: '1218',
+          actionCount: 0,
+          processCount: 0,
+          deliveryKpi: {
+            id: 'delivery',
+            label: 'Entregas',
+            current: 45,
+            target: 100,
+            unit: 'entregas',
             percentage: 45,
             color: 'yellow' as const
-          } 
+          }
         }
       ];
-      
-      actionLogService.getPlayerCnpjListWithCount.and.returnValue(of(mockCarteiraData));
-      
-      const companyKpiService = TestBed.inject(CompanyKpiService) as jasmine.SpyObj<CompanyKpiService>;
-      companyKpiService.enrichCompaniesWithKpis.and.returnValue(of(mockEnrichedData));
 
-      // Act
+      supabaseCompaniesService.getCompaniesForPlayer.and.returnValue(of(supabaseRows));
+
+      const companyKpiService = TestBed.inject(CompanyKpiService) as jasmine.SpyObj<CompanyKpiService>;
+      companyKpiService.enrichCarteiraRowsWithMaps.and.returnValue(mockEnrichedData);
+
       fixture.detectChanges();
       tick();
 
-      // Assert - Verify enrichCompaniesWithKpis was called with the raw data
-      expect(companyKpiService.enrichCompaniesWithKpis).toHaveBeenCalledWith(mockCarteiraData);
-      
-      // Assert - Verify the enriched data is stored in the component
+      expect(companyKpiService.fetchGamificacaoMapsAsync).toHaveBeenCalled();
+      expect(companyKpiService.enrichCarteiraRowsWithMaps).toHaveBeenCalledWith(
+        carteiraKpiPayloadFromRows(supabaseRows),
+        jasmine.any(Object)
+      );
       expect(component.carteiraClientes).toEqual(mockEnrichedData);
       expect(component.carteiraClientes[0].deliveryKpi).toBeDefined();
       expect(component.carteiraClientes[0].deliveryKpi?.current).toBe(89);
@@ -1312,30 +1348,20 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
       expect(component.carteiraClientes[1].deliveryKpi?.current).toBe(45);
     }));
 
-    /**
-     * Test loadCarteiraData handles enrichment errors gracefully
-     * Validates: Task 4.3 - Maintain existing error handling
-     */
     it('should handle enrichment errors gracefully', fakeAsync(() => {
-      // Arrange
-      const mockCarteiraData = [
-        { cnpj: 'COMPANY A l 0001 [2000|0001-60]', actionCount: 5 }
-      ];
+      const mockList = [{ cnpj: 'COMPANY A l 0001 [2000|0001-60]' }];
       const error = new Error('Failed to enrich companies with KPI data');
-      
-      actionLogService.getPlayerCnpjListWithCount.and.returnValue(of(mockCarteiraData));
-      
-      const companyKpiService = TestBed.inject(CompanyKpiService) as jasmine.SpyObj<CompanyKpiService>;
-      companyKpiService.enrichCompaniesWithKpis.and.returnValue(throwError(() => error));
 
-      // Act
+      supabaseCompaniesService.getCompaniesForPlayer.and.returnValue(of(rowsFromCnpjList(mockList)));
+
+      const companyKpiService = TestBed.inject(CompanyKpiService) as jasmine.SpyObj<CompanyKpiService>;
+      companyKpiService.fetchGamificacaoMapsAsync.and.returnValue(Promise.reject(error));
+
       fixture.detectChanges();
       tick();
 
-      // Assert - Error should be handled gracefully
-      expect(component.isLoadingCarteira).toBe(false);
+      expect(component.isLoadingClientes).toBe(false);
       expect(component.carteiraClientes).toEqual([]);
-      // Note: No toast error is shown for enrichment failures (silent failure)
     }));
   });
 
@@ -1348,41 +1374,35 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
       kpiService.getPlayerKPIs.and.returnValue(of([]));
     });
 
-    /**
-     * Test KPI indicator displays when deliveryKpi is available
-     * Validates: Task 5.6 - Display KPI indicator when cliente has deliveryKpi
-     */
     it('should display KPI indicator when cliente has deliveryKpi', fakeAsync(() => {
-      // Arrange
       const mockEnrichedData: CompanyDisplay[] = [
-        { 
-          cnpj: 'COMPANY A l 0001 [2000|0001-60]', 
-          cnpjId: '2000', 
-          actionCount: 5, 
-          deliveryKpi: { 
-            id: 'delivery', 
-            label: 'Entregas', 
-            current: 89, 
-            target: 100, 
-            unit: 'entregas', 
+        {
+          cnpj: 'COMPANY A l 0001 [2000|0001-60]',
+          cnpjId: '2000',
+          actionCount: 0,
+          processCount: 0,
+          deliveryKpi: {
+            id: 'delivery',
+            label: 'Entregas',
+            current: 89,
+            target: 100,
+            unit: 'entregas',
             percentage: 89,
             color: 'green' as const
-          } 
+          }
         }
       ];
-      
-      actionLogService.getPlayerCnpjListWithCount.and.returnValue(of([
-        { cnpj: 'COMPANY A l 0001 [2000|0001-60]', actionCount: 5 }
-      ]));
-      
-      const companyKpiService = TestBed.inject(CompanyKpiService) as jasmine.SpyObj<CompanyKpiService>;
-      companyKpiService.enrichCompaniesWithKpis.and.returnValue(of(mockEnrichedData));
 
-      // Act
+      supabaseCompaniesService.getCompaniesForPlayer.and.returnValue(
+        of(rowsFromCnpjList([{ cnpj: 'COMPANY A l 0001 [2000|0001-60]' }]))
+      );
+
+      const companyKpiService = TestBed.inject(CompanyKpiService) as jasmine.SpyObj<CompanyKpiService>;
+      companyKpiService.enrichCarteiraRowsWithMaps.and.returnValue(mockEnrichedData);
+
       fixture.detectChanges();
       tick();
 
-      // Assert
       expect(component.carteiraClientes.length).toBe(1);
       expect(component.carteiraClientes[0].deliveryKpi).toBeDefined();
       expect(component.carteiraClientes[0].deliveryKpi?.label).toBe('Entregas');
@@ -1391,205 +1411,193 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
       expect(component.carteiraClientes[0].deliveryKpi?.percentage).toBe(89);
     }));
 
-    /**
-     * Test "N/A" displays when deliveryKpi is missing
-     * Validates: Task 5.6 - Display "N/A" when cliente does not have deliveryKpi
-     */
-    it('should display "N/A" when cliente does not have deliveryKpi', fakeAsync(() => {
-      // Arrange
+    it('should display "n/a" when cliente does not have deliveryKpi', fakeAsync(() => {
       const mockEnrichedData: CompanyDisplay[] = [
-        { 
-          cnpj: 'COMPANY B l 0002 [1218|0002-45]', 
-          cnpjId: '1218', 
-          actionCount: 3
-          // No deliveryKpi property
+        {
+          cnpj: 'COMPANY B l 0002 [1218|0002-45]',
+          cnpjId: '1218',
+          actionCount: 0,
+          processCount: 0
         }
       ];
-      
-      actionLogService.getPlayerCnpjListWithCount.and.returnValue(of([
-        { cnpj: 'COMPANY B l 0002 [1218|0002-45]', actionCount: 3 }
-      ]));
-      
-      const companyKpiService = TestBed.inject(CompanyKpiService) as jasmine.SpyObj<CompanyKpiService>;
-      companyKpiService.enrichCompaniesWithKpis.and.returnValue(of(mockEnrichedData));
 
-      // Act
+      supabaseCompaniesService.getCompaniesForPlayer.and.returnValue(
+        of(rowsFromCnpjList([{ cnpj: 'COMPANY B l 0002 [1218|0002-45]' }]))
+      );
+
+      const companyKpiService = TestBed.inject(CompanyKpiService) as jasmine.SpyObj<CompanyKpiService>;
+      companyKpiService.enrichCarteiraRowsWithMaps.and.returnValue(mockEnrichedData);
+
       fixture.detectChanges();
       tick();
 
-      // Assert
       expect(component.carteiraClientes.length).toBe(1);
       expect(component.carteiraClientes[0].deliveryKpi).toBeUndefined();
+      const el = fixture.nativeElement as HTMLElement;
+      expect(el.textContent?.toLowerCase()).toContain('n/a');
     }));
 
-    /**
-     * Test multiple companies with mixed KPI availability
-     * Validates: Task 5.6 - Handle mixed scenarios
-     */
     it('should handle multiple companies with mixed KPI availability', fakeAsync(() => {
-      // Arrange
       const mockEnrichedData: CompanyDisplay[] = [
-        { 
-          cnpj: 'COMPANY A l 0001 [2000|0001-60]', 
-          cnpjId: '2000', 
-          actionCount: 5, 
-          deliveryKpi: { 
-            id: 'delivery', 
-            label: 'Entregas', 
-            current: 89, 
-            target: 100, 
-            unit: 'entregas', 
+        {
+          cnpj: 'COMPANY A l 0001 [2000|0001-60]',
+          cnpjId: '2000',
+          actionCount: 0,
+          processCount: 0,
+          deliveryKpi: {
+            id: 'delivery',
+            label: 'Entregas',
+            current: 89,
+            target: 100,
+            unit: 'entregas',
             percentage: 89,
             color: 'green' as const
-          } 
+          }
         },
-        { 
-          cnpj: 'COMPANY B l 0002 [1218|0002-45]', 
-          cnpjId: '1218', 
-          actionCount: 3
-          // No deliveryKpi
+        {
+          cnpj: 'COMPANY B l 0002 [1218|0002-45]',
+          cnpjId: '1218',
+          actionCount: 0,
+          processCount: 0
         },
-        { 
-          cnpj: 'COMPANY C l 0003 [9654|0003-12]', 
-          cnpjId: '9654', 
-          actionCount: 8, 
-          deliveryKpi: { 
-            id: 'delivery', 
-            label: 'Entregas', 
-            current: 102, 
-            target: 100, 
-            unit: 'entregas', 
+        {
+          cnpj: 'COMPANY C l 0003 [9654|0003-12]',
+          cnpjId: '9654',
+          actionCount: 0,
+          processCount: 0,
+          deliveryKpi: {
+            id: 'delivery',
+            label: 'Entregas',
+            current: 102,
+            target: 100,
+            unit: 'entregas',
             percentage: 100,
             color: 'green' as const
-          } 
+          }
         }
       ];
-      
-      actionLogService.getPlayerCnpjListWithCount.and.returnValue(of([
-        { cnpj: 'COMPANY A l 0001 [2000|0001-60]', actionCount: 5 },
-        { cnpj: 'COMPANY B l 0002 [1218|0002-45]', actionCount: 3 },
-        { cnpj: 'COMPANY C l 0003 [9654|0003-12]', actionCount: 8 }
-      ]));
-      
-      const companyKpiService = TestBed.inject(CompanyKpiService) as jasmine.SpyObj<CompanyKpiService>;
-      companyKpiService.enrichCompaniesWithKpis.and.returnValue(of(mockEnrichedData));
 
-      // Act
+      supabaseCompaniesService.getCompaniesForPlayer.and.returnValue(
+        of(
+          rowsFromCnpjList([
+            { cnpj: 'COMPANY A l 0001 [2000|0001-60]' },
+            { cnpj: 'COMPANY B l 0002 [1218|0002-45]' },
+            { cnpj: 'COMPANY C l 0003 [9654|0003-12]' }
+          ])
+        )
+      );
+
+      const companyKpiService = TestBed.inject(CompanyKpiService) as jasmine.SpyObj<CompanyKpiService>;
+      companyKpiService.enrichCarteiraRowsWithMaps.and.returnValue(mockEnrichedData);
+
       fixture.detectChanges();
       tick();
 
-      // Assert
       expect(component.carteiraClientes.length).toBe(3);
       expect(component.carteiraClientes[0].deliveryKpi).toBeDefined();
       expect(component.carteiraClientes[1].deliveryKpi).toBeUndefined();
       expect(component.carteiraClientes[2].deliveryKpi).toBeDefined();
     }));
 
-    /**
-     * Test KPI indicator with different performance levels
-     * Validates: Task 5.6 - Verify KPI values are correctly displayed
-     */
     it('should display KPI indicators with different performance levels', fakeAsync(() => {
-      // Arrange
       const mockEnrichedData: CompanyDisplay[] = [
-        { 
-          cnpj: 'LOW PERFORMER l 0001 [1000|0001-60]', 
-          cnpjId: '1000', 
-          actionCount: 2, 
-          deliveryKpi: { 
-            id: 'delivery', 
-            label: 'Entregas', 
-            current: 25, 
-            target: 100, 
-            unit: 'entregas', 
+        {
+          cnpj: 'LOW PERFORMER l 0001 [1000|0001-60]',
+          cnpjId: '1000',
+          actionCount: 0,
+          processCount: 0,
+          deliveryKpi: {
+            id: 'delivery',
+            label: 'Entregas',
+            current: 25,
+            target: 100,
+            unit: 'entregas',
             percentage: 25,
             color: 'red' as const
-          } 
+          }
         },
-        { 
-          cnpj: 'MEDIUM PERFORMER l 0002 [2000|0002-45]', 
-          cnpjId: '2000', 
-          actionCount: 5, 
-          deliveryKpi: { 
-            id: 'delivery', 
-            label: 'Entregas', 
-            current: 60, 
-            target: 100, 
-            unit: 'entregas', 
+        {
+          cnpj: 'MEDIUM PERFORMER l 0002 [2000|0002-45]',
+          cnpjId: '2000',
+          actionCount: 0,
+          processCount: 0,
+          deliveryKpi: {
+            id: 'delivery',
+            label: 'Entregas',
+            current: 60,
+            target: 100,
+            unit: 'entregas',
             percentage: 60,
             color: 'yellow' as const
-          } 
+          }
         },
-        { 
-          cnpj: 'HIGH PERFORMER l 0003 [3000|0003-12]', 
-          cnpjId: '3000', 
-          actionCount: 10, 
-          deliveryKpi: { 
-            id: 'delivery', 
-            label: 'Entregas', 
-            current: 95, 
-            target: 100, 
-            unit: 'entregas', 
+        {
+          cnpj: 'HIGH PERFORMER l 0003 [3000|0003-12]',
+          cnpjId: '3000',
+          actionCount: 0,
+          processCount: 0,
+          deliveryKpi: {
+            id: 'delivery',
+            label: 'Entregas',
+            current: 95,
+            target: 100,
+            unit: 'entregas',
             percentage: 95,
             color: 'green' as const
-          } 
+          }
         }
       ];
-      
-      actionLogService.getPlayerCnpjListWithCount.and.returnValue(of([
-        { cnpj: 'LOW PERFORMER l 0001 [1000|0001-60]', actionCount: 2 },
-        { cnpj: 'MEDIUM PERFORMER l 0002 [2000|0002-45]', actionCount: 5 },
-        { cnpj: 'HIGH PERFORMER l 0003 [3000|0003-12]', actionCount: 10 }
-      ]));
-      
-      const companyKpiService = TestBed.inject(CompanyKpiService) as jasmine.SpyObj<CompanyKpiService>;
-      companyKpiService.enrichCompaniesWithKpis.and.returnValue(of(mockEnrichedData));
 
-      // Act
+      supabaseCompaniesService.getCompaniesForPlayer.and.returnValue(
+        of(
+          rowsFromCnpjList([
+            { cnpj: 'LOW PERFORMER l 0001 [1000|0001-60]' },
+            { cnpj: 'MEDIUM PERFORMER l 0002 [2000|0002-45]' },
+            { cnpj: 'HIGH PERFORMER l 0003 [3000|0003-12]' }
+          ])
+        )
+      );
+
+      const companyKpiService = TestBed.inject(CompanyKpiService) as jasmine.SpyObj<CompanyKpiService>;
+      companyKpiService.enrichCarteiraRowsWithMaps.and.returnValue(mockEnrichedData);
+
       fixture.detectChanges();
       tick();
 
-      // Assert
       expect(component.carteiraClientes[0].deliveryKpi?.percentage).toBe(25);
       expect(component.carteiraClientes[1].deliveryKpi?.percentage).toBe(60);
       expect(component.carteiraClientes[2].deliveryKpi?.percentage).toBe(95);
     }));
 
-    /**
-     * Test KPI indicator with over-target performance
-     * Validates: Task 5.6 - Handle edge case where current > target
-     */
     it('should display KPI indicator when performance exceeds target', fakeAsync(() => {
-      // Arrange
       const mockEnrichedData: CompanyDisplay[] = [
-        { 
-          cnpj: 'OVER PERFORMER l 0001 [4000|0001-60]', 
-          cnpjId: '4000', 
-          actionCount: 15, 
-          deliveryKpi: { 
-            id: 'delivery', 
-            label: 'Entregas', 
-            current: 120, 
-            target: 100, 
-            unit: 'entregas', 
-            percentage: 100, // Capped at 100%
+        {
+          cnpj: 'OVER PERFORMER l 0001 [4000|0001-60]',
+          cnpjId: '4000',
+          actionCount: 0,
+          processCount: 0,
+          deliveryKpi: {
+            id: 'delivery',
+            label: 'Entregas',
+            current: 120,
+            target: 100,
+            unit: 'entregas',
+            percentage: 100,
             color: 'green' as const
-          } 
+          }
         }
       ];
-      
-      actionLogService.getPlayerCnpjListWithCount.and.returnValue(of([
-        { cnpj: 'OVER PERFORMER l 0001 [4000|0001-60]', actionCount: 15 }
-      ]));
-      
-      const companyKpiService = TestBed.inject(CompanyKpiService) as jasmine.SpyObj<CompanyKpiService>;
-      companyKpiService.enrichCompaniesWithKpis.and.returnValue(of(mockEnrichedData));
 
-      // Act
+      supabaseCompaniesService.getCompaniesForPlayer.and.returnValue(
+        of(rowsFromCnpjList([{ cnpj: 'OVER PERFORMER l 0001 [4000|0001-60]' }]))
+      );
+
+      const companyKpiService = TestBed.inject(CompanyKpiService) as jasmine.SpyObj<CompanyKpiService>;
+      companyKpiService.enrichCarteiraRowsWithMaps.and.returnValue(mockEnrichedData);
+
       fixture.detectChanges();
       tick();
 
-      // Assert
       expect(component.carteiraClientes[0].deliveryKpi?.current).toBe(120);
       expect(component.carteiraClientes[0].deliveryKpi?.target).toBe(100);
       expect(component.carteiraClientes[0].deliveryKpi?.percentage).toBe(100);

@@ -106,8 +106,9 @@ export class ModalCarteiraComponent implements OnInit, OnDestroy {
     this.selectedClienteActions = [];
     this.cdr.markForCheck();
 
-    // Now fetch all actions for this CNPJ (from all players)
-    this.actionLogService.getActionsByCnpj(cnpj, this.month)
+    const singlePlayer =
+      this.playerId && !this.playerId.includes(',') ? this.playerId.trim() : undefined;
+    this.actionLogService.getActionsByCnpj(cnpj, this.month, singlePlayer ? { userId: singlePlayer } : undefined)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (actions) => {

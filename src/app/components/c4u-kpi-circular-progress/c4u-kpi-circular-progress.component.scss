@@ -1,5 +1,16 @@
 @import "tools";
 
+:host.compact-percent-only {
+  .kpi-circular-progress {
+    gap: 4px;
+  }
+
+  .kpi-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+  }
+}
+
 :host {
   display: block;
   

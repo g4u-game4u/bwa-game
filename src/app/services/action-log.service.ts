@@ -3,6 +3,7 @@ import { Observable, of, forkJoin } from 'rxjs';
 import { map, catchError, shareReplay, switchMap } from 'rxjs/operators';
 import { FunifierApiService } from './funifier-api.service';
 import { ActivityMetrics, ProcessMetrics } from '@model/gamification-dashboard.model';
+import { PONTOS_POR_ATIVIDADE_FINALIZADA_ACTION_LOG } from '@app/constants/pontos-por-atividade-action-log';
 
 export interface ActionLogEntry {
   _id: string;
@@ -13,6 +14,7 @@ export interface ActionLogEntry {
     delivery_title?: string; // Process title
     delivery_id?: number; // Process ID (number)
     delivery?: number; // Used in desbloquear action to reference delivery_id
+    deal?: string | number; // ID da empresa no CRM (carteira por time usa este campo no aggregate)
     acao?: string; // Action title to display
     cnpj?: string; // Client CNPJ
     integration_id?: number;
@@ -64,6 +66,14 @@ export interface ClienteActionItem {
   player: string; // userId (email do executor)
   created: number; // timestamp
   status?: 'finalizado' | 'pendente' | 'dispensado'; // Status da tarefa
+  /** Processo (delivery_title) quando vem do action_log */
+  processTitle?: string;
+}
+
+/** Opções para alinhar o aggregate ao mesmo critério da carteira (cnpj vs deal, escopo jogador/time). */
+export interface GetActionsByCompanyKeyOptions {
+  userId?: string;
+  teamId?: string;
 }
 
 interface CacheEntry<T> {
@@ -83,6 +93,66 @@ function extractTimestamp(time: number | { $date: string } | undefined): number 
     return isNaN(date.getTime()) ? 0 : date.getTime();
   }
   return 0;
+}
+
+/** Valores para $in em attributes.cnpj e attributes.deal (Funifier pode gravar string ou número). */
+function buildCompanyIdentifierVariants(raw: string): (string | number)[] {
+  const trimmed = (raw ?? '').trim();
+  if (!trimmed) return [];
+  const out = new Set<string | number>();
+  out.add(trimmed);
+  const asNum = Number(trimmed);
+  if (Number.isFinite(asNum) && !Number.isNaN(asNum)) {
+    out.add(asNum);
+    out.add(String(asNum));
+  }
+  const digits = trimmed.replace(/\D/g, '');
+  if (digits && digits !== trimmed) {
+    out.add(digits);
+    const dn = Number(digits);
+    if (Number.isFinite(dn)) {
+      out.add(dn);
+    }
+  }
+  return [...out];
+}
+
+/** Cruza linha da carteira (CNPJ/deal) com attributes.cnpj / attributes.deal do action_log (string ou número). */
+function actionLogEntryMatchesCompanyKey(entry: ActionLogEntry, companyKey: string): boolean {
+  const variants = buildCompanyIdentifierVariants(companyKey);
+  if (variants.length === 0) {
+    return false;
+  }
+
+  const attrCnpj = entry.attributes?.cnpj;
+  const attrDeal = entry.attributes?.deal;
+  const candidates: unknown[] = [attrCnpj, attrDeal].filter(x => x != null && x !== '');
+
+  for (const cand of candidates) {
+    const asStr = String(cand).trim();
+    const asNum = Number(asStr);
+    for (const v of variants) {
+      if (v === cand) {
+        return true;
+      }
+      if (String(v) === asStr) {
+        return true;
+      }
+      if (typeof v === 'number' && Number.isFinite(asNum) && !Number.isNaN(asNum) && v === asNum) {
+        return true;
+      }
+    }
+    const digitsCand = asStr.replace(/\D/g, '');
+    if (digitsCand) {
+      for (const v of variants) {
+        const vs = String(v).replace(/\D/g, '');
+        if (vs && digitsCand === vs) {
+          return true;
+        }
+      }
+    }
+  }
+  return false;
 }
 
 /**
@@ -219,6 +289,11 @@ function filterAchievementsByMonth<T extends { time?: number | { $date: string }
 })
 export class ActionLogService {
   private readonly CACHE_DURATION = 3 * 60 * 1000; // 3 minutes
+
+  /**
+   * Pontos exibidos no painel e modais: calculados no frontend — 3 por cada
+   * registro de action_log no período (cada registro = uma tarefa/entrega logada).
+   */
   private actionLogCache = new Map<string, CacheEntry<ActionLogEntry[]>>();
   private metricsCache = new Map<string, CacheEntry<{ activity: ActivityMetrics; processo: ProcessMetrics }>>();
   private activityCountCache = new Map<string, CacheEntry<number>>(); // Cache for activity counts
@@ -377,8 +452,8 @@ export class ActionLogService {
   /**
    * Alias for getAtividadesFinalizadas for backward compatibility
    */
-  getCompletedTasksCount(playerId: string): Observable<number> {
-    return this.getAtividadesFinalizadas(playerId);
+  getCompletedTasksCount(playerId: string, month?: Date): Observable<number> {
+    return this.getAtividadesFinalizadas(playerId, month);
   }
 
   /**
@@ -517,70 +592,24 @@ export class ActionLogService {
   }
 
   /**
-   * Get points from achievements based on delivery_ids from action_log
-   * 
-   * Flow:
-   * 1. Get action_log entries for the player (filtered by month on frontend)
-   * 2. Extract unique delivery_ids from attributes.delivery_id
-   * 3. Query achievement collection with those delivery_ids using extra.delivery
-   * 4. Sum the total field
-   * 
-   * Achievement query format:
-   * [
-   *   { $match: { type: 0, "extra.delivery": { $in: [delivery_ids...] } } },
-   *   { $group: { _id: null, total_sum: { $sum: "$total" } } }
-   * ]
+   * Pontos do período: calculados no frontend como
+   * `atividades no action_log (mês/temporada) × PONTOS_POR_ATIVIDADE_FINALIZADA_ACTION_LOG`.
+   * Não consulta mais achievement/delivery_ids no Funifier.
    */
   getPontosForMonth(playerId: string, month?: Date): Observable<number> {
     return this.getPlayerActionLogForMonth(playerId, month).pipe(
-      switchMap(actions => {
-        // Filter by month on frontend
+      map(actions => {
         const filtered = filterByMonth(actions, month);
-        
-        // Extract unique delivery_ids from action_log
-        const deliveryIds = [...new Set(
-          filtered
-            .map(a => a.attributes?.delivery_id)
-            .filter((id): id is number => id != null && typeof id === 'number')
-        )];
-        
-        console.log('📊 Delivery IDs for points query:', deliveryIds.length, 'unique IDs');
-        
-        if (deliveryIds.length === 0) {
-          console.log('📊 No delivery IDs found, returning 0 points');
-          return of(0);
-        }
-        
-        // Query achievement collection with delivery_ids
-        const aggregateBody = [
-          {
-            $match: {
-              type: 0, // type 0 = points
-              'extra.delivery': { $in: deliveryIds }
-            }
-          },
-          {
-            $group: {
-              _id: null,
-              total_sum: { $sum: '$total' }
-            }
-          }
-        ];
-        
-        return this.funifierApi.post<{ _id: null; total_sum: number }[]>(
-          '/v3/database/achievement/aggregate?strict=true',
-          aggregateBody
-        ).pipe(
-          map(response => {
-            const total = response?.[0]?.total_sum || 0;
-            console.log('📊 Achievement points from delivery_ids:', total);
-            return total;
-          }),
-          catchError(error => {
-            console.error('Error fetching achievement points:', error);
-            return of(0);
-          })
+        const total = filtered.length * PONTOS_POR_ATIVIDADE_FINALIZADA_ACTION_LOG;
+        console.log(
+          '📊 Pontos (frontend):',
+          filtered.length,
+          'tarefas ×',
+          PONTOS_POR_ATIVIDADE_FINALIZADA_ACTION_LOG,
+          '=',
+          total
         );
+        return total;
       }),
       catchError(error => {
         console.error('Error in getPontosForMonth:', error);
@@ -762,7 +791,7 @@ export class ActionLogService {
         return filtered.map(a => ({
           id: a._id,
           title: a.attributes?.acao || a.action_title || a.actionId || 'Ação sem título',
-          points: a.points || 0,
+          points: PONTOS_POR_ATIVIDADE_FINALIZADA_ACTION_LOG,
           created: extractTimestamp(a.time as number | { $date: string } | undefined),
           player: a.userId || '',
           cnpj: a.attributes?.cnpj || undefined
@@ -899,8 +928,9 @@ export class ActionLogService {
    * Cached with shareReplay to avoid duplicate requests
    */
   getPlayerCnpjListWithCount(playerId: string, month?: Date): Observable<{ cnpj: string; actionCount: number }[]> {
-      // Cache key without month - we fetch ALL data
-      const cacheKey = `${playerId}_all_cnpj_list_count`;
+      // Month must be part of the key: the inner map closes over `month` when the cached observable is built.
+      const monthKey = this.getMonthCacheKey(month);
+      const cacheKey = `${playerId}_cnpj_list_count_${monthKey}`;
       const cached = this.getCachedData(this.cnpjListWithCountCache, cacheKey);
       if (cached) {
         return cached;
@@ -1027,56 +1057,87 @@ export class ActionLogService {
   }
 
   /**
-   * Get all actions for a specific CNPJ (by all players)
-   * NO time filtering in aggregate - filtering done on frontend
-   * Cached with shareReplay to avoid duplicate requests
+   * Tarefas da empresa cruzadas com POST `action_log/aggregate?strict=true`.
+   * O identificador da linha da carteira pode ser `attributes.cnpj` ou `attributes.deal` (ex.: aggregate da equipa).
+   * Filtro de mês no cliente (filterByMonth), como nas outras leituras de action_log.
    */
-  getActionsByCnpj(cnpj: string, month?: Date): Observable<ClienteActionItem[]> {
+  getActionsByCnpj(
+    companyKey: string,
+    month?: Date,
+    options?: GetActionsByCompanyKeyOptions
+  ): Observable<ClienteActionItem[]> {
     const monthKey = this.getMonthCacheKey(month);
-    const cacheKey = `${cnpj}_actions_by_cnpj_${monthKey}`;
+    const optUser = options?.userId?.trim() || '';
+    const optTeam = options?.teamId?.trim() || '';
+    const cacheKey = `${companyKey}_actions_company_${monthKey}_u_${optUser || 'all'}_t_${optTeam || 'all'}`;
     const cached = this.getCachedData(this.actionsByCnpjCache, cacheKey);
     if (cached) {
       return cached;
     }
 
-    // attributes.cnpj contains the empid (e.g. "1553")
-    // Match both string and number formats since DB may store either
-    const cnpjNum = parseInt(cnpj, 10);
-    const cnpjMatchCondition = !isNaN(cnpjNum)
-      ? { $in: [cnpj, cnpjNum] }
-      : cnpj;
+    const variants = buildCompanyIdentifierVariants(companyKey);
+    if (variants.length === 0) {
+      return of([]);
+    }
 
-    const aggregateBody = [
-      {
-        $match: {
-          'attributes.cnpj': cnpjMatchCondition
-        }
-      },
-      { $sort: { time: -1 } },
-      { $limit: 1000 }
-    ];
+    const companyOr = {
+      $or: [
+        { 'attributes.cnpj': { $in: variants } },
+        { 'attributes.deal': { $in: variants } }
+      ]
+    };
 
-    console.log('📊 Actions by CNPJ query (ALL data, no time filter):', JSON.stringify(aggregateBody));
+    let aggregateBody: object[];
+    if (optUser) {
+      aggregateBody = [
+        { $match: { $and: [companyOr, { userId: optUser }] } },
+        { $sort: { time: -1 } },
+        { $limit: 1000 }
+      ];
+    } else if (optTeam) {
+      aggregateBody = [
+        {
+          $lookup: {
+            from: 'player',
+            localField: 'userId',
+            foreignField: '_id',
+            as: 'playerData'
+          }
+        },
+        { $unwind: '$playerData' },
+        {
+          $match: {
+            $and: [{ 'playerData.teams': optTeam }, companyOr]
+          }
+        },
+        { $sort: { time: -1 } },
+        { $limit: 1000 }
+      ];
+    } else {
+      aggregateBody = [{ $match: companyOr }, { $sort: { time: -1 } }, { $limit: 1000 }];
+    }
+
+    console.log('📊 Actions by company key (action_log aggregate):', JSON.stringify(aggregateBody));
 
     const request$ = this.funifierApi.post<ActionLogEntry[]>(
       '/v3/database/action_log/aggregate?strict=true',
       aggregateBody
     ).pipe(
       map(actions => {
-        console.log('📊 Actions by CNPJ response (ALL):', actions?.length || 0, 'entries');
-        
+        console.log('📊 Actions by company key response:', actions?.length || 0, 'entries');
+
         const filtered = filterByMonth(actions, month);
-        
+
         return filtered.map(a => ({
           id: a._id,
           title: a.attributes?.acao || a.action_title || a.actionId || 'Ação sem título',
           player: a.userId || '',
           created: extractTimestamp(a.time as number | { $date: string } | undefined),
-          cnpj: a.attributes?.cnpj || undefined
+          processTitle: a.attributes?.delivery_title || undefined
         }));
       }),
       catchError(error => {
-        console.error('Error fetching actions by CNPJ:', error);
+        console.error('Error fetching actions by company key:', error);
         return of([]);
       }),
       shareReplay({ bufferSize: 1, refCount: true, windowTime: this.CACHE_DURATION })
@@ -1084,6 +1145,41 @@ export class ActionLogService {
 
     this.setCachedData(this.actionsByCnpjCache, cacheKey, request$);
     return request$;
+  }
+
+  /**
+   * Tarefas do colaborador para um cliente (CNPJ/deal), usando o mesmo conjunto de dados do painel:
+   * `getPlayerActionLogForMonth` → mesmo aggregate paginado `{ $match: { userId } }, { $sort: { time: -1 } }` do carregamento inicial.
+   * Filtra no cliente por `attributes.cnpj` / `attributes.deal` alinhado à lista de participação.
+   */
+  getUserActionsForCompanyUsingPlayerActionLog(
+    playerId: string,
+    companyKey: string,
+    month?: Date
+  ): Observable<ClienteActionItem[]> {
+    return this.getPlayerActionLogForMonth(playerId).pipe(
+      map(actions => {
+        const matched = actions.filter(a => actionLogEntryMatchesCompanyKey(a, companyKey));
+        const filtered = filterByMonth(matched, month);
+        filtered.sort((a, b) => extractTimestamp(b.time) - extractTimestamp(a.time));
+        return filtered.map(a => ({
+          id: a._id,
+          title:
+            a.attributes?.delivery_title ||
+            a.attributes?.acao ||
+            a.action_title ||
+            a.actionId ||
+            'Ação sem título',
+          player: a.userId || '',
+          created: extractTimestamp(a.time as number | { $date: string } | undefined),
+          processTitle: a.attributes?.delivery_title || undefined
+        }));
+      }),
+      catchError(error => {
+        console.error('Error in getUserActionsForCompanyUsingPlayerActionLog:', error);
+        return of([]);
+      })
+    );
   }
 
   /**
@@ -1097,8 +1193,8 @@ export class ActionLogService {
         }
 
         // Fetch actions for each CNPJ
-        const requests = cnpjs.map(cnpj => 
-          this.getActionsByCnpj(cnpj, month).pipe(
+        const requests = cnpjs.map(cnpj =>
+          this.getActionsByCnpj(cnpj, month, { userId: playerId }).pipe(
             map(actions => ({ cnpj, actions }))
           )
         );
@@ -1175,7 +1271,7 @@ export class ActionLogService {
           return {
             id: a._id,
             title: a.attributes?.acao || a.action_title || a.actionId || 'Ação sem título',
-            points: a.points || 0,
+            points: PONTOS_POR_ATIVIDADE_FINALIZADA_ACTION_LOG,
             created: extractTimestamp(a.time as number | { $date: string } | undefined),
             player: a.userId || '',
             status,

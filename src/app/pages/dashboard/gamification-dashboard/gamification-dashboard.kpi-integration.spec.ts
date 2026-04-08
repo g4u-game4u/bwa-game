@@ -20,6 +20,11 @@ import { CompanyKpiService, CompanyDisplay, CnpjKpiData } from '@services/compan
 import { PerformanceMonitorService } from '@services/performance-monitor.service';
 import { SessaoProvider } from '@providers/sessao/sessao.provider';
 import { ActivatedRoute, Router } from '@angular/router';
+import { CacheManagerService } from '@services/cache-manager.service';
+import { CnpjLookupService } from '@services/cnpj-lookup.service';
+import { SupabaseCompaniesService } from '@services/supabase-companies.service';
+import { NgbModal } from '@ng-bootstrap/ng-bootstrap';
+import { SupabaseCompanyRow } from '@model/supabase-company.model';
 import {
   generatePlayerStatus,
   generatePointWallet,
@@ -38,6 +43,7 @@ describe('GamificationDashboard - Company KPI Integration Tests', () => {
   let companyKpiService: jasmine.SpyObj<CompanyKpiService>;
   let performanceMonitor: jasmine.SpyObj<PerformanceMonitorService>;
   let sessaoProvider: jasmine.SpyObj<SessaoProvider>;
+  let supabaseCompaniesService: jasmine.SpyObj<SupabaseCompaniesService>;
 
   beforeEach(async () => {
     // Create spy objects for all services
@@ -62,15 +68,27 @@ describe('GamificationDashboard - Company KPI Integration Tests', () => {
       'getProgressMetrics',
       'getPlayerCnpjListWithCount',
       'getUniqueClientesCount',
-      'getCompletedTasksCount'
+      'getCompletedTasksCount',
+      'getPontosForMonth'
     ]);
 
+    const emptyGamificacaoMaps = { byEmpId: new Map(), byCnpjNorm: new Map() };
     const companyKpiServiceSpy = jasmine.createSpyObj('CompanyKpiService', [
       'extractCnpjId',
       'getKpiData',
-      'enrichCompaniesWithKpis',
+      'enrichFromCnpjResp',
+      'fetchGamificacaoMapsAsync',
+      'enrichCarteiraRowsWithMaps',
       'clearCache'
     ]);
+
+    const cacheManagerSpy = jasmine.createSpyObj('CacheManagerService', ['clearAllCaches']);
+    const cnpjLookupSpy = jasmine.createSpyObj('CnpjLookupService', ['enrichCnpjListFull']);
+    const supabaseCompaniesSpy = jasmine.createSpyObj('SupabaseCompaniesService', [
+      'getCompaniesForPlayer',
+      'applyRowsToCnpjMaps'
+    ]);
+    const ngbModalSpy = jasmine.createSpyObj('NgbModal', ['open']);
 
     const performanceMonitorSpy = jasmine.createSpyObj('PerformanceMonitorService', [
       'measureRenderTime',
@@ -102,6 +120,10 @@ describe('GamificationDashboard - Company KPI Integration Tests', () => {
         { provide: CompanyKpiService, useValue: companyKpiServiceSpy },
         { provide: PerformanceMonitorService, useValue: performanceMonitorSpy },
         { provide: SessaoProvider, useValue: sessaoProviderSpy },
+        { provide: CacheManagerService, useValue: cacheManagerSpy },
+        { provide: CnpjLookupService, useValue: cnpjLookupSpy },
+        { provide: SupabaseCompaniesService, useValue: supabaseCompaniesSpy },
+        { provide: NgbModal, useValue: ngbModalSpy },
         { provide: ActivatedRoute, useValue: activatedRouteSpy },
         { provide: Router, useValue: routerSpy }
       ],
@@ -116,6 +138,7 @@ describe('GamificationDashboard - Company KPI Integration Tests', () => {
     companyKpiService = TestBed.inject(CompanyKpiService) as jasmine.SpyObj<CompanyKpiService>;
     performanceMonitor = TestBed.inject(PerformanceMonitorService) as jasmine.SpyObj<PerformanceMonitorService>;
     sessaoProvider = TestBed.inject(SessaoProvider) as jasmine.SpyObj<SessaoProvider>;
+    supabaseCompaniesService = TestBed.inject(SupabaseCompaniesService) as jasmine.SpyObj<SupabaseCompaniesService>;
 
     // Setup default return values
     playerService.getPlayerStatus.and.returnValue(of(generatePlayerStatus()));
@@ -129,6 +152,11 @@ describe('GamificationDashboard - Company KPI Integration Tests', () => {
     }));
     actionLogService.getUniqueClientesCount.and.returnValue(of(0));
     actionLogService.getCompletedTasksCount.and.returnValue(of(0));
+    actionLogService.getPontosForMonth.and.returnValue(of(500));
+    companyKpiService.fetchGamificacaoMapsAsync.and.returnValue(Promise.resolve(emptyGamificacaoMaps));
+    companyKpiService.enrichCarteiraRowsWithMaps.and.returnValue([]);
+    companyKpiService.enrichFromCnpjResp.and.returnValue(of([]));
+    supabaseCompaniesService.getCompaniesForPlayer.and.returnValue(of([]));
 
     fixture = TestBed.createComponent(GamificationDashboardComponent);
     component = fixture.componentInstance;
@@ -143,6 +171,23 @@ describe('GamificationDashboard - Company KPI Integration Tests', () => {
       { cnpj: 'ACME CORPORATION l 0002 [1218|0002-45]', actionCount: 3 },
       { cnpj: 'TECH SOLUTIONS LTDA l 0003 [9654|0003-12]', actionCount: 8 }
     ];
+  }
+
+  function rowsFromCnpjList(list: { cnpj: string }[]): SupabaseCompanyRow[] {
+    return list.map((item, i) => {
+      const name = item.cnpj.includes(' l ') ? item.cnpj.split(' l ')[0].trim() : `Empresa ${i}`;
+      return {
+        id: i + 1,
+        cnpj: item.cnpj,
+        razao_social: name,
+        fantasia: name,
+        status: 'Ativa',
+        client_type_id: null,
+        synced_at: '',
+        created_at: '',
+        responsaveis: []
+      };
+    });
   }
 
   /**
@@ -165,6 +210,7 @@ describe('GamificationDashboard - Company KPI Integration Tests', () => {
         cnpj: 'RODOPRIMA LOGISTICA LTDA l 0001 [2000|0001-60]',
         cnpjId: '2000',
         actionCount: 5,
+        processCount: 0,
         deliveryKpi: {
           id: 'delivery',
           label: 'Entregas',
@@ -179,6 +225,7 @@ describe('GamificationDashboard - Company KPI Integration Tests', () => {
         cnpj: 'ACME CORPORATION l 0002 [1218|0002-45]',
         cnpjId: '1218',
         actionCount: 3,
+        processCount: 0,
         deliveryKpi: {
           id: 'delivery',
           label: 'Entregas',
@@ -193,6 +240,7 @@ describe('GamificationDashboard - Company KPI Integration Tests', () => {
         cnpj: 'TECH SOLUTIONS LTDA l 0003 [9654|0003-12]',
         cnpjId: '9654',
         actionCount: 8,
+        processCount: 0,
         deliveryKpi: {
           id: 'delivery',
           label: 'Entregas',
@@ -211,27 +259,26 @@ describe('GamificationDashboard - Company KPI Integration Tests', () => {
      * Test 9.2: Complete flow with valid KPI data
      * Validates: Requirements 1.1, 1.2, 2.1, 2.2, 2.3
      */
-    it('should load companies from action_log and enrich with KPI data', fakeAsync(() => {
+    it('should load companies from Supabase (service) and enrich with KPI data', fakeAsync(() => {
       // Arrange
       const mockCnpjList = createMockCnpjList();
       const enrichedCompanies = createEnrichedCompanies();
 
-      actionLogService.getPlayerCnpjListWithCount.and.returnValue(of(mockCnpjList));
-      companyKpiService.enrichCompaniesWithKpis.and.returnValue(of(enrichedCompanies));
+      supabaseCompaniesService.getCompaniesForPlayer.and.returnValue(of(rowsFromCnpjList(mockCnpjList)));
+      companyKpiService.enrichCarteiraRowsWithMaps.and.returnValue(enrichedCompanies);
+      companyKpiService.enrichFromCnpjResp.and.returnValue(of(enrichedCompanies));
 
       // Act
       fixture.detectChanges(); // Triggers ngOnInit
       tick();
 
       // Assert
-      expect(actionLogService.getPlayerCnpjListWithCount).toHaveBeenCalledWith(
-        'test@example.com',
-        jasmine.any(Date)
-      );
-      expect(companyKpiService.enrichCompaniesWithKpis).toHaveBeenCalledWith(mockCnpjList);
+      expect(supabaseCompaniesService.getCompaniesForPlayer).toHaveBeenCalled();
+      expect(companyKpiService.fetchGamificacaoMapsAsync).toHaveBeenCalled();
+      expect(companyKpiService.enrichCarteiraRowsWithMaps).toHaveBeenCalled();
+      expect(companyKpiService.enrichFromCnpjResp).toHaveBeenCalled();
       expect(component.carteiraClientes).toEqual(enrichedCompanies);
       expect(component.carteiraClientes.length).toBe(3);
-      expect(component.isLoadingCarteira).toBe(false);
     }));
 
     /**
@@ -241,8 +288,9 @@ describe('GamificationDashboard - Company KPI Integration Tests', () => {
     it('should have correct KPI data structure in enriched companies', fakeAsync(() => {
       // Arrange
       const enrichedCompanies = createEnrichedCompanies();
-      actionLogService.getPlayerCnpjListWithCount.and.returnValue(of(createMockCnpjList()));
-      companyKpiService.enrichCompaniesWithKpis.and.returnValue(of(enrichedCompanies));
+      supabaseCompaniesService.getCompaniesForPlayer.and.returnValue(of(rowsFromCnpjList(createMockCnpjList())));
+      companyKpiService.enrichCarteiraRowsWithMaps.and.returnValue(enrichedCompanies);
+      companyKpiService.enrichFromCnpjResp.and.returnValue(of(enrichedCompanies));
 
       // Act
       fixture.detectChanges();
@@ -266,8 +314,9 @@ describe('GamificationDashboard - Company KPI Integration Tests', () => {
     it('should extract CNPJ IDs correctly from action_log format', fakeAsync(() => {
       // Arrange
       const enrichedCompanies = createEnrichedCompanies();
-      actionLogService.getPlayerCnpjListWithCount.and.returnValue(of(createMockCnpjList()));
-      companyKpiService.enrichCompaniesWithKpis.and.returnValue(of(enrichedCompanies));
+      supabaseCompaniesService.getCompaniesForPlayer.and.returnValue(of(rowsFromCnpjList(createMockCnpjList())));
+      companyKpiService.enrichCarteiraRowsWithMaps.and.returnValue(enrichedCompanies);
+      companyKpiService.enrichFromCnpjResp.and.returnValue(of(enrichedCompanies));
 
       // Act
       fixture.detectChanges();
@@ -286,8 +335,9 @@ describe('GamificationDashboard - Company KPI Integration Tests', () => {
     it('should preserve action counts from action_log', fakeAsync(() => {
       // Arrange
       const enrichedCompanies = createEnrichedCompanies();
-      actionLogService.getPlayerCnpjListWithCount.and.returnValue(of(createMockCnpjList()));
-      companyKpiService.enrichCompaniesWithKpis.and.returnValue(of(enrichedCompanies));
+      supabaseCompaniesService.getCompaniesForPlayer.and.returnValue(of(rowsFromCnpjList(createMockCnpjList())));
+      companyKpiService.enrichCarteiraRowsWithMaps.and.returnValue(enrichedCompanies);
+      companyKpiService.enrichFromCnpjResp.and.returnValue(of(enrichedCompanies));
 
       // Act
       fixture.detectChanges();
@@ -308,8 +358,9 @@ describe('GamificationDashboard - Company KPI Integration Tests', () => {
     it('should display KPI indicators for companies with valid data', fakeAsync(() => {
       // Arrange
       const enrichedCompanies = createEnrichedCompanies();
-      actionLogService.getPlayerCnpjListWithCount.and.returnValue(of(createMockCnpjList()));
-      companyKpiService.enrichCompaniesWithKpis.and.returnValue(of(enrichedCompanies));
+      supabaseCompaniesService.getCompaniesForPlayer.and.returnValue(of(rowsFromCnpjList(createMockCnpjList())));
+      companyKpiService.enrichCarteiraRowsWithMaps.and.returnValue(enrichedCompanies);
+      companyKpiService.enrichFromCnpjResp.and.returnValue(of(enrichedCompanies));
 
       // Act
       fixture.detectChanges();
@@ -330,8 +381,9 @@ describe('GamificationDashboard - Company KPI Integration Tests', () => {
     it('should assign correct colors based on KPI performance', fakeAsync(() => {
       // Arrange
       const enrichedCompanies = createEnrichedCompanies();
-      actionLogService.getPlayerCnpjListWithCount.and.returnValue(of(createMockCnpjList()));
-      companyKpiService.enrichCompaniesWithKpis.and.returnValue(of(enrichedCompanies));
+      supabaseCompaniesService.getCompaniesForPlayer.and.returnValue(of(rowsFromCnpjList(createMockCnpjList())));
+      companyKpiService.enrichCarteiraRowsWithMaps.and.returnValue(enrichedCompanies);
+      companyKpiService.enrichFromCnpjResp.and.returnValue(of(enrichedCompanies));
 
       // Act
       fixture.detectChanges();
@@ -353,8 +405,9 @@ describe('GamificationDashboard - Company KPI Integration Tests', () => {
     it('should handle multiple companies with KPI data', fakeAsync(() => {
       // Arrange
       const enrichedCompanies = createEnrichedCompanies();
-      actionLogService.getPlayerCnpjListWithCount.and.returnValue(of(createMockCnpjList()));
-      companyKpiService.enrichCompaniesWithKpis.and.returnValue(of(enrichedCompanies));
+      supabaseCompaniesService.getCompaniesForPlayer.and.returnValue(of(rowsFromCnpjList(createMockCnpjList())));
+      companyKpiService.enrichCarteiraRowsWithMaps.and.returnValue(enrichedCompanies);
+      companyKpiService.enrichFromCnpjResp.and.returnValue(of(enrichedCompanies));
 
       // Act
       fixture.detectChanges();
@@ -377,15 +430,17 @@ describe('GamificationDashboard - Company KPI Integration Tests', () => {
         {
           cnpj: 'COMPANY WITHOUT KPI l 0001 [5000|0001-00]',
           cnpjId: '5000',
-          actionCount: 2
+          actionCount: 2,
+          processCount: 0
           // No deliveryKpi property
         }
       ];
 
-      actionLogService.getPlayerCnpjListWithCount.and.returnValue(of([
-        { cnpj: 'COMPANY WITHOUT KPI l 0001 [5000|0001-00]', actionCount: 2 }
-      ]));
-      companyKpiService.enrichCompaniesWithKpis.and.returnValue(of(companiesWithoutKpi));
+      supabaseCompaniesService.getCompaniesForPlayer.and.returnValue(
+        of(rowsFromCnpjList([{ cnpj: 'COMPANY WITHOUT KPI l 0001 [5000|0001-00]' }]))
+      );
+      companyKpiService.enrichCarteiraRowsWithMaps.and.returnValue(companiesWithoutKpi);
+      companyKpiService.enrichFromCnpjResp.and.returnValue(of(companiesWithoutKpi));
 
       // Act
       fixture.detectChanges();
@@ -394,7 +449,7 @@ describe('GamificationDashboard - Company KPI Integration Tests', () => {
       // Assert
       expect(component.carteiraClientes.length).toBe(1);
       expect(component.carteiraClientes[0].deliveryKpi).toBeUndefined();
-      expect(component.isLoadingCarteira).toBe(false);
+      expect(component.isLoadingClientes).toBe(false);
     }));
 
     /**
@@ -403,8 +458,9 @@ describe('GamificationDashboard - Company KPI Integration Tests', () => {
      */
     it('should handle empty CNPJ list from action_log', fakeAsync(() => {
       // Arrange
-      actionLogService.getPlayerCnpjListWithCount.and.returnValue(of([]));
-      companyKpiService.enrichCompaniesWithKpis.and.returnValue(of([]));
+      supabaseCompaniesService.getCompaniesForPlayer.and.returnValue(of([]));
+      companyKpiService.enrichCarteiraRowsWithMaps.and.returnValue([]);
+      companyKpiService.enrichFromCnpjResp.and.returnValue(of([]));
 
       // Act
       fixture.detectChanges();
@@ -412,7 +468,7 @@ describe('GamificationDashboard - Company KPI Integration Tests', () => {
 
       // Assert
       expect(component.carteiraClientes).toEqual([]);
-      expect(component.isLoadingCarteira).toBe(false);
+      expect(component.isLoadingClientes).toBe(false);
     }));
 
     /**
@@ -425,15 +481,17 @@ describe('GamificationDashboard - Company KPI Integration Tests', () => {
         {
           cnpj: 'INVALID FORMAT',
           cnpjId: undefined,
-          actionCount: 1
+          actionCount: 1,
+          processCount: 0
           // No deliveryKpi due to invalid format
         }
       ];
 
-      actionLogService.getPlayerCnpjListWithCount.and.returnValue(of([
-        { cnpj: 'INVALID FORMAT', actionCount: 1 }
-      ]));
-      companyKpiService.enrichCompaniesWithKpis.and.returnValue(of(companiesWithInvalidFormat));
+      supabaseCompaniesService.getCompaniesForPlayer.and.returnValue(
+        of(rowsFromCnpjList([{ cnpj: 'INVALID FORMAT' }]))
+      );
+      companyKpiService.enrichCarteiraRowsWithMaps.and.returnValue(companiesWithInvalidFormat);
+      companyKpiService.enrichFromCnpjResp.and.returnValue(of(companiesWithInvalidFormat));
 
       // Act
       fixture.detectChanges();
@@ -456,6 +514,7 @@ describe('GamificationDashboard - Company KPI Integration Tests', () => {
           cnpj: 'COMPANY WITH KPI l 0001 [2000|0001-60]',
           cnpjId: '2000',
           actionCount: 5,
+          processCount: 0,
           deliveryKpi: {
             id: 'delivery',
             label: 'Entregas',
@@ -469,16 +528,22 @@ describe('GamificationDashboard - Company KPI Integration Tests', () => {
         {
           cnpj: 'COMPANY WITHOUT KPI l 0002 [9999|0002-00]',
           cnpjId: '9999',
-          actionCount: 2
+          actionCount: 2,
+          processCount: 0
           // No deliveryKpi
         }
       ];
 
-      actionLogService.getPlayerCnpjListWithCount.and.returnValue(of([
-        { cnpj: 'COMPANY WITH KPI l 0001 [2000|0001-60]', actionCount: 5 },
-        { cnpj: 'COMPANY WITHOUT KPI l 0002 [9999|0002-00]', actionCount: 2 }
-      ]));
-      companyKpiService.enrichCompaniesWithKpis.and.returnValue(of(mixedCompanies));
+      supabaseCompaniesService.getCompaniesForPlayer.and.returnValue(
+        of(
+          rowsFromCnpjList([
+            { cnpj: 'COMPANY WITH KPI l 0001 [2000|0001-60]' },
+            { cnpj: 'COMPANY WITHOUT KPI l 0002 [9999|0002-00]' }
+          ])
+        )
+      );
+      companyKpiService.enrichCarteiraRowsWithMaps.and.returnValue(mixedCompanies);
+      companyKpiService.enrichFromCnpjResp.and.returnValue(of(mixedCompanies));
 
       // Act
       fixture.detectChanges();
@@ -499,8 +564,9 @@ describe('GamificationDashboard - Company KPI Integration Tests', () => {
     it('should display KPI indicators in carteira list', fakeAsync(() => {
       // Arrange
       const enrichedCompanies = createEnrichedCompanies();
-      actionLogService.getPlayerCnpjListWithCount.and.returnValue(of(createMockCnpjList()));
-      companyKpiService.enrichCompaniesWithKpis.and.returnValue(of(enrichedCompanies));
+      supabaseCompaniesService.getCompaniesForPlayer.and.returnValue(of(rowsFromCnpjList(createMockCnpjList())));
+      companyKpiService.enrichCarteiraRowsWithMaps.and.returnValue(enrichedCompanies);
+      companyKpiService.enrichFromCnpjResp.and.returnValue(of(enrichedCompanies));
 
       // Act
       fixture.detectChanges();
@@ -521,8 +587,9 @@ describe('GamificationDashboard - Company KPI Integration Tests', () => {
     it('should extract and display company names correctly', fakeAsync(() => {
       // Arrange
       const enrichedCompanies = createEnrichedCompanies();
-      actionLogService.getPlayerCnpjListWithCount.and.returnValue(of(createMockCnpjList()));
-      companyKpiService.enrichCompaniesWithKpis.and.returnValue(of(enrichedCompanies));
+      supabaseCompaniesService.getCompaniesForPlayer.and.returnValue(of(rowsFromCnpjList(createMockCnpjList())));
+      companyKpiService.enrichCarteiraRowsWithMaps.and.returnValue(enrichedCompanies);
+      companyKpiService.enrichFromCnpjResp.and.returnValue(of(enrichedCompanies));
 
       // Act
       fixture.detectChanges();
@@ -544,10 +611,15 @@ describe('GamificationDashboard - Company KPI Integration Tests', () => {
     it('should manage loading state correctly during data fetch', fakeAsync(() => {
       // Arrange
       const enrichedCompanies = createEnrichedCompanies();
-      actionLogService.getPlayerCnpjListWithCount.and.returnValue(
-        of(createMockCnpjList()).pipe(delay(100))
+      const delayedMaps = { byEmpId: new Map(), byCnpjNorm: new Map() };
+      companyKpiService.fetchGamificacaoMapsAsync.and.returnValue(
+        new Promise(resolve => setTimeout(() => resolve(delayedMaps), 100))
       );
-      companyKpiService.enrichCompaniesWithKpis.and.returnValue(
+      supabaseCompaniesService.getCompaniesForPlayer.and.returnValue(
+        of(rowsFromCnpjList(createMockCnpjList())).pipe(delay(100))
+      );
+      companyKpiService.enrichCarteiraRowsWithMaps.and.returnValue(enrichedCompanies);
+      companyKpiService.enrichFromCnpjResp.and.returnValue(
         of(enrichedCompanies).pipe(delay(100))
       );
 
@@ -555,12 +627,12 @@ describe('GamificationDashboard - Company KPI Integration Tests', () => {
       fixture.detectChanges();
 
       // Assert - Initially loading
-      expect(component.isLoadingCarteira).toBe(true);
+      expect(component.isLoadingClientes).toBe(true);
 
       tick(250);
 
       // Assert - Loading complete
-      expect(component.isLoadingCarteira).toBe(false);
+      expect(component.isLoadingClientes).toBe(false);
       expect(component.carteiraClientes.length).toBe(3);
     }));
 
@@ -571,8 +643,9 @@ describe('GamificationDashboard - Company KPI Integration Tests', () => {
     it('should update KPI data when dashboard is refreshed', fakeAsync(() => {
       // Arrange - Initial data
       const initialCompanies = createEnrichedCompanies();
-      actionLogService.getPlayerCnpjListWithCount.and.returnValue(of(createMockCnpjList()));
-      companyKpiService.enrichCompaniesWithKpis.and.returnValue(of(initialCompanies));
+      supabaseCompaniesService.getCompaniesForPlayer.and.returnValue(of(rowsFromCnpjList(createMockCnpjList())));
+      companyKpiService.enrichCarteiraRowsWithMaps.and.returnValue(initialCompanies);
+      companyKpiService.enrichFromCnpjResp.and.returnValue(of(initialCompanies));
 
       fixture.detectChanges();
       tick();
@@ -582,7 +655,8 @@ describe('GamificationDashboard - Company KPI Integration Tests', () => {
       // Arrange - Updated data
       const updatedCompanies = createEnrichedCompanies();
       updatedCompanies[0].deliveryKpi!.current = 95; // Updated value
-      companyKpiService.enrichCompaniesWithKpis.and.returnValue(of(updatedCompanies));
+      companyKpiService.enrichCarteiraRowsWithMaps.and.returnValue(updatedCompanies);
+      companyKpiService.enrichFromCnpjResp.and.returnValue(of(updatedCompanies));
 
       // Act - Refresh
       component.refreshData();
@@ -601,7 +675,7 @@ describe('GamificationDashboard - Company KPI Integration Tests', () => {
     it('should handle action_log API failure gracefully', fakeAsync(() => {
       // Arrange
       const error = new Error('API Error');
-      actionLogService.getPlayerCnpjListWithCount.and.returnValue(throwError(() => error));
+      supabaseCompaniesService.getCompaniesForPlayer.and.returnValue(throwError(() => error));
 
       // Act
       fixture.detectChanges();
@@ -609,7 +683,7 @@ describe('GamificationDashboard - Company KPI Integration Tests', () => {
 
       // Assert
       expect(component.carteiraClientes).toEqual([]);
-      expect(component.isLoadingCarteira).toBe(false);
+      expect(component.isLoadingClientes).toBe(false);
       // Should not break the application
       expect(component.isLoadingPlayer).toBe(false);
     }));
@@ -622,15 +696,16 @@ describe('GamificationDashboard - Company KPI Integration Tests', () => {
       // Arrange
       const mockCnpjList = createMockCnpjList();
       const error = new Error('Enrichment Error');
-      actionLogService.getPlayerCnpjListWithCount.and.returnValue(of(mockCnpjList));
-      companyKpiService.enrichCompaniesWithKpis.and.returnValue(throwError(() => error));
+      supabaseCompaniesService.getCompaniesForPlayer.and.returnValue(of(rowsFromCnpjList(mockCnpjList)));
+      companyKpiService.fetchGamificacaoMapsAsync.and.returnValue(Promise.reject(error));
+      companyKpiService.enrichFromCnpjResp.and.returnValue(throwError(() => error));
 
       // Act
       fixture.detectChanges();
       tick();
 
       // Assert
-      expect(component.isLoadingCarteira).toBe(false);
+      expect(component.isLoadingClientes).toBe(false);
       // Application should continue to function
       expect(component.isLoadingPlayer).toBe(false);
     }));
@@ -642,7 +717,7 @@ describe('GamificationDashboard - Company KPI Integration Tests', () => {
     it('should handle network timeout gracefully', fakeAsync(() => {
       // Arrange
       const error = new Error('Network timeout');
-      actionLogService.getPlayerCnpjListWithCount.and.returnValue(
+      supabaseCompaniesService.getCompaniesForPlayer.and.returnValue(
         throwError(() => error).pipe(delay(5000))
       );
 
@@ -651,7 +726,7 @@ describe('GamificationDashboard - Company KPI Integration Tests', () => {
       tick(5100);
 
       // Assert
-      expect(component.isLoadingCarteira).toBe(false);
+      expect(component.isLoadingClientes).toBe(false);
     }));
 
     /**
@@ -661,7 +736,7 @@ describe('GamificationDashboard - Company KPI Integration Tests', () => {
     it('should continue loading other sections when carteira fails', fakeAsync(() => {
       // Arrange
       const error = new Error('Carteira API Error');
-      actionLogService.getPlayerCnpjListWithCount.and.returnValue(throwError(() => error));
+      supabaseCompaniesService.getCompaniesForPlayer.and.returnValue(throwError(() => error));
       
       // Other services should still work
       playerService.getPlayerStatus.and.returnValue(of(generatePlayerStatus()));
@@ -683,8 +758,9 @@ describe('GamificationDashboard - Company KPI Integration Tests', () => {
      */
     it('should handle malformed API response gracefully', fakeAsync(() => {
       // Arrange
-      actionLogService.getPlayerCnpjListWithCount.and.returnValue(of(null as any));
-      companyKpiService.enrichCompaniesWithKpis.and.returnValue(of([]));
+      supabaseCompaniesService.getCompaniesForPlayer.and.returnValue(of([]));
+      companyKpiService.enrichCarteiraRowsWithMaps.and.returnValue([]);
+      companyKpiService.enrichFromCnpjResp.and.returnValue(of([]));
 
       // Act
       fixture.detectChanges();
@@ -692,7 +768,7 @@ describe('GamificationDashboard - Company KPI Integration Tests', () => {
 
       // Assert
       expect(component.carteiraClientes).toEqual([]);
-      expect(component.isLoadingCarteira).toBe(false);
+      expect(component.isLoadingClientes).toBe(false);
     }));
   });
 
@@ -704,14 +780,15 @@ describe('GamificationDashboard - Company KPI Integration Tests', () => {
     it('should use cached data on subsequent loads', fakeAsync(() => {
       // Arrange
       const enrichedCompanies = createEnrichedCompanies();
-      actionLogService.getPlayerCnpjListWithCount.and.returnValue(of(createMockCnpjList()));
-      companyKpiService.enrichCompaniesWithKpis.and.returnValue(of(enrichedCompanies));
+      supabaseCompaniesService.getCompaniesForPlayer.and.returnValue(of(rowsFromCnpjList(createMockCnpjList())));
+      companyKpiService.enrichCarteiraRowsWithMaps.and.returnValue(enrichedCompanies);
+      companyKpiService.enrichFromCnpjResp.and.returnValue(of(enrichedCompanies));
 
       // Act - First load
       fixture.detectChanges();
       tick();
 
-      const firstCallCount = companyKpiService.enrichCompaniesWithKpis.calls.count();
+      const firstCallCount = companyKpiService.fetchGamificacaoMapsAsync.calls.count();
 
       // Act - Second load (should use cache)
       component.loadDashboardData();
@@ -720,7 +797,9 @@ describe('GamificationDashboard - Company KPI Integration Tests', () => {
       // Assert
       // Note: Caching is handled by the service, so we verify the service is called
       // The actual caching behavior is tested in the service unit tests
-      expect(companyKpiService.enrichCompaniesWithKpis.calls.count()).toBeGreaterThan(firstCallCount);
+      expect(companyKpiService.fetchGamificacaoMapsAsync.calls.count()).toBeGreaterThan(
+        firstCallCount
+      );
     }));
 
     /**
@@ -730,8 +809,9 @@ describe('GamificationDashboard - Company KPI Integration Tests', () => {
     it('should clear cache when manual refresh is triggered', fakeAsync(() => {
       // Arrange
       const enrichedCompanies = createEnrichedCompanies();
-      actionLogService.getPlayerCnpjListWithCount.and.returnValue(of(createMockCnpjList()));
-      companyKpiService.enrichCompaniesWithKpis.and.returnValue(of(enrichedCompanies));
+      supabaseCompaniesService.getCompaniesForPlayer.and.returnValue(of(rowsFromCnpjList(createMockCnpjList())));
+      companyKpiService.enrichCarteiraRowsWithMaps.and.returnValue(enrichedCompanies);
+      companyKpiService.enrichFromCnpjResp.and.returnValue(of(enrichedCompanies));
 
       fixture.detectChanges();
       tick();
@@ -741,8 +821,8 @@ describe('GamificationDashboard - Company KPI Integration Tests', () => {
       tick();
 
       // Assert
-      // Verify enrichCompaniesWithKpis is called again after refresh
-      expect(companyKpiService.enrichCompaniesWithKpis.calls.count()).toBeGreaterThanOrEqual(2);
+      // Carteira enrichment runs again after refresh
+      expect(companyKpiService.fetchGamificacaoMapsAsync.calls.count()).toBeGreaterThanOrEqual(2);
     }));
 
     /**
@@ -752,8 +832,9 @@ describe('GamificationDashboard - Company KPI Integration Tests', () => {
     it('should handle multiple loads efficiently', fakeAsync(() => {
       // Arrange
       const enrichedCompanies = createEnrichedCompanies();
-      actionLogService.getPlayerCnpjListWithCount.and.returnValue(of(createMockCnpjList()));
-      companyKpiService.enrichCompaniesWithKpis.and.returnValue(of(enrichedCompanies));
+      supabaseCompaniesService.getCompaniesForPlayer.and.returnValue(of(rowsFromCnpjList(createMockCnpjList())));
+      companyKpiService.enrichCarteiraRowsWithMaps.and.returnValue(enrichedCompanies);
+      companyKpiService.enrichFromCnpjResp.and.returnValue(of(enrichedCompanies));
 
       // Act - Multiple loads
       fixture.detectChanges();
@@ -767,7 +848,7 @@ describe('GamificationDashboard - Company KPI Integration Tests', () => {
 
       // Assert
       expect(component.carteiraClientes.length).toBe(3);
-      expect(component.isLoadingCarteira).toBe(false);
+      expect(component.isLoadingClientes).toBe(false);
     }));
   });
 
@@ -790,6 +871,7 @@ describe('GamificationDashboard - Company KPI Integration Tests', () => {
         cnpj: item.cnpj,
         cnpjId: `100${index + 1}`,
         actionCount: item.actionCount,
+        processCount: 0,
         deliveryKpi: {
           id: 'delivery',
           label: 'Entregas',
@@ -801,8 +883,9 @@ describe('GamificationDashboard - Company KPI Integration Tests', () => {
         }
       }));
 
-      actionLogService.getPlayerCnpjListWithCount.and.returnValue(of(realisticCnpjList));
-      companyKpiService.enrichCompaniesWithKpis.and.returnValue(of(realisticEnrichedCompanies));
+      supabaseCompaniesService.getCompaniesForPlayer.and.returnValue(of(rowsFromCnpjList(realisticCnpjList)));
+      companyKpiService.enrichCarteiraRowsWithMaps.and.returnValue(realisticEnrichedCompanies);
+      companyKpiService.enrichFromCnpjResp.and.returnValue(of(realisticEnrichedCompanies));
 
       // Act
       fixture.detectChanges();
@@ -810,7 +893,7 @@ describe('GamificationDashboard - Company KPI Integration Tests', () => {
 
       // Assert
       expect(component.carteiraClientes.length).toBe(5);
-      expect(component.isLoadingCarteira).toBe(false);
+      expect(component.isLoadingClientes).toBe(false);
 
       // Verify all companies have KPI data
       component.carteiraClientes.forEach(company => {
@@ -836,10 +919,15 @@ describe('GamificationDashboard - Company KPI Integration Tests', () => {
       const enrichedCompanies = createEnrichedCompanies();
       const startTime = Date.now();
 
-      actionLogService.getPlayerCnpjListWithCount.and.returnValue(
-        of(createMockCnpjList()).pipe(delay(100))
+      const perfMaps = { byEmpId: new Map(), byCnpjNorm: new Map() };
+      companyKpiService.fetchGamificacaoMapsAsync.and.returnValue(
+        new Promise(resolve => setTimeout(() => resolve(perfMaps), 100))
       );
-      companyKpiService.enrichCompaniesWithKpis.and.returnValue(
+      supabaseCompaniesService.getCompaniesForPlayer.and.returnValue(
+        of(rowsFromCnpjList(createMockCnpjList())).pipe(delay(100))
+      );
+      companyKpiService.enrichCarteiraRowsWithMaps.and.returnValue(enrichedCompanies);
+      companyKpiService.enrichFromCnpjResp.and.returnValue(
         of(enrichedCompanies).pipe(delay(100))
       );
 
@@ -864,17 +952,17 @@ describe('GamificationDashboard - Company KPI Integration Tests', () => {
       const mockCnpjList = createMockCnpjList();
       const enrichedCompanies = createEnrichedCompanies();
 
-      actionLogService.getPlayerCnpjListWithCount.and.returnValue(of(mockCnpjList));
-      companyKpiService.enrichCompaniesWithKpis.and.returnValue(of(enrichedCompanies));
+      supabaseCompaniesService.getCompaniesForPlayer.and.returnValue(of(rowsFromCnpjList(mockCnpjList)));
+      companyKpiService.enrichCarteiraRowsWithMaps.and.returnValue(enrichedCompanies);
+      companyKpiService.enrichFromCnpjResp.and.returnValue(of(enrichedCompanies));
 
       // Act
       fixture.detectChanges();
       tick();
 
-      // Assert - Verify data consistency
+      // Assert - Verify data consistency (CNPJ order; action counts come from Funifier enrichment)
       for (let i = 0; i < mockCnpjList.length; i++) {
         expect(component.carteiraClientes[i].cnpj).toBe(mockCnpjList[i].cnpj);
-        expect(component.carteiraClientes[i].actionCount).toBe(mockCnpjList[i].actionCount);
       }
     }));
 
@@ -885,21 +973,22 @@ describe('GamificationDashboard - Company KPI Integration Tests', () => {
     it('should reload KPI data when month changes', fakeAsync(() => {
       // Arrange - Initial month
       const enrichedCompanies = createEnrichedCompanies();
-      actionLogService.getPlayerCnpjListWithCount.and.returnValue(of(createMockCnpjList()));
-      companyKpiService.enrichCompaniesWithKpis.and.returnValue(of(enrichedCompanies));
+      supabaseCompaniesService.getCompaniesForPlayer.and.returnValue(of(rowsFromCnpjList(createMockCnpjList())));
+      companyKpiService.enrichCarteiraRowsWithMaps.and.returnValue(enrichedCompanies);
+      companyKpiService.enrichFromCnpjResp.and.returnValue(of(enrichedCompanies));
 
       fixture.detectChanges();
       tick();
 
-      const initialCallCount = actionLogService.getPlayerCnpjListWithCount.calls.count();
+      const initialKpiCalls = kpiService.getPlayerKPIs.calls.count();
 
-      // Act - Change month
+      // Act - Change month (reloads KPIs + progress, not carteira)
       component.onMonthChange(1); // 1 month ago
       tick();
 
       // Assert
-      expect(actionLogService.getPlayerCnpjListWithCount.calls.count()).toBeGreaterThan(initialCallCount);
-      expect(component.selectedMonth.getMonth()).not.toBe(new Date().getMonth());
+      expect(kpiService.getPlayerKPIs.calls.count()).toBeGreaterThan(initialKpiCalls);
+      expect(component.selectedMonth!.getMonth()).not.toBe(new Date().getMonth());
     }));
   });
 
@@ -907,8 +996,9 @@ describe('GamificationDashboard - Company KPI Integration Tests', () => {
     it('should unsubscribe from observables on destroy', fakeAsync(() => {
       // Arrange
       const enrichedCompanies = createEnrichedCompanies();
-      actionLogService.getPlayerCnpjListWithCount.and.returnValue(of(createMockCnpjList()));
-      companyKpiService.enrichCompaniesWithKpis.and.returnValue(of(enrichedCompanies));
+      supabaseCompaniesService.getCompaniesForPlayer.and.returnValue(of(rowsFromCnpjList(createMockCnpjList())));
+      companyKpiService.enrichCarteiraRowsWithMaps.and.returnValue(enrichedCompanies);
+      companyKpiService.enrichFromCnpjResp.and.returnValue(of(enrichedCompanies));
 
       fixture.detectChanges();
       tick();

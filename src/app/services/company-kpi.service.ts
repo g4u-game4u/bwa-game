@@ -1,33 +1,72 @@
 import { Injectable } from '@angular/core';
-import { Observable, of, forkJoin } from 'rxjs';
-import { map, catchError, shareReplay, switchMap } from 'rxjs/operators';
-import { FunifierApiService } from './funifier-api.service';
+import { HttpClient, HttpHeaders } from '@angular/common/http';
+import { Observable, of, firstValueFrom } from 'rxjs';
+import { map, catchError, shareReplay, take } from 'rxjs/operators';
 import { KPIData } from '@model/gamification-dashboard.model';
+import { environment } from '../../environments/environment';
 
 /**
- * Interface for CNPJ KPI data from cnpj__c collection
+ * Linha da API de gamificação (hook).
+ * Percentual: `porcEntregas` / `percEntregas` (string BR ou número) → `number` em `entrega`.
+ * Carteira: cruzamento principal `companies.id` (Supabase) === `EmpID` da API; depois `emp_id` colunar, depois CNPJ.
  */
-export interface CnpjKpiData {
-  _id: string;
-  entrega: number;
+export interface GamificacaoEmpresaRow {
   CNPJ?: string;
-  'Classificação do Cliente'?: string;
+  cnpj?: string;
+  EmpID?: string | number;
+  empId?: string | number;
+  empid?: string | number;
+  porcEntregas?: string | number;
+  PorcEntregas?: string | number;
+  percEntregas?: string | number;
+  PercEntregas?: string | number;
+  procFinalizados?: string | number;
+  procPendentes?: string | number;
+  regime?: string;
+  data_criacao?: string;
+  data_processamento?: string;
+  [key: string]: unknown;
 }
 
 /**
- * Interface for company display data with KPI information
+ * KPI normalizado por empresa (compatível com o antigo cnpj__c)
  */
+export interface CnpjKpiData {
+  _id: string;
+  /** Só definido quando a API envia percentual (`porcEntregas` / `percEntregas`, etc.). */
+  entrega?: number;
+  CNPJ?: string;
+  'Classificação do Cliente'?: string;
+  procFinalizados?: number;
+  procPendentes?: number;
+}
+
 export interface CompanyDisplay {
-  cnpj: string; // empid from cnpj_resp
-  cnpjId?: string; // Extracted ID for KPI lookup (same as cnpj for cnpj_resp)
-  cnpjNumber?: string; // Actual CNPJ number from empid_cnpj__c (e.g. "00.063.263/0009-05")
-  name?: string; // Company name from empid_cnpj__c
-  status?: string; // Company status from empid_cnpj__c (e.g. "Ativa", "Inativa")
-  actionCount: number; // Number of actions for this company
-  processCount: number; // Number of unique processes (delivery_id) for this company
-  entrega?: number; // Entregas no Prazo % from cnpj__c
-  classificacao?: string; // Classificação do Cliente from cnpj__c (Ouro, Prata, Diamante)
-  deliveryKpi?: KPIData; // Delivery KPI from cnpj__c
+  cnpj: string;
+  cnpjId?: string;
+  cnpjNumber?: string;
+  name?: string;
+  status?: string;
+  actionCount: number;
+  processCount: number;
+  entrega?: number;
+  classificacao?: string;
+  deliveryKpi?: KPIData;
+}
+
+/** Linha da carteira vinda do Supabase para enriquecer com o GET da gamificação. */
+export interface CarteiraSupabaseKpiRow {
+  cnpj: string;
+  /** PK `companies.id` — deve corresponder ao `EmpID` retornado pela API. */
+  supabaseId?: number | null;
+  /** Coluna opcional no banco (ex.: emp_id), se diferente do id. */
+  empId?: string | null;
+}
+
+/** Snapshot normalizado do GET gamificação (índices para cruzar com carteira / participação). */
+export interface GamificacaoMaps {
+  byEmpId: Map<string, CnpjKpiData>;
+  byCnpjNorm: Map<string, CnpjKpiData>;
 }
 
 interface CacheEntry<T> {
@@ -36,209 +75,359 @@ interface CacheEntry<T> {
 }
 
 /**
- * Service to handle CNPJ ID extraction and KPI data fetching from Funifier API
- * 
- * This service:
- * - Extracts CNPJ IDs from action_log CNPJ strings (format: "NAME l CODE [ID|SUFFIX]")
- * - Fetches KPI data from cnpj__c collection
- * - Enriches company display data with delivery KPI information
- * - Caches KPI data to minimize API calls
+ * KPI por empresa: lista única da API BWA gamificação (x-api-token),
+ * com lookup por EmpID ou CNPJ normalizado.
  */
 @Injectable({
   providedIn: 'root'
 })
 export class CompanyKpiService {
   private readonly CACHE_DURATION = 10 * 60 * 1000; // 10 minutes
-  private kpiCache = new Map<string, CacheEntry<Map<string, CnpjKpiData>>>();
+  private gamificacaoSnapshotCache: CacheEntry<GamificacaoMaps> | null = null;
 
-  constructor(private funifierApi: FunifierApiService) {}
+  constructor(private http: HttpClient) {}
 
-  /**
-   * Extract CNPJ ID from full CNPJ string
-   * 
-   * Format: "COMPANY NAME l CODE [ID|SUFFIX]"
-   * Returns: ID between [ and |
-   * 
-   * Example:
-   * Input: "RODOPRIMA LOGISTICA LTDA l 0001 [2000|0001-60]"
-   * Output: "2000"
-   * 
-   * @param cnpjString - Full CNPJ string from action_log
-   * @returns Extracted CNPJ ID or null if format is invalid
-   */
   extractCnpjId(cnpjString: string): string | null {
     if (!cnpjString || typeof cnpjString !== 'string') {
       return null;
     }
 
-    // Find text between [ and |
     const match = cnpjString.match(/\[([^\|]+)\|/);
     return match ? match[1].trim() : null;
   }
 
   /**
-   * Fetch KPI data for multiple CNPJ IDs from cnpj__c collection
-   * 
-   * Uses Funifier aggregate API with $match and $in operator for batch fetching.
-   * Results are cached for 10 minutes to minimize API calls.
-   * 
-   * @param cnpjIds - Array of CNPJ IDs to fetch KPI data for
-   * @returns Observable of Map from CNPJ ID to KPI data
+   * KPIs para os EmpIDs solicitados (filtrados do snapshot em cache).
    */
   getKpiData(cnpjIds: string[]): Observable<Map<string, CnpjKpiData>> {
     if (!cnpjIds || cnpjIds.length === 0) {
       return of(new Map());
     }
 
-    // Create cache key from sorted IDs
-    const cacheKey = [...cnpjIds].sort().join(',');
-    const cached = this.getCachedData(this.kpiCache, cacheKey);
-    if (cached) {
-      return cached;
-    }
-
-    const stringIds = cnpjIds.map(id => String(id));
-    const aggregateBody = [
-      { $match: { _id: { $in: stringIds } } }
-    ];
-
-    console.log('📊 Fetching KPI data for CNPJ IDs:', cnpjIds.length, 'IDs');
-
-    const request$ = this.fetchAllPaginatedKpi(aggregateBody, 100).pipe(
-      map(entries => {
-        const kpiMap = new Map<string, CnpjKpiData>();
-        entries.forEach(item => {
-          if (item._id) {
-            kpiMap.set(String(item._id), item);
+    return this.getGamificacaoMaps$().pipe(
+      map(({ byEmpId, byCnpjNorm }) => {
+        const result = new Map<string, CnpjKpiData>();
+        for (const rawId of cnpjIds) {
+          if (rawId == null || rawId === '') {
+            continue;
           }
-        });
-        console.log('📊 KPI data map created with', kpiMap.size, 'entries');
-        return kpiMap;
-      }),
-      catchError(error => {
-        console.error('📊 Error fetching KPI data:', error);
-        return of(new Map<string, CnpjKpiData>());
-      }),
-      shareReplay({ bufferSize: 1, refCount: true, windowTime: this.CACHE_DURATION })
-    );
-
-    this.setCachedData(this.kpiCache, cacheKey, request$);
-    return request$;
-  }
-
-  /**
-   * Paginated fetch for cnpj__c aggregate.
-   * Uses Range header: items=startIndex-batchSize
-   * Recursively fetches until a partial batch is returned.
-   */
-  private fetchAllPaginatedKpi(
-    aggregateBody: any[],
-    batchSize: number,
-    startIndex: number = 0,
-    accumulated: CnpjKpiData[] = []
-  ): Observable<CnpjKpiData[]> {
-    const rangeHeader = `items=${startIndex}-${batchSize}`;
-    console.warn(`📊 KPI batch: ${rangeHeader} (accumulated: ${accumulated.length})`);
-
-    return this.funifierApi.post<CnpjKpiData[]>(
-      '/v3/database/cnpj__c/aggregate?strict=true',
-      aggregateBody,
-      { headers: { 'Range': rangeHeader } }
-    ).pipe(
-      switchMap(response => {
-        const batch = Array.isArray(response) ? response : [];
-        const all = [...accumulated, ...batch];
-
-        if (batch.length === batchSize) {
-          // Full batch — there might be more
-          return this.fetchAllPaginatedKpi(aggregateBody, batchSize, startIndex + batchSize, all);
+          const id = String(rawId).trim();
+          const row = this.resolveKpiFromMaps(id, byEmpId, byCnpjNorm);
+          if (row) {
+            result.set(id, row);
+          }
         }
-        // Partial or empty — done
-        console.log(`📊 KPI final batch (${batch.length} items), total: ${all.length}`);
-        return of(all);
-      }),
-      catchError(error => {
-        console.error(`❌ Error fetching KPI batch at index ${startIndex}:`, error);
-        return of(accumulated);
+        return result;
       })
     );
   }
 
   /**
-   * Enrich a list of empids (from cnpj_resp) with KPI data from cnpj__c
-   * and names from empid_cnpj__c.
-   * 
-   * @param empids - Array of empid strings from player.extra.cnpj_resp
-   * @returns Observable of enriched CompanyDisplay array
+   * Carteira Supabase costuma trazer CNPJ só com 14 dígitos; a API traz mascarado.
+   * Participação / Funifier costuma trazer EmpID curto. Tentamos os dois.
    */
-  /**
-   * Check if a value is a full CNPJ (14 digits with formatting like 57.443.329/0001-44)
-   */
-  private isFullCnpj(value: string): boolean {
-    if (!value) return false;
-    return /^\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}$/.test(value.trim());
+  private resolveKpiFromMaps(
+    key: string,
+    byEmpId: Map<string, CnpjKpiData>,
+    byCnpjNorm: Map<string, CnpjKpiData>
+  ): CnpjKpiData | undefined {
+    const trimmed = String(key || '').trim();
+    if (!trimmed) {
+      return undefined;
+    }
+    const byEmp = byEmpId.get(trimmed);
+    if (byEmp) {
+      return byEmp;
+    }
+    if (/^\d+$/.test(trimmed)) {
+      const stripped = trimmed.replace(/^0+/, '') || '0';
+      if (stripped !== trimmed) {
+        const h = byEmpId.get(stripped);
+        if (h) {
+          return h;
+        }
+      }
+    }
+    for (const cand of this.cnpjNormCandidates(trimmed)) {
+      const hit = byCnpjNorm.get(cand);
+      if (hit) {
+        return hit;
+      }
+    }
+    return undefined;
   }
 
   /**
-   * Fetch KPI data for full CNPJ numbers by first resolving them to empids via empid_cnpj__c,
-   * then querying cnpj__c by _id with those empids.
-   * 
-   * Flow: full CNPJ → empid_cnpj__c (by cnpj field) → get _id → cnpj__c (by _id)
+   * Lista do action_log (modal carteira): EmpID entre colchetes, CNPJ mascarado no texto, ou só dígitos.
    */
-  private getKpiDataByCnpjField(fullCnpjs: string[]): Observable<Map<string, CnpjKpiData>> {
-    if (!fullCnpjs || fullCnpjs.length === 0) {
-      return of(new Map());
+  private resolveKpiForActionLogCompany(
+    company: { cnpj: string; cnpjId: string | null },
+    maps: GamificacaoMaps
+  ): CnpjKpiData | undefined {
+    if (company.cnpjId) {
+      const h = this.resolveKpiFromMaps(company.cnpjId, maps.byEmpId, maps.byCnpjNorm);
+      if (h) {
+        return h;
+      }
+    }
+    const emb = company.cnpj.match(/\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}/)?.[0];
+    if (emb) {
+      const h = this.resolveKpiFromMaps(emb, maps.byEmpId, maps.byCnpjNorm);
+      if (h) {
+        return h;
+      }
+    }
+    const digits = this.normalizeCnpjKey(company.cnpj);
+    if (digits.length >= 8) {
+      return this.resolveKpiFromMaps(digits, maps.byEmpId, maps.byCnpjNorm);
+    }
+    return undefined;
+  }
+
+  /** Variações comuns no Supabase (14 dígitos ou menos com zeros à esquerda omitidos). */
+  private cnpjNormCandidates(key: string): string[] {
+    const norm = this.normalizeCnpjKey(key);
+    if (!norm.length) {
+      return [];
+    }
+    const out = new Set<string>();
+    if (norm.length === 14) {
+      out.add(norm);
+    }
+    if (norm.length >= 8 && norm.length <= 13) {
+      out.add(norm.padStart(14, '0'));
+    }
+    if (norm.length > 14) {
+      out.add(norm.slice(-14));
+    }
+    return [...out];
+  }
+
+  /** Apenas dígitos, para cruzar CNPJ formatado com a API */
+  private normalizeCnpjKey(cnpj: string): string {
+    return (cnpj || '').replace(/\D/g, '');
+  }
+
+  /**
+   * Converte porcentagem BR ("94,81") para número.
+   */
+  parsePorcEntregas(value: string | number | undefined | null): number {
+    if (value == null || value === '') {
+      return 0;
+    }
+    if (typeof value === 'number') {
+      return Number.isFinite(value) ? value : 0;
+    }
+    const t = String(value).trim();
+    if (!t) {
+      return 0;
+    }
+    const normalized = t.includes(',')
+      ? t.replace(/\./g, '').replace(',', '.')
+      : t;
+    const n = parseFloat(normalized);
+    return Number.isFinite(n) ? n : 0;
+  }
+
+  private pickEmpId(row: GamificacaoEmpresaRow): string {
+    const v =
+      row.EmpID ?? row.empId ?? row.empid ?? (row as Record<string, unknown>)['EmpId'];
+    if (v == null || v === '') {
+      return '';
+    }
+    return String(v).trim();
+  }
+
+  private pickCnpjRaw(row: GamificacaoEmpresaRow): string {
+    const r = row as Record<string, unknown>;
+    const v = row.CNPJ ?? row.cnpj ?? r['CNPJPrincipal'] ?? r['cnpjPrincipal'];
+    if (v == null || v === '') {
+      return '';
+    }
+    return String(v).trim();
+  }
+
+  /** Percentual de entregas no prazo (`porcEntregas` ou `percEntregas`, string BR ou número). */
+  private pickPorcEntregas(row: GamificacaoEmpresaRow): string | number | undefined {
+    const r = row as Record<string, unknown>;
+    const v =
+      row.porcEntregas ??
+      row.PorcEntregas ??
+      row.percEntregas ??
+      row.PercEntregas ??
+      r['perc_entregas'] ??
+      r['porc_entregas'];
+    return v as string | number | undefined;
+  }
+
+  private rowToCnpjKpiData(row: GamificacaoEmpresaRow): CnpjKpiData {
+    const empid = this.pickEmpId(row);
+    const cnpjRaw = this.pickCnpjRaw(row);
+    const procFin = parseInt(String(row.procFinalizados ?? ''), 10);
+    const procPen = parseInt(String(row.procPendentes ?? ''), 10);
+    const rawPorc = this.pickPorcEntregas(row);
+    const hasPorc =
+      rawPorc !== undefined &&
+      rawPorc !== null &&
+      !(typeof rawPorc === 'string' && rawPorc.trim() === '');
+    const out: CnpjKpiData = {
+      _id: empid || this.normalizeCnpjKey(cnpjRaw) || 'unknown',
+      CNPJ: cnpjRaw || undefined,
+      'Classificação do Cliente': row.regime,
+      procFinalizados: Number.isFinite(procFin) ? procFin : 0,
+      procPendentes: Number.isFinite(procPen) ? procPen : 0
+    };
+    if (hasPorc) {
+      out.entrega = this.parsePorcEntregas(rawPorc);
+    }
+    return out;
+  }
+
+  private buildGamificacaoMaps(rows: GamificacaoEmpresaRow[]): GamificacaoMaps {
+    const byEmpId = new Map<string, CnpjKpiData>();
+    const byCnpjNorm = new Map<string, CnpjKpiData>();
+
+    for (const row of rows) {
+      if (!row) {
+        continue;
+      }
+      const kpi = this.rowToCnpjKpiData(row);
+      const empid = this.pickEmpId(row);
+      const cnpjRaw = this.pickCnpjRaw(row);
+      if (empid) {
+        byEmpId.set(empid, kpi);
+        if (/^\d+$/.test(empid)) {
+          const stripped = empid.replace(/^0+/, '') || '0';
+          if (stripped !== empid) {
+            byEmpId.set(stripped, kpi);
+          }
+        }
+      }
+      for (const cand of this.cnpjNormCandidates(cnpjRaw)) {
+        byCnpjNorm.set(cand, kpi);
+      }
     }
 
-    console.warn('📊 Resolving', fullCnpjs.length, 'full CNPJs → empids via empid_cnpj__c');
+    return { byEmpId, byCnpjNorm };
+  }
 
-    // Step 1: Query empid_cnpj__c by cnpj field to get empids (_id)
-    const empidLookupBody = [
-      { $match: { cnpj: { $in: fullCnpjs } } },
-      { $project: { _id: 1, cnpj: 1 } }
-    ];
-
-    return this.funifierApi.post<{ _id: string | number; cnpj: string }[]>(
-      '/v3/database/empid_cnpj__c/aggregate?strict=true',
-      empidLookupBody,
-      { headers: { 'Range': 'items=0-100' } }
-    ).pipe(
-      switchMap(empidResults => {
-        if (!empidResults || empidResults.length === 0) {
-          console.warn('📊 No empids found for full CNPJs');
-          return of(new Map<string, CnpjKpiData>());
+  private extractGamificacaoRows(body: unknown): GamificacaoEmpresaRow[] {
+    if (Array.isArray(body)) {
+      return body as GamificacaoEmpresaRow[];
+    }
+    if (body && typeof body === 'object') {
+      const o = body as Record<string, unknown>;
+      for (const k of ['data', 'result', 'items', 'empresas', 'rows']) {
+        const v = o[k];
+        if (Array.isArray(v)) {
+          return v as GamificacaoEmpresaRow[];
         }
+      }
+    }
+    return [];
+  }
 
-        // Build mapping: full CNPJ → empid string
-        const cnpjToEmpid = new Map<string, string>();
-        const empids: string[] = [];
-        empidResults.forEach(r => {
-          const empid = String(r._id);
-          cnpjToEmpid.set(r.cnpj, empid);
-          empids.push(empid);
-        });
+  private getGamificacaoMaps$(): Observable<GamificacaoMaps> {
+    const url = environment.gamificacaoApiUrl?.trim();
+    const token = environment.gamificacaoApiToken?.trim();
 
-        console.warn('📊 Resolved', empids.length, 'empids from full CNPJs');
+    if (!url || !token) {
+      console.warn('📊 Gamificação: defina gamificacaoApiUrl e gamificacaoApiToken (x-api-token).');
+      return of({ byEmpId: new Map(), byCnpjNorm: new Map() });
+    }
 
-        // Step 2: Query cnpj__c by _id with the resolved empids
-        return this.getKpiData(empids).pipe(
-          map(kpiMap => {
-            // Re-map: full CNPJ → KPI data (using the empid as intermediary)
-            const result = new Map<string, CnpjKpiData>();
-            fullCnpjs.forEach(cnpj => {
-              const empid = cnpjToEmpid.get(cnpj);
-              if (empid && kpiMap.has(empid)) {
-                result.set(cnpj, kpiMap.get(empid)!);
-              }
-            });
-            console.warn('📊 KPI data resolved for', result.size, '/', fullCnpjs.length, 'full CNPJs');
-            return result;
-          })
-        );
+    const now = Date.now();
+    if (
+      this.gamificacaoSnapshotCache &&
+      now - this.gamificacaoSnapshotCache.timestamp < this.CACHE_DURATION
+    ) {
+      return this.gamificacaoSnapshotCache.data;
+    }
+
+    const headers = new HttpHeaders({ 'x-api-token': token });
+    const request$ = this.http.get<unknown>(url, { headers }).pipe(
+      map(body => this.buildGamificacaoMaps(this.extractGamificacaoRows(body))),
+      catchError(err => {
+        console.error('📊 Erro na API gamificação (empresas):', err);
+        return of({ byEmpId: new Map(), byCnpjNorm: new Map() });
       }),
+      /** `refCount: false` mantém o último valor após unsubscribe — evita cancelar o GET após `take(1)` no prefetch. */
+      shareReplay({ bufferSize: 1, refCount: false })
+    );
+
+    this.gamificacaoSnapshotCache = { data: request$, timestamp: now };
+    return request$;
+  }
+
+  /**
+   * Aguarda o GET a `GAMIFICACAO_API_URL` e o mapa EmpID/CNPJ → KPI (usa cache TTL se ainda válido).
+   */
+  async fetchGamificacaoMapsAsync(): Promise<GamificacaoMaps> {
+    return firstValueFrom(this.getGamificacaoMaps$().pipe(take(1)));
+  }
+
+  /**
+   * Cruza linhas da carteira com um snapshot já carregado: 1) `supabaseId` ↔ `EmpID`, 2) `empId`, 3) CNPJ.
+   */
+  enrichCarteiraRowsWithMaps(rows: CarteiraSupabaseKpiRow[], maps: GamificacaoMaps): CompanyDisplay[] {
+    const { byEmpId, byCnpjNorm } = maps;
+    return rows.map(({ cnpj, supabaseId, empId }) => {
+      const cnpjKey = String(cnpj || '').trim();
+      const empKey = empId != null ? String(empId).trim() : '';
+      const idKey =
+        supabaseId != null && Number.isFinite(Number(supabaseId))
+          ? String(Math.trunc(Number(supabaseId)))
+          : '';
+
+      let kpiData: CnpjKpiData | undefined;
+      if (idKey) {
+        kpiData = this.resolveKpiFromMaps(idKey, byEmpId, byCnpjNorm);
+      }
+      if (!kpiData && empKey) {
+        kpiData = this.resolveKpiFromMaps(empKey, byEmpId, byCnpjNorm);
+      }
+      if (!kpiData) {
+        kpiData = this.resolveKpiFromMaps(cnpjKey, byEmpId, byCnpjNorm);
+      }
+
+      const procFin = kpiData?.procFinalizados ?? 0;
+      const procPen = kpiData?.procPendentes ?? 0;
+
+      const result: CompanyDisplay = {
+        cnpj: cnpjKey,
+        cnpjId: cnpjKey,
+        actionCount: 0,
+        processCount: procFin + procPen
+      };
+
+      this.applyKpiDataToCompanyDisplay(result, kpiData);
+      return result;
+    });
+  }
+
+  /**
+   * Carteira Supabase: GET gamificação (cache) e cruza 1) `supabaseId` ↔ `EmpID`, 2) coluna `empId`, 3) CNPJ.
+   */
+  enrichCarteiraFromSupabase(rows: CarteiraSupabaseKpiRow[]): Observable<CompanyDisplay[]> {
+    if (!rows || rows.length === 0) {
+      return of([]);
+    }
+
+    return this.getGamificacaoMaps$().pipe(
+      map(maps => this.enrichCarteiraRowsWithMaps(rows, maps)),
       catchError(error => {
-        console.error('📊 Error resolving full CNPJs to KPI data:', error);
-        return of(new Map<string, CnpjKpiData>());
+        console.error('📊 Error enriching carteira from Supabase:', error);
+        return of(
+          rows.map(
+            r =>
+              ({
+                cnpj: String(r.cnpj || '').trim(),
+                cnpjId: String(r.cnpj || '').trim(),
+                actionCount: 0,
+                processCount: 0
+              }) as CompanyDisplay
+          )
+        );
       })
     );
   }
@@ -248,71 +437,47 @@ export class CompanyKpiService {
       return of([]);
     }
 
-    // Separate empids into short (lookup by _id) and full CNPJ (lookup by CNPJ field)
-    const shortIds: string[] = [];
-    const fullCnpjs: string[] = [];
-    empids.forEach(id => {
-      if (this.isFullCnpj(id)) {
-        fullCnpjs.push(id);
-      } else {
-        shortIds.push(id);
-      }
-    });
+    return this.getGamificacaoMaps$().pipe(
+      map(({ byEmpId, byCnpjNorm }) =>
+        empids.map(empid => {
+          const key = String(empid).trim();
+          const kpiData = this.resolveKpiFromMaps(key, byEmpId, byCnpjNorm);
 
-    console.warn('📊 enrichFromCnpjResp: shortIds:', shortIds.length, 'fullCnpjs:', fullCnpjs.length);
-
-    // Fetch both in parallel
-    const shortFetch$ = shortIds.length > 0 ? this.getKpiData(shortIds) : of(new Map<string, CnpjKpiData>());
-    const fullFetch$ = fullCnpjs.length > 0 ? this.getKpiDataByCnpjField(fullCnpjs) : of(new Map<string, CnpjKpiData>());
-
-    return forkJoin({ shortMap: shortFetch$, fullMap: fullFetch$ }).pipe(
-      map(({ shortMap, fullMap }) => {
-        console.warn('📊 enrichFromCnpjResp: shortMap size:', shortMap.size, 'fullMap size:', fullMap.size);
-        return empids.map(empid => {
-          // Try short ID lookup first, then full CNPJ lookup
-          const kpiData = this.isFullCnpj(empid) ? fullMap.get(empid) : shortMap.get(empid);
           if (!kpiData) {
             console.warn('📊 enrichFromCnpjResp: NO KPI for', empid);
           }
+
+          const procFin = kpiData?.procFinalizados ?? 0;
+          const procPen = kpiData?.procPendentes ?? 0;
+
           const result: CompanyDisplay = {
             cnpj: empid,
             cnpjId: empid,
             actionCount: 0,
-            processCount: 0,
-            entrega: kpiData?.entrega,
-            classificacao: kpiData?.['Classificação do Cliente'],
+            processCount: procFin + procPen
           };
 
-          if (kpiData) {
-            result.deliveryKpi = this.mapToKpiData(kpiData);
-          }
-
+          this.applyKpiDataToCompanyDisplay(result, kpiData);
           return result;
-        });
-      }),
+        })
+      ),
       catchError(error => {
         console.error('📊 Error enriching cnpj_resp with KPIs:', error);
-        return of(empids.map(empid => ({
-          cnpj: empid,
-          cnpjId: empid,
-          actionCount: 0,
-          processCount: 0,
-        } as CompanyDisplay)));
+        return of(
+          empids.map(
+            empid =>
+              ({
+                cnpj: empid,
+                cnpjId: empid,
+                actionCount: 0,
+                processCount: 0
+              }) as CompanyDisplay
+          )
+        );
       })
     );
   }
 
-  /**
-   * Enrich company display items with KPI data
-   * 
-   * Takes action_log CNPJ data (CNPJ string + action count) and adds deliveryKpi property
-   * by extracting CNPJ IDs and fetching KPI data from cnpj__c collection.
-   * 
-   * Companies with invalid CNPJ format or missing KPI data will not have deliveryKpi property.
-   * 
-   * @param companies - Array of companies with CNPJ string and action count
-   * @returns Observable of enriched company display data with KPI information
-   */
   enrichCompaniesWithKpis(
     companies: { cnpj: string; actionCount: number; processCount?: number }[]
   ): Observable<CompanyDisplay[]> {
@@ -320,35 +485,13 @@ export class CompanyKpiService {
       return of([]);
     }
 
-    // Extract CNPJ IDs from all companies
     const companiesWithIds = companies.map(company => ({
       ...company,
       cnpjId: this.extractCnpjId(company.cnpj)
     }));
 
-    // Get unique valid CNPJ IDs
-    const validCnpjIds = [...new Set(
-      companiesWithIds
-        .map(c => c.cnpjId)
-        .filter((id): id is string => id !== null)
-    )];
-
-    console.log('📊 Extracted CNPJ IDs:', validCnpjIds);
-
-    if (validCnpjIds.length === 0) {
-      // No valid IDs, return companies without KPI data
-      return of(companiesWithIds.map(c => ({
-        cnpj: c.cnpj,
-        cnpjId: c.cnpjId || undefined,
-        actionCount: c.actionCount,
-        processCount: c.processCount || 0
-      })));
-    }
-
-    // Fetch KPI data for all valid IDs
-    return this.getKpiData(validCnpjIds).pipe(
-      map(kpiMap => {
-        // Enrich each company with KPI data if available
+    return this.getGamificacaoMaps$().pipe(
+      map(maps => {
         return companiesWithIds.map(company => {
           const result: CompanyDisplay = {
             cnpj: company.cnpj,
@@ -357,44 +500,50 @@ export class CompanyKpiService {
             processCount: company.processCount || 0
           };
 
-          // Add KPI data if available
-          if (company.cnpjId && kpiMap.has(company.cnpjId)) {
-            const kpiData = kpiMap.get(company.cnpjId)!;
-            result.deliveryKpi = this.mapToKpiData(kpiData);
-            result.entrega = kpiData.entrega;
-            result.classificacao = kpiData['Classificação do Cliente'];
-          }
+          const kpiData = this.resolveKpiForActionLogCompany(company, maps);
+          this.applyKpiDataToCompanyDisplay(result, kpiData);
 
           return result;
         });
       }),
       catchError(error => {
         console.error('📊 Error enriching companies with KPIs:', error);
-        // Return companies without KPI data on error
-        return of(companiesWithIds.map(c => ({
-          cnpj: c.cnpj,
-          cnpjId: c.cnpjId || undefined,
-          actionCount: c.actionCount,
-          processCount: c.processCount || 0
-        })));
+        return of(
+          companiesWithIds.map(c => ({
+            cnpj: c.cnpj,
+            cnpjId: c.cnpjId || undefined,
+            actionCount: c.actionCount,
+            processCount: c.processCount || 0
+          }))
+        );
       })
     );
   }
 
-  /**
-   * Map CNPJ KPI data to KPIData format
-   * 
-   * @param cnpjKpi - Raw KPI data from cnpj__c collection
-   * @returns Formatted KPI data for display
-   */
-  private mapToKpiData(cnpjKpi: CnpjKpiData): KPIData {
-    const current = cnpjKpi.entrega || 0;
-    const target = 90; // Target matches the circular KPI progress (90%)
-    const percentage = Math.min((current / target) * 100, 100);
+  /** Preenche `classificacao` / `entrega` / `deliveryKpi` quando a linha da API existe e há `porcEntregas`. */
+  private applyKpiDataToCompanyDisplay(
+    result: CompanyDisplay,
+    kpiData: CnpjKpiData | undefined
+  ): void {
+    if (!kpiData) {
+      return;
+    }
+    result.classificacao = kpiData['Classificação do Cliente'];
+    const e = kpiData.entrega;
+    if (e !== undefined && e !== null && Number.isFinite(Number(e))) {
+      const n = Number(e);
+      result.entrega = n;
+      result.deliveryKpi = this.mapToKpiData(n);
+    }
+  }
+
+  private mapToKpiData(current: number): KPIData {
+    const target = 90;
+    const percentage = Math.max(0, Math.min((current / target) * 100, 100));
 
     return {
       id: 'delivery',
-      label: 'Entregas no Prazo', // Full label instead of just "Entregas"
+      label: 'Entregas no Prazo',
       current,
       target,
       unit: '%',
@@ -403,22 +552,11 @@ export class CompanyKpiService {
     };
   }
 
-  /**
-   * Determine KPI color based on completion percentage
-   * 
-   * If current is below target, always return red.
-   * Otherwise, use percentage-based color logic.
-   * 
-   * @param current - Current value
-   * @param target - Target value
-   * @returns Color indicator (red, yellow, or green)
-   */
   private getKpiColor(current: number, target: number): 'red' | 'yellow' | 'green' {
     if (target === 0) {
       return 'red';
     }
 
-    // If current is below target, always show red
     if (current < target) {
       return 'red';
     }
@@ -427,47 +565,30 @@ export class CompanyKpiService {
 
     if (percentage >= 80) {
       return 'green';
-    } else if (percentage >= 50) {
+    }
+    if (percentage >= 50) {
       return 'yellow';
     }
 
     return 'red';
   }
 
-  /**
-   * Clear KPI cache
-   * 
-   * Useful for forcing a refresh of KPI data
-   */
   clearCache(): void {
-    this.kpiCache.clear();
+    this.gamificacaoSnapshotCache = null;
   }
 
   /**
-   * Get cached data if valid
+   * Dispara o GET do snapshot (cache ~10 min) sem depender de CNPJs na carteira/participação.
+   * Esses fluxos fazem `of([])` quando a lista vem vazia e não chamavam `enrichFromCnpjResp`, então o Network não mostrava a API.
    */
-  private getCachedData<T>(cache: Map<string, CacheEntry<T>>, key: string): Observable<T> | null {
-    const entry = cache.get(key);
-    if (!entry) {
-      return null;
+  prefetchGamificacaoSnapshot(): void {
+    const url = environment.gamificacaoApiUrl?.trim();
+    const token = environment.gamificacaoApiToken?.trim();
+    if (!url || !token) {
+      return;
     }
-
-    const now = Date.now();
-    if (now - entry.timestamp > this.CACHE_DURATION) {
-      cache.delete(key);
-      return null;
-    }
-
-    return entry.data;
-  }
-
-  /**
-   * Set cached data
-   */
-  private setCachedData<T>(cache: Map<string, CacheEntry<T>>, key: string, data: Observable<T>): void {
-    cache.set(key, {
-      data,
-      timestamp: Date.now()
-    });
+    this.getGamificacaoMaps$()
+      .pipe(take(1))
+      .subscribe({ error: () => void 0 });
   }
 }

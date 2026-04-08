@@ -17,6 +17,10 @@ import { firstValueFrom } from 'rxjs';
 export class ModalCompanyCarteiraDetailComponent implements OnInit, OnDestroy {
   @Input() company: CompanyDisplay | null = null;
   @Input() month?: Date;
+  /** Quando definido, restringe o aggregate ao userId (carteira individual / colaborador). */
+  @Input() actionLogUserId: string | null = null;
+  /** Vista equipa sem colaborador: restringe aos jogadores do time (mesmo critério da carteira agregada). */
+  @Input() actionLogTeamId: string | null = null;
   @Output() closed = new EventEmitter<void>();
 
   private destroy$ = new Subject<void>();
@@ -125,9 +129,20 @@ export class ModalCompanyCarteiraDetailComponent implements OnInit, OnDestroy {
     this.isLoadingTasks = true;
     this.cdr.markForCheck();
 
-    this.actionLogService.getActionsByCnpj(this.company.cnpj, this.month)
-      .pipe(takeUntil(this.destroy$))
-      .subscribe({
+    const uid = this.actionLogUserId?.trim() || undefined;
+    const tid = !uid && this.actionLogTeamId?.trim() ? this.actionLogTeamId.trim() : undefined;
+
+    // Colaborador: mesmo action_log do painel (aggregate userId + sort) e filtro por CNPJ/deal no cliente.
+    // Time: aggregate com lookup em player (comportamento anterior).
+    const tasks$ =
+      uid && !tid
+        ? this.actionLogService.getUserActionsForCompanyUsingPlayerActionLog(uid, this.company.cnpj, this.month)
+        : this.actionLogService.getActionsByCnpj(this.company.cnpj, this.month, {
+            userId: uid,
+            teamId: tid
+          });
+
+    tasks$.pipe(takeUntil(this.destroy$)).subscribe({
         next: (tasks) => {
           console.log('📊 Tasks loaded for company:', tasks);
           this.tasks = tasks;

@@ -2,29 +2,56 @@ import { TestBed } from '@angular/core/testing';
 import { KPIService } from './kpi.service';
 import { FunifierApiService } from './funifier-api.service';
 import { KPIMapper } from './kpi-mapper.service';
+import { PlayerService } from './player.service';
+import { SupabaseCompaniesService } from './supabase-companies.service';
 import * as fc from 'fast-check';
 import { of } from 'rxjs';
+import { SupabaseCompanyRow } from '@model/supabase-company.model';
 
 describe('KPIService', () => {
   let service: KPIService;
   let funifierApiSpy: jasmine.SpyObj<FunifierApiService>;
   let mapperSpy: jasmine.SpyObj<KPIMapper>;
+  let playerServiceSpy: jasmine.SpyObj<PlayerService>;
+  let supabaseCompaniesSpy: jasmine.SpyObj<SupabaseCompaniesService>;
+
+  function mockCompanyRows(n: number): SupabaseCompanyRow[] {
+    return Array.from({ length: n }, (_, i) => ({
+      id: i + 1,
+      cnpj: `${i + 1}.000.000/0001-00`,
+      razao_social: `Empresa ${i}`,
+      fantasia: `Empresa ${i}`,
+      status: 'Ativa',
+      client_type_id: null,
+      synced_at: '',
+      created_at: '',
+      responsaveis: []
+    }));
+  }
 
   beforeEach(() => {
-    const apiSpy = jasmine.createSpyObj('FunifierApiService', ['get']);
+    const apiSpy = jasmine.createSpyObj('FunifierApiService', ['get', 'post']);
     const kpiMapperSpy = jasmine.createSpyObj('KPIMapper', ['toKPIDataArray']);
+    const playerSpy = jasmine.createSpyObj('PlayerService', ['getRawPlayerData']);
+    const supabaseSpy = jasmine.createSpyObj('SupabaseCompaniesService', ['getCompaniesForPlayer']);
+
+    supabaseSpy.getCompaniesForPlayer.and.returnValue(of(mockCompanyRows(6)));
 
     TestBed.configureTestingModule({
       providers: [
         KPIService,
         { provide: FunifierApiService, useValue: apiSpy },
-        { provide: KPIMapper, useValue: kpiMapperSpy }
+        { provide: KPIMapper, useValue: kpiMapperSpy },
+        { provide: PlayerService, useValue: playerSpy },
+        { provide: SupabaseCompaniesService, useValue: supabaseSpy }
       ]
     });
 
     service = TestBed.inject(KPIService);
     funifierApiSpy = TestBed.inject(FunifierApiService) as jasmine.SpyObj<FunifierApiService>;
     mapperSpy = TestBed.inject(KPIMapper) as jasmine.SpyObj<KPIMapper>;
+    playerServiceSpy = TestBed.inject(PlayerService) as jasmine.SpyObj<PlayerService>;
+    supabaseCompaniesSpy = TestBed.inject(SupabaseCompaniesService) as jasmine.SpyObj<SupabaseCompaniesService>;
   });
 
   it('should be created', () => {
@@ -181,27 +208,28 @@ describe('KPIService', () => {
   });
 
   describe('New Metrics from Player Extra Info', () => {
-    it('should extract Número de Empresas from player extra.cnpj', (done) => {
+    it('should use Supabase carteira count for Clientes na Carteira KPI', (done) => {
       const mockPlayerStatus = {
         _id: 'test-player',
         name: 'Test Player',
         extra: {
-          cnpj: '10282,2368,10492,10004,330,1110', // 6 companies
+          client_goals: 10,
           entrega: '85'
         }
       };
 
-      funifierApiSpy.get.and.returnValue(of(mockPlayerStatus));
+      playerServiceSpy.getRawPlayerData.and.returnValue(of(mockPlayerStatus));
+      supabaseCompaniesSpy.getCompaniesForPlayer.and.returnValue(of(mockCompanyRows(6)));
 
       service.getPlayerKPIs('test-player').subscribe(result => {
         const empresasKPI = result.find(kpi => kpi.id === 'numero-empresas');
-        
+
         expect(empresasKPI).toBeDefined();
-        expect(empresasKPI!.label).toBe('Número de Empresas');
+        expect(empresasKPI!.label).toBe('Clientes na Carteira');
         expect(empresasKPI!.current).toBe(6);
         expect(empresasKPI!.target).toBe(10);
         expect(empresasKPI!.superTarget).toBe(15);
-        expect(empresasKPI!.unit).toBe('empresas');
+        expect(empresasKPI!.unit).toBe('clientes');
         expect(empresasKPI!.color).toBe('red'); // 6 < 10 (below goal)
         done();
       });
@@ -212,23 +240,24 @@ describe('KPIService', () => {
         _id: 'test-player',
         name: 'Test Player',
         extra: {
-          cnpj: '10282,2368,10492',
-          entrega: '85' // 85%
+          entrega: '85',
+          entrega_goal: 80
         }
       };
 
-      funifierApiSpy.get.and.returnValue(of(mockPlayerStatus));
+      playerServiceSpy.getRawPlayerData.and.returnValue(of(mockPlayerStatus));
+      supabaseCompaniesSpy.getCompaniesForPlayer.and.returnValue(of(mockCompanyRows(3)));
 
       service.getPlayerKPIs('test-player').subscribe(result => {
         const entregasKPI = result.find(kpi => kpi.id === 'entregas-prazo');
-        
+
         expect(entregasKPI).toBeDefined();
         expect(entregasKPI!.label).toBe('Entregas no Prazo');
         expect(entregasKPI!.current).toBe(85);
         expect(entregasKPI!.target).toBe(80);
-        expect(entregasKPI!.superTarget).toBe(90);
+        expect(entregasKPI!.superTarget).toBe(100);
         expect(entregasKPI!.unit).toBe('%');
-        expect(entregasKPI!.color).toBe('yellow'); // 80 <= 85 < 90 (above goal, below super goal)
+        expect(entregasKPI!.color).toBe('yellow'); // 80 <= 85 < 100
         done();
       });
     });
@@ -237,33 +266,36 @@ describe('KPIService', () => {
       const mockPlayerStatus = {
         _id: 'test-player',
         name: 'Test Player'
-        // No extra field
       };
 
-      funifierApiSpy.get.and.returnValue(of(mockPlayerStatus));
+      playerServiceSpy.getRawPlayerData.and.returnValue(of(mockPlayerStatus));
+      supabaseCompaniesSpy.getCompaniesForPlayer.and.returnValue(of([]));
 
       service.getPlayerKPIs('test-player').subscribe(result => {
-        expect(result).toEqual([]);
+        const empresas = result.find(k => k.id === 'numero-empresas');
+        expect(empresas?.current).toBe(0);
+        const entregas = result.find(k => k.id === 'entregas-prazo');
+        expect(entregas?.isMissing).toBe(true);
         done();
       });
     });
 
-    it('should handle empty cnpj string', (done) => {
+    it('should show zero clientes when Supabase returns no companies', (done) => {
       const mockPlayerStatus = {
         _id: 'test-player',
         name: 'Test Player',
         extra: {
-          cnpj: '', // Empty string
           entrega: '75'
         }
       };
 
-      funifierApiSpy.get.and.returnValue(of(mockPlayerStatus));
+      playerServiceSpy.getRawPlayerData.and.returnValue(of(mockPlayerStatus));
+      supabaseCompaniesSpy.getCompaniesForPlayer.and.returnValue(of([]));
 
       service.getPlayerKPIs('test-player').subscribe(result => {
         const empresasKPI = result.find(kpi => kpi.id === 'numero-empresas');
-        expect(empresasKPI).toBeUndefined(); // Should not create KPI for empty cnpj
-        
+        expect(empresasKPI!.current).toBe(0);
+
         const entregasKPI = result.find(kpi => kpi.id === 'entregas-prazo');
         expect(entregasKPI).toBeDefined();
         done();
@@ -275,16 +307,17 @@ describe('KPIService', () => {
         _id: 'test-player',
         name: 'Test Player',
         extra: {
-          cnpj: '10282,2368,10492,10004,330,1110', // 6 companies
+          client_goals: 10,
           entrega: '85'
         }
       };
 
-      funifierApiSpy.get.and.returnValue(of(mockPlayerStatus));
+      playerServiceSpy.getRawPlayerData.and.returnValue(of(mockPlayerStatus));
+      supabaseCompaniesSpy.getCompaniesForPlayer.and.returnValue(of(mockCompanyRows(6)));
 
       service.getPlayerKPIs('test-player').subscribe(result => {
         const empresasKPI = result.find(kpi => kpi.id === 'numero-empresas');
-        
+
         expect(empresasKPI).toBeDefined();
         expect(empresasKPI!.current).toBe(6);
         expect(empresasKPI!.superTarget).toBe(15);
@@ -298,20 +331,21 @@ describe('KPIService', () => {
         _id: 'test-player',
         name: 'Test Player',
         extra: {
-          cnpj: '10282,2368,10492',
-          entrega: '85' // 85%
+          entrega: '85',
+          entrega_goal: 80
         }
       };
 
-      funifierApiSpy.get.and.returnValue(of(mockPlayerStatus));
+      playerServiceSpy.getRawPlayerData.and.returnValue(of(mockPlayerStatus));
+      supabaseCompaniesSpy.getCompaniesForPlayer.and.returnValue(of(mockCompanyRows(3)));
 
       service.getPlayerKPIs('test-player').subscribe(result => {
         const entregasKPI = result.find(kpi => kpi.id === 'entregas-prazo');
-        
+
         expect(entregasKPI).toBeDefined();
         expect(entregasKPI!.current).toBe(85);
-        expect(entregasKPI!.superTarget).toBe(90);
-        expect(entregasKPI!.percentage).toBeCloseTo(94.4, 1); // 85/90 * 100 = 94.44%
+        expect(entregasKPI!.superTarget).toBe(100);
+        expect(entregasKPI!.percentage).toBe(85);
         done();
       });
     });
@@ -321,19 +355,21 @@ describe('KPIService', () => {
         _id: 'test-player',
         name: 'Test Player',
         extra: {
-          cnpj: '1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20', // 20 companies
-          entrega: '95' // 95%
+          client_goals: 10,
+          entrega: '95',
+          entrega_goal: 80
         }
       };
 
-      funifierApiSpy.get.and.returnValue(of(mockPlayerStatus));
+      playerServiceSpy.getRawPlayerData.and.returnValue(of(mockPlayerStatus));
+      supabaseCompaniesSpy.getCompaniesForPlayer.and.returnValue(of(mockCompanyRows(20)));
 
       service.getPlayerKPIs('test-player').subscribe(result => {
         const empresasKPI = result.find(kpi => kpi.id === 'numero-empresas');
         const entregasKPI = result.find(kpi => kpi.id === 'entregas-prazo');
-        
-        expect(empresasKPI!.percentage).toBe(100); // Capped at 100% (20/15 = 133% -> 100%)
-        expect(entregasKPI!.percentage).toBe(100); // Capped at 100% (95/90 = 105% -> 100%)
+
+        expect(empresasKPI!.percentage).toBe(100);
+        expect(entregasKPI!.percentage).toBe(95);
         done();
       });
     });

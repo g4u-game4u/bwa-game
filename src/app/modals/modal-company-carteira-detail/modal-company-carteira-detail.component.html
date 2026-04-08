@@ -54,11 +54,15 @@
 
           <div *ngIf="tasks.length > 0" class="tasks-table">
             <div class="task-header">
+              <div class="task-col-process">Processo</div>
               <div class="task-col-title">Tarefa</div>
               <div class="task-col-executor">Executor</div>
               <div class="task-col-date">Data</div>
             </div>
             <div *ngFor="let task of tasks" class="task-row">
+              <div class="task-col-process">
+                <span class="task-process">{{ task.processTitle || '—' }}</span>
+              </div>
               <div class="task-col-title">
                 <span class="task-title">{{ task.title }}</span>
               </div>

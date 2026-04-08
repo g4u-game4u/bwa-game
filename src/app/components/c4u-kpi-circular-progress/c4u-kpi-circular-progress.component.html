@@ -5,7 +5,7 @@
      [attr.aria-valuemin]="0"
      [attr.aria-valuemax]="target"
      [attr.aria-valuetext]="ariaValueText">
-  <div class="kpi-label-wrapper">
+  <div class="kpi-label-wrapper" *ngIf="!compactPercentOnly">
     <i [class]="kpiIcon + ' kpi-icon'" aria-hidden="true"></i>
     <div class="kpi-label" aria-hidden="true">{{ label }}</div>
     <c4u-info-button 
@@ -23,6 +23,6 @@
     </c4u-porcentagem-circular>
   </div>
   <div class="kpi-value" aria-hidden="true">{{ displayValue }}</div>
-  <div class="kpi-target" aria-hidden="true">{{ targetDisplayValue }}</div>
-  <div class="kpi-status" [class]="'status-' + color" [class.status-goal-achieved]="isGoalAchieved" aria-hidden="true">{{ goalStatus }}</div>
+  <div class="kpi-target" *ngIf="!compactPercentOnly" aria-hidden="true">{{ targetDisplayValue }}</div>
+  <div class="kpi-status" *ngIf="!compactPercentOnly" [class]="'status-' + color" [class.status-goal-achieved]="isGoalAchieved" aria-hidden="true">{{ goalStatus }}</div>
 </div>

@@ -505,6 +505,8 @@
     *ngIf="isCompanyCarteiraDetailModalOpen && selectedCarteiraCompany"
     [company]="selectedCarteiraCompany"
     [month]="selectedMonth"
+    [actionLogUserId]="selectedCollaborator"
+    [actionLogTeamId]="selectedCollaborator ? null : selectedTeamId"
     (closed)="onCompanyCarteiraDetailModalClosed()">
   </modal-company-carteira-detail>
   

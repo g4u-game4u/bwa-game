@@ -80,10 +80,10 @@
         
         <!-- Circular KPIs Compact - Show only enabled KPIs -->
         <ng-container *ngFor="let kpi of enabledKPIs">
-          <div class="compact-item" [title]="kpi.label + ': ' + roundValue(kpi.current) + ' / ' + roundValue(kpi.target) + (kpi.unit ? ' ' + kpi.unit : '')">
+          <div class="compact-item" [title]="kpiSidebarTitle(kpi)">
             <i class="ri-time-line compact-icon entregas" *ngIf="kpi.id === 'entregas-prazo'"></i>
             <i class="ri-building-line compact-icon clientes" *ngIf="kpi.id === 'numero-empresas'"></i>
-            <span class="compact-value">{{ roundValue(kpi.current) }}{{ kpi.unit || '' }}</span>
+            <span class="compact-value">{{ kpiSidebarValue(kpi) }}</span>
           </div>
         </ng-container>
         
@@ -159,7 +159,7 @@
         <ng-container *ngFor="let kpi of playerKPIs; let i = index; trackBy: trackByKpiId">
           <c4u-kpi-circular-progress
             [label]="kpi.label"
-            [current]="roundValue(getKpiCurrentValue(kpi))"
+            [current]="kpi.id === 'entregas-prazo' ? getKpiCurrentValue(kpi) : roundValue(getKpiCurrentValue(kpi))"
             [target]="roundValue(kpi.target)"
             [superTarget]="kpi.superTarget ? roundValue(kpi.superTarget) : undefined"
             [color]="kpi.color"
@@ -235,9 +235,15 @@
                 {{ getCompanyStatus(cliente.cnpj) }}
               </span>
             </div>
-            <div class="carteira-item-meta" *ngIf="cliente.entrega !== undefined || cliente.classificacao">
-              <span class="carteira-entrega" *ngIf="cliente.entrega !== undefined">{{ cliente.entrega }}%</span>
-              <span class="carteira-classificacao" *ngIf="cliente.classificacao">{{ cliente.classificacao }}</span>
+            <div class="carteira-item-meta">
+              <span
+                class="carteira-entrega"
+                [class.carteira-entrega--na]="getListaEntregaPercent(cliente) === null">
+                <ng-container *ngIf="getListaEntregaPercent(cliente) !== null; else entregaNaCarteira">
+                  {{ getListaEntregaPercent(cliente)! | number:'1.0-2':'pt-BR' }}%
+                </ng-container>
+                <ng-template #entregaNaCarteira>n/a</ng-template>
+              </span>
             </div>
           </div>
         </div>
@@ -262,9 +268,15 @@
                 {{ getCompanyStatus(cliente.cnpj) }}
               </span>
             </div>
-            <div class="carteira-item-meta" *ngIf="cliente.entrega !== undefined || cliente.classificacao">
-              <span class="carteira-entrega" *ngIf="cliente.entrega !== undefined">{{ cliente.entrega }}%</span>
-              <span class="carteira-classificacao" *ngIf="cliente.classificacao">{{ cliente.classificacao }}</span>
+            <div class="carteira-item-meta">
+              <span
+                class="carteira-entrega"
+                [class.carteira-entrega--na]="getListaEntregaPercent(cliente) === null">
+                <ng-container *ngIf="getListaEntregaPercent(cliente) !== null; else entregaNaParticipacao">
+                  {{ getListaEntregaPercent(cliente)! | number:'1.0-2':'pt-BR' }}%
+                </ng-container>
+                <ng-template #entregaNaParticipacao>n/a</ng-template>
+              </span>
             </div>
           </div>
         </div>
@@ -297,6 +309,7 @@
     *ngIf="isCompanyCarteiraDetailModalOpen && selectedCarteiraCompany"
     [company]="selectedCarteiraCompany"
     [month]="selectedMonth"
+    [actionLogUserId]="actionLogUserIdForModals || null"
     (closed)="onCompanyCarteiraDetailModalClosed()">
   </modal-company-carteira-detail>
   

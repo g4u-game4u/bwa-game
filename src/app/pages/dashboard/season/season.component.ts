@@ -14,6 +14,7 @@ import { TIPO_CONSULTA_TIME } from "../dashboard.component";
 import { ModalDetalheExecutorComponent } from "./modal-detalhe-executor/modal-detalhe-executor.component";
 import { ModalSeasonFaqComponent } from "@modals/modal-season-faq/modal-season-faq.component";
 import { environment } from 'src/environments/environment';
+import { PONTOS_POR_ATIVIDADE_FINALIZADA_ACTION_LOG } from '@app/constants/pontos-por-atividade-action-log';
 
 @Component({
   selector: 'page-season',    
@@ -118,10 +119,31 @@ export class SeasonComponent implements OnInit, OnChanges {
 
   getDadosTemporada() {
     this.temporadaService.getDadosTemporadaDashboard(this.idConsulta, this.tipoConsulta).then(data => {
-      this.seasonData.emit(data);
-      this.seasonInfo = data;
+      const normalized = this.normalizeSeasonPointsFromCompletedTasks(data);
+      this.seasonData.emit(normalized);
+      this.seasonInfo = normalized;
       this.apiReady = true;
     });
+  }
+
+  /**
+   * Ignora total_points / pontos desbloqueados vindos da API (ex.: action_stats.total_points ou status).
+   * Exibe no season: desbloqueados = tarefas finalizadas × constante (alinhado ao restante do app).
+   */
+  private normalizeSeasonPointsFromCompletedTasks(data: TemporadaDashboard): TemporadaDashboard {
+    const completed =
+      typeof data.completedTasks === 'number' && !Number.isNaN(data.completedTasks)
+        ? data.completedTasks
+        : 0;
+    const unblocked = Math.floor(completed * PONTOS_POR_ATIVIDADE_FINALIZADA_ACTION_LOG);
+    const blocked = Number(data.blocked_points) || 0;
+    return {
+      ...data,
+      unblocked_points: unblocked,
+      total_points: blocked + unblocked,
+      total_actions: completed,
+      total_blocked_points: data.total_blocked_points ?? blocked
+    };
   }
 
   get isTeam() {

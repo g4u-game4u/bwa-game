@@ -1,0 +1,10 @@
+{
+  "/api/bwa-gamificacao": {
+    "target": "https://hook.bwa.global:3334",
+    "secure": true,
+    "changeOrigin": true,
+    "pathRewrite": {
+      "^/api/bwa-gamificacao": ""
+    }
+  }
+}

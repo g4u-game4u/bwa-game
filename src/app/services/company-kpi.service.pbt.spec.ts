@@ -1,8 +1,7 @@
 import { TestBed } from '@angular/core/testing';
-import { CompanyKpiService, CnpjKpiData, CompanyDisplay } from './company-kpi.service';
-import { FunifierApiService } from './funifier-api.service';
+import { HttpClientTestingModule } from '@angular/common/http/testing';
+import { CompanyKpiService } from './company-kpi.service';
 import * as fc from 'fast-check';
-import { of } from 'rxjs';
 
 /**
  * Property-Based Tests for CompanyKpiService
@@ -14,20 +13,14 @@ import { of } from 'rxjs';
  */
 describe('CompanyKpiService Property-Based Tests', () => {
   let service: CompanyKpiService;
-  let funifierApiSpy: jasmine.SpyObj<FunifierApiService>;
 
   beforeEach(() => {
-    const apiSpy = jasmine.createSpyObj('FunifierApiService', ['post']);
-
     TestBed.configureTestingModule({
-      providers: [
-        CompanyKpiService,
-        { provide: FunifierApiService, useValue: apiSpy }
-      ]
+      imports: [HttpClientTestingModule],
+      providers: [CompanyKpiService]
     });
 
     service = TestBed.inject(CompanyKpiService);
-    funifierApiSpy = TestBed.inject(FunifierApiService) as jasmine.SpyObj<FunifierApiService>;
   });
 
   /**
