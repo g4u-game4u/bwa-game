@@ -165,8 +165,7 @@
             [color]="kpi.color"
             [unit]="kpi.unit"
             [colorIndex]="i"
-            [isMissing]="!!kpi.isMissing"
-            [compactPercentOnly]="kpi.id === 'entregas-prazo'">
+            [isMissing]="!!kpi.isMissing">
           </c4u-kpi-circular-progress>
         </ng-container>
       </div>
@@ -245,7 +244,6 @@
                 </ng-container>
                 <ng-template #entregaNaCarteira>n/a</ng-template>
               </span>
-              <span class="carteira-classificacao" *ngIf="cliente.classificacao">{{ cliente.classificacao }}</span>
             </div>
           </div>
         </div>
@@ -279,7 +277,6 @@
                 </ng-container>
                 <ng-template #entregaNaParticipacao>n/a</ng-template>
               </span>
-              <span class="carteira-classificacao" *ngIf="cliente.classificacao">{{ cliente.classificacao }}</span>
             </div>
           </div>
         </div>

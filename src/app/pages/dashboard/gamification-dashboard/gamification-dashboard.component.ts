@@ -1055,7 +1055,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
 
   kpiSidebarTitle(kpi: KPIData): string {
     if (kpi.id === 'entregas-prazo') {
-      return this.kpiSidebarValue(kpi);
+      return `${kpi.label}: ${this.kpiSidebarValue(kpi)} (meta ${kpi.target}${kpi.unit || '%'})`;
     }
     return `${kpi.label}: ${this.roundValue(kpi.current)} / ${this.roundValue(kpi.target)}${kpi.unit ? ' ' + kpi.unit : ''}`;
   }
