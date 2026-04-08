@@ -769,6 +769,19 @@
             }
           }
           
+          .carteira-entrega {
+            font-size: 0.8125rem;
+            font-weight: 600;
+            min-width: 3.25rem;
+            text-align: right;
+            color: $text-primary;
+
+            &--na {
+              font-weight: 500;
+              color: $text-secondary;
+            }
+          }
+
           .carteira-item-meta {
             display: flex;
             align-items: center;

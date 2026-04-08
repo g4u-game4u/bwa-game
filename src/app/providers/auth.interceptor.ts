@@ -46,10 +46,44 @@ export class AuthInterceptor implements HttpInterceptor {
         return obj;
     }
 
+    /**
+     * Hook BWA gamificação: autenticação apenas com `x-api-token` (sem Bearer da sessão Funifier).
+     * Sem este bypass, o fluxo padrão exige `sessao.token` e a requisição nem chega a ser enviada.
+     */
+    private isGamificacaoApiKeyRequest(request: HttpRequest<unknown>): boolean {
+        if (!request.headers.has('x-api-token')) {
+            return false;
+        }
+        const configured = environment.gamificacaoApiUrl?.trim();
+        if (!configured) {
+            return false;
+        }
+        try {
+            const reqUrl = new URL(request.url);
+            const base = new URL(configured);
+            if (reqUrl.origin !== base.origin) {
+                return false;
+            }
+            const norm = (pathname: string) => {
+                const p = pathname.replace(/\/$/, '') || '/';
+                return p;
+            };
+            const basePath = norm(base.pathname);
+            const reqPath = norm(reqUrl.pathname);
+            return reqPath === basePath || reqPath.startsWith(basePath + '/');
+        } catch {
+            return false;
+        }
+    }
+
     intercept(request: HttpRequest<any>, next: HttpHandler): Observable<HttpEvent<any>> {
         // Safety check for request URL
         const requestUrl = request.url || '';
-        
+
+        if (this.isGamificacaoApiKeyRequest(request)) {
+            return next.handle(request);
+        }
+
         // Check if this is a Funifier API request by URL
         const isFunifierRequest = WHITELISTED_URLS.some(item => requestUrl.includes(item));
         

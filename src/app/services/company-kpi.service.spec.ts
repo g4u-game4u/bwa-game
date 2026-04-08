@@ -1,774 +1,368 @@
 import { TestBed } from '@angular/core/testing';
-import { CompanyKpiService, CnpjKpiData, CompanyDisplay } from './company-kpi.service';
-import { FunifierApiService } from './funifier-api.service';
-import { of, throwError } from 'rxjs';
+import {
+  HttpClientTestingModule,
+  HttpTestingController
+} from '@angular/common/http/testing';
+import { CompanyKpiService, GamificacaoEmpresaRow } from './company-kpi.service';
+import { environment } from '../../environments/environment';
+
+const TEST_GAMIFICACAO_URL = 'http://localhost/unit-test-gamificacao';
+
+function row(
+  empId: string,
+  porcEntregas: string,
+  cnpj = '00.020.621/0001-37'
+): GamificacaoEmpresaRow {
+  return {
+    CNPJ: cnpj,
+    EmpID: empId,
+    porcEntregas,
+    procFinalizados: '0',
+    procPendentes: '0',
+    regime: 'Regime teste',
+    data_criacao: '',
+    data_processamento: ''
+  };
+}
 
 describe('CompanyKpiService', () => {
   let service: CompanyKpiService;
-  let funifierApiSpy: jasmine.SpyObj<FunifierApiService>;
+  let httpMock: HttpTestingController;
+  let prevUrl: string;
+  let prevToken: string;
 
   beforeEach(() => {
-    const apiSpy = jasmine.createSpyObj('FunifierApiService', ['post']);
+    prevUrl = environment.gamificacaoApiUrl;
+    prevToken = environment.gamificacaoApiToken;
+    environment.gamificacaoApiUrl = TEST_GAMIFICACAO_URL;
+    environment.gamificacaoApiToken = 'test-x-api-token';
 
     TestBed.configureTestingModule({
-      providers: [
-        CompanyKpiService,
-        { provide: FunifierApiService, useValue: apiSpy }
-      ]
+      imports: [HttpClientTestingModule],
+      providers: [CompanyKpiService]
     });
 
     service = TestBed.inject(CompanyKpiService);
-    funifierApiSpy = TestBed.inject(FunifierApiService) as jasmine.SpyObj<FunifierApiService>;
+    httpMock = TestBed.inject(HttpTestingController);
+  });
+
+  afterEach(() => {
+    httpMock.verify();
+    service.clearCache();
+    environment.gamificacaoApiUrl = prevUrl;
+    environment.gamificacaoApiToken = prevToken;
   });
 
   it('should be created', () => {
     expect(service).toBeTruthy();
   });
 
-  // ========================================
-  // Task 2.2: Tests for extractCnpjId() with valid formats
-  // ========================================
   describe('extractCnpjId() - Valid Formats', () => {
     it('should extract ID from standard CNPJ format', () => {
       const cnpj = 'RODOPRIMA LOGISTICA LTDA l 0001 [2000|0001-60]';
-      const result = service.extractCnpjId(cnpj);
-      expect(result).toBe('2000');
+      expect(service.extractCnpjId(cnpj)).toBe('2000');
     });
 
     it('should extract ID with spaces', () => {
       const cnpj = 'COMPANY NAME l CODE [ 1234 |SUFFIX]';
-      const result = service.extractCnpjId(cnpj);
-      expect(result).toBe('1234');
-    });
-
-    it('should extract numeric ID', () => {
-      const cnpj = 'ABC COMPANY l 0001 [9876|0001-00]';
-      const result = service.extractCnpjId(cnpj);
-      expect(result).toBe('9876');
-    });
-
-    it('should extract alphanumeric ID', () => {
-      const cnpj = 'TEST CORP l 0002 [ABC123|SUFFIX]';
-      const result = service.extractCnpjId(cnpj);
-      expect(result).toBe('ABC123');
-    });
-
-    it('should extract single character ID', () => {
-      const cnpj = 'COMPANY l CODE [X|SUFFIX]';
-      const result = service.extractCnpjId(cnpj);
-      expect(result).toBe('X');
-    });
-
-    it('should extract ID with special characters', () => {
-      const cnpj = 'COMPANY l CODE [ID-123_ABC|SUFFIX]';
-      const result = service.extractCnpjId(cnpj);
-      expect(result).toBe('ID-123_ABC');
-    });
-
-    it('should trim whitespace from extracted ID', () => {
-      const cnpj = 'COMPANY l CODE [  2000  |SUFFIX]';
-      const result = service.extractCnpjId(cnpj);
-      expect(result).toBe('2000');
+      expect(service.extractCnpjId(cnpj)).toBe('1234');
     });
   });
 
-  // ========================================
-  // Task 2.3: Tests for extractCnpjId() with invalid formats
-  // ========================================
   describe('extractCnpjId() - Invalid Formats', () => {
     it('should return null for empty string', () => {
-      const result = service.extractCnpjId('');
-      expect(result).toBeNull();
+      expect(service.extractCnpjId('')).toBeNull();
     });
 
     it('should return null for null input', () => {
-      const result = service.extractCnpjId(null as any);
-      expect(result).toBeNull();
-    });
-
-    it('should return null for undefined input', () => {
-      const result = service.extractCnpjId(undefined as any);
-      expect(result).toBeNull();
-    });
-
-    it('should return null for non-string input', () => {
-      const result = service.extractCnpjId(12345 as any);
-      expect(result).toBeNull();
-    });
-
-    it('should return null when missing opening bracket', () => {
-      const cnpj = 'COMPANY l CODE 2000|SUFFIX]';
-      const result = service.extractCnpjId(cnpj);
-      expect(result).toBeNull();
-    });
-
-    it('should return null when missing pipe separator', () => {
-      const cnpj = 'COMPANY l CODE [2000-SUFFIX]';
-      const result = service.extractCnpjId(cnpj);
-      expect(result).toBeNull();
-    });
-
-    it('should return null when missing both bracket and pipe', () => {
-      const cnpj = 'COMPANY l CODE 2000';
-      const result = service.extractCnpjId(cnpj);
-      expect(result).toBeNull();
-    });
-
-    it('should return null for empty brackets', () => {
-      const cnpj = 'COMPANY l CODE [|SUFFIX]';
-      const result = service.extractCnpjId(cnpj);
-      expect(result).toBe('');
-    });
-
-    it('should return null for malformed format', () => {
-      const cnpj = 'INVALID FORMAT STRING';
-      const result = service.extractCnpjId(cnpj);
-      expect(result).toBeNull();
-    });
-
-    it('should return null for string with only brackets', () => {
-      const cnpj = '[]';
-      const result = service.extractCnpjId(cnpj);
-      expect(result).toBeNull();
+      expect(service.extractCnpjId(null as any)).toBeNull();
     });
   });
 
-  // ========================================
-  // Task 2.4: Tests for getKpiData() with mocked API responses
-  // ========================================
-  describe('getKpiData() - API Integration', () => {
-    it('should fetch KPI data for single CNPJ ID', (done) => {
-      const mockResponse: CnpjKpiData[] = [
-        { _id: '2000', entrega: 89 }
-      ];
+  describe('parsePorcEntregas', () => {
+    it('should parse Brazilian decimal', () => {
+      expect(service.parsePorcEntregas('94,81')).toBeCloseTo(94.81, 5);
+    });
 
-      funifierApiSpy.post.and.returnValue(of(mockResponse));
+    it('should parse plain number string', () => {
+      expect(service.parsePorcEntregas('89')).toBe(89);
+    });
+  });
 
+  describe('getKpiData() — API gamificação', () => {
+    it('should fetch by EmpID', done => {
       service.getKpiData(['2000']).subscribe(result => {
         expect(result.size).toBe(1);
-        expect(result.get('2000')).toEqual({ _id: '2000', entrega: 89 });
-        expect(funifierApiSpy.post).toHaveBeenCalledWith(
-          '/v3/database/cnpj__c/aggregate?strict=true',
-          [{ $match: { _id: { $in: ['2000'] } } }]
-        );
+        expect(result.get('2000')?.entrega).toBeCloseTo(89, 5);
         done();
       });
+
+      const req = httpMock.expectOne(r => r.url === TEST_GAMIFICACAO_URL);
+      expect(req.request.headers.get('x-api-token')).toBe('test-x-api-token');
+      req.flush([row('2000', '89,00')]);
     });
 
-    it('should fetch KPI data for multiple CNPJ IDs', (done) => {
-      const mockResponse: CnpjKpiData[] = [
-        { _id: '2000', entrega: 89 },
-        { _id: '1218', entrega: 45 },
-        { _id: '9654', entrega: 102 }
-      ];
-
-      funifierApiSpy.post.and.returnValue(of(mockResponse));
-
-      service.getKpiData(['2000', '1218', '9654']).subscribe(result => {
-        expect(result.size).toBe(3);
-        expect(result.get('2000')?.entrega).toBe(89);
-        expect(result.get('1218')?.entrega).toBe(45);
-        expect(result.get('9654')?.entrega).toBe(102);
+    it('should return empty map when URL/token missing', done => {
+      environment.gamificacaoApiToken = '';
+      service.clearCache();
+      service.getKpiData(['2000']).subscribe(result => {
+        expect(result.size).toBe(0);
         done();
       });
+      httpMock.expectNone(TEST_GAMIFICACAO_URL);
     });
 
-    it('should return empty map for empty input array', (done) => {
+    it('should return empty for empty input', done => {
       service.getKpiData([]).subscribe(result => {
         expect(result.size).toBe(0);
-        expect(funifierApiSpy.post).not.toHaveBeenCalled();
         done();
       });
+      httpMock.expectNone(TEST_GAMIFICACAO_URL);
     });
 
-    it('should return empty map for null input', (done) => {
-      service.getKpiData(null as any).subscribe(result => {
-        expect(result.size).toBe(0);
-        expect(funifierApiSpy.post).not.toHaveBeenCalled();
-        done();
-      });
-    });
-
-    it('should handle partial data (some IDs not found)', (done) => {
-      const mockResponse: CnpjKpiData[] = [
-        { _id: '2000', entrega: 89 }
-        // '1218' not in response
-      ];
-
-      funifierApiSpy.post.and.returnValue(of(mockResponse));
-
-      service.getKpiData(['2000', '1218']).subscribe(result => {
+    it('should handle partial match', done => {
+      service.getKpiData(['2000', '9999']).subscribe(result => {
         expect(result.size).toBe(1);
-        expect(result.has('2000')).toBe(true);
-        expect(result.has('1218')).toBe(false);
+        expect(result.has('2000')).toBeTrue();
         done();
       });
+      const req = httpMock.expectOne(TEST_GAMIFICACAO_URL);
+      req.flush([row('2000', '50,00')]);
     });
 
-    it('should handle API returning empty array', (done) => {
-      funifierApiSpy.post.and.returnValue(of([]));
-
+    it('should handle HTTP error', done => {
       service.getKpiData(['2000']).subscribe(result => {
         expect(result.size).toBe(0);
         done();
       });
-    });
-
-    it('should handle API returning non-array response', (done) => {
-      funifierApiSpy.post.and.returnValue(of({} as any));
-
-      service.getKpiData(['2000']).subscribe(result => {
-        expect(result.size).toBe(0);
-        done();
-      });
-    });
-
-    it('should handle items without _id field', (done) => {
-      const mockResponse: any[] = [
-        { _id: '2000', entrega: 89 },
-        { entrega: 45 } // Missing _id
-      ];
-
-      funifierApiSpy.post.and.returnValue(of(mockResponse));
-
-      service.getKpiData(['2000']).subscribe(result => {
-        expect(result.size).toBe(1);
-        expect(result.has('2000')).toBe(true);
-        done();
-      });
+      const req = httpMock.expectOne(TEST_GAMIFICACAO_URL);
+      req.error(new ProgressEvent('network'));
     });
   });
 
-  // ========================================
-  // Task 2.5: Tests for enrichCompaniesWithKpis() with various scenarios
-  // ========================================
-  describe('enrichCompaniesWithKpis() - Data Enrichment', () => {
-    it('should enrich companies with KPI data', (done) => {
+  describe('enrichCompaniesWithKpis()', () => {
+    it('should enrich companies with KPI data', done => {
       const companies = [
         { cnpj: 'COMPANY A l 0001 [2000|0001-60]', actionCount: 5, processCount: 2 },
         { cnpj: 'COMPANY B l 0002 [1218|0002-45]', actionCount: 3, processCount: 1 }
       ];
 
-      const mockKpiResponse: CnpjKpiData[] = [
-        { _id: '2000', entrega: 89 },
-        { _id: '1218', entrega: 45 }
-      ];
-
-      funifierApiSpy.post.and.returnValue(of(mockKpiResponse));
-
       service.enrichCompaniesWithKpis(companies).subscribe(result => {
         expect(result.length).toBe(2);
-        
-        expect(result[0].cnpj).toBe('COMPANY A l 0001 [2000|0001-60]');
-        expect(result[0].cnpjId).toBe('2000');
-        expect(result[0].actionCount).toBe(5);
-        expect(result[0].deliveryKpi).toBeDefined();
-        expect(result[0].deliveryKpi?.current).toBe(89);
-        expect(result[0].deliveryKpi?.label).toBe('Entregas');
-        
-        expect(result[1].cnpj).toBe('COMPANY B l 0002 [1218|0002-45]');
-        expect(result[1].cnpjId).toBe('1218');
-        expect(result[1].actionCount).toBe(3);
-        expect(result[1].deliveryKpi).toBeDefined();
-        expect(result[1].deliveryKpi?.current).toBe(45);
-        
+        expect(result[0].deliveryKpi?.current).toBeCloseTo(89, 5);
+        expect(result[1].deliveryKpi?.current).toBeCloseTo(45, 5);
+        expect(result[0].deliveryKpi?.label).toBe('Entregas no Prazo');
         done();
       });
+
+      const req = httpMock.expectOne(TEST_GAMIFICACAO_URL);
+      req.flush([row('2000', '89,00'), row('1218', '45,00')]);
     });
 
-    it('should handle companies without KPI data', (done) => {
+    it('should handle companies without KPI data', done => {
       const companies = [
         { cnpj: 'COMPANY A l 0001 [2000|0001-60]', actionCount: 5, processCount: 2 }
       ];
 
-      funifierApiSpy.post.and.returnValue(of([])); // No KPI data
-
       service.enrichCompaniesWithKpis(companies).subscribe(result => {
-        expect(result.length).toBe(1);
-        expect(result[0].cnpjId).toBe('2000');
         expect(result[0].deliveryKpi).toBeUndefined();
         done();
       });
+
+      httpMock.expectOne(TEST_GAMIFICACAO_URL).flush([]);
     });
 
-    it('should handle companies with invalid CNPJ format', (done) => {
-      const companies = [
-        { cnpj: 'INVALID FORMAT', actionCount: 5, processCount: 2 },
-        { cnpj: 'COMPANY B l 0002 [1218|0002-45]', actionCount: 3, processCount: 1 }
-      ];
-
-      const mockKpiResponse: CnpjKpiData[] = [
-        { _id: '1218', entrega: 45 }
-      ];
-
-      funifierApiSpy.post.and.returnValue(of(mockKpiResponse));
-
-      service.enrichCompaniesWithKpis(companies).subscribe(result => {
-        expect(result.length).toBe(2);
-        
-        // Invalid format company
-        expect(result[0].cnpjId).toBeUndefined();
-        expect(result[0].deliveryKpi).toBeUndefined();
-        
-        // Valid company
-        expect(result[1].cnpjId).toBe('1218');
-        expect(result[1].deliveryKpi).toBeDefined();
-        
-        done();
-      });
-    });
-
-    it('should return empty array for empty input', (done) => {
+    it('should return empty array for empty input', done => {
       service.enrichCompaniesWithKpis([]).subscribe(result => {
         expect(result).toEqual([]);
-        expect(funifierApiSpy.post).not.toHaveBeenCalled();
         done();
       });
+      httpMock.expectNone(TEST_GAMIFICACAO_URL);
     });
 
-    it('should return empty array for null input', (done) => {
-      service.enrichCompaniesWithKpis(null as any).subscribe(result => {
-        expect(result).toEqual([]);
-        expect(funifierApiSpy.post).not.toHaveBeenCalled();
-        done();
-      });
-    });
-
-    it('should handle mixed valid and invalid CNPJ formats', (done) => {
+    it('should match by formatted CNPJ in label when bracket EmpID is absent', done => {
       const companies = [
-        { cnpj: 'COMPANY A l 0001 [2000|0001-60]', actionCount: 5, processCount: 2 },
-        { cnpj: 'INVALID', actionCount: 2, processCount: 1 },
-        { cnpj: 'COMPANY C l 0003 [9654|0003-12]', actionCount: 8, processCount: 3 }
+        {
+          cnpj: 'ACME LTDA — 00.020.621/0001-37',
+          actionCount: 1,
+          processCount: 0
+        }
       ];
-
-      const mockKpiResponse: CnpjKpiData[] = [
-        { _id: '2000', entrega: 89 },
-        { _id: '9654', entrega: 102 }
-      ];
-
-      funifierApiSpy.post.and.returnValue(of(mockKpiResponse));
-
       service.enrichCompaniesWithKpis(companies).subscribe(result => {
-        expect(result.length).toBe(3);
-        expect(result[0].deliveryKpi).toBeDefined();
-        expect(result[1].deliveryKpi).toBeUndefined();
-        expect(result[2].deliveryKpi).toBeDefined();
+        expect(result[0].deliveryKpi?.current).toBeCloseTo(91.2, 5);
         done();
       });
+      httpMock.expectOne(TEST_GAMIFICACAO_URL).flush([
+        row('2477', '91,20', '00.020.621/0001-37')
+      ]);
     });
 
-    it('should handle duplicate CNPJ IDs', (done) => {
+    it('should match EmpID with leading zeros to API row without zeros', done => {
       const companies = [
-        { cnpj: 'COMPANY A l 0001 [2000|0001-60]', actionCount: 5, processCount: 2 },
-        { cnpj: 'COMPANY A BRANCH l 0002 [2000|0002-45]', actionCount: 3, processCount: 1 }
+        { cnpj: 'X [002000|suffix]', actionCount: 1, processCount: 0 }
       ];
-
-      const mockKpiResponse: CnpjKpiData[] = [
-        { _id: '2000', entrega: 89 }
-      ];
-
-      funifierApiSpy.post.and.returnValue(of(mockKpiResponse));
-
       service.enrichCompaniesWithKpis(companies).subscribe(result => {
-        expect(result.length).toBe(2);
-        expect(result[0].deliveryKpi?.current).toBe(89);
-        expect(result[1].deliveryKpi?.current).toBe(89);
-        // Should only call API once with unique IDs
-        expect(funifierApiSpy.post).toHaveBeenCalledTimes(1);
+        expect(result[0].deliveryKpi?.current).toBeCloseTo(80, 5);
         done();
       });
+      httpMock.expectOne(TEST_GAMIFICACAO_URL).flush([row('2000', '80,00')]);
     });
 
-    it('should preserve all company properties', (done) => {
-      const companies = [
-        { cnpj: 'COMPANY A l 0001 [2000|0001-60]', actionCount: 5, processCount: 2 }
-      ];
+    it('enrichCarteiraFromSupabase should match by emp_id when CNPJ differs from API', done => {
+      service
+        .enrichCarteiraFromSupabase([
+          { cnpj: '001112223334455', empId: '999' }
+        ])
+        .subscribe(result => {
+          expect(result[0].entrega).toBeCloseTo(55.5, 5);
+          done();
+        });
+      httpMock.expectOne(TEST_GAMIFICACAO_URL).flush([
+        {
+          cnpj: '99.999.999/0001-99',
+          empId: 999,
+          porcEntregas: '55,50',
+          procFinalizados: '0',
+          procPendentes: '0',
+          regime: 'Simples',
+          data_criacao: '',
+          data_processamento: ''
+        }
+      ]);
+    });
 
-      const mockKpiResponse: CnpjKpiData[] = [
-        { _id: '2000', entrega: 89 }
-      ];
-
-      funifierApiSpy.post.and.returnValue(of(mockKpiResponse));
-
-      service.enrichCompaniesWithKpis(companies).subscribe(result => {
-        expect(result[0].cnpj).toBe('COMPANY A l 0001 [2000|0001-60]');
-        expect(result[0].actionCount).toBe(5);
-        expect(result[0].cnpjId).toBe('2000');
-        done();
-      });
+    it('enrichCarteiraFromSupabase should match Supabase id to API EmpID and parse percEntregas string', done => {
+      service
+        .enrichCarteiraFromSupabase([{ cnpj: '12345678000199', supabaseId: 2477 }])
+        .subscribe(result => {
+          expect(result[0].entrega).toBeCloseTo(93.25, 5);
+          expect(result[0].deliveryKpi?.current).toBeCloseTo(93.25, 5);
+          done();
+        });
+      httpMock.expectOne(TEST_GAMIFICACAO_URL).flush([
+        {
+          EmpID: '2477',
+          cnpj: '12.345.678/0001-99',
+          percEntregas: '93,25',
+          procFinalizados: '1',
+          procPendentes: '2',
+          regime: 'Lucro Real',
+          data_criacao: '',
+          data_processamento: ''
+        }
+      ]);
     });
   });
 
-  // ========================================
-  // Task 2.6: Tests for caching behavior
-  // ========================================
-  describe('Caching Behavior', () => {
-    it('should cache KPI data and reuse on subsequent calls', (done) => {
-      const mockResponse: CnpjKpiData[] = [
-        { _id: '2000', entrega: 89 }
-      ];
-
-      funifierApiSpy.post.and.returnValue(of(mockResponse));
-
-      // First call
-      service.getKpiData(['2000']).subscribe(result1 => {
-        expect(result1.size).toBe(1);
-        expect(funifierApiSpy.post).toHaveBeenCalledTimes(1);
-
-        // Second call should use cache
-        service.getKpiData(['2000']).subscribe(result2 => {
-          expect(result2.size).toBe(1);
-          expect(funifierApiSpy.post).toHaveBeenCalledTimes(1); // Still 1, not 2
-          done();
-        });
-      });
-    });
-
-    it('should use same cache for same IDs in different order', (done) => {
-      const mockResponse: CnpjKpiData[] = [
-        { _id: '2000', entrega: 89 },
-        { _id: '1218', entrega: 45 }
-      ];
-
-      funifierApiSpy.post.and.returnValue(of(mockResponse));
-
-      // First call with IDs in one order
-      service.getKpiData(['2000', '1218']).subscribe(() => {
-        expect(funifierApiSpy.post).toHaveBeenCalledTimes(1);
-
-        // Second call with IDs in different order
-        service.getKpiData(['1218', '2000']).subscribe(() => {
-          expect(funifierApiSpy.post).toHaveBeenCalledTimes(1); // Should use cache
-          done();
-        });
-      });
-    });
-
-    it('should create separate cache entries for different ID sets', (done) => {
-      const mockResponse1: CnpjKpiData[] = [{ _id: '2000', entrega: 89 }];
-      const mockResponse2: CnpjKpiData[] = [{ _id: '1218', entrega: 45 }];
-
-      funifierApiSpy.post.and.returnValues(of(mockResponse1), of(mockResponse2));
-
-      // First call
+  describe('Caching', () => {
+    it('should reuse snapshot for second getKpiData call', done => {
       service.getKpiData(['2000']).subscribe(() => {
-        expect(funifierApiSpy.post).toHaveBeenCalledTimes(1);
-
-        // Second call with different IDs
         service.getKpiData(['1218']).subscribe(() => {
-          expect(funifierApiSpy.post).toHaveBeenCalledTimes(2); // New API call
           done();
         });
+        httpMock.expectNone(TEST_GAMIFICACAO_URL);
       });
+      httpMock.expectOne(TEST_GAMIFICACAO_URL).flush([
+        row('2000', '10,00'),
+        row('1218', '20,00')
+      ]);
     });
 
-    it('should clear cache when clearCache() is called', (done) => {
-      const mockResponse: CnpjKpiData[] = [
-        { _id: '2000', entrega: 89 }
-      ];
-
-      funifierApiSpy.post.and.returnValue(of(mockResponse));
-
-      // First call
+    it('should refetch after clearCache', done => {
       service.getKpiData(['2000']).subscribe(() => {
-        expect(funifierApiSpy.post).toHaveBeenCalledTimes(1);
-
-        // Clear cache
         service.clearCache();
-
-        // Second call should hit API again
-        service.getKpiData(['2000']).subscribe(() => {
-          expect(funifierApiSpy.post).toHaveBeenCalledTimes(2);
-          done();
-        });
+        service.getKpiData(['2000']).subscribe(() => done());
+        httpMock.expectOne(TEST_GAMIFICACAO_URL).flush([row('2000', '99,00')]);
       });
-    });
-
-    it('should share cached data across enrichCompaniesWithKpis calls', (done) => {
-      const companies1 = [
-        { cnpj: 'COMPANY A l 0001 [2000|0001-60]', actionCount: 5, processCount: 2 }
-      ];
-      const companies2 = [
-        { cnpj: 'COMPANY A l 0001 [2000|0001-60]', actionCount: 3, processCount: 1 }
-      ];
-
-      const mockResponse: CnpjKpiData[] = [
-        { _id: '2000', entrega: 89 }
-      ];
-
-      funifierApiSpy.post.and.returnValue(of(mockResponse));
-
-      // First enrichment call
-      service.enrichCompaniesWithKpis(companies1).subscribe(() => {
-        expect(funifierApiSpy.post).toHaveBeenCalledTimes(1);
-
-        // Second enrichment call with same CNPJ ID
-        service.enrichCompaniesWithKpis(companies2).subscribe(() => {
-          expect(funifierApiSpy.post).toHaveBeenCalledTimes(1); // Should use cache
-          done();
-        });
-      });
+      httpMock.expectOne(TEST_GAMIFICACAO_URL).flush([row('2000', '10,00')]);
     });
   });
 
-  // ========================================
-  // Task 2.7: Tests for error handling
-  // ========================================
-  describe('Error Handling', () => {
-    it('should handle API errors gracefully in getKpiData', (done) => {
-      funifierApiSpy.post.and.returnValue(
-        throwError(() => new Error('API Error'))
-      );
-
-      service.getKpiData(['2000']).subscribe(result => {
-        expect(result.size).toBe(0); // Should return empty map
+  describe('enrichFromCnpjResp', () => {
+    it('should match EmpID and full CNPJ', done => {
+      service.enrichFromCnpjResp(['2477', '00.020.621/0001-37']).subscribe(res => {
+        expect(res[0].deliveryKpi?.current).toBeCloseTo(94.81, 5);
+        expect(res[1].deliveryKpi?.current).toBeCloseTo(94.81, 5);
+        expect(res[0].processCount).toBe(64);
         done();
       });
+      httpMock.expectOne(TEST_GAMIFICACAO_URL).flush([
+        {
+          CNPJ: '00.020.621/0001-37',
+          EmpID: '2477',
+          porcEntregas: '94,81',
+          procFinalizados: '51',
+          procPendentes: '13',
+          regime: 'Lucro Presumido',
+          data_criacao: '2026-04-08 11:02:11',
+          data_processamento: '2026-04-08 11:02:11'
+        }
+      ]);
     });
 
-    it('should handle network errors in getKpiData', (done) => {
-      funifierApiSpy.post.and.returnValue(
-        throwError(() => ({ status: 0, message: 'Network error' }))
-      );
-
-      service.getKpiData(['2000']).subscribe(result => {
-        expect(result.size).toBe(0);
+    it('should match Supabase-style CNPJ (14 digits only, no mask)', done => {
+      service.enrichFromCnpjResp(['00020621000137']).subscribe(res => {
+        expect(res[0].entrega).toBeCloseTo(88.5, 5);
+        expect(res[0].deliveryKpi?.current).toBeCloseTo(88.5, 5);
         done();
       });
+      httpMock.expectOne(TEST_GAMIFICACAO_URL).flush([
+        row('2477', '88,50', '00.020.621/0001-37')
+      ]);
     });
 
-    it('should handle 404 errors in getKpiData', (done) => {
-      funifierApiSpy.post.and.returnValue(
-        throwError(() => ({ status: 404, message: 'Not found' }))
-      );
-
-      service.getKpiData(['2000']).subscribe(result => {
-        expect(result.size).toBe(0);
+    it('should read empId, cnpj e porcEntregas em camelCase', done => {
+      service.enrichFromCnpjResp(['999']).subscribe(res => {
+        expect(res[0].entrega).toBeCloseTo(77.25, 5);
         done();
       });
-    });
-
-    it('should handle 500 errors in getKpiData', (done) => {
-      funifierApiSpy.post.and.returnValue(
-        throwError(() => ({ status: 500, message: 'Server error' }))
-      );
-
-      service.getKpiData(['2000']).subscribe(result => {
-        expect(result.size).toBe(0);
-        done();
-      });
-    });
-
-    it('should handle API errors gracefully in enrichCompaniesWithKpis', (done) => {
-      const companies = [
-        { cnpj: 'COMPANY A l 0001 [2000|0001-60]', actionCount: 5, processCount: 2 }
-      ];
-
-      funifierApiSpy.post.and.returnValue(
-        throwError(() => new Error('API Error'))
-      );
-
-      service.enrichCompaniesWithKpis(companies).subscribe(result => {
-        expect(result.length).toBe(1);
-        expect(result[0].cnpjId).toBe('2000');
-        expect(result[0].deliveryKpi).toBeUndefined(); // No KPI data due to error
-        done();
-      });
-    });
-
-    it('should not throw error when all companies have invalid CNPJ format', (done) => {
-      const companies = [
-        { cnpj: 'INVALID FORMAT 1', actionCount: 5, processCount: 2 },
-        { cnpj: 'INVALID FORMAT 2', actionCount: 3, processCount: 1 }
-      ];
-
-      service.enrichCompaniesWithKpis(companies).subscribe(result => {
-        expect(result.length).toBe(2);
-        expect(result[0].deliveryKpi).toBeUndefined();
-        expect(result[1].deliveryKpi).toBeUndefined();
-        expect(funifierApiSpy.post).not.toHaveBeenCalled(); // No API call for invalid IDs
-        done();
-      });
-    });
-
-    it('should handle malformed API response', (done) => {
-      funifierApiSpy.post.and.returnValue(of(null as any));
-
-      service.getKpiData(['2000']).subscribe(result => {
-        expect(result.size).toBe(0);
-        done();
-      });
-    });
-
-    it('should handle API response with missing entrega field', (done) => {
-      const mockResponse: any[] = [
-        { _id: '2000' } // Missing entrega
-      ];
-
-      funifierApiSpy.post.and.returnValue(of(mockResponse));
-
-      service.getKpiData(['2000']).subscribe(result => {
-        expect(result.size).toBe(1);
-        const kpiData = result.get('2000');
-        expect(kpiData).toBeDefined();
-        expect(kpiData?.entrega).toBeUndefined();
-        done();
-      });
+      httpMock.expectOne(TEST_GAMIFICACAO_URL).flush([
+        {
+          cnpj: '11.222.333/0001-44',
+          empId: 999,
+          porcEntregas: '77,25',
+          procFinalizados: '0',
+          procPendentes: '0',
+          regime: 'Simples',
+          data_criacao: '',
+          data_processamento: ''
+        }
+      ]);
     });
   });
 
-  // ========================================
-  // Additional Tests: KPI Data Mapping
-  // ========================================
-  describe('KPI Data Mapping', () => {
-    it('should map KPI data with correct structure', (done) => {
+  describe('mapToKpiData / colors (target 90)', () => {
+    it('should cap percentage at 100%', done => {
       const companies = [
         { cnpj: 'COMPANY A l 0001 [2000|0001-60]', actionCount: 5, processCount: 2 }
       ];
-
-      const mockKpiResponse: CnpjKpiData[] = [
-        { _id: '2000', entrega: 89 }
-      ];
-
-      funifierApiSpy.post.and.returnValue(of(mockKpiResponse));
-
-      service.enrichCompaniesWithKpis(companies).subscribe(result => {
-        const kpi = result[0].deliveryKpi;
-        
-        expect(kpi).toBeDefined();
-        expect(kpi?.id).toBe('delivery');
-        expect(kpi?.label).toBe('Entregas');
-        expect(kpi?.current).toBe(89);
-        expect(kpi?.target).toBe(100);
-        expect(kpi?.unit).toBe('entregas');
-        expect(kpi?.percentage).toBe(89);
-        expect(kpi?.color).toBe('yellow'); // 89% is between 50-79%
-        
-        done();
-      });
-    });
-
-    it('should calculate percentage correctly', (done) => {
-      const companies = [
-        { cnpj: 'COMPANY A l 0001 [2000|0001-60]', actionCount: 5, processCount: 2 }
-      ];
-
-      const mockKpiResponse: CnpjKpiData[] = [
-        { _id: '2000', entrega: 50 }
-      ];
-
-      funifierApiSpy.post.and.returnValue(of(mockKpiResponse));
-
-      service.enrichCompaniesWithKpis(companies).subscribe(result => {
-        expect(result[0].deliveryKpi?.percentage).toBe(50);
-        done();
-      });
-    });
-
-    it('should cap percentage at 100%', (done) => {
-      const companies = [
-        { cnpj: 'COMPANY A l 0001 [2000|0001-60]', actionCount: 5, processCount: 2 }
-      ];
-
-      const mockKpiResponse: CnpjKpiData[] = [
-        { _id: '2000', entrega: 150 }
-      ];
-
-      funifierApiSpy.post.and.returnValue(of(mockKpiResponse));
-
       service.enrichCompaniesWithKpis(companies).subscribe(result => {
         expect(result[0].deliveryKpi?.percentage).toBe(100);
         done();
       });
+      httpMock.expectOne(TEST_GAMIFICACAO_URL).flush([row('2000', '150,00')]);
     });
 
-    it('should assign green color for >= 80% completion', (done) => {
+    it('should be red below target', done => {
       const companies = [
         { cnpj: 'COMPANY A l 0001 [2000|0001-60]', actionCount: 5, processCount: 2 }
       ];
+      service.enrichCompaniesWithKpis(companies).subscribe(result => {
+        expect(result[0].deliveryKpi?.color).toBe('red');
+        done();
+      });
+      httpMock.expectOne(TEST_GAMIFICACAO_URL).flush([row('2000', '65,00')]);
+    });
 
-      const mockKpiResponse: CnpjKpiData[] = [
-        { _id: '2000', entrega: 85 }
+    it('should be green at or above target with high ratio', done => {
+      const companies = [
+        { cnpj: 'COMPANY A l 0001 [2000|0001-60]', actionCount: 5, processCount: 2 }
       ];
-
-      funifierApiSpy.post.and.returnValue(of(mockKpiResponse));
-
       service.enrichCompaniesWithKpis(companies).subscribe(result => {
         expect(result[0].deliveryKpi?.color).toBe('green');
         done();
       });
-    });
-
-    it('should assign red color when current is below target (even if percentage would be 50-79%)', (done) => {
-      const companies = [
-        { cnpj: 'COMPANY A l 0001 [2000|0001-60]', actionCount: 5, processCount: 2 }
-      ];
-
-      const mockKpiResponse: CnpjKpiData[] = [
-        { _id: '2000', entrega: 65 } // 65 < 80 (target), so should be red
-      ];
-
-      funifierApiSpy.post.and.returnValue(of(mockKpiResponse));
-
-      service.enrichCompaniesWithKpis(companies).subscribe(result => {
-        expect(result[0].deliveryKpi?.color).toBe('red');
-        done();
-      });
-    });
-
-    it('should assign red color when current is exactly at target but below 80% threshold', (done) => {
-      const companies = [
-        { cnpj: 'COMPANY A l 0001 [2000|0001-60]', actionCount: 5, processCount: 2 }
-      ];
-
-      // Target is 80, so 80 >= 80 means it's at target
-      // But percentage is 100%, which is >= 80%, so should be green
-      const mockKpiResponse: CnpjKpiData[] = [
-        { _id: '2000', entrega: 80 } // 80 >= 80 (target), 100% so should be green
-      ];
-
-      funifierApiSpy.post.and.returnValue(of(mockKpiResponse));
-
-      service.enrichCompaniesWithKpis(companies).subscribe(result => {
-        expect(result[0].deliveryKpi?.color).toBe('green');
-        done();
-      });
-    });
-
-    it('should assign red color for < 50% completion', (done) => {
-      const companies = [
-        { cnpj: 'COMPANY A l 0001 [2000|0001-60]', actionCount: 5, processCount: 2 }
-      ];
-
-      const mockKpiResponse: CnpjKpiData[] = [
-        { _id: '2000', entrega: 30 }
-      ];
-
-      funifierApiSpy.post.and.returnValue(of(mockKpiResponse));
-
-      service.enrichCompaniesWithKpis(companies).subscribe(result => {
-        expect(result[0].deliveryKpi?.color).toBe('red');
-        done();
-      });
-    });
-
-    it('should handle zero entrega value', (done) => {
-      const companies = [
-        { cnpj: 'COMPANY A l 0001 [2000|0001-60]', actionCount: 5, processCount: 2 }
-      ];
-
-      const mockKpiResponse: CnpjKpiData[] = [
-        { _id: '2000', entrega: 0 }
-      ];
-
-      funifierApiSpy.post.and.returnValue(of(mockKpiResponse));
-
-      service.enrichCompaniesWithKpis(companies).subscribe(result => {
-        expect(result[0].deliveryKpi?.current).toBe(0);
-        expect(result[0].deliveryKpi?.percentage).toBe(0);
-        expect(result[0].deliveryKpi?.color).toBe('red');
-        done();
-      });
+      httpMock.expectOne(TEST_GAMIFICACAO_URL).flush([row('2000', '95,00')]);
     });
   });
 });

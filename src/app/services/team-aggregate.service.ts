@@ -1,5 +1,6 @@
 import { Injectable } from '@angular/core';
-import { Observable, of, throwError } from 'rxjs';
+import { Observable, of, throwError, forkJoin } from 'rxjs';
+import { PONTOS_POR_ATIVIDADE_FINALIZADA_ACTION_LOG } from '@app/constants/pontos-por-atividade-action-log';
 import { map, catchError, tap, switchMap } from 'rxjs/operators';
 import { FunifierApiService } from './funifier-api.service';
 import { AggregateQueryBuilderService, AggregateQuery } from './aggregate-query-builder.service';
@@ -716,9 +717,10 @@ export class TeamAggregateService {
     ).pipe(
       map(response => {
         const result = Array.isArray(response) && response.length > 0 ? response[0] : {};
+        const finalizadas = result.totalActions || 0;
         const metrics = {
-          finalizadas: result.totalActions || 0,
-          pontos: 0, // Will be fetched separately from achievement
+          finalizadas,
+          pontos: Math.floor(finalizadas * PONTOS_POR_ATIVIDADE_FINALIZADA_ACTION_LOG),
           processosFinalizados: result.desbloqueados || 0,
           processosIncompletos: (result.uniqueProcesses?.length || 0) - (result.desbloqueados || 0)
         };
@@ -729,6 +731,70 @@ export class TeamAggregateService {
       catchError(error => {
         console.error('Error in getTeamActivityMetrics:', error);
         return of({ finalizadas: 0, pontos: 0, processosFinalizados: 0, processosIncompletos: 0 });
+      })
+    );
+  }
+
+  /**
+   * Contagem de registros no action_log por membro (escopo time + intervalo).
+   * Usada para pontos = count × PONTOS_POR_ATIVIDADE_FINALIZADA_ACTION_LOG (regra provisória).
+   */
+  getTeamMemberActionLogCounts(
+    teamId: string,
+    startDate: Date,
+    endDate: Date
+  ): Observable<Map<string, number>> {
+    const cacheKey = `team_member_action_counts_${teamId}_${startDate.getTime()}_${endDate.getTime()}`;
+
+    const cached = this.getFromCache<Map<string, number>>(cacheKey);
+    if (cached) {
+      return of(cached);
+    }
+
+    const aggregateQuery = [
+      {
+        $lookup: {
+          from: 'player',
+          localField: 'userId',
+          foreignField: '_id',
+          as: 'playerData'
+        }
+      },
+      { $unwind: '$playerData' },
+      {
+        $match: {
+          'playerData.teams': teamId,
+          time: {
+            $gte: { $date: startDate.toISOString() },
+            $lte: { $date: endDate.toISOString() }
+          }
+        }
+      },
+      {
+        $group: {
+          _id: '$userId',
+          actionCount: { $sum: 1 }
+        }
+      }
+    ];
+
+    return this.funifierApi.post<any[]>(
+      '/database/action_log/aggregate?strict=true',
+      aggregateQuery
+    ).pipe(
+      map(response => {
+        const map = new Map<string, number>();
+        (Array.isArray(response) ? response : []).forEach((item: any) => {
+          if (item._id != null) {
+            map.set(String(item._id), item.actionCount || 0);
+          }
+        });
+        return map;
+      }),
+      tap(data => this.setCache(cacheKey, data)),
+      catchError(error => {
+        console.error('Error in getTeamMemberActionLogCounts:', error);
+        return of(new Map<string, number>());
       })
     );
   }
@@ -823,36 +889,31 @@ export class TeamAggregateService {
   }
 
   /**
-   * OPTIMIZED: Get monthly points breakdown for all team members in a single aggregate query.
-   * Replaces individual getMonthlyPointsBreakdown calls per member.
-   * 
-   * @param memberIds - Array of team member IDs
-   * @param startDate - Start date for filtering
-   * @param endDate - End date for filtering
-   * @returns Observable of aggregated points breakdown
+   * Breakdown mensal/equipe: bloqueados vêm do achievement (carteira); desbloqueados =
+   * atividades no action_log (escopo time) × pontos por atividade (regra provisória, alinhada ao gamification).
    */
   getTeamMonthlyPointsBreakdown(
+    teamId: string,
     memberIds: string[],
     startDate: Date,
     endDate: Date
   ): Observable<{ bloqueados: number; desbloqueados: number }> {
-    const cacheKey = `team_points_breakdown_${memberIds.join('_')}_${startDate.getTime()}_${endDate.getTime()}`;
-    
-    const cached = this.getFromCache<any>(cacheKey);
+    const cacheKey = `team_points_breakdown_v2_${teamId}_${memberIds.join('_')}_${startDate.getTime()}_${endDate.getTime()}`;
+
+    const cached = this.getFromCache<{ bloqueados: number; desbloqueados: number }>(cacheKey);
     if (cached) {
       return of(cached);
     }
 
-    if (memberIds.length === 0) {
+    if (memberIds.length === 0 || !teamId) {
       return of({ bloqueados: 0, desbloqueados: 0 });
     }
 
-    // Single aggregate query to get points breakdown for all team members
-    const aggregateQuery = [
+    const achievementQuery = [
       {
         $match: {
           player: { $in: memberIds },
-          type: 0, // type 0 = points
+          type: 0,
           time: {
             $gte: { $date: startDate.toISOString() },
             $lte: { $date: endDate.toISOString() }
@@ -867,28 +928,27 @@ export class TeamAggregateService {
       }
     ];
 
-    console.log('🔍 Team monthly points breakdown aggregate query');
+    console.log('🔍 Team monthly points breakdown (achievement + action_log)');
 
-    return this.funifierApi.post<any[]>(
-      '/database/achievement/aggregate?strict=true',
-      aggregateQuery
-    ).pipe(
-      map(response => {
+    return forkJoin({
+      ach: this.funifierApi.post<any[]>(
+        '/database/achievement/aggregate?strict=true',
+        achievementQuery
+      ),
+      activity: this.getTeamActivityMetrics(teamId, startDate, endDate)
+    }).pipe(
+      map(({ ach, activity }) => {
         let bloqueados = 0;
-        let desbloqueados = 0;
-
-        if (Array.isArray(response)) {
-          response.forEach(item => {
+        if (Array.isArray(ach)) {
+          ach.forEach(item => {
             if (item._id === 'locked_points' || item._id === 'bloqueados') {
               bloqueados = Math.floor(item.total || 0);
-            } else if (item._id === 'points' || item._id === 'unlocked_points' || item._id === 'desbloqueados') {
-              desbloqueados = Math.floor(item.total || 0);
             }
           });
         }
-
+        const desbloqueados = Math.floor(activity.pontos || 0);
         const result = { bloqueados, desbloqueados };
-        console.log('✅ Team monthly points breakdown (OPTIMIZED):', result);
+        console.log('✅ Team monthly points breakdown:', result);
         return result;
       }),
       tap(data => this.setCache(cacheKey, data)),
@@ -900,20 +960,16 @@ export class TeamAggregateService {
   }
 
   /**
-   * OPTIMIZED: Get total points for all team members in a single aggregate query.
-   * 
-   * @param memberIds - Array of team member IDs
-   * @param startDate - Start date for filtering
-   * @param endDate - End date for filtering
-   * @returns Observable of total points
+   * Total de pontos de atividade (action_log no intervalo, todos os membros indicados) × pontos por tarefa.
+   * Regra provisória alinhada ao gamification; não usa soma de achievement.
    */
   getTeamTotalPoints(
     memberIds: string[],
     startDate: Date,
     endDate: Date
   ): Observable<number> {
-    const cacheKey = `team_total_points_${memberIds.join('_')}_${startDate.getTime()}_${endDate.getTime()}`;
-    
+    const cacheKey = `team_total_activity_points_${memberIds.join('_')}_${startDate.getTime()}_${endDate.getTime()}`;
+
     const cached = this.getFromCache<number>(cacheKey);
     if (cached !== null) {
       return of(cached);
@@ -923,12 +979,10 @@ export class TeamAggregateService {
       return of(0);
     }
 
-    // Single aggregate query to get total points for all team members
     const aggregateQuery = [
       {
         $match: {
-          player: { $in: memberIds },
-          type: 0, // type 0 = points
+          userId: { $in: memberIds },
           time: {
             $gte: { $date: startDate.toISOString() },
             $lte: { $date: endDate.toISOString() }
@@ -938,22 +992,22 @@ export class TeamAggregateService {
       {
         $group: {
           _id: null,
-          total: { $sum: '$total' }
+          total: { $sum: 1 }
         }
       }
     ];
 
-    console.log('🔍 Team total points aggregate query');
+    console.log('🔍 Team total activity points (action_log count × constant)');
 
     return this.funifierApi.post<any[]>(
-      '/database/achievement/aggregate?strict=true',
+      '/database/action_log/aggregate?strict=true',
       aggregateQuery
     ).pipe(
       map(response => {
-        const total = Array.isArray(response) && response.length > 0 
-          ? Math.floor(response[0].total || 0) 
-          : 0;
-        console.log('✅ Team total points (OPTIMIZED):', total);
+        const count =
+          Array.isArray(response) && response.length > 0 ? Math.floor(response[0].total || 0) : 0;
+        const total = Math.floor(count * PONTOS_POR_ATIVIDADE_FINALIZADA_ACTION_LOG);
+        console.log('✅ Team total activity points:', total);
         return total;
       }),
       tap(data => this.setCache(cacheKey, data)),

@@ -235,8 +235,15 @@
                 {{ getCompanyStatus(cliente.cnpj) }}
               </span>
             </div>
-            <div class="carteira-item-meta" *ngIf="cliente.entrega !== undefined || cliente.classificacao">
-              <span class="carteira-entrega" *ngIf="cliente.entrega !== undefined">{{ cliente.entrega }}%</span>
+            <div class="carteira-item-meta">
+              <span
+                class="carteira-entrega"
+                [class.carteira-entrega--na]="getListaEntregaPercent(cliente) === null">
+                <ng-container *ngIf="getListaEntregaPercent(cliente) !== null; else entregaNaCarteira">
+                  {{ getListaEntregaPercent(cliente)! | number:'1.0-2':'pt-BR' }}%
+                </ng-container>
+                <ng-template #entregaNaCarteira>n/a</ng-template>
+              </span>
               <span class="carteira-classificacao" *ngIf="cliente.classificacao">{{ cliente.classificacao }}</span>
             </div>
           </div>
@@ -262,8 +269,15 @@
                 {{ getCompanyStatus(cliente.cnpj) }}
               </span>
             </div>
-            <div class="carteira-item-meta" *ngIf="cliente.entrega !== undefined || cliente.classificacao">
-              <span class="carteira-entrega" *ngIf="cliente.entrega !== undefined">{{ cliente.entrega }}%</span>
+            <div class="carteira-item-meta">
+              <span
+                class="carteira-entrega"
+                [class.carteira-entrega--na]="getListaEntregaPercent(cliente) === null">
+                <ng-container *ngIf="getListaEntregaPercent(cliente) !== null; else entregaNaParticipacao">
+                  {{ getListaEntregaPercent(cliente)! | number:'1.0-2':'pt-BR' }}%
+                </ng-container>
+                <ng-template #entregaNaParticipacao>n/a</ng-template>
+              </span>
               <span class="carteira-classificacao" *ngIf="cliente.classificacao">{{ cliente.classificacao }}</span>
             </div>
           </div>
@@ -297,6 +311,7 @@
     *ngIf="isCompanyCarteiraDetailModalOpen && selectedCarteiraCompany"
     [company]="selectedCarteiraCompany"
     [month]="selectedMonth"
+    [actionLogUserId]="actionLogUserIdForModals || null"
     (closed)="onCompanyCarteiraDetailModalClosed()">
   </modal-company-carteira-detail>
   

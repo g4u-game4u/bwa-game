@@ -5,6 +5,7 @@ import { FunifierApiService } from './funifier-api.service';
 import { KPIMapper } from './kpi-mapper.service';
 import { KPIData } from '@model/gamification-dashboard.model';
 import { PlayerService } from './player.service';
+import { SupabaseCompaniesService } from './supabase-companies.service';
 
 interface CacheEntry<T> {
   data: Observable<T>;
@@ -32,7 +33,8 @@ export class KPIService {
   constructor(
     private funifierApi: FunifierApiService,
     private mapper: KPIMapper,
-    private playerService: PlayerService
+    private playerService: PlayerService,
+    private supabaseCompanies: SupabaseCompaniesService
   ) {}
 
   /**
@@ -92,19 +94,18 @@ export class KPIService {
       return cached;
     }
 
-    // Use PlayerService to get raw player data and cnpj_resp count from player_company__c
+    // Carteira count from Supabase companies (mock until live credentials + SUPABASE_USE_MOCK=false)
     const request$: Observable<KPIData[]> = forkJoin({
       playerStatus: this.playerService.getRawPlayerData(playerId),
-      cnpjRespList: this.playerService.getPlayerCnpjResp(playerId)
+      carteiraRows: this.supabaseCompanies.getCompaniesForPlayer(playerId)
     }).pipe(
-      map(({ playerStatus, cnpjRespList }) => {
+      map(({ playerStatus, carteiraRows }) => {
         console.log('📊 Player status received:', playerStatus);
-        console.log('📊 Player cnpj_resp count from player_company__c:', cnpjRespList.length);
+        console.log('📊 Carteira companies count (Supabase/mock):', carteiraRows.length);
         
         const kpis: KPIData[] = [];
 
-        // Clientes na Carteira - count from player_company__c where type = "cnpj_resp"
-        const companyCount = cnpjRespList.length;
+        const companyCount = carteiraRows.length;
         
         // Get target from player's extra.client_goals (number), fallback to default 100
         const clientGoals = playerStatus.extra?.client_goals;

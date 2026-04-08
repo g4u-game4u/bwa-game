@@ -1,7 +1,36 @@
 import { TestBed } from '@angular/core/testing';
-import { CompanyKpiService, CnpjKpiData, CompanyDisplay } from './company-kpi.service';
-import { FunifierApiService } from './funifier-api.service';
+import { HttpClient } from '@angular/common/http';
+import {
+  CompanyKpiService,
+  CnpjKpiData,
+  CompanyDisplay,
+  GamificacaoEmpresaRow
+} from './company-kpi.service';
+import { environment } from '../../environments/environment';
 import { of, throwError } from 'rxjs';
+
+const ERR_TEST_GAMIFICACAO_URL = 'http://localhost/err-gamificacao';
+
+function rowsFromLegacyKpi(items: Partial<CnpjKpiData>[]): GamificacaoEmpresaRow[] {
+  return (items || [])
+    .filter(i => i && i._id != null && String(i._id).length > 0)
+    .map(i => {
+      let porcEntregas = '0';
+      if (i.entrega != null && Number.isFinite(Number(i.entrega))) {
+        porcEntregas = Number(i.entrega).toFixed(2).replace('.', ',');
+      }
+      return {
+        CNPJ: '11.111.111/1111-11',
+        EmpID: String(i._id),
+        porcEntregas,
+        procFinalizados: '0',
+        procPendentes: '0',
+        regime: '',
+        data_criacao: '',
+        data_processamento: ''
+      };
+    });
+}
 
 /**
  * Error Scenario Tests for CompanyKpiService
@@ -20,29 +49,36 @@ import { of, throwError } from 'rxjs';
  */
 describe('CompanyKpiService - Error Scenarios', () => {
   let service: CompanyKpiService;
-  let funifierApiSpy: jasmine.SpyObj<FunifierApiService>;
+  let httpSpy: jasmine.SpyObj<HttpClient>;
   let consoleErrorSpy: jasmine.Spy;
+  let prevGamificacaoUrl: string;
+  let prevGamificacaoToken: string;
 
   beforeEach(() => {
-    const apiSpy = jasmine.createSpyObj('FunifierApiService', ['post']);
+    prevGamificacaoUrl = environment.gamificacaoApiUrl;
+    prevGamificacaoToken = environment.gamificacaoApiToken;
+    environment.gamificacaoApiUrl = ERR_TEST_GAMIFICACAO_URL;
+    environment.gamificacaoApiToken = 'err-test-token';
+
+    httpSpy = jasmine.createSpyObj('HttpClient', ['get']);
+    httpSpy.get.and.returnValue(of([]));
 
     TestBed.configureTestingModule({
       providers: [
         CompanyKpiService,
-        { provide: FunifierApiService, useValue: apiSpy }
+        { provide: HttpClient, useValue: httpSpy }
       ]
     });
 
     service = TestBed.inject(CompanyKpiService);
-    funifierApiSpy = TestBed.inject(FunifierApiService) as jasmine.SpyObj<FunifierApiService>;
-    
-    // Spy on console.error to verify error logging
+
     consoleErrorSpy = spyOn(console, 'error');
   });
 
   afterEach(() => {
-    // Clear cache after each test
     service.clearCache();
+    environment.gamificacaoApiUrl = prevGamificacaoUrl;
+    environment.gamificacaoApiToken = prevGamificacaoToken;
   });
 
   // ========================================
@@ -61,7 +97,7 @@ describe('CompanyKpiService - Error Scenarios', () => {
         expect(result[0].cnpj).toBe('COMPANY NAME WITHOUT BRACKETS');
         expect(result[0].actionCount).toBe(5);
         // Should not call API for invalid format
-        expect(funifierApiSpy.post).not.toHaveBeenCalled();
+        expect(httpSpy.get).not.toHaveBeenCalled();
         done();
       });
     });
@@ -75,7 +111,7 @@ describe('CompanyKpiService - Error Scenarios', () => {
         expect(result.length).toBe(1);
         expect(result[0].cnpjId).toBeUndefined();
         expect(result[0].deliveryKpi).toBeUndefined();
-        expect(funifierApiSpy.post).not.toHaveBeenCalled();
+        expect(httpSpy.get).not.toHaveBeenCalled();
         done();
       });
     });
@@ -89,7 +125,7 @@ describe('CompanyKpiService - Error Scenarios', () => {
         expect(result.length).toBe(1);
         expect(result[0].cnpjId).toBeUndefined();
         expect(result[0].deliveryKpi).toBeUndefined();
-        expect(funifierApiSpy.post).not.toHaveBeenCalled();
+        expect(httpSpy.get).not.toHaveBeenCalled();
         done();
       });
     });
@@ -133,7 +169,7 @@ describe('CompanyKpiService - Error Scenarios', () => {
         { _id: '1218', entrega: 45 }
       ];
 
-      funifierApiSpy.post.and.returnValue(of(mockKpiResponse));
+      httpSpy.get.and.returnValue(of(rowsFromLegacyKpi(mockKpiResponse)));
 
       service.enrichCompaniesWithKpis(companies).subscribe(result => {
         expect(result.length).toBe(4);
@@ -156,7 +192,7 @@ describe('CompanyKpiService - Error Scenarios', () => {
         expect(result[3].deliveryKpi?.current).toBe(45);
         
         // Should only call API once with valid IDs
-        expect(funifierApiSpy.post).toHaveBeenCalledTimes(1);
+        expect(httpSpy.get).toHaveBeenCalledTimes(1);
         done();
       });
     });
@@ -172,7 +208,7 @@ describe('CompanyKpiService - Error Scenarios', () => {
       ];
 
       // API returns empty array (no matching CNPJ ID)
-      funifierApiSpy.post.and.returnValue(of([]));
+      httpSpy.get.and.returnValue(of([]));
 
       service.enrichCompaniesWithKpis(companies).subscribe(result => {
         expect(result.length).toBe(1);
@@ -198,7 +234,7 @@ describe('CompanyKpiService - Error Scenarios', () => {
         // 9999 is missing
       ];
 
-      funifierApiSpy.post.and.returnValue(of(mockKpiResponse));
+      httpSpy.get.and.returnValue(of(rowsFromLegacyKpi(mockKpiResponse)));
 
       service.enrichCompaniesWithKpis(companies).subscribe(result => {
         expect(result.length).toBe(3);
@@ -227,7 +263,7 @@ describe('CompanyKpiService - Error Scenarios', () => {
         { _id: '2000' } // Missing entrega
       ];
 
-      funifierApiSpy.post.and.returnValue(of(mockKpiResponse));
+      httpSpy.get.and.returnValue(of(rowsFromLegacyKpi(mockKpiResponse)));
 
       service.enrichCompaniesWithKpis(companies).subscribe(result => {
         expect(result.length).toBe(1);
@@ -248,7 +284,7 @@ describe('CompanyKpiService - Error Scenarios', () => {
         { _id: '2000', entrega: null }
       ];
 
-      funifierApiSpy.post.and.returnValue(of(mockKpiResponse));
+      httpSpy.get.and.returnValue(of(rowsFromLegacyKpi(mockKpiResponse)));
 
       service.enrichCompaniesWithKpis(companies).subscribe(result => {
         expect(result.length).toBe(1);
@@ -267,7 +303,7 @@ describe('CompanyKpiService - Error Scenarios', () => {
         { _id: '2000', entrega: undefined }
       ];
 
-      funifierApiSpy.post.and.returnValue(of(mockKpiResponse));
+      httpSpy.get.and.returnValue(of(rowsFromLegacyKpi(mockKpiResponse)));
 
       service.enrichCompaniesWithKpis(companies).subscribe(result => {
         expect(result.length).toBe(1);
@@ -290,7 +326,7 @@ describe('CompanyKpiService - Error Scenarios', () => {
       const serverError = new Error('Internal Server Error');
       (serverError as any).status = 500;
 
-      funifierApiSpy.post.and.returnValue(throwError(() => serverError));
+      httpSpy.get.and.returnValue(throwError(() => serverError));
 
       service.enrichCompaniesWithKpis(companies).subscribe(result => {
         // Should return companies without KPI data
@@ -313,7 +349,7 @@ describe('CompanyKpiService - Error Scenarios', () => {
       const notFoundError = new Error('Not Found');
       (notFoundError as any).status = 404;
 
-      funifierApiSpy.post.and.returnValue(throwError(() => notFoundError));
+      httpSpy.get.and.returnValue(throwError(() => notFoundError));
 
       service.enrichCompaniesWithKpis(companies).subscribe(result => {
         expect(result.length).toBe(1);
@@ -331,7 +367,7 @@ describe('CompanyKpiService - Error Scenarios', () => {
       const timeoutError = new Error('Network timeout');
       timeoutError.name = 'TimeoutError';
 
-      funifierApiSpy.post.and.returnValue(throwError(() => timeoutError));
+      httpSpy.get.and.returnValue(throwError(() => timeoutError));
 
       service.enrichCompaniesWithKpis(companies).subscribe(result => {
         expect(result.length).toBe(1);
@@ -349,7 +385,7 @@ describe('CompanyKpiService - Error Scenarios', () => {
       const serviceError = new Error('Service Unavailable');
       (serviceError as any).status = 503;
 
-      funifierApiSpy.post.and.returnValue(throwError(() => serviceError));
+      httpSpy.get.and.returnValue(throwError(() => serviceError));
 
       service.enrichCompaniesWithKpis(companies).subscribe(result => {
         expect(result.length).toBe(1);
@@ -366,7 +402,7 @@ describe('CompanyKpiService - Error Scenarios', () => {
       const authError = new Error('Unauthorized');
       (authError as any).status = 401;
 
-      funifierApiSpy.post.and.returnValue(throwError(() => authError));
+      httpSpy.get.and.returnValue(throwError(() => authError));
 
       service.enrichCompaniesWithKpis(companies).subscribe(result => {
         expect(result.length).toBe(1);
@@ -384,7 +420,7 @@ describe('CompanyKpiService - Error Scenarios', () => {
       const connectionError = new Error('Connection refused');
       connectionError.name = 'HttpErrorResponse';
 
-      funifierApiSpy.post.and.returnValue(throwError(() => connectionError));
+      httpSpy.get.and.returnValue(throwError(() => connectionError));
 
       service.enrichCompaniesWithKpis(companies).subscribe(result => {
         expect(result.length).toBe(1);
@@ -401,7 +437,7 @@ describe('CompanyKpiService - Error Scenarios', () => {
       const dnsError = new Error('DNS resolution failed');
       dnsError.name = 'NetworkError';
 
-      funifierApiSpy.post.and.returnValue(throwError(() => dnsError));
+      httpSpy.get.and.returnValue(throwError(() => dnsError));
 
       service.enrichCompaniesWithKpis(companies).subscribe(result => {
         expect(result.length).toBe(1);
@@ -419,7 +455,7 @@ describe('CompanyKpiService - Error Scenarios', () => {
       const error2 = new Error('Second error');
 
       // First call fails
-      funifierApiSpy.post.and.returnValue(throwError(() => error1));
+      httpSpy.get.and.returnValue(throwError(() => error1));
 
       service.enrichCompaniesWithKpis(companies).subscribe(result1 => {
         expect(result1[0].deliveryKpi).toBeUndefined();
@@ -428,7 +464,7 @@ describe('CompanyKpiService - Error Scenarios', () => {
         service.clearCache();
 
         // Second call also fails
-        funifierApiSpy.post.and.returnValue(throwError(() => error2));
+        httpSpy.get.and.returnValue(throwError(() => error2));
 
         service.enrichCompaniesWithKpis(companies).subscribe(result2 => {
           expect(result2[0].deliveryKpi).toBeUndefined();
@@ -453,7 +489,7 @@ describe('CompanyKpiService - Error Scenarios', () => {
         { _id: '2000', entrega: 89 }
       ];
 
-      funifierApiSpy.post.and.returnValue(of(mockKpiResponse));
+      httpSpy.get.and.returnValue(of(rowsFromLegacyKpi(mockKpiResponse)));
 
       service.enrichCompaniesWithKpis(companies).subscribe(result => {
         expect(result.length).toBe(3);
@@ -475,7 +511,7 @@ describe('CompanyKpiService - Error Scenarios', () => {
         { _id: '9654', entrega: 102 }
       ];
 
-      funifierApiSpy.post.and.returnValue(of(mockKpiResponse));
+      httpSpy.get.and.returnValue(of(rowsFromLegacyKpi(mockKpiResponse)));
 
       service.enrichCompaniesWithKpis(companies).subscribe(result => {
         expect(result.length).toBe(3);
@@ -500,7 +536,7 @@ describe('CompanyKpiService - Error Scenarios', () => {
         { _id: '9654', entrega: 102 }
       ];
 
-      funifierApiSpy.post.and.returnValue(of(mockKpiResponse));
+      httpSpy.get.and.returnValue(of(rowsFromLegacyKpi(mockKpiResponse)));
 
       service.enrichCompaniesWithKpis(companies).subscribe(result => {
         expect(result.length).toBe(4);
@@ -527,7 +563,7 @@ describe('CompanyKpiService - Error Scenarios', () => {
         { _id: '1040', entrega: 78 }
       ];
 
-      funifierApiSpy.post.and.returnValue(of(mockKpiResponse));
+      httpSpy.get.and.returnValue(of(rowsFromLegacyKpi(mockKpiResponse)));
 
       service.enrichCompaniesWithKpis(companies).subscribe(result => {
         expect(result.length).toBe(50);
@@ -557,7 +593,7 @@ describe('CompanyKpiService - Error Scenarios', () => {
         // 1218 and 9654 missing
       ];
 
-      funifierApiSpy.post.and.returnValue(of(mockKpiResponse));
+      httpSpy.get.and.returnValue(of(rowsFromLegacyKpi(mockKpiResponse)));
 
       service.enrichCompaniesWithKpis(companies).subscribe(result => {
         expect(result.length).toBe(5);
@@ -580,7 +616,7 @@ describe('CompanyKpiService - Error Scenarios', () => {
     it('should handle empty companies array', (done) => {
       service.enrichCompaniesWithKpis([]).subscribe(result => {
         expect(result).toEqual([]);
-        expect(funifierApiSpy.post).not.toHaveBeenCalled();
+        expect(httpSpy.get).not.toHaveBeenCalled();
         done();
       });
     });
@@ -588,7 +624,7 @@ describe('CompanyKpiService - Error Scenarios', () => {
     it('should handle null companies input', (done) => {
       service.enrichCompaniesWithKpis(null as any).subscribe(result => {
         expect(result).toEqual([]);
-        expect(funifierApiSpy.post).not.toHaveBeenCalled();
+        expect(httpSpy.get).not.toHaveBeenCalled();
         done();
       });
     });
@@ -596,7 +632,7 @@ describe('CompanyKpiService - Error Scenarios', () => {
     it('should handle undefined companies input', (done) => {
       service.enrichCompaniesWithKpis(undefined as any).subscribe(result => {
         expect(result).toEqual([]);
-        expect(funifierApiSpy.post).not.toHaveBeenCalled();
+        expect(httpSpy.get).not.toHaveBeenCalled();
         done();
       });
     });
@@ -607,7 +643,7 @@ describe('CompanyKpiService - Error Scenarios', () => {
         { cnpj: 'COMPANY B l 0002 [1218|0002-45]', actionCount: 3 }
       ];
 
-      funifierApiSpy.post.and.returnValue(of([]));
+      httpSpy.get.and.returnValue(of([]));
 
       service.enrichCompaniesWithKpis(companies).subscribe(result => {
         expect(result.length).toBe(2);
@@ -622,7 +658,7 @@ describe('CompanyKpiService - Error Scenarios', () => {
         { cnpj: 'COMPANY A l 0001 [2000|0001-60]', actionCount: 5 }
       ];
 
-      funifierApiSpy.post.and.returnValue(of(null as any));
+      httpSpy.get.and.returnValue(of(null as any));
 
       service.enrichCompaniesWithKpis(companies).subscribe(result => {
         expect(result.length).toBe(1);
@@ -636,7 +672,7 @@ describe('CompanyKpiService - Error Scenarios', () => {
         { cnpj: 'COMPANY A l 0001 [2000|0001-60]', actionCount: 5 }
       ];
 
-      funifierApiSpy.post.and.returnValue(of(undefined as any));
+      httpSpy.get.and.returnValue(of(undefined as any));
 
       service.enrichCompaniesWithKpis(companies).subscribe(result => {
         expect(result.length).toBe(1);
@@ -657,7 +693,7 @@ describe('CompanyKpiService - Error Scenarios', () => {
         expect(result[0].deliveryKpi).toBeUndefined();
         expect(result[1].deliveryKpi).toBeUndefined();
         expect(result[2].deliveryKpi).toBeUndefined();
-        expect(funifierApiSpy.post).not.toHaveBeenCalled();
+        expect(httpSpy.get).not.toHaveBeenCalled();
         done();
       });
     });
@@ -703,7 +739,7 @@ describe('CompanyKpiService - Error Scenarios', () => {
       it('should handle null input', (done) => {
         service.getKpiData(null as any).subscribe(result => {
           expect(result.size).toBe(0);
-          expect(funifierApiSpy.post).not.toHaveBeenCalled();
+          expect(httpSpy.get).not.toHaveBeenCalled();
           done();
         });
       });
@@ -711,7 +747,7 @@ describe('CompanyKpiService - Error Scenarios', () => {
       it('should handle undefined input', (done) => {
         service.getKpiData(undefined as any).subscribe(result => {
           expect(result.size).toBe(0);
-          expect(funifierApiSpy.post).not.toHaveBeenCalled();
+          expect(httpSpy.get).not.toHaveBeenCalled();
           done();
         });
       });
@@ -719,14 +755,14 @@ describe('CompanyKpiService - Error Scenarios', () => {
       it('should handle empty array', (done) => {
         service.getKpiData([]).subscribe(result => {
           expect(result.size).toBe(0);
-          expect(funifierApiSpy.post).not.toHaveBeenCalled();
+          expect(httpSpy.get).not.toHaveBeenCalled();
           done();
         });
       });
 
       it('should handle array with null values', (done) => {
         service.getKpiData([null as any, undefined as any, '2000']).subscribe(result => {
-          expect(funifierApiSpy.post).toHaveBeenCalled();
+          expect(httpSpy.get).toHaveBeenCalled();
           done();
         });
       });
@@ -768,7 +804,7 @@ describe('CompanyKpiService - Error Scenarios', () => {
           { _id: '2000', entrega: 89 }
         ];
 
-        funifierApiSpy.post.and.returnValue(of(mockKpiResponse));
+        httpSpy.get.and.returnValue(of(rowsFromLegacyKpi(mockKpiResponse)));
 
         service.enrichCompaniesWithKpis(companies).subscribe(result => {
           expect(result.length).toBe(1);
@@ -787,7 +823,7 @@ describe('CompanyKpiService - Error Scenarios', () => {
           { _id: '2000', entrega: 89 }
         ];
 
-        funifierApiSpy.post.and.returnValue(of(mockKpiResponse));
+        httpSpy.get.and.returnValue(of(rowsFromLegacyKpi(mockKpiResponse)));
 
         service.enrichCompaniesWithKpis(companies).subscribe(result => {
           expect(result.length).toBe(1);
@@ -809,7 +845,7 @@ describe('CompanyKpiService - Error Scenarios', () => {
       ];
 
       // First call fails
-      funifierApiSpy.post.and.returnValue(throwError(() => new Error('API Error')));
+      httpSpy.get.and.returnValue(throwError(() => new Error('API Error')));
 
       service.enrichCompaniesWithKpis(companies).subscribe(result1 => {
         expect(result1.length).toBe(1);
@@ -822,7 +858,7 @@ describe('CompanyKpiService - Error Scenarios', () => {
         const mockKpiResponse: CnpjKpiData[] = [
           { _id: '2000', entrega: 89 }
         ];
-        funifierApiSpy.post.and.returnValue(of(mockKpiResponse));
+        httpSpy.get.and.returnValue(of(rowsFromLegacyKpi(mockKpiResponse)));
 
         service.enrichCompaniesWithKpis(companies).subscribe(result2 => {
           expect(result2.length).toBe(1);
@@ -839,7 +875,7 @@ describe('CompanyKpiService - Error Scenarios', () => {
         { cnpj: 'COMPANY B l 0002 [1218|0002-45]', actionCount: 3 }
       ];
 
-      funifierApiSpy.post.and.returnValue(throwError(() => new Error('API Error')));
+      httpSpy.get.and.returnValue(throwError(() => new Error('API Error')));
 
       service.enrichCompaniesWithKpis(companies).subscribe(result => {
         expect(result.length).toBe(2);
@@ -870,7 +906,7 @@ describe('CompanyKpiService - Error Scenarios', () => {
         { _id: '2000', entrega: 89 }
       ];
 
-      funifierApiSpy.post.and.returnValue(of(mockKpiResponse));
+      httpSpy.get.and.returnValue(of(rowsFromLegacyKpi(mockKpiResponse)));
 
       service.enrichCompaniesWithKpis(companies).subscribe({
         next: (result) => {
@@ -893,7 +929,7 @@ describe('CompanyKpiService - Error Scenarios', () => {
         { _id: '2000', entrega: 89 }
       ];
 
-      funifierApiSpy.post.and.returnValue(of(mockKpiResponse));
+      httpSpy.get.and.returnValue(of(rowsFromLegacyKpi(mockKpiResponse)));
 
       let completedCalls = 0;
       const totalCalls = 5;
@@ -919,13 +955,13 @@ describe('CompanyKpiService - Error Scenarios', () => {
       ];
 
       // First call succeeds and caches data
-      funifierApiSpy.post.and.returnValue(of(mockKpiResponse));
+      httpSpy.get.and.returnValue(of(rowsFromLegacyKpi(mockKpiResponse)));
 
       service.enrichCompaniesWithKpis(companies).subscribe(result1 => {
         expect(result1[0].deliveryKpi).toBeDefined();
 
         // Second call should use cache even if API would fail
-        funifierApiSpy.post.and.returnValue(throwError(() => new Error('API Error')));
+        httpSpy.get.and.returnValue(throwError(() => new Error('API Error')));
 
         service.enrichCompaniesWithKpis(companies).subscribe(result2 => {
           // Should still get cached data
@@ -946,7 +982,7 @@ describe('CompanyKpiService - Error Scenarios', () => {
         { cnpj: 'COMPANY A l 0001 [2000|0001-60]', actionCount: 5 }
       ];
 
-      funifierApiSpy.post.and.returnValue(throwError(() => new Error('API Error')));
+      httpSpy.get.and.returnValue(throwError(() => new Error('API Error')));
 
       service.enrichCompaniesWithKpis(companies).subscribe(() => {
         expect(consoleErrorSpy).toHaveBeenCalled();
@@ -982,7 +1018,7 @@ describe('CompanyKpiService - Error Scenarios', () => {
         { cnpj: 'COMPANY A l 0001 [2000|0001-60]', actionCount: 5 }
       ];
 
-      funifierApiSpy.post.and.returnValue(of([]));
+      httpSpy.get.and.returnValue(of([]));
 
       service.enrichCompaniesWithKpis(companies).subscribe(() => {
         // Missing KPI data is expected, should not log error
@@ -992,7 +1028,7 @@ describe('CompanyKpiService - Error Scenarios', () => {
     });
 
     it('should log error for getKpiData API failures', (done) => {
-      funifierApiSpy.post.and.returnValue(throwError(() => new Error('Network Error')));
+      httpSpy.get.and.returnValue(throwError(() => new Error('Network Error')));
 
       service.getKpiData(['2000']).subscribe(() => {
         expect(consoleErrorSpy).toHaveBeenCalled();
@@ -1010,7 +1046,7 @@ describe('CompanyKpiService - Error Scenarios', () => {
       ];
 
       const error = new Error('Specific API Error Message');
-      funifierApiSpy.post.and.returnValue(throwError(() => error));
+      httpSpy.get.and.returnValue(throwError(() => error));
 
       service.enrichCompaniesWithKpis(companies).subscribe(() => {
         expect(consoleErrorSpy).toHaveBeenCalledWith(
@@ -1036,7 +1072,7 @@ describe('CompanyKpiService - Error Scenarios', () => {
         { _id: '2000', entrega: 89 }
       ];
 
-      funifierApiSpy.post.and.returnValue(of(mockKpiResponse));
+      httpSpy.get.and.returnValue(of(rowsFromLegacyKpi(mockKpiResponse)));
 
       service.enrichCompaniesWithKpis(companies).subscribe(result => {
         expect(result.length).toBe(1);
@@ -1055,7 +1091,7 @@ describe('CompanyKpiService - Error Scenarios', () => {
         { _id: '2000', entrega: 89 }
       ];
 
-      funifierApiSpy.post.and.returnValue(of(mockKpiResponse));
+      httpSpy.get.and.returnValue(of(rowsFromLegacyKpi(mockKpiResponse)));
 
       service.enrichCompaniesWithKpis(companies).subscribe(result => {
         expect(result.length).toBe(1);
@@ -1074,7 +1110,7 @@ describe('CompanyKpiService - Error Scenarios', () => {
         { _id: '2000', entrega: -10 }
       ];
 
-      funifierApiSpy.post.and.returnValue(of(mockKpiResponse));
+      httpSpy.get.and.returnValue(of(rowsFromLegacyKpi(mockKpiResponse)));
 
       service.enrichCompaniesWithKpis(companies).subscribe(result => {
         expect(result.length).toBe(1);
@@ -1095,7 +1131,7 @@ describe('CompanyKpiService - Error Scenarios', () => {
         { _id: '2000', entrega: 999999 }
       ];
 
-      funifierApiSpy.post.and.returnValue(of(mockKpiResponse));
+      httpSpy.get.and.returnValue(of(rowsFromLegacyKpi(mockKpiResponse)));
 
       service.enrichCompaniesWithKpis(companies).subscribe(result => {
         expect(result.length).toBe(1);
@@ -1116,7 +1152,7 @@ describe('CompanyKpiService - Error Scenarios', () => {
         { _id: '2000', entrega: 89.5 }
       ];
 
-      funifierApiSpy.post.and.returnValue(of(mockKpiResponse));
+      httpSpy.get.and.returnValue(of(rowsFromLegacyKpi(mockKpiResponse)));
 
       service.enrichCompaniesWithKpis(companies).subscribe(result => {
         expect(result.length).toBe(1);
@@ -1137,7 +1173,7 @@ describe('CompanyKpiService - Error Scenarios', () => {
         { _id: '2000', entrega: 89 }
       ];
 
-      funifierApiSpy.post.and.returnValue(of(mockKpiResponse));
+      httpSpy.get.and.returnValue(of(rowsFromLegacyKpi(mockKpiResponse)));
 
       service.enrichCompaniesWithKpis(companies).subscribe(result => {
         expect(result.length).toBe(3);
@@ -1148,7 +1184,7 @@ describe('CompanyKpiService - Error Scenarios', () => {
         expect(result[2].deliveryKpi?.current).toBe(89);
         
         // Should only call API once
-        expect(funifierApiSpy.post).toHaveBeenCalledTimes(1);
+        expect(httpSpy.get).toHaveBeenCalledTimes(1);
         
         done();
       });
@@ -1169,7 +1205,7 @@ describe('CompanyKpiService - Error Scenarios', () => {
         }
       ];
 
-      funifierApiSpy.post.and.returnValue(of(mockKpiResponse));
+      httpSpy.get.and.returnValue(of(rowsFromLegacyKpi(mockKpiResponse)));
 
       service.enrichCompaniesWithKpis(companies).subscribe(result => {
         expect(result.length).toBe(1);
@@ -1189,7 +1225,7 @@ describe('CompanyKpiService - Error Scenarios', () => {
         { _id: '2000', entrega: 89 }
       ];
 
-      funifierApiSpy.post.and.returnValue(of(mockKpiResponse));
+      httpSpy.get.and.returnValue(of(rowsFromLegacyKpi(mockKpiResponse)));
 
       service.enrichCompaniesWithKpis(companies).subscribe(result => {
         expect(result.length).toBe(1);
