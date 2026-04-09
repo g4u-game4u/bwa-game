@@ -1,6 +1,7 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnChanges, SimpleChanges } from '@angular/core';
 import { AtividadeDetalhe, PontosAvulsosService } from '../../../../services/pontos-avulsos.service';
 import { Comentario } from '../comentarios/comentarios.component';
+import { lookupActivityPoints } from '@utils/activity-points.util';
 
 export type CorDetalhe = 'vermelho' | 'verde' | 'azul' | 'cinza' | 'amarelo';
 
@@ -282,5 +283,14 @@ export class DetalheAtividadeComponent implements OnInit, OnChanges {
     }
 
     return this.formatEmailToName(email);
+  }
+
+  get pontosCalculados(): number {
+    const title = this.atividade?.action_title;
+    const hit = lookupActivityPoints(title);
+    if (hit.found) {
+      return hit.points;
+    }
+    return Math.round(Number(this.atividade?.points ?? 0)) || 0;
   }
 } 

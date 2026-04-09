@@ -21,6 +21,7 @@ import { CompanyDisplay, CompanyKpiService } from '@services/company-kpi.service
 import { KPIData } from '@app/model/gamification-dashboard.model';
 import { KPIService } from '@services/kpi.service';
 import { CnpjLookupService } from '@services/cnpj-lookup.service';
+import { SystemParamsService } from '@services/system-params.service';
 
 // Models
 import { Team } from '@components/c4u-team-selector/c4u-team-selector.component';
@@ -62,6 +63,7 @@ import { ProgressListType } from '@modals/modal-progress-list/modal-progress-lis
   ]
 })
 export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
+  private static readonly FINANCE_TEAM_ID = 'Fouegv0';
   // State management
   selectedTeam: string = '';
   selectedTeamId: string = ''; // Funifier team ID (e.g., 'FkmdnFU')
@@ -207,6 +209,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
     private companyKpiService: CompanyKpiService,
     private kpiService: KPIService,
     private cnpjLookupService: CnpjLookupService,
+    private systemParamsService: SystemParamsService,
     private router: Router,
     private cdr: ChangeDetectorRef
   ) {}
@@ -2724,6 +2727,40 @@ private calculateCollaboratorTotals(memberData: Array<{
             }
           } catch (error) {
             console.error('Error loading team entrega KPI:', error);
+          }
+        }
+
+        // 3. Valor concedido (coletivo; apenas time do financeiro)
+        if (this.selectedTeamId === TeamManagementDashboardComponent.FINANCE_TEAM_ID) {
+          try {
+            const [currentBilling, billingGoal] = await Promise.all([
+              firstValueFrom(
+                this.actionLogService
+                  .getTeamBillingForMonth(this.selectedTeamId, this.selectedMonth)
+                  .pipe(takeUntil(this.destroy$))
+              ),
+              this.systemParamsService.getParam<number>('financeiro_monthly_billing_goal' as any)
+            ]);
+
+            // Fallback: se não tiver param, deixa meta 0 para não inventar número.
+            const targetBilling = typeof billingGoal === 'number' && billingGoal > 0 ? billingGoal : 0;
+            const superTargetBilling = targetBilling > 0 ? Math.ceil(targetBilling * 1.5) : undefined;
+            const safeCurrentBilling = typeof currentBilling === 'number' && isFinite(currentBilling) ? currentBilling : 0;
+
+            teamKPIs.push({
+              id: 'valor-concedido',
+              label: 'Valor concedido',
+              current: safeCurrentBilling,
+              target: targetBilling,
+              superTarget: superTargetBilling,
+              unit: 'R$',
+              color: targetBilling > 0 && superTargetBilling != null
+                ? this.getKPIColorByGoals(safeCurrentBilling, targetBilling, superTargetBilling)
+                : 'red',
+              percentage: targetBilling > 0 ? Math.round((safeCurrentBilling / targetBilling) * 100) : 0
+            });
+          } catch (error) {
+            console.error('Error loading team collective billing KPI:', error);
           }
         }
         

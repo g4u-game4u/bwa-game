@@ -5,6 +5,7 @@ import { FunifierApiService } from './funifier-api.service';
 import { ATTRIBUTES_DEAL_UNWIND_STAGES } from './action-log-deal-aggregate.util';
 import { ActivityMetrics, ProcessMetrics } from '@model/gamification-dashboard.model';
 import dayjs from 'dayjs';
+import { lookupActivityPoints } from '@utils/activity-points.util';
 
 export interface ActionLogEntry {
   _id: string;
@@ -123,6 +124,19 @@ function extractProcessTitleFromActionLogId(actionLogId: string | undefined): st
 
   const parsedTitle = match[1].trim();
   return parsedTitle !== '' ? parsedTitle : undefined;
+}
+
+function extractActionTitle(action: ActionLogEntry): string {
+  const stageFromAttributes = action.attributes?.['stage'];
+  const acaoFromAttributes = action.attributes?.['acao'];
+  const title =
+    (typeof stageFromAttributes === 'string' && stageFromAttributes.trim() !== '')
+      ? stageFromAttributes
+      : (typeof acaoFromAttributes === 'string' && acaoFromAttributes.trim() !== '')
+        ? acaoFromAttributes
+        : (action.action_title || action.actionId || 'Ação sem título');
+
+  return title;
 }
 
 /**
@@ -580,43 +594,114 @@ export class ActionLogService {
       return cached;
     }
 
-    // Use Funifier's relative date syntax
-    const startDate = getRelativeDateExpression(month, 'start');
-    const endDate = getRelativeDateExpression(month, 'end');
-
-    const aggregateBody = [
-      {
-        $match: {
-          player: playerId,
-          type: 0, // type 0 = points
-          time: { $gte: startDate, $lte: endDate }
+    // Front-end points calculation based on action-template-pontos.md.
+    // We intentionally derive points from the action title (stage/acao) to keep UI consistent.
+    const request$ = this.getPlayerActionLogForMonth(playerId, month).pipe(
+      map(actions => {
+        let total = 0;
+        for (const a of actions) {
+          const title = extractActionTitle(a);
+          const hit = lookupActivityPoints(title);
+          if (hit.found) {
+            total += hit.points;
+          }
         }
-      },
-      {
-        $group: {
-          _id: null,
-          total: { $sum: '$total' }
-        }
-      }
-    ];
-    const request$ = this.funifierApi.post<{ _id: null; total: number }[]>(
-      '/v3/database/achievement/aggregate?strict=true',
-      aggregateBody
-    ).pipe(
-      map(response => {
-        if (Array.isArray(response) && response.length > 0) {
-          return response[0].total || 0;
-        }
-        return 0;
+        return Math.floor(total);
       }),
       catchError(error => {
-        console.error('Error fetching achievement points:', error);
+        console.error('Error calculating points from action-template table:', error);
         return of(0);
       }),
       shareReplay({ bufferSize: 1, refCount: true, windowTime: this.CACHE_DURATION })
     );
 
     this.setCachedData(this.pontosForMonthCache, cacheKey, request$);
+    return request$;
+  }
+
+  /**
+   * Soma do "valor faturado" (R$) do jogador no mês selecionado.
+   *
+   * Observação: o Funifier pode armazenar esse valor em chaves diferentes dentro de `attributes`.
+   * Este aggregate tenta ler, em ordem:
+   * - attributes.valor_faturado
+   * - attributes.valorFaturado
+   * - attributes.billing_value
+   * - attributes.value
+   *
+   * Se o campo não existir (ou não for numérico), conta como 0.
+   */
+  getPlayerBillingForMonth(playerId: string, month?: Date): Observable<number> {
+    const targetMonth = month || new Date();
+    const cacheKey = `player_billing_${playerId}_${dayjs(targetMonth).format('YYYY-MM')}`;
+    const cached = this.getCachedData(this.activityCountCache as any, cacheKey);
+    if (cached) {
+      return cached as Observable<number>;
+    }
+
+    const startDate = getRelativeDateExpression(targetMonth, 'start');
+    const endDate = getRelativeDateExpression(targetMonth, 'end');
+
+    const aggregateBody = [
+      {
+        $match: {
+          userId: playerId,
+          time: { $gte: startDate, $lte: endDate }
+        }
+      },
+      {
+        $addFields: {
+          billedValue: {
+            $convert: {
+              input: {
+                $ifNull: [
+                  '$attributes.valor_faturado',
+                  {
+                    $ifNull: [
+                      '$attributes.valorFaturado',
+                      {
+                        $ifNull: [
+                          '$attributes.billing_value',
+                          '$attributes.value'
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              to: 'double',
+              onError: 0,
+              onNull: 0
+            }
+          }
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          total: { $sum: '$billedValue' }
+        }
+      }
+    ];
+
+    const request$ = this.funifierApi
+      .post<Array<{ _id: null; total: number }>>('/v3/database/action_log/aggregate?strict=true', aggregateBody)
+      .pipe(
+        map(resp => {
+          const total = Array.isArray(resp) && resp.length > 0 ? Number(resp[0]?.total || 0) : 0;
+          if (!isFinite(total)) return 0;
+          return Math.round(total);
+        }),
+        catchError(error => {
+          console.error('Error fetching player billing:', error);
+          return of(0);
+        }),
+        shareReplay({ bufferSize: 1, refCount: true, windowTime: this.CACHE_DURATION })
+      );
+
+    // Reuse an existing cache map to avoid expanding cache footprint unnecessarily.
+    // (Key is unique and TTL is the same.)
+    this.setCachedData(this.activityCountCache as any, cacheKey, request$ as any);
     return request$;
   }
 
@@ -903,22 +988,16 @@ export class ActionLogService {
           status = 'pendente';
         }
 
-        const stageFromAttributes = a.attributes?.['stage'];
-        const acaoFromAttributes = a.attributes?.['acao'];
-        const title =
-          (typeof stageFromAttributes === 'string' && stageFromAttributes.trim() !== '')
-            ? stageFromAttributes
-            : (typeof acaoFromAttributes === 'string' && acaoFromAttributes.trim() !== '')
-              ? acaoFromAttributes
-              : (a.action_title || a.actionId || 'Ação sem título');
+        const title = extractActionTitle(a);
 
           const pointsInfo = achievementPoints.get(a._id);
           const templatePts = templatePoints.get(a._id);
+          const tablePointsHit = lookupActivityPoints(title);
 
           return {
           id: a._id,
           title,
-          points: templatePts ?? pointsInfo?.total ?? (a.points || 0),
+          points: tablePointsHit.found ? tablePointsHit.points : (templatePts ?? pointsInfo?.total ?? (a.points || 0)),
           pointsLocked: pointsInfo?.locked ?? false,
           created: extractTimestamp(a.time as number | { $date: string } | undefined),
           player: a.userId || '',
@@ -1108,7 +1187,7 @@ export class ActionLogService {
    * Uses userId field and time field with Funifier relative dates
    * Cached with shareReplay to avoid duplicate requests
    */
-  getPlayerCnpjListWithCount(playerId: string, month?: Date): Observable<{ cnpj: string; actionCount: number; processCount: number }[]> {
+  getPlayerCnpjListWithCount(playerId: string, month?: Date): Observable<{ cnpj: string; actionCount: number; processCount?: number }[]> {
     const targetMonth = month || new Date();
     const cacheKey = `${playerId}_${dayjs(targetMonth).format('YYYY-MM')}_cnpj_list_count`;
     const cached = this.getCachedData(this.cnpjListWithCountCache, cacheKey);
@@ -1288,17 +1367,11 @@ export class ActionLogService {
               status = 'pendente';
             }
             
-            const stageFromAttributes = a.attributes?.['stage'];
-            const acaoFromAttributes = a.attributes?.['acao'];
-            const title =
-              (typeof stageFromAttributes === 'string' && stageFromAttributes.trim() !== '')
-                ? stageFromAttributes
-                : (typeof acaoFromAttributes === 'string' && acaoFromAttributes.trim() !== '')
-                  ? acaoFromAttributes
-                  : (a.action_title || a.actionId || 'Ação sem título');
+            const title = extractActionTitle(a);
 
             const pointsInfo = achievementPoints.get(a._id);
             const templatePts = templatePoints.get(a._id);
+            const tablePointsHit = lookupActivityPoints(title);
 
             return {
               id: a._id,
@@ -1307,7 +1380,7 @@ export class ActionLogService {
               created: extractTimestamp(a.time as number | { $date: string } | undefined),
               status,
               cnpj: normalizeAttributesDealToString(a.attributes?.['deal']),
-              points: templatePts ?? pointsInfo?.total ?? 0,
+              points: tablePointsHit.found ? tablePointsHit.points : (templatePts ?? pointsInfo?.total ?? 0),
               pointsLocked: pointsInfo?.locked ?? false
             };
           });
@@ -1419,19 +1492,13 @@ export class ActionLogService {
             status = 'pendente';
           }
 
-          const stageFromAttributes = a.attributes?.['stage'];
-          const acaoFromAttributes = a.attributes?.['acao'];
-          const title =
-            (typeof stageFromAttributes === 'string' && stageFromAttributes.trim() !== '')
-              ? stageFromAttributes
-              : (typeof acaoFromAttributes === 'string' && acaoFromAttributes.trim() !== '')
-                ? acaoFromAttributes
-                : (a.action_title || a.actionId || 'Ação sem título');
+          const title = extractActionTitle(a);
 
+          const tablePointsHit = lookupActivityPoints(title);
           return {
             id: a._id,
             title,
-            points: a.points || 0,
+            points: tablePointsHit.found ? tablePointsHit.points : (a.points || 0),
             created: extractTimestamp(a.time as number | { $date: string } | undefined),
             player: a.userId || '',
             status,
@@ -1525,6 +1592,86 @@ export class ActionLogService {
   }
 
   /**
+   * Enrich user_action items with cliente info from action_log (attributes.deal).
+   *
+   * We match by integration_id primarily (string or number) and fall back to delivery_id when present.
+   * Returns a Map where key is the integration_id/delivery_id as string and value is the deal string.
+   */
+  getDealsByIntegrationIds(integrationIds: Array<string | number>): Observable<Map<string, string>> {
+    const keys = Array.from(
+      new Set(
+        (integrationIds || [])
+          .map(x => (x != null ? String(x).trim() : ''))
+          .filter(Boolean)
+      )
+    );
+
+    if (keys.length === 0) {
+      return of(new Map<string, string>());
+    }
+
+    const numericKeys = keys
+      .map(k => Number(k))
+      .filter(n => Number.isFinite(n));
+
+    const or: any[] = [
+      { 'attributes.integration_id': { $in: keys } }
+    ];
+    if (numericKeys.length > 0) {
+      or.push({ 'attributes.integration_id': { $in: numericKeys } });
+      or.push({ 'attributes.delivery_id': { $in: numericKeys } });
+    }
+
+    // Some payloads may store delivery_id as string
+    or.push({ 'attributes.delivery_id': { $in: keys } });
+
+    const aggregateBody = [
+      { $match: { $or: or } },
+      {
+        $project: {
+          _id: 1,
+          integration_id: '$attributes.integration_id',
+          delivery_id: '$attributes.delivery_id',
+          deal: '$attributes.deal'
+        }
+      },
+      { $limit: 10000 }
+    ];
+
+    return this.funifierApi
+      .post<Array<{ integration_id?: unknown; delivery_id?: unknown; deal?: unknown }>>(
+        '/v3/database/action_log/aggregate?strict=true',
+        aggregateBody
+      )
+      .pipe(
+        map(rows => {
+          const mapResult = new Map<string, string>();
+
+          (Array.isArray(rows) ? rows : []).forEach(r => {
+            const deal = normalizeAttributesDealToString(r?.deal);
+            if (!deal) return;
+
+            const integrationKey = r?.integration_id != null ? String(r.integration_id).trim() : '';
+            const deliveryKey = r?.delivery_id != null ? String(r.delivery_id).trim() : '';
+
+            if (integrationKey && !mapResult.has(integrationKey)) {
+              mapResult.set(integrationKey, deal);
+            }
+            if (deliveryKey && !mapResult.has(deliveryKey)) {
+              mapResult.set(deliveryKey, deal);
+            }
+          });
+
+          return mapResult;
+        }),
+        catchError(error => {
+          console.error('Error fetching deals by integration ids:', error);
+          return of(new Map<string, string>());
+        })
+      );
+  }
+
+  /**
    * Clear all caches
    */
   clearCache(): void {
@@ -1545,6 +1692,7 @@ export class ActionLogService {
     this.teamMetricsCache.clear();
     this.teamCnpjCache.clear();
     this.teamPointsBreakdownCache.clear();
+    this.teamBillingCache.clear();
   }
 
   // ============================================
@@ -1555,6 +1703,100 @@ export class ActionLogService {
   private teamMetricsCache = new Map<string, CacheEntry<any>>();
   private teamCnpjCache = new Map<string, CacheEntry<any>>();
   private teamPointsBreakdownCache = new Map<string, CacheEntry<any>>();
+  private teamBillingCache = new Map<string, CacheEntry<number>>();
+
+  /**
+   * Soma do "valor faturado" (R$) do time no mês selecionado.
+   *
+   * Observação: o Funifier pode armazenar esse valor em chaves diferentes dentro de `attributes`.
+   * Este aggregate tenta ler, em ordem:
+   * - attributes.valor_faturado
+   * - attributes.valorFaturado
+   * - attributes.billing_value
+   * - attributes.value
+   *
+   * Se o campo não existir (ou não for numérico), conta como 0.
+   */
+  getTeamBillingForMonth(teamId: string, month?: Date): Observable<number> {
+    const targetMonth = month || new Date();
+    const cacheKey = `team_billing_${teamId}_${dayjs(targetMonth).format('YYYY-MM')}`;
+    const cached = this.getCachedData(this.teamBillingCache, cacheKey);
+    if (cached) {
+      return cached;
+    }
+
+    const startDate = getRelativeDateExpression(targetMonth, 'start');
+    const endDate = getRelativeDateExpression(targetMonth, 'end');
+
+    const aggregateBody = [
+      {
+        $lookup: {
+          from: 'player',
+          localField: 'userId',
+          foreignField: '_id',
+          as: 'playerData'
+        }
+      },
+      { $unwind: '$playerData' },
+      {
+        $match: {
+          'playerData.teams': teamId,
+          time: { $gte: startDate, $lte: endDate }
+        }
+      },
+      {
+        $addFields: {
+          billedValue: {
+            $convert: {
+              input: {
+                $ifNull: [
+                  '$attributes.valor_faturado',
+                  {
+                    $ifNull: [
+                      '$attributes.valorFaturado',
+                      {
+                        $ifNull: [
+                          '$attributes.billing_value',
+                          '$attributes.value'
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              to: 'double',
+              onError: 0,
+              onNull: 0
+            }
+          }
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          total: { $sum: '$billedValue' }
+        }
+      }
+    ];
+
+    const request$ = this.funifierApi
+      .post<Array<{ _id: null; total: number }>>('/v3/database/action_log/aggregate?strict=true', aggregateBody)
+      .pipe(
+        map(resp => {
+          const total = Array.isArray(resp) && resp.length > 0 ? Number(resp[0]?.total || 0) : 0;
+          if (!isFinite(total)) return 0;
+          return Math.round(total);
+        }),
+        catchError(error => {
+          console.error('Error fetching team billing:', error);
+          return of(0);
+        }),
+        shareReplay({ bufferSize: 1, refCount: true, windowTime: this.CACHE_DURATION })
+      );
+
+    this.setCachedData(this.teamBillingCache, cacheKey, request$);
+    return request$;
+  }
 
   /**
    * Get progress metrics for all team members in a single aggregate query.
@@ -1704,7 +1946,7 @@ export class ActionLogService {
    * @param month - Target month for filtering
    * @returns Observable of CNPJ list with action and process counts
    */
-  getTeamCnpjListWithCount(teamId: string, month?: Date): Observable<{ cnpj: string; actionCount: number; processCount: number }[]> {
+  getTeamCnpjListWithCount(teamId: string, month?: Date): Observable<{ cnpj: string; actionCount: number; processCount?: number }[]> {
     const targetMonth = month || new Date();
     const cacheKey = `team_cnpj_${teamId}_${dayjs(targetMonth).format('YYYY-MM')}`;
     const cached = this.getCachedData(this.teamCnpjCache, cacheKey);

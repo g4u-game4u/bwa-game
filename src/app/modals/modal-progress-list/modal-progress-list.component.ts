@@ -30,6 +30,8 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
   @Input() month?: Date;
   /** When false, hides the Pontos column for "Tarefas Finalizadas" (listType atividades). Gestor dashboards keep default true. */
   @Input() showPointsInActivityList = true;
+  /** When true, shows a "Cliente" column using item.cnpj (attributes.deal). */
+  @Input() showClientColumnInActivityList = false;
   @Output() closed = new EventEmitter<void>();
 
   private destroy$ = new Subject<void>();
@@ -118,6 +120,10 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
       return this.showPointsInActivityList;
     }
     return false;
+  }
+
+  get showClientColumn(): boolean {
+    return this.isActivityList && this.showClientColumnInActivityList;
   }
 
   onSearchInput(event: Event): void {

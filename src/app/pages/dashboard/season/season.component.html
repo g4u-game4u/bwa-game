@@ -44,7 +44,7 @@
              *enableShimmer="[!apiReady, {height: 56, borderRadius: 8}]">
             <div flex direction="column" vAlign="center" hAlign="center" flexItem="1"
                  [toolTip]="'HINT_TOTAL_POINTS' | translate : {pointAlias: pointAlias, actionAlias: actionAlias}">
-                <span class="points">{{ seasonInfo.blocked_points + seasonInfo.unblocked_points }}</span>
+                <span class="points">{{ totalSeasonPoints }}</span>
                 <span class="points-hint" translate="LABEL_TOTAL"></span>
             </div>
             <div flex direction="column" vAlign="center" hAlign="center" flexItem="1"

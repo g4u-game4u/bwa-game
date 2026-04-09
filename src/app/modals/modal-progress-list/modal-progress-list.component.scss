@@ -353,6 +353,9 @@
   background: rgba(255, 255, 255, 0.02);
   border-radius: 8px;
 
+  // Fixed width for "Cliente" column in the activities table
+  $client-col-width: 220px;
+
   .task-header {
     display: grid;
     grid-template-columns: 2fr 1.5fr 1.5fr 1fr;
@@ -373,6 +376,16 @@
     // Adjust grid for pontos type
     &.with-points {
       grid-template-columns: 2fr 1.5fr 1.5fr 1fr 1fr;
+    }
+
+    // Adjust grid to include Cliente column
+    &.with-client {
+      grid-template-columns: 2fr $client-col-width 1.5fr 1.5fr 1fr;
+    }
+
+    // Cliente + Pontos
+    &.with-client.with-points {
+      grid-template-columns: 2fr $client-col-width 1.5fr 1.5fr 1fr 1fr;
     }
     
     // Adjust grid for processes
@@ -408,6 +421,16 @@
     &.with-points {
       grid-template-columns: 2fr 1.5fr 1.5fr 1fr 1fr;
     }
+
+    // Adjust grid to include Cliente column
+    &.with-client {
+      grid-template-columns: 2fr $client-col-width 1.5fr 1.5fr 1fr;
+    }
+
+    // Cliente + Pontos
+    &.with-client.with-points {
+      grid-template-columns: 2fr $client-col-width 1.5fr 1.5fr 1fr 1fr;
+    }
     
     // Adjust grid for processes
     &.process-grid {
@@ -432,6 +455,18 @@
       .task-date {
         color: $text-secondary;
         font-size: 0.875rem;
+      }
+    }
+
+    .task-col-client {
+      .task-client {
+        color: $text-secondary;
+        font-size: 0.875rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        display: inline-block;
+        max-width: 100%;
       }
     }
 
@@ -845,6 +880,12 @@
 
       .task-col-title::before {
         content: 'Tarefa: ';
+        font-weight: 600;
+        color: $text-secondary;
+      }
+
+      .task-col-client::before {
+        content: 'Cliente: ';
         font-weight: 600;
         color: $text-secondary;
       }

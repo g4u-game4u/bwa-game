@@ -137,11 +137,11 @@ describe('GamificationDashboard - Company KPI Integration Tests', () => {
   /**
    * Helper function to create mock CNPJ list from action_log
    */
-  function createMockCnpjList(): { cnpj: string; actionCount: number }[] {
+  function createMockCnpjList(): { cnpj: string; actionCount: number; processCount: number }[] {
     return [
-      { cnpj: 'RODOPRIMA LOGISTICA LTDA l 0001 [2000|0001-60]', actionCount: 5 },
-      { cnpj: 'ACME CORPORATION l 0002 [1218|0002-45]', actionCount: 3 },
-      { cnpj: 'TECH SOLUTIONS LTDA l 0003 [9654|0003-12]', actionCount: 8 }
+      { cnpj: 'RODOPRIMA LOGISTICA LTDA l 0001 [2000|0001-60]', actionCount: 5, processCount: 0 },
+      { cnpj: 'ACME CORPORATION l 0002 [1218|0002-45]', actionCount: 3, processCount: 0 },
+      { cnpj: 'TECH SOLUTIONS LTDA l 0003 [9654|0003-12]', actionCount: 8, processCount: 0 }
     ];
   }
 
@@ -165,6 +165,7 @@ describe('GamificationDashboard - Company KPI Integration Tests', () => {
         cnpj: 'RODOPRIMA LOGISTICA LTDA l 0001 [2000|0001-60]',
         cnpjId: '2000',
         actionCount: 5,
+        processCount: 0,
         deliveryKpi: {
           id: 'delivery',
           label: 'Entregas',
@@ -179,6 +180,7 @@ describe('GamificationDashboard - Company KPI Integration Tests', () => {
         cnpj: 'ACME CORPORATION l 0002 [1218|0002-45]',
         cnpjId: '1218',
         actionCount: 3,
+        processCount: 0,
         deliveryKpi: {
           id: 'delivery',
           label: 'Entregas',
@@ -193,6 +195,7 @@ describe('GamificationDashboard - Company KPI Integration Tests', () => {
         cnpj: 'TECH SOLUTIONS LTDA l 0003 [9654|0003-12]',
         cnpjId: '9654',
         actionCount: 8,
+        processCount: 0,
         deliveryKpi: {
           id: 'delivery',
           label: 'Entregas',

@@ -45,6 +45,11 @@ export interface SystemParams {
   enable_challenges: SystemParamValue;
   season_start_date: SystemParamValue;
   team_monthly_goal: SystemParamValue;
+  /**
+   * Meta mensal (R$) para o time do financeiro (Team ID: Fouegv0).
+   * Opcional para manter compatibilidade com ambientes que ainda não têm esse parâmetro.
+   */
+  financeiro_monthly_billing_goal?: SystemParamValue;
   allow_theme_switch: SystemParamValue;
   enable_achievements: SystemParamValue;
   enable_leaderboards: SystemParamValue;

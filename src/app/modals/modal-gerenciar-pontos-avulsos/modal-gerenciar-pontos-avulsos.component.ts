@@ -18,6 +18,8 @@ import { TypeModalData } from '../modal-pending-quests/modal-pending-quests.comp
 import { BotaoSelecaoItemModel } from '../../components/c4u-botao-selecao/c4u-botao-selecao.component';
 import { LoadingProvider } from '../../providers/loading.provider';
 import { ToastService } from '../../services/toast.service';
+import { ActionLogService } from '@services/action-log.service';
+import { firstValueFrom } from 'rxjs';
 
 export interface ModalData {
   title: string;
@@ -221,7 +223,8 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
     private aliasService: AliasService,
     private sessao: SessaoProvider,
     private loadingProvider: LoadingProvider,
-    private toastService: ToastService
+    private toastService: ToastService,
+    private actionLogService: ActionLogService
   ) {
 
     this.isTeamContext = !this.sessao.isColaborador();
@@ -469,6 +472,24 @@ export class ModalGerenciarPontosAvulsosComponent implements OnInit {
       // Sempre atribuir paginacao ANTES de aplicar filtros locais
       this.paginacaoFinalizadas = response;
       this.atividadesFinalizadasOriginais = response.items;
+
+      // Enriquecer com "cliente" (attributes.deal) vindo do action_log
+      try {
+        const ids = response.items
+          .map(i => i.integration_id || i.delivery_id || i.id)
+          .filter(Boolean) as string[];
+        const dealsMap = await firstValueFrom(this.actionLogService.getDealsByIntegrationIds(ids));
+        const enrich = (item: AtividadeDetalhe): AtividadeDetalhe => {
+          const key = String(item.integration_id || item.delivery_id || item.id || '').trim();
+          const deal = dealsMap.get(key);
+          return deal ? { ...item, deal } : item;
+        };
+        this.atividadesFinalizadasOriginais = this.atividadesFinalizadasOriginais.map(enrich);
+        response.items = response.items.map(enrich);
+      } catch (e) {
+        // Não falhar o modal se não conseguir enriquecer o cliente
+        console.warn('⚠️ Não foi possível carregar cliente (deal) para as finalizadas:', e);
+      }
       
       // Aplicar filtros locais se houver busca por texto (após atribuir paginação)
       const temFiltroData = !!(this.filtrosAtivos?.created_at_start || this.filtrosAtivos?.created_at_end || 
