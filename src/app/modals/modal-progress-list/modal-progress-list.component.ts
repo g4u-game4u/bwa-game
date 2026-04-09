@@ -28,8 +28,11 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
   @Input() playerId = '';
   @Input() listType: ProgressListType = 'atividades';
   @Input() month?: Date;
-  /** When false, hides the Pontos column for "Tarefas Finalizadas" (listType atividades). Gestor dashboards keep default true. */
-  @Input() showPointsInActivityList = true;
+  /**
+   * When true, shows the Pontos column in activity lists (listType `atividades` or `pontos`).
+   * Default false: painel individual do jogador não exibe pontos por tarefa; apenas o team-management ativa.
+   */
+  @Input() showPointsInActivityList = false;
   /** When true, shows a "Cliente" column using item.cnpj (attributes.deal). */
   @Input() showClientColumnInActivityList = false;
   @Output() closed = new EventEmitter<void>();
@@ -113,13 +116,10 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
   }
 
   get showPointsColumn(): boolean {
-    if (this.listType === 'pontos') {
-      return true;
+    if (!this.showPointsInActivityList) {
+      return false;
     }
-    if (this.listType === 'atividades') {
-      return this.showPointsInActivityList;
-    }
-    return false;
+    return this.listType === 'atividades' || this.listType === 'pontos';
   }
 
   get showClientColumn(): boolean {
