@@ -13,6 +13,7 @@
       <tr>
         <th>ID</th>
         <th>Título</th>
+        <th *ngIf="tipo === 'finalizadas'">Cliente</th>
         <th>Status</th>
         <th>Executor</th>
         <th>Data</th>
@@ -35,6 +36,9 @@
           <ng-template #noTitle>
             N/A
           </ng-template>
+        </td>
+        <td *ngIf="tipo === 'finalizadas'">
+          <span [title]="atividade.deal || ''">{{ atividade.deal || '—' }}</span>
         </td>
         <td [ngClass]="getStatusClass(atividade.status || '', atividade)">
           {{ getStatusLabel(atividade.status || '', atividade) }}

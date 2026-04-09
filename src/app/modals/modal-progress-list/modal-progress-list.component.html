@@ -90,17 +90,21 @@
           </div>
           
           <div *ngIf="filteredActivityItems.length > 0" class="tasks-table">
-            <div class="task-header" [class.with-points]="showPointsColumn">
+            <div class="task-header" [class.with-points]="showPointsColumn" [class.with-client]="showClientColumn">
               <div class="task-col-title">Tarefa</div>
+              <div class="task-col-client" *ngIf="showClientColumn">Cliente</div>
               <div class="task-col-executor">Executor</div>
               <div class="task-col-date">Data</div>
               <div class="task-col-status">Status</div>
               <div class="task-col-points" *ngIf="showPointsColumn">Pontos</div>
             </div>
             <div class="tasks-list">
-              <div *ngFor="let item of filteredActivityItems" class="task-row" [class.with-points]="showPointsColumn">
+              <div *ngFor="let item of filteredActivityItems" class="task-row" [class.with-points]="showPointsColumn" [class.with-client]="showClientColumn">
                 <div class="task-col-title">
                   <span class="task-title">{{ item.title }}</span>
+                </div>
+                <div class="task-col-client" *ngIf="showClientColumn">
+                  <span class="task-client">{{ getCompanyDisplayName(item.cnpj) || '—' }}</span>
                 </div>
                 <div class="task-col-executor">
                   <span class="task-executor">{{ formatEmailToName(item.player) }}</span>

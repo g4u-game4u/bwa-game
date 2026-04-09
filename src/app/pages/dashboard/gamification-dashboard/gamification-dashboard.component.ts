@@ -12,6 +12,7 @@ import { ActionLogService } from '@services/action-log.service';
 import { CompanyKpiService } from '@services/company-kpi.service';
 import { CnpjLookupService } from '@services/cnpj-lookup.service';
 import { SessaoProvider } from '@providers/sessao/sessao.provider';
+import { SystemParamsService } from '@services/system-params.service';
 import { 
   PlayerStatus, 
   PointWallet, 
@@ -34,6 +35,7 @@ import { ProgressListType } from '@modals/modal-progress-list/modal-progress-lis
 export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterViewInit {
   private destroy$ = new Subject<void>();
   private endRenderMeasurement: (() => void) | null = null;
+  private static readonly FINANCE_TEAM_ID = 'Fouegv0';
   
   // Responsive properties
   isMobile = false;
@@ -119,6 +121,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     private companyKpiService: CompanyKpiService,
     private cnpjLookupService: CnpjLookupService,
     private sessaoProvider: SessaoProvider,
+    private systemParamsService: SystemParamsService,
     private route: ActivatedRoute,
     private router: Router
   ) {
@@ -460,7 +463,8 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (kpis) => {
-          this.playerKPIs = kpis || [];
+          const baseKpis = kpis || [];
+          this.playerKPIs = baseKpis;
           this.isLoadingKPIs = false;
           
           // Always update metas if we have KPIs (even if empty, to show 0/0)
@@ -471,6 +475,11 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
           }
           
           this.cdr.markForCheck();
+
+          // Add billing KPI for Finance team members
+          if (this.isFinanceTeamMember()) {
+            this.injectFinanceBillingKpi(playerId);
+          }
         },
         error: (error) => {
           console.error('📊 Failed to load KPIs:', error);
@@ -478,6 +487,73 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
           this.isLoadingKPIs = false;
           // Don't update metas on error - preserve existing values
           this.cdr.markForCheck();
+        }
+      });
+  }
+
+  private isFinanceTeamMember(): boolean {
+    const teams = (this.sessaoProvider.usuario as any)?.teams;
+    if (!teams || !Array.isArray(teams)) return false;
+    return teams.some((t: any) => {
+      if (typeof t === 'string') return t === GamificationDashboardComponent.FINANCE_TEAM_ID;
+      if (t && typeof t === 'object') return t._id === GamificationDashboardComponent.FINANCE_TEAM_ID || t.id === GamificationDashboardComponent.FINANCE_TEAM_ID;
+      return false;
+    });
+  }
+
+  private injectFinanceBillingKpi(playerId: string): void {
+    // Avoid duplicates on refresh/month changes
+    if (this.playerKPIs.some(k => k.id === 'valor-concedido')) {
+      return;
+    }
+
+    // Load current and goal in parallel
+    this.actionLogService
+      .getTeamBillingForMonth(GamificationDashboardComponent.FINANCE_TEAM_ID, this.selectedMonth)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (currentBilling) => {
+          this.systemParamsService
+            .getParam<number>('financeiro_monthly_billing_goal' as any)
+            .then(goal => {
+              const safeCurrent = typeof currentBilling === 'number' && isFinite(currentBilling) ? currentBilling : 0;
+              const target = typeof goal === 'number' && goal > 0 ? goal : 0;
+              const superTarget = target > 0 ? Math.ceil(target * 1.5) : undefined;
+
+              const billingKpi: KPIData = {
+                id: 'valor-concedido',
+                label: 'Valor concedido',
+                current: safeCurrent,
+                target,
+                superTarget,
+                unit: 'R$',
+                color: target > 0 && superTarget != null
+                  ? (safeCurrent >= superTarget ? 'green' : safeCurrent >= target ? 'yellow' : 'red')
+                  : 'red',
+                percentage: target > 0 ? Math.round((safeCurrent / target) * 100) : 0
+              };
+
+              this.playerKPIs = [...this.playerKPIs, billingKpi];
+              this.cdr.markForCheck();
+            })
+            .catch(() => {
+              // Even without goal, we can still show the current billing.
+              const safeCurrent = typeof currentBilling === 'number' && isFinite(currentBilling) ? currentBilling : 0;
+              const billingKpi: KPIData = {
+                id: 'valor-concedido',
+                label: 'Valor concedido',
+                current: safeCurrent,
+                target: 0,
+                unit: 'R$',
+                color: 'red',
+                percentage: 0
+              };
+              this.playerKPIs = [...this.playerKPIs, billingKpi];
+              this.cdr.markForCheck();
+            });
+        },
+        error: () => {
+          // Silent failure: don't block KPI rendering.
         }
       });
   }

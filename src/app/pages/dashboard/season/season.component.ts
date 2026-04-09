@@ -13,6 +13,8 @@ import { ModalGerenciarPontosAvulsosProvider } from "../../../providers/modal-ge
 import { TIPO_CONSULTA_TIME } from "../dashboard.component";
 import { ModalDetalheExecutorComponent } from "./modal-detalhe-executor/modal-detalhe-executor.component";
 import { environment } from 'src/environments/environment';
+import { ActionLogService } from '@services/action-log.service';
+import { firstValueFrom } from 'rxjs';
 
 @Component({
   selector: 'page-season',    
@@ -69,6 +71,9 @@ export class SeasonComponent implements OnInit, OnChanges {
   clientId: string | null = null;
   clientIdLoading = false;
 
+  // Pontos recalculados no front (base action-template-pontos.md)
+  seasonPointsFromTable: number | null = null;
+
   // Propriedades para verificação de permissão de times
   freeChallengesAllowedTeams: FreeChallengeAllowedTeam[] | null = null;
   freeChallengesAllowedTeamsLoading = false;
@@ -88,7 +93,8 @@ export class SeasonComponent implements OnInit, OnChanges {
     private featuresService: FeaturesService,
     private router: Router,
     private systemParamsService: SystemParamsService,
-    private modalGerenciarPontosAvulsosProvider: ModalGerenciarPontosAvulsosProvider
+    private modalGerenciarPontosAvulsosProvider: ModalGerenciarPontosAvulsosProvider,
+    private actionLogService: ActionLogService
   ) {
   }
 
@@ -453,7 +459,46 @@ export class SeasonComponent implements OnInit, OnChanges {
       };
     } finally {
       this.seasonDatesLoading = false;
+      this.recalculateSeasonPointsFromTable();
     }
+  }
+
+  private async recalculateSeasonPointsFromTable() {
+    try {
+      const email = this.sessaoProvider.usuario?.email;
+      if (!email || !this.seasonDates?.start || !this.seasonDates?.end) {
+        this.seasonPointsFromTable = null;
+        return;
+      }
+
+      const start = new Date(this.seasonDates.start);
+      const end = new Date(this.seasonDates.end);
+      if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+        this.seasonPointsFromTable = null;
+        return;
+      }
+
+      // Soma mês a mês, usando a mesma regra do painel mensal (ActionLogService.getPontosForMonth)
+      const cursor = new Date(start.getFullYear(), start.getMonth(), 1);
+      const endMonth = new Date(end.getFullYear(), end.getMonth(), 1);
+      let total = 0;
+
+      while (cursor <= endMonth) {
+        const monthPoints = await firstValueFrom(this.actionLogService.getPontosForMonth(email, cursor));
+        total += Number(monthPoints) || 0;
+        cursor.setMonth(cursor.getMonth() + 1);
+      }
+
+      this.seasonPointsFromTable = Math.floor(total);
+    } catch (error) {
+      console.error('Erro ao recalcular pontos da temporada pela tabela:', error);
+      this.seasonPointsFromTable = null;
+    }
+  }
+
+  get totalSeasonPoints(): number {
+    const fallback = Math.floor((this.seasonInfo?.blocked_points || 0) + (this.seasonInfo?.unblocked_points || 0));
+    return this.seasonPointsFromTable != null ? this.seasonPointsFromTable : fallback;
   }
 
   /**

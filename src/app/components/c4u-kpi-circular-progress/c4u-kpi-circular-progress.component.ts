@@ -86,6 +86,13 @@ export class C4uKpiCircularProgressComponent {
     if (this.unit === '%') {
       return `${Math.round(this.current)}%`;
     }
+
+    // Currency (BRL)
+    if (this.unit === 'R$' || this.unit?.toUpperCase() === 'BRL') {
+      const n = Number(this.current);
+      const safe = isFinite(n) ? n : 0;
+      return safe.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
+    }
     
     // For count-based KPIs (like "Clientes na Carteira"), show the raw count
     return `${Math.round(this.current)}`;
@@ -96,6 +103,11 @@ export class C4uKpiCircularProgressComponent {
    * This replaces the old displayValue that showed current value
    */
   get targetDisplayValue(): string {
+    if (this.unit === 'R$' || this.unit?.toUpperCase() === 'BRL') {
+      const n = Number(this.target);
+      const safe = isFinite(n) ? n : 0;
+      return `Meta: ${safe.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })}`;
+    }
     if (this.unit) {
       return `Meta: ${this.target} ${this.unit}`;
     }

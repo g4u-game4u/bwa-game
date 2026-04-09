@@ -7,6 +7,7 @@ import { TIPO_CONSULTA_TIME } from '../pages/dashboard/dashboard.component';
 import { environment } from '../../environments/environment';
 import { SessaoProvider } from '../providers/sessao/sessao.provider';
 import { AuthProvider } from '../providers/auth/auth.provider';
+import { lookupActivityPoints } from '@utils/activity-points.util';
 
 export interface ActionTemplate {
   id: string;
@@ -45,6 +46,7 @@ export interface AtividadeDetalhe {
   user_email: string;
   status: string;
   created_at: string;
+  deal?: string; // Cliente (attributes.deal do action_log)
   dismissed?: boolean;
   finished_at?: string;
   points?: number;
@@ -956,7 +958,11 @@ export class PontosAvulsosService {
           status: item.status,
           created_at: item.created_at,
           finished_at: item.finished_at,
-          points: item.points,
+          points: (() => {
+            const title = item.action_title || item.title;
+            const hit = lookupActivityPoints(title);
+            return hit.found ? hit.points : item.points;
+          })(),
           integration_id: item.integration_id,
           delivery_id: item.delivery_id,
           delivery_title: item.delivery_title,
@@ -1184,7 +1190,10 @@ export class PontosAvulsosService {
           status: item.status,
           created_at: item.created_at,
           finished_at: item.finished_at || undefined,
-          points: item.points,
+          points: (() => {
+            const hit = lookupActivityPoints(item.action_title);
+            return hit.found ? hit.points : item.points;
+          })(),
           integration_id: item.integration_id,
           delivery_id: item.delivery_id,
           delivery_title: item.delivery_title,
