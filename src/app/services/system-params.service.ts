@@ -184,6 +184,10 @@ export class SystemParamsService {
         team_monthly_goal: { value: 10000, inherited: false },
         // Meta mensal (R$) do time financeiro (Team ID: Fouegv0)
         financeiro_monthly_billing_goal: { value: 0, inherited: false },
+        financeiro_omie_painel_json_url: { value: '', inherited: false },
+        financeiro_omie_caixa_json_url: { value: '', inherited: false },
+        financeiro_omie_categorias_codigos: { value: '', inherited: false },
+        financeiro_omie_categorias_desc: { value: '', inherited: false },
         allow_theme_switch: { value: true, inherited: false },
         enable_achievements: { value: true, inherited: false },
         enable_leaderboards: { value: true, inherited: false },

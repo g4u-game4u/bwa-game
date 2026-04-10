@@ -41,7 +41,7 @@
     <div [marginTop]="24" flex direction="column" [gap]="24" *ngIf="!isCSLayout">
         <h1 translate="LABEL_SEASON_POINTS" [translateParams]="{pointAlias: pointAlias}"></h1>
         <div flex [h]="56" hAlign="space-evenly" class="div-points"
-             *enableShimmer="[!apiReady, {height: 56, borderRadius: 8}]">
+             *enableShimmer="[!apiReady || (seasonDatesReady && seasonWalletLoading), {height: 56, borderRadius: 8}]">
             <div flex direction="column" vAlign="center" hAlign="center" flexItem="1"
                  [toolTip]="'HINT_TOTAL_POINTS' | translate : {pointAlias: pointAlias, actionAlias: actionAlias}">
                 <span class="points">{{ totalSeasonPoints }}</span>
@@ -49,14 +49,14 @@
             </div>
             <div flex direction="column" vAlign="center" hAlign="center" flexItem="1"
                  [toolTip]="'HINT_BLOCKED_POINTS' | translate : {value: getPercentPontosBloqueados(), pointAlias: pointAlias}">
-                <span class="points">{{ seasonInfo.blocked_points }}</span>
+                <span class="points">{{ displaySeasonBlockedPoints }}</span>
                 <span class="points-hint" translate="LABEL_BLOCKED"></span>
             </div>
         </div>
         <div class="div-cid-points" flex hAlign="space-evenly" class="div-unblocked-points"
-             *enableShimmer="[!apiReady, {height: 56, borderRadius: 8}]">
+             *enableShimmer="[!apiReady || (seasonDatesReady && seasonWalletLoading), {height: 56, borderRadius: 8}]">
             <div flex direction="column" vAlign="center" hAlign="center" flexItem="1">
-                <span class="unblocked-points">{{ seasonInfo?.unblocked_points }}</span>
+                <span class="unblocked-points">{{ displaySeasonUnblockedPoints }}</span>
                 <span class="unblocked-points-hint" translate="LABEL_UNBLOCKED"></span>
             </div>
         </div>

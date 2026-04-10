@@ -1,0 +1,574 @@
+{
+    "gerado_em": "2026-04-10T20:48:20.820841+00:00",
+    "fonte": "C:\\Users\\cesar.domingos\\Documents\\Development Novo\\debugger\\debugger-integracao-omie\\omie_caixa_recebimentos.json",
+    "periodo_consulta": {
+      "inicio": "01/04/2026",
+      "fim": "09/04/2026"
+    },
+    "aviso_dados": "Export sem recebidos_itens: apenas amostra_recebidos foi usada — regenere o caixa com fetch atualizado.",
+    "filtro_categorias_codigos": null,
+    "filtro_categorias_descricoes": [
+      "Concessão de Aposentadoria",
+      "Concessão RESOLVVI (transferência)"
+    ],
+    "progresso_meta_recebimento": {
+      "meta_recebimento": 500000.0,
+      "valor_acumulado_recebido": 73212.76,
+      "progresso_percentual": 14.64,
+      "fracao_barra": 0.146426,
+      "excedeu_meta": false
+    },
+    "quantidade_itens": 55,
+    "itens": [
+      {
+        "valor do documento": 569.25,
+        "saldo": 4428.01,
+        "data inclusão": "02/04/2026",
+        "hora da inclusão": "09:47:59",
+        "categoria": {
+          "codigo": "1.04.97",
+          "descricao": "Concessão RESOLVVI (transferência)"
+        }
+      },
+      {
+        "valor do documento": 777.0,
+        "saldo": 4635.76,
+        "data inclusão": "02/04/2026",
+        "hora da inclusão": "09:48:45",
+        "categoria": {
+          "codigo": "1.04.97",
+          "descricao": "Concessão RESOLVVI (transferência)"
+        }
+      },
+      {
+        "valor do documento": 1207.16,
+        "saldo": 5057.94,
+        "data inclusão": "02/04/2026",
+        "hora da inclusão": "09:50:27",
+        "categoria": {
+          "codigo": "1.04.97",
+          "descricao": "Concessão RESOLVVI (transferência)"
+        }
+      },
+      {
+        "valor do documento": 851.33,
+        "saldo": 4698.12,
+        "data inclusão": "02/04/2026",
+        "hora da inclusão": "09:52:14",
+        "categoria": {
+          "codigo": "1.04.97",
+          "descricao": "Concessão RESOLVVI (transferência)"
+        }
+      },
+      {
+        "valor do documento": 1503.95,
+        "saldo": 5349.74,
+        "data inclusão": "02/04/2026",
+        "hora da inclusão": "09:53:40",
+        "categoria": {
+          "codigo": "1.01.01",
+          "descricao": "Concessão de Aposentadoria"
+        }
+      },
+      {
+        "valor do documento": 303.6,
+        "saldo": 5652.34,
+        "data inclusão": "02/04/2026",
+        "hora da inclusão": "09:54:45",
+        "categoria": {
+          "codigo": "1.04.97",
+          "descricao": "Concessão RESOLVVI (transferência)"
+        }
+      },
+      {
+        "valor do documento": 450.83,
+        "saldo": 5799.57,
+        "data inclusão": "02/04/2026",
+        "hora da inclusão": "09:55:47",
+        "categoria": {
+          "codigo": "1.04.97",
+          "descricao": "Concessão RESOLVVI (transferência)"
+        }
+      },
+      {
+        "valor do documento": 759.0,
+        "saldo": 6077.57,
+        "data inclusão": "07/04/2026",
+        "hora da inclusão": "11:46:21",
+        "categoria": {
+          "codigo": "1.04.97",
+          "descricao": "Concessão RESOLVVI (transferência)"
+        }
+      },
+      {
+        "valor do documento": 1577.9,
+        "saldo": 6896.47,
+        "data inclusão": "07/04/2026",
+        "hora da inclusão": "11:47:46",
+        "categoria": {
+          "codigo": "1.04.97",
+          "descricao": "Concessão RESOLVVI (transferência)"
+        }
+      },
+      {
+        "valor do documento": 1473.84,
+        "saldo": 6792.41,
+        "data inclusão": "07/04/2026",
+        "hora da inclusão": "11:48:48",
+        "categoria": {
+          "codigo": "1.04.97",
+          "descricao": "Concessão RESOLVVI (transferência)"
+        }
+      },
+      {
+        "valor do documento": 506.0,
+        "saldo": 5824.57,
+        "data inclusão": "07/04/2026",
+        "hora da inclusão": "11:49:22",
+        "categoria": {
+          "codigo": "1.04.97",
+          "descricao": "Concessão RESOLVVI (transferência)"
+        }
+      },
+      {
+        "valor do documento": 799.32,
+        "saldo": 6117.89,
+        "data inclusão": "07/04/2026",
+        "hora da inclusão": "11:50:16",
+        "categoria": {
+          "codigo": "1.04.97",
+          "descricao": "Concessão RESOLVVI (transferência)"
+        }
+      },
+      {
+        "valor do documento": 2032.46,
+        "saldo": 7351.03,
+        "data inclusão": "07/04/2026",
+        "hora da inclusão": "11:51:23",
+        "categoria": {
+          "codigo": "1.04.97",
+          "descricao": "Concessão RESOLVVI (transferência)"
+        }
+      },
+      {
+        "valor do documento": 1138.5,
+        "saldo": 6457.07,
+        "data inclusão": "07/04/2026",
+        "hora da inclusão": "11:52:26",
+        "categoria": {
+          "codigo": "1.04.97",
+          "descricao": "Concessão RESOLVVI (transferência)"
+        }
+      },
+      {
+        "valor do documento": 3500.0,
+        "saldo": 9957.07,
+        "data inclusão": "07/04/2026",
+        "hora da inclusão": "11:53:48",
+        "categoria": {
+          "codigo": "1.01.01",
+          "descricao": "Concessão de Aposentadoria"
+        }
+      },
+      {
+        "valor do documento": 936.46,
+        "saldo": 10882.54,
+        "data inclusão": "07/04/2026",
+        "hora da inclusão": "11:58:54",
+        "categoria": {
+          "codigo": "1.04.97",
+          "descricao": "Concessão RESOLVVI (transferência)"
+        }
+      },
+      {
+        "valor do documento": 1500.0,
+        "saldo": 11445.08,
+        "data inclusão": "07/04/2026",
+        "hora da inclusão": "12:09:17",
+        "categoria": {
+          "codigo": "1.04.97",
+          "descricao": "Concessão RESOLVVI (transferência)"
+        }
+      },
+      {
+        "valor do documento": 303.6,
+        "saldo": 10248.68,
+        "data inclusão": "07/04/2026",
+        "hora da inclusão": "12:10:17",
+        "categoria": {
+          "codigo": "1.01.01",
+          "descricao": "Concessão de Aposentadoria"
+        }
+      },
+      {
+        "valor do documento": 940.62,
+        "saldo": 10847.7,
+        "data inclusão": "07/04/2026",
+        "hora da inclusão": "12:15:28",
+        "categoria": {
+          "codigo": "1.01.01",
+          "descricao": "Concessão de Aposentadoria"
+        }
+      },
+      {
+        "valor do documento": 6350.74,
+        "saldo": 15954.22,
+        "data inclusão": "07/04/2026",
+        "hora da inclusão": "12:17:43",
+        "categoria": {
+          "codigo": "1.01.01",
+          "descricao": "Concessão de Aposentadoria"
+        }
+      },
+      {
+        "valor do documento": 1904.74,
+        "saldo": 17858.96,
+        "data inclusão": "07/04/2026",
+        "hora da inclusão": "12:18:39",
+        "categoria": {
+          "codigo": "1.04.97",
+          "descricao": "Concessão RESOLVVI (transferência)"
+        }
+      },
+      {
+        "valor do documento": 2280.14,
+        "saldo": 20139.1,
+        "data inclusão": "07/04/2026",
+        "hora da inclusão": "12:19:05",
+        "categoria": {
+          "codigo": "1.04.97",
+          "descricao": "Concessão RESOLVVI (transferência)"
+        }
+      },
+      {
+        "valor do documento": 3049.65,
+        "saldo": 20908.61,
+        "data inclusão": "07/04/2026",
+        "hora da inclusão": "12:19:35",
+        "categoria": {
+          "codigo": "1.04.97",
+          "descricao": "Concessão RESOLVVI (transferência)"
+        }
+      },
+      {
+        "valor do documento": 2789.22,
+        "saldo": 20648.18,
+        "data inclusão": "07/04/2026",
+        "hora da inclusão": "12:20:57",
+        "categoria": {
+          "codigo": "1.04.97",
+          "descricao": "Concessão RESOLVVI (transferência)"
+        }
+      },
+      {
+        "valor do documento": 496.58,
+        "saldo": 18355.54,
+        "data inclusão": "07/04/2026",
+        "hora da inclusão": "12:22:07",
+        "categoria": {
+          "codigo": "1.04.97",
+          "descricao": "Concessão RESOLVVI (transferência)"
+        }
+      },
+      {
+        "valor do documento": 678.66,
+        "saldo": 18537.62,
+        "data inclusão": "07/04/2026",
+        "hora da inclusão": "12:23:25",
+        "categoria": {
+          "codigo": "1.04.97",
+          "descricao": "Concessão RESOLVVI (transferência)"
+        }
+      },
+      {
+        "valor do documento": 810.5,
+        "saldo": 18669.46,
+        "data inclusão": "07/04/2026",
+        "hora da inclusão": "12:24:13",
+        "categoria": {
+          "codigo": "1.04.97",
+          "descricao": "Concessão RESOLVVI (transferência)"
+        }
+      },
+      {
+        "valor do documento": 569.25,
+        "saldo": 18428.21,
+        "data inclusão": "07/04/2026",
+        "hora da inclusão": "12:24:38",
+        "categoria": {
+          "codigo": "1.04.97",
+          "descricao": "Concessão RESOLVVI (transferência)"
+        }
+      },
+      {
+        "valor do documento": 518.0,
+        "saldo": 18376.96,
+        "data inclusão": "07/04/2026",
+        "hora da inclusão": "12:25:29",
+        "categoria": {
+          "codigo": "1.01.01",
+          "descricao": "Concessão de Aposentadoria"
+        }
+      },
+      {
+        "valor do documento": 304.59,
+        "saldo": 107225.56,
+        "data inclusão": "02/04/2026",
+        "hora da inclusão": "08:09:44",
+        "categoria": {
+          "codigo": "1.01.01",
+          "descricao": "Concessão de Aposentadoria"
+        }
+      },
+      {
+        "valor do documento": 607.2,
+        "saldo": 107832.76,
+        "data inclusão": "02/04/2026",
+        "hora da inclusão": "08:09:45",
+        "categoria": {
+          "codigo": "1.01.01",
+          "descricao": "Concessão de Aposentadoria"
+        }
+      },
+      {
+        "valor do documento": 1149.65,
+        "saldo": 108982.41,
+        "data inclusão": "02/04/2026",
+        "hora da inclusão": "08:09:46",
+        "categoria": {
+          "codigo": "1.01.01",
+          "descricao": "Concessão de Aposentadoria"
+        }
+      },
+      {
+        "valor do documento": 2079.02,
+        "saldo": 111061.43,
+        "data inclusão": "02/04/2026",
+        "hora da inclusão": "08:09:47",
+        "categoria": {
+          "codigo": "1.01.01",
+          "descricao": "Concessão de Aposentadoria"
+        }
+      },
+      {
+        "valor do documento": 747.34,
+        "saldo": 111808.77,
+        "data inclusão": "02/04/2026",
+        "hora da inclusão": "08:09:49",
+        "categoria": {
+          "codigo": "1.01.01",
+          "descricao": "Concessão de Aposentadoria"
+        }
+      },
+      {
+        "valor do documento": 759.0,
+        "saldo": 112567.77,
+        "data inclusão": "02/04/2026",
+        "hora da inclusão": "08:09:50",
+        "categoria": {
+          "codigo": "1.01.01",
+          "descricao": "Concessão de Aposentadoria"
+        }
+      },
+      {
+        "valor do documento": 1632.03,
+        "saldo": 114199.8,
+        "data inclusão": "02/04/2026",
+        "hora da inclusão": "08:09:52",
+        "categoria": {
+          "codigo": "1.01.01",
+          "descricao": "Concessão de Aposentadoria"
+        }
+      },
+      {
+        "valor do documento": 1080.0,
+        "saldo": 49940.74,
+        "data inclusão": "02/04/2026",
+        "hora da inclusão": "08:12:18",
+        "categoria": {
+          "codigo": "1.01.01",
+          "descricao": "Concessão de Aposentadoria"
+        }
+      },
+      {
+        "valor do documento": 759.0,
+        "saldo": -19109.19,
+        "data inclusão": "02/04/2026",
+        "hora da inclusão": "08:27:13",
+        "categoria": {
+          "codigo": "1.01.01",
+          "descricao": "Concessão de Aposentadoria"
+        }
+      },
+      {
+        "valor do documento": 400.0,
+        "saldo": -18709.19,
+        "data inclusão": "02/04/2026",
+        "hora da inclusão": "08:43:45",
+        "categoria": {
+          "codigo": "1.01.01",
+          "descricao": "Concessão de Aposentadoria"
+        }
+      },
+      {
+        "valor do documento": 2000.0,
+        "saldo": -16709.19,
+        "data inclusão": "02/04/2026",
+        "hora da inclusão": "08:44:34",
+        "categoria": {
+          "codigo": "1.04.97",
+          "descricao": "Concessão RESOLVVI (transferência)"
+        }
+      },
+      {
+        "valor do documento": 2880.19,
+        "saldo": 936171.0,
+        "data inclusão": "02/04/2026",
+        "hora da inclusão": "08:53:16",
+        "categoria": {
+          "codigo": "1.01.01",
+          "descricao": "Concessão de Aposentadoria"
+        }
+      },
+      {
+        "valor do documento": 891.01,
+        "saldo": 937016.91,
+        "data inclusão": "02/04/2026",
+        "hora da inclusão": "09:17:16",
+        "categoria": {
+          "codigo": "1.01.01",
+          "descricao": "Concessão de Aposentadoria"
+        }
+      },
+      {
+        "valor do documento": 2054.22,
+        "saldo": 939071.13,
+        "data inclusão": "03/04/2026",
+        "hora da inclusão": "08:52:08",
+        "categoria": {
+          "codigo": "1.01.01",
+          "descricao": "Concessão de Aposentadoria"
+        }
+      },
+      {
+        "valor do documento": 1073.69,
+        "saldo": 940144.82,
+        "data inclusão": "03/04/2026",
+        "hora da inclusão": "08:52:10",
+        "categoria": {
+          "codigo": "1.01.01",
+          "descricao": "Concessão de Aposentadoria"
+        }
+      },
+      {
+        "valor do documento": 1012.0,
+        "saldo": 941156.82,
+        "data inclusão": "03/04/2026",
+        "hora da inclusão": "08:52:11",
+        "categoria": {
+          "codigo": "1.01.01",
+          "descricao": "Concessão de Aposentadoria"
+        }
+      },
+      {
+        "valor do documento": 1570.52,
+        "saldo": 942727.34,
+        "data inclusão": "03/04/2026",
+        "hora da inclusão": "08:52:12",
+        "categoria": {
+          "codigo": "1.01.01",
+          "descricao": "Concessão de Aposentadoria"
+        }
+      },
+      {
+        "valor do documento": 2134.25,
+        "saldo": 944861.59,
+        "data inclusão": "03/04/2026",
+        "hora da inclusão": "08:52:13",
+        "categoria": {
+          "codigo": "1.01.01",
+          "descricao": "Concessão de Aposentadoria"
+        }
+      },
+      {
+        "valor do documento": 2286.68,
+        "saldo": 947148.27,
+        "data inclusão": "03/04/2026",
+        "hora da inclusão": "08:52:14",
+        "categoria": {
+          "codigo": "1.01.01",
+          "descricao": "Concessão de Aposentadoria"
+        }
+      },
+      {
+        "valor do documento": 1621.15,
+        "saldo": 948769.42,
+        "data inclusão": "03/04/2026",
+        "hora da inclusão": "08:52:15",
+        "categoria": {
+          "codigo": "1.01.01",
+          "descricao": "Concessão de Aposentadoria"
+        }
+      },
+      {
+        "valor do documento": 1080.67,
+        "saldo": 949746.13,
+        "data inclusão": "07/04/2026",
+        "hora da inclusão": "08:41:45",
+        "categoria": {
+          "codigo": "1.01.01",
+          "descricao": "Concessão de Aposentadoria"
+        }
+      },
+      {
+        "valor do documento": 455.4,
+        "saldo": 950201.53,
+        "data inclusão": "07/04/2026",
+        "hora da inclusão": "08:44:23",
+        "categoria": {
+          "codigo": "1.04.97",
+          "descricao": "Concessão RESOLVVI (transferência)"
+        }
+      },
+      {
+        "valor do documento": 1238.68,
+        "saldo": 951440.21,
+        "data inclusão": "07/04/2026",
+        "hora da inclusão": "08:33:17",
+        "categoria": {
+          "codigo": "1.01.01",
+          "descricao": "Concessão de Aposentadoria"
+        }
+      },
+      {
+        "valor do documento": 1288.17,
+        "saldo": 952728.38,
+        "data inclusão": "07/04/2026",
+        "hora da inclusão": "08:33:20",
+        "categoria": {
+          "codigo": "1.01.01",
+          "descricao": "Concessão de Aposentadoria"
+        }
+      },
+      {
+        "valor do documento": 1012.0,
+        "saldo": 953740.38,
+        "data inclusão": "07/04/2026",
+        "hora da inclusão": "08:33:22",
+        "categoria": {
+          "codigo": "1.01.01",
+          "descricao": "Concessão de Aposentadoria"
+        }
+      },
+      {
+        "valor do documento": 518.0,
+        "saldo": 954258.38,
+        "data inclusão": "07/04/2026",
+        "hora da inclusão": "08:33:23",
+        "categoria": {
+          "codigo": "1.01.01",
+          "descricao": "Concessão de Aposentadoria"
+        }
+      }
+    ]
+  }

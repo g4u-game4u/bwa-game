@@ -6,6 +6,7 @@ import { CompanyKpiService, CompanyDisplay } from '@services/company-kpi.service
 import { KPIService } from '@services/kpi.service';
 import { KPIData } from '@model/gamification-dashboard.model';
 import { CnpjLookupService } from '@services/cnpj-lookup.service';
+import { SessaoProvider } from '@providers/sessao/sessao.provider';
 import { firstValueFrom } from 'rxjs';
 
 @Component({
@@ -34,8 +35,14 @@ export class ModalCompanyCarteiraDetailComponent implements OnInit, OnDestroy {
     private companyKpiService: CompanyKpiService,
     private kpiService: KPIService,
     private cnpjLookupService: CnpjLookupService,
-    private cdr: ChangeDetectorRef
+    private cdr: ChangeDetectorRef,
+    private sessao: SessaoProvider
   ) {}
+
+  /** Coluna de pontos por tarefa: apenas admin / gestor (supervisor). */
+  get showTaskPointsForGestor(): boolean {
+    return Boolean(this.sessao.isAdmin() || this.sessao.isGerente());
+  }
 
   ngOnInit(): void {
     if (this.company) {

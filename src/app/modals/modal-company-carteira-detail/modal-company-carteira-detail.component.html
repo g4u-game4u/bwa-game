@@ -65,13 +65,13 @@
               <span>Nenhum resultado para a busca</span>
             </div>
 
-            <div *ngIf="filteredTasks.length > 0" class="tasks-table">
+            <div *ngIf="filteredTasks.length > 0" class="tasks-table" [class.without-task-points]="!showTaskPointsForGestor">
             <div class="task-header">
               <div class="task-col-title">Tarefa</div>
               <div class="task-col-executor">Executor</div>
               <div class="task-col-date">Data</div>
               <div class="task-col-status">Status</div>
-              <div class="task-col-points">Pontos</div>
+              <div class="task-col-points" *ngIf="showTaskPointsForGestor">Pontos</div>
             </div>
             <div *ngFor="let task of filteredTasks" class="task-row">
               <div class="task-col-title">
@@ -88,7 +88,7 @@
                   {{ getStatusLabel(task.status) }}
                 </span>
               </div>
-              <div class="task-col-points">
+              <div class="task-col-points" *ngIf="showTaskPointsForGestor">
                 <span class="task-points" [class.locked]="task.pointsLocked">+{{ task.points || 0 }} pts</span>
               </div>
             </div>

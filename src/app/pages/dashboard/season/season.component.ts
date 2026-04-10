@@ -71,8 +71,12 @@ export class SeasonComponent implements OnInit, OnChanges {
   clientId: string | null = null;
   clientIdLoading = false;
 
-  // Pontos recalculados no front (base action-template-pontos.md)
-  seasonPointsFromTable: number | null = null;
+  /**
+   * Carteira de pontos da temporada montada no front (action-template-pontos.md),
+   * agregando o action_log no intervalo real da temporada — jogador ou time.
+   */
+  seasonPointsWallet: { total: number; bloqueados: number; desbloqueados: number } | null = null;
+  seasonWalletLoading = false;
 
   // Propriedades para verificação de permissão de times
   freeChallengesAllowedTeams: FreeChallengeAllowedTeam[] | null = null;
@@ -85,7 +89,6 @@ export class SeasonComponent implements OnInit, OnChanges {
 
   constructor(
     private modal: NgbModal,
-    private sessaoProvider: SessaoProvider,
     private temporadaService: TemporadaService,
     private sessao: SessaoProvider,
     private seasonDatesService: SeasonDatesService,
@@ -111,13 +114,22 @@ export class SeasonComponent implements OnInit, OnChanges {
   ngOnChanges() {
     this.apiReady = false;
     this.apiTeamReady = false;
+    if (!this.idConsulta) {
+      this.seasonPointsWallet = null;
+      this.seasonWalletLoading = false;
+    }
     this.init();
   }
 
   init() {
     if (this.idConsulta) {
       this.getDadosTemporada();
-      // this.getDadosTimeUsuario();
+      if (this.seasonDates?.start && this.seasonDates?.end) {
+        void this.recalculateSeasonWalletFromTemplate();
+      }
+    } else {
+      this.seasonPointsWallet = null;
+      this.seasonWalletLoading = false;
     }
   }
 
@@ -134,9 +146,15 @@ export class SeasonComponent implements OnInit, OnChanges {
   }
 
   getPercentPontosBloqueados() {
-    // return Math.floor((this.seasonInfo.pontos.bloqueados / this.seasonInfo.pontos.total) * 100);
-    const totalPontos = this.seasonInfo.blocked_points + this.seasonInfo.unblocked_points;
-    return Math.floor((this.seasonInfo.blocked_points / Number(totalPontos)) * 100);
+    const w = this.seasonPointsWallet;
+    if (!w) {
+      return 0;
+    }
+    const totalPontos = w.bloqueados + w.desbloqueados;
+    if (totalPontos <= 0) {
+      return 0;
+    }
+    return Math.floor((w.bloqueados / totalPontos) * 100);
   }
 
   extratoTemporadaBeta() {
@@ -459,46 +477,48 @@ export class SeasonComponent implements OnInit, OnChanges {
       };
     } finally {
       this.seasonDatesLoading = false;
-      this.recalculateSeasonPointsFromTable();
+      void this.recalculateSeasonWalletFromTemplate();
     }
   }
 
-  private async recalculateSeasonPointsFromTable() {
+  private async recalculateSeasonWalletFromTemplate(): Promise<void> {
+    if (!this.idConsulta || !this.seasonDates?.start || !this.seasonDates?.end) {
+      this.seasonPointsWallet = null;
+      this.seasonWalletLoading = false;
+      return;
+    }
+
+    const rangeStart = new Date(this.seasonDates.start);
+    const rangeEnd = new Date(this.seasonDates.end);
+    if (isNaN(rangeStart.getTime()) || isNaN(rangeEnd.getTime())) {
+      this.seasonPointsWallet = null;
+      return;
+    }
+
+    this.seasonWalletLoading = true;
     try {
-      const email = this.sessaoProvider.usuario?.email;
-      if (!email || !this.seasonDates?.start || !this.seasonDates?.end) {
-        this.seasonPointsFromTable = null;
-        return;
-      }
-
-      const start = new Date(this.seasonDates.start);
-      const end = new Date(this.seasonDates.end);
-      if (isNaN(start.getTime()) || isNaN(end.getTime())) {
-        this.seasonPointsFromTable = null;
-        return;
-      }
-
-      // Soma mês a mês, usando a mesma regra do painel mensal (ActionLogService.getPontosForMonth)
-      const cursor = new Date(start.getFullYear(), start.getMonth(), 1);
-      const endMonth = new Date(end.getFullYear(), end.getMonth(), 1);
-      let total = 0;
-
-      while (cursor <= endMonth) {
-        const monthPoints = await firstValueFrom(this.actionLogService.getPontosForMonth(email, cursor));
-        total += Number(monthPoints) || 0;
-        cursor.setMonth(cursor.getMonth() + 1);
-      }
-
-      this.seasonPointsFromTable = Math.floor(total);
+      const wallet$ = this.isTeam
+        ? this.actionLogService.computeSeasonWalletForTeam(String(this.idConsulta), rangeStart, rangeEnd)
+        : this.actionLogService.computeSeasonWalletForPlayer(String(this.idConsulta), rangeStart, rangeEnd);
+      this.seasonPointsWallet = await firstValueFrom(wallet$);
     } catch (error) {
-      console.error('Erro ao recalcular pontos da temporada pela tabela:', error);
-      this.seasonPointsFromTable = null;
+      console.error('Erro ao montar carteira de pontos da temporada (tabela):', error);
+      this.seasonPointsWallet = { total: 0, bloqueados: 0, desbloqueados: 0 };
+    } finally {
+      this.seasonWalletLoading = false;
     }
   }
 
   get totalSeasonPoints(): number {
-    const fallback = Math.floor((this.seasonInfo?.blocked_points || 0) + (this.seasonInfo?.unblocked_points || 0));
-    return this.seasonPointsFromTable != null ? this.seasonPointsFromTable : fallback;
+    return Math.floor(this.seasonPointsWallet?.total ?? 0);
+  }
+
+  get displaySeasonBlockedPoints(): number {
+    return Math.floor(this.seasonPointsWallet?.bloqueados ?? 0);
+  }
+
+  get displaySeasonUnblockedPoints(): number {
+    return Math.floor(this.seasonPointsWallet?.desbloqueados ?? 0);
   }
 
   /**

@@ -13,6 +13,7 @@ import { CompanyKpiService } from '@services/company-kpi.service';
 import { CnpjLookupService } from '@services/cnpj-lookup.service';
 import { SessaoProvider } from '@providers/sessao/sessao.provider';
 import { SystemParamsService } from '@services/system-params.service';
+import { FinanceiroOmieRecebiveisService } from '@services/financeiro-omie-recebiveis.service';
 import { 
   PlayerStatus, 
   PointWallet, 
@@ -122,6 +123,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     private cnpjLookupService: CnpjLookupService,
     private sessaoProvider: SessaoProvider,
     private systemParamsService: SystemParamsService,
+    private financeiroOmieRecebiveisService: FinanceiroOmieRecebiveisService,
     private route: ActivatedRoute,
     private router: Router
   ) {
@@ -508,8 +510,8 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     }
 
     // Load current and goal in parallel
-    this.actionLogService
-      .getTeamBillingForMonth(GamificationDashboardComponent.FINANCE_TEAM_ID, this.selectedMonth)
+    this.financeiroOmieRecebiveisService
+      .getValorConcedidoFinanceiro(GamificationDashboardComponent.FINANCE_TEAM_ID, this.selectedMonth)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (currentBilling) => {

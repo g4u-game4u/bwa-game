@@ -28,5 +28,18 @@ export const environment = {
   supervisorTeamCode: 'Fkmdmko',
   gestorTeamCode: 'FkmdnFU',
   diretorTeamCode: 'FkmdhZ9',
-  logo_url: 'https://i.ibb.co/Fk92q8hv/Logo-Revisa-Prev-removebg-preview.png'
+  logo_url: 'https://i.ibb.co/Fk92q8hv/Logo-Revisa-Prev-removebg-preview.png',
+
+  /**
+   * Integração Omie — KPI circular "Valor concedido" (time financeiro).
+   * Modo A: painelJsonUrl → JSON já processado (omie_painel_recebiveis.json).
+   * Modo B: caixaJsonUrl → export bruto; o front aplica as mesmas regras do Python.
+   * Sobrescritos por system params homônimos quando preenchidos.
+   */
+  financeiroOmieRecebiveis: {
+    painelJsonUrl: '',
+    caixaJsonUrl: '',
+    categoriasCodigos: '',
+    categoriasDesc: ''
+  }
 };

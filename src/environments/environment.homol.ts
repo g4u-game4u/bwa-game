@@ -28,5 +28,12 @@ export const environment = {
   // Team Code Configuration (supports both uppercase and lowercase env var names)
   supervisorTeamCode: process.env['SUPERVISOR_TEAM_CODE'] || process.env['supervisor_team_code'] || 'Fkmdmko',
   gestorTeamCode: process.env['GESTOR_TEAM_CODE'] || process.env['gestor_team_code'] || 'FkmdnFU',
-  diretorTeamCode: process.env['DIRETOR_TEAM_CODE'] || process.env['diretor_team_code'] || 'FkmdhZ9'
+  diretorTeamCode: process.env['DIRETOR_TEAM_CODE'] || process.env['diretor_team_code'] || 'FkmdhZ9',
+
+  financeiroOmieRecebiveis: {
+    painelJsonUrl: process.env['FINANCEIRO_OMIE_PAINEL_JSON_URL'] || process.env['financeiro_omie_painel_json_url'] || '',
+    caixaJsonUrl: process.env['FINANCEIRO_OMIE_CAIXA_JSON_URL'] || process.env['financeiro_omie_caixa_json_url'] || '',
+    categoriasCodigos: process.env['PAINEL_CATEGORIAS'] || process.env['painel_categorias'] || '',
+    categoriasDesc: process.env['PAINEL_CATEGORIAS_DESC'] || process.env['painel_categorias_desc'] || ''
+  }
 };

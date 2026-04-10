@@ -149,6 +149,13 @@
       background: rgba(255, 255, 255, 0.02);
       border-radius: 8px;
 
+      &.without-task-points {
+        .task-header,
+        .task-row {
+          grid-template-columns: 2fr 1.5fr 1.5fr 1fr;
+        }
+      }
+
       .task-header {
         display: grid;
         grid-template-columns: 2fr 1.5fr 1.5fr 1fr 1fr;

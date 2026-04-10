@@ -22,6 +22,7 @@ import { KPIData } from '@app/model/gamification-dashboard.model';
 import { KPIService } from '@services/kpi.service';
 import { CnpjLookupService } from '@services/cnpj-lookup.service';
 import { SystemParamsService } from '@services/system-params.service';
+import { FinanceiroOmieRecebiveisService } from '@services/financeiro-omie-recebiveis.service';
 
 // Models
 import { Team } from '@components/c4u-team-selector/c4u-team-selector.component';
@@ -210,6 +211,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
     private kpiService: KPIService,
     private cnpjLookupService: CnpjLookupService,
     private systemParamsService: SystemParamsService,
+    private financeiroOmieRecebiveisService: FinanceiroOmieRecebiveisService,
     private router: Router,
     private cdr: ChangeDetectorRef
   ) {}
@@ -2735,8 +2737,8 @@ private calculateCollaboratorTotals(memberData: Array<{
           try {
             const [currentBilling, billingGoal] = await Promise.all([
               firstValueFrom(
-                this.actionLogService
-                  .getTeamBillingForMonth(this.selectedTeamId, this.selectedMonth)
+                this.financeiroOmieRecebiveisService
+                  .getValorConcedidoFinanceiro(this.selectedTeamId, this.selectedMonth)
                   .pipe(takeUntil(this.destroy$))
               ),
               this.systemParamsService.getParam<number>('financeiro_monthly_billing_goal' as any)

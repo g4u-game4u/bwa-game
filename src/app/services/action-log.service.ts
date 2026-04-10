@@ -620,6 +620,169 @@ export class ActionLogService {
   }
 
   /**
+   * Limites absolutos de `time` no action_log para um intervalo de temporada.
+   * Respeita o piso 01/01/2026 (mesma regra de getRelativeDateExpression / painel mensal).
+   */
+  private buildSeasonActionLogTimeBounds(
+    rangeStart: Date,
+    rangeEnd: Date
+  ): { start: { $date: string }; end: { $date: string } } {
+    const seasonMin = dayjs('2026-01-01T00:00:00.000Z').startOf('day');
+    let s = dayjs(rangeStart).startOf('day');
+    const e = dayjs(rangeEnd).endOf('day');
+    if (s.isBefore(seasonMin)) {
+      s = seasonMin;
+    }
+    return {
+      start: { $date: s.toISOString() },
+      end: { $date: e.toISOString() }
+    };
+  }
+
+  private templatePointsForActionLogEntry(a: ActionLogEntry): number {
+    const title = extractActionTitle(a);
+    const hit = lookupActivityPoints(title);
+    return hit.found ? hit.points : 0;
+  }
+
+  /**
+   * Desbloqueado na carteira: processado no extra ou status finalizado (sem somar achievement).
+   */
+  private isActionLogUnlockedForSeasonWallet(a: ActionLogEntry): boolean {
+    if (a.extra?.processed === true) {
+      return true;
+    }
+    const st = String(a.status || '').toLowerCase();
+    return st === 'finalizado' || st === 'done' || st === 'delivered';
+  }
+
+  /**
+   * Carteira da temporada a partir do action_log + tabela de pontos.
+   * Ignora linhas `desbloquear` (pontuação vem das tarefas; evita duplicar com achievement).
+   */
+  private splitSeasonWalletFromActionLogs(
+    actions: ActionLogEntry[]
+  ): { total: number; bloqueados: number; desbloqueados: number } {
+    let bloqueados = 0;
+    let desbloqueados = 0;
+    for (const a of actions) {
+      if (a.actionId === 'desbloquear') {
+        continue;
+      }
+      const pts = this.templatePointsForActionLogEntry(a);
+      if (pts <= 0) {
+        continue;
+      }
+      if (this.isActionLogUnlockedForSeasonWallet(a)) {
+        desbloqueados += pts;
+      } else {
+        bloqueados += pts;
+      }
+    }
+    return {
+      total: Math.floor(bloqueados + desbloqueados),
+      bloqueados: Math.floor(bloqueados),
+      desbloqueados: Math.floor(desbloqueados)
+    };
+  }
+
+  /**
+   * action_log do jogador entre duas datas (temporada), até 10k linhas.
+   */
+  getPlayerActionLogForDateRange(
+    playerId: string,
+    rangeStart: Date,
+    rangeEnd: Date
+  ): Observable<ActionLogEntry[]> {
+    const bounds = this.buildSeasonActionLogTimeBounds(rangeStart, rangeEnd);
+    const aggregateBody = [
+      {
+        $match: {
+          userId: playerId,
+          time: { $gte: bounds.start, $lte: bounds.end }
+        }
+      },
+      { $sort: { time: -1 } },
+      { $limit: 10000 }
+    ];
+    return this.funifierApi
+      .post<ActionLogEntry[]>('/v3/database/action_log/aggregate?strict=true', aggregateBody)
+      .pipe(
+        map(response => (Array.isArray(response) ? response : [])),
+        catchError(error => {
+          console.error('Error fetching player action log for date range:', error);
+          return of([]);
+        })
+      );
+  }
+
+  /**
+   * Carteira agregada na temporada (jogador): pontos só da tabela, intervalo real da temporada.
+   */
+  computeSeasonWalletForPlayer(
+    playerId: string,
+    rangeStart: Date,
+    rangeEnd: Date
+  ): Observable<{ total: number; bloqueados: number; desbloqueados: number }> {
+    return this.getPlayerActionLogForDateRange(playerId, rangeStart, rangeEnd).pipe(
+      map(actions => this.splitSeasonWalletFromActionLogs(actions))
+    );
+  }
+
+  /**
+   * action_log de todos os membros do time no intervalo (lookup player.teams).
+   */
+  getTeamActionLogForDateRange(
+    teamId: string,
+    rangeStart: Date,
+    rangeEnd: Date
+  ): Observable<ActionLogEntry[]> {
+    const bounds = this.buildSeasonActionLogTimeBounds(rangeStart, rangeEnd);
+    const tid = String(teamId);
+    const aggregateBody = [
+      {
+        $lookup: {
+          from: 'player',
+          localField: 'userId',
+          foreignField: '_id',
+          as: 'playerData'
+        }
+      },
+      { $unwind: '$playerData' },
+      {
+        $match: {
+          'playerData.teams': tid,
+          time: { $gte: bounds.start, $lte: bounds.end }
+        }
+      },
+      { $sort: { time: -1 } },
+      { $limit: 10000 }
+    ];
+    return this.funifierApi
+      .post<ActionLogEntry[]>('/v3/database/action_log/aggregate?strict=true', aggregateBody)
+      .pipe(
+        map(response => (Array.isArray(response) ? response : [])),
+        catchError(error => {
+          console.error('Error fetching team action log for date range:', error);
+          return of([]);
+        })
+      );
+  }
+
+  /**
+   * Carteira agregada na temporada (time): mesma regra do jogador, somando membros do time.
+   */
+  computeSeasonWalletForTeam(
+    teamId: string,
+    rangeStart: Date,
+    rangeEnd: Date
+  ): Observable<{ total: number; bloqueados: number; desbloqueados: number }> {
+    return this.getTeamActionLogForDateRange(teamId, rangeStart, rangeEnd).pipe(
+      map(actions => this.splitSeasonWalletFromActionLogs(actions))
+    );
+  }
+
+  /**
    * Soma do "valor faturado" (R$) do jogador no mês selecionado.
    *
    * Observação: o Funifier pode armazenar esse valor em chaves diferentes dentro de `attributes`.
