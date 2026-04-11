@@ -2,12 +2,24 @@ export const environment = {
   production: false,
   // client_id: 'cidadania4u',
   client_id: 'revisaprev',
-  // backend_url_base: 'https://integrador-n8n.grupo4u.com.br/webhook/game4u/taxall',
-  backend_url_base: 'http://localhost',
-  // backend_url_base: 'https://g4u-mvp-api.onrender.com',
-  // backend_url_base: 'https://g4u-mvp-api-staging.onrender.com',
-  // backend_url_base: 'https://g4u-mvp-api-1.onrender.com',
-  // backend_url_base: 'http://194.163.158.136:1935'
+  /**
+   * API backend. Com `ng serve`, lê `BACKEND_URL_BASE` ou `backend_url_base` do `.env` (DefinePlugin).
+   * Fallback local alinhado à porta padrão da API em desenvolvimento.
+   */
+  backend_url_base:
+    process.env['BACKEND_URL_BASE'] ||
+    process.env['backend_url_base'] ||
+    'http://localhost:3001',
+
+  /**
+   * Base da API Game4U (login em POST /auth/login). Se vazio, usa a mesma ordem de fallback de `backend_url_base`.
+   */
+  g4u_api_base:
+    process.env.G4U_API_BASE ||
+    process.env.g4u_api_base ||
+    process.env['BACKEND_URL_BASE'] ||
+    process.env['backend_url_base'] ||
+    'http://localhost:3001',
   
   // Funifier API Configuration
   funifier_api_url: 'https://service2.funifier.com/v3/',
@@ -41,5 +53,19 @@ export const environment = {
     caixaJsonUrl: '',
     categoriasCodigos: '',
     categoriasDesc: ''
+  },
+
+  /**
+   * Supabase (projeto RevisaPrev). Com `ng serve`, o webpack injeta `process.env` a partir do `.env`.
+   * Variáveis: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_SECRET.
+   * Documentação relacionada ao produto: https://g4u-mvp-api.onrender.com/api#/
+   */
+  supabaseRevisaprev: {
+    url: process.env['SUPABASE_URL'] || process.env['supabase_url'] || '',
+    anonKey: process.env['SUPABASE_ANON_KEY'] || process.env['supabase_anon_key'] || '',
+    serviceRoleSecret:
+      process.env['SUPABASE_SERVICE_ROLE_SECRET'] ||
+      process.env['supabase_service_role_secret'] ||
+      ''
   }
 };

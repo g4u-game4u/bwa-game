@@ -6,7 +6,15 @@
     "start": "ng serve --configuration development",
     "build": "ng build --configuration=production",
     "watch": "ng build --watch --configuration development",
-    "test": "ng test"
+    "test": "ng test",
+    "api-scripts": "node regras-de-negocio-scrips/run-api-scripts.mjs",
+    "api-scripts:login": "node regras-de-negocio-scrips/run-api-scripts.mjs login",
+    "api-scripts:templates": "node regras-de-negocio-scrips/run-api-scripts.mjs seed-action-templates",
+    "api-scripts:sync-template-points": "node regras-de-negocio-scrips/run-api-scripts.mjs sync-action-template-points",
+    "api-scripts:users": "node regras-de-negocio-scrips/run-api-scripts.mjs seed-teams-users",
+    "api-scripts:zoho-stages": "node regras-de-negocio-scrips/run-api-scripts.mjs zoho-stages",
+    "api-scripts:zoho-tasks": "node regras-de-negocio-scrips/run-api-scripts.mjs zoho-tasks",
+    "api-scripts:probe-process": "node regras-de-negocio-scrips/run-api-scripts.mjs probe-game-action-process"
   },
   "private": true,
   "dependencies": {
@@ -24,6 +32,7 @@
     "@ng-select/ng-select": "^11.0.0",
     "@ngx-translate/core": "^15.0.0",
     "@popperjs/core": "^2.11.6",
+    "@supabase/supabase-js": "^2.103.0",
     "@types/canvas-confetti": "^1.9.0",
     "@vercel/analytics": "^1.6.1",
     "animate.css": "^4.1.1",
@@ -53,6 +62,7 @@
     "@types/jwt-decode": "^2.2.1",
     "@types/node": "^22.15.3",
     "autoprefixer": "^10.4.21",
+    "dotenv": "^17.4.1",
     "dotenv-webpack": "^8.1.0",
     "fast-check": "^4.3.0",
     "jasmine-core": "~4.6.0",

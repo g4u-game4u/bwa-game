@@ -3,6 +3,7 @@ import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { Observable, of } from 'rxjs';
 import { map, catchError, tap, switchMap } from 'rxjs/operators';
 import { environment } from '../../environments/environment';
+import { FUNIFIER_HTTP_DISABLED } from '../config/funifier-requests-disabled';
 
 export interface CnpjEntry {
   _id: number;
@@ -25,6 +26,9 @@ export class CnpjLookupService {
    * Handles large lists by batching requests with Range header
    */
   private fetchCnpjByEmpids(empids: number[]): Observable<Map<number, CnpjEntry>> {
+    if (FUNIFIER_HTTP_DISABLED) {
+      return of(new Map<number, CnpjEntry>());
+    }
     if (empids.length === 0) {
       return of(new Map<number, CnpjEntry>());
     }

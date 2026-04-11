@@ -1,0 +1,461 @@
+{
+  "_meta": {
+    "description": "Configuração declarativa dos scripts de integração Game4U + Zoho descritos em scripts.md. Não executa chamadas por si só; serve de contrato para um runner futuro.",
+    "openApiReference": "https://g4u-mvp-api.onrender.com/api-json",
+    "relatedFiles": [
+      "scripts.md",
+      "revisaprev-action-template.json",
+      "users-by-team-revisaprev.md"
+    ]
+  },
+  "version": "1.0.0",
+  "api": {
+    "baseUrl": "http://localhost:3001",
+    "baseUrlEnv": "G4U_API_BASE",
+    "baseUrlNotes": "Backend local costuma expor /auth/login na raiz (sem /api). No Render/Swagger o prefixo pode ser /api — nesse caso use G4U_API_BASE=https://g4u-mvp-api.onrender.com/api",
+    "clientIdDefault": "revisaprev",
+    "clientIdEnvKeys": ["CLIENT_ID", "client_id"],
+    "headers": {
+      "client_id": "Usar valor de clientIdDefault ou variável de ambiente (primeiro não vazio entre clientIdEnvKeys).",
+      "Authorization": "Bearer <access_token> obtido em POST /auth/login (obrigatório para a maioria dos endpoints protegidos)."
+    }
+  },
+  "auth": {
+    "login": {
+      "method": "POST",
+      "path": "/auth/login",
+      "headers": ["client_id"],
+      "bodySchemaRef": "LoginModel",
+      "bodyFields": ["email", "password"]
+    },
+    "adminCredentialsEnv": {
+      "email": "G4U_ADMIN_EMAIL",
+      "password": "G4U_ADMIN_PASSWORD"
+    },
+    "notes": [
+      "POST /action, POST /team, POST /user e importações em massa exigem perfil administrativo conforme regras da API.",
+      "Não armazenar senhas reais neste JSON; usar .env ou segredo fora do repositório."
+    ]
+  },
+  "game4uUserActionPayload": {
+    "description": "Alinhado ao ProcessActionPayload do front (pontos-avulsos.service.ts) para POST /game/action/process.",
+    "example": {
+      "status": "PENDING",
+      "user_email": "usuario@exemplo.com",
+      "action_id": "teste",
+      "delivery_id": "550e8400-e29b-41d4-a716-446655440000",
+      "delivery_title": "Sprint 1",
+      "created_at": "2026-04-11T12:00:00.000Z",
+      "integration_id": "ext-123",
+      "comments": [
+        {
+          "id": 0,
+          "message": "Texto livre opcional",
+          "created_by": "sistema",
+          "created_at": "2026-04-11T12:00:00.000Z",
+          "type": "note"
+        }
+      ],
+      "approved": false,
+      "approved_by": null,
+      "dismissed": false
+    },
+    "fieldAliases": {
+      "delivery_name": "No parse scripts.md aparece como Deal_Name; o exemplo da API usa delivery_title — normalizar para delivery_title no payload final."
+    }
+  },
+  "gameActionProcess": {
+    "description": "Endpoint candidato a receber o processamento de ação vindos do CRM (tag Game na OpenAPI).",
+    "method": "POST",
+    "path": "/game/action/process",
+    "openApiVerification": {
+      "checkedAgainst": "https://g4u-mvp-api.onrender.com/api-json",
+      "requestBodyInOpenApi": false,
+      "note": "Na especificação consultada, este path declara apenas o header client_id e respostas 200/204, sem requestBody. Validar em http://localhost:3001/api-json após subir a API local e alinhar o corpo real ao game4uUserActionPayload (ou ao DTO do backend).",
+      "localSwaggerUrl": "http://localhost:3001/api-json",
+      "requiresManualVerification": true
+    },
+    "headers": ["client_id", "Authorization"]
+  },
+  "game4uUserActionSearch": {
+    "path": "/user-action/search",
+    "defaultLimit": 100,
+    "createdAtStartDefault": "2000-01-01T00:00:00.000Z",
+    "filterByDeliveryId": true,
+    "note": "Usado para obter created_at da atividade PENDING antes de enviar DONE (integration_id estável zoho-deal-{id}-action-{templateId}). Se delivery_id não for suportado pela API, defina filterByDeliveryId=false e filtre no runner."
+  },
+  "gameDeliveryComplete": {
+    "method": "POST",
+    "pathTemplate": "/game/delivery/{{deliveryId}}/complete",
+    "note": "Body { finished_at }; alinhado a desbloquearAtividade no front."
+  },
+  "zoho": {
+    "token": {
+      "method": "POST",
+      "url": "https://accounts.zoho.com/oauth/v2/token",
+      "contentType": "application/x-www-form-urlencoded",
+      "bodyParameters": {
+        "grant_type": "refresh_token",
+        "client_id": "$ZOHO_CLIENT_ID",
+        "client_secret": "$ZOHO_CLIENT_SECRET",
+        "refresh_token": "$ZOHO_REFRESH_TOKEN"
+      },
+      "envVars": ["ZOHO_CLIENT_ID", "ZOHO_CLIENT_SECRET", "ZOHO_REFRESH_TOKEN"]
+    },
+    "dealsSearch": {
+      "method": "GET",
+      "baseUrl": "https://www.zohoapis.com/crm/v8/Deals/search",
+      "docsUrl": "https://www.zoho.com/crm/developer/docs/api/v8/search-records.html",
+      "authorizationHeaderTemplate": "Zoho-oauthtoken {{access_token}}",
+      "criteriaTemplate": "(Modified_Time:between:{{from}},{{to}})",
+      "criteriaNotes": "Search Records v8: critério único segue Field:operator:value; datetime 'between' usa dois valores ISO8601 separados por vírgula. Condições compostas: ((A) and (B)). Vírgulas/parenteses nos valores exigem escape (\\,) e encode. O runner envia criteria já via encodeURIComponent; adiciona page e per_page (máx. 200).",
+      "defaultPerPage": 200,
+      "searchIncludeFields": "id,Pipeline,Stage,Deal_Name,Owner,Financeiro_Respons_vel,Respons_vel_Jur,Jur_dico_Respons_vel",
+      "searchIncludeFieldsNote": "Garante Pipeline e lookups no body de cada deal (sem isto o Zoho pode omitir Pipeline e as regras por pipeline falham). Máx. 50 api_names.",
+      "dateRangeEnv": {
+        "from": "ZOHO_MODIFIED_FROM",
+        "to": "ZOHO_MODIFIED_TO"
+      },
+      "dateRangeExample": {
+        "from": "2026-04-01T00:00:00+00:00",
+        "to": "2026-04-10T00:00:00+00:00"
+      },
+      "pagination": {
+        "note": "Resposta traz info.more_records, info.page, info.per_page (default/máx. 200). Próximas páginas: incrementar page até more_records=false."
+      },
+      "pipelineFilter": {
+        "enabled": true,
+        "fieldApiName": "Pipeline",
+        "fieldApiNameNote": "Se o CRM usar outro api_name (ex. Layout), ajuste aqui ou env ZOHO_DEALS_PIPELINE_FIELD.",
+        "allowedDisplayNames": [
+          "Concessão de Aposentadoria",
+          "Qualidade",
+          "Cobrança"
+        ],
+        "teamsNote": "Concessão de Aposentadoria: CS + Jurídico. Qualidade: só CS. Cobrança: CS + Financeiro. O runner só restringe por pipeline; regras por responsável/stage/tag continuam no código.",
+        "requireFinanceiroLookupForStagePostByPipeline": {
+          "Concessão de Aposentadoria": true,
+          "Qualidade": false,
+          "Cobrança": true
+        },
+        "stagePostUsesOwnerEmailOnlyPipelines": ["Qualidade"]
+      }
+    },
+    "dealTimelineStages": {
+      "description": "Histórico de estágio para fluxo CS/Financeiro (scripts.md §3). Runner zoho-stages: não envia POST por Stage se Respons_vel_Jur ou Jur_dico_Respons_vel estiver preenchido (usar atividades/tags); Owner sempre obrigatório; Financeiro_Respons_vel conforme requireFinanceiroLookupForStagePostByPipeline (Qualidade=false); em pipelines stagePostUsesOwnerEmailOnlyPipelines o user_email do stage é sempre Owner.",
+      "method": "GET",
+      "pathTemplate": "https://www.zohoapis.com/crm/v8/Deals/{{dealId}}/__timeline",
+      "docsUrl": "https://www.zoho.com/crm/developer/docs/api/v8/timeline-of-a-record.html",
+      "pagination": true,
+      "firstPageQueryNotes": "Primeira página: per_page + sort_by=audited_time; filters JSON com audited_time between (mesmo intervalo do search ajuda). include_inner_details para field_history rico. page_token nas páginas seguintes (não misturar per_page com page_token)."
+    },
+    "dealActivitiesChronological": {
+      "description": "Histórico de atividades para fluxo Jurídico por tags (scripts.md §4).",
+      "method": "GET",
+      "pathTemplate": "https://www.zohoapis.com/crm/v8/Deals/{{dealId}}/Activities_Chronological_View_History",
+      "pagination": true
+    },
+    "stagePostToGame4u": {
+      "description": "Envio do último evento de Stage do __timeline para POST /game/action/process no G4U.",
+      "allowMissingFinanceiroLookup": true,
+      "allowPostWhenJuridicoResponsibleSet": true,
+      "financeiroStageUseOwnerEmailIfFinanceiroHasNoEmail": true,
+      "resolveUserEmailViaCrmUsersApi": true,
+      "notes": "allowMissingFinanceiroLookup: não exige Financeiro_Respons_vel preenchido (Concessão/Cobrança) — usa Owner. allowPostWhenJuridicoResponsibleSet: envia POST por stage mesmo com responsável jurídico no deal. financeiroStageUseOwnerEmailIfFinanceiroHasNoEmail: stage financeiro sem e-mail no lookup usa Owner. resolveUserEmailViaCrmUsersApi: GET /crm/v8|v2/users/{id} quando o lookup só tem id. Env: G4U_ZOHO_ALLOW_MISSING_FINANCEIRO, G4U_ZOHO_POST_WITH_JUR, G4U_ZOHO_FALLBACK_USER_EMAIL."
+    },
+    "stagesThatCompleteDelivery": [
+      "Comunicar Protoc. Revisão (CS)",
+      "Revisão Concedida (CS)",
+      "Comunicar Protocolo (CS)",
+      "Aposentadoria Concedida (CS)",
+      "Concedida (Rev Adm)",
+      "Concedida (Rev Jud)",
+      "Comunicar Cliente Protocolo (Parceiro)",
+      "Acompanhamento Liquidação",
+      "Liquidado",
+      "Processo Deferido (Parceiro)"
+    ],
+    "jurActivitiesFromZoho": {
+      "zohoTaskStatusToGame4uStatus": {
+        "Completed": "DONE",
+        "Concluída": "DONE",
+        "Closed": "DONE",
+        "Completa": "DONE",
+        "Open": "PENDING",
+        "Em aberto": "PENDING",
+        "Not Started": "PENDING",
+        "In Progress": "PENDING",
+        "Em andamento": "PENDING"
+      },
+      "note": "zoho-tasks: status da task Zoho → status G4U no POST /game/action/process. integration_id jurídico estável: zoho-deal-{dealId}-jur-action-{actionTemplateId} (ver integrationIdRunnerNotes). Ajuste as chaves ao picklist real do CRM."
+    },
+    "integrationIdRunnerNotes": "IDs estáveis no runner: Stage zoho-deal-{dealId}-action-{actionTemplateId}; Jurídico (tags) zoho-deal-{dealId}-jur-action-{actionTemplateId}. Registos antigos criados com zoho-deal-{id}-timeline-{rowId} não são encontrados pelo GET user-action/search para montar DONE — feche no G4U ou reabra com o novo integration_id."
+  },
+  "teamsDefinition": [
+    {
+      "key": "cs",
+      "apiTeamName": "CS",
+      "leaderEmail": "pamela.costa@revisaprev.com.br",
+      "leaderFullName": "Pamela Costa"
+    },
+    {
+      "key": "juridico",
+      "apiTeamName": "Jurídico",
+      "leaderEmail": "amanda.motomatsu@revisaprev.com.br",
+      "leaderFullName": "Amanda Motomatsu"
+    },
+    {
+      "key": "financeiro",
+      "apiTeamName": "Financeiro",
+      "leaderEmail": "lucas.oyafuco@revisaprev.com.br",
+      "leaderFullName": "Lucas Oyafuco"
+    }
+  ],
+  "areaToTeamKey": {
+    "CS": "cs",
+    "CS - QUALIDADE": "cs",
+    "LÍDER CS": "cs",
+    "JURÍDICO": "juridico",
+    "LÍDER JURÍDICO": "juridico",
+    "FINANCEIRO": "financeiro",
+    "LÍDER FINANCEIRO": "financeiro",
+    "DIRETOR": null,
+    "COO": null
+  },
+  "accessToUserRole": {
+    "ADMIN": "ADMIN",
+    "LEADER": "LEADER",
+    "PLAYER": "PLAYER"
+  },
+  "dataQualityNotes": [
+    "E-mail em users-by-team-revisaprev.md para Fernanda Arantes está sem sufixo .br (fernanda.arantes@revisaprev.com); corrigir antes de criar usuário na API se necessário.",
+    "Remover espaços extras nos e-mails ao copiar (ex.: pamela.costa@revisaprev.com.br)."
+  ],
+  "passwordSourceFile": "users-by-team-revisaprev.md",
+  "passwordPolicy": "Senhas listadas no markdown são apenas referência operacional local; preferir variáveis de ambiente ou segredo gerenciado em CI/produção. Não duplicar senhas neste JSON.",
+  "seedDefaultAvatarUrl": null,
+  "seedDefaultAvatarUrlEnv": "G4U_SEED_AVATAR_URL",
+  "seedUsersOrdered": {
+    "description": "Ordem: (1) POST /team (name, leader_id; funifier_id opcional); (2) admins; (3) líderes + players com team_id; (4) PUT líderes. --reset-supabase-auth: SUPABASE_URL + SUPABASE_SERVICE_ROLE_SECRET.",
+    "phases": [
+      {
+        "phase": "teams_bootstrap",
+        "api": { "method": "POST", "path": "/team" },
+        "note": "leader_id temporário = GET /auth/user. Opcional: funifier_id por item ou env G4U_FUNIFIER_TEAM_CS / _JURIDICO / _FINANCEIRO.",
+        "items": [
+          { "name": "CS" },
+          { "name": "Jurídico" },
+          { "name": "Financeiro" }
+        ]
+      },
+      {
+        "phase": "admin_users",
+        "api": { "method": "POST", "path": "/user" },
+        "users": [
+          {
+            "fullName": "ARIELE VINCENTE",
+            "email": "ariele.vicente@revisaprev.com.br",
+            "userRole": "ADMIN",
+            "teamKey": null
+          },
+          {
+            "fullName": "LARISSA SEMENSATTI",
+            "email": "larissa.semensatti@revisaprev.com.br",
+            "userRole": "ADMIN",
+            "teamKey": null
+          },
+          {
+            "fullName": "LUCIANO HERCULANI",
+            "email": "lucianoluciano.herculani@revisaprev.com.br",
+            "userRole": "ADMIN",
+            "teamKey": null
+          }
+        ]
+      },
+      {
+        "phase": "team_leaders",
+        "api": { "method": "POST", "path": "/user" },
+        "note": "Líderes já com team_id (times criados na fase teams_bootstrap).",
+        "users": [
+          {
+            "fullName": "Pamela Costa",
+            "email": "pamela.costa@revisaprev.com.br",
+            "userRole": "LEADER",
+            "teamKey": "cs",
+            "isDesignatedTeamLeader": true
+          },
+          {
+            "fullName": "AMANDA MOTOMATSU",
+            "email": "amanda.motomatsu@revisaprev.com.br",
+            "userRole": "LEADER",
+            "teamKey": "juridico",
+            "isDesignatedTeamLeader": true
+          },
+          {
+            "fullName": "LUCAS OYAFUCO",
+            "email": "lucas.oyafuco@revisaprev.com.br",
+            "userRole": "LEADER",
+            "teamKey": "financeiro",
+            "isDesignatedTeamLeader": true
+          }
+        ]
+      },
+      {
+        "phase": "players_and_remaining",
+        "api": { "method": "POST", "path": "/user" },
+        "users": [
+          { "fullName": "Larissa Savana", "email": "larissa.savana@revisaprev.com.br", "userRole": "PLAYER", "teamKey": "financeiro" },
+          { "fullName": "Monise Alves", "email": "monise.alves@revisaprev.com.br", "userRole": "PLAYER", "teamKey": "cs" },
+          { "fullName": "Amanda Vianna", "email": "amanda.vianna@revisaprev.com.br", "userRole": "PLAYER", "teamKey": "cs" },
+          { "fullName": "João Pedro Tobias", "email": "joaopedro.tobias@revisaprev.com.br", "userRole": "PLAYER", "teamKey": "juridico" },
+          { "fullName": "Bianca Pereira", "email": "bianca.pereira@revisaprev.com.br", "userRole": "PLAYER", "teamKey": "cs" },
+          { "fullName": "Pedro Oliveira", "email": "pedro.oliveira@revisaprev.com.br", "userRole": "PLAYER", "teamKey": "cs" },
+          { "fullName": "Fernanda Arantes", "email": "fernanda.arantes@revisaprev.com", "userRole": "PLAYER", "teamKey": "cs" },
+          { "fullName": "Maria Alice Nunes", "email": "maria.alice@revisaprev.com.br", "userRole": "PLAYER", "teamKey": "cs" },
+          { "fullName": "Gabriel Lopes", "email": "gabriel.lopes@revisaprev.com.br", "userRole": "PLAYER", "teamKey": "cs" },
+          { "fullName": "Luiza Evangelista", "email": "luiza.birck@revisaprev.com.br", "userRole": "PLAYER", "teamKey": "cs" },
+          { "fullName": "Fernanda Mota", "email": "fernanda.mota@revisaprev.com.br", "userRole": "PLAYER", "teamKey": "juridico" },
+          { "fullName": "Jéssica Oliveira", "email": "jessica.oliveira@revisaprev.com.br", "userRole": "PLAYER", "teamKey": "juridico" },
+          { "fullName": "Matheus Galiano", "email": "matheus.galiano@revisaprev.com.br", "userRole": "PLAYER", "teamKey": "juridico" },
+          { "fullName": "Joislane Viscone", "email": "joislane.viscone@revisaprev.com.br", "userRole": "PLAYER", "teamKey": "financeiro" },
+          { "fullName": "Michelle Franco", "email": "michelle.franco@revisaprev.com.br", "userRole": "PLAYER", "teamKey": "financeiro" },
+          { "fullName": "Milena Anjos", "email": "milena.anjos@revisaprev.com.br", "userRole": "PLAYER", "teamKey": "financeiro" }
+        ]
+      },
+      {
+        "phase": "assign_team_leaders",
+        "api": { "method": "PUT", "path": "/team/{id}" },
+        "note": "Atualiza leader_id de cada time para o líder real (POST /user já executado).",
+        "items": [
+          { "teamName": "CS", "leaderEmail": "pamela.costa@revisaprev.com.br" },
+          { "teamName": "Jurídico", "leaderEmail": "amanda.motomatsu@revisaprev.com.br" },
+          { "teamName": "Financeiro", "leaderEmail": "lucas.oyafuco@revisaprev.com.br" }
+        ]
+      }
+    ]
+  },
+  "scripts": [
+    {
+      "id": "seed-action-templates",
+      "title": "POST action templates",
+      "sourceDoc": "scripts.md seção 1",
+      "input": {
+        "file": "revisaprev-action-template.json",
+        "format": "json-array"
+      },
+      "steps": [
+        {
+          "order": 1,
+          "method": "POST",
+          "path": "/action",
+          "bodySchemaRef": "ActionModel",
+          "iterateOverInput": true,
+          "transformEachItem": [
+            {
+              "op": "omitFields",
+              "fields": ["client_id", "updated_at"]
+            },
+            {
+              "op": "parseJsonStringField",
+              "field": "criteria",
+              "targetType": "object",
+              "reason": "OpenAPI ActionModel.criteria é objeto; o seed armazena string JSON."
+            },
+            {
+              "op": "ensureField",
+              "field": "integration_id",
+              "valueIfMissing": null
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "seed-teams-users",
+      "title": "POST users e teams",
+      "sourceDoc": "scripts.md seção 2",
+      "input": {
+        "parseFrom": "users-by-team-revisaprev.md",
+        "structuredSeedRef": "seedUsersOrdered",
+        "teamsRef": "teamsDefinition"
+      },
+      "steps": [
+        {
+          "order": 1,
+          "description": "Login admin via auth.login",
+          "uses": "auth.login"
+        },
+        {
+          "order": 2,
+          "description": "Executar fases em seedUsersOrdered.phases na ordem; resolver team_id por nome ou UUID retornado pela API."
+        },
+        {
+          "order": 3,
+          "method": "PUT",
+          "pathTemplate": "/team/{teamId}/users",
+          "optional": true,
+          "note": "Incluir membros adicionais ao time se a API não preencher automaticamente ao definir leader_id."
+        }
+      ]
+    },
+    {
+      "id": "zoho-deals-to-user-actions",
+      "title": "POST user action from ZOHO — estágios (CS/Financeiro)",
+      "sourceDoc": "scripts.md seção 3",
+      "targetTeamsNarrative": ["CS", "Financeiro"],
+      "steps": [
+        { "order": 1, "uses": "zoho.token" },
+        { "order": 2, "uses": "zoho.dealsSearch" },
+        { "order": 3, "uses": "zoho.dealTimelineStages", "iterateDeals": true },
+        {
+          "order": 4,
+          "description": "Montar payloads game4uUserActionPayload a partir do timeline",
+          "fieldMapping": {
+            "status": "Deal.Status mapeado: concluída → DONE; caso contrário conforme tabela de negócio",
+            "user_email": "Owner.name (resolver para e-mail do usuário Game4U se a API exigir e-mail)",
+            "action_id": "field_history._value.old",
+            "delivery_id": "Deal.Deal_Name normalizado (trim)",
+            "delivery_title": "Deal.Deal_Name",
+            "integration_id": "Deal.id",
+            "comments": "Livre ou texto do histórico relevante"
+          }
+        },
+        {
+          "order": 5,
+          "uses": "gameActionProcess",
+          "bodyRef": "game4uUserActionPayload",
+          "warning": "Confirmar contrato real em gameActionProcess.openApiVerification"
+        }
+      ]
+    },
+    {
+      "id": "zoho-tasks-to-user-actions",
+      "title": "POST user action from ZOHO — tasks/tags (Jurídico)",
+      "sourceDoc": "scripts.md seção 4",
+      "targetTeamsNarrative": ["Jurídico"],
+      "steps": [
+        { "order": 1, "uses": "zoho.token" },
+        { "order": 2, "uses": "zoho.dealsSearch" },
+        { "order": 3, "uses": "zoho.dealActivitiesChronological", "iterateDeals": true },
+        {
+          "order": 4,
+          "description": "Montar payloads game4uUserActionPayload a partir das atividades",
+          "fieldMapping": {
+            "status": "Status (concluída = DONE)",
+            "user_email": "Owner.name",
+            "action_id": "Tag[0].name",
+            "delivery_id": "Deal_name trim",
+            "delivery_title": "Deal_Name",
+            "integration_id": "ID do DEAL"
+          }
+        },
+        {
+          "order": 5,
+          "uses": "gameActionProcess",
+          "bodyRef": "game4uUserActionPayload",
+          "warning": "Confirmar contrato real em gameActionProcess.openApiVerification"
+        }
+      ]
+    }
+  ]
+}

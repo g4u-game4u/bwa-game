@@ -1,9 +1,7 @@
 import {Injectable} from '@angular/core';
 import {TemporadaDashboard} from '../model/temporadaDashboard.model';
 import {ApiProvider} from "../providers/api.provider";
-import {TIPO_CONSULTA_TIME} from "@app/pages/dashboard/dashboard.component";
 import {SeasonDatesService} from "./season-dates.service";
-import {environment} from '../../environments/environment';
 
 @Injectable({
   providedIn: 'root'
@@ -16,11 +14,14 @@ export class TemporadaService {
     private api: ApiProvider,
     private seasonDatesService: SeasonDatesService
   ) {
+    void this.api;
+    void this.seasonDatesService;
   }
 
-  public async getDadosTemporadaDashboard(id: number, tipo: number): Promise<TemporadaDashboard> {
-    // Check if backend_url_base is configured - if not, return empty data
-    // This prevents calls to non-existent endpoints in production
+  public async getDadosTemporadaDashboard(_id: number, _tipo: number): Promise<TemporadaDashboard> {
+    // REFATORAÇÃO: stats da temporada no card não vêm mais de /game/stats nem de agregados Funifier.
+    // Reativar o bloco abaixo quando houver novo backend.
+    /*
     if (!environment.backend_url_base || environment.backend_url_base === 'http://localhost') {
       console.warn('⚠️ TemporadaService: backend_url_base not configured, returning empty data');
       return this.getEmptyTemporadaDashboard();
@@ -28,11 +29,8 @@ export class TemporadaService {
 
     try {
       let url = this.basePath;
-      
-      // Obter datas da temporada (campanha) no formato ISO
       const startDateISO = await this.seasonDatesService.getSeasonStartDateISO();
       const endDateISO = await this.seasonDatesService.getSeasonEndDateISO();
-      
       let queryParams = '?start=' + startDateISO + '&end=' + endDateISO;
 
       if (tipo === TIPO_CONSULTA_TIME) {
@@ -57,6 +55,10 @@ export class TemporadaService {
       console.error('❌ TemporadaService: Error fetching season data:', error);
       return this.getEmptyTemporadaDashboard();
     }
+    */
+    void _id;
+    void _tipo;
+    return this.getEmptyTemporadaDashboard();
   }
 
   private getEmptyTemporadaDashboard(): TemporadaDashboard {
@@ -71,6 +73,7 @@ export class TemporadaService {
       total_points: 0,
       total_blocked_points: 0,
       total_actions: 0,
+      nivel: { nivelAtual: 0, nivelMax: 0 },
     };
   }
 

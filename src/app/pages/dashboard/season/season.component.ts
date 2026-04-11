@@ -13,8 +13,6 @@ import { ModalGerenciarPontosAvulsosProvider } from "../../../providers/modal-ge
 import { TIPO_CONSULTA_TIME } from "../dashboard.component";
 import { ModalDetalheExecutorComponent } from "./modal-detalhe-executor/modal-detalhe-executor.component";
 import { environment } from 'src/environments/environment';
-import { ActionLogService } from '@services/action-log.service';
-import { firstValueFrom } from 'rxjs';
 
 @Component({
   selector: 'page-season',    
@@ -96,8 +94,7 @@ export class SeasonComponent implements OnInit, OnChanges {
     private featuresService: FeaturesService,
     private router: Router,
     private systemParamsService: SystemParamsService,
-    private modalGerenciarPontosAvulsosProvider: ModalGerenciarPontosAvulsosProvider,
-    private actionLogService: ActionLogService
+    private modalGerenciarPontosAvulsosProvider: ModalGerenciarPontosAvulsosProvider
   ) {
   }
 
@@ -134,7 +131,8 @@ export class SeasonComponent implements OnInit, OnChanges {
   }
 
   getDadosTemporada() {
-    this.temporadaService.getDadosTemporadaDashboard(this.idConsulta, this.tipoConsulta).then(data => {
+    // REFATORAÇÃO: TemporadaService não chama mais API; card não usa agregados Funifier para contagens.
+    void this.temporadaService.getDadosTemporadaDashboard(this.idConsulta, this.tipoConsulta).then(data => {
       this.seasonData.emit(data);
       this.seasonInfo = data;
       this.apiReady = true;
@@ -497,10 +495,15 @@ export class SeasonComponent implements OnInit, OnChanges {
 
     this.seasonWalletLoading = true;
     try {
-      const wallet$ = this.isTeam
-        ? this.actionLogService.computeSeasonWalletForTeam(String(this.idConsulta), rangeStart, rangeEnd)
-        : this.actionLogService.computeSeasonWalletForPlayer(String(this.idConsulta), rangeStart, rangeEnd);
-      this.seasonPointsWallet = await firstValueFrom(wallet$);
+      // REFATORAÇÃO: carteira da temporada não usa mais aggregate action_log na Funifier.
+      // Reativar ao apontar ActionLogService (ou novo backend) sem Funifier:
+      // const wallet$ = this.isTeam
+      //   ? this.actionLogService.computeSeasonWalletForTeam(String(this.idConsulta), rangeStart, rangeEnd)
+      //   : this.actionLogService.computeSeasonWalletForPlayer(String(this.idConsulta), rangeStart, rangeEnd);
+      // this.seasonPointsWallet = await firstValueFrom(wallet$);
+      void rangeStart;
+      void rangeEnd;
+      this.seasonPointsWallet = { total: 0, bloqueados: 0, desbloqueados: 0 };
     } catch (error) {
       console.error('Erro ao montar carteira de pontos da temporada (tabela):', error);
       this.seasonPointsWallet = { total: 0, bloqueados: 0, desbloqueados: 0 };

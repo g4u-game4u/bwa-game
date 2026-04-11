@@ -1,7 +1,8 @@
 import { Component, OnInit, OnDestroy, HostListener, ChangeDetectionStrategy, ChangeDetectorRef, AfterViewInit } from '@angular/core';
+import { HttpErrorResponse } from '@angular/common/http';
 import { ActivatedRoute, Router } from '@angular/router';
 import { Subject } from 'rxjs';
-import { takeUntil, switchMap } from 'rxjs/operators';
+import { takeUntil, switchMap, finalize } from 'rxjs/operators';
 
 import { PlayerService } from '@services/player.service';
 import { CompanyService } from '@services/company.service';
@@ -14,6 +15,8 @@ import { CnpjLookupService } from '@services/cnpj-lookup.service';
 import { SessaoProvider } from '@providers/sessao/sessao.provider';
 import { SystemParamsService } from '@services/system-params.service';
 import { FinanceiroOmieRecebiveisService } from '@services/financeiro-omie-recebiveis.service';
+import { BackendActionApiService } from '@services/backend-action-api.service';
+import { environment } from '../../../../environments/environment';
 import { 
   PlayerStatus, 
   PointWallet, 
@@ -100,6 +103,9 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   
   // Refresh state
   lastRefreshTime: Date | null = null;
+
+  /** Teste GET `/action` no backend (`backend_url_base`). */
+  isActionApiLoading = false;
   
   // Season dates (TODO: Get from season service or API)
   private readonly seasonDates = {
@@ -124,6 +130,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     private sessaoProvider: SessaoProvider,
     private systemParamsService: SystemParamsService,
     private financeiroOmieRecebiveisService: FinanceiroOmieRecebiveisService,
+    private backendActionApiService: BackendActionApiService,
     private route: ActivatedRoute,
     private router: Router
   ) {
@@ -504,12 +511,10 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   }
 
   private injectFinanceBillingKpi(playerId: string): void {
-    // Avoid duplicates on refresh/month changes
-    if (this.playerKPIs.some(k => k.id === 'valor-concedido')) {
-      return;
-    }
+    void playerId;
+    // Sempre refetch Omie ao montar KPIs (evita KPI antigo após mudança de mês / recarga).
+    this.playerKPIs = this.playerKPIs.filter(k => k.id !== 'valor-concedido');
 
-    // Load current and goal in parallel
     this.financeiroOmieRecebiveisService
       .getValorConcedidoFinanceiro(GamificationDashboardComponent.FINANCE_TEAM_ID, this.selectedMonth)
       .pipe(takeUntil(this.destroy$))
@@ -797,6 +802,48 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     return (usuario._id || usuario.email || '') as string;
   }
   
+  /**
+   * GET `{backend_url_base}/action` com header `client_id` (e Bearer via interceptor).
+   */
+  fetchBackendActions(): void {
+    const base = environment.backend_url_base?.trim();
+    if (!base) {
+      this.toastService.error('Configure backend_url_base no ambiente.');
+      return;
+    }
+    this.isActionApiLoading = true;
+    this.cdr.markForCheck();
+    this.backendActionApiService
+      .getActions()
+      .pipe(
+        takeUntil(this.destroy$),
+        finalize(() => {
+          this.isActionApiLoading = false;
+          this.cdr.markForCheck();
+        })
+      )
+      .subscribe({
+        next: (body) => {
+          console.log('GET /action response', body);
+          this.toastService.success('GET /action concluído com sucesso.');
+        },
+        error: (err: unknown) => {
+          let msg = 'Erro ao chamar GET /action';
+          if (err instanceof HttpErrorResponse) {
+            if (typeof err.error === 'string' && err.error.trim()) {
+              msg = err.error;
+            } else if (err.error && typeof err.error === 'object' && 'message' in err.error) {
+              const m = (err.error as { message?: string }).message;
+              if (m) msg = m;
+            } else if (err.message) {
+              msg = err.message;
+            }
+          }
+          this.toastService.error(msg);
+        }
+      });
+  }
+
   /**
    * Manual refresh mechanism
    */

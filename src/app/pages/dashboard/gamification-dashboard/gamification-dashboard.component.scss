@@ -387,9 +387,9 @@
       flex: 0 0 auto;
     }
     
-    .refresh-button {
+    .refresh-button,
+    .action-api-button {
       position: absolute;
-      right: 120px; // Increased from 80px to add more spacing between buttons
       top: 50%;
       transform: translateY(-50%);
       display: flex;
@@ -403,26 +403,39 @@
       cursor: pointer;
       transition: all 0.2s ease;
       white-space: nowrap;
-      
+
       &:hover:not(:disabled) {
         background: rgba($primary-electric-blue, 0.1);
         border-color: $primary-electric-blue;
         color: $primary-electric-blue;
       }
-      
+
       &:disabled {
         opacity: 0.5;
         cursor: not-allowed;
       }
-      
+
       i {
         font-size: 1rem;
-        
+
         &.spinning {
           animation: spin 1s linear infinite;
         }
       }
-      
+
+      span {
+        font-size: $font-size-small;
+        font-weight: 500;
+      }
+    }
+
+    .action-api-button {
+      right: 260px;
+    }
+
+    .refresh-button {
+      right: 120px; // Increased from 80px to add more spacing between buttons
+
       .refresh-time {
         font-size: $font-size-small;
       }
@@ -465,7 +478,8 @@
       flex-direction: column;
       align-items: center;
       
-      .refresh-button {
+      .refresh-button,
+      .action-api-button {
         position: static;
         transform: none;
         margin-top: $spacing-sm;

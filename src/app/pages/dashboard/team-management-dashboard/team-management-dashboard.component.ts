@@ -2228,6 +2228,9 @@ private calculateCollaboratorTotals(memberData: Array<{
    */
   switchTab(tab: 'goals' | 'productivity'): void {
     this.activeTab = tab;
+    if (tab === 'goals' && this.selectedTeamId === TeamManagementDashboardComponent.FINANCE_TEAM_ID) {
+      void this.loadTeamKPIs();
+    }
   }
 
   /**

@@ -9,6 +9,12 @@ import { CompanyService } from '@services/company.service';
 import { KPIService } from '@services/kpi.service';
 import { ToastService } from '@services/toast.service';
 import { ActionLogService } from '@services/action-log.service';
+import { BackendActionApiService } from '@services/backend-action-api.service';
+import { CnpjLookupService } from '@services/cnpj-lookup.service';
+import { SystemParamsService } from '@services/system-params.service';
+import { FinanceiroOmieRecebiveisService } from '@services/financeiro-omie-recebiveis.service';
+import { Router } from '@angular/router';
+import { ActivatedRoute } from '@angular/router';
 import { CompanyKpiService, CompanyDisplay } from '@services/company-kpi.service';
 import { PerformanceMonitorService } from '@services/performance-monitor.service';
 import { SessaoProvider } from '@providers/sessao/sessao.provider';
@@ -84,6 +90,26 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
       usuario: { _id: 'test-user', email: 'test@example.com', roles: [] }
     });
 
+    const backendActionApiSpy = jasmine.createSpyObj('BackendActionApiService', ['getActions']);
+    backendActionApiSpy.getActions.and.returnValue(of({}));
+
+    const cnpjLookupSpy = jasmine.createSpyObj('CnpjLookupService', ['enrichCnpjList']);
+    cnpjLookupSpy.enrichCnpjList.and.returnValue(of(new Map()));
+
+    const systemParamsSpy = jasmine.createSpyObj('SystemParamsService', ['getParam']);
+    systemParamsSpy.getParam.and.returnValue(Promise.resolve(null));
+
+    const financeiroOmieSpy = jasmine.createSpyObj('FinanceiroOmieRecebiveisService', [
+      'getValorConcedidoFinanceiro'
+    ]);
+    financeiroOmieSpy.getValorConcedidoFinanceiro.and.returnValue(of(null));
+
+    const routerSpy = jasmine.createSpyObj('Router', ['navigate']);
+    const activatedRouteStub = {
+      snapshot: { queryParams: {} },
+      queryParams: of({})
+    };
+
     await TestBed.configureTestingModule({
       declarations: [GamificationDashboardComponent],
       providers: [
@@ -94,7 +120,13 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
         { provide: ActionLogService, useValue: actionLogServiceSpy },
         { provide: CompanyKpiService, useValue: companyKpiServiceSpy },
         { provide: PerformanceMonitorService, useValue: performanceMonitorSpy },
-        { provide: SessaoProvider, useValue: sessaoProviderSpy }
+        { provide: SessaoProvider, useValue: sessaoProviderSpy },
+        { provide: BackendActionApiService, useValue: backendActionApiSpy },
+        { provide: CnpjLookupService, useValue: cnpjLookupSpy },
+        { provide: SystemParamsService, useValue: systemParamsSpy },
+        { provide: FinanceiroOmieRecebiveisService, useValue: financeiroOmieSpy },
+        { provide: Router, useValue: routerSpy },
+        { provide: ActivatedRoute, useValue: activatedRouteStub }
       ],
       schemas: [NO_ERRORS_SCHEMA]
     }).compileComponents();

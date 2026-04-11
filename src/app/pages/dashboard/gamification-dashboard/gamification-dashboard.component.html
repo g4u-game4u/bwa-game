@@ -113,6 +113,16 @@
         [playerId]="getPlayerId()" 
         (onSelectedMonth)="onMonthChange($event)">
       </c4u-seletor-mes>
+      <button
+        type="button"
+        class="action-api-button"
+        (click)="fetchBackendActions()"
+        [disabled]="isActionApiLoading || isLoading"
+        [attr.aria-label]="isActionApiLoading ? 'Consultando ações na API…' : 'Consultar endpoint GET /action na API'"
+        title="Testar GET /action no backend (client_id no header)">
+        <i class="ri-flashlight-line" [class.spinning]="isActionApiLoading" aria-hidden="true"></i>
+        <span>API /action</span>
+      </button>
       <button 
         class="refresh-button"
         (click)="refreshData()"

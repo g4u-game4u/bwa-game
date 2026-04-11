@@ -6,6 +6,7 @@ import { PlayerMapper } from './player-mapper.service';
 import { PlayerStatus, PointWallet, SeasonProgress } from '@model/gamification-dashboard.model';
 import { HttpClient } from '@angular/common/http';
 import { environment } from '../../environments/environment';
+import { FUNIFIER_HTTP_DISABLED } from '../config/funifier-requests-disabled';
 
 interface CacheEntry {
   data$: Observable<any>;
@@ -76,6 +77,14 @@ export class PlayerService {
     
     if (!forceRefresh && cached && (now - cached.timestamp) < this.CACHE_DURATION) {
       return cached.data$;
+    }
+
+    if (FUNIFIER_HTTP_DISABLED) {
+      const stub$ = of({}).pipe(
+        shareReplay({ bufferSize: 1, refCount: true, windowTime: this.CACHE_DURATION })
+      );
+      this.cachedRawData.set(cacheKey, { data$: stub$, timestamp: now });
+      return stub$;
     }
 
     const request$ = this.http.get<any>(`${this.funifierBaseUrl}player/me`).pipe(

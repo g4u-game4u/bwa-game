@@ -1,12 +1,11 @@
 import { HttpBackend, HttpClient } from '@angular/common/http';
 import { Injectable } from '@angular/core';
 import { Observable, from, of, firstValueFrom } from 'rxjs';
-import { catchError, map, switchMap } from 'rxjs/operators';
+import { catchError, map } from 'rxjs/operators';
 import dayjs from 'dayjs';
 import { environment } from 'src/environments/environment';
 import { SystemParams } from '@model/system-params.model';
 import { SystemParamsService } from './system-params.service';
-import { ActionLogService } from './action-log.service';
 import {
   extrairValorAcumuladoDoPainelProcessado,
   isPainelProcessadoShape,
@@ -34,6 +33,7 @@ function readOmieEnv(): OmieEnv {
 /**
  * Busca valor acumulado (R$) conforme regras Omie do painel de recebíveis.
  * Usa HttpClient sem interceptors para URLs absolutas de integrador/webhook.
+ * Cada chamada adiciona `_cb` (timestamp) para evitar cache e refletir todo carregamento de tela.
  */
 @Injectable({ providedIn: 'root' })
 export class FinanceiroOmieRecebiveisService {
@@ -41,33 +41,38 @@ export class FinanceiroOmieRecebiveisService {
 
   constructor(
     handler: HttpBackend,
-    private readonly systemParamsService: SystemParamsService,
-    private readonly actionLogService: ActionLogService
+    private readonly systemParamsService: SystemParamsService
   ) {
     this.plainHttp = new HttpClient(handler);
   }
 
   /**
-   * Valor para o KPI "Valor concedido": Omie (se configurado) ou soma no action_log (Funifier).
+   * Valor para o KPI "Valor concedido" somente via Omie (URLs configuradas).
+   * Sem URL ou em falha → 0 (sem fallback Funifier/action_log).
    */
-  getValorConcedidoFinanceiro(teamId: string, month: Date): Observable<number> {
+  getValorConcedidoFinanceiro(_teamId: string, month: Date): Observable<number> {
+    void _teamId;
     return from(this.tryOmieValor(month)).pipe(
-      switchMap((omie) => {
+      map((omie) => {
         if (omie != null && Number.isFinite(omie.valor)) {
           if (omie.dadosIncompletos && omie.avisoDados) {
             console.warn('[Financeiro OMIE]', omie.avisoDados);
           }
-          return of(omie.valor);
+          return omie.valor;
         }
-        return this.actionLogService.getTeamBillingForMonth(teamId, month);
+        return 0;
       })
     );
   }
 
-  private appendReferenceMonth(url: string, month: Date): string {
+  private appendReferenceMonthAndNoCache(url: string, month: Date): string {
     const ym = dayjs(month).format('YYYY-MM');
-    const sep = url.includes('?') ? '&' : '?';
-    return `${url}${sep}referenceMonth=${encodeURIComponent(ym)}`;
+    let u = url;
+    const sep1 = u.includes('?') ? '&' : '?';
+    u = `${u}${sep1}referenceMonth=${encodeURIComponent(ym)}`;
+    const sep2 = u.includes('?') ? '&' : '?';
+    u = `${u}${sep2}_cb=${Date.now()}`;
+    return u;
   }
 
   private async resolveOmieSources(): Promise<{
@@ -106,7 +111,7 @@ export class FinanceiroOmieRecebiveisService {
   ): Promise<{ valor: number; dadosIncompletos?: boolean; avisoDados?: string | null } | null> {
     const cfg = await this.resolveOmieSources();
     if (cfg.painelUrl) {
-      const url = this.appendReferenceMonth(cfg.painelUrl, month);
+      const url = this.appendReferenceMonthAndNoCache(cfg.painelUrl, month);
       try {
         const body = await firstValueFrom(this.plainHttp.get<unknown>(url));
         if (isPainelProcessadoShape(body)) {
@@ -129,7 +134,7 @@ export class FinanceiroOmieRecebiveisService {
     }
 
     if (cfg.caixaUrl) {
-      const url = this.appendReferenceMonth(cfg.caixaUrl, month);
+      const url = this.appendReferenceMonthAndNoCache(cfg.caixaUrl, month);
       try {
         const body = await firstValueFrom(this.plainHttp.get<unknown>(url));
         const painel = processarExportCaixaParaPainel(body, {
@@ -156,27 +161,23 @@ export class FinanceiroOmieRecebiveisService {
   getValorConcedidoFinanceiroComMeta(
     teamId: string,
     month: Date
-  ): Observable<{ valor: number; origem: 'omie' | 'action_log'; meta?: FinanceiroOmieFetchMeta }> {
+  ): Observable<{ valor: number; origem: 'omie' | 'indisponivel'; meta?: FinanceiroOmieFetchMeta }> {
+    void teamId;
     return from(this.tryOmieValor(month)).pipe(
-      switchMap((omie) => {
+      map((omie) => {
         if (omie != null && Number.isFinite(omie.valor)) {
-          return of({
+          return {
             valor: omie.valor,
             origem: 'omie' as const,
             meta: {
               dadosIncompletos: omie.dadosIncompletos,
               avisoDados: omie.avisoDados
             }
-          });
+          };
         }
-        return this.actionLogService.getTeamBillingForMonth(teamId, month).pipe(
-          map((v) => ({
-            valor: typeof v === 'number' && Number.isFinite(v) ? v : 0,
-            origem: 'action_log' as const
-          })),
-          catchError(() => of({ valor: 0, origem: 'action_log' as const }))
-        );
-      })
+        return { valor: 0, origem: 'indisponivel' as const };
+      }),
+      catchError(() => of({ valor: 0, origem: 'indisponivel' as const }))
     );
   }
 }

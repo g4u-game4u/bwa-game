@@ -133,8 +133,10 @@ export class AuthInterceptor implements HttpInterceptor {
     }
 
     private refreshToken(request: HttpRequest<any>, next: HttpHandler) {
-        if (!this.refreshChain)
-            this.refreshChain = this.http.post<HttpRequest<any>>(environment.backend_url_base + '/auth/refresh', {
+        if (!this.refreshChain) {
+            const refreshBase = String(environment.g4u_api_base || environment.backend_url_base || '')
+                .replace(/\/+$/, '');
+            this.refreshChain = this.http.post<HttpRequest<any>>(`${refreshBase}/auth/refresh`, {
                 refresh_token: this.sessao.refreshToken
             }).pipe(
                 tap(res => {
@@ -147,6 +149,7 @@ export class AuthInterceptor implements HttpInterceptor {
                 }),
                 share()
             );
+        }
 
         return this.refreshChain.pipe(concatMap(refreshed =>
             next.handle(request.clone({

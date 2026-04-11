@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpErrorResponse, HttpHeaders } from '@angular/common/http';
-import { Observable, throwError } from 'rxjs';
+import { Observable, of, throwError } from 'rxjs';
+import { FUNIFIER_HTTP_DISABLED } from '../config/funifier-requests-disabled';
 import { catchError, retry, tap } from 'rxjs/operators';
 import { environment } from '../../environments/environment';
 
@@ -56,6 +57,9 @@ export class FunifierApiService {
    * POST /auth/token
    * baseUrl already includes /v3/, so just use auth/token
    */
+  /**
+   * Único fluxo Funifier que permanece ativo com FUNIFIER_HTTP_DISABLED: POST auth/token.
+   */
   authenticate(credentials: AuthCredentials): Observable<AuthToken> {
     const authBody = {
       apiKey: credentials.apiKey || this.apiKey,
@@ -67,12 +71,12 @@ export class FunifierApiService {
     // Ensure baseUrl ends with / and endpoint doesn't start with /
     const cleanBaseUrl = this.baseUrl.endsWith('/') ? this.baseUrl : `${this.baseUrl}/`;
     const authUrl = `${cleanBaseUrl}auth/token`;
-    
+
     return this.http.post<AuthToken>(authUrl, authBody).pipe(
       tap(response => {
         this.authToken = response.access_token;
         this.tokenExpiry = response.expires_in;
-        
+
         localStorage.setItem('funifier_token', response.access_token);
         localStorage.setItem('funifier_token_expiry', response.expires_in.toString());
       }),
@@ -112,7 +116,12 @@ export class FunifierApiService {
     // Ensure baseUrl ends with /
     const cleanBaseUrl = this.baseUrl.endsWith('/') ? this.baseUrl : `${this.baseUrl}/`;
     const url = `${cleanBaseUrl}${cleanEndpoint}`;
-    
+
+    if (FUNIFIER_HTTP_DISABLED) {
+      console.warn('[Funifier API] GET bloqueado (refatoração):', url);
+      return of({} as T);
+    }
+
     return this.http.get<T>(url, { headers, params }).pipe(
       retry({ count: 2, delay: 1000 }),
       catchError(error => {
@@ -145,7 +154,12 @@ export class FunifierApiService {
     // Ensure baseUrl ends with / 
     const cleanBaseUrl = this.baseUrl.endsWith('/') ? this.baseUrl : `${this.baseUrl}/`;
     const url = `${cleanBaseUrl}${cleanEndpoint}`;
-    
+
+    if (FUNIFIER_HTTP_DISABLED) {
+      console.warn('[Funifier API] POST bloqueado (refatoração):', url);
+      return of([] as unknown as T);
+    }
+
     return this.http.post<T>(url, body, { headers }).pipe(
       retry({ count: 3, delay: 1000 }),
       catchError(this.handleError)
@@ -176,7 +190,12 @@ export class FunifierApiService {
     // Ensure baseUrl ends with /
     const cleanBaseUrl = this.baseUrl.endsWith('/') ? this.baseUrl : `${this.baseUrl}/`;
     const url = `${cleanBaseUrl}${cleanEndpoint}`;
-    
+
+    if (FUNIFIER_HTTP_DISABLED) {
+      console.warn('[Funifier API] PUT bloqueado (refatoração):', url);
+      return of([] as unknown as T);
+    }
+
     return this.http.put<T>(url, body, { headers }).pipe(
       retry({ count: 3, delay: 1000 }),
       catchError(this.handleError)
@@ -207,7 +226,12 @@ export class FunifierApiService {
     // Ensure baseUrl ends with /
     const cleanBaseUrl = this.baseUrl.endsWith('/') ? this.baseUrl : `${this.baseUrl}/`;
     const url = `${cleanBaseUrl}${cleanEndpoint}`;
-    
+
+    if (FUNIFIER_HTTP_DISABLED) {
+      console.warn('[Funifier API] PATCH bloqueado (refatoração):', url);
+      return of([] as unknown as T);
+    }
+
     return this.http.patch<T>(url, body, { headers }).pipe(
       retry({ count: 3, delay: 1000 }),
       catchError(this.handleError)
