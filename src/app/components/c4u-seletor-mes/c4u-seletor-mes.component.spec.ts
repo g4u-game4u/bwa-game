@@ -6,23 +6,29 @@ import * as fc from 'fast-check';
 import * as moment from 'moment';
 
 import { C4uSeletorMesComponent } from './c4u-seletor-mes.component';
-import { SessaoProvider } from '@providers/sessao/sessao.provider';
 import { SeasonDatesService } from '@services/season-dates.service';
 import { configureTestBed } from '@app/testing/test-fixtures';
 
 describe('C4uSeletorMesComponent', () => {
   let component: C4uSeletorMesComponent;
   let fixture: ComponentFixture<C4uSeletorMesComponent>;
-  let mockSessaoProvider: jasmine.SpyObj<SessaoProvider>;
   let mockSeasonDatesService: jasmine.SpyObj<SeasonDatesService>;
 
+  const seasonMarAbr2026 = () =>
+    Promise.resolve([
+      { id: 0, name: 'MAR', date: new Date(2026, 2, 1) },
+      { id: 1, name: 'ABR', date: new Date(2026, 3, 1) }
+    ]);
+
   beforeEach(async () => {
-    mockSessaoProvider = jasmine.createSpyObj('SessaoProvider', ['isAdmin']);
-    mockSeasonDatesService = jasmine.createSpyObj('SeasonDatesService', ['getMonthsSinceSeasonStart']);
-    
-    // Default mock behavior
-    mockSessaoProvider.isAdmin.and.returnValue(false);
-    mockSeasonDatesService.getMonthsSinceSeasonStart.and.returnValue(Promise.resolve(3));
+    mockSeasonDatesService = jasmine.createSpyObj('SeasonDatesService', [
+      'getAvailableMonths',
+      'formatMonthAbbrevPtBr'
+    ]);
+    mockSeasonDatesService.getAvailableMonths.and.callFake(seasonMarAbr2026);
+    mockSeasonDatesService.formatMonthAbbrevPtBr.and.callFake((date: Date) =>
+      date.toLocaleDateString('pt-BR', { month: 'short' }).replace(/\./g, '').trim().toUpperCase()
+    );
 
     configureTestBed({
       declarations: [C4uSeletorMesComponent],
@@ -31,10 +37,7 @@ describe('C4uSeletorMesComponent', () => {
         NgSelectModule,
         TranslateModule.forRoot()
       ],
-      providers: [
-        { provide: SessaoProvider, useValue: mockSessaoProvider },
-        { provide: SeasonDatesService, useValue: mockSeasonDatesService }
-      ]
+      providers: [{ provide: SeasonDatesService, useValue: mockSeasonDatesService }]
     });
 
     fixture = TestBed.createComponent(C4uSeletorMesComponent);
@@ -57,10 +60,14 @@ describe('C4uSeletorMesComponent', () => {
           fc.integer({ min: 0, max: 11 }), // Starting selected index
           (monthCount, startIndex) => {
             // Setup: Initialize component with monthCount months
-            component.months = Array.from({ length: monthCount }, (_, i) => ({
-              id: i,
-              name: moment().subtract(i, 'months').format('MMM/YY').toUpperCase()
-            }));
+            component.months = Array.from({ length: monthCount }, (_, i) => {
+              const d = moment().subtract(i, 'months').toDate();
+              return {
+                id: i,
+                name: moment(d).format('MMM/YY').toUpperCase(),
+                date: new Date(d.getFullYear(), d.getMonth(), 1)
+              };
+            });
             
             // Ensure startIndex is valid for the generated months
             const validStartIndex = Math.min(startIndex, monthCount - 1);
@@ -101,10 +108,14 @@ describe('C4uSeletorMesComponent', () => {
           fc.integer({ min: 2, max: 12 }), // At least 2 months
           (monthCount) => {
             // Setup
-            component.months = Array.from({ length: monthCount }, (_, i) => ({
-              id: i,
-              name: moment().subtract(i, 'months').format('MMM/YY').toUpperCase()
-            }));
+            component.months = Array.from({ length: monthCount }, (_, i) => {
+              const d = moment().subtract(i, 'months').toDate();
+              return {
+                id: i,
+                name: moment(d).format('MMM/YY').toUpperCase(),
+                date: new Date(d.getFullYear(), d.getMonth(), 1)
+              };
+            });
             
             // Test: Cannot go right from current month (index 0)
             component.selected = 0;
@@ -154,10 +165,13 @@ describe('C4uSeletorMesComponent', () => {
     describe('Month Navigation', () => {
       it('should navigate to previous month when goLeft is called', () => {
         // Setup: 3 months available, start at current month
+        const m0 = moment().toDate();
+        const m1 = moment().subtract(1, 'months').toDate();
+        const m2 = moment().subtract(2, 'months').toDate();
         component.months = [
-          { id: 0, name: moment().format('MMM/YY').toUpperCase() },
-          { id: 1, name: moment().subtract(1, 'months').format('MMM/YY').toUpperCase() },
-          { id: 2, name: moment().subtract(2, 'months').format('MMM/YY').toUpperCase() }
+          { id: 0, name: moment(m0).format('MMM/YY').toUpperCase(), date: new Date(m0.getFullYear(), m0.getMonth(), 1) },
+          { id: 1, name: moment(m1).format('MMM/YY').toUpperCase(), date: new Date(m1.getFullYear(), m1.getMonth(), 1) },
+          { id: 2, name: moment(m2).format('MMM/YY').toUpperCase(), date: new Date(m2.getFullYear(), m2.getMonth(), 1) }
         ];
         component.selected = 0;
         component.prevEnabled = true;
@@ -170,11 +184,13 @@ describe('C4uSeletorMesComponent', () => {
       });
 
       it('should navigate to next month when goRight is called', () => {
-        // Setup: Start at previous month
+        const m0 = moment().toDate();
+        const m1 = moment().subtract(1, 'months').toDate();
+        const m2 = moment().subtract(2, 'months').toDate();
         component.months = [
-          { id: 0, name: moment().format('MMM/YY').toUpperCase() },
-          { id: 1, name: moment().subtract(1, 'months').format('MMM/YY').toUpperCase() },
-          { id: 2, name: moment().subtract(2, 'months').format('MMM/YY').toUpperCase() }
+          { id: 0, name: moment(m0).format('MMM/YY').toUpperCase(), date: new Date(m0.getFullYear(), m0.getMonth(), 1) },
+          { id: 1, name: moment(m1).format('MMM/YY').toUpperCase(), date: new Date(m1.getFullYear(), m1.getMonth(), 1) },
+          { id: 2, name: moment(m2).format('MMM/YY').toUpperCase(), date: new Date(m2.getFullYear(), m2.getMonth(), 1) }
         ];
         component.selected = 1;
         component.nextEnabled = true;
@@ -188,9 +204,9 @@ describe('C4uSeletorMesComponent', () => {
 
       it('should not navigate left when at oldest month', () => {
         component.months = [
-          { id: 0, name: 'JAN/24' },
-          { id: 1, name: 'DEZ/23' },
-          { id: 2, name: 'NOV/23' }
+          { id: 0, name: 'JAN/24', date: new Date(2024, 0, 1) },
+          { id: 1, name: 'DEZ/23', date: new Date(2023, 11, 1) },
+          { id: 2, name: 'NOV/23', date: new Date(2023, 10, 1) }
         ];
         component.selected = 2; // Oldest month
         component.prevEnabled = false;
@@ -202,8 +218,8 @@ describe('C4uSeletorMesComponent', () => {
 
       it('should not navigate right when at current month', () => {
         component.months = [
-          { id: 0, name: 'JAN/24' },
-          { id: 1, name: 'DEZ/23' }
+          { id: 0, name: 'JAN/24', date: new Date(2024, 0, 1) },
+          { id: 1, name: 'DEZ/23', date: new Date(2023, 11, 1) }
         ];
         component.selected = 0; // Current month
         component.nextEnabled = false;
@@ -235,9 +251,9 @@ describe('C4uSeletorMesComponent', () => {
 
       it('should return correct previous month name', () => {
         component.months = [
-          { id: 0, name: 'JAN/24' },
-          { id: 1, name: 'DEZ/23' },
-          { id: 2, name: 'NOV/23' }
+          { id: 0, name: 'JAN/24', date: new Date(2024, 0, 1) },
+          { id: 1, name: 'DEZ/23', date: new Date(2023, 11, 1) },
+          { id: 2, name: 'NOV/23', date: new Date(2023, 10, 1) }
         ];
         component.selected = 0;
         component.prevEnabled = true;
@@ -249,9 +265,9 @@ describe('C4uSeletorMesComponent', () => {
 
       it('should return correct next month name', () => {
         component.months = [
-          { id: 0, name: 'JAN/24' },
-          { id: 1, name: 'DEZ/23' },
-          { id: 2, name: 'NOV/23' }
+          { id: 0, name: 'JAN/24', date: new Date(2024, 0, 1) },
+          { id: 1, name: 'DEZ/23', date: new Date(2023, 11, 1) },
+          { id: 2, name: 'NOV/23', date: new Date(2023, 10, 1) }
         ];
         component.selected = 1;
         component.nextEnabled = true;
@@ -264,14 +280,16 @@ describe('C4uSeletorMesComponent', () => {
 
     describe('Month Selection Event', () => {
       it('should emit monthSelected event when month changes', (done) => {
+        const d0 = new Date(2024, 0, 1);
+        const d1 = new Date(2023, 11, 1);
         component.months = [
-          { id: 0, name: 'JAN/24' },
-          { id: 1, name: 'DEZ/23' }
+          { id: 0, name: 'JAN/24', date: d0 },
+          { id: 1, name: 'DEZ/23', date: d1 }
         ];
         component.selected = 0;
 
-        component.onSelectedMonth.subscribe((selectedIndex: number) => {
-          expect(selectedIndex).toBe(1);
+        component.onSelectedMonth.subscribe((picked: Date) => {
+          expect(picked.getTime()).toBe(d1.getTime());
           done();
         });
 
@@ -279,32 +297,36 @@ describe('C4uSeletorMesComponent', () => {
         component.onChange();
       });
 
-      it('should emit correct index when navigating left', (done) => {
+      it('should emit correct date when navigating left', (done) => {
+        const d0 = new Date(2024, 0, 1);
+        const d1 = new Date(2023, 11, 1);
         component.months = [
-          { id: 0, name: 'JAN/24' },
-          { id: 1, name: 'DEZ/23' }
+          { id: 0, name: 'JAN/24', date: d0 },
+          { id: 1, name: 'DEZ/23', date: d1 }
         ];
         component.selected = 0;
         component.prevEnabled = true;
 
-        component.onSelectedMonth.subscribe((selectedIndex: number) => {
-          expect(selectedIndex).toBe(1);
+        component.onSelectedMonth.subscribe((picked: Date) => {
+          expect(picked.getTime()).toBe(d1.getTime());
           done();
         });
 
         component.goLeft();
       });
 
-      it('should emit correct index when navigating right', (done) => {
+      it('should emit correct date when navigating right', (done) => {
+        const d0 = new Date(2024, 0, 1);
+        const d1 = new Date(2023, 11, 1);
         component.months = [
-          { id: 0, name: 'JAN/24' },
-          { id: 1, name: 'DEZ/23' }
+          { id: 0, name: 'JAN/24', date: d0 },
+          { id: 1, name: 'DEZ/23', date: d1 }
         ];
         component.selected = 1;
         component.nextEnabled = true;
 
-        component.onSelectedMonth.subscribe((selectedIndex: number) => {
-          expect(selectedIndex).toBe(0);
+        component.onSelectedMonth.subscribe((picked: Date) => {
+          expect(picked.getTime()).toBe(d0.getTime());
           done();
         });
 
@@ -315,9 +337,9 @@ describe('C4uSeletorMesComponent', () => {
     describe('Button State Management', () => {
       it('should disable previous button at oldest month', () => {
         component.months = [
-          { id: 0, name: 'JAN/24' },
-          { id: 1, name: 'DEZ/23' },
-          { id: 2, name: 'NOV/23' }
+          { id: 0, name: 'JAN/24', date: new Date(2024, 0, 1) },
+          { id: 1, name: 'DEZ/23', date: new Date(2023, 11, 1) },
+          { id: 2, name: 'NOV/23', date: new Date(2023, 10, 1) }
         ];
         component.selected = 2;
 
@@ -329,8 +351,8 @@ describe('C4uSeletorMesComponent', () => {
 
       it('should disable next button at current month', () => {
         component.months = [
-          { id: 0, name: 'JAN/24' },
-          { id: 1, name: 'DEZ/23' }
+          { id: 0, name: 'JAN/24', date: new Date(2024, 0, 1) },
+          { id: 1, name: 'DEZ/23', date: new Date(2023, 11, 1) }
         ];
         component.selected = 0;
 
@@ -342,9 +364,9 @@ describe('C4uSeletorMesComponent', () => {
 
       it('should enable both buttons for middle months', () => {
         component.months = [
-          { id: 0, name: 'JAN/24' },
-          { id: 1, name: 'DEZ/23' },
-          { id: 2, name: 'NOV/23' }
+          { id: 0, name: 'JAN/24', date: new Date(2024, 0, 1) },
+          { id: 1, name: 'DEZ/23', date: new Date(2023, 11, 1) },
+          { id: 2, name: 'NOV/23', date: new Date(2023, 10, 1) }
         ];
         component.selected = 1;
 
@@ -357,30 +379,18 @@ describe('C4uSeletorMesComponent', () => {
 
     describe('Initialization', () => {
       it('should initialize with months based on season dates', async () => {
-        mockSeasonDatesService.getMonthsSinceSeasonStart.and.returnValue(Promise.resolve(3));
-        
-        const newComponent = new C4uSeletorMesComponent(mockSessaoProvider, mockSeasonDatesService);
+        const newComponent = new C4uSeletorMesComponent(mockSeasonDatesService);
         await newComponent.ngOnInit();
 
-        expect(newComponent.months.length).toBe(3);
-      });
-
-      it('should show 6 months for admin users', async () => {
-        mockSessaoProvider.isAdmin.and.returnValue(true);
-        
-        const newComponent = new C4uSeletorMesComponent(mockSessaoProvider, mockSeasonDatesService);
-        await newComponent.ngOnInit();
-
-        expect(newComponent.months.length).toBe(6);
+        expect(newComponent.months.length).toBe(2);
       });
 
       it('should handle initialization errors gracefully', async () => {
-        mockSeasonDatesService.getMonthsSinceSeasonStart.and.returnValue(Promise.reject('Error'));
-        
-        const newComponent = new C4uSeletorMesComponent(mockSessaoProvider, mockSeasonDatesService);
+        mockSeasonDatesService.getAvailableMonths.and.returnValue(Promise.reject('Error'));
+
+        const newComponent = new C4uSeletorMesComponent(mockSeasonDatesService);
         await newComponent.ngOnInit();
 
-        // Should fallback to at least 1 month
         expect(newComponent.months.length).toBeGreaterThanOrEqual(1);
       });
     });

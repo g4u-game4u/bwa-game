@@ -136,9 +136,16 @@ export class AuthInterceptor implements HttpInterceptor {
         if (!this.refreshChain) {
             const refreshBase = String(environment.g4u_api_base || environment.backend_url_base || '')
                 .replace(/\/+$/, '');
-            this.refreshChain = this.http.post<HttpRequest<any>>(`${refreshBase}/auth/refresh`, {
-                refresh_token: this.sessao.refreshToken
-            }).pipe(
+            this.refreshChain = this.http.post<HttpRequest<any>>(
+                `${refreshBase}/auth/refresh`,
+                { refresh_token: this.sessao.refreshToken },
+                {
+                    headers: new HttpHeaders({
+                        'Content-Type': 'application/json',
+                        client_id: environment.client_id || ''
+                    })
+                }
+            ).pipe(
                 tap(res => {
                     this.sessao.storeLoginInfo(res as unknown as LoginResponse);
                     delete this.refreshChain;
@@ -154,6 +161,7 @@ export class AuthInterceptor implements HttpInterceptor {
         return this.refreshChain.pipe(concatMap(refreshed =>
             next.handle(request.clone({
                 setHeaders: {
+                    ...this.headersToObject(request.headers),
                     Authorization: `Bearer ${(refreshed as unknown as LoginResponse).access_token}`
                 }
             }))

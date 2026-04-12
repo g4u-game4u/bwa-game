@@ -1,5 +1,11 @@
-<c4u-modal modalTitle="Carteira de Clientes" icon="ri-building-2-line" (closed)="onClose()">
+<c4u-modal
+  [modalTitle]="useBackendUserActions ? 'Carteira — entregas e ações' : 'Carteira de Clientes'"
+  icon="ri-building-2-line"
+  (closed)="onClose()">
   <div class="carteira-content">
+    <p *ngIf="useBackendUserActions && !isLoading" class="carteira-hint">
+      Cada linha é uma <strong>entrega</strong> (delivery). Toque para ver as tarefas daquela entrega.
+    </p>
     <!-- Loading State -->
     <div *ngIf="isLoading" class="loading-state">
       <i class="ri-loader-4-line loading-icon"></i>
@@ -17,16 +23,24 @@
       <div 
         *ngFor="let cliente of clientes" 
         class="cliente-card"
-        [class.expanded]="selectedCnpj === cliente.cnpj">
+        [class.expanded]="selectedListRowKey === getClienteRowKey(cliente)">
         
         <button 
           type="button" 
           class="cliente-header"
-          (click)="selectCliente(cliente.cnpj)"
-          [attr.aria-expanded]="selectedCnpj === cliente.cnpj">
-          <div class="cliente-info">
-            <i class="ri-building-2-line cliente-icon"></i>
-            <span class="cliente-cnpj">{{ getCompanyDisplayName(cliente.cnpj) }}</span>
+          (click)="selectCliente(cliente)"
+          [attr.aria-expanded]="selectedListRowKey === getClienteRowKey(cliente)">
+          <div class="cliente-info cliente-info-stack">
+            <i
+              class="cliente-icon"
+              [class.ri-user-3-line]="useBackendUserActions && cliente.deliveryId"
+              [class.ri-building-2-line]="!(useBackendUserActions && cliente.deliveryId)"></i>
+            <div class="cliente-text-block">
+              <span class="cliente-cnpj">{{ getClientePrimaryLabel(cliente) }}</span>
+              <span class="delivery-meta" *ngIf="useBackendUserActions && cliente.deliveryId">
+                <span class="delivery-badge">Entrega</span>
+              </span>
+            </div>
           </div>
           <div class="cliente-meta">
             <span class="action-count">{{ cliente.actionCount }} ações</span>
@@ -44,11 +58,11 @@
             </c4u-kpi-circular-progress>
             <span *ngIf="!cliente.deliveryKpi" class="kpi-na">N/A</span>
             <i class="ri-arrow-down-s-line expand-icon" 
-               [class.rotated]="selectedCnpj === cliente.cnpj"></i>
+               [class.rotated]="selectedListRowKey === getClienteRowKey(cliente)"></i>
           </div>
         </button>
 
-        <div class="cliente-actions" *ngIf="selectedCnpj === cliente.cnpj">
+        <div class="cliente-actions" *ngIf="selectedListRowKey === getClienteRowKey(cliente)">
           <!-- Loading actions -->
           <div *ngIf="isLoadingActions" class="loading-actions">
             <i class="ri-loader-4-line loading-icon"></i>

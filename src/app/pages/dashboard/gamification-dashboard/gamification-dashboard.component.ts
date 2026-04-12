@@ -1,8 +1,8 @@
 import { Component, OnInit, OnDestroy, HostListener, ChangeDetectionStrategy, ChangeDetectorRef, AfterViewInit } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
 import { ActivatedRoute, Router } from '@angular/router';
-import { Subject } from 'rxjs';
-import { takeUntil, switchMap, finalize } from 'rxjs/operators';
+import { Subject, forkJoin, of } from 'rxjs';
+import { takeUntil, switchMap, finalize, map } from 'rxjs/operators';
 
 import { PlayerService } from '@services/player.service';
 import { CompanyService } from '@services/company.service';
@@ -10,12 +10,12 @@ import { KPIService } from '@services/kpi.service';
 import { ToastService } from '@services/toast.service';
 import { PerformanceMonitorService } from '@services/performance-monitor.service';
 import { ActionLogService } from '@services/action-log.service';
-import { CompanyKpiService } from '@services/company-kpi.service';
 import { CnpjLookupService } from '@services/cnpj-lookup.service';
 import { SessaoProvider } from '@providers/sessao/sessao.provider';
 import { SystemParamsService } from '@services/system-params.service';
 import { FinanceiroOmieRecebiveisService } from '@services/financeiro-omie-recebiveis.service';
 import { BackendActionApiService } from '@services/backend-action-api.service';
+import { UserActionDashboardService } from '@services/user-action-dashboard.service';
 import { environment } from '../../../../environments/environment';
 import { 
   PlayerStatus, 
@@ -29,6 +29,7 @@ import {
 import { CompanyDisplay } from '@services/company-kpi.service';
 import { ProgressCardType } from '@components/c4u-activity-progress/c4u-activity-progress.component';
 import { ProgressListType } from '@modals/modal-progress-list/modal-progress-list.component';
+import { SEASON_GAME_ACTION_RANGE } from '@app/constants/season-action-range';
 
 @Component({
   selector: 'app-gamification-dashboard',
@@ -79,13 +80,13 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   companies: Company[] = [];
   selectedCompany: Company | null = null;
   
-  // Carteira data from action_log (CNPJs with action counts and KPI data)
+  // Carteira: entregas do jogador (GET /user-action), enriquecidas com KPI quando há CNPJ no deal
   carteiraClientes: CompanyDisplay[] = [];
   isLoadingCarteira = true;
   cnpjNameMap = new Map<string, string>(); // Map of original CNPJ → clean empresa name
   
-  // Month selection
-  selectedMonth: Date = new Date();
+  // Month selection (temporada padrão mar–abr/2026; alinhado ao seletor — abril = mais recente)
+  selectedMonth: Date = new Date(2026, 3, 1);
   
   // Modal state
   isCompanyModalOpen = false;
@@ -107,11 +108,8 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   /** Teste GET `/action` no backend (`backend_url_base`). */
   isActionApiLoading = false;
   
-  // Season dates (TODO: Get from season service or API)
-  private readonly seasonDates = {
-    start: new Date('2023-04-01'),
-    end: new Date('2023-09-30')
-  };
+  /** Intervalo exibido e usado em GET `/game/actions?start&end` para o cartão de temporada (fixo mar–abr/2026). */
+  private readonly seasonDates = SEASON_GAME_ACTION_RANGE;
   
   // Accessibility properties
   screenReaderAnnouncement = '';
@@ -125,12 +123,12 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     private cdr: ChangeDetectorRef,
     private performanceMonitor: PerformanceMonitorService,
     private actionLogService: ActionLogService,
-    private companyKpiService: CompanyKpiService,
     private cnpjLookupService: CnpjLookupService,
     private sessaoProvider: SessaoProvider,
     private systemParamsService: SystemParamsService,
     private financeiroOmieRecebiveisService: FinanceiroOmieRecebiveisService,
     private backendActionApiService: BackendActionApiService,
+    private userActionDashboard: UserActionDashboardService,
     private route: ActivatedRoute,
     private router: Router
   ) {
@@ -344,8 +342,11 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
       return;
     }
 
-    // Load clientes count from action_log (same month as KPIs / carteira)
-    this.actionLogService.getUniqueClientesCount(playerId, this.selectedMonth)
+    const range = SEASON_GAME_ACTION_RANGE;
+
+    // Clientes na temporada: entregas distintas no intervalo fixo (GET `/game/actions?start&end`)
+    this.userActionDashboard
+      .getDeliveryCountInRange(playerId, range.start, range.end)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (count: number) => {
@@ -358,13 +359,19 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
           }
         },
         error: (err: Error) => {
-          console.error('📊 Failed to load clientes count:', err);
+          console.error('📊 Failed to load clientes (entregas) count:', err);
         }
       });
-    
-    // Load tarefas finalizadas from action_log
-    this.actionLogService.getCompletedTasksCount(playerId)
-      .pipe(takeUntil(this.destroy$))
+
+    // Tarefas finalizadas na temporada: mesmo endpoint, intervalo fixo
+    this.userActionDashboard
+      .getActionsForPlayerDateRange(playerId, range.start, range.end)
+      .pipe(
+        map(items =>
+          this.userActionDashboard.countFinalizadasInRange(items, range.start, range.end)
+        ),
+        takeUntil(this.destroy$)
+      )
       .subscribe({
         next: (count: number) => {
           if (this.seasonProgress) {
@@ -376,7 +383,22 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
           }
         },
         error: (err: Error) => {
-          console.error('📊 Failed to load tarefas count:', err);
+          console.error('📊 Failed to load tarefas finalizadas count:', err);
+        }
+      });
+
+    // Metas do cartão de temporada: KPIs no intervalo fixo (não no mês do seletor)
+    this.kpiService
+      .getPlayerKPIsForDateRange(playerId, range.start, range.end)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: kpis => {
+          if (kpis != null) {
+            this.updateMetasFromKPIs(kpis);
+          }
+        },
+        error: (err: Error) => {
+          console.error('📊 Failed to load season metas KPIs:', err);
         }
       });
   }
@@ -411,8 +433,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   }
 
   /**
-   * Load carteira data from action_log (CNPJs with action counts)
-   * and enrich with KPI data from cnpj__c collection
+   * Carteira = lista de entregas (delivery) do jogador no mês, via GET /user-action.
    */
   private loadCarteiraData(): void {
     this.isLoadingCarteira = true;
@@ -427,19 +448,18 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
       return;
     }
     
-    this.actionLogService.getPlayerCnpjListWithCount(playerId, this.selectedMonth)
+    this.userActionDashboard
+      .getCarteiraEnriched(playerId, this.selectedMonth)
       .pipe(
-        switchMap(clientes => {
-          // Extract all CNPJ strings for lookup
-          const cnpjList = clientes.map(c => c.cnpj);
-          
-          // Enrich CNPJs with clean company names and KPI data in parallel
+        switchMap(enrichedClientes => {
+          const cnpjList = enrichedClientes.map(c => c.cnpj);
+          if (cnpjList.length === 0) {
+            return of(enrichedClientes);
+          }
           return this.cnpjLookupService.enrichCnpjList(cnpjList).pipe(
-            switchMap(cnpjNames => {
-              // Store the CNPJ name map for display
+            map(cnpjNames => {
               this.cnpjNameMap = cnpjNames;
-              // Enrich companies with KPI data from cnpj__c collection
-              return this.companyKpiService.enrichCompaniesWithKpis(clientes);
+              return enrichedClientes;
             })
           );
         }),
@@ -467,8 +487,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     
     const playerId = this.getPlayerId();
     
-    // Pass selectedMonth and actionLogService to getPlayerKPIs
-    this.kpiService.getPlayerKPIs(playerId, this.selectedMonth, this.actionLogService)
+    this.kpiService.getPlayerKPIs(playerId, this.selectedMonth)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (kpis) => {
@@ -476,13 +495,8 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
           this.playerKPIs = baseKpis;
           this.isLoadingKPIs = false;
           
-          // Always update metas if we have KPIs (even if empty, to show 0/0)
-          // But preserve existing values if KPIs array is null/undefined (error case)
-          if (kpis !== null && kpis !== undefined) {
-            this.updateMetasFromKPIs(kpis);
-          } else {
-          }
-          
+          // Metas do cartão "Progresso da Temporada": loadSeasonProgressDetails (intervalo fixo).
+
           this.cdr.markForCheck();
 
           // Add billing KPI for Finance team members
@@ -594,70 +608,61 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   }
   
   /**
-   * Load activity and macro progress data from action_log
+   * Atividades / pontos do mês: GET /user-action. Processos: continua no action_log.
    */
   private loadProgressData(): void {
     this.isLoadingProgress = true;
     
-    // Get player email/id for action log query
-    // Funifier uses email as the player ID
     const usuario = this.sessaoProvider.usuario as { _id?: string; email?: string } | null;
     const playerId: string = (usuario?._id || usuario?.email || '') as string;
     
     if (!playerId) {
       console.warn('📊 No player ID available for progress data');
-      // Use default values if no player ID
       this.activityMetrics = { pendentes: 0, emExecucao: 0, finalizadas: 0, pontos: 0 };
       this.processMetrics = { pendentes: 0, incompletas: 0, finalizadas: 0 };
+      this.monthlyPointsBreakdown = { bloqueados: 0, desbloqueados: 0 };
       this.isLoadingProgress = false;
       this.cdr.markForCheck();
       return;
     }
 
-    this.actionLogService.getProgressMetrics(playerId, this.selectedMonth)
+    forkJoin({
+      items: this.userActionDashboard.getActions(playerId),
+      processo: this.actionLogService.getProcessMetrics(playerId, this.selectedMonth)
+    })
       .pipe(takeUntil(this.destroy$))
       .subscribe({
-        next: (metrics) => {
-          this.activityMetrics = metrics.activity;
-          this.processMetrics = metrics.processo;
+        next: ({ items, processo }) => {
+          this.activityMetrics = this.userActionDashboard.getActivityMetricsFromActions(
+            items,
+            this.selectedMonth
+          );
+          this.monthlyPointsBreakdown = this.userActionDashboard.getMonthlyPointsBreakdownFromActions(
+            items,
+            this.selectedMonth
+          );
+          this.processMetrics = processo;
           this.isLoadingProgress = false;
           this.cdr.markForCheck();
         },
         error: (error) => {
           console.error('📊 Failed to load progress metrics:', error);
-          // Use default values on error
           this.activityMetrics = { pendentes: 0, emExecucao: 0, finalizadas: 0, pontos: 0 };
           this.processMetrics = { pendentes: 0, incompletas: 0, finalizadas: 0 };
-          this.isLoadingProgress = false;
-          this.cdr.markForCheck();
-        }
-      });
-
-    // Load monthly points breakdown
-    this.actionLogService.getMonthlyPointsBreakdown(playerId, this.selectedMonth)
-      .pipe(takeUntil(this.destroy$))
-      .subscribe({
-        next: (breakdown) => {
-          this.monthlyPointsBreakdown = breakdown;
-          this.cdr.markForCheck();
-        },
-        error: (error) => {
-          console.error('📊 Failed to load monthly points breakdown:', error);
           this.monthlyPointsBreakdown = { bloqueados: 0, desbloqueados: 0 };
+          this.isLoadingProgress = false;
           this.cdr.markForCheck();
         }
       });
   }
   
   /**
-   * Handle month change event from c4u-seletor-mes
-   * @param monthsAgo - Number of months ago (0 = current month)
+   * Handle month change event from c4u-seletor-mes (primeiro dia do mês).
    */
-  onMonthChange(monthsAgo: number): void {
-    const date = new Date();
-    date.setMonth(date.getMonth() - monthsAgo);
-    this.selectedMonth = date;
-    const monthName = date.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+  onMonthChange(monthDate: Date): void {
+    const d = monthDate instanceof Date ? monthDate : new Date(monthDate);
+    this.selectedMonth = new Date(d.getFullYear(), d.getMonth(), 1);
+    const monthName = this.selectedMonth.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
     this.announceToScreenReader(`Mês alterado para ${monthName}`);
     this.loadDashboardData();
   }
@@ -850,8 +855,8 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   refreshData(): void {
     this.toastService.alert('Atualizando dados...');
     this.announceToScreenReader('Atualizando dados do painel');
-    // Clear cache to force fresh data
     this.playerService.clearCache();
+    this.userActionDashboard.clearCache();
     this.loadDashboardData();
   }
   

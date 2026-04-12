@@ -4,10 +4,11 @@ import { takeUntil } from 'rxjs/operators';
 import { ActionLogService, ClienteActionItem } from '@services/action-log.service';
 import { CompanyKpiService, CompanyDisplay } from '@services/company-kpi.service';
 import { KPIService } from '@services/kpi.service';
-import { KPIData } from '@model/gamification-dashboard.model';
+import { ChartDataset, KPIData } from '@model/gamification-dashboard.model';
 import { CnpjLookupService } from '@services/cnpj-lookup.service';
 import { SessaoProvider } from '@providers/sessao/sessao.provider';
-import { firstValueFrom } from 'rxjs';
+import { UserActionDashboardService } from '@services/user-action-dashboard.service';
+import { firstValueFrom, Observable, of } from 'rxjs';
 
 @Component({
   selector: 'modal-company-carteira-detail',
@@ -18,6 +19,15 @@ import { firstValueFrom } from 'rxjs';
 export class ModalCompanyCarteiraDetailComponent implements OnInit, OnDestroy {
   @Input() company: CompanyDisplay | null = null;
   @Input() month?: Date;
+  /**
+   * Jogador cujas ações alimentam GET `/game/actions?user=` para esta entrega.
+   * Se omitido, usa o utilizador da sessão (legado).
+   */
+  @Input() actionContextPlayerId: string | null = null;
+  /**
+   * Vários jogadores (ex.: todos os membros do time na gestão de equipa) — agrega atividades da mesma `deliveryId`.
+   */
+  @Input() actionContextPlayerIds: string[] | null = null;
   @Output() closed = new EventEmitter<void>();
 
   private destroy$ = new Subject<void>();
@@ -27,6 +37,8 @@ export class ModalCompanyCarteiraDetailComponent implements OnInit, OnDestroy {
   companyKPIs: KPIData[] = [];
   tasks: ClienteActionItem[] = [];
   filteredTasks: ClienteActionItem[] = [];
+  chartLabels: string[] = [];
+  chartDatasets: ChartDataset[] = [];
   searchTerm = '';
   cnpjNameMap = new Map<string, string>(); // Map of original CNPJ → clean empresa name
 
@@ -36,7 +48,8 @@ export class ModalCompanyCarteiraDetailComponent implements OnInit, OnDestroy {
     private kpiService: KPIService,
     private cnpjLookupService: CnpjLookupService,
     private cdr: ChangeDetectorRef,
-    private sessao: SessaoProvider
+    private sessao: SessaoProvider,
+    private userActionDashboard: UserActionDashboardService
   ) {}
 
   /** Coluna de pontos por tarefa: apenas admin / gestor (supervisor). */
@@ -125,23 +138,59 @@ export class ModalCompanyCarteiraDetailComponent implements OnInit, OnDestroy {
     this.isLoadingTasks = true;
     this.cdr.markForCheck();
 
-    this.actionLogService.getActionsByCnpj(this.company.cnpj, this.month)
-      .pipe(takeUntil(this.destroy$))
-      .subscribe({
-        next: (tasks) => {
-          this.tasks = tasks;
-          this.filterTasks();
-          this.isLoadingTasks = false;
-          this.cdr.markForCheck();
-        },
-        error: (error) => {
-          console.error('Error loading tasks:', error);
-          this.tasks = [];
-          this.filteredTasks = [];
-          this.isLoadingTasks = false;
-          this.cdr.markForCheck();
-        }
-      });
+    const month = this.month || new Date();
+    const usuario = this.sessao.usuario as { _id?: string; email?: string } | null;
+    const sessionPlayer = ((usuario?._id || usuario?.email || '') as string).trim();
+
+    const multiIds =
+      this.actionContextPlayerIds && this.actionContextPlayerIds.length > 0
+        ? this.actionContextPlayerIds.map(id => String(id).trim()).filter(Boolean)
+        : null;
+    const singleFromInput =
+      this.actionContextPlayerId != null && String(this.actionContextPlayerId).trim() !== ''
+        ? String(this.actionContextPlayerId).trim()
+        : null;
+
+    let tasks$: Observable<ClienteActionItem[]>;
+
+    if (this.company.deliveryId) {
+      if (multiIds && multiIds.length > 0) {
+        tasks$ = this.userActionDashboard.getClienteActionsForDeliveryForPlayers(
+          multiIds,
+          this.company.deliveryId,
+          month
+        );
+      } else {
+        const playerKey = singleFromInput || sessionPlayer;
+        tasks$ = playerKey
+          ? this.userActionDashboard.getClienteActionsForDelivery(
+              playerKey,
+              this.company.deliveryId,
+              month
+            )
+          : of([]);
+      }
+    } else {
+      tasks$ = this.actionLogService.getActionsByCnpj(this.company.cnpj, this.month);
+    }
+
+    tasks$.pipe(takeUntil(this.destroy$)).subscribe({
+      next: tasks => {
+        this.tasks = tasks;
+        this.filterTasks();
+        this.rebuildTaskDailyChart();
+        this.isLoadingTasks = false;
+        this.cdr.markForCheck();
+      },
+      error: (error) => {
+        console.error('Error loading tasks:', error);
+        this.tasks = [];
+        this.filteredTasks = [];
+        this.rebuildTaskDailyChart();
+        this.isLoadingTasks = false;
+        this.cdr.markForCheck();
+      }
+    });
   }
 
   getCompanyDisplayName(cnpj: string): string {
@@ -158,6 +207,70 @@ export class ModalCompanyCarteiraDetailComponent implements OnInit, OnDestroy {
     this.searchTerm = value;
     this.filterTasks();
     this.cdr.markForCheck();
+  }
+
+  /**
+   * Tarefas finalizadas por dia no mês selecionado (mesma lógica do modal de lista de progresso).
+   */
+  private rebuildTaskDailyChart(): void {
+    const targetMonth = this.month || new Date();
+    const year = targetMonth.getFullYear();
+    const month = targetMonth.getMonth();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const today = new Date();
+    const isCurrentMonth = year === today.getFullYear() && month === today.getMonth();
+    const currentDay = isCurrentMonth ? today.getDate() : daysInMonth;
+    const newDailyCounts: number[] = Array.from({ length: daysInMonth }, () => 0);
+
+    for (const task of this.tasks) {
+      if (task.status === 'pendente' || task.status === 'dispensado') {
+        continue;
+      }
+      const entryDate = new Date(task.created);
+      if (isNaN(entryDate.getTime())) {
+        continue;
+      }
+      if (
+        entryDate.getFullYear() === year &&
+        entryDate.getMonth() === month &&
+        entryDate.getDate() >= 1 &&
+        entryDate.getDate() <= daysInMonth
+      ) {
+        newDailyCounts[entryDate.getDate() - 1]++;
+      }
+    }
+
+    this.chartLabels = [...Array.from({ length: daysInMonth }, (_, i) => String(i + 1))];
+
+    const backgroundColorArray = newDailyCounts.map((count, index) => {
+      if (isCurrentMonth && index + 1 > currentDay) {
+        return 'rgba(255, 255, 255, 0.1)';
+      }
+      if (count > 0) {
+        return 'rgba(34, 197, 94, 0.6)';
+      }
+      return 'rgba(255, 255, 255, 0.05)';
+    });
+
+    const borderColorArray = newDailyCounts.map((count, index) => {
+      if (isCurrentMonth && index + 1 > currentDay) {
+        return 'rgba(255, 255, 255, 0.1)';
+      }
+      if (count > 0) {
+        return 'rgba(34, 197, 94, 1)';
+      }
+      return 'rgba(255, 255, 255, 0.1)';
+    });
+
+    this.chartDatasets = [
+      {
+        label: 'Tarefas',
+        data: [...newDailyCounts],
+        backgroundColor: backgroundColorArray,
+        borderColor: borderColorArray,
+        borderWidth: 1
+      }
+    ];
   }
 
   private filterTasks(): void {

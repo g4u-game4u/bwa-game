@@ -5,6 +5,7 @@ import {TIPO_CONSULTA_TIME} from "@app/pages/dashboard/dashboard.component";
 import { DetalheAtividade } from '@model/detalheAtividade.model';
 import { environment } from 'src/environments/environment';
 import { HttpClient } from '@angular/common/http';
+import { buildGame4uQueryString } from '@utils/game4u-query-encode.util';
 import { DetalheMacro } from '@model/detalheMacro.model';
 
 @Injectable({
@@ -17,7 +18,7 @@ export class MesAnteriorService {
   constructor(private api: ApiProvider, private http: HttpClient) {
   }
 
-  public async getDadosMesAnteriorDashboard(id: number, tipo: number, mesesAnteriores: number): Promise<ResumoMes> {
+  public async getDadosMesAnteriorDashboard(id: string | number, tipo: number, mesesAnteriores: number): Promise<ResumoMes> {
     // Check if backend_url_base is configured - if not, return empty data
     if (!environment.backend_url_base || environment.backend_url_base === 'http://localhost') {
       console.warn('⚠️ MesAnteriorService: backend_url_base not configured, returning empty data');
@@ -36,17 +37,19 @@ export class MesAnteriorService {
       firstDayOfMonth.setUTCHours(0, 0, 0, 0);
       lastDayOfMonth.setUTCHours(23, 59, 59, 999);
 
-      let queryParams = '?start=' + firstDayOfMonth.toISOString() +
-                        '&end=' + lastDayOfMonth.toISOString();
+      const params: Record<string, string> = {
+        start: firstDayOfMonth.toISOString(),
+        end: lastDayOfMonth.toISOString()
+      };
 
       if (tipo == TIPO_CONSULTA_TIME) {
         url = '/game/team-stats';
-        queryParams += '&team=' + id;
+        params['team'] = String(id);
       } else {
-          queryParams += '&user=' + id;
+        params['user'] = String(id);
       }
 
-      const response = await this.api.get<any>(url + queryParams);
+      const response = await this.api.get<any>(url, { params });
 
       return <ResumoMes>{
         pontos: (response?.action_stats?.total_points || 0) + (response?.action_stats?.total_blocked_points || 0),
@@ -102,10 +105,10 @@ export class MesAnteriorService {
         params.user = id;
     }
 
-    return this.http.get<DetalheAtividade | DetalheMacro>(
-        baseUrl,
-        { params }
-    ).toPromise();
+    const qs = buildGame4uQueryString(params as Record<string, string>);
+    return this.http
+        .get<DetalheAtividade | DetalheMacro>(qs ? `${baseUrl}?${qs}` : baseUrl)
+        .toPromise();
   }
 
   getGameDeliveries(status: string, page: number, pageSize: number, mesesAnteriores: number, id?: string, tipo?: number) {
@@ -133,10 +136,10 @@ export class MesAnteriorService {
         params.user = id;
     }
 
-    return this.http.get<DetalheAtividade | DetalheMacro>(
-        baseUrl,
-        { params }
-    ).toPromise();
+    const qs = buildGame4uQueryString(params as Record<string, string>);
+    return this.http
+        .get<DetalheAtividade | DetalheMacro>(qs ? `${baseUrl}?${qs}` : baseUrl)
+        .toPromise();
   }
 
 }

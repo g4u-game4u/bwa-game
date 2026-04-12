@@ -17,9 +17,10 @@ describe('UserProfileService', () => {
   };
 
   beforeEach(() => {
-    mockSessaoProvider = jasmine.createSpyObj('SessaoProvider', [], {
+    mockSessaoProvider = jasmine.createSpyObj('SessaoProvider', ['isAdmin'], {
       usuario: null
     });
+    mockSessaoProvider.isAdmin.and.returnValue(false);
 
     mockTeamCodeService = jasmine.createSpyObj('TeamCodeService', [
       'getTeamCodes',
@@ -180,6 +181,14 @@ describe('UserProfileService', () => {
       expect(result).toContain('team-123');
       expect(result).toContain('team-456');
     });
+
+    it('should return empty array for ADMIN (semântica: todas as equipes)', () => {
+      mockSessaoProvider.isAdmin.and.returnValue(true);
+      Object.defineProperty(mockSessaoProvider, 'usuario', { 
+        value: { teams: [defaultTeamCodes.gestor, 'team-123'] } 
+      });
+      expect(service.getAccessibleTeamIds()).toEqual([]);
+    });
   });
 
   describe('Backward Compatibility', () => {
@@ -211,9 +220,16 @@ describe('UserProfileService', () => {
   });
 
   describe('Helper Methods', () => {
-    it('canAccessTeamManagement should return false for JOGADOR', () => {
+    it('canAccessTeamManagement should return false for JOGADOR without ADMIN', () => {
+      mockSessaoProvider.isAdmin.and.returnValue(false);
       Object.defineProperty(mockSessaoProvider, 'usuario', { value: { teams: [] } });
       expect(service.canAccessTeamManagement()).toBe(false);
+    });
+
+    it('canAccessTeamManagement should return true for JOGADOR with ADMIN role', () => {
+      mockSessaoProvider.isAdmin.and.returnValue(true);
+      Object.defineProperty(mockSessaoProvider, 'usuario', { value: { teams: [] } });
+      expect(service.canAccessTeamManagement()).toBe(true);
     });
 
     it('canAccessTeamManagement should return true for management profiles', () => {
@@ -223,7 +239,8 @@ describe('UserProfileService', () => {
       expect(service.canAccessTeamManagement()).toBe(true);
     });
 
-    it('canSeeAllTeams should return true only for DIRETOR', () => {
+    it('canSeeAllTeams should return true for DIRETOR', () => {
+      mockSessaoProvider.isAdmin.and.returnValue(false);
       Object.defineProperty(mockSessaoProvider, 'usuario', { 
         value: { teams: [defaultTeamCodes.diretor] } 
       });
@@ -233,6 +250,15 @@ describe('UserProfileService', () => {
         value: { teams: [defaultTeamCodes.gestor] } 
       });
       expect(service.canSeeAllTeams()).toBe(false);
+    });
+
+    it('canSeeAllTeams should return true for ADMIN even when profile is JOGADOR', () => {
+      mockSessaoProvider.isAdmin.and.returnValue(true);
+      Object.defineProperty(mockSessaoProvider, 'usuario', { 
+        value: { teams: [] } 
+      });
+      expect(service.getCurrentUserProfile()).toBe(UserProfile.JOGADOR);
+      expect(service.canSeeAllTeams()).toBe(true);
     });
 
     it('canOnlySeeOwnTeam should return true only for SUPERVISOR', () => {

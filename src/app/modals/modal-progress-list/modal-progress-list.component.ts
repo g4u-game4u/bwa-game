@@ -3,6 +3,7 @@ import { trigger, transition, style, animate } from '@angular/animations';
 import { Subject, forkJoin, of, firstValueFrom } from 'rxjs';
 import { takeUntil, map, catchError } from 'rxjs/operators';
 import { ActionLogService, ActivityListItem, ProcessListItem, ActionLogEntry } from '@services/action-log.service';
+import { UserActionDashboardService } from '@services/user-action-dashboard.service';
 import { ChartDataset } from '@model/gamification-dashboard.model';
 import { CnpjLookupService } from '@services/cnpj-lookup.service';
 
@@ -35,6 +36,8 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
   @Input() showPointsInActivityList = false;
   /** When true, shows a "Cliente" column using item.cnpj (attributes.deal). */
   @Input() showClientColumnInActivityList = false;
+  /** Se true, listas de atividades/pontos vêm do GET `/user-action` (cache no UserActionDashboardService). */
+  @Input() useBackendUserActions = false;
   @Output() closed = new EventEmitter<void>();
 
   private destroy$ = new Subject<void>();
@@ -64,6 +67,7 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
 
   constructor(
     private actionLogService: ActionLogService,
+    private userActionDashboard: UserActionDashboardService,
     private cnpjLookupService: CnpjLookupService,
     private cdr: ChangeDetectorRef
   ) {}
@@ -220,19 +224,28 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
       this.activityItems = [];
       this.processoItems = [];
       this.isLoading = false;
+      this.isLoadingChart = false;
+      this.chartLabels = [];
+      this.chartDatasets = [];
       this.cdr.markForCheck();
       return;
     }
 
     if (this.isActivityList) {
-      // Load activities for all player IDs in parallel
       const activityRequests = playerIds.map(playerId =>
-        this.actionLogService.getActivityList(playerId, this.month).pipe(
-          catchError(error => {
-            console.error(`Error loading activity list for player ${playerId}:`, error);
-            return of([] as ActivityListItem[]);
-          })
-        )
+        this.useBackendUserActions
+          ? this.userActionDashboard.getFinishedListForPlayer(playerId, this.month || new Date()).pipe(
+              catchError(error => {
+                console.error(`Error loading user-action list for player ${playerId}:`, error);
+                return of([] as ActivityListItem[]);
+              })
+            )
+          : this.actionLogService.getActivityList(playerId, this.month).pipe(
+              catchError(error => {
+                console.error(`Error loading activity list for player ${playerId}:`, error);
+                return of([] as ActivityListItem[]);
+              })
+            )
       );
 
       forkJoin(activityRequests)
@@ -262,18 +275,28 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
             this.filterActivityItems();
 
             this.isLoading = false;
+            if (this.useBackendUserActions && this.isActivityList) {
+              this.loadChartDataFromActivityItems();
+            }
             this.cdr.markForCheck();
           },
           error: (err: Error) => {
             console.error('Error loading activity lists:', err);
             this.activityItems = [];
             this.isLoading = false;
+            this.isLoadingChart = false;
             this.cdr.markForCheck();
           }
         });
       
-      // Load chart data for activities
-      this.loadChartData();
+      if (!this.useBackendUserActions) {
+        this.loadChartData();
+      } else {
+        this.isLoadingChart = true;
+        this.chartLabels = [];
+        this.chartDatasets = [];
+        this.cdr.markForCheck();
+      }
     } else if (this.isProcessList) {
       // Load processes for all player IDs in parallel
       const processRequests = playerIds.map(playerId =>
@@ -350,7 +373,7 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
     this.chartLabels = [];
     this.chartDatasets = [];
     this.cdr.markForCheck();
-    
+
     const targetMonth = this.month || new Date();
     const year = targetMonth.getFullYear();
     const month = targetMonth.getMonth();
@@ -502,6 +525,69 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
           this.cdr.markForCheck();
         }
       });
+  }
+
+  /** Gráfico diário a partir de `activityItems` já carregados (GET `/user-action`). */
+  private loadChartDataFromActivityItems(): void {
+    const targetMonth = this.month || new Date();
+    const year = targetMonth.getFullYear();
+    const month = targetMonth.getMonth();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const today = new Date();
+    const isCurrentMonth = year === today.getFullYear() && month === today.getMonth();
+    const currentDay = isCurrentMonth ? today.getDate() : daysInMonth;
+    const newDailyCounts: number[] = Array.from({ length: daysInMonth }, () => 0);
+
+    this.activityItems.forEach(item => {
+      if (item.status && item.status !== 'finalizado') {
+        return;
+      }
+      const entryDate = new Date(item.created);
+      if (isNaN(entryDate.getTime())) {
+        return;
+      }
+      if (
+        entryDate.getFullYear() === year &&
+        entryDate.getMonth() === month &&
+        entryDate.getDate() >= 1 &&
+        entryDate.getDate() <= daysInMonth
+      ) {
+        newDailyCounts[entryDate.getDate() - 1]++;
+      }
+    });
+
+    this.chartLabels = [...Array.from({ length: daysInMonth }, (_, i) => String(i + 1))];
+
+    const backgroundColorArray = newDailyCounts.map((count, index) => {
+      if (isCurrentMonth && index + 1 > currentDay) {
+        return 'rgba(255, 255, 255, 0.1)';
+      }
+      if (count > 0) {
+        return 'rgba(34, 197, 94, 0.6)';
+      }
+      return 'rgba(255, 255, 255, 0.05)';
+    });
+
+    const borderColorArray = newDailyCounts.map((count, index) => {
+      if (isCurrentMonth && index + 1 > currentDay) {
+        return 'rgba(255, 255, 255, 0.1)';
+      }
+      if (count > 0) {
+        return 'rgba(34, 197, 94, 1)';
+      }
+      return 'rgba(255, 255, 255, 0.1)';
+    });
+
+    this.chartDatasets = [{
+      label: 'Tarefas',
+      data: [...newDailyCounts],
+      backgroundColor: backgroundColorArray,
+      borderColor: borderColorArray,
+      borderWidth: 1
+    }];
+
+    this.isLoadingChart = false;
+    this.cdr.markForCheck();
   }
 
   onClose(): void {

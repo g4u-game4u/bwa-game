@@ -9,7 +9,7 @@ import { UserProfile } from '@utils/user-profile';
  * 
  * Redirects:
  * - JOGADOR → /dashboard (gamification dashboard)
- * - SUPERVISOR, GESTOR, DIRETOR → /dashboard/team-management (team management dashboard)
+ * - SUPERVISOR, GESTOR, DIRETOR, ADMIN → /dashboard/team-management (team management dashboard)
  */
 @Injectable({
   providedIn: 'root'
@@ -53,13 +53,15 @@ export class DashboardRedirectGuardService {
     }
 
     const profile = this.userProfileService.getCurrentUserProfile();
+    const useTeamManagement =
+      profile !== UserProfile.JOGADOR || !!this.sessao.isAdmin();
     // Check current route to avoid infinite redirect loops
     const currentUrl = state.url;
     const isOnDashboard = currentUrl === '/dashboard' || currentUrl.startsWith('/dashboard/');
     const isOnTeamManagement = currentUrl.startsWith('/dashboard/team-management');
     const isOnDashboardRoot = currentUrl === '/dashboard' || currentUrl === '/dashboard/';
     // Redirect based on profile
-    if (profile === UserProfile.JOGADOR) {
+    if (!useTeamManagement) {
       // JOGADOR goes to their own dashboard
       if (isOnTeamManagement) {
         // JOGADOR is on team management, redirect to dashboard
@@ -74,7 +76,7 @@ export class DashboardRedirectGuardService {
         return false;
       }
     } else {
-      // SUPERVISOR, GESTOR, and DIRETOR go to team management dashboard
+      // SUPERVISOR, GESTOR, DIRETOR, and ADMIN go to team management dashboard
       if (!isOnTeamManagement) {
         // Management user is not on team management, redirect
         const navigationResult = await this.router.navigate(['/dashboard/team-management']);

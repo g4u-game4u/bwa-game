@@ -1,5 +1,7 @@
 export interface TemporadaDashboard {
   pendingTasks: number,
+  /** Opcional — contagem DOING em action_stats (ex.: /game/stats). */
+  doingTasks?: number,
   completedTasks: number,
   pendingDeliveries: number,
   incompleteDeliveries: number,

@@ -8,7 +8,9 @@
  *   node regras-de-negocio-scrips/run-api-scripts.mjs seed-action-templates
  *   node regras-de-negocio-scrips/run-api-scripts.mjs seed-teams-users
  *   node regras-de-negocio-scrips/run-api-scripts.mjs zoho-stages
+ *   node regras-de-negocio-scrips/run-api-scripts.mjs zoho-cobranca-stages
  *   node regras-de-negocio-scrips/run-api-scripts.mjs zoho-tasks
+ *   node regras-de-negocio-scrips/run-api-scripts.mjs zoho-pipeline-probe
  *   node regras-de-negocio-scrips/run-api-scripts.mjs probe-game-action-process
  *
  * Env (.env na raiz):
@@ -80,14 +82,121 @@ function getZohoJuridicoResponsibleLookup(deal) {
   return deal?.Respons_vel_Jur ?? deal?.Jur_dico_Respons_vel ?? null;
 }
 
+/** Deals/search por vezes devolve só o nome (string); GET do registo pode trazer lookup { id, email }. */
+function zohoJuridicoResponsiblePresent(jur) {
+  if (jur == null) return false;
+  if (typeof jur === 'string') return Boolean(String(jur).trim());
+  if (typeof jur === 'object') return zohoUserLookupFilled(jur);
+  return false;
+}
+
+function zohoPickJurLookupFromDealRow(row) {
+  if (!row || typeof row !== 'object') return null;
+  return row.Respons_vel_Jur ?? row.Jur_dico_Respons_vel ?? null;
+}
+
+async function zohoGetDealRowCached(dealId, oauthToken, fields, cacheMap) {
+  const key = String(dealId);
+  if (cacheMap.has(key)) return cacheMap.get(key);
+  const url = `${ZOHO_CRM_API_BASE}/crm/v8/Deals/${encodeURIComponent(key)}?fields=${encodeURIComponent(fields)}`;
+  await sleep(55);
+  const r = await fetch(url, { headers: { Authorization: `Zoho-oauthtoken ${oauthToken}` } });
+  const t = await r.text();
+  let j;
+  try {
+    j = JSON.parse(t);
+  } catch {
+    cacheMap.set(key, null);
+    return null;
+  }
+  const row = Array.isArray(j?.data) ? j.data[0] : j?.data ?? null;
+  cacheMap.set(key, row);
+  return row;
+}
+
+async function zohoResolveJuridicoResponsibleEmail(
+  jur,
+  dealId,
+  oauthToken,
+  zohoUserEmailCache,
+  dealRowCache,
+  taskActivityForOwnerFallback
+) {
+  let lookup = jur;
+  if (typeof jur === 'string' && String(jur).trim()) {
+    const full = await zohoGetDealRowCached(
+      dealId,
+      oauthToken,
+      'Respons_vel_Jur,Jur_dico_Respons_vel',
+      dealRowCache
+    );
+    const expanded = zohoPickJurLookupFromDealRow(full);
+    if (expanded && typeof expanded === 'object') lookup = expanded;
+  }
+  if (lookup && typeof lookup === 'object') {
+    return zohoResolveUserEmailFromLookup(lookup, oauthToken, zohoUserEmailCache);
+  }
+  if (typeof jur === 'string' && String(jur).trim()) {
+    const fb =
+      process.env.G4U_ZOHO_JUR_STRING_FALLBACK_EMAIL?.trim() ||
+      process.env.G4U_ZOHO_FALLBACK_USER_EMAIL?.trim() ||
+      null;
+    if (fb) return fb;
+    const taskOwner = taskActivityForOwnerFallback?.Owner;
+    if (taskOwner && typeof taskOwner === 'object') {
+      const fromTask = await zohoResolveUserEmailFromLookup(taskOwner, oauthToken, zohoUserEmailCache);
+      if (fromTask) return fromTask;
+    }
+    console.warn(
+      `${colors.yellow}deal ${dealId}: Jurídico veio como texto e GET do deal não devolveu lookup com id — use Owner da task, env G4U_ZOHO_JUR_STRING_FALLBACK_EMAIL ou campo utilizador no CRM.${colors.reset}`
+    );
+  }
+  return null;
+}
+
 function normalizeZohoPicklistLabel(s) {
   return String(s ?? '')
     .trim()
     .normalize('NFC');
 }
 
+/** Deals/search pode devolver Pipeline como string ou como objeto (name, display_value, …). */
+function zohoPicklistDisplayString(raw) {
+  if (raw == null) return '';
+  if (typeof raw === 'string' || typeof raw === 'number') return String(raw).trim();
+  if (typeof raw === 'object') {
+    const s =
+      raw.name ??
+      raw.display_value ??
+      raw.displayValue ??
+      raw.reference_value ??
+      raw.actual_value ??
+      raw.value;
+    if (s != null) return String(s).trim();
+  }
+  return '';
+}
+
 function getZohoDealPipelineName(deal) {
-  return normalizeZohoPicklistLabel(deal?.Pipeline);
+  return normalizeZohoPicklistLabel(zohoPicklistDisplayString(deal?.Pipeline));
+}
+
+/** Rótulo do layout no body do deal (para conferir com critério Layout.display_label). */
+function getZohoDealLayoutDisplayLabel(deal) {
+  const L = deal?.Layout;
+  if (L == null) return '';
+  if (typeof L === 'string' || typeof L === 'number') {
+    return normalizeZohoPicklistLabel(L);
+  }
+  if (typeof L === 'object') {
+    const raw =
+      L.display_label ??
+      L.displayLabel ??
+      L.name ??
+      zohoPicklistDisplayString(L);
+    return normalizeZohoPicklistLabel(raw);
+  }
+  return '';
 }
 
 /** Concessão/Cobrança exigem lookup financeiro; Qualidade não (só CS). */
@@ -222,6 +331,75 @@ async function game4uFetch(path, { method = 'GET', body, token } = {}) {
   };
 }
 
+/** Resposta da API ao tentar PENDING com entrega/atividade em CANCELLED. */
+function game4uIsCancelledToPendingTransitionError(apiRes) {
+  const parts = [];
+  if (apiRes?.json != null) {
+    parts.push(
+      typeof apiRes.json === 'string' ? apiRes.json : JSON.stringify(apiRes.json)
+    );
+  }
+  if (apiRes?.raw) parts.push(String(apiRes.raw));
+  return /state transition from cancelled to pending not found/i.test(parts.join('\n'));
+}
+
+async function game4uPostDeliveryRestore(deliveryId, userEmail) {
+  const em =
+    (userEmail && String(userEmail).trim()) ||
+    process.env.G4U_ZOHO_FALLBACK_USER_EMAIL?.trim() ||
+    '';
+  if (!em) {
+    return {
+      ok: false,
+      status: 0,
+      json: {
+        message:
+          'game4uPostDeliveryRestore: falta user_email no payload e env G4U_ZOHO_FALLBACK_USER_EMAIL'
+      },
+      raw: ''
+    };
+  }
+  const path = `/game/delivery/${encodeURIComponent(String(deliveryId))}/restore`;
+  return game4uFetch(path, { method: 'POST', body: { user_email: em } });
+}
+
+/**
+ * POST /game/action/process; enquanto a resposta for "CANCELLED to PENDING", restore da delivery e nova tentativa.
+ * Limite: env G4U_ZOHO_CANCELLED_PENDING_RESTORE_MAX (default 10, máx. 20).
+ */
+async function game4uActionProcessWithRestoreOnCancelledPending(path, method, body) {
+  const rawMax = parseInt(process.env.G4U_ZOHO_CANCELLED_PENDING_RESTORE_MAX?.trim() || '10', 10);
+  const maxRestoreCycles = Number.isFinite(rawMax) && rawMax > 0 ? Math.min(rawMax, 20) : 10;
+  const deliveryId = body?.delivery_id;
+
+  let pr = await game4uFetch(path, { method, body });
+  let cycle = 0;
+
+  while (
+    !isGameActionProcessResponseOk(pr) &&
+    game4uIsCancelledToPendingTransitionError(pr) &&
+    deliveryId != null &&
+    deliveryId !== '' &&
+    cycle < maxRestoreCycles
+  ) {
+    cycle += 1;
+    console.warn(
+      `${colors.yellow}game/action/process: CANCELLED→PENDING (ciclo ${cycle}/${maxRestoreCycles}) — ` +
+        `POST /game/delivery/${deliveryId}/restore e nova tentativa.${colors.reset}`
+    );
+    const rs = await game4uPostDeliveryRestore(deliveryId, body?.user_email);
+    log(
+      `POST /game/delivery/${deliveryId}/restore (ciclo ${cycle})`,
+      `status ${rs.status}`,
+      rs.json
+    );
+    await sleep(100 + Math.min(cycle * 40, 400));
+    pr = await game4uFetch(path, { method, body });
+  }
+
+  return pr;
+}
+
 function buildZohoStableIntegrationId(dealId, actionTemplateId) {
   return `zoho-deal-${dealId}-action-${actionTemplateId}`;
 }
@@ -334,7 +512,28 @@ function zohoActivityTaskStatus(activity) {
 }
 
 /**
- * Última atividade (mais recente na lista) cujo JSON contém uma chave de tagFlowTitleToActionTemplateId.
+ * Correspondência tag do mapa ↔ atividade Zoho: texto completo no JSON, ou sufixo "Tag: …" / título antes de "- Tag:"
+ * alinhado ao campo Subject (ex.: Subject "Análise Inicial imediata" ↔ Tag: Análise Inicial).
+ */
+function zohoActivityMatchesTagFlowKey(activity, tagFlowKey) {
+  if (!activity || !tagFlowKey) return false;
+  const blob = JSON.stringify(activity);
+  if (blob.includes(tagFlowKey)) return true;
+  const subj = String(activity.Subject ?? activity.subject ?? '').trim();
+  if (!subj) return false;
+  const subjl = subj.toLowerCase();
+  const tagM = String(tagFlowKey).match(/Tag:\s*(.+)$/i);
+  if (tagM) {
+    const label = tagM[1].trim();
+    if (label.length >= 2 && subjl.includes(label.toLowerCase())) return true;
+  }
+  const beforeTag = String(tagFlowKey).split(/\s*-\s*Tag:/i)[0].replace(/^\*\s*/, '').trim();
+  if (beforeTag.length >= 5 && subjl.includes(beforeTag.toLowerCase())) return true;
+  return false;
+}
+
+/**
+ * Última atividade (mais recente na lista) que casa com tagFlowTitleToActionTemplateId.
  */
 function findLatestActivityWithTagFlow(activityList, map) {
   const tagMap = map.tagFlowTitleToActionTemplateId || {};
@@ -343,9 +542,8 @@ function findLatestActivityWithTagFlow(activityList, map) {
   for (let i = activityList.length - 1; i >= 0; i--) {
     const a = activityList[i];
     if (!a || typeof a !== 'object') continue;
-    const blob = JSON.stringify(a);
     for (const [tagFlowKey, actionId] of entries) {
-      if (blob.includes(tagFlowKey)) return { activity: a, tagFlowKey, actionId };
+      if (zohoActivityMatchesTagFlowKey(a, tagFlowKey)) return { activity: a, tagFlowKey, actionId };
     }
   }
   return null;
@@ -616,6 +814,138 @@ async function loadUsersViaSearchPaginated({ maxPages = 30 } = {}) {
 function userRecordEmailNorm(u) {
   const raw = u?.email ?? u?.user_email ?? u?.userEmail ?? '';
   return String(raw).trim().toLowerCase();
+}
+
+/** Normaliza texto para comparar nomes Zoho ↔ Game4U (acentos, vírgulas, espaços). */
+function normalizePersonNameForMatch(s) {
+  return String(s || '')
+    .normalize('NFD')
+    .replace(/\p{M}/gu, '')
+    .toLowerCase()
+    .replace(/,/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/** Assinatura independente da ordem "Nome Sobrenome" vs "Sobrenome, Nome". */
+function personNameMatchSignature(s) {
+  const n = normalizePersonNameForMatch(s);
+  if (!n) return '';
+  const stop = new Set(['da', 'de', 'do', 'das', 'dos', 'e']);
+  return n
+    .split(' ')
+    .filter((t) => t.length > 0 && !stop.has(t))
+    .sort()
+    .join(' ');
+}
+
+/** Zoho por vezes traz login tipo michelle.franco em vez do nome completo. */
+function coerceZohoUserLabelForNameMatch(raw) {
+  let s = String(raw || '').trim();
+  if (!s) return '';
+  if (s.includes('@')) s = s.split('@')[0].trim();
+  if (/^[a-z0-9._-]+$/i.test(s) && /[._-]/.test(s)) {
+    s = s.replace(/[._-]+/g, ' ').replace(/\s+/g, ' ').trim();
+  }
+  return s;
+}
+
+function game4uUserDisplayName(u) {
+  if (!u || typeof u !== 'object') return '';
+  const fn = u.full_name ?? u.fullName ?? u.name ?? u.display_name ?? u.displayName;
+  if (fn && String(fn).trim()) return String(fn).trim();
+  const parts = [u.first_name ?? u.firstName, u.last_name ?? u.lastName].filter(Boolean);
+  if (parts.length) return parts.join(' ');
+  return '';
+}
+
+function extractGame4uUserTeamIds(u) {
+  if (!u || typeof u !== 'object') return [];
+  const out = [];
+  if (u.team_id != null && String(u.team_id).trim()) out.push(String(u.team_id).trim());
+  if (u.teamId != null && String(u.teamId).trim()) out.push(String(u.teamId).trim());
+  const teams = u.teams ?? u.team;
+  if (Array.isArray(teams)) {
+    for (const t of teams) {
+      if (typeof t === 'string' && t.trim()) out.push(t.trim());
+      else if (t && typeof t === 'object') {
+        const id = t.id ?? t._id ?? t.team_id;
+        if (id != null && String(id).trim()) out.push(String(id).trim());
+      }
+    }
+  }
+  return [...new Set(out)];
+}
+
+/**
+ * Índice full_name (G4U) ↔ e-mail. Prioriza utilizadores do time "Financeiro" (config teamsDefinition).
+ * G4U_ZOHO_FINANCEIRO_NAME_MATCH_ALL_TEAMS=0 — só o time Financeiro.
+ */
+async function buildGame4uZohoDisplayNameEmailResolver() {
+  let users = await loadAllUsersFromApi();
+  if (!users.length) users = await loadUsersViaSearchPaginated({ maxPages: 50 });
+  const teamNameToId = await loadTeamNameToId();
+  const finDef = cfg.teamsDefinition?.find((t) => t.key === 'financeiro');
+  const financeiroTeamId = finDef?.apiTeamName ? teamNameToId.get(finDef.apiTeamName) : null;
+
+  const bySigFinance = new Map();
+  const bySigAll = new Map();
+
+  function addToMap(map, sig, email) {
+    if (!sig || !email) return;
+    const em = String(email).trim().toLowerCase();
+    if (!em) return;
+    if (!map.has(sig)) map.set(sig, []);
+    map.get(sig).push(em);
+  }
+
+  for (const u of users) {
+    const dn = game4uUserDisplayName(u);
+    const em = userRecordEmailNorm(u);
+    if (!dn || !em) continue;
+    const sig = personNameMatchSignature(dn);
+    if (!sig) continue;
+    addToMap(bySigAll, sig, em);
+    const tids = extractGame4uUserTeamIds(u);
+    if (financeiroTeamId && tids.includes(String(financeiroTeamId))) {
+      addToMap(bySigFinance, sig, em);
+    }
+  }
+
+  function pickUnique(sig, bucket, label) {
+    const arr = bucket.get(sig);
+    if (!arr?.length) return null;
+    const uniq = [...new Set(arr)];
+    if (uniq.length === 1) return uniq[0];
+    console.warn(
+      `${colors.yellow}Match nome → e-mail (${label}): assinatura "${sig}" é ambígua (${uniq.length} e-mails).${colors.reset}`
+    );
+    return null;
+  }
+
+  const allowAllTeams = !['0', 'false', 'off', 'no'].includes(
+    String(process.env.G4U_ZOHO_FINANCEIRO_NAME_MATCH_ALL_TEAMS ?? '1').trim().toLowerCase()
+  );
+
+  return {
+    resolveByDisplayName(zohoDisplayName) {
+      const coerced = coerceZohoUserLabelForNameMatch(zohoDisplayName);
+      const sig = personNameMatchSignature(coerced);
+      if (!sig) return null;
+      let email = pickUnique(sig, bySigFinance, 'time Financeiro');
+      if (email) return email;
+      if (allowAllTeams) {
+        email = pickUnique(sig, bySigAll, 'todos os times');
+        if (email) {
+          console.log(
+            `${colors.dim}Match nome "${zohoDisplayName}" → ${email} (G4U: utilizador não está no time Financeiro ou time não foi resolvido).${colors.reset}`
+          );
+        }
+      }
+      return email;
+    },
+    debugCounts: { users: users.length, financeiroTeamId: financeiroTeamId || null }
+  };
 }
 
 async function ensureToken() {
@@ -1265,6 +1595,41 @@ function buildZohoPipelineCriteriaOrClause() {
     .join(' or ');
 }
 
+/** Um único pipeline (valor de picklist) + intervalo Modified_Time — para probes e validação. */
+function buildZohoSinglePipelineSearchCriteria(pipelineDisplayName, from, to) {
+  const pf = cfg.zoho.dealsSearch?.pipelineFilter;
+  const field =
+    process.env.ZOHO_DEALS_PIPELINE_FIELD?.trim() || pf?.fieldApiName || 'Pipeline';
+  const timePart = zohoCriteriaModifiedBetween(from, to);
+  const pipe = `(${field}:equals:${escapeZohoSearchCriteriaValue(String(pipelineDisplayName || '').trim())})`;
+  return `((${timePart}) and ${pipe})`;
+}
+
+/**
+ * Modified_Time + filtro em Layout.display_label (ou ZOHO_PROBE_LAYOUT_FIELD). Sem filtro de Pipeline.
+ * operator: "equals" | "not_equal" (Zoho CRM v8 search).
+ */
+function buildZohoTimeAndLayoutDisplayLabelCriteria(from, to, operator, layoutDisplayLabel) {
+  const timePart = zohoCriteriaModifiedBetween(from, to);
+  const layoutField =
+    process.env.ZOHO_PROBE_LAYOUT_FIELD?.trim() || 'Layout.display_label';
+  const op = operator === 'not_equal' ? 'not_equal' : 'equals';
+  const val = escapeZohoSearchCriteriaValue(String(layoutDisplayLabel ?? '').trim());
+  const layoutClause = `(${layoutField}:${op}:${val})`;
+  return `((${timePart}) and ${layoutClause})`;
+}
+
+function zohoProbeMiniPipelineHistogramLines(deals, maxBuckets = 18) {
+  const h = new Map();
+  for (const d of deals) {
+    const p = getZohoDealPipelineName(d) || '(sem pipeline legível)';
+    h.set(p, (h.get(p) || 0) + 1);
+  }
+  const sorted = [...h.entries()].sort((a, b) => b[1] - a[1]);
+  const lines = sorted.slice(0, maxBuckets).map(([n, c]) => `    ${String(c).padStart(5)}\t${n}`);
+  return { lines, totalBuckets: sorted.length, sorted };
+}
+
 /**
  * Critério completo do Deals/search: intervalo Modified_Time + opcionalmente pipelines permitidos.
  */
@@ -1277,9 +1642,21 @@ function zohoDealsSearchCriteria(from, to, argv) {
 }
 
 /**
- * Timeline v8: primeira página com sort_by, per_page, filters (audited_time between), include_inner_details.
+ * Timeline v8: URL inicial com sort_by, per_page, filters (audited_time between), include_inner_details; páginas
+ * seguintes via page_token (ver zohoFetchMergedDealTimeline).
  * @see https://www.zoho.com/crm/developer/docs/api/v8/timeline-of-a-record.html
  */
+function buildZohoDealActivitiesChronologicalUrl(dealId) {
+  const ac = cfg.zoho.dealActivitiesChronological || {};
+  const base = String(ac.pathTemplate || '').replace('{{dealId}}', String(dealId));
+  const fields = ac.fieldsQueryParam;
+  if (!base) return base;
+  if (!fields || !String(fields).trim()) return base;
+  const u = new URL(base);
+  u.searchParams.set('fields', String(fields).trim());
+  return u.toString();
+}
+
 function buildZohoDealTimelineUrl(dealId, auditedFrom, auditedTo) {
   const base = cfg.zoho.dealTimelineStages.pathTemplate.replace('{{dealId}}', String(dealId));
   const u = new URL(base);
@@ -1298,25 +1675,443 @@ function buildZohoDealTimelineUrl(dealId, auditedFrom, auditedTo) {
   return u.toString();
 }
 
-/** Última entrada do __timeline com alteração do campo Stage (por audited_time). */
-function pickLatestStageChangeFromTimeline(timelineResponse) {
-  const list = timelineResponse?.__timeline;
-  if (!Array.isArray(list)) return null;
-  let best = null;
-  let bestTime = '';
-  for (const row of list) {
-    const fh = row.field_history;
-    if (!Array.isArray(fh)) continue;
-    for (const f of fh) {
-      if (String(f.api_name || '') !== 'Stage') continue;
-      const t = String(row.audited_time || '');
-      if (!best || t > bestTime) {
-        best = { row, field: f };
-        bestTime = t;
+/**
+ * Janela audited_time do __timeline mais larga que só Modified_Time do search:
+ * inclui transições de Stage (CS vs Financeiro) para montar DONE com o utilizador certo.
+ * Env: ZOHO_TIMELINE_AUDITED_FROM / ZOHO_TIMELINE_AUDITED_TO sobrepõem;
+ * ZOHO_TIMELINE_EXTRA_DAYS_BACK (default 0 = igual ao Modified_Time do search; ex. 730 para recuar o início);
+ * dealTimelineStages.stageHistoryAuditedFromNotBefore (opcional): max(início calculado, esta data).
+ * Fim: ZOHO_TIMELINE_AUDITED_TO ou ZOHO_MODIFIED_TO; opcional ZOHO_TIMELINE_EXTEND_TO_NOW=1 alarga o fim até agora
+ * (algumas orgs Zoho devolvem __timeline vazio se o between incluir instante futuro — use com cuidado).
+ */
+function zohoTimelineAuditedRangeForStageHistory(modifiedFrom, modifiedTo) {
+  const envFrom = process.env.ZOHO_TIMELINE_AUDITED_FROM?.trim();
+  const envTo = process.env.ZOHO_TIMELINE_AUDITED_TO?.trim();
+  const extendToNow =
+    process.env.ZOHO_TIMELINE_EXTEND_TO_NOW === '1' ||
+    process.env.ZOHO_TIMELINE_EXTEND_TO_NOW === 'true';
+  let fromR = modifiedFrom;
+  if (envFrom) {
+    fromR = envFrom;
+  } else if (modifiedFrom) {
+    const extra = parseInt(process.env.ZOHO_TIMELINE_EXTRA_DAYS_BACK || '0', 10);
+    const n = Number.isFinite(extra) && extra > 0 ? Math.min(extra, 3650) : 0;
+    if (n > 0) {
+      const d = new Date(modifiedFrom);
+      if (!Number.isNaN(d.getTime())) {
+        d.setUTCDate(d.getUTCDate() - n);
+        fromR = d.toISOString();
+      }
+    }
+    const notBefore =
+      cfg.zoho?.dealTimelineStages?.stageHistoryAuditedFromNotBefore ??
+      cfg.zoho?.dealTimelineStages?.stageHistoryAuditedFromFallback;
+    if (notBefore && String(notBefore).trim()) {
+      const tNb = new Date(String(notBefore).trim()).getTime();
+      const tCur = new Date(fromR).getTime();
+      if (!Number.isNaN(tNb) && !Number.isNaN(tCur)) {
+        fromR = new Date(Math.max(tNb, tCur)).toISOString();
       }
     }
   }
-  return best;
+  const nowIso = new Date().toISOString();
+  let toR = envTo || modifiedTo || nowIso;
+  if (!envTo && extendToNow) {
+    try {
+      const tTo = new Date(toR).getTime();
+      const tNow = new Date(nowIso).getTime();
+      if (!Number.isNaN(tTo) && !Number.isNaN(tNow) && tTo < tNow) {
+        toR = nowIso;
+      }
+    } catch {
+      toR = nowIso;
+    }
+  }
+  return { from: fromR, to: toR };
+}
+
+function zohoDealsSearchMaxPages() {
+  const n = parseInt(process.env.ZOHO_DEALS_SEARCH_MAX_PAGES || '500', 10);
+  return Number.isFinite(n) && n > 0 ? Math.min(n, 2000) : 500;
+}
+
+/** Zoho devolve 400 LIMIT_REACHED ao exceder ~2000 registos numa cadeia de search paginado. */
+function zohoDealsSearchIsIterationLimitError(data) {
+  if (!data || typeof data !== 'object') return false;
+  if (data.code === 'LIMIT_REACHED') return true;
+  const m = String(data.message || '').toLowerCase();
+  return m.includes('maximum response iteration') || m.includes('iteration limit');
+}
+
+/**
+ * Deals no intervalo: uma pesquisa por cada pipeline em allowedDisplayNames (união por id).
+ * Evita um único Deals/search sem pipeline que estoura o limite de iteração da Zoho (~2000).
+ */
+async function zohoFetchDealsMergedByAllowedPipelines(from, to, token, opts = {}) {
+  const quiet = Boolean(opts.quiet);
+  const names = cfg.zoho.dealsSearch?.pipelineFilter?.allowedDisplayNames;
+  if (!Array.isArray(names) || names.length === 0) {
+    const crit = zohoDealsSearchCriteria(from, to, ['--zoho-ignore-pipeline-filter']);
+    return zohoFetchAllDealsSearchPages(crit, token, { quiet });
+  }
+  const byId = new Map();
+  for (const name of names) {
+    const crit = buildZohoSinglePipelineSearchCriteria(name, from, to);
+    const rows = await zohoFetchAllDealsSearchPages(crit, token, { quiet });
+    for (const d of rows) {
+      if (d && d.id != null) byId.set(String(d.id), d);
+    }
+  }
+  return [...byId.values()];
+}
+
+/** Nome do picklist Pipeline para Cobrança (env ou entrada em allowedDisplayNames). */
+function zohoCobrancaPipelineDisplayName() {
+  const e = process.env.ZOHO_COBRANCA_PIPELINE_NAME?.trim();
+  if (e) return e;
+  const allowed = cfg.zoho.dealsSearch?.pipelineFilter?.allowedDisplayNames || [];
+  const hit = allowed.find((n) => /cobran/i.test(String(n)));
+  return hit || 'Cobrança';
+}
+
+/**
+ * E-mail para PENDING no pipeline Cobrança (normalmente Financeiro_Respons_vel).
+ * strictFinanceiroOnly (zoho-cobranca-stages por defeito): não usa Owner nem G4U_ZOHO_FALLBACK_USER_EMAIL —
+ * evita registar ações no CS quando o CRM só traz id/nome no lookup. Desligar com G4U_ZOHO_COBRANCA_OWNER_FALLBACK=1.
+ */
+async function resolveEmailZohoCobrancaGameUser(deal, token, zohoUserEmailCache, opts = {}) {
+  const strict = Boolean(opts.strictFinanceiroOnly);
+  const resolver = opts.game4uNameResolver;
+  let em = await zohoResolveUserEmailFromLookup(deal.Financeiro_Respons_vel, token, zohoUserEmailCache);
+  if (!em && resolver) {
+    const zohoLabel = await zohoFinanceiroZohoSideDisplayName(
+      deal.Financeiro_Respons_vel,
+      token,
+      zohoUserEmailCache
+    );
+    if (zohoLabel) {
+      em = resolver.resolveByDisplayName(zohoLabel);
+      if (em) {
+        console.log(
+          `${colors.dim}deal ${deal.id}: Financeiro (Zoho) "${zohoLabel}" ↔ nome no Game4U → ${em}${colors.reset}`
+        );
+      } else {
+        console.warn(
+          `${colors.yellow}deal ${deal.id}: Financeiro "${zohoLabel}" sem e-mail no CRM nem match de nome no Game4U (full_name / time Financeiro).${colors.reset}`
+        );
+      }
+    }
+  }
+  if (!em && !strict && zohoFinanceiroStageFallbackToOwnerEmail()) {
+    em = await zohoResolveUserEmailFromLookup(deal.Owner, token, zohoUserEmailCache);
+    if (em) {
+      console.warn(
+        `${colors.yellow}deal ${deal.id}: Cobrança PENDING — Financeiro_Respons_vel sem e-mail resolvido; ` +
+          `a usar Owner (CS). Corrija o lookup no CRM, a API users, ou use strict só com financeiro. ` +
+          `Para forçar este fallback: G4U_ZOHO_COBRANCA_OWNER_FALLBACK=1.${colors.reset}`
+      );
+    }
+  }
+  if (!em && !strict) {
+    em = process.env.G4U_ZOHO_FALLBACK_USER_EMAIL?.trim() || null;
+  }
+  return em;
+}
+
+function zohoTimelineMaxPages() {
+  const n = parseInt(process.env.ZOHO_TIMELINE_MAX_PAGES || '50', 10);
+  return Number.isFinite(n) && n > 0 ? Math.min(n, 200) : 50;
+}
+
+function zohoActivitiesChronologicalMaxPages() {
+  const n = parseInt(process.env.ZOHO_ACTIVITIES_MAX_PAGES || '50', 10);
+  return Number.isFinite(n) && n > 0 ? Math.min(n, 200) : 50;
+}
+
+/**
+ * Limite opcional de deals após juntar todas as páginas do search.
+ * Sem --max-deals e sem ZOHO_MAX_DEALS → processa todos.
+ */
+function zohoRunnerMaxDeals(argv) {
+  const i = argv.indexOf('--max-deals');
+  if (i >= 0 && argv[i + 1] != null) {
+    const n = parseInt(argv[i + 1], 10);
+    if (Number.isFinite(n) && n > 0) return n;
+    if (Number.isFinite(n) && n === 0) return Number.MAX_SAFE_INTEGER;
+  }
+  const env = process.env.ZOHO_MAX_DEALS?.trim();
+  if (env) {
+    const n = parseInt(env, 10);
+    if (Number.isFinite(n) && n > 0) return n;
+  }
+  return Number.MAX_SAFE_INTEGER;
+}
+
+/** Deals/search: todas as páginas (info.more_records + page++). opts.quiet: só erros (útil em probes). */
+async function zohoFetchAllDealsSearchPages(criteria, token, opts = {}) {
+  const quiet = Boolean(opts.quiet);
+  const all = [];
+  let page = 1;
+  const maxPages = zohoDealsSearchMaxPages();
+  for (;;) {
+    if (page > maxPages) {
+      console.warn(
+        `${colors.yellow}ZOHO_DEALS_SEARCH_MAX_PAGES (${maxPages}) atingido — parando.${colors.reset}`
+      );
+      break;
+    }
+    const url = buildZohoDealsSearchUrl(criteria, page);
+    if (page > 1) await sleep(90);
+    const r = await fetch(url, { headers: { Authorization: `Zoho-oauthtoken ${token}` } });
+    const text = await r.text();
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      if (r.ok && (r.status === 204 || !String(text).trim())) {
+        data = { data: [], info: { more_records: false, count: 0 } };
+      } else {
+        log(`Zoho Deals/search página ${page}`, `status ${r.status} JSON inválido`, {
+          _raw: String(text).slice(0, 500)
+        });
+        break;
+      }
+    }
+    if (!r.ok) {
+      if (zohoDealsSearchIsIterationLimitError(data)) {
+        console.warn(
+          `${colors.yellow}Zoho Deals/search página ${page}: limite de iteração/resposta da API — ` +
+            `devolvendo ${all.length} registo(s) já acumulados (reduza o intervalo ou filtre por pipeline).${colors.reset}`
+        );
+        break;
+      }
+      log(`Zoho Deals/search página ${page}`, `status ${r.status}`, data);
+      break;
+    }
+    const info = data?.info;
+    const compactLog =
+      page === 1
+        ? data
+        : {
+            info,
+            records_this_page: data?.data?.length,
+            first_ids: (data?.data ?? []).slice(0, 3).map((d) => d?.id)
+          };
+    if (!quiet) {
+      log(
+        `Zoho Deals/search (página ${page}${info?.more_records ? '+' : ''})`,
+        `status ${r.status} criteria=${criteria}` +
+          (info
+            ? ` | page=${info.page} per_page=${info.per_page} more_records=${info.more_records} count=${info.count}`
+            : ''),
+        compactLog
+      );
+    }
+    const rows = data?.data ?? [];
+    for (const row of rows) {
+      if (row && row.id != null) all.push(row);
+    }
+    if (info?.more_records !== true || rows.length === 0) break;
+    page += 1;
+  }
+  return all;
+}
+
+/** __timeline: todas as páginas (page_token) fundidas num único __timeline. */
+async function zohoFetchMergedDealTimeline(dealId, from, to, token, bareTimeline) {
+  const merged = { __timeline: [] };
+  const initialUrl = bareTimeline
+    ? cfg.zoho.dealTimelineStages.pathTemplate.replace('{{dealId}}', String(dealId))
+    : buildZohoDealTimelineUrl(dealId, from, to);
+  let nextUrl = null;
+  const maxPages = zohoTimelineMaxPages();
+  for (let p = 0; p < maxPages; p++) {
+    const fetchUrl = nextUrl ?? initialUrl;
+    if (p > 0) await sleep(80);
+    const r2 = await fetch(fetchUrl, { headers: { Authorization: `Zoho-oauthtoken ${token}` } });
+    const t2 = await r2.text();
+    let j2;
+    try {
+      j2 = JSON.parse(t2);
+    } catch {
+      j2 = { _raw: t2 };
+    }
+    const list = j2?.__timeline;
+    if (Array.isArray(list)) merged.__timeline.push(...list);
+    const info = j2?.info;
+    const pageToken = info?.next_page_token ?? info?.Next_Page_Token ?? null;
+    if (info?.more_records === true && pageToken) {
+      const u = new URL(fetchUrl);
+      u.searchParams.set('page_token', String(pageToken));
+      nextUrl = u.toString();
+    } else {
+      break;
+    }
+  }
+  return merged;
+}
+
+/** Activities_Chronological: todas as páginas fundidas numa lista de atividades. */
+async function zohoFetchAllActivitiesChronologicalForDeal(dealId, token) {
+  const all = [];
+  const initialUrl = buildZohoDealActivitiesChronologicalUrl(dealId);
+  let nextUrl = null;
+  const maxPages = zohoActivitiesChronologicalMaxPages();
+  for (let p = 0; p < maxPages; p++) {
+    const fetchUrl = nextUrl ?? initialUrl;
+    if (p > 0) await sleep(55);
+    const r2 = await fetch(fetchUrl, { headers: { Authorization: `Zoho-oauthtoken ${token}` } });
+    const t2 = await r2.text();
+    let j2;
+    try {
+      j2 = JSON.parse(t2);
+    } catch {
+      j2 = { _raw: t2 };
+    }
+    all.push(...extractZohoActivitiesChronologicalList(j2));
+    const info = j2?.info;
+    const pageToken = info?.next_page_token ?? info?.Next_Page_Token ?? info?.page_token ?? null;
+    if (info?.more_records === true && pageToken) {
+      const u = new URL(fetchUrl);
+      u.searchParams.set('page_token', String(pageToken));
+      nextUrl = u.toString();
+    } else {
+      break;
+    }
+  }
+  return all;
+}
+
+/** Zoho __timeline: api_name do picklist de estágio vem como "Stage" ou "stage" conforme org/API. */
+function zohoTimelineFieldIsStage(fieldHistoryEntry) {
+  const n = String(fieldHistoryEntry?.api_name ?? fieldHistoryEntry?.field?.api_name ?? '')
+    .trim()
+    .toLowerCase();
+  return n === 'stage';
+}
+
+/**
+ * Lê old/new do field_history (estrutura típica: _value.old, _value.new; às vezes objetos aninhados).
+ */
+function zohoFieldHistoryStageOldNew(fieldHistoryEntry) {
+  const v =
+    fieldHistoryEntry?._value ??
+    fieldHistoryEntry?.value ??
+    fieldHistoryEntry?.field_history?._value;
+  if (v && typeof v === 'object') {
+    const oldRaw = v.old ?? v.Old ?? v.previous_value ?? v.previous;
+    const newRaw = v.new ?? v.New ?? v.current_value ?? v.current;
+    return {
+      oldVal: zohoPicklistDisplayString(oldRaw),
+      newVal: zohoPicklistDisplayString(newRaw)
+    };
+  }
+  return { oldVal: '', newVal: '' };
+}
+
+/**
+ * Todas as alterações de Stage no __timeline (field_history com api_name stage, qualquer capitalização).
+ */
+function collectStageChangesFromTimeline(timelineResponse) {
+  const list = timelineResponse?.__timeline;
+  if (!Array.isArray(list)) return [];
+  const out = [];
+  for (const row of list) {
+    const fh = row.field_history;
+    if (fh == null) continue;
+    const entries = Array.isArray(fh) ? fh : [fh];
+    const audited = row.audited_time ?? row.Audited_Time ?? '';
+    for (const f of entries) {
+      if (!f || typeof f !== 'object') continue;
+      if (!zohoTimelineFieldIsStage(f)) continue;
+      const { oldVal, newVal } = zohoFieldHistoryStageOldNew(f);
+      out.push({ row, field: f, audited_time: audited, oldVal, newVal });
+    }
+  }
+  return out;
+}
+
+/**
+ * Transição Stage mais recente no __timeline (último old → new por audited_time).
+ * Usado para DONE (old) + PENDING (new) alinhado ao CRM.
+ */
+function pickLatestStageChangeFromTimeline(timelineResponse) {
+  const changes = collectStageChangesFromTimeline(timelineResponse);
+  if (!changes.length) return null;
+  changes.sort((a, b) => {
+    const ta = Date.parse(String(a.audited_time)) || 0;
+    const tb = Date.parse(String(b.audited_time)) || 0;
+    if (tb !== ta) return tb - ta;
+    return String(b.audited_time).localeCompare(String(a.audited_time));
+  });
+  const top = changes[0];
+  return {
+    row: top.row,
+    field: top.field,
+    oldVal: top.oldVal,
+    newVal: top.newVal
+  };
+}
+
+/**
+ * Normaliza a última transição Stage (old → new) do __timeline para dois POSTs explícitos:
+ * 1) DONE com action_id do estágio **anterior** (old)
+ * 2) PENDING com action_id do estágio **novo** (new)
+ */
+function normalizeZohoDealStageTransition(deal, map, hit) {
+  let oldVal = hit.oldVal || '';
+  let newVal = hit.newVal || '';
+  let usedDealStageFallback = false;
+  if (!newVal && deal.Stage != null && String(deal.Stage).trim()) {
+    newVal = normalizeZohoPicklistLabel(deal.Stage);
+    usedDealStageFallback = true;
+  }
+  const auditedAt = hit.row.audited_time || hit.row.Audited_Time || new Date().toISOString();
+
+  const actionIdOld = oldVal ? resolveActionTemplateIdForZohoStage(oldVal, map) : null;
+  const actionIdNew = newVal ? resolveActionTemplateIdForZohoStage(newVal, map) : null;
+
+  const doneEligible =
+    Boolean(actionIdOld && oldVal) &&
+    actionIdOld !== actionIdNew &&
+    !(isFinanceStageName(oldVal, map, deal) && !financeStageEligibleForDeal(deal));
+
+  const pendingEligible =
+    Boolean(actionIdNew && newVal) &&
+    !(isFinanceStageName(newVal, map, deal) && !financeStageEligibleForDeal(deal));
+
+  return {
+    oldVal,
+    newVal,
+    auditedAt,
+    actionIdOld,
+    actionIdNew,
+    usedDealStageFallback,
+    doneEligible,
+    pendingEligible,
+    wantCompleteDelivery: stageNameCompletesDelivery(newVal),
+    wantStageProcess: Boolean(actionIdOld || actionIdNew)
+  };
+}
+
+/**
+ * E-mail do executor para PENDING do **novo** estágio.
+ * zoho-cobranca-stages: Financeiro_Respons_vel só quando o mapa marca o new stage como equipa financeira;
+ * estágios CS no pipeline Cobrança usam Owner como no fluxo geral.
+ */
+async function resolveZohoPendingUserEmailForDealStage(
+  deal,
+  newVal,
+  map,
+  token,
+  zohoUserEmailCache,
+  cobrancaFinanceiroUser,
+  resolveCobrancaFinanceiroEmailOnce
+) {
+  if (cobrancaFinanceiroUser && isFinanceStageName(newVal, map, deal)) {
+    return resolveCobrancaFinanceiroEmailOnce(deal);
+  }
+  return resolveEmailForZohoStageTeam(newVal, deal, map, token, zohoUserEmailCache);
 }
 
 async function zohoRefreshToken() {
@@ -1367,10 +2162,21 @@ function zohoFinanceiroStageFallbackToOwnerEmail() {
   return zohoStagePostToGame4uOpts().financeiroStageUseOwnerEmailIfFinanceiroHasNoEmail !== false;
 }
 
-async function zohoFetchCrmUserEmailById(userId, oauthToken) {
+function zohoCrmUserRecordDisplayName(u) {
+  if (!u || typeof u !== 'object') return null;
+  const parts = [u.first_name ?? u.First_Name, u.last_name ?? u.Last_Name].filter(
+    (x) => x != null && String(x).trim()
+  );
+  if (parts.length) return parts.map((x) => String(x).trim()).join(' ');
+  const full = u.full_name ?? u.Full_Name ?? u.name ?? u.Name;
+  if (full && String(full).trim()) return String(full).trim();
+  return null;
+}
+
+async function zohoFetchCrmUserProfileById(userId, oauthToken) {
   const id = String(userId || '').trim();
-  if (!id) return null;
-  const paths = [`/crm/v8/users/${id}`, `/crm/v2/users/${id}`];
+  if (!id) return { email: null, displayName: null };
+  const paths = [`/crm/v8/users/${id}`, `/crm/v3/users/${id}`, `/crm/v2/users/${id}`];
   for (const p of paths) {
     const r = await fetch(`${ZOHO_CRM_API_BASE}${p}`, {
       headers: { Authorization: `Zoho-oauthtoken ${oauthToken}` }
@@ -1383,11 +2189,45 @@ async function zohoFetchCrmUserEmailById(userId, oauthToken) {
       continue;
     }
     if (!r.ok) continue;
-    const u = j.users?.[0] ?? j.data?.[0] ?? j.user ?? null;
-    const em = u?.email ?? u?.Email;
-    if (em && String(em).trim()) return String(em).trim();
+    const candidates = [];
+    if (Array.isArray(j.users)) candidates.push(...j.users);
+    if (Array.isArray(j.data)) candidates.push(...j.data);
+    if (j.user && typeof j.user === 'object') candidates.push(j.user);
+    if (candidates.length === 0 && (j.users?.[0] || j.data?.[0])) {
+      candidates.push(j.users?.[0] ?? j.data?.[0]);
+    }
+    for (const u of candidates) {
+      const emRaw = u?.email ?? u?.Email ?? u?.primary_email;
+      const email = emRaw && String(emRaw).trim() ? String(emRaw).trim() : null;
+      const displayName = zohoCrmUserRecordDisplayName(u);
+      if (email || displayName) return { email, displayName };
+    }
   }
-  return null;
+  return { email: null, displayName: null };
+}
+
+async function zohoFetchCrmUserEmailById(userId, oauthToken) {
+  const p = await zohoFetchCrmUserProfileById(userId, oauthToken);
+  return p.email || null;
+}
+
+/**
+ * Garante cache[id] = { email, displayName } após GET users Zoho (um pedido por id).
+ */
+async function zohoEnsureUserProfileInCache(lookup, oauthToken, cache) {
+  if (!lookup || typeof lookup !== 'object' || !lookup.id) return null;
+  const key = String(lookup.id);
+  if (cache.has(key)) return cache.get(key);
+  if (zohoStagePostToGame4uOpts().resolveUserEmailViaCrmUsersApi === false) {
+    const empty = { email: '', displayName: '' };
+    cache.set(key, empty);
+    return empty;
+  }
+  await sleep(55);
+  const prof = await zohoFetchCrmUserProfileById(key, oauthToken);
+  const row = { email: prof.email || '', displayName: prof.displayName || '' };
+  cache.set(key, row);
+  return row;
 }
 
 /**
@@ -1400,54 +2240,85 @@ async function zohoResolveUserEmailFromLookup(lookup, oauthToken, cache) {
   const key = String(lookup.id);
   if (cache.has(key)) {
     const hit = cache.get(key);
-    return hit ? hit : null;
+    if (typeof hit === 'string') return hit ? hit : null;
+    return hit?.email?.trim() || null;
   }
-  if (zohoStagePostToGame4uOpts().resolveUserEmailViaCrmUsersApi === false) {
-    cache.set(key, '');
-    return null;
+  const row = await zohoEnsureUserProfileInCache(lookup, oauthToken, cache);
+  return row?.email?.trim() || null;
+}
+
+/**
+ * Nome para cruzar com full_name do Game4U (lookup.name, ou CRM users API).
+ */
+async function zohoFinanceiroZohoSideDisplayName(lookup, oauthToken, cache) {
+  if (typeof lookup === 'string') {
+    const s = coerceZohoUserLabelForNameMatch(lookup);
+    return s || null;
   }
-  await sleep(55);
-  const email = await zohoFetchCrmUserEmailById(key, oauthToken);
-  cache.set(key, email || '');
-  return email || null;
+  if (!lookup || typeof lookup !== 'object') return null;
+  const n = lookup.name ?? lookup.Name ?? lookup.full_name ?? lookup.Full_Name;
+  if (n && String(n).trim()) {
+    const s = coerceZohoUserLabelForNameMatch(String(n).trim());
+    return s || null;
+  }
+  if (!lookup.id) return null;
+  const key = String(lookup.id);
+  if (cache && !cache.has(key)) {
+    await zohoEnsureUserProfileInCache(lookup, oauthToken, cache);
+  }
+  const row = cache?.get(key);
+  if (typeof row === 'string') return null;
+  const d = row?.displayName?.trim();
+  return d ? coerceZohoUserLabelForNameMatch(d) : null;
 }
 
 async function cmdZohoStages(argv) {
   const noPost = argv.includes('--no-post-process');
   const postAllMapped = argv.includes('--post-all-mapped');
+  const cobrancaFinanceiroUser = argv.includes('--zoho-cobranca-financeiro-user');
+  const pipelineOnlyCobranca = argv.includes('--zoho-pipeline-only-cobranca');
+  const cobrancaFinanceiroEmailStrict =
+    cobrancaFinanceiroUser &&
+    !['1', 'true', 'yes', 'on'].includes(
+      String(process.env.G4U_ZOHO_COBRANCA_OWNER_FALLBACK || '').trim().toLowerCase()
+    );
+  const cobrancaGameUserResolveOpts = { strictFinanceiroOnly: cobrancaFinanceiroEmailStrict };
   const map = loadZohoCrmActionMap();
   const { from, to, kf, kt } = zohoModifiedTimeRange();
   if (!from || !to) {
     throw new Error(`Defina ${kf} e ${kt} (ou alias ZOHO_MOVIFIED_FROM / ZOHO_MOVIFIED_TO se usar o typo)`);
   }
-  const criteria = zohoDealsSearchCriteria(from, to, argv);
+  const criteria = pipelineOnlyCobranca
+    ? buildZohoSinglePipelineSearchCriteria(zohoCobrancaPipelineDisplayName(), from, to)
+    : zohoDealsSearchCriteria(from, to, argv);
   const token = await zohoRefreshToken();
   const zohoUserEmailCache = new Map();
-  const searchUrl = buildZohoDealsSearchUrl(criteria, 1);
-  const r = await fetch(searchUrl, {
-    headers: { Authorization: `Zoho-oauthtoken ${token}` }
-  });
-  const text = await r.text();
-  let data;
-  try {
-    data = JSON.parse(text);
-  } catch {
-    data = { _raw: text };
-  }
-  const info = data?.info;
-  log(
-    'Zoho Deals/search (apenas página 1, todos os deals desta página)',
-    `status ${r.status} criteria=${criteria}` +
-      (info
-        ? ` | page=${info.page} per_page=${info.per_page} more_records=${info.more_records} count=${info.count}`
-        : ''),
-    data
-  );
-
-  const pageDeals = data?.data ?? [];
-  if (!pageDeals.length) {
-    console.warn(`${colors.yellow}Nenhum deal na primeira página do search.${colors.reset}`);
+  const allDealsFetched = await zohoFetchAllDealsSearchPages(criteria, token);
+  if (!allDealsFetched.length) {
+    console.warn(`${colors.yellow}Nenhum deal no Deals/search (todas as páginas).${colors.reset}`);
     return;
+  }
+  const maxDeals = zohoRunnerMaxDeals(argv);
+  const pageDeals = allDealsFetched.slice(0, maxDeals);
+  if (pipelineOnlyCobranca && cobrancaFinanceiroUser) {
+    console.log(
+      `${colors.cyan}zoho-cobranca-stages:${colors.reset} pipeline "${zohoCobrancaPipelineDisplayName()}"; ` +
+        `transição timeline: 1º POST DONE (estágio OLD), 2º POST PENDING (estágio NEW); ` +
+        `DONE: equipa do OLD (CS=Owner, Fin=Financeiro_Respons_vel); ` +
+        `PENDING: equipa do NEW — estágios financeiros → Financeiro (CRM/nome G4U); demais → Owner/CS` +
+        (cobrancaFinanceiroEmailStrict
+          ? `; strict sem Owner nem G4U_ZOHO_FALLBACK_USER_EMAIL (G4U_ZOHO_COBRANCA_OWNER_FALLBACK=1 = antigo).`
+          : `; fallback Owner / G4U_ZOHO_FALLBACK_USER_EMAIL se configurado.`)
+    );
+  }
+  if (pageDeals.length < allDealsFetched.length) {
+    console.log(
+      `${colors.cyan}Deals/search: ${allDealsFetched.length} no total; processando ${pageDeals.length} (--max-deals ou ZOHO_MAX_DEALS).${colors.reset}`
+    );
+  } else {
+    console.log(
+      `${colors.cyan}Deals/search: ${pageDeals.length} deal(s) (todas as páginas). POST /game/action/process com o mesmo integration_id deve atualizar registos existentes no G4U.${colors.reset}`
+    );
   }
 
   const bareTimeline =
@@ -1455,49 +2326,99 @@ async function cmdZohoStages(argv) {
     process.env.ZOHO_TIMELINE_BARE === '1' ||
     process.env.ZOHO_TIMELINE_BARE === 'true';
 
+  const { from: timelineAuditedFrom, to: timelineAuditedTo } = bareTimeline
+    ? { from, to }
+    : zohoTimelineAuditedRangeForStageHistory(from, to);
+  if (!bareTimeline && (timelineAuditedFrom !== from || timelineAuditedTo !== to)) {
+    console.log(
+      `${colors.dim}__timeline audited_time: ${timelineAuditedFrom} .. ${timelineAuditedTo} ` +
+        `(alargado vs Modified_Time do search para histórico Stage CS/Financeiro).${colors.reset}`
+    );
+  }
+
   if (!noPost) await ensureToken();
+
+  if (cobrancaFinanceiroUser) {
+    await ensureToken();
+    try {
+      const resolver = await buildGame4uZohoDisplayNameEmailResolver();
+      cobrancaGameUserResolveOpts.game4uNameResolver = resolver;
+      console.log(
+        `${colors.dim}G4U: ${resolver.debugCounts.users} utilizador(es) para match Financeiro por nome; ` +
+          `team_id Financeiro=${resolver.debugCounts.financeiroTeamId ?? 'n/d'}.${colors.reset}`
+      );
+    } catch (e) {
+      console.warn(
+        `${colors.yellow}Não foi possível carregar utilizadores Game4U para match por nome: ${e.message || e}${colors.reset}`
+      );
+    }
+  }
 
   let builtPayloads = 0;
   let postsOk = 0;
   let deliveryCompleteOk = 0;
   const totalDeals = pageDeals.length;
+  const cobrancaFinanceiroEmailByDealId = new Map();
+
+  async function resolveCobrancaFinanceiroEmailOnce(deal) {
+    const id = String(deal.id);
+    if (cobrancaFinanceiroEmailByDealId.has(id)) return cobrancaFinanceiroEmailByDealId.get(id);
+    const em = await resolveEmailZohoCobrancaGameUser(
+      deal,
+      token,
+      zohoUserEmailCache,
+      cobrancaGameUserResolveOpts
+    );
+    cobrancaFinanceiroEmailByDealId.set(id, em);
+    return em;
+  }
 
   for (let i = 0; i < pageDeals.length; i++) {
     const deal = pageDeals[i];
     if (!deal?.id) continue;
     if (i > 0) await sleep(120);
 
-    const tl = bareTimeline
-      ? cfg.zoho.dealTimelineStages.pathTemplate.replace('{{dealId}}', deal.id)
-      : buildZohoDealTimelineUrl(deal.id, from, to);
-    const r2 = await fetch(tl, {
-      headers: { Authorization: `Zoho-oauthtoken ${token}` }
-    });
-    const t2 = await r2.text();
-    let j2;
-    try {
-      j2 = JSON.parse(t2);
-    } catch {
-      j2 = { _raw: t2 };
-    }
-    log(`Zoho __timeline [${i + 1}/${totalDeals}] deal ${deal.id}`, `status ${r2.status}`, j2);
+    const j2 = await zohoFetchMergedDealTimeline(
+      deal.id,
+      timelineAuditedFrom,
+      timelineAuditedTo,
+      token,
+      bareTimeline
+    );
+    const tlCount = j2?.__timeline?.length ?? 0;
+    log(
+      `Zoho __timeline [${i + 1}/${totalDeals}] deal ${deal.id}`,
+      `${tlCount} entrada(s) fundidas (todas as páginas com page_token)`,
+      tlCount <= 30 ? j2 : { __timeline_len: tlCount, note: 'corpo truncado no log' }
+    );
 
     const hit = pickLatestStageChangeFromTimeline(j2);
     if (!hit) {
       console.warn(
-        `${colors.dim}deal ${deal.id}: sem field_history Stage no __timeline — pulando.${colors.reset}`
+        `${colors.dim}deal ${deal.id}: sem field_history com api_name stage/Stage no __timeline — pulando.${colors.reset}`
       );
       continue;
     }
 
-    const oldVal = String(hit.field._value?.old ?? '').trim();
-    const newVal = String(hit.field._value?.new ?? '').trim();
-    const audited = hit.row.audited_time || new Date().toISOString();
+    const transition = normalizeZohoDealStageTransition(deal, map, hit);
+    const {
+      oldVal,
+      newVal,
+      auditedAt,
+      actionIdOld,
+      actionIdNew,
+      doneEligible,
+      pendingEligible,
+      wantCompleteDelivery,
+      wantStageProcess,
+      usedDealStageFallback
+    } = transition;
 
-    const actionIdOld = oldVal ? resolveActionTemplateIdForZohoStage(oldVal, map) : null;
-    const actionIdNew = newVal ? resolveActionTemplateIdForZohoStage(newVal, map) : null;
-    const wantCompleteDelivery = stageNameCompletesDelivery(newVal);
-    const wantStageProcess = Boolean(actionIdOld || actionIdNew);
+    if (usedDealStageFallback) {
+      console.warn(
+        `${colors.dim}deal ${deal.id}: transição Stage sem _value.new no timeline — usando Stage atual do deal como newVal.${colors.reset}`
+      );
+    }
 
     if (!wantStageProcess && !wantCompleteDelivery) {
       console.warn(
@@ -1507,41 +2428,67 @@ async function cmdZohoStages(argv) {
     }
 
     const jur = getZohoJuridicoResponsibleLookup(deal);
-    if (zohoUserLookupFilled(jur) && !zohoAllowPostWhenJurFilled()) {
+    if (zohoJuridicoResponsiblePresent(jur) && !zohoAllowPostWhenJurFilled()) {
       console.warn(
         `${colors.dim}deal ${deal.id}: Responsável Jurídico preenchido — POST por Stage omitido (usar fluxo de tags / zoho-tasks ou zoho.stagePostToGame4u.allowPostWhenJuridicoResponsibleSet).${colors.reset}`
       );
       continue;
     }
 
-    const needFin = dealRequiresFinanceiroLookupForStagePost(deal);
-    const allowMissFin = zohoAllowMissingFinanceiroForStagePost();
-    if (
-      wantStageProcess &&
-      (!zohoUserLookupFilled(deal.Owner) ||
-        (needFin && !allowMissFin && !zohoUserLookupFilled(deal.Financeiro_Respons_vel)))
-    ) {
-      console.warn(
-        `${colors.yellow}deal ${deal.id}: exige Owner (CS)${needFin && !allowMissFin ? ' e Financeiro_Respons_vel' : ''} para POST por Stage — pulando.${colors.reset}`
+    let pendingAssigneeEmail = null;
+    if (wantStageProcess && pendingEligible) {
+      pendingAssigneeEmail = await resolveZohoPendingUserEmailForDealStage(
+        deal,
+        newVal,
+        map,
+        token,
+        zohoUserEmailCache,
+        cobrancaFinanceiroUser,
+        resolveCobrancaFinanceiroEmailOnce
       );
-      continue;
+    }
+
+    if (wantStageProcess && cobrancaFinanceiroUser && pendingEligible) {
+      if (!pendingAssigneeEmail) {
+        console.warn(
+          `${colors.yellow}deal ${deal.id}: Cobrança — sem e-mail para PENDING do Stage "${newVal}"` +
+            (cobrancaFinanceiroEmailStrict
+              ? ` (strict). Corrija lookup/CRM ou match nome Game4U. Para usar Owner: G4U_ZOHO_COBRANCA_OWNER_FALLBACK=1.`
+              : ` (ou fallback Owner / G4U_ZOHO_FALLBACK_USER_EMAIL).`) +
+            ` — pulando deal.${colors.reset}`
+        );
+        continue;
+      }
+    } else if (wantStageProcess) {
+      const needFin = dealRequiresFinanceiroLookupForStagePost(deal);
+      const allowMissFin = zohoAllowMissingFinanceiroForStagePost();
+      if (
+        !zohoUserLookupFilled(deal.Owner) ||
+        (needFin && !allowMissFin && !zohoUserLookupFilled(deal.Financeiro_Respons_vel))
+      ) {
+        console.warn(
+          `${colors.yellow}deal ${deal.id}: exige Owner (CS)${needFin && !allowMissFin ? ' e Financeiro_Respons_vel' : ''} para POST por Stage — pulando.${colors.reset}`
+        );
+        continue;
+      }
     }
 
     let anyOkThisDeal = false;
     let dealBuilt = 0;
     let lastHttpStatusThisDeal = 0;
 
-    if (
-      wantStageProcess &&
-      actionIdOld &&
-      oldVal &&
-      actionIdOld !== actionIdNew &&
-      !(isFinanceStageName(oldVal, map, deal) && !financeStageEligibleForDeal(deal))
-    ) {
-      const emailOld = await resolveEmailForZohoStageTeam(oldVal, deal, map, token, zohoUserEmailCache);
+    // Fase 1 — DONE: fecha a user_action do estágio anterior (old) no histórico Zoho.
+    if (wantStageProcess && doneEligible) {
+      const emailOld = await resolveEmailForZohoStageTeam(
+        oldVal,
+        deal,
+        map,
+        token,
+        zohoUserEmailCache
+      );
       if (!emailOld) {
         console.warn(
-          `${colors.yellow}deal ${deal.id}: sem e-mail para concluir estágio anterior "${oldVal}" — pulando DONE.${colors.reset}`
+          `${colors.yellow}deal ${deal.id}: sem e-mail para DONE do estágio anterior "${oldVal}" — pulando DONE.${colors.reset}`
         );
       } else {
         const stableOld = buildZohoStableIntegrationId(deal.id, actionIdOld);
@@ -1549,7 +2496,7 @@ async function cmdZohoStages(argv) {
         if (!noPost) {
           const searchRes = await game4uFetchPendingUserActionsForDelivery(deal.id);
           log(
-            `GET user-action/search (deal ${deal.id}, fechar ${actionIdOld})`,
+            `GET user-action/search (deal ${deal.id}, fechar estágio OLD "${oldVal}" action ${actionIdOld})`,
             `status ${searchRes.status}`,
             searchRes.json
           );
@@ -1559,12 +2506,12 @@ async function cmdZohoStages(argv) {
             if (row?.created_at) createdAtForDone = row.created_at;
           }
         } else {
-          createdAtForDone = audited;
+          createdAtForDone = auditedAt;
         }
 
         if (!createdAtForDone) {
           console.warn(
-            `${colors.yellow}deal ${deal.id}: DONE omitido — atividade PENDING não encontrada (integration_id esperado ${stableOld}; registos antigos usavam timeline-*).${colors.reset}`
+            `${colors.yellow}deal ${deal.id}: DONE omitido — PENDING do estágio OLD não encontrada (integration_id ${buildZohoStableIntegrationId(deal.id, actionIdOld)}; registos antigos usavam timeline-*).${colors.reset}`
           );
         } else {
           const doneBody = buildGameProcessPayloadZohoStageProcess({
@@ -1574,22 +2521,23 @@ async function cmdZohoStages(argv) {
             status: 'DONE',
             integrationId: stableOld,
             createdAt: createdAtForDone,
-            finishedAt: audited,
+            finishedAt: auditedAt,
             oldVal,
             newVal,
-            audited
+            audited: auditedAt
           });
           dealBuilt++;
           log(
-            `POST /game/action/process DONE (deal ${deal.id}, ${i + 1}/${totalDeals})`,
-            `action_id=${actionIdOld} ← era Stage "${oldVal}"`,
+            `POST /game/action/process DONE [estágio OLD] (deal ${deal.id}, ${i + 1}/${totalDeals})`,
+            `"${oldVal}" → "${newVal}" | action_id=${actionIdOld}`,
             doneBody
           );
           if (!noPost) {
-            const prDone = await game4uFetch(cfg.gameActionProcess.path, {
-              method: cfg.gameActionProcess.method,
-              body: doneBody
-            });
+            const prDone = await game4uActionProcessWithRestoreOnCancelledPending(
+              cfg.gameActionProcess.path,
+              cfg.gameActionProcess.method,
+              doneBody
+            );
             log(
               `${cfg.gameActionProcess.method} ${cfg.gameActionProcess.path} DONE deal ${deal.id}`,
               `status ${prDone.status}`,
@@ -1606,42 +2554,38 @@ async function cmdZohoStages(argv) {
       }
     }
 
-    if (
-      wantStageProcess &&
-      actionIdNew &&
-      newVal &&
-      !(isFinanceStageName(newVal, map, deal) && !financeStageEligibleForDeal(deal))
-    ) {
-      const emailNew = await resolveEmailForZohoStageTeam(newVal, deal, map, token, zohoUserEmailCache);
-      if (!emailNew) {
+    // Fase 2 — PENDING: abre a user_action do estágio novo (new) no histórico Zoho.
+    if (wantStageProcess && pendingEligible) {
+      if (!pendingAssigneeEmail) {
         console.warn(
-          `${colors.yellow}deal ${deal.id}: sem e-mail para abrir Stage "${newVal}" — pulando PENDING.${colors.reset}`
+          `${colors.yellow}deal ${deal.id}: sem e-mail para PENDING do estágio NEW "${newVal}" — pulando PENDING.${colors.reset}`
         );
       } else {
         const stableNew = buildZohoStableIntegrationId(deal.id, actionIdNew);
         const pendingBody = buildGameProcessPayloadZohoStageProcess({
           deal,
           actionId: actionIdNew,
-          userEmail: emailNew,
+          userEmail: pendingAssigneeEmail,
           status: 'PENDING',
           integrationId: stableNew,
-          createdAt: audited,
+          createdAt: auditedAt,
           finishedAt: null,
           oldVal,
           newVal,
-          audited
+          audited: auditedAt
         });
         dealBuilt++;
         log(
-          `POST /game/action/process PENDING (deal ${deal.id}, ${i + 1}/${totalDeals})`,
-          `action_id=${actionIdNew} ← Stage "${newVal}"`,
+          `POST /game/action/process PENDING [estágio NEW] (deal ${deal.id}, ${i + 1}/${totalDeals})`,
+          `"${oldVal}" → "${newVal}" | action_id=${actionIdNew}`,
           pendingBody
         );
         if (!noPost) {
-          const prPen = await game4uFetch(cfg.gameActionProcess.path, {
-            method: cfg.gameActionProcess.method,
-            body: pendingBody
-          });
+          const prPen = await game4uActionProcessWithRestoreOnCancelledPending(
+            cfg.gameActionProcess.path,
+            cfg.gameActionProcess.method,
+            pendingBody
+          );
           log(
             `${cfg.gameActionProcess.method} ${cfg.gameActionProcess.path} PENDING deal ${deal.id}`,
             `status ${prPen.status}`,
@@ -1661,10 +2605,10 @@ async function cmdZohoStages(argv) {
       log(
         `POST delivery/complete (deal ${deal.id})`,
         `Stage novo "${newVal}" em stagesThatCompleteDelivery`,
-        { finished_at: audited }
+        { finished_at: auditedAt }
       );
       if (!noPost) {
-        const dr = await game4uPostDeliveryCompleteIfConfigured(deal.id, audited);
+        const dr = await game4uPostDeliveryCompleteIfConfigured(deal.id, auditedAt);
         log(`POST .../delivery/.../complete deal ${deal.id}`, `status ${dr.status}`, dr.json);
         lastHttpStatusThisDeal = dr.status;
         if (dr.ok) {
@@ -1697,7 +2641,7 @@ async function cmdZohoStages(argv) {
 
   if (noPost) {
     console.log(
-      `${colors.yellow}[--no-post-process] ${builtPayloads} payload(s) montado(s) a partir de ${totalDeals} deal(s) na página 1.${colors.reset}`
+      `${colors.yellow}[--no-post-process] ${builtPayloads} payload(s) montado(s) a partir de ${totalDeals} deal(s) (após paginação completa do search).${colors.reset}`
     );
   } else {
     console.log(
@@ -1714,8 +2658,6 @@ async function cmdZohoStages(argv) {
 async function cmdZohoTasks(argv) {
   const noPost = argv.includes('--no-post-process');
   const postAllMapped = argv.includes('--post-all-mapped');
-  const maxDeals =
-    argInt(argv, '--max-deals', parseInt(process.env.ZOHO_MAX_DEALS || '200', 10)) || 200;
   const map = loadZohoCrmActionMap();
 
   const { from, to, kf, kt } = zohoModifiedTimeRange();
@@ -1725,34 +2667,23 @@ async function cmdZohoTasks(argv) {
   const criteria = zohoDealsSearchCriteria(from, to, argv);
   const token = await zohoRefreshToken();
   const zohoUserEmailCache = new Map();
-  const searchUrl = buildZohoDealsSearchUrl(criteria, 1);
-  const r = await fetch(searchUrl, {
-    headers: { Authorization: `Zoho-oauthtoken ${token}` }
-  });
-  const txt = await r.text();
-  let data;
-  try {
-    data = JSON.parse(txt);
-  } catch {
-    data = { _raw: txt };
-  }
-  const info = data?.info;
-  log(
-    'Zoho Deals/search (zoho-tasks, página 1)',
-    `status ${r.status} criteria=${criteria}` +
-      (info
-        ? ` | page=${info.page} per_page=${info.per_page} more_records=${info.more_records} count=${info.count}`
-        : ''),
-    data
-  );
-
-  const pageDeals = data?.data ?? [];
-  if (!pageDeals.length) {
-    console.warn(`${colors.yellow}Nenhum deal na primeira página do search.${colors.reset}`);
+  const zohoDealRowCacheForJur = new Map();
+  const allDealsFetched = await zohoFetchAllDealsSearchPages(criteria, token);
+  if (!allDealsFetched.length) {
+    console.warn(`${colors.yellow}Nenhum deal no Deals/search (todas as páginas).${colors.reset}`);
     return;
   }
-
-  const subset = pageDeals.slice(0, maxDeals);
+  const maxDeals = zohoRunnerMaxDeals(argv);
+  const subset = allDealsFetched.slice(0, maxDeals);
+  if (subset.length < allDealsFetched.length) {
+    console.log(
+      `${colors.cyan}zoho-tasks: ${allDealsFetched.length} deals no search; processando ${subset.length} (--max-deals / ZOHO_MAX_DEALS).${colors.reset}`
+    );
+  } else {
+    console.log(
+      `${colors.cyan}zoho-tasks: ${subset.length} deal(s). POST com mesmo integration_id deve atualizar o G4U.${colors.reset}`
+    );
+  }
   if (!noPost) await ensureToken();
 
   let postsOk = 0;
@@ -1769,27 +2700,19 @@ async function cmdZohoTasks(argv) {
     let dealBuilt = 0;
 
     const jur = getZohoJuridicoResponsibleLookup(deal);
-    if (!zohoUserLookupFilled(jur)) {
+    if (!zohoJuridicoResponsiblePresent(jur)) {
       console.warn(
         `${colors.dim}deal ${deal.id}: sem Respons_vel_Jur / Jur_dico_Respons_vel — pulando (zoho-tasks só deals com jurídico).${colors.reset}`
       );
       continue;
     }
 
-    const url = cfg.zoho.dealActivitiesChronological.pathTemplate.replace('{{dealId}}', deal.id);
-    const r2 = await fetch(url, {
-      headers: { Authorization: `Zoho-oauthtoken ${token}` }
-    });
-    const t2 = await r2.text();
-    let j2;
-    try {
-      j2 = JSON.parse(t2);
-    } catch {
-      j2 = { _raw: t2 };
-    }
-    log(`Zoho Activities_Chronological [${i + 1}/${totalDeals}] deal ${deal.id}`, `status ${r2.status}`, j2);
-
-    const list = extractZohoActivitiesChronologicalList(j2);
+    const list = await zohoFetchAllActivitiesChronologicalForDeal(deal.id, token);
+    log(
+      `Zoho Activities_Chronological [${i + 1}/${totalDeals}] deal ${deal.id}`,
+      `${list.length} atividade(s) (todas as páginas)`,
+      list.length <= 12 ? list : { total: list.length, preview: list.slice(0, 3) }
+    );
     const hit = findLatestActivityWithTagFlow(list, map);
     if (!hit) {
       console.warn(
@@ -1808,7 +2731,14 @@ async function cmdZohoTasks(argv) {
       new Date().toISOString();
     const stableIntId = buildZohoJurStableIntegrationId(deal.id, hit.actionId);
 
-    const email = await zohoResolveUserEmailFromLookup(jur, token, zohoUserEmailCache);
+    const email = await zohoResolveJuridicoResponsibleEmail(
+      jur,
+      deal.id,
+      token,
+      zohoUserEmailCache,
+      zohoDealRowCacheForJur,
+      hit.activity
+    );
     if (!email) {
       console.warn(
         `${colors.yellow}deal ${deal.id}: jurídico sem e-mail resolvido — pulando POST.${colors.reset}`
@@ -1835,6 +2765,17 @@ async function cmdZohoTasks(argv) {
         }
       } else {
         createdAtUse = audited;
+      }
+      const jurCfg = cfg.zoho?.jurActivitiesFromZoho || {};
+      const allowDoneFromTaskTime =
+        jurCfg.allowDoneUsingTaskCreatedAtWhenSearchMiss === true ||
+        process.env.G4U_ZOHO_JUR_DONE_USE_TASK_CREATED_AT === '1';
+      if (!createdAtUse && allowDoneFromTaskTime) {
+        createdAtUse =
+          hit.activity.Created_Time || hit.activity.created_time || audited;
+        console.warn(
+          `${colors.yellow}deal ${deal.id}: DONE jur usando created_at da task Zoho (sem PENDING no search; risco se o registo G4U existir com outro created_at).${colors.reset}`
+        );
       }
       if (!createdAtUse) {
         console.warn(
@@ -1872,10 +2813,11 @@ async function cmdZohoTasks(argv) {
     );
 
     if (!noPost) {
-      const pr = await game4uFetch(cfg.gameActionProcess.path, {
-        method: cfg.gameActionProcess.method,
+      const pr = await game4uActionProcessWithRestoreOnCancelledPending(
+        cfg.gameActionProcess.path,
+        cfg.gameActionProcess.method,
         body
-      });
+      );
       lastHttpStatus = pr.status;
       log(
         `${cfg.gameActionProcess.method} ${cfg.gameActionProcess.path} JUR deal ${deal.id}`,
@@ -2006,10 +2948,11 @@ async function cmdSyncActionTemplatePoints(argv) {
 async function cmdProbeGameActionProcess(argv = []) {
   await ensureToken();
   const body = { ...cfg.game4uUserActionPayload.example };
-  const r = await game4uFetch(cfg.gameActionProcess.path, {
-    method: cfg.gameActionProcess.method,
+  const r = await game4uActionProcessWithRestoreOnCancelledPending(
+    cfg.gameActionProcess.path,
+    cfg.gameActionProcess.method,
     body
-  });
+  );
   log(
     `${cfg.gameActionProcess.method} ${cfg.gameActionProcess.path}`,
     `status ${r.status}`,
@@ -2024,6 +2967,197 @@ async function cmdProbeGameActionProcess(argv = []) {
     r.json
   );
   await maybePauseBetweenOps(argv);
+}
+
+/**
+ * Validação rápida: Zoho Deals/search (sem timeline nem POST G4U).
+ * 1) Layout.display_label equals / not_equal "Layout CS e Jurídico" (sem filtro Pipeline no critério).
+ * 2) Histograma de Pipeline no intervalo; Pipeline:equals; critério completo do runner.
+ */
+async function cmdZohoPipelineProbe(argv = []) {
+  const quiet = !argv.includes('--verbose');
+  const samplesLimit = (() => {
+    const i = argv.indexOf('--samples');
+    if (i >= 0 && argv[i + 1] != null) {
+      const n = parseInt(argv[i + 1], 10);
+      return Number.isFinite(n) && n >= 0 ? Math.min(n, 50) : 5;
+    }
+    return 5;
+  })();
+
+  const { from, to, kf, kt } = zohoModifiedTimeRange();
+  if (!from || !to) {
+    throw new Error(`Defina ${kf} e ${kt} (intervalo Modified_Time do Deals/search).`);
+  }
+
+  const pf = cfg.zoho.dealsSearch?.pipelineFilter;
+  const field =
+    process.env.ZOHO_DEALS_PIPELINE_FIELD?.trim() || pf?.fieldApiName || 'Pipeline';
+  const allowed = Array.isArray(pf?.allowedDisplayNames) ? [...pf.allowedDisplayNames] : [];
+
+  const extraFromEnv = (process.env.ZOHO_PROBE_PIPELINE_NAMES || '')
+    .split('|')
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  const token = await zohoRefreshToken();
+
+  const layoutProbeLabel =
+    process.env.ZOHO_PROBE_LAYOUT_LABEL?.trim() || 'Layout CS e Jurídico';
+  const layoutFieldProbe =
+    process.env.ZOHO_PROBE_LAYOUT_FIELD?.trim() || 'Layout.display_label';
+  const runLayoutNotEqualAlways = argv.includes('--layout-probe-both');
+
+  console.log(
+    `\n${colors.cyan}Teste Layout (critério sem Pipeline):${colors.reset} ${layoutFieldProbe}`
+  );
+  const critLayoutEq = buildZohoTimeAndLayoutDisplayLabelCriteria(
+    from,
+    to,
+    'equals',
+    layoutProbeLabel
+  );
+  console.log(`${colors.dim}criteria equals: ${critLayoutEq}${colors.reset}`);
+  const dealsLayoutEq = await zohoFetchAllDealsSearchPages(critLayoutEq, token, { quiet });
+  console.log(
+    `${dealsLayoutEq.length ? colors.green : colors.yellow}` +
+      `${layoutFieldProbe} equals "${layoutProbeLabel}": ${dealsLayoutEq.length} deal(s)${colors.reset}`
+  );
+  if (dealsLayoutEq.length) {
+    const { lines, totalBuckets } = zohoProbeMiniPipelineHistogramLines(dealsLayoutEq);
+    console.log(`  Pipelines neste conjunto (${totalBuckets} distintos, top 18):`);
+    for (const ln of lines) console.log(ln);
+    const cob = dealsLayoutEq.filter((d) => /cobran/i.test(getZohoDealPipelineName(d)));
+    if (cob.length) {
+      console.log(`  ${colors.green}Destes, pipeline ~cobran: ${cob.length}${colors.reset}`);
+    }
+    const laySample = dealsLayoutEq.slice(0, 3).map((d) => ({
+      id: d.id,
+      layout_body: getZohoDealLayoutDisplayLabel(d),
+      pipeline: getZohoDealPipelineName(d)
+    }));
+    console.log(`  Amostra layout/pipeline no body: ${JSON.stringify(laySample)}`);
+  }
+
+  if (dealsLayoutEq.length === 0 || runLayoutNotEqualAlways) {
+    if (dealsLayoutEq.length > 0 && runLayoutNotEqualAlways) {
+      console.log(`\n${colors.dim}--layout-probe-both: a correr também not_equal…${colors.reset}`);
+    }
+    const critLayoutNe = buildZohoTimeAndLayoutDisplayLabelCriteria(
+      from,
+      to,
+      'not_equal',
+      layoutProbeLabel
+    );
+    console.log(`${colors.dim}criteria not_equal: ${critLayoutNe}${colors.reset}`);
+    const dealsLayoutNe = await zohoFetchAllDealsSearchPages(critLayoutNe, token, { quiet });
+    console.log(
+      `${dealsLayoutNe.length ? colors.green : colors.yellow}` +
+        `${layoutFieldProbe} not_equal "${layoutProbeLabel}": ${dealsLayoutNe.length} deal(s)${colors.reset}`
+    );
+    if (dealsLayoutNe.length) {
+      const { lines, totalBuckets } = zohoProbeMiniPipelineHistogramLines(dealsLayoutNe);
+      console.log(`  Pipelines neste conjunto (${totalBuckets} distintos, top 18):`);
+      for (const ln of lines) console.log(ln);
+      const cob = dealsLayoutNe.filter((d) => /cobran/i.test(getZohoDealPipelineName(d)));
+      if (cob.length) {
+        console.log(`  ${colors.green}Destes, pipeline ~cobran: ${cob.length}${colors.reset}`);
+      }
+    }
+  } else {
+    console.log(
+      `${colors.dim}Teste not_equal omitido (equals já devolveu deals). Use --layout-probe-both para forçar.${colors.reset}`
+    );
+  }
+
+  console.log(
+    `\n${colors.cyan}zoho-pipeline-probe:${colors.reset} Modified_Time ${from} .. ${to}; api_name ${field}; ` +
+      `histograma = união por pipeline (allowedDisplayNames) — evita limite Zoho ~2000 num search único.`
+  );
+  const allDeals = await zohoFetchDealsMergedByAllowedPipelines(from, to, token, { quiet });
+  console.log(`Total de deals no intervalo (ignorando filtro de pipeline): ${allDeals.length}`);
+
+  const hist = new Map();
+  const samples = new Map();
+  let emptyPipeline = 0;
+  for (const d of allDeals) {
+    const label = getZohoDealPipelineName(d);
+    if (!label) {
+      emptyPipeline++;
+      continue;
+    }
+    hist.set(label, (hist.get(label) || 0) + 1);
+    if (!samples.has(label)) samples.set(label, d.Pipeline);
+  }
+
+  const sorted = [...hist.entries()].sort((a, b) => b[1] - a[1]);
+  console.log(`\nPipelines distintos (rótulo normalizado a partir do body): ${sorted.length}`);
+  const show = Math.min(sorted.length, 40);
+  for (let i = 0; i < show; i++) {
+    const [name, c] = sorted[i];
+    console.log(`  ${String(c).padStart(5)}\t${name}`);
+  }
+  if (sorted.length > show) {
+    console.log(`  … (+${sorted.length - show} pipelines não listados)`);
+  }
+  if (emptyPipeline) {
+    console.log(
+      `${colors.yellow}Deals sem Pipeline legível no body (string/objeto vazio): ${emptyPipeline}${colors.reset}`
+    );
+  }
+
+  const cobrancaLike = sorted.filter(([name]) => /cobran/i.test(name));
+  if (cobrancaLike.length) {
+    console.log(`\n${colors.green}Buckets do histograma que casam /cobran/i:${colors.reset}`);
+    for (const [name, c] of cobrancaLike) {
+      console.log(`  ${String(c).padStart(5)}\t${name}`);
+    }
+    const [firstName] = cobrancaLike[0];
+    const raw = samples.get(firstName);
+    console.log(`\nAmostra JSON bruto do campo Pipeline (primeiro bucket acima): ${JSON.stringify(raw)}`);
+  } else {
+    console.log(
+      `\n${colors.yellow}Nenhum pipeline no histograma contém "cobran" — alargue ZOHO_MODIFIED_* ou confira o nome no CRM.${colors.reset}`
+    );
+  }
+
+  const probeNames = new Set();
+  for (const n of allowed) {
+    if (/cobran/i.test(n)) probeNames.add(n);
+  }
+  probeNames.add('Cobrança');
+  probeNames.add('Cobranca');
+  for (const n of extraFromEnv) probeNames.add(n);
+
+  console.log(
+    `\n${colors.cyan}Deals/search com (Modified_Time) and (Pipeline:equals:…):${colors.reset}`
+  );
+  for (const name of probeNames) {
+    const crit = buildZohoSinglePipelineSearchCriteria(name, from, to);
+    const rows = await zohoFetchAllDealsSearchPages(crit, token, { quiet });
+    const ok = rows.length > 0 ? colors.green : colors.dim;
+    console.log(
+      `  ${ok}Pipeline:equals "${name}" → ${rows.length} deal(s)${colors.reset}`
+    );
+  }
+
+  const critConfigured = zohoDealsSearchCriteria(from, to, []);
+  const withFilter = await zohoFetchAllDealsSearchPages(critConfigured, token, { quiet });
+  const cobrancaInConfigured = withFilter.filter((d) => /cobran/i.test(getZohoDealPipelineName(d)));
+  console.log(
+    `\nCritério do runner (Modified_Time + pipelines em allowedDisplayNames): ${withFilter.length} deals; ` +
+      `com rótulo de pipeline ~cobran: ${cobrancaInConfigured.length}`
+  );
+
+  if (samplesLimit > 0 && cobrancaInConfigured.length) {
+    const ids = cobrancaInConfigured.slice(0, samplesLimit).map((d) => d.id);
+    console.log(`  IDs (amostra, --samples ${samplesLimit}): ${ids.join(', ')}`);
+  }
+
+  console.log(
+    `\n${colors.dim}Dicas: --verbose; ZOHO_PROBE_PIPELINE_NAMES; ZOHO_PROBE_LAYOUT_LABEL / ZOHO_PROBE_LAYOUT_FIELD; ` +
+      `--layout-probe-both; ZOHO_DEALS_PIPELINE_FIELD se Pipeline tiver outro api_name.${colors.reset}`
+  );
 }
 
 function cmdHelp() {
@@ -2042,23 +3176,33 @@ Comandos:
   seed-teams-users              Times primeiro (leader temp. = GET /auth/user), usuários com team_id, PUT líderes
                                 Opções: --phase … | all  --pause  --reset-supabase-auth  --dry-run (só com reset)
                                 Env: SUPABASE_URL + SUPABASE_SERVICE_ROLE_SECRET (reset)  G4U_SEED_AVATAR_URL (opcional)
-  zoho-stages                   Zoho: página 1 Deals/search; __timeline 1ª página. Por transição Stage:
-                                DONE estágio anterior + PENDING novo (action_id via zoho-crm-action-map.json).
-                                integration_id estável zoho-deal-{id}-action-{template}; antes do DONE usa
-                                GET /user-action/search para created_at. Novo Stage em stagesThatCompleteDelivery
-                                → POST /game/delivery/{id}/complete. Regras CS vs financeiro e Jur omitido por Stage
-                                (usar zoho-tasks) como antes. Opções: --no-post-process --post-all-mapped
-                                --zoho-timeline-bare --zoho-ignore-pipeline-filter  |  Env: ZOHO_* ZOHO_MODIFIED_*
-                                G4U_ZOHO_STAGE_ACTION_ID  G4U_ZOHO_*  ZOHO_DEALS_PIPELINE_FILTER
-  zoho-tasks                    Deals com Respons_vel_Jur/Jur_dico_Respons_vel: Activities_Chronological_View_History;
-                                última atividade cuja JSON contém chave de tagFlowTitleToActionTemplateId → action_id;
-                                status da task → G4U (zoho.jurActivitiesFromZoho.zohoTaskStatusToGame4uStatus);
-                                POST /game/action/process; integration_id zoho-deal-{id}-jur-action-{template};
-                                DONE com user-action/search como zoho-stages. Opções: --no-post-process
-                                --post-all-mapped --max-deals  |  mesmo search/pipeline que zoho-stages
+  zoho-stages                   Zoho: Deals/search em todas as páginas (page até more_records=false); __timeline
+                                com page_token fundido. POST /game/action/process: mesmo integration_id deve atualizar
+                                no G4U (upsert no backend). Transição Stage: DONE + PENDING; delivery complete;
+                                CS/financeiro/Jur. __timeline alarga audited_time (histórico Stage) vs Modified_Time do search.
+                                Opções: --no-post-process --post-all-mapped --max-deals N (cap opcional)
+                                --zoho-timeline-bare --zoho-ignore-pipeline-filter
+                                Env: ZOHO_* ZOHO_MODIFIED_* ZOHO_TIMELINE_EXTRA_DAYS_BACK (0=defeito; ex. 730) ZOHO_TIMELINE_AUDITED_FROM/TO
+                                G4U_ZOHO_CANCELLED_PENDING_RESTORE_MAX  ZOHO_DEALS_SEARCH_MAX_PAGES  ZOHO_TIMELINE_MAX_PAGES
+                                ZOHO_MAX_DEALS  G4U_ZOHO_*  ZOHO_DEALS_PIPELINE_FILTER
+  zoho-cobranca-stages          Pipeline Cobrança; timeline: DONE estágio OLD + PENDING estágio NEW; Fin. só em stages financeiros;
+                                DONE com user_email por equipa do estágio anterior (CS=Owner, Financeiro=lookup).
+                                npm run api-scripts:zoho-cobranca-stages -- --post-all-mapped
+                                Env: ZOHO_COBRANCA_PIPELINE_NAME (opcional)
+  zoho-tasks                    Mesmo Deals/search paginado; Activities_Chronological com page_token (todas páginas).
+                                Jur + tags; POST process; integration_id jur estável. --max-deals / ZOHO_MAX_DEALS
+                                limitam quantos deals processar após o search completo (omitir = todos).
+                                Env: ZOHO_ACTIVITIES_MAX_PAGES  (+ G4U_ZOHO_JUR_DONE_USE_TASK_CREATED_AT se precisar)
+  zoho-pipeline-probe           Só Zoho: teste Layout.display_label (= / ≠ "Layout CS e Jurídico", sem Pipeline);
+                                histograma = união por allowedDisplayNames (evita limite ~2000 Zoho); Pipeline:equals; runner.
+                                Opções: --verbose  --samples N  --layout-probe-both (sempre correr not_equal)
+                                Env: ZOHO_MODIFIED_*  ZOHO_PROBE_PIPELINE_NAMES  ZOHO_PROBE_LAYOUT_LABEL
+                                ZOHO_PROBE_LAYOUT_FIELD (default Layout.display_label)
   probe-game-action-process      POST /game/action/process com corpo de exemplo (ver resposta da API)
 
 Env úteis:
+  G4U_ZOHO_CANCELLED_PENDING_RESTORE_MAX   Máx. ciclos restore+retry por POST /game/action/process (default 10)
+  G4U_ZOHO_FINANCEIRO_NAME_MATCH_ALL_TEAMS  default 1: match nome→e-mail fora do time Financeiro; 0 = só Financeiro
   G4U_ACCESS_TOKEN              Pula login se já autenticado
   G4U_SEED_DEFAULT_PASSWORD     Senha fallback se linha do .md não bater por e-mail
   G4U_SEED_AVATAR_URL           URL opcional enviada como avatar_url em cada POST /user
@@ -2093,8 +3237,18 @@ const cmd = argv[0] || 'help';
       case 'zoho-stages':
         await cmdZohoStages(argv);
         break;
+      case 'zoho-cobranca-stages':
+        await cmdZohoStages([
+          '--zoho-cobranca-financeiro-user',
+          '--zoho-pipeline-only-cobranca',
+          ...argv.slice(1)
+        ]);
+        break;
       case 'zoho-tasks':
         await cmdZohoTasks(argv);
+        break;
+      case 'zoho-pipeline-probe':
+        await cmdZohoPipelineProbe(argv);
         break;
       case 'probe-game-action-process':
         await cmdProbeGameActionProcess(argv);

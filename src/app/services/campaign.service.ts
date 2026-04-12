@@ -68,24 +68,18 @@ export class CampaignService {
   }
 
   /**
-   * Retorna uma campanha padrão em caso de erro
-   * Usa o ano inteiro como período da campanha
+   * Campanha padrão: temporada fixa 01/03/2026 — 30/04/2026 (dois meses).
    */
   private getDefaultCampaign(): Campaign {
-    const now = new Date();
-    const startDate = new Date(now.getFullYear(), 0, 1); // Janeiro 1
-    const endDate = new Date(now.getFullYear(), 11, 31); // Dezembro 31
-
-    const defaultCampaign = {
+    return {
       id: 1,
-      created_at: startDate.toISOString(),
-      name: `Temporada ${now.getFullYear()}`,
+      created_at: new Date().toISOString(),
+      name: 'Temporada Mar–Abr 2026',
       client_id: 'default',
-      starts_at: this.formatToDateString(startDate),
-      finishes_at: this.formatToDateString(endDate),
-      isDefault: true // Indica que é uma campanha padrão de fallback
+      starts_at: '2026-03-01',
+      finishes_at: '2026-04-30',
+      isDefault: true
     };
-    return defaultCampaign;
   }
 
   /**

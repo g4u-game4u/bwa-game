@@ -448,23 +448,13 @@ export class ActionLogService {
   }
 
   /**
-   * Get monthly points breakdown (blocked and unlocked)
-   * Queries achievement collection for type=0 entries, separated by item field
-   * Uses Funifier's relative date expressions
-   * Cached with shareReplay to avoid duplicate requests
-   */
-  /**
-   * Get monthly points breakdown for the selected month.
-   * 
-   * Two-step process:
-   * 1. Fetch action_log IDs for the player in the selected month
-   * 2. Use those IDs in an achievement aggregate with extra.id filter to get locked_points total
-   * 
-   * This ensures we only count points that are associated with actions in the selected month.
+   * Pontos mensais (bloqueados / desbloqueados) via achievements ligados ao `action_log`.
+   * Passos: (1) IDs de action_log no mês; (2) agregar achievements com `extra.id` nesses IDs.
+   * Só entram linhas de action_log finalizadas (DONE/DELIVERED ou `extra.processed`).
    */
   getMonthlyPointsBreakdown(playerId: string, month?: Date): Observable<{ bloqueados: number; desbloqueados: number }> {
     const targetMonth = month || new Date();
-    const cacheKey = `${playerId}_${dayjs(targetMonth).format('YYYY-MM')}_points_breakdown`;
+    const cacheKey = `${playerId}_${dayjs(targetMonth).format('YYYY-MM')}_points_breakdown_fin`;
     const cached = this.getCachedData(this.monthlyPointsBreakdownCache, cacheKey);
     if (cached) {
       return cached;
@@ -507,7 +497,11 @@ export class ActionLogService {
       {
         $match: {
           userId: playerId,
-          time: { $gte: startDate, $lte: endDate }
+          time: { $gte: startDate, $lte: endDate },
+          $or: [
+            { status: { $in: ['DONE', 'DELIVERED', 'done', 'delivered'] } },
+            { 'extra.processed': true }
+          ]
         }
       },
       {

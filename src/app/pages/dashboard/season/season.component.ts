@@ -1,4 +1,4 @@
-import { Component, EventEmitter, Input, OnChanges, OnInit, Output } from '@angular/core';
+import { Component, EventEmitter, Input, OnChanges, OnInit, Output, SimpleChanges } from '@angular/core';
 import { Router } from '@angular/router';
 import { NgbModal } from "@ng-bootstrap/ng-bootstrap";
 import { FeaturesService } from '@services/features.service';
@@ -7,7 +7,7 @@ import { SystemParamsService } from '@services/system-params.service';
 import { TemporadaDashboard } from 'src/app/model/temporadaDashboard.model';
 import { SessaoProvider } from 'src/app/providers/sessao/sessao.provider';
 import { AliasService, SystemAliases } from 'src/app/services/alias.service';
-import { TemporadaService } from 'src/app/services/temporada.service';
+import { TemporadaService } from '@services/temporada.service';
 import { FreeChallengeAllowedTeam, FreeChallengeAllowedRole } from 'src/app/model/system-params.model';
 import { ModalGerenciarPontosAvulsosProvider } from "../../../providers/modal-gerenciar-pontos-avulsos.provider";
 import { TIPO_CONSULTA_TIME } from "../dashboard.component";
@@ -85,6 +85,11 @@ export class SeasonComponent implements OnInit, OnChanges {
   restrictFreeChallengesByRole: boolean = false;
   freeChallengesRolesLoading = false;
 
+  /** Chave estável do contexto (colaborador/time) — ignora churn de collapse, nomeConsulta, showTeamGoal, etc. */
+  private lastSeasonLoadKey: string | null = null;
+  /** Invalida callbacks HTTP quando um novo carregamento é pedido. */
+  private seasonDataLoadGeneration = 0;
+
   constructor(
     private modal: NgbModal,
     private temporadaService: TemporadaService,
@@ -99,7 +104,6 @@ export class SeasonComponent implements OnInit, OnChanges {
   }
 
   async ngOnInit() {
-    this.init();
     this.loadAliases();
     this.loadSeasonDates();
     this.loadClientInfo();
@@ -108,35 +112,68 @@ export class SeasonComponent implements OnInit, OnChanges {
     this.loadFreeChallengesRoles();
   }
 
-  ngOnChanges() {
+  /**
+   * Recarrega só quando o contexto real muda (quem está selecionado). Qualquer outro @Input
+   * (collapse, nomeConsulta, showTeamGoal, nova referência de `time` com o mesmo id) não dispara API.
+   */
+  ngOnChanges(_changes: SimpleChanges): void {
+    if (!this.idConsulta) {
+      this.lastSeasonLoadKey = null;
+      this.seasonDataLoadGeneration++;
+      this.apiReady = false;
+      this.apiTeamReady = false;
+      this.seasonPointsWallet = null;
+      this.seasonWalletLoading = false;
+      return;
+    }
+
+    const key = this.seasonLoadKey();
+    if (key === this.lastSeasonLoadKey) {
+      return;
+    }
+
+    this.lastSeasonLoadKey = key;
+    this.seasonDataLoadGeneration++;
+    const loadGen = this.seasonDataLoadGeneration;
+
     this.apiReady = false;
     this.apiTeamReady = false;
-    if (!this.idConsulta) {
-      this.seasonPointsWallet = null;
-      this.seasonWalletLoading = false;
-    }
-    this.init();
-  }
 
-  init() {
-    if (this.idConsulta) {
-      this.getDadosTemporada();
-      if (this.seasonDates?.start && this.seasonDates?.end) {
-        void this.recalculateSeasonWalletFromTemplate();
-      }
-    } else {
-      this.seasonPointsWallet = null;
-      this.seasonWalletLoading = false;
+    this.getDadosTemporada(loadGen);
+    if (this.seasonDates?.start && this.seasonDates?.end) {
+      void this.recalculateSeasonWalletFromTemplate(loadGen);
     }
   }
 
-  getDadosTemporada() {
-    // REFATORAÇÃO: TemporadaService não chama mais API; card não usa agregados Funifier para contagens.
-    void this.temporadaService.getDadosTemporadaDashboard(this.idConsulta, this.tipoConsulta).then(data => {
-      this.seasonData.emit(data);
-      this.seasonInfo = data;
-      this.apiReady = true;
-    });
+  private seasonLoadKey(): string {
+    const t = this.time;
+    const teamPart =
+      t == null || t === ''
+        ? ''
+        : typeof t === 'object' && t !== null && 'id' in (t as object)
+          ? String((t as { id?: unknown }).id ?? '')
+          : String(t);
+    return `${String(this.tipoConsulta ?? '')}|${String(this.idConsulta ?? '')}|${teamPart}`;
+  }
+
+  private getDadosTemporada(loadGen: number): void {
+    const range =
+      this.seasonDates?.start && this.seasonDates?.end
+        ? {
+            start: new Date(this.seasonDates.start).toISOString(),
+            end: new Date(this.seasonDates.end).toISOString()
+          }
+        : undefined;
+    void this.temporadaService
+      .getDadosTemporadaDashboard(this.idConsulta, this.tipoConsulta, range)
+      .then(data => {
+        if (loadGen !== this.seasonDataLoadGeneration) {
+          return;
+        }
+        this.seasonData.emit(data);
+        this.seasonInfo = data;
+        this.apiReady = true;
+      });
   }
 
   get isTeam() {
@@ -468,18 +505,21 @@ export class SeasonComponent implements OnInit, OnChanges {
       this.seasonDates = await this.seasonDatesService.getSeasonDates();
     } catch (error) {
       console.error('Erro ao carregar datas da temporada:', error);
-      // Fallback para datas padrão
       this.seasonDates = {
-        start: new Date('2025-05-01T03:00:00.000Z'),
-        end: new Date('2025-06-30T03:00:00.000Z')
+        start: new Date(2026, 2, 1),
+        end: new Date(2026, 3, 30, 23, 59, 59, 999)
       };
     } finally {
       this.seasonDatesLoading = false;
-      void this.recalculateSeasonWalletFromTemplate();
+      const gen = this.seasonDataLoadGeneration;
+      void this.recalculateSeasonWalletFromTemplate(gen);
     }
   }
 
-  private async recalculateSeasonWalletFromTemplate(): Promise<void> {
+  private async recalculateSeasonWalletFromTemplate(loadGen: number): Promise<void> {
+    if (loadGen !== this.seasonDataLoadGeneration) {
+      return;
+    }
     if (!this.idConsulta || !this.seasonDates?.start || !this.seasonDates?.end) {
       this.seasonPointsWallet = null;
       this.seasonWalletLoading = false;
@@ -495,20 +535,30 @@ export class SeasonComponent implements OnInit, OnChanges {
 
     this.seasonWalletLoading = true;
     try {
-      // REFATORAÇÃO: carteira da temporada não usa mais aggregate action_log na Funifier.
-      // Reativar ao apontar ActionLogService (ou novo backend) sem Funifier:
-      // const wallet$ = this.isTeam
-      //   ? this.actionLogService.computeSeasonWalletForTeam(String(this.idConsulta), rangeStart, rangeEnd)
-      //   : this.actionLogService.computeSeasonWalletForPlayer(String(this.idConsulta), rangeStart, rangeEnd);
-      // this.seasonPointsWallet = await firstValueFrom(wallet$);
-      void rangeStart;
-      void rangeEnd;
-      this.seasonPointsWallet = { total: 0, bloqueados: 0, desbloqueados: 0 };
+      const dash = await this.temporadaService.getDadosTemporadaDashboard(
+        this.idConsulta,
+        this.tipoConsulta,
+        { start: rangeStart.toISOString(), end: rangeEnd.toISOString() }
+      );
+      if (loadGen !== this.seasonDataLoadGeneration) {
+        return;
+      }
+      const bloq = Math.floor(Number(dash.blocked_points) || 0);
+      const desb = Math.floor(Number(dash.unblocked_points) || 0);
+      this.seasonPointsWallet = {
+        total: bloq + desb,
+        bloqueados: bloq,
+        desbloqueados: desb
+      };
     } catch (error) {
-      console.error('Erro ao montar carteira de pontos da temporada (tabela):', error);
-      this.seasonPointsWallet = { total: 0, bloqueados: 0, desbloqueados: 0 };
+      console.error('Erro ao montar carteira de pontos da temporada (/game/stats):', error);
+      if (loadGen === this.seasonDataLoadGeneration) {
+        this.seasonPointsWallet = { total: 0, bloqueados: 0, desbloqueados: 0 };
+      }
     } finally {
-      this.seasonWalletLoading = false;
+      if (loadGen === this.seasonDataLoadGeneration) {
+        this.seasonWalletLoading = false;
+      }
     }
   }
 

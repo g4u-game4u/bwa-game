@@ -1,0 +1,11 @@
+# Meia-noite (00:00) no fuso do servidor — novo POST /goals/logs com totais Omie do dia.
+# Coloque GOAL_TEMPLATE_ID e credenciais no .env na raiz do repo (o Python faz load_dotenv).
+# Ajuste o caminho absoluto do repositório.
+#
+# crontab -e
+
+0 0 * * * cd /caminho/absoluto/bwa-game && OMIE_GOALS_REGENERATE_PANEL=1 ./scripts/cron/run-daily-omie-goals.sh
+
+# Variantes úteis:
+#   OMIE_GOALS_INPUT=referencia-python/omie_painel_recebiveis.json
+#   OMIE_GOALS_LOG_DIR=/var/log/bwa-game

@@ -316,16 +316,15 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
       companyService.getCompanies.calls.reset();
       kpiService.getPlayerKPIs.calls.reset();
 
-      const monthsAgo = 1; // 1 month ago
+      const picked = new Date(2026, 2, 1);
 
       // Act
-      component.onMonthChange(monthsAgo);
+      component.onMonthChange(picked);
       tick();
 
       // Assert
-      const expectedMonth = new Date();
-      expectedMonth.setMonth(expectedMonth.getMonth() - monthsAgo);
-      expect(component.selectedMonth.getMonth()).toEqual(expectedMonth.getMonth());
+      expect(component.selectedMonth.getFullYear()).toBe(2026);
+      expect(component.selectedMonth.getMonth()).toBe(2);
       expect(playerService.getPlayerStatus).toHaveBeenCalled();
       expect(companyService.getCompanies).toHaveBeenCalled();
       expect(kpiService.getPlayerKPIs).toHaveBeenCalled();
@@ -339,16 +338,14 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
       companyService.getCompanies.and.returnValue(of([]));
       kpiService.getPlayerKPIs.and.returnValue(of([]));
       
-      const monthsAgo = 2; // 2 months ago
+      const picked = new Date(2026, 2, 1);
 
       // Act
-      component.onMonthChange(monthsAgo);
+      component.onMonthChange(picked);
       tick();
 
       // Assert
-      const expectedMonth = new Date();
-      expectedMonth.setMonth(expectedMonth.getMonth() - monthsAgo);
-      expect(component.selectedMonth.getMonth()).toEqual(expectedMonth.getMonth());
+      expect(component.selectedMonth.getMonth()).toBe(2);
     }));
   });
 
@@ -1250,7 +1247,7 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
       companyKpiService.enrichCompaniesWithKpis.and.returnValue(of(newEnrichedData));
 
       // Act - Change month
-      component.onMonthChange(1); // 1 month ago
+      component.onMonthChange(new Date(2026, 2, 1));
       tick();
 
       // Assert

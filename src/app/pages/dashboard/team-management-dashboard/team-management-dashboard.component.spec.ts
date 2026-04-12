@@ -207,17 +207,16 @@ describe('TeamManagementDashboardComponent', () => {
     }));
 
     it('should update selected month when month changes', () => {
-      const initialMonth = component.selectedMonth;
-      component.onMonthChange(1);
-      
-      expect(component.selectedMonthsAgo).toBe(1);
-      expect(component.selectedMonth).not.toEqual(initialMonth);
+      component.onMonthChange(new Date(2026, 2, 1));
+
+      expect(component.selectedMonth.getFullYear()).toBe(2026);
+      expect(component.selectedMonth.getMonth()).toBe(2);
     });
 
     it('should load team data when month changes', () => {
       spyOn(component, 'loadTeamData');
-      component.onMonthChange(1);
-      
+      component.onMonthChange(new Date(2026, 2, 1));
+
       expect(component.loadTeamData).toHaveBeenCalled();
     });
   });
@@ -399,13 +398,11 @@ describe('TeamManagementDashboardComponent', () => {
       it('should preserve selected month during refresh', fakeAsync(() => {
         const originalMonth = new Date('2024-06-15');
         component.selectedMonth = originalMonth;
-        component.selectedMonthsAgo = 2;
-        
+
         component.refreshData();
         tick();
 
         expect(component.selectedMonth).toEqual(originalMonth);
-        expect(component.selectedMonthsAgo).toBe(2);
       }));
 
       it('should preserve active tab during refresh', fakeAsync(() => {
@@ -431,7 +428,6 @@ describe('TeamManagementDashboardComponent', () => {
         component.selectedTeam = 'Financeiro';
         component.selectedCollaborator = 'user2@test.com';
         component.selectedMonth = new Date('2024-05-01');
-        component.selectedMonthsAgo = 3;
         component.activeTab = 'productivity';
         component.selectedPeriod = 90;
         
@@ -442,7 +438,6 @@ describe('TeamManagementDashboardComponent', () => {
         expect(component.selectedTeam).toBe('Financeiro');
         expect(component.selectedCollaborator).toBe('user2@test.com');
         expect(component.selectedMonth).toEqual(new Date('2024-05-01'));
-        expect(component.selectedMonthsAgo).toBe(3);
         expect(component.activeTab).toBe('productivity');
         expect(component.selectedPeriod).toBe(90);
       }));
@@ -682,12 +677,12 @@ describe('TeamManagementDashboardComponent', () => {
       }));
 
       it('should refresh with different month selected', fakeAsync(() => {
-        component.selectedMonthsAgo = 5;
-        
+        component.selectedMonth = new Date(2026, 2, 1);
+
         component.refreshData();
         tick();
 
-        expect(component.selectedMonthsAgo).toBe(5);
+        expect(component.selectedMonth.getMonth()).toBe(2);
         expect(mockTeamAggregateService.clearCache).toHaveBeenCalled();
       }));
     });

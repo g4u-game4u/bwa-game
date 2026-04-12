@@ -18,6 +18,7 @@ export enum UserProfile {
  * Import TeamCodes interface from team-code.service
  */
 import { TeamCodes } from '../services/team-code.service';
+import { ROLES_LIST } from './constants';
 
 /**
  * Team IDs that correspond to management roles
@@ -46,6 +47,26 @@ const DEFAULT_TEAM_CODES: TeamCodes = {
  * @param teams - User's teams array (can be strings or objects with _id)
  * @returns Array of team ID strings
  */
+/** Role de gestão na API (ex.: `roles` do Funifier) — mesmo valor que ROLES_LIST.ACCESS_MANAGER_PANEL. */
+const GESTOR_ROLE_TOKEN = ROLES_LIST.ACCESS_MANAGER_PANEL;
+
+function hasGestorRole(roles: string[] | undefined | null): boolean {
+  if (!roles || !Array.isArray(roles)) {
+    return false;
+  }
+  return roles.some(
+    r =>
+      typeof r === 'string' &&
+      (r === GESTOR_ROLE_TOKEN || r.toUpperCase().includes(GESTOR_ROLE_TOKEN))
+  );
+}
+
+function hasOperationalTeamOutsideMeta(teamIds: string[], codes: TeamCodes): boolean {
+  return teamIds.some(
+    id => id !== codes.diretor && id !== codes.gestor && id !== codes.supervisor
+  );
+}
+
 function extractTeamIds(teams: any[] | undefined | null): string[] {
   if (!teams || !Array.isArray(teams) || teams.length === 0) {
     return [];
@@ -54,8 +75,15 @@ function extractTeamIds(teams: any[] | undefined | null): string[] {
   return teams.map((team: any) => {
     if (typeof team === 'string') {
       return team;
-    } else if (team && typeof team === 'object' && team._id) {
-      return team._id;
+    }
+    if (typeof team === 'number' && isFinite(team)) {
+      return String(team);
+    }
+    if (team && typeof team === 'object' && team._id != null) {
+      return String(team._id);
+    }
+    if (team && typeof team === 'object' && team.id != null) {
+      return String(team.id);
     }
     return null;
   }).filter(Boolean) as string[];
@@ -72,30 +100,45 @@ function extractTeamIds(teams: any[] | undefined | null): string[] {
  * 
  * @param teams - User's teams array (can be strings or objects with _id)
  * @param teamCodes - Optional team codes configuration. If not provided, uses default values.
+ * @param roles - Opcional: `usuario.roles` (ex. GESTOR sem estar no time meta FkmdnFU).
  * @returns UserProfile enum value
  */
 export function determineUserProfile(
   teams: any[] | undefined | null,
-  teamCodes?: TeamCodes
+  teamCodes?: TeamCodes,
+  roles?: string[] | null
 ): UserProfile {
   const codes = teamCodes || DEFAULT_TEAM_CODES;
   const teamIds = extractTeamIds(teams);
 
-  if (teamIds.length === 0) {
-    return UserProfile.JOGADOR;
+  // Check in priority order (highest to lowest)
+  if (teamIds.length > 0) {
+    if (teamIds.includes(codes.diretor)) {
+      return UserProfile.DIRETOR;
+    }
+
+    if (teamIds.includes(codes.gestor)) {
+      return UserProfile.GESTOR;
+    }
+
+    if (teamIds.includes(codes.supervisor)) {
+      return UserProfile.SUPERVISOR;
+    }
   }
 
-  // Check in priority order (highest to lowest)
-  if (teamIds.includes(codes.diretor)) {
-    return UserProfile.DIRETOR;
-  }
-  
-  if (teamIds.includes(codes.gestor)) {
+  if (
+    hasGestorRole(roles || undefined) &&
+    teamIds.length > 0 &&
+    hasOperationalTeamOutsideMeta(teamIds, codes)
+  ) {
     return UserProfile.GESTOR;
   }
-  
-  if (teamIds.includes(codes.supervisor)) {
-    return UserProfile.SUPERVISOR;
+
+  if (teamIds.length === 0) {
+    if (hasGestorRole(roles || undefined)) {
+      return UserProfile.GESTOR;
+    }
+    return UserProfile.JOGADOR;
   }
 
   return UserProfile.JOGADOR;
@@ -130,8 +173,12 @@ export function getUserOwnTeamId(
     return teamIds.find(id => id === codes.supervisor) || null;
   }
 
-  // For GESTOR, return their GESTAO team
+  // GESTOR: time “próprio” para UI = primeiro time operacional (não o meta GESTAO)
   if (profile === UserProfile.GESTOR) {
+    const managed = teamIds.filter(id => id !== codes.gestor);
+    if (managed.length > 0) {
+      return managed[0];
+    }
     return teamIds.find(id => id === codes.gestor) || null;
   }
 

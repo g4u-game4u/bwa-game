@@ -66,6 +66,7 @@
   },
   "gameActionProcess": {
     "description": "Endpoint candidato a receber o processamento de ação vindos do CRM (tag Game na OpenAPI).",
+    "integrationUpsertNote": "O runner reenvia POST com o mesmo delivery_id + integration_id estável em sincronizações repetidas; a API deve atualizar o registo existente em vez de criar duplicado.",
     "method": "POST",
     "path": "/game/action/process",
     "openApiVerification": {
@@ -110,8 +111,8 @@
       "criteriaTemplate": "(Modified_Time:between:{{from}},{{to}})",
       "criteriaNotes": "Search Records v8: critério único segue Field:operator:value; datetime 'between' usa dois valores ISO8601 separados por vírgula. Condições compostas: ((A) and (B)). Vírgulas/parenteses nos valores exigem escape (\\,) e encode. O runner envia criteria já via encodeURIComponent; adiciona page e per_page (máx. 200).",
       "defaultPerPage": 200,
-      "searchIncludeFields": "id,Pipeline,Stage,Deal_Name,Owner,Financeiro_Respons_vel,Respons_vel_Jur,Jur_dico_Respons_vel",
-      "searchIncludeFieldsNote": "Garante Pipeline e lookups no body de cada deal (sem isto o Zoho pode omitir Pipeline e as regras por pipeline falham). Máx. 50 api_names.",
+      "searchIncludeFields": "id,Layout,Pipeline,Stage,Deal_Name,Owner,Financeiro_Respons_vel,Respons_vel_Jur,Jur_dico_Respons_vel",
+      "searchIncludeFieldsNote": "Garante Pipeline, Layout e lookups no body (Layout útil para probes e validar Layout.display_label no search). Máx. 50 api_names.",
       "dateRangeEnv": {
         "from": "ZOHO_MODIFIED_FROM",
         "to": "ZOHO_MODIFIED_TO"
@@ -121,7 +122,7 @@
         "to": "2026-04-10T00:00:00+00:00"
       },
       "pagination": {
-        "note": "Resposta traz info.more_records, info.page, info.per_page (default/máx. 200). Próximas páginas: incrementar page até more_records=false."
+        "note": "Resposta traz info.more_records, info.page, info.per_page (default/máx. 200). Próximas páginas: incrementar page até more_records=false. Runner: zohoFetchAllDealsSearchPages. Limite de segurança: env ZOHO_DEALS_SEARCH_MAX_PAGES (default 500)."
       },
       "pipelineFilter": {
         "enabled": true,
@@ -132,7 +133,7 @@
           "Qualidade",
           "Cobrança"
         ],
-        "teamsNote": "Concessão de Aposentadoria: CS + Jurídico. Qualidade: só CS. Cobrança: CS + Financeiro. O runner só restringe por pipeline; regras por responsável/stage/tag continuam no código.",
+        "teamsNote": "Concessão de Aposentadoria: CS + Jurídico. Qualidade: só CS. Cobrança: CS + Financeiro. O runner só restringe por pipeline; regras por responsável/stage/tag continuam no código. Comando zoho-cobranca-stages: só Cobrança no search; POST com user_email = Financeiro_Respons_vel (env ZOHO_COBRANCA_PIPELINE_NAME se o rótulo do picklist for outro).",
         "requireFinanceiroLookupForStagePostByPipeline": {
           "Concessão de Aposentadoria": true,
           "Qualidade": false,
@@ -147,12 +148,16 @@
       "pathTemplate": "https://www.zohoapis.com/crm/v8/Deals/{{dealId}}/__timeline",
       "docsUrl": "https://www.zoho.com/crm/developer/docs/api/v8/timeline-of-a-record.html",
       "pagination": true,
-      "firstPageQueryNotes": "Primeira página: per_page + sort_by=audited_time; filters JSON com audited_time between (mesmo intervalo do search ajuda). include_inner_details para field_history rico. page_token nas páginas seguintes (não misturar per_page com page_token)."
+      "firstPageQueryNotes": "Primeira página: per_page + sort_by=audited_time; filters JSON com audited_time between (mesmo intervalo do search ajuda). include_inner_details para field_history rico. page_token nas páginas seguintes (não misturar per_page com page_token).",
+      "stageHistoryAuditedFromNotBefore": null,
+      "stageHistoryTimelineNote": "Runner zoho-stages: por defeito início = ZOHO_MODIFIED_FROM; opcional ZOHO_TIMELINE_EXTRA_DAYS_BACK (ex. 730) recua o início. fim ≥ agora se ZOHO_MODIFIED_TO for passado. Janelas muito largas podem devolver __timeline vazio na Zoho. Env: ZOHO_TIMELINE_AUDITED_FROM/TO. --zoho-timeline-bare mantém from/to do search."
     },
     "dealActivitiesChronological": {
       "description": "Histórico de atividades para fluxo Jurídico por tags (scripts.md §4).",
       "method": "GET",
       "pathTemplate": "https://www.zohoapis.com/crm/v8/Deals/{{dealId}}/Activities_Chronological_View_History",
+      "fieldsQueryParam": "Subject,Status,Priority,Activity_Type,Created_Time,Modified_Time,Owner,What_Id,Description,$se_module",
+      "fieldsQueryNote": "A API v8 exige query fields neste endpoint; ajuste api_names se o CRM usar outros nomes.",
       "pagination": true
     },
     "stagePostToGame4u": {
@@ -161,7 +166,7 @@
       "allowPostWhenJuridicoResponsibleSet": true,
       "financeiroStageUseOwnerEmailIfFinanceiroHasNoEmail": true,
       "resolveUserEmailViaCrmUsersApi": true,
-      "notes": "allowMissingFinanceiroLookup: não exige Financeiro_Respons_vel preenchido (Concessão/Cobrança) — usa Owner. allowPostWhenJuridicoResponsibleSet: envia POST por stage mesmo com responsável jurídico no deal. financeiroStageUseOwnerEmailIfFinanceiroHasNoEmail: stage financeiro sem e-mail no lookup usa Owner. resolveUserEmailViaCrmUsersApi: GET /crm/v8|v2/users/{id} quando o lookup só tem id. Env: G4U_ZOHO_ALLOW_MISSING_FINANCEIRO, G4U_ZOHO_POST_WITH_JUR, G4U_ZOHO_FALLBACK_USER_EMAIL."
+      "notes": "allowMissingFinanceiroLookup: não exige Financeiro_Respons_vel preenchido (Concessão/Cobrança) — usa Owner. allowPostWhenJuridicoResponsibleSet: envia POST por stage mesmo com responsável jurídico no deal. financeiroStageUseOwnerEmailIfFinanceiroHasNoEmail: stage financeiro sem e-mail no lookup usa Owner (não aplica ao PENDING do script zoho-cobranca-stages em modo strict). zoho-cobranca-stages: se o CRM não devolver e-mail, cruza nome do utilizador Zoho (lookup.name ou API users) com full_name dos utilizadores Game4U, priorizando o time Financeiro; G4U_ZOHO_FINANCEIRO_NAME_MATCH_ALL_TEAMS=0 restringe ao time Financeiro; G4U_ZOHO_COBRANCA_OWNER_FALLBACK=1 reativa Owner + G4U_ZOHO_FALLBACK_USER_EMAIL. resolveUserEmailViaCrmUsersApi: GET users quando o lookup só tem id. Env: G4U_ZOHO_ALLOW_MISSING_FINANCEIRO, G4U_ZOHO_POST_WITH_JUR, G4U_ZOHO_FALLBACK_USER_EMAIL, G4U_ZOHO_COBRANCA_OWNER_FALLBACK."
     },
     "stagesThatCompleteDelivery": [
       "Comunicar Protoc. Revisão (CS)",
@@ -176,6 +181,8 @@
       "Processo Deferido (Parceiro)"
     ],
     "jurActivitiesFromZoho": {
+      "allowDoneUsingTaskCreatedAtWhenSearchMiss": false,
+      "allowDoneUsingTaskCreatedAtWhenSearchMissNote": "Se true (ou env G4U_ZOHO_JUR_DONE_USE_TASK_CREATED_AT=1), DONE jur envia created_at da task Zoho quando /user-action/search não achar PENDING — útil para sincronizar tarefas já concluídas no CRM; use com cuidado.",
       "zohoTaskStatusToGame4uStatus": {
         "Completed": "DONE",
         "Concluída": "DONE",

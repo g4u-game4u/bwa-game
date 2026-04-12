@@ -4,7 +4,7 @@ import { Observable } from 'rxjs';
 import { environment } from '../../environments/environment';
 
 /**
- * Chamadas ao backend configurado em `environment.backend_url_base` (ex.: Game4U MVP API).
+ * Chamadas à API Game4U (`g4u_api_base` com fallback para `backend_url_base`).
  * O `AuthInterceptor` também envia `client_id` e `Authorization` nas URLs do backend.
  */
 @Injectable({ providedIn: 'root' })
@@ -12,7 +12,7 @@ export class BackendActionApiService {
   constructor(private http: HttpClient) {}
 
   private actionsUrl(): string {
-    const base = (environment.backend_url_base || '').replace(/\/$/, '');
+    const base = String(environment.g4u_api_base || environment.backend_url_base || '').replace(/\/$/, '');
     return `${base}/action`;
   }
 

@@ -243,6 +243,7 @@
     [listType]="progressModalType"
     [month]="selectedMonth"
     [showPointsInActivityList]="false"
+    [useBackendUserActions]="true"
     (closed)="onProgressModalClosed()">
   </modal-progress-list>
   
@@ -251,6 +252,7 @@
     *ngIf="isCompanyCarteiraDetailModalOpen && selectedCarteiraCompany"
     [company]="selectedCarteiraCompany"
     [month]="selectedMonth"
+    [actionContextPlayerId]="getPlayerId()"
     (closed)="onCompanyCarteiraDetailModalClosed()">
   </modal-company-carteira-detail>
   
@@ -259,6 +261,7 @@
     *ngIf="isCarteiraModalOpen"
     [playerId]="currentPlayerId"
     [month]="selectedMonth"
+    [useBackendUserActions]="true"
     (closed)="onCarteiraModalClosed()">
   </modal-carteira>
 </div>

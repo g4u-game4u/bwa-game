@@ -1,3 +1,4 @@
+<ng-container *ngIf="canViewTeamManagementDashboard; else teamManagementAccessDeniedTpl">
 <div class="team-management-dashboard" [class.sidebar-collapsed]="sidebarCollapsed" role="main">
   <!-- Screen reader announcements -->
   <div aria-live="polite" aria-atomic="true" class="sr-only" id="dashboard-announcements">
@@ -284,7 +285,7 @@
                     [colorIndex]="i">
                   </c4u-kpi-circular-progress>
                   <c4u-kpi-circular-progress
-                    *ngIf="kpi.id !== 'numero-empresas'"
+                    *ngIf="kpi.id !== 'numero-empresas' && (kpi.id !== 'valor-concedido' || isSelectedFinanceTeam())"
                     [label]="kpi.label"
                     [current]="roundValue(kpi.current)"
                     [target]="roundValue(kpi.target)"
@@ -316,52 +317,48 @@
               
               <c4u-shimmer *ngIf="isLoadingGoals"></c4u-shimmer>
             </section>
-            
-            <!-- Company Portfolio Section -->
-            <ng-container>
-              <section class="dashboard-section carteira-section" aria-labelledby="company-section-title">
-                <div class="section-header">
-                  <h3 id="company-section-title" class="section-title">Clientes</h3>
-                  <!-- <button 
-                    type="button" 
-                    class="carteira-expand-btn"
-                    (click)="openCarteiraModal()"
-                    aria-label="Ver todos os clientes">
-                    <i class="ri-external-link-line"></i>
-                    Ver todos
-                  </button> -->
-                </div>
-                
-                <c4u-card class="carteira-card">
-                  <!-- Carteira list from action_log CNPJs -->
-                  <div *ngIf="teamCarteiraClientes.length > 0" class="carteira-list">
-                    <div *ngFor="let cliente of teamCarteiraClientes" 
-                         class="carteira-item"
-                         (click)="openCompanyDetailModal(cliente)"
-                         role="button"
-                         tabindex="0"
-                         [attr.aria-label]="'Ver detalhes de ' + getCompanyDisplayName(cliente.cnpj)"
-                         (keydown.enter)="openCompanyDetailModal(cliente)"
-                         (keydown.space)="openCompanyDetailModal(cliente); $event.preventDefault()">
-                      <div class="carteira-item-info">
-                        <i class="ri-building-line"></i>
-                        <span class="carteira-cnpj">{{ getCompanyDisplayName(cliente.cnpj) }}</span>
-                      </div>
-                      <div class="carteira-item-meta">
-                        <span class="carteira-action-count">{{ formatClienteTasksLabel(cliente.actionCount) }}</span>
-                      </div>
+          </div>
+
+          <!-- Clientes: fora do bloco de loading de metas; dados via Funifier ou Game4U -->
+          <section
+            class="dashboard-section carteira-section"
+            aria-labelledby="company-section-title">
+            <div class="section-header">
+              <h3 id="company-section-title" class="section-title">Clientes</h3>
+            </div>
+
+            <c4u-card class="carteira-card">
+              <div *ngIf="teamCarteiraClientes.length > 0" class="carteira-list">
+                <div *ngFor="let cliente of teamCarteiraClientes"
+                     class="carteira-item"
+                     (click)="openCompanyDetailModal(cliente)"
+                     role="button"
+                     tabindex="0"
+                     [attr.aria-label]="'Ver detalhes de ' + getCarteiraClienteTitle(cliente)"
+                     (keydown.enter)="openCompanyDetailModal(cliente)"
+                     (keydown.space)="openCompanyDetailModal(cliente); $event.preventDefault()">
+                  <div class="carteira-item-info carteira-item-info-stack">
+                    <i
+                      class="carteira-item-icon"
+                      [class.ri-user-3-line]="cliente.deliveryId"
+                      [class.ri-building-line]="!cliente.deliveryId"></i>
+                    <div class="carteira-item-text">
+                      <span class="carteira-cnpj">{{ getCarteiraClienteTitle(cliente) }}</span>
                     </div>
                   </div>
-                  
-                  <c4u-shimmer *ngIf="isLoadingCarteira"></c4u-shimmer>
-                  
-                  <div *ngIf="!isLoadingCarteira && teamCarteiraClientes.length === 0" class="empty-state">
-                    <p>Nenhum cliente encontrado na carteira da equipe</p>
+                  <div class="carteira-item-meta">
+                    <span class="carteira-action-count">{{ formatClienteTasksLabel(cliente.actionCount) }}</span>
                   </div>
-                </c4u-card>
-              </section>
-            </ng-container>
-          </div>
+                </div>
+              </div>
+
+              <c4u-shimmer *ngIf="isLoadingCarteira"></c4u-shimmer>
+
+              <div *ngIf="!isLoadingCarteira && teamCarteiraClientes.length === 0" class="empty-state">
+                <p>Nenhuma entrega/cliente com tarefas neste mês (via Funifier ou Game4U).</p>
+              </div>
+            </c4u-card>
+          </section>
 
           <c4u-shimmer *ngIf="isLoadingGoals"></c4u-shimmer>
 
@@ -494,6 +491,7 @@
     [month]="selectedMonth"
     [showPointsInActivityList]="true"
     [showClientColumnInActivityList]="true"
+    [useBackendUserActions]="true"
     (closed)="onProgressModalClosed()">
   </modal-progress-list>
   
@@ -502,6 +500,8 @@
     *ngIf="isCompanyCarteiraDetailModalOpen && selectedCarteiraCompany"
     [company]="selectedCarteiraCompany"
     [month]="selectedMonth"
+    [actionContextPlayerId]="carteiraActionPlayerIdForModal"
+    [actionContextPlayerIds]="carteiraActionPlayerIdsForModal"
     (closed)="onCompanyCarteiraDetailModalClosed()">
   </modal-company-carteira-detail>
   
@@ -510,6 +510,7 @@
     *ngIf="isCarteiraModalOpen"
     [playerId]="teamPlayerIdsForModal"
     [month]="selectedMonth"
+    [useBackendUserActions]="true"
     (closed)="onCarteiraModalClosed()">
   </modal-carteira>
 
@@ -523,3 +524,9 @@
     </div>
   </div>
 </div>
+</ng-container>
+<ng-template #teamManagementAccessDeniedTpl>
+  <div class="team-management-access-denied sr-only" role="status">
+    Acesso à gestão de equipe está disponível apenas para perfis de supervisão, gestão ou direção.
+  </div>
+</ng-template>

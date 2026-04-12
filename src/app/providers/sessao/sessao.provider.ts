@@ -1,6 +1,7 @@
 import {Injectable} from '@angular/core';
 import {Usuario} from '@model/usuario.model';
 import {ROLES_LIST} from '@utils/constants';
+import { extractGame4uUserIdFromUserPayload } from '@utils/game4u-user-id.util';
 import {AuthProvider, LoginResponse} from "@providers/auth/auth.provider";
 import {Router} from "@angular/router";
 import {firstValueFrom, timeout, catchError, throwError} from "rxjs";
@@ -103,6 +104,27 @@ export class SessaoProvider {
             await this.logout();
             return;
         }
+        // Game4U GET /auth/user: desembrulhar e alinhar campos ao modelo Usuario
+        const dataObj =
+            user.data && typeof user.data === 'object' && !Array.isArray(user.data) ? user.data : null;
+        if (dataObj) {
+            user = { ...user, ...dataObj };
+            if (dataObj.user && typeof dataObj.user === 'object' && !Array.isArray(dataObj.user)) {
+                user = { ...user, ...dataObj.user };
+            }
+        }
+        if (user.user && typeof user.user === 'object') {
+            user = { ...user, ...user.user };
+        }
+        if (typeof user.roles === 'string' && user.roles.trim()) {
+            user.roles = [user.roles.trim()];
+        }
+        if (user.id != null && user._id == null) {
+            user._id = String(user.id);
+        }
+        if ((!user.teams || !Array.isArray(user.teams) || user.teams.length === 0) && user.team_id != null) {
+            user.teams = [user.team_id];
+        }
         // Handle Funifier response format - map _id to email if email is not set
         // Funifier uses _id as the email/player identifier
         if (!user.email && user._id) {
@@ -146,6 +168,13 @@ export class SessaoProvider {
         // Ensure teams is an array
         if (!Array.isArray(user.teams)) {
             user.teams = [];
+        }
+        const g4uId = extractGame4uUserIdFromUserPayload(user, this.loginResponse?.access_token);
+        if (g4uId) {
+            user.user_id = g4uId;
+            if (user.id == null) {
+                user.id = g4uId;
+            }
         }
         this._usuario = user;
     }

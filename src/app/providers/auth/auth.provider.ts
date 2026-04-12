@@ -29,10 +29,14 @@ export class AuthProvider {
     );
   }
 
+  /**
+   * Perfil do utilizador autenticado.
+   * Com Funifier desligado, usa GET `/auth/user` na mesma base do login (roles, times, email).
+   */
   userInfo(): Observable<any> {
     if (FUNIFIER_HTTP_DISABLED) {
-      console.warn('[AuthProvider] userInfo Funifier bloqueado (refatoração)');
-      return of({});
+      const base = String(this.g4uApiBase || '').replace(/\/+$/, '');
+      return this.http.get<any>(`${base}/auth/user`);
     }
     return this.http.get(`${this.funifierBaseUrl}player/me`);
   }

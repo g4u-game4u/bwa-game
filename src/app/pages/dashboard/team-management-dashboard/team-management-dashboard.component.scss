@@ -1086,7 +1086,8 @@
             flex: 1;
             min-width: 0;
 
-            i {
+            i,
+            .carteira-item-icon {
               color: $primary-electric-blue;
               font-size: 1.25rem;
               flex-shrink: 0;
@@ -1098,6 +1099,32 @@
               white-space: nowrap;
               overflow: hidden;
               text-overflow: ellipsis;
+            }
+
+            &.carteira-item-info-stack {
+              align-items: flex-start;
+
+              .carteira-item-text {
+                display: flex;
+                flex-direction: column;
+                gap: 2px;
+                min-width: 0;
+              }
+
+              .carteira-cnpj {
+                white-space: normal;
+                display: -webkit-box;
+                -webkit-line-clamp: 2;
+                -webkit-box-orient: vertical;
+                overflow: hidden;
+              }
+
+              .carteira-delivery-id {
+                font-size: 0.7rem;
+                color: $text-secondary;
+                font-family: ui-monospace, monospace;
+                word-break: break-all;
+              }
             }
           }
 
