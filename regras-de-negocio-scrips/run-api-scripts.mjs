@@ -417,36 +417,175 @@ function unwrapGame4uUserActionSearchItems(apiRes) {
   return [];
 }
 
-async function game4uFetchPendingUserActionsForDelivery(deliveryId) {
+function buildGame4uUserActionSearchQuery(deliveryId, status, opts = {}) {
   const c = cfg.game4uUserActionSearch || {};
   const path = c.path || '/user-action/search';
-  const limit = Number(c.defaultLimit) || 100;
+  const envLim = process.env.G4U_USER_ACTION_SEARCH_LIMIT?.trim();
+  const baseLimit = Number(c.defaultLimit) || 100;
+  const parsedEnv = envLim ? parseInt(envLim, 10) : NaN;
+  let limit =
+    opts.limit != null && Number(opts.limit) > 0
+      ? Number(opts.limit)
+      : Number.isFinite(parsedEnv) && parsedEnv > 0
+        ? parsedEnv
+        : baseLimit;
+  limit = Math.min(Math.max(limit, 1), 500);
   const start = c.createdAtStartDefault || '2000-01-01T00:00:00.000Z';
   const end = new Date().toISOString();
+  const page = opts.page != null ? String(opts.page) : '1';
+  const dismissed =
+    opts.dismissed !== undefined && opts.dismissed !== null ? String(opts.dismissed) : 'false';
   const qs = new URLSearchParams({
     created_at_start: start,
     created_at_end: end,
-    dismissed: 'false',
-    page: '1',
-    limit: String(limit)
+    dismissed,
+    limit: String(limit),
+    status: String(status || 'PENDING')
   });
-  qs.append('status', 'PENDING');
   if (deliveryId && c.filterByDeliveryId !== false) {
     qs.set('delivery_id', String(deliveryId));
   }
-  return game4uFetch(`${path}?${qs.toString()}`);
+  if (opts.pageToken) {
+    qs.set('page_token', String(opts.pageToken));
+  } else {
+    qs.set('page', page);
+  }
+  return { path: `${path}?${qs.toString()}`, limit };
+}
+
+/**
+ * Todas as páginas de /user-action/search para um delivery+status (evita perder linhas além do limit).
+ * Respeita G4U_USER_ACTION_SEARCH_MAX_PAGES (default 80).
+ */
+async function game4uFetchUserActionSearchAllItems(deliveryId, status, opts = {}) {
+  const maxPages = Math.min(
+    Math.max(parseInt(process.env.G4U_USER_ACTION_SEARCH_MAX_PAGES?.trim() || '80', 10), 1),
+    200
+  );
+  const all = [];
+  let page = 1;
+  let pageToken = null;
+  let lastRes = { ok: false, status: 0, json: null };
+
+  for (let iter = 0; iter < maxPages; iter++) {
+    const { path, limit } = buildGame4uUserActionSearchQuery(deliveryId, status, {
+      ...opts,
+      page,
+      pageToken
+    });
+    const r = await game4uFetch(path);
+    lastRes = r;
+    const j = r.json;
+    const chunk = unwrapGame4uUserActionSearchItems(r);
+    all.push(...chunk);
+
+    const nextTok =
+      j && typeof j === 'object'
+        ? j.next_page_token ?? j.nextPageToken ?? j.Next_Page_Token ?? null
+        : null;
+    if (nextTok) {
+      pageToken = String(nextTok);
+      continue;
+    }
+    pageToken = null;
+
+    const totalPages = j?.total_pages ?? j?.totalPages;
+    const curPage = typeof j?.page === 'number' ? j.page : page;
+    if (typeof totalPages === 'number' && typeof curPage === 'number' && curPage < totalPages) {
+      page = curPage + 1;
+      continue;
+    }
+
+    if (!chunk.length || chunk.length < limit) {
+      break;
+    }
+    page += 1;
+  }
+
+  return { items: all, lastRes };
+}
+
+async function game4uFetchPendingUserActionsForDelivery(deliveryId) {
+  const { path } = buildGame4uUserActionSearchQuery(deliveryId, 'PENDING');
+  return game4uFetch(path);
+}
+
+/**
+ * Junta PENDING + CANCELLED (e opcionalmente outros) para achar created_at ao fechar estágio (DONE).
+ * Env G4U_USER_ACTION_DONE_LOOKUP_STATUSES=CANCELLED (default junta PENDING+CANCELLED).
+ */
+async function game4uFetchUserActionsForDoneLookup(deliveryId) {
+  const extra = String(process.env.G4U_USER_ACTION_DONE_LOOKUP_STATUSES || 'CANCELLED')
+    .split(/[,;]+/)
+    .map((s) => s.trim().toUpperCase())
+    .filter(Boolean);
+  const want = new Set(['PENDING', ...extra]);
+  const includeDismissed =
+    String(process.env.G4U_USER_ACTION_DONE_LOOKUP_INCLUDE_DISMISSED || '')
+      .trim()
+      .match(/^(1|true|yes)$/i) != null;
+
+  const mergedById = new Map();
+  let lastOk = false;
+  let lastStatus = 0;
+
+  async function mergeStatusPages(st, dismissedFlag) {
+    const { items, lastRes } = await game4uFetchUserActionSearchAllItems(deliveryId, st, {
+      dismissed: dismissedFlag
+    });
+    if (lastRes.ok) lastOk = true;
+    lastStatus = lastRes.status;
+    for (const it of items) {
+      if (it?.id != null && String(it.id).trim()) {
+        mergedById.set(String(it.id), it);
+      } else {
+        const k = `${it?.integration_id ?? ''}|${it?.action_template_id ?? it?.action_id ?? ''}|${it?.created_at ?? ''}`;
+        mergedById.set(k, it);
+      }
+    }
+  }
+
+  for (const st of want) {
+    await mergeStatusPages(st, 'false');
+    if (includeDismissed) {
+      await mergeStatusPages(st, 'true');
+    }
+  }
+
+  return {
+    ok: lastOk,
+    status: lastStatus,
+    json: { items: [...mergedById.values()] }
+  };
 }
 
 function findPendingUserActionToClose(items, deliveryId, stableIntegrationId, actionTemplateId) {
   const did = String(deliveryId);
+  const tid = String(actionTemplateId);
   const narrowed = items.filter((it) => String(it.delivery_id) === did);
+  const matchesTemplate = (it) => String(it.action_template_id || it.action_id || '') === tid;
+
   const exact = narrowed.find(
-    (it) =>
-      String(it.integration_id) === String(stableIntegrationId) &&
-      String(it.action_template_id || it.action_id || '') === String(actionTemplateId)
+    (it) => String(it.integration_id) === String(stableIntegrationId) && matchesTemplate(it)
   );
   if (exact) return exact;
-  return narrowed.find((it) => String(it.action_template_id || it.action_id || '') === String(actionTemplateId));
+
+  const pool = narrowed.filter(matchesTemplate);
+  if (!pool.length) return null;
+
+  const dealPrefix = `zoho-deal-${did}-`;
+  const scored = pool.map((it) => {
+    const integ = String(it.integration_id || '');
+    const legacyTimeline = integ.startsWith(dealPrefix) && integ.includes('-timeline-');
+    const t = Date.parse(String(it.created_at || ''));
+    const ts = Number.isFinite(t) ? t : 0;
+    return { it, legacyTimeline, ts };
+  });
+  scored.sort((a, b) => {
+    if (a.legacyTimeline !== b.legacyTimeline) return a.legacyTimeline ? -1 : 1;
+    return b.ts - a.ts;
+  });
+  return scored[0].it;
 }
 
 function stageNameCompletesDelivery(stageName) {
@@ -454,6 +593,15 @@ function stageNameCompletesDelivery(stageName) {
   if (!Array.isArray(list) || !stageName) return false;
   const n = normalizeZohoPicklistLabel(stageName);
   return list.some((s) => normalizeZohoPicklistLabel(s) === n);
+}
+
+/** Se /user-action/search não devolver created_at, usar audited_time da transição (Stage old mapeado = concluído). */
+function zohoStageDoneAllowAuditedWhenSearchMiss() {
+  const e = String(process.env.G4U_ZOHO_STAGE_DONE_USE_AUDITED_WHEN_SEARCH_MISS || '').trim().toLowerCase();
+  if (e === '0' || e === 'false' || e === 'no') return false;
+  const c = cfg.zoho?.stagePostToGame4u?.allowDoneUsingAuditedWhenSearchMiss;
+  if (c === false) return false;
+  return true;
 }
 
 async function game4uPostDeliveryCompleteIfConfigured(deliveryId, finishedAt) {
@@ -1990,17 +2138,38 @@ function zohoTimelineFieldIsStage(fieldHistoryEntry) {
   return n === 'stage';
 }
 
+function zohoParseJsonObjectIfString(raw) {
+  if (raw == null) return null;
+  if (typeof raw === 'object' && !Array.isArray(raw)) return raw;
+  if (typeof raw !== 'string') return null;
+  const t = raw.trim();
+  if (!t.startsWith('{') && !t.startsWith('[')) return null;
+  try {
+    const j = JSON.parse(t);
+    return typeof j === 'object' && j != null ? j : null;
+  } catch {
+    return null;
+  }
+}
+
 /**
- * Lê old/new do field_history (estrutura típica: _value.old, _value.new; às vezes objetos aninhados).
+ * Lê old/new do field_history: prioridade a _value.old / _value.new (Zoho CRM timeline).
+ * _value pode vir string JSON; old/new podem ser objetos picklist.
  */
 function zohoFieldHistoryStageOldNew(fieldHistoryEntry) {
-  const v =
+  let v =
     fieldHistoryEntry?._value ??
     fieldHistoryEntry?.value ??
-    fieldHistoryEntry?.field_history?._value;
+    fieldHistoryEntry?.field_history?._value ??
+    fieldHistoryEntry?.field?.value;
+
+  const parsedFromString = zohoParseJsonObjectIfString(v);
+  if (parsedFromString) v = parsedFromString;
   if (v && typeof v === 'object') {
-    const oldRaw = v.old ?? v.Old ?? v.previous_value ?? v.previous;
-    const newRaw = v.new ?? v.New ?? v.current_value ?? v.current;
+    const oldRaw =
+      v.old ?? v.Old ?? v.previous_value ?? v.previous ?? v.before ?? v.from ?? v.old_value;
+    const newRaw =
+      v.new ?? v.New ?? v.current_value ?? v.current ?? v.after ?? v.to ?? v.new_value;
     return {
       oldVal: zohoPicklistDisplayString(oldRaw),
       newVal: zohoPicklistDisplayString(newRaw)
@@ -2011,12 +2180,14 @@ function zohoFieldHistoryStageOldNew(fieldHistoryEntry) {
 
 /**
  * Todas as alterações de Stage no __timeline (field_history com api_name stage, qualquer capitalização).
+ * timelineIndex = posição da linha no __timeline fundido (desempate quando audited_time empata).
  */
 function collectStageChangesFromTimeline(timelineResponse) {
   const list = timelineResponse?.__timeline;
   if (!Array.isArray(list)) return [];
   const out = [];
-  for (const row of list) {
+  for (let timelineIndex = 0; timelineIndex < list.length; timelineIndex++) {
+    const row = list[timelineIndex];
     const fh = row.field_history;
     if (fh == null) continue;
     const entries = Array.isArray(fh) ? fh : [fh];
@@ -2025,31 +2196,71 @@ function collectStageChangesFromTimeline(timelineResponse) {
       if (!f || typeof f !== 'object') continue;
       if (!zohoTimelineFieldIsStage(f)) continue;
       const { oldVal, newVal } = zohoFieldHistoryStageOldNew(f);
-      out.push({ row, field: f, audited_time: audited, oldVal, newVal });
+      out.push({ row, field: f, audited_time: audited, oldVal, newVal, timelineIndex });
     }
   }
   return out;
 }
 
+function zohoNormStageLabelForMatch(s) {
+  return normalizeZohoPicklistLabel(zohoPicklistDisplayString(s));
+}
+
 /**
- * Transição Stage mais recente no __timeline (último old → new por audited_time).
- * Usado para DONE (old) + PENDING (new) alinhado ao CRM.
+ * Última transição Stage relevante para o deal atual:
+ * - Ordena por audited_time (mais recente primeiro), depois timelineIndex (linhas mais à frente no merge).
+ * - Se o deal tem Stage, prefere a alteração cujo _value.new coincide com esse Stage (última vez que entrou no estágio atual).
+ * - Se new veio vazio mas old veio do _value, usa deal.Stage como new (estágio atual no CRM).
  */
-function pickLatestStageChangeFromTimeline(timelineResponse) {
+function pickLatestStageChangeFromTimeline(timelineResponse, deal) {
   const changes = collectStageChangesFromTimeline(timelineResponse);
   if (!changes.length) return null;
-  changes.sort((a, b) => {
+
+  const sortDesc = (a, b) => {
     const ta = Date.parse(String(a.audited_time)) || 0;
     const tb = Date.parse(String(b.audited_time)) || 0;
     if (tb !== ta) return tb - ta;
-    return String(b.audited_time).localeCompare(String(a.audited_time));
-  });
-  const top = changes[0];
+    const ia = a.timelineIndex ?? 0;
+    const ib = b.timelineIndex ?? 0;
+    if (ib !== ia) return ib - ia;
+    const ida = String(a.row?.id ?? '');
+    const idb = String(b.row?.id ?? '');
+    return idb.localeCompare(ida);
+  };
+
+  const dealStageNorm =
+    deal && deal.Stage != null && String(zohoPicklistDisplayString(deal.Stage)).trim()
+      ? zohoNormStageLabelForMatch(deal.Stage)
+      : '';
+
+  let pool = changes;
+  if (dealStageNorm) {
+    const aligned = changes.filter((c) => zohoNormStageLabelForMatch(c.newVal) === dealStageNorm);
+    if (aligned.length) pool = aligned;
+  }
+
+  pool.sort(sortDesc);
+  const top = pool[0];
+
+  let oldVal = top.oldVal || '';
+  let newVal = top.newVal || '';
+
+  if (dealStageNorm) {
+    if (!String(newVal).trim()) {
+      newVal = dealStageNorm;
+    } else if (zohoNormStageLabelForMatch(newVal) !== dealStageNorm) {
+      newVal = dealStageNorm;
+    }
+  }
+
+  oldVal = oldVal ? zohoNormStageLabelForMatch(oldVal) || String(oldVal).trim() : '';
+  newVal = newVal ? zohoNormStageLabelForMatch(newVal) || String(newVal).trim() : '';
+
   return {
     row: top.row,
     field: top.field,
-    oldVal: top.oldVal,
-    newVal: top.newVal
+    oldVal,
+    newVal
   };
 }
 
@@ -2071,9 +2282,13 @@ function normalizeZohoDealStageTransition(deal, map, hit) {
   const actionIdOld = oldVal ? resolveActionTemplateIdForZohoStage(oldVal, map) : null;
   const actionIdNew = newVal ? resolveActionTemplateIdForZohoStage(newVal, map) : null;
 
+  /**
+   * DONE do estágio anterior: basta _value.old (normalizado) mapear no CRM action map.
+   * Não exigir actionIdOld !== actionIdNew — vários nomes de Stage distintos partilham o mesmo
+   * template (ex.: Análise do CS / Análise Adicional (Jur) → revisaprev_at_005).
+   */
   const doneEligible =
     Boolean(actionIdOld && oldVal) &&
-    actionIdOld !== actionIdNew &&
     !(isFinanceStageName(oldVal, map, deal) && !financeStageEligibleForDeal(deal));
 
   const pendingEligible =
@@ -2392,7 +2607,7 @@ async function cmdZohoStages(argv) {
       tlCount <= 30 ? j2 : { __timeline_len: tlCount, note: 'corpo truncado no log' }
     );
 
-    const hit = pickLatestStageChangeFromTimeline(j2);
+    const hit = pickLatestStageChangeFromTimeline(j2, deal);
     if (!hit) {
       console.warn(
         `${colors.dim}deal ${deal.id}: sem field_history com api_name stage/Stage no __timeline — pulando.${colors.reset}`
@@ -2494,9 +2709,9 @@ async function cmdZohoStages(argv) {
         const stableOld = buildZohoStableIntegrationId(deal.id, actionIdOld);
         let createdAtForDone = null;
         if (!noPost) {
-          const searchRes = await game4uFetchPendingUserActionsForDelivery(deal.id);
+          const searchRes = await game4uFetchUserActionsForDoneLookup(deal.id);
           log(
-            `GET user-action/search (deal ${deal.id}, fechar estágio OLD "${oldVal}" action ${actionIdOld})`,
+            `GET user-action/search (deal ${deal.id}, fechar estágio OLD "${oldVal}" action ${actionIdOld}; PENDING+CANCELLED)`,
             `status ${searchRes.status}`,
             searchRes.json
           );
@@ -2509,9 +2724,16 @@ async function cmdZohoStages(argv) {
           createdAtForDone = auditedAt;
         }
 
+        if (!createdAtForDone && zohoStageDoneAllowAuditedWhenSearchMiss()) {
+          createdAtForDone = auditedAt;
+          console.warn(
+            `${colors.dim}deal ${deal.id}: DONE estágio OLD — usando audited_time como created_at (search sem PENDING/CANCELLED para action ${actionIdOld}; G4U_ZOHO_STAGE_DONE_USE_AUDITED_WHEN_SEARCH_MISS=0 para omitir).${colors.reset}`
+          );
+        }
+
         if (!createdAtForDone) {
           console.warn(
-            `${colors.yellow}deal ${deal.id}: DONE omitido — PENDING do estágio OLD não encontrada (integration_id ${buildZohoStableIntegrationId(deal.id, actionIdOld)}; registos antigos usavam timeline-*).${colors.reset}`
+            `${colors.yellow}deal ${deal.id}: DONE omitido — user_action PENDING/CANCELLED do estágio OLD não encontrada (action ${actionIdOld}; integration_id ${buildZohoStableIntegrationId(deal.id, actionIdOld)}; legado timeline-*). Aumente G4U_USER_ACTION_SEARCH_LIMIT ou G4U_USER_ACTION_SEARCH_MAX_PAGES; se a linha estiver dismissed, use G4U_USER_ACTION_DONE_LOOKUP_INCLUDE_DISMISSED=1.${colors.reset}`
           );
         } else {
           const doneBody = buildGameProcessPayloadZohoStageProcess({
@@ -2752,9 +2974,9 @@ async function cmdZohoTasks(argv) {
     if (g4uStatus === 'DONE') {
       createdAtUse = null;
       if (!noPost) {
-        const searchRes = await game4uFetchPendingUserActionsForDelivery(deal.id);
+        const searchRes = await game4uFetchUserActionsForDoneLookup(deal.id);
         log(
-          `GET user-action/search (deal ${deal.id}, jur DONE ${hit.actionId})`,
+          `GET user-action/search (deal ${deal.id}, jur DONE ${hit.actionId}; PENDING+CANCELLED)`,
           `status ${searchRes.status}`,
           searchRes.json
         );
@@ -2779,7 +3001,7 @@ async function cmdZohoTasks(argv) {
       }
       if (!createdAtUse) {
         console.warn(
-          `${colors.yellow}deal ${deal.id}: DONE jur omitido — atividade PENDING não encontrada (integration_id esperado ${stableIntId}).${colors.reset}`
+          `${colors.yellow}deal ${deal.id}: DONE jur omitido — user_action PENDING/CANCELLED não encontrada (integration_id esperado ${stableIntId}).${colors.reset}`
         );
         announceDone(i + 1, totalDeals, `Zoho Jur→G4U deal ${deal.id}`, false, lastHttpStatus, {
           skipped: 'DONE sem created_at da API'
@@ -2967,6 +3189,99 @@ async function cmdProbeGameActionProcess(argv = []) {
     r.json
   );
   await maybePauseBetweenOps(argv);
+}
+
+/**
+ * Só Zoho: N deals do Deals/search + GET __timeline; imprime _value bruto e _value.old dos field_history com api_name stage.
+ * Opções: --sample-deals N (default 10)  --zoho-timeline-bare  --zoho-ignore-pipeline-filter
+ */
+async function cmdProbeZohoTimelineStageValues(argv = []) {
+  const si = argv.indexOf('--sample-deals');
+  let sampleN = 10;
+  if (si >= 0 && argv[si + 1] != null) {
+    const n = parseInt(argv[si + 1], 10);
+    if (Number.isFinite(n) && n > 0) sampleN = Math.min(n, 50);
+  }
+  const { from, to, kf, kt } = zohoModifiedTimeRange();
+  if (!from || !to) {
+    throw new Error(`Defina ${kf} e ${kt} para o Deals/search.`);
+  }
+  const token = await zohoRefreshToken();
+  const criteria = zohoDealsSearchCriteria(from, to, argv);
+  const all = await zohoFetchAllDealsSearchPages(criteria, token, { quiet: true });
+  const deals = all.slice(0, sampleN);
+  console.log(
+    `${colors.cyan}probe-zoho-timeline-stage-values:${colors.reset} Deals/search → ${all.length} deal(s); ` +
+      `amostra ${deals.length} (critério Modified_Time + pipeline se ativo).`
+  );
+  console.log(`${colors.dim}${kf}=${from}  ${kt}=${to}${colors.reset}`);
+
+  const bareTimeline =
+    argv.includes('--zoho-timeline-bare') ||
+    process.env.ZOHO_TIMELINE_BARE === '1' ||
+    process.env.ZOHO_TIMELINE_BARE === 'true';
+  const { from: af, to: at } = bareTimeline
+    ? { from, to }
+    : zohoTimelineAuditedRangeForStageHistory(from, to);
+  console.log(`${colors.dim}__timeline audited_time: ${af} .. ${at}${colors.reset}\n`);
+
+  const ser = (x, max = 400) => {
+    if (x === undefined) return '(undefined)';
+    if (x === null) return '(null)';
+    if (typeof x === 'string') return x.length > max ? `${x.slice(0, max)}…` : x;
+    try {
+      const s = JSON.stringify(x);
+      return s.length > max ? `${s.slice(0, max)}…` : s;
+    } catch {
+      return String(x);
+    }
+  };
+
+  for (let i = 0; i < deals.length; i++) {
+    const deal = deals[i];
+    if (!deal?.id) continue;
+    if (i > 0) await sleep(120);
+    const j2 = await zohoFetchMergedDealTimeline(deal.id, af, at, token, bareTimeline);
+    const list = j2?.__timeline ?? [];
+    const stageNow = zohoPicklistDisplayString(deal.Stage);
+    console.log(
+      `${colors.cyan}=== [${i + 1}/${deals.length}] deal ${deal.id}${colors.reset} | Stage no search: ${ser(stageNow, 120)} | entradas __timeline: ${list.length}`
+    );
+
+    let stageCount = 0;
+    for (const row of list) {
+      const fh = row.field_history;
+      if (fh == null) continue;
+      const entries = Array.isArray(fh) ? fh : [fh];
+      const audited = row.audited_time ?? row.Audited_Time ?? '';
+      for (const f of entries) {
+        if (!f || typeof f !== 'object') continue;
+        if (!zohoTimelineFieldIsStage(f)) continue;
+        stageCount += 1;
+        const rawV = f._value;
+        let oldDirect = rawV;
+        if (rawV != null && typeof rawV === 'object') {
+          oldDirect = rawV.old ?? rawV.Old ?? rawV.previous_value ?? rawV.previous ?? rawV.before;
+        } else if (typeof rawV === 'string') {
+          const p = zohoParseJsonObjectIfString(rawV);
+          if (p && typeof p === 'object') {
+            oldDirect = p.old ?? p.Old ?? p.previous_value ?? p.previous ?? p.before;
+          }
+        }
+        const { oldVal, newVal } = zohoFieldHistoryStageOldNew(f);
+        console.log(`  — Stage change #${stageCount}  audited_time=${ser(audited, 80)}`);
+        console.log(`      api_name: ${ser(f.api_name ?? f.field?.api_name, 60)}`);
+        console.log(`      _value tipo: ${typeof rawV}  |  _value (amostra): ${ser(rawV, 350)}`);
+        console.log(
+          `      _value.old (bruto ou equivalente old/Old/previous_*): ${ser(oldDirect, 200)}`
+        );
+        console.log(`      parse runner → oldVal="${oldVal}"  newVal="${newVal}"`);
+      }
+    }
+    if (stageCount === 0) {
+      console.log(`  ${colors.dim}(nenhum field_history com api_name stage nesta janela)${colors.reset}`);
+    }
+  }
 }
 
 /**
@@ -3199,10 +3514,17 @@ Comandos:
                                 Env: ZOHO_MODIFIED_*  ZOHO_PROBE_PIPELINE_NAMES  ZOHO_PROBE_LAYOUT_LABEL
                                 ZOHO_PROBE_LAYOUT_FIELD (default Layout.display_label)
   probe-game-action-process      POST /game/action/process com corpo de exemplo (ver resposta da API)
+  probe-zoho-timeline-stage-values  Só Zoho: N deals + __timeline; mostra _value e _value.old do Stage
+                                Opções: --sample-deals N (default 10)  --zoho-timeline-bare  --zoho-ignore-pipeline-filter
 
 Env úteis:
   G4U_ZOHO_CANCELLED_PENDING_RESTORE_MAX   Máx. ciclos restore+retry por POST /game/action/process (default 10)
   G4U_ZOHO_FINANCEIRO_NAME_MATCH_ALL_TEAMS  default 1: match nome→e-mail fora do time Financeiro; 0 = só Financeiro
+  G4U_USER_ACTION_DONE_LOOKUP_STATUSES   Ex.: CANCELLED (default) — statuses extra no search para created_at do DONE
+  G4U_USER_ACTION_SEARCH_LIMIT           Limite por página no search (default config; máx. 500)
+  G4U_USER_ACTION_SEARCH_MAX_PAGES       Máx. páginas por status no DONE lookup (default 80)
+  G4U_USER_ACTION_DONE_LOOKUP_INCLUDE_DISMISSED  1/true — junta também search com dismissed=true
+  G4U_ZOHO_STAGE_DONE_USE_AUDITED_WHEN_SEARCH_MISS  default ligado — Stage DONE usa audited_time se search não achar created_at; 0/false desliga
   G4U_ACCESS_TOKEN              Pula login se já autenticado
   G4U_SEED_DEFAULT_PASSWORD     Senha fallback se linha do .md não bater por e-mail
   G4U_SEED_AVATAR_URL           URL opcional enviada como avatar_url em cada POST /user
@@ -3252,6 +3574,9 @@ const cmd = argv[0] || 'help';
         break;
       case 'probe-game-action-process':
         await cmdProbeGameActionProcess(argv);
+        break;
+      case 'probe-zoho-timeline-stage-values':
+        await cmdProbeZohoTimelineStageValues(argv);
         break;
       default:
         console.error(`${colors.red}Comando desconhecido: ${cmd}${colors.reset}`);

@@ -83,7 +83,7 @@
     "defaultLimit": 100,
     "createdAtStartDefault": "2000-01-01T00:00:00.000Z",
     "filterByDeliveryId": true,
-    "note": "Usado para obter created_at da atividade PENDING antes de enviar DONE (integration_id estável zoho-deal-{id}-action-{templateId}). Se delivery_id não for suportado pela API, defina filterByDeliveryId=false e filtre no runner."
+    "note": "Usado para obter created_at antes de enviar DONE. O runner junta PENDING + CANCELLED (env G4U_USER_ACTION_DONE_LOOKUP_STATUSES, default CANCELLED), percorre todas as páginas (page / page_token / total_pages) até G4U_USER_ACTION_SEARCH_MAX_PAGES, e pode subir o limite por página com G4U_USER_ACTION_SEARCH_LIMIT. integration_id estável zoho-deal-{id}-action-{templateId}; legado timeline-* casa por action_id + delivery. Opcional: G4U_USER_ACTION_DONE_LOOKUP_INCLUDE_DISMISSED=1. Se delivery_id não for suportado, filterByDeliveryId=false."
   },
   "gameDeliveryComplete": {
     "method": "POST",
@@ -166,6 +166,8 @@
       "allowPostWhenJuridicoResponsibleSet": true,
       "financeiroStageUseOwnerEmailIfFinanceiroHasNoEmail": true,
       "resolveUserEmailViaCrmUsersApi": true,
+      "allowDoneUsingAuditedWhenSearchMiss": true,
+      "allowDoneUsingAuditedWhenSearchMissNote": "Quando o estágio anterior (_value.old) está mapeado em stageTitleToActionTemplateId, o runner envia DONE mesmo sem achar PENDING no /user-action/search: usa audited_time da transição como created_at (alinhado a ‘old’ = concluído). Desligar: allowDoneUsingAuditedWhenSearchMiss false ou env G4U_ZOHO_STAGE_DONE_USE_AUDITED_WHEN_SEARCH_MISS=0.",
       "notes": "allowMissingFinanceiroLookup: não exige Financeiro_Respons_vel preenchido (Concessão/Cobrança) — usa Owner. allowPostWhenJuridicoResponsibleSet: envia POST por stage mesmo com responsável jurídico no deal. financeiroStageUseOwnerEmailIfFinanceiroHasNoEmail: stage financeiro sem e-mail no lookup usa Owner (não aplica ao PENDING do script zoho-cobranca-stages em modo strict). zoho-cobranca-stages: se o CRM não devolver e-mail, cruza nome do utilizador Zoho (lookup.name ou API users) com full_name dos utilizadores Game4U, priorizando o time Financeiro; G4U_ZOHO_FINANCEIRO_NAME_MATCH_ALL_TEAMS=0 restringe ao time Financeiro; G4U_ZOHO_COBRANCA_OWNER_FALLBACK=1 reativa Owner + G4U_ZOHO_FALLBACK_USER_EMAIL. resolveUserEmailViaCrmUsersApi: GET users quando o lookup só tem id. Env: G4U_ZOHO_ALLOW_MISSING_FINANCEIRO, G4U_ZOHO_POST_WITH_JUR, G4U_ZOHO_FALLBACK_USER_EMAIL, G4U_ZOHO_COBRANCA_OWNER_FALLBACK."
     },
     "stagesThatCompleteDelivery": [
@@ -196,7 +198,7 @@
       },
       "note": "zoho-tasks: status da task Zoho → status G4U no POST /game/action/process. integration_id jurídico estável: zoho-deal-{dealId}-jur-action-{actionTemplateId} (ver integrationIdRunnerNotes). Ajuste as chaves ao picklist real do CRM."
     },
-    "integrationIdRunnerNotes": "IDs estáveis no runner: Stage zoho-deal-{dealId}-action-{actionTemplateId}; Jurídico (tags) zoho-deal-{dealId}-jur-action-{actionTemplateId}. Registos antigos criados com zoho-deal-{id}-timeline-{rowId} não são encontrados pelo GET user-action/search para montar DONE — feche no G4U ou reabra com o novo integration_id."
+    "integrationIdRunnerNotes": "IDs estáveis no runner: Stage zoho-deal-{dealId}-action-{actionTemplateId}; Jurídico (tags) zoho-deal-{dealId}-jur-action-{actionTemplateId}. Registos antigos com timeline-*: search paginado + fallback de created_at com audited_time (stagePostToGame4u.allowDoneUsingAuditedWhenSearchMiss) quando não houver PENDING/CANCELLED."
   },
   "teamsDefinition": [
     {

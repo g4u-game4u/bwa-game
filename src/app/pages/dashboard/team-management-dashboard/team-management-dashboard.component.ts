@@ -32,6 +32,7 @@ import { HttpClient } from '@angular/common/http';
 import { environment } from '../../../../environments/environment';
 import { FUNIFIER_HTTP_DISABLED } from '../../../config/funifier-requests-disabled';
 import { SEASON_GAME_ACTION_RANGE } from '@app/constants/season-action-range';
+import { filterCompanyDisplaysByClienteSearch } from '@utils/cliente-carteira-search.util';
 
 /** Listagem de times (Funifier ou Game4U): garante array — evita `.filter` em `{}` quando Funifier está desligado. */
 function normalizeTeamsListPayload(raw: unknown): any[] {
@@ -175,6 +176,8 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
   
   // Company/Carteira data for team
   teamCarteiraClientes: CompanyDisplay[] = [];
+  /** Filtro local da lista Clientes (nome da entrega, CNPJ, delivery id, …). */
+  carteiraClienteSearchTerm = '';
   isLoadingCarteira: boolean = false;
   cnpjNameMap = new Map<string, string>(); // Map of original CNPJ → clean empresa name
   
@@ -2549,9 +2552,23 @@ private calculateCollaboratorTotals(memberData: Array<{
   onMonthChange(monthDate: Date): void {
     const d = monthDate instanceof Date ? monthDate : new Date(monthDate);
     this.selectedMonth = new Date(d.getFullYear(), d.getMonth(), 1);
+    this.carteiraClienteSearchTerm = '';
     const monthName = this.selectedMonth.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
     this.announceToScreenReader(`Mês alterado para ${monthName}`);
     this.loadTeamData();
+  }
+
+  get filteredTeamCarteiraClientes(): CompanyDisplay[] {
+    return filterCompanyDisplaysByClienteSearch(
+      this.teamCarteiraClientes,
+      this.carteiraClienteSearchTerm,
+      cnpj => this.getCompanyDisplayName(cnpj)
+    );
+  }
+
+  onCarteiraClienteSearchInput(event: Event): void {
+    this.carteiraClienteSearchTerm = (event.target as HTMLInputElement).value ?? '';
+    this.cdr.markForCheck();
   }
 
   /**

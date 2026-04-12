@@ -30,6 +30,7 @@ import { CompanyDisplay } from '@services/company-kpi.service';
 import { ProgressCardType } from '@components/c4u-activity-progress/c4u-activity-progress.component';
 import { ProgressListType } from '@modals/modal-progress-list/modal-progress-list.component';
 import { SEASON_GAME_ACTION_RANGE } from '@app/constants/season-action-range';
+import { filterCompanyDisplaysByClienteSearch } from '@utils/cliente-carteira-search.util';
 
 @Component({
   selector: 'app-gamification-dashboard',
@@ -82,6 +83,8 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   
   // Carteira: entregas do jogador (GET /user-action), enriquecidas com KPI quando há CNPJ no deal
   carteiraClientes: CompanyDisplay[] = [];
+  /** Filtro local da lista Clientes (nome da entrega, CNPJ, delivery id, …). */
+  carteiraClienteSearchTerm = '';
   isLoadingCarteira = true;
   cnpjNameMap = new Map<string, string>(); // Map of original CNPJ → clean empresa name
   
@@ -662,9 +665,23 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   onMonthChange(monthDate: Date): void {
     const d = monthDate instanceof Date ? monthDate : new Date(monthDate);
     this.selectedMonth = new Date(d.getFullYear(), d.getMonth(), 1);
+    this.carteiraClienteSearchTerm = '';
     const monthName = this.selectedMonth.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
     this.announceToScreenReader(`Mês alterado para ${monthName}`);
     this.loadDashboardData();
+  }
+
+  get filteredCarteiraClientes(): CompanyDisplay[] {
+    return filterCompanyDisplaysByClienteSearch(
+      this.carteiraClientes,
+      this.carteiraClienteSearchTerm,
+      cnpj => this.getCompanyDisplayName(cnpj)
+    );
+  }
+
+  onCarteiraClienteSearchInput(event: Event): void {
+    this.carteiraClienteSearchTerm = (event.target as HTMLInputElement).value ?? '';
+    this.cdr.markForCheck();
   }
   
   /**
