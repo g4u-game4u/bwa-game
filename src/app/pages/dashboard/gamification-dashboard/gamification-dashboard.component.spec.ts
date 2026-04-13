@@ -6,13 +6,15 @@ import { delay } from 'rxjs/operators';
 import { GamificationDashboardComponent } from './gamification-dashboard.component';
 import { PlayerService } from '@services/player.service';
 import { CompanyService } from '@services/company.service';
+import { UserActionDashboardService } from '@services/user-action-dashboard.service';
+import { TemporadaService } from '@services/temporada.service';
 import { KPIService } from '@services/kpi.service';
 import { ToastService } from '@services/toast.service';
 import { ActionLogService } from '@services/action-log.service';
-import { BackendActionApiService } from '@services/backend-action-api.service';
 import { CnpjLookupService } from '@services/cnpj-lookup.service';
 import { SystemParamsService } from '@services/system-params.service';
 import { FinanceiroOmieRecebiveisService } from '@services/financeiro-omie-recebiveis.service';
+import { GoalsReceitaBackendService } from '@services/goals-receita-backend.service';
 import { Router } from '@angular/router';
 import { ActivatedRoute } from '@angular/router';
 import { CompanyKpiService, CompanyDisplay } from '@services/company-kpi.service';
@@ -48,8 +50,10 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
     ]);
     
     const kpiServiceSpy = jasmine.createSpyObj('KPIService', [
-      'getPlayerKPIs'
+      'getPlayerKPIs',
+      'getPlayerKPIsForDateRange'
     ]);
+    kpiServiceSpy.getPlayerKPIsForDateRange.and.returnValue(of([]));
     
     const toastServiceSpy = jasmine.createSpyObj('ToastService', [
       'error',
@@ -61,8 +65,12 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
       'getProgressMetrics',
       'getPlayerCnpjListWithCount',
       'getUniqueClientesCount',
-      'getCompletedTasksCount'
+      'getCompletedTasksCount',
+      'getProcessMetrics'
     ]);
+    actionLogServiceSpy.getProcessMetrics.and.returnValue(
+      of({ pendentes: 0, incompletas: 0, finalizadas: 0 })
+    );
     actionLogServiceSpy.getProgressMetrics.and.returnValue(of({
       activity: { pendentes: 0, emExecucao: 0, finalizadas: 0, pontos: 0 },
       macro: { pendentes: 0, incompletas: 0, finalizadas: 0 }
@@ -90,9 +98,6 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
       usuario: { _id: 'test-user', email: 'test@example.com', roles: [] }
     });
 
-    const backendActionApiSpy = jasmine.createSpyObj('BackendActionApiService', ['getActions']);
-    backendActionApiSpy.getActions.and.returnValue(of({}));
-
     const cnpjLookupSpy = jasmine.createSpyObj('CnpjLookupService', ['enrichCnpjList']);
     cnpjLookupSpy.enrichCnpjList.and.returnValue(of(new Map()));
 
@@ -103,6 +108,55 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
       'getValorConcedidoFinanceiro'
     ]);
     financeiroOmieSpy.getValorConcedidoFinanceiro.and.returnValue(of(null));
+
+    const goalsReceitaSpy = jasmine.createSpyObj('GoalsReceitaBackendService', [
+      'tryGetReceitaConcedidaKpi'
+    ]);
+    goalsReceitaSpy.tryGetReceitaConcedidaKpi.and.returnValue(Promise.resolve(null));
+
+    const temporadaServiceSpy = jasmine.createSpyObj('TemporadaService', ['getDadosTemporadaDashboard']);
+    temporadaServiceSpy.getDadosTemporadaDashboard.and.returnValue(
+      Promise.resolve({
+        blocked_points: 0,
+        unblocked_points: 0,
+        pendingTasks: 0,
+        doingTasks: 0,
+        completedTasks: 0,
+        pendingDeliveries: 0,
+        incompleteDeliveries: 0,
+        completedDeliveries: 0,
+        total_points: 0,
+        total_blocked_points: 0,
+        total_actions: 0,
+        nivel: { nivelAtual: 0, nivelMax: 0 }
+      })
+    );
+
+    const userActionDashboardSpy = jasmine.createSpyObj('UserActionDashboardService', [
+      'getCarteiraEnriched',
+      'getDeliveryCountInRange',
+      'getActionsForPlayerDateRange',
+      'getActions',
+      'countFinalizadasInRange',
+      'getActivityMetricsFromActions',
+      'getMonthlyPointsBreakdownFromActions',
+      'clearCache'
+    ]);
+    userActionDashboardSpy.getCarteiraEnriched.and.returnValue(of([]));
+    userActionDashboardSpy.getDeliveryCountInRange.and.returnValue(of(0));
+    userActionDashboardSpy.getActionsForPlayerDateRange.and.returnValue(of([]));
+    userActionDashboardSpy.getActions.and.returnValue(of([]));
+    userActionDashboardSpy.countFinalizadasInRange.and.returnValue(0);
+    userActionDashboardSpy.getActivityMetricsFromActions.and.returnValue({
+      pendentes: 0,
+      emExecucao: 0,
+      finalizadas: 0,
+      pontos: 0
+    });
+    userActionDashboardSpy.getMonthlyPointsBreakdownFromActions.and.returnValue({
+      bloqueados: 0,
+      desbloqueados: 0
+    });
 
     const routerSpy = jasmine.createSpyObj('Router', ['navigate']);
     const activatedRouteStub = {
@@ -121,10 +175,12 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
         { provide: CompanyKpiService, useValue: companyKpiServiceSpy },
         { provide: PerformanceMonitorService, useValue: performanceMonitorSpy },
         { provide: SessaoProvider, useValue: sessaoProviderSpy },
-        { provide: BackendActionApiService, useValue: backendActionApiSpy },
         { provide: CnpjLookupService, useValue: cnpjLookupSpy },
         { provide: SystemParamsService, useValue: systemParamsSpy },
         { provide: FinanceiroOmieRecebiveisService, useValue: financeiroOmieSpy },
+        { provide: GoalsReceitaBackendService, useValue: goalsReceitaSpy },
+        { provide: TemporadaService, useValue: temporadaServiceSpy },
+        { provide: UserActionDashboardService, useValue: userActionDashboardSpy },
         { provide: Router, useValue: routerSpy },
         { provide: ActivatedRoute, useValue: activatedRouteStub }
       ],

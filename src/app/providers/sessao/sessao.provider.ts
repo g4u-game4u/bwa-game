@@ -1,7 +1,7 @@
 import {Injectable} from '@angular/core';
 import {Usuario} from '@model/usuario.model';
 import {ROLES_LIST} from '@utils/constants';
-import { extractGame4uUserIdFromUserPayload } from '@utils/game4u-user-id.util';
+import { extractGame4uUserIdFromUserPayload, looksLikeEmail } from '@utils/game4u-user-id.util';
 import {AuthProvider, LoginResponse} from "@providers/auth/auth.provider";
 import {Router} from "@angular/router";
 import {firstValueFrom, timeout, catchError, throwError} from "rxjs";
@@ -125,10 +125,13 @@ export class SessaoProvider {
         if ((!user.teams || !Array.isArray(user.teams) || user.teams.length === 0) && user.team_id != null) {
             user.teams = [user.team_id];
         }
-        // Handle Funifier response format - map _id to email if email is not set
-        // Funifier uses _id as the email/player identifier
-        if (!user.email && user._id) {
-            user.email = user._id;
+        // Funifier legado: `_id` pode ser o e-mail. Não copiar UUID/object id para `email`
+        // (GET `/game/actions?user=` exige e-mail real).
+        if (!user.email && user._id != null) {
+            const idStr = String(user._id).trim();
+            if (looksLikeEmail(idStr)) {
+                user.email = idStr;
+            }
         }
         
         // Map name to full_name if full_name is not set

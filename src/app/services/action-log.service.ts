@@ -50,6 +50,8 @@ export interface ActivityListItem {
   player?: string; // userId (email do executor)
   status?: 'finalizado' | 'pendente' | 'dispensado'; // Status da atividade
   cnpj?: string; // CNPJ da empresa associada à atividade
+  /** Nome da entrega (delivery_title / processo), exibido como cliente no modal de tarefas. */
+  deliveryName?: string;
 }
 
 export interface ProcessListItem {
@@ -124,6 +126,19 @@ function extractProcessTitleFromActionLogId(actionLogId: string | undefined): st
 
   const parsedTitle = match[1].trim();
   return parsedTitle !== '' ? parsedTitle : undefined;
+}
+
+/** Nome da entrega/processos: delivery_title nos attributes, legado ou título extraído do _id. */
+function resolveDeliveryDisplayNameFromAction(action: ActionLogEntry): string | undefined {
+  const fromAttributes = action.attributes?.delivery_title;
+  if (typeof fromAttributes === 'string' && fromAttributes.trim() !== '') {
+    return fromAttributes.trim();
+  }
+  const legacy = action.delivery_title;
+  if (typeof legacy === 'string' && legacy.trim() !== '') {
+    return legacy.trim();
+  }
+  return extractProcessTitleFromActionLogId(action._id);
 }
 
 function extractActionTitle(action: ActionLogEntry): string {
@@ -1159,7 +1174,8 @@ export class ActionLogService {
           created: extractTimestamp(a.time as number | { $date: string } | undefined),
           player: a.userId || '',
           status,
-          cnpj: normalizeAttributesDealToString(a.attributes?.['deal'])
+          cnpj: normalizeAttributesDealToString(a.attributes?.['deal']),
+          deliveryName: resolveDeliveryDisplayNameFromAction(a)
           };
         }))
       )),
@@ -1659,7 +1675,8 @@ export class ActionLogService {
             created: extractTimestamp(a.time as number | { $date: string } | undefined),
             player: a.userId || '',
             status,
-            cnpj: normalizeAttributesDealToString(a.attributes?.['deal'])
+            cnpj: normalizeAttributesDealToString(a.attributes?.['deal']),
+            deliveryName: resolveDeliveryDisplayNameFromAction(a)
           };
         });
       }),

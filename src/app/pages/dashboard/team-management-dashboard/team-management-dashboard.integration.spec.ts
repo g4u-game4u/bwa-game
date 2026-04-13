@@ -114,6 +114,7 @@ describe('TeamManagementDashboardComponent - Integration Tests', () => {
 
     fixture = TestBed.createComponent(TeamManagementDashboardComponent);
     component = fixture.componentInstance;
+    component.productivityAnalysisInMaintenance = false;
   });
 
   describe('Dashboard Initialization', () => {

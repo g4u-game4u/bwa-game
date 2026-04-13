@@ -40,7 +40,8 @@ describe('TeamManagementDashboardComponent', () => {
 
     mockToastService = jasmine.createSpyObj('ToastService', [
       'error',
-      'success'
+      'success',
+      'alert'
     ]);
 
     mockSessaoProvider = jasmine.createSpyObj('SessaoProvider', [], {
@@ -222,6 +223,10 @@ describe('TeamManagementDashboardComponent', () => {
   });
 
   describe('Tab Switching', () => {
+    beforeEach(() => {
+      component.productivityAnalysisInMaintenance = false;
+    });
+
     it('should switch to goals tab', () => {
       component.activeTab = 'productivity';
       component.switchTab('goals');
@@ -245,6 +250,26 @@ describe('TeamManagementDashboardComponent', () => {
       expect(component.selectedTeam).toBe('Financeiro');
       expect(component.selectedCollaborator).toBe('user1@test.com');
     });
+  });
+
+  describe('Productivity tab maintenance', () => {
+    it('should not switch to productivity tab when maintenance is on', () => {
+      component.productivityAnalysisInMaintenance = true;
+      component.activeTab = 'goals';
+      component.switchTab('productivity');
+      expect(component.activeTab).toBe('goals');
+    });
+
+    it('should show throttled toast on maintenance hover', fakeAsync(() => {
+      component.productivityAnalysisInMaintenance = true;
+      component.onProductivityTabMaintenanceHover();
+      expect(mockToastService.alert).toHaveBeenCalledWith('em manutenção');
+      component.onProductivityTabMaintenanceHover();
+      expect(mockToastService.alert).toHaveBeenCalledTimes(1);
+      tick(3501);
+      component.onProductivityTabMaintenanceHover();
+      expect(mockToastService.alert).toHaveBeenCalledTimes(2);
+    }));
   });
 
   describe('Data Loading', () => {

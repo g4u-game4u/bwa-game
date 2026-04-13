@@ -3,7 +3,10 @@ import { trigger, transition, style, animate } from '@angular/animations';
 import { Subject, forkJoin, of, firstValueFrom } from 'rxjs';
 import { takeUntil, map, catchError } from 'rxjs/operators';
 import { ActionLogService, ActivityListItem, ProcessListItem, ActionLogEntry } from '@services/action-log.service';
-import { UserActionDashboardService } from '@services/user-action-dashboard.service';
+import {
+  GameActionsUserRosterEntry,
+  UserActionDashboardService
+} from '@services/user-action-dashboard.service';
 import { ChartDataset } from '@model/gamification-dashboard.model';
 import { CnpjLookupService } from '@services/cnpj-lookup.service';
 
@@ -38,6 +41,11 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
   @Input() showClientColumnInActivityList = false;
   /** Se true, listas de atividades/pontos vêm do GET `/user-action` (cache no UserActionDashboardService). */
   @Input() useBackendUserActions = false;
+  /**
+   * Mapeia `userId` (ex.: UUID Game4U) → e-mail para GET `/game/actions?user=` quando {@link playerId} não é e-mail.
+   * Usado na gestão de equipa ao agregar vários membros.
+   */
+  @Input() gameActionsUserRoster: ReadonlyArray<GameActionsUserRosterEntry> | null = null;
   @Output() closed = new EventEmitter<void>();
 
   private destroy$ = new Subject<void>();
@@ -147,8 +155,14 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
       const title = (item.title || '').toLowerCase();
       const executor = (item.player || '').toLowerCase();
       const dateText = this.formatDate(item.created).toLowerCase();
+      const delivery = (item.deliveryName || '').toLowerCase();
 
-      return title.includes(search) || executor.includes(search) || dateText.includes(search);
+      return (
+        title.includes(search) ||
+        executor.includes(search) ||
+        dateText.includes(search) ||
+        delivery.includes(search)
+      );
     });
   }
 
@@ -164,7 +178,8 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
         const matchesSearch = !term ||
           item.title.toLowerCase().includes(term) ||
           (item.player && item.player.toLowerCase().includes(term)) ||
-          (item.cnpj && item.cnpj.toLowerCase().includes(term));
+          (item.cnpj && item.cnpj.toLowerCase().includes(term)) ||
+          (item.deliveryName && item.deliveryName.toLowerCase().includes(term));
         const matchesExecutor = !executor || item.player === executor;
         return matchesSearch && matchesExecutor;
       });
@@ -234,7 +249,13 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
     if (this.isActivityList) {
       const activityRequests = playerIds.map(playerId =>
         this.useBackendUserActions
-          ? this.userActionDashboard.getFinishedListForPlayer(playerId, this.month || new Date()).pipe(
+          ? this.userActionDashboard
+              .getFinishedListForPlayer(
+                playerId,
+                this.month || new Date(),
+                this.gameActionsUserRoster ?? undefined
+              )
+              .pipe(
               catchError(error => {
                 console.error(`Error loading user-action list for player ${playerId}:`, error);
                 return of([] as ActivityListItem[]);
@@ -604,6 +625,27 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
       hour: '2-digit',
       minute: '2-digit'
     });
+  }
+
+  /**
+   * Encurta rótulos de cliente/entrega para caber em coluna fixa (tooltip com texto completo no template).
+   */
+  abbreviateClientLabel(text: string | undefined | null, maxLength = 26): string {
+    if (text == null) {
+      return '';
+    }
+    const t = String(text).trim();
+    if (t === '') {
+      return '';
+    }
+    if (t.length <= maxLength) {
+      return t;
+    }
+    const slice = t.slice(0, maxLength);
+    const lastSpace = slice.lastIndexOf(' ');
+    const cut = lastSpace > Math.min(10, maxLength * 0.35) ? slice.slice(0, lastSpace) : slice.slice(0, maxLength - 1);
+    const base = cut.trimEnd();
+    return base.length > 0 ? `${base}…` : `${t.slice(0, maxLength - 1)}…`;
   }
 
   /**

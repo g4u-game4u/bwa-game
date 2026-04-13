@@ -47,7 +47,7 @@ describe('TeamManagementDashboardComponent - Accessibility', () => {
     mockSeasonDatesService = jasmine.createSpyObj('SeasonDatesService', [
       'getSeasonDates'
     ]);
-    mockToastService = jasmine.createSpyObj('ToastService', ['error', 'success']);
+    mockToastService = jasmine.createSpyObj('ToastService', ['error', 'success', 'alert']);
     mockSessaoProvider = jasmine.createSpyObj('SessaoProvider', [], {
       usuario: { extra: { teams: ['Departamento Pessoal'] } }
     });
@@ -79,6 +79,7 @@ describe('TeamManagementDashboardComponent - Accessibility', () => {
 
     fixture = TestBed.createComponent(TeamManagementDashboardComponent);
     component = fixture.componentInstance;
+    component.productivityAnalysisInMaintenance = false;
     fixture.detectChanges();
   });
 

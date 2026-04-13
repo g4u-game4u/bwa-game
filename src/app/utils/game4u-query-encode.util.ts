@@ -5,7 +5,14 @@
  */
 export function encodeGame4uQueryValue(paramName: string, value: string): string {
   let s = encodeURIComponent(value);
-  if (paramName === 'start' || paramName === 'end') {
+  if (
+    paramName === 'start' ||
+    paramName === 'end' ||
+    paramName === 'created_at_start' ||
+    paramName === 'created_at_end' ||
+    paramName === 'finished_at_start' ||
+    paramName === 'finished_at_end'
+  ) {
     s = s.replace(/%3A/gi, ':');
   }
   if (paramName === 'user') {

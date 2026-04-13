@@ -763,6 +763,16 @@
       margin-bottom: $spacing-lg;
       box-sizing: border-box;
 
+      .tab-productivity-maintenance-wrap {
+        flex: 1;
+        display: flex;
+        min-width: 0;
+
+        .tab-button {
+          width: 100%;
+        }
+      }
+
       .tab-button {
         flex: 1;
         display: flex;
@@ -786,7 +796,7 @@
           transition: transform $transition-duration $transition-easing;
         }
 
-        &:hover:not(.active) {
+        &:hover:not(.active):not(:disabled) {
           background-color: rgba($primary-electric-blue, 0.1);
           color: $primary-electric-blue;
           transform: translateY(-1px);
@@ -810,6 +820,19 @@
 
         &:focus-visible {
           @include focus-visible;
+        }
+
+        &:disabled,
+        &:disabled:hover {
+          cursor: not-allowed;
+          opacity: 0.55;
+          transform: none;
+          background-color: transparent;
+          color: $text-secondary;
+
+          i {
+            transform: none;
+          }
         }
 
         @include tablet-only {

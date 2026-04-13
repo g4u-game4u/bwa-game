@@ -24,7 +24,10 @@ import { CnpjLookupService } from '@services/cnpj-lookup.service';
 import { SystemParamsService } from '@services/system-params.service';
 import { FinanceiroOmieRecebiveisService } from '@services/financeiro-omie-recebiveis.service';
 import { GoalsReceitaBackendService } from '@services/goals-receita-backend.service';
-import { UserActionDashboardService } from '@services/user-action-dashboard.service';
+import {
+  GameActionsUserRosterEntry,
+  UserActionDashboardService
+} from '@services/user-action-dashboard.service';
 import { TemporadaService } from '@services/temporada.service';
 import { TIPO_CONSULTA_COLABORADOR, TIPO_CONSULTA_TIME } from '../dashboard.component';
 import { TeamCodeService } from '@services/team-code.service';
@@ -33,6 +36,7 @@ import { environment } from '../../../../environments/environment';
 import { FUNIFIER_HTTP_DISABLED } from '../../../config/funifier-requests-disabled';
 import { SEASON_GAME_ACTION_RANGE } from '@app/constants/season-action-range';
 import { filterCompanyDisplaysByClienteSearch } from '@utils/cliente-carteira-search.util';
+import { looksLikeEmail } from '@utils/game4u-user-id.util';
 
 /** Listagem de times (Funifier ou Game4U): garante array — evita `.filter` em `{}` quando Funifier está desligado. */
 function normalizeTeamsListPayload(raw: unknown): any[] {
@@ -91,7 +95,8 @@ import { ProgressListType } from '@modals/modal-progress-list/modal-progress-lis
   ]
 })
 export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
-  private static readonly FINANCE_TEAM_ID = 'Fouegv0';
+  /** Time Financeiro na base Game4U (substitui o id legado Funifier). */
+  private static readonly FINANCE_TEAM_ID = '6';
   // State management
   selectedTeam: string = '';
   selectedTeamId: string = ''; // Funifier team ID (e.g., 'FkmdnFU')
@@ -99,7 +104,13 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
   /** Alinhado ao c4u-seletor-mes: temporada padrão mar–abr/2026; mês inicial = abril (mais recente na lista). */
   selectedMonth: Date = new Date(2026, 3, 1);
   activeTab: 'goals' | 'productivity' = 'goals';
-  
+  /**
+   * Aba "Análise de produtividade" desativada (toast ao hover). Nos testes, usar `false` para exercitar a aba.
+   */
+  productivityAnalysisInMaintenance = true;
+
+  private lastProductivityMaintenanceToastAt = 0;
+
   // Loading states
   isLoading: boolean = false;
   isLoadingTeams: boolean = false;
@@ -425,7 +436,8 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
     if (!u || typeof u !== 'object') {
       return null;
     }
-    const email = String(u.email ?? u.user_email ?? '').trim();
+    const emailRaw = String(u.email ?? u.user_email ?? '').trim();
+    const email = looksLikeEmail(emailRaw) ? emailRaw : '';
     const rawId = u.id ?? u.user_id ?? u._id;
     let game4uUserId = '';
     if (rawId != null && String(rawId).trim() !== '') {
@@ -440,7 +452,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
     }
     const name =
       String(u.full_name ?? u.name ?? u.fullName ?? (email || game4uUserId)).trim() || fallback;
-    return { game4uUserId, name, email: email || game4uUserId };
+    return { game4uUserId, name, email };
   }
 
   /**
@@ -956,9 +968,12 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       this.sidebarErrorMessage = '';
 
       if (FUNIFIER_HTTP_DISABLED) {
-        const userEmail =
-          this.collaborators.find(c => c.userId === collaboratorId)?.email ||
-          (collaboratorId.includes('@') ? collaboratorId : '');
+        const fromRow = this.collaborators.find(c => c.userId === collaboratorId)?.email?.trim() || '';
+        const userEmail = looksLikeEmail(fromRow)
+          ? fromRow
+          : looksLikeEmail(collaboratorId)
+            ? collaboratorId.trim()
+            : '';
         if (!userEmail) {
           console.warn('⚠️ Colaborador sem e-mail para /game/stats:', collaboratorId);
           this.hasSidebarError = true;
@@ -1029,7 +1044,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
         }),
         firstValueFrom(
           this.userActionDashboard
-            .getActivityMetricsForPlayer(collaboratorId, this.selectedMonth)
+            .getActivityMetricsForPlayer(collaboratorId, this.selectedMonth, this.collaborators)
             .pipe(takeUntil(this.destroy$))
         ).catch((error) => {
           console.error('Error loading collaborator user-action metrics:', error);
@@ -1241,12 +1256,16 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       if (this.teamMembersData.length > 0) {
         // Funifier: _id = email. Game4U: userId = game4uUserId para alinhar com query `user_id` no search.
         this.collaborators = this.teamMembersData.map((playerStatus: any) => {
-          const email = playerStatus.email || playerStatus._id;
-          const userId = playerStatus.game4uUserId || email;
+          const mail = String(playerStatus.email ?? '').trim();
+          const idStr = String(playerStatus._id ?? '').trim();
+          const email =
+            (looksLikeEmail(mail) ? mail : '') || (looksLikeEmail(idStr) ? idStr : '');
+          const userId =
+            String(playerStatus.game4uUserId ?? '').trim() || email || idStr;
           return {
             userId,
             name: playerStatus.name || userId,
-            email: email || userId
+            email: email || ''
           };
         });
       } else if (this.teamMemberIds.length === 0) {
@@ -1318,7 +1337,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
         }),
         firstValueFrom(
           this.userActionDashboard
-            .getActivityMetricsForPlayer(collaboratorId, this.selectedMonth)
+            .getActivityMetricsForPlayer(collaboratorId, this.selectedMonth, this.collaborators)
             .pipe(takeUntil(this.destroy$))
         ).catch(() => ({ pendentes: 0, emExecucao: 0, finalizadas: 0, pontos: 0 }))
       ]);
@@ -2088,7 +2107,7 @@ private calculateCollaboratorTotals(memberData: Array<{
         ) {
           uaTeam = await firstValueFrom(
             this.userActionDashboard
-              .sumTeamActivityInMonth(this.teamMemberIds, this.selectedMonth)
+              .sumTeamActivityInMonth(this.teamMemberIds, this.selectedMonth, this.collaborators)
               .pipe(takeUntil(this.destroy$))
           ).catch((error) => {
             console.error('Error loading team user-action metrics (por membro):', error);
@@ -2105,7 +2124,7 @@ private calculateCollaboratorTotals(memberData: Array<{
       } else if (this.teamMemberIds.length > 0) {
         uaTeam = await firstValueFrom(
           this.userActionDashboard
-            .sumTeamActivityInMonth(this.teamMemberIds, this.selectedMonth)
+            .sumTeamActivityInMonth(this.teamMemberIds, this.selectedMonth, this.collaborators)
             .pipe(takeUntil(this.destroy$))
         ).catch((error) => {
           console.error('Error loading team user-action metrics:', error);
@@ -2182,8 +2201,8 @@ private calculateCollaboratorTotals(memberData: Array<{
   > {
     const monthStart = dayjs(this.selectedMonth).startOf('month').toDate();
     const monthEnd = dayjs(this.selectedMonth).endOf('month').toDate();
-    const userKey = this.userActionDashboard.resolvePlayerKey(playerId);
-    if (!userKey) {
+    const userKey = this.userActionDashboard.resolvePlayerKeyWithRoster(playerId, this.collaborators);
+    if (!userKey || !looksLikeEmail(userKey)) {
       return [];
     }
     try {
@@ -2588,10 +2607,26 @@ private calculateCollaboratorTotals(memberData: Array<{
    * Switch active tab
    */
   switchTab(tab: 'goals' | 'productivity'): void {
+    if (tab === 'productivity' && this.productivityAnalysisInMaintenance) {
+      return;
+    }
     this.activeTab = tab;
     if (tab === 'goals') {
       void this.loadTeamKPIs();
     }
+  }
+
+  /** Toast ao passar o rato no separador de produtividade em manutenção (com debounce simples). */
+  onProductivityTabMaintenanceHover(): void {
+    if (!this.productivityAnalysisInMaintenance) {
+      return;
+    }
+    const now = Date.now();
+    if (now - this.lastProductivityMaintenanceToastAt < 3500) {
+      return;
+    }
+    this.lastProductivityMaintenanceToastAt = now;
+    this.toastService.alert('em manutenção');
   }
 
   /**
@@ -2829,6 +2864,11 @@ private calculateCollaboratorTotals(memberData: Array<{
     return this.teamMemberIds.join(',');
   }
 
+  /** Roster para o modal de tarefas finalizadas: resolve UUID → e-mail em `/game/actions`. */
+  get gameActionsUserRosterForModal(): GameActionsUserRosterEntry[] {
+    return this.collaborators.map(c => ({ userId: c.userId, email: c.email }));
+  }
+
   /**
    * Get player ID for month selector component
    * Uses selected collaborator first, then team member fallback, then current user.
@@ -2895,22 +2935,6 @@ private calculateCollaboratorTotals(memberData: Array<{
   }
 
   /**
-   * Jogador(es) para GET `/game/actions` no modal de detalhe da entrega (carteira).
-   * Colaborador selecionado → um e-mail/id; vista do time → todos os membros.
-   */
-  get carteiraActionPlayerIdForModal(): string | null {
-    const c = this.selectedCollaborator?.trim();
-    return c ? c : null;
-  }
-
-  get carteiraActionPlayerIdsForModal(): string[] | null {
-    if (this.carteiraActionPlayerIdForModal) {
-      return null;
-    }
-    return this.teamMemberIds?.length ? [...this.teamMemberIds] : null;
-  }
-
-  /**
    * Open company detail modal
    */
   openCompanyDetailModal(company: CompanyDisplay): void {
@@ -2968,9 +2992,13 @@ private calculateCollaboratorTotals(memberData: Array<{
       this.isLoadingKPIs = true;
       
       if (collaboratorId) {
-        // For single collaborator, use their KPIs
+        const resolved = this.userActionDashboard.resolvePlayerKeyWithRoster(
+          collaboratorId,
+          this.collaborators
+        );
+        const kpiPlayerId = looksLikeEmail(resolved) ? resolved : collaboratorId;
         const kpis = await firstValueFrom(
-          this.kpiService.getPlayerKPIs(collaboratorId, this.selectedMonth, this.actionLogService)
+          this.kpiService.getPlayerKPIs(kpiPlayerId, this.selectedMonth, this.actionLogService)
             .pipe(takeUntil(this.destroy$))
         );
         this.teamKPIs = kpis || [];
@@ -3247,10 +3275,10 @@ private calculateCollaboratorTotals(memberData: Array<{
       void firstValueFrom(
         forkJoin({
           m: this.userActionDashboard
-            .getActivityMetricsForPlayerInRange(collab, start, end)
+            .getActivityMetricsForPlayerInRange(collab, start, end, this.collaborators)
             .pipe(takeUntil(this.destroy$)),
           c: this.userActionDashboard
-            .getDeliveryCountInRange(collab, start, end)
+            .getDeliveryCountInRange(collab, start, end, this.collaborators)
             .pipe(takeUntil(this.destroy$))
         })
       )

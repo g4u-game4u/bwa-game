@@ -46,7 +46,7 @@ export interface SystemParams {
   season_start_date: SystemParamValue;
   team_monthly_goal: SystemParamValue;
   /**
-   * Meta mensal (R$) para o time do financeiro (Team ID: Fouegv0).
+   * Meta mensal (R$) para o time do financeiro (team id Game4U: 6).
    * Opcional para manter compatibilidade com ambientes que ainda não têm esse parâmetro.
    */
   financeiro_monthly_billing_goal?: SystemParamValue;

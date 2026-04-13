@@ -239,20 +239,29 @@
           <i class="fas fa-bullseye" aria-hidden="true"></i>
           <span>Metas e Progresso</span>
         </button>
-        <button 
-          class="tab-button"
-          role="tab"
-          [attr.aria-selected]="activeTab === 'productivity'"
-          [attr.aria-controls]="'productivity-panel'"
-          [attr.tabindex]="activeTab === 'productivity' ? 0 : -1"
-          [class.active]="activeTab === 'productivity'"
-          (click)="switchTab('productivity')"
-          (keydown.enter)="switchTab('productivity')"
-          (keydown.space)="switchTab('productivity'); $event.preventDefault()"
-          aria-label="Visualizar análise de produtividade">
-          <i class="fas fa-chart-line" aria-hidden="true"></i>
-          <span>Análise de Produtividade</span>
-        </button>
+        <span
+          class="tab-productivity-maintenance-wrap"
+          (mouseenter)="onProductivityTabMaintenanceHover()"
+          role="presentation">
+          <button
+            class="tab-button"
+            type="button"
+            role="tab"
+            [disabled]="productivityAnalysisInMaintenance"
+            [attr.aria-selected]="activeTab === 'productivity'"
+            [attr.aria-controls]="'productivity-panel'"
+            [attr.tabindex]="productivityAnalysisInMaintenance ? -1 : activeTab === 'productivity' ? 0 : -1"
+            [class.active]="activeTab === 'productivity'"
+            [attr.aria-disabled]="productivityAnalysisInMaintenance ? 'true' : null"
+            [attr.aria-label]="
+              productivityAnalysisInMaintenance
+                ? 'Análise de produtividade em manutenção'
+                : 'Visualizar análise de produtividade'
+            ">
+            <i class="fas fa-chart-line" aria-hidden="true"></i>
+            <span>Análise de Produtividade</span>
+          </button>
+        </span>
     </div>
 
     <!-- Tab Content -->
@@ -509,8 +518,8 @@
     [listType]="progressModalType"
     [month]="selectedMonth"
     [showPointsInActivityList]="true"
-    [showClientColumnInActivityList]="true"
     [useBackendUserActions]="true"
+    [gameActionsUserRoster]="gameActionsUserRosterForModal"
     (closed)="onProgressModalClosed()">
   </modal-progress-list>
   
@@ -519,8 +528,7 @@
     *ngIf="isCompanyCarteiraDetailModalOpen && selectedCarteiraCompany"
     [company]="selectedCarteiraCompany"
     [month]="selectedMonth"
-    [actionContextPlayerId]="carteiraActionPlayerIdForModal"
-    [actionContextPlayerIds]="carteiraActionPlayerIdsForModal"
+    [teamIdForDeliveryActions]="selectedTeamId"
     (closed)="onCompanyCarteiraDetailModalClosed()">
   </modal-company-carteira-detail>
   

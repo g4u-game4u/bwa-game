@@ -8,6 +8,7 @@
     "stageResponsibleTeamNotes": "Stages não listados em stageResponsibleTeamOverrides usam team cs (Owner). Jurídico no deal: runner zoho-stages não envia POST por stage — usar fluxo de tags (zoho-tasks)."
   },
   "stageTitleToActionTemplateId": {
+    "Aguard Contato Inicial": "revisaprev_at_002",
     "Contato Inicial (CS)": "revisaprev_at_002",
     "Ag. Docs Iniciais (CS)": "revisaprev_at_003",
     "Ag. CNIS": "revisaprev_at_004",

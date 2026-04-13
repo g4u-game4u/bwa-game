@@ -8,7 +8,14 @@ import { CompanyKpiService, CompanyDisplay } from './company-kpi.service';
 import { ActivityListItem, ClienteActionItem } from './action-log.service';
 import { ActivityMetrics } from '@model/gamification-dashboard.model';
 import { lookupActivityPoints } from '@utils/activity-points.util';
-import { extractGame4uUserIdFromUserPayload } from '@utils/game4u-user-id.util';
+import {
+  extractGame4uUserIdFromUserPayload,
+  looksLikeEmail,
+  pickSessionEmailForGameApi
+} from '@utils/game4u-user-id.util';
+
+/** Mapear `userId` (ex.: UUID Game4U) → e-mail real para GET `/game/actions?user=`. */
+export type GameActionsUserRosterEntry = { userId: string; email?: string };
 
 /** Registo normalizado vindo do GET `/game/actions` ou `/game/team-actions` (lista em JSON). */
 export interface UserActionRow {
@@ -26,6 +33,8 @@ export interface UserActionRow {
   approved?: boolean | null;
   dismissed?: boolean;
   deal?: string;
+  /** Presente em várias respostas GET `/game/actions` (ex.: RevisaPrev). */
+  team_name?: string;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -51,7 +60,7 @@ export class UserActionDashboardService {
       | { id?: string; user_id?: string; _id?: string; email?: string }
       | null
       | undefined;
-    const sessEmail = (u?.email && String(u.email).trim()) || '';
+    const sessEmail = pickSessionEmailForGameApi(u, this.sessao.token ?? null);
 
     if (playerId === 'me') {
       return sessEmail || playerId;
@@ -73,6 +82,30 @@ export class UserActionDashboardService {
     return playerId.trim();
   }
 
+  /**
+   * Resolve `user` para `/game/actions`: e-mail da sessão, e-mail explícito, ou e-mail do colaborador no roster do time.
+   */
+  resolvePlayerKeyWithRoster(
+    playerId: string,
+    roster?: ReadonlyArray<GameActionsUserRosterEntry> | null
+  ): string {
+    const id = (playerId || '').trim();
+    if (!id) {
+      return '';
+    }
+    if (id.includes('@')) {
+      return id;
+    }
+    if (roster?.length) {
+      const row = roster.find(c => c.userId === id);
+      const em = row?.email?.trim();
+      if (em && looksLikeEmail(em)) {
+        return em;
+      }
+    }
+    return this.resolvePlayerKey(id);
+  }
+
   /** Query param `user` em `/game/actions` — deve ser e-mail (chave já resolvida em {@link resolvePlayerKey}). */
   private queryUserParamForPlayerKey(playerKey: string): Record<string, string> {
     const key = (playerKey || '').trim();
@@ -88,22 +121,44 @@ export class UserActionDashboardService {
     }
     if (typeof body === 'object' && body !== null) {
       const o = body as Record<string, unknown>;
-      if (Array.isArray(o['items'])) {
-        return o['items'] as unknown[];
-      }
-      if (Array.isArray(o['data'])) {
-        return o['data'] as unknown[];
+      const listKeys = ['items', 'data', 'actions', 'results', 'records', 'rows'] as const;
+      for (const k of listKeys) {
+        if (Array.isArray(o[k])) {
+          return o[k] as unknown[];
+        }
       }
     }
     return [];
   }
 
+  /** Identificador estável da linha: vários backends usam `_id` / `user_action_id` em vez de `id`. */
+  private pickRawActionId(raw: Record<string, unknown>): string | null {
+    const keys = [
+      'id',
+      '_id',
+      'user_action_id',
+      'userActionId',
+      'action_id',
+      'actionId'
+    ] as const;
+    for (const k of keys) {
+      const v = raw[k];
+      if (v == null) {
+        continue;
+      }
+      const s = String(v).trim();
+      if (s !== '') {
+        return s;
+      }
+    }
+    return null;
+  }
+
   private normalizeRow(raw: Record<string, unknown>): UserActionRow | null {
-    const idRaw = raw['id'];
-    if (idRaw == null || idRaw === '') {
+    const id = this.pickRawActionId(raw);
+    if (!id) {
       return null;
     }
-    const id = String(idRaw);
     const titleFromGame =
       typeof raw['action_title'] === 'string'
         ? raw['action_title']
@@ -132,6 +187,10 @@ export class UserActionDashboardService {
     const action_template_id =
       raw['action_template_id'] != null ? String(raw['action_template_id']) : undefined;
     const deal = typeof raw['deal'] === 'string' ? raw['deal'] : undefined;
+    const team_name =
+      typeof raw['team_name'] === 'string' && raw['team_name'].trim()
+        ? raw['team_name'].trim()
+        : undefined;
     const dismissed = raw['dismissed'] === true;
     const approved =
       typeof raw['approved'] === 'boolean' || raw['approved'] === null
@@ -156,7 +215,8 @@ export class UserActionDashboardService {
       action_template_id,
       approved,
       dismissed,
-      deal
+      deal,
+      team_name
     };
   }
 
@@ -185,31 +245,174 @@ export class UserActionDashboardService {
     return { items, page: 1, totalPages: 1 };
   }
 
+  private extractNextPageToken(body: unknown): string | null {
+    if (!body || typeof body !== 'object') {
+      return null;
+    }
+    const o = body as Record<string, unknown>;
+    const tok = o['next_page_token'] ?? o['nextPageToken'] ?? o['Next_Page_Token'];
+    if (typeof tok === 'string' && tok.trim()) {
+      return tok.trim();
+    }
+    return null;
+  }
+
+  private dedupeUserActionRows(rows: UserActionRow[]): UserActionRow[] {
+    const byId = new Map<string, UserActionRow>();
+    for (const r of rows) {
+      byId.set(r.id, r);
+    }
+    return [...byId.values()];
+  }
+
   /**
-   * GET `/game/actions?start&end&user` ou `/game/team-actions?start&end&team` (lista completa no intervalo).
+   * Todas as páginas de GET `/user-action/search` (delivery_id, created_at_*, dismissed, limit; sem `status` — todos os estados).
+   * Paginação: `page` ou `page_token`; continuação pelo corpo (`next_page_token` / variantes).
+   */
+  private async fetchUserActionSearchAllPages(
+    base: Record<string, string>
+  ): Promise<UserActionRow[]> {
+    const limRaw = base['limit'] || '200';
+    const limit = Math.min(Math.max(parseInt(limRaw, 10) || 200, 1), 500);
+    const merged: UserActionRow[] = [];
+    let page = 1;
+    let pageToken: string | null = null;
+    const maxIterations = 200;
+
+    for (let iter = 0; iter < maxIterations; iter++) {
+      const entries: Record<string, string> = { ...base };
+      delete entries['status'];
+      delete entries['page'];
+      delete entries['page_token'];
+      entries['limit'] = String(limit);
+      if (pageToken) {
+        entries['page_token'] = pageToken;
+      } else {
+        entries['page'] = String(page);
+      }
+
+      const body = await firstValueFrom(this.backendUserActionApi.getUserActionSearch(entries));
+      const parsed = this.parsePage(body);
+      merged.push(...parsed.items);
+
+      const nextTok = this.extractNextPageToken(body);
+      if (nextTok) {
+        pageToken = nextTok;
+        continue;
+      }
+      pageToken = null;
+
+      const curPage = parsed.page;
+      const totalPages = parsed.totalPages;
+      if (curPage < totalPages) {
+        page = curPage + 1;
+        continue;
+      }
+
+      if (parsed.items.length === 0) {
+        break;
+      }
+
+      const singlePageButMaybeTruncated =
+        totalPages === 1 && parsed.items.length >= 50 && iter < maxIterations - 1;
+      if (singlePageButMaybeTruncated) {
+        page = curPage + 1;
+        continue;
+      }
+
+      break;
+    }
+
+    return this.dedupeUserActionRows(merged);
+  }
+
+  /**
+   * Todas as user actions da entrega na janela: duas buscas (dismissed false / true), sem filtro `status`.
+   */
+  private async fetchDeliveryActionsViaUserActionSearch(
+    deliveryId: string,
+    createdAtStart: string,
+    createdAtEnd: string
+  ): Promise<UserActionRow[]> {
+    const did = String(deliveryId || '').trim();
+    if (!did) {
+      return [];
+    }
+    const base = {
+      delivery_id: did,
+      created_at_start: createdAtStart,
+      created_at_end: createdAtEnd,
+      limit: '200'
+    };
+    const [a, b] = await Promise.all([
+      this.fetchUserActionSearchAllPages({ ...base, dismissed: 'false' }).catch(
+        () => [] as UserActionRow[]
+      ),
+      this.fetchUserActionSearchAllPages({ ...base, dismissed: 'true' }).catch(
+        () => [] as UserActionRow[]
+      )
+    ]);
+    return this.dedupeUserActionRows([...a, ...b]);
+  }
+
+  /**
+   * GET `/game/actions?start&end&user` ou `/game/team-actions?start&end&team` (todas as páginas no intervalo).
    */
   async fetchAllUserActionsWithParams(extra: Record<string, string>): Promise<UserActionRow[]> {
     const start = (extra['start'] || '2000-01-01T00:00:00.000Z').trim();
     const end = (extra['end'] || new Date().toISOString()).trim();
     const teamId = String(extra['team_id'] || '').trim();
+    const user =
+      String(extra['user'] || extra['user_id'] || extra['user_email'] || '').trim();
 
-    let body: unknown;
-    if (teamId) {
-      body = await firstValueFrom(
-        this.backendUserActionApi.getGameTeamActions({ start, end, team: teamId })
-      );
-    } else {
-      const user =
-        String(extra['user'] || extra['user_id'] || extra['user_email'] || '').trim();
-      if (!user) {
-        return [];
-      }
-      body = await firstValueFrom(
-        this.backendUserActionApi.getGameActions({ start, end, user })
-      );
+    if (!teamId && !user) {
+      return [];
     }
 
-    return this.parsePage(body).items;
+    const maxIterations = 200;
+    const merged: UserActionRow[] = [];
+    let pageToken: string | null = null;
+
+    for (let iter = 0; iter < maxIterations; iter++) {
+      const paging: { next_page_token?: string } = {};
+      if (pageToken) {
+        paging.next_page_token = pageToken;
+      }
+
+      let body: unknown;
+      if (teamId) {
+        body = await firstValueFrom(
+          this.backendUserActionApi.getGameTeamActions({
+            start,
+            end,
+            team: teamId,
+            ...paging
+          })
+        );
+      } else {
+        body = await firstValueFrom(
+          this.backendUserActionApi.getGameActions({
+            start,
+            end,
+            user,
+            ...paging
+          })
+        );
+      }
+
+      const parsed = this.parsePage(body);
+      merged.push(...parsed.items);
+
+      const nextTok = this.extractNextPageToken(body);
+      if (nextTok) {
+        pageToken = nextTok;
+        continue;
+      }
+
+      break;
+    }
+
+    return this.dedupeUserActionRows(merged);
   }
 
   async fetchAllUserActions(playerKey: string): Promise<UserActionRow[]> {
@@ -217,8 +420,14 @@ export class UserActionDashboardService {
     return this.fetchAllUserActionsWithParams(baseParams);
   }
 
-  getActions(playerKey: string): Observable<UserActionRow[]> {
-    const key = this.resolvePlayerKey(playerKey) || playerKey;
+  getActions(
+    playerKey: string,
+    roster?: ReadonlyArray<GameActionsUserRosterEntry> | null
+  ): Observable<UserActionRow[]> {
+    const key = this.resolvePlayerKeyWithRoster(playerKey, roster ?? null) || playerKey.trim();
+    if (!key || !looksLikeEmail(key)) {
+      return of([]);
+    }
     const hit = this.actionCache.get(key);
     if (hit) {
       return of(hit);
@@ -236,10 +445,11 @@ export class UserActionDashboardService {
   getActionsForPlayerDateRange(
     playerKey: string,
     rangeStart: Date,
-    rangeEnd: Date
+    rangeEnd: Date,
+    roster?: ReadonlyArray<GameActionsUserRosterEntry> | null
   ): Observable<UserActionRow[]> {
-    const user = (this.resolvePlayerKey(playerKey) || playerKey || '').trim();
-    if (!user) {
+    const user = (this.resolvePlayerKeyWithRoster(playerKey, roster ?? null) || '').trim();
+    if (!user || !looksLikeEmail(user)) {
       return of([]);
     }
     const start = rangeStart.toISOString();
@@ -256,9 +466,10 @@ export class UserActionDashboardService {
   getDeliveryCountInRange(
     playerId: string,
     rangeStart: Date,
-    rangeEnd: Date
+    rangeEnd: Date,
+    roster?: ReadonlyArray<GameActionsUserRosterEntry> | null
   ): Observable<number> {
-    return this.getActionsForPlayerDateRange(playerId, rangeStart, rangeEnd).pipe(
+    return this.getActionsForPlayerDateRange(playerId, rangeStart, rangeEnd, roster).pipe(
       map(items => this.buildCarteiraCompaniesInRange(items, rangeStart, rangeEnd).length)
     );
   }
@@ -266,9 +477,10 @@ export class UserActionDashboardService {
   getActivityMetricsForPlayerInRange(
     playerId: string,
     rangeStart: Date,
-    rangeEnd: Date
+    rangeEnd: Date,
+    roster?: ReadonlyArray<GameActionsUserRosterEntry> | null
   ): Observable<ActivityMetrics> {
-    return this.getActionsForPlayerDateRange(playerId, rangeStart, rangeEnd).pipe(
+    return this.getActionsForPlayerDateRange(playerId, rangeStart, rangeEnd, roster).pipe(
       map(items => this.getActivityMetricsFromActionsInRange(items, rangeStart, rangeEnd))
     );
   }
@@ -321,8 +533,12 @@ export class UserActionDashboardService {
   /**
    * Métricas de atividade no mês para um jogador (GET `/game/actions`).
    */
-  getActivityMetricsForPlayer(playerId: string, month: Date): Observable<ActivityMetrics> {
-    return this.getActions(playerId).pipe(
+  getActivityMetricsForPlayer(
+    playerId: string,
+    month: Date,
+    roster?: ReadonlyArray<GameActionsUserRosterEntry> | null
+  ): Observable<ActivityMetrics> {
+    return this.getActions(playerId, roster ?? null).pipe(
       map(items => this.getActivityMetricsFromActions(items, month))
     );
   }
@@ -330,13 +546,17 @@ export class UserActionDashboardService {
   /**
    * Soma métricas de todos os membros (tarefas finalizadas e pontos no mês).
    */
-  sumTeamActivityInMonth(memberIds: string[], month: Date): Observable<ActivityMetrics> {
+  sumTeamActivityInMonth(
+    memberIds: string[],
+    month: Date,
+    roster?: ReadonlyArray<GameActionsUserRosterEntry> | null
+  ): Observable<ActivityMetrics> {
     if (!memberIds.length) {
       return of({ pendentes: 0, emExecucao: 0, finalizadas: 0, pontos: 0 });
     }
     return forkJoin(
       memberIds.map(id =>
-        this.getActivityMetricsForPlayer(id, month)
+        this.getActivityMetricsForPlayer(id, month, roster ?? null)
       )
     ).pipe(
       map(metricsList =>
@@ -471,16 +691,47 @@ export class UserActionDashboardService {
     };
   }
 
-  private statusUpper(row: UserActionRow): string {
-    return (row.status || '').trim().toUpperCase();
+  /** Comparação de `status` tolerando acentos e caixa (ex.: Concluído → CONCLUIDO). */
+  private statusComparable(row: UserActionRow): string {
+    return (row.status || '')
+      .trim()
+      .toUpperCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '');
   }
 
+  /**
+   * Contagem/listagem de “finalizadas” no painel: estados clássicos (DONE, DELIVERED, …),
+   * linha com `finished_at` válido, ou **PENDING** não dispensada (aguarda aprovação no jogo
+   * mas entra em métricas e modais alinhado ao contrato da API).
+   */
   isFinalizedStatus(row: UserActionRow): boolean {
     if (row.dismissed) {
       return false;
     }
-    const s = this.statusUpper(row);
-    return s === 'DONE' || s === 'DELIVERED';
+    if (this.parseInstant(row.finished_at) > 0) {
+      return true;
+    }
+    const s = this.statusComparable(row);
+    if (!s) {
+      return false;
+    }
+    const finalized = new Set([
+      'DONE',
+      'DELIVERED',
+      'PENDING',
+      'FINALIZADO',
+      'FINALIZED',
+      'COMPLETED',
+      'COMPLETE',
+      'CONCLUIDO',
+      'CONCLUIDA',
+      'FECHADO',
+      'CLOSED',
+      'RESOLVED',
+      'SUCCESS'
+    ]);
+    return finalized.has(s);
   }
 
   rowPoints(row: UserActionRow): number {
@@ -491,11 +742,75 @@ export class UserActionDashboardService {
     return Math.round(Number(row.points ?? 0)) || 0;
   }
 
+  /**
+   * Carteira da temporada (sidebar), soma em `[rangeStart, rangeEnd]` sobre GET `/game/actions`:
+   * - `DONE` → bloqueados; `DELIVERED` → desbloqueados;
+   * - Outras linhas que {@link isFinalizedStatus} trata como finalizadas (ex. `PENDING`): mesma regra do
+   *   breakdown mensal — `approved === false` → bloqueados; caso contrário → desbloqueados.
+   * Linhas `dismissed` não entram.
+   */
+  getSeasonPointWalletDoneDelivered(
+    items: UserActionRow[],
+    rangeStart: Date,
+    rangeEnd: Date
+  ): { bloqueados: number; desbloqueados: number } {
+    const rows = this.filterDateRange(items, rangeStart, rangeEnd).filter(r => !r.dismissed);
+    let bloqueados = 0;
+    let desbloqueados = 0;
+    for (const r of rows) {
+      const s = this.statusComparable(r);
+      const pts = this.rowPoints(r);
+      if (s === 'DONE') {
+        bloqueados += pts;
+      } else if (s === 'DELIVERED') {
+        desbloqueados += pts;
+      } else if (this.isFinalizedStatus(r)) {
+        if (r.approved !== false) {
+          desbloqueados += pts;
+        } else {
+          bloqueados += pts;
+        }
+      }
+    }
+    return {
+      bloqueados: Math.floor(bloqueados),
+      desbloqueados: Math.floor(desbloqueados)
+    };
+  }
+
+  /**
+   * Nome do time mais frequente nas ações no intervalo (fallback quando o perfil não traz nome legível).
+   */
+  pickPrimaryTeamNameFromActions(
+    items: UserActionRow[],
+    rangeStart: Date,
+    rangeEnd: Date
+  ): string {
+    const rows = this.filterDateRange(items, rangeStart, rangeEnd);
+    const counts = new Map<string, number>();
+    for (const r of rows) {
+      const n = (r.team_name || '').trim();
+      if (!n) {
+        continue;
+      }
+      counts.set(n, (counts.get(n) || 0) + 1);
+    }
+    let best = '';
+    let bestCount = 0;
+    for (const [name, c] of counts) {
+      if (c > bestCount) {
+        best = name;
+        bestCount = c;
+      }
+    }
+    return best;
+  }
+
   filterMonth(items: UserActionRow[], month: Date): UserActionRow[] {
     return items.filter(r => this.inSelectedMonth(r, month));
   }
 
-  /** Soma dos pontos no mês apenas para atividades finalizadas (DONE/DELIVERED). */
+  /** Soma dos pontos no mês para atividades que {@link isFinalizedStatus} considera finalizadas (incl. PENDING). */
   sumPointsInMonth(items: UserActionRow[], month: Date): number {
     return this.filterMonth(items, month)
       .filter(r => this.isFinalizedStatus(r))
@@ -521,9 +836,10 @@ export class UserActionDashboardService {
   }
 
   /**
-   * Pontos do mês na secção “dados mensais”: só linhas finalizadas (DONE/DELIVERED).
-   * Entre finalizadas, `approved === false` → bloqueados; caso contrário → desbloqueados.
-   * Atividades pendentes/em curso não entram na soma.
+   * Pontos do mês na secção “dados mensais”: só linhas que {@link isFinalizedStatus} trata como finalizadas
+   * (DONE/DELIVERED, `finished_at`, PENDING não dispensada, etc.).
+   * Entre essas, `approved === false` → bloqueados; caso contrário → desbloqueados.
+   * Demais estados não entram na soma.
    */
   getMonthlyPointsBreakdownFromActions(
     items: UserActionRow[],
@@ -548,6 +864,8 @@ export class UserActionDashboardService {
 
   toActivityListItem(row: UserActionRow): ActivityListItem {
     const created = this.referenceTimestamp(row) || this.parseInstant(row.created_at);
+    const deal = (row.deal || '').trim();
+    const deliveryTitle = (row.delivery_title || '').trim();
     return {
       id: row.id,
       title: row.action_title || 'Atividade',
@@ -555,7 +873,8 @@ export class UserActionDashboardService {
       created,
       player: row.user_email,
       status: this.isFinalizedStatus(row) ? 'finalizado' : 'pendente',
-      cnpj: row.deal || row.delivery_title
+      cnpj: deal || undefined,
+      deliveryName: deliveryTitle || undefined
     };
   }
 
@@ -609,8 +928,12 @@ export class UserActionDashboardService {
     return result;
   }
 
-  getCarteiraEnriched(playerId: string, month: Date): Observable<CompanyDisplay[]> {
-    return this.getActions(playerId).pipe(
+  getCarteiraEnriched(
+    playerId: string,
+    month: Date,
+    roster?: ReadonlyArray<GameActionsUserRosterEntry> | null
+  ): Observable<CompanyDisplay[]> {
+    return this.getActions(playerId, roster ?? null).pipe(
       switchMap(items => {
         const companies = this.buildCarteiraCompanies(items, month);
         if (companies.length === 0) {
@@ -621,28 +944,40 @@ export class UserActionDashboardService {
     );
   }
 
-  getDeliveryCount(playerId: string, month: Date): Observable<number> {
-    return this.getActions(playerId).pipe(
+  getDeliveryCount(
+    playerId: string,
+    month: Date,
+    roster?: ReadonlyArray<GameActionsUserRosterEntry> | null
+  ): Observable<number> {
+    return this.getActions(playerId, roster ?? null).pipe(
       map(items => this.buildCarteiraCompanies(items, month).length)
     );
   }
 
+  /**
+   * @param applyMonthFilter — quando `false`, assume que `items` já veio com `start`/`end` da API
+   * (ex.: team-actions no mês); evita excluir linhas com `created_at`/`finished_at` incompletos.
+   */
   toClienteActionItemsForDelivery(
     items: UserActionRow[],
     deliveryId: string,
-    month: Date
+    month: Date,
+    applyMonthFilter = true
   ): ClienteActionItem[] {
-    return this.filterMonth(items, month)
-      .filter(r => (r.delivery_id || '').trim() === String(deliveryId).trim())
+    const scope = applyMonthFilter ? this.filterMonth(items, month) : items;
+    const want = String(deliveryId ?? '').trim();
+    return scope
+      .filter(r => String(r.delivery_id ?? '').trim() === want)
       .map(r => ({
         id: r.id,
         title: r.action_title || 'Atividade',
         player: r.user_email,
         created: this.referenceTimestamp(r) || this.parseInstant(r.created_at),
-        status: (this.isFinalizedStatus(r) ? 'finalizado' : 'pendente') as
-          | 'finalizado'
-          | 'pendente'
-          | 'dispensado',
+        status: (r.dismissed
+          ? 'dispensado'
+          : this.isFinalizedStatus(r)
+            ? 'finalizado'
+            : 'pendente') as 'finalizado' | 'pendente' | 'dispensado',
         points: this.rowPoints(r)
       }))
       .sort((a, b) => b.created - a.created);
@@ -651,24 +986,65 @@ export class UserActionDashboardService {
   getClienteActionsForDelivery(
     playerId: string,
     deliveryId: string,
-    month: Date
+    month: Date,
+    roster?: ReadonlyArray<GameActionsUserRosterEntry> | null
   ): Observable<ClienteActionItem[]> {
-    return this.getActions(playerId).pipe(
+    return this.getActions(playerId, roster ?? null).pipe(
       map(items => this.toClienteActionItemsForDelivery(items, deliveryId, month))
     );
+  }
+
+  private monthBoundsIso(month: Date): { start: string; end: string } {
+    const y = month.getFullYear();
+    const m = month.getMonth();
+    const start = new Date(y, m, 1, 0, 0, 0, 0);
+    const end = new Date(y, m + 1, 0, 23, 59, 59, 999);
+    return { start: start.toISOString(), end: end.toISOString() };
+  }
+
+  /**
+   * Detalhe da entrega no modal: GET `/user-action/search` (`delivery_id`, `created_at_start` / `created_at_end` do mês, `status`, `dismissed`, `limit`, `page` ou `page_token`).
+   */
+  getDeliveryDetailActionsFromUserActionSearch(
+    deliveryId: string,
+    month: Date
+  ): Observable<ClienteActionItem[]> {
+    const did = String(deliveryId || '').trim();
+    if (!did) {
+      return of([]);
+    }
+    const { start, end } = this.monthBoundsIso(month);
+    return from(this.fetchDeliveryActionsViaUserActionSearch(did, start, end)).pipe(
+      map(items => this.toClienteActionItemsForDelivery(items, did, month, false))
+    );
+  }
+
+  /**
+   * @deprecated Preferir {@link getDeliveryDetailActionsFromUserActionSearch}; `teamId` é ignorado.
+   */
+  getTeamActionsForDeliveryInMonth(
+    teamId: string,
+    deliveryId: string,
+    month: Date
+  ): Observable<ClienteActionItem[]> {
+    void teamId;
+    return this.getDeliveryDetailActionsFromUserActionSearch(deliveryId, month);
   }
 
   /** Mesma entrega agregada para vários membros (ex.: modal carteira na gestão de equipa). */
   getClienteActionsForDeliveryForPlayers(
     playerIds: string[],
     deliveryId: string,
-    month: Date
+    month: Date,
+    roster?: ReadonlyArray<GameActionsUserRosterEntry> | null
   ): Observable<ClienteActionItem[]> {
     if (!playerIds.length) {
       return of([]);
     }
     return forkJoin(
-      playerIds.map(id => this.getClienteActionsForDelivery(id, deliveryId, month))
+      playerIds.map(id =>
+        this.getClienteActionsForDelivery(id, deliveryId, month, roster ?? null)
+      )
     ).pipe(
       map(groups => {
         const merged = groups.flat();
@@ -678,9 +1054,26 @@ export class UserActionDashboardService {
     );
   }
 
-  getFinishedListForPlayer(playerId: string, month: Date): Observable<ActivityListItem[]> {
-    return this.getActions(playerId).pipe(
-      map(items => this.getFinishedActivityListItems(items, month))
+  getFinishedListForPlayer(
+    playerId: string,
+    month: Date,
+    roster?: ReadonlyArray<GameActionsUserRosterEntry> | null
+  ): Observable<ActivityListItem[]> {
+    const user = (this.resolvePlayerKeyWithRoster(playerId, roster ?? null) || '').trim();
+    if (!user || !looksLikeEmail(user)) {
+      return of([]);
+    }
+    const y = month.getFullYear();
+    const m = month.getMonth();
+    const rangeStart = new Date(y, m, 1, 0, 0, 0, 0);
+    const rangeEnd = new Date(y, m + 1, 0, 23, 59, 59, 999);
+    return this.getActionsForPlayerDateRange(playerId, rangeStart, rangeEnd, roster ?? null).pipe(
+      map(items =>
+        items
+          .filter(r => this.isFinalizedStatus(r))
+          .map(r => this.toActivityListItem(r))
+          .sort((a, b) => b.created - a.created)
+      )
     );
   }
 

@@ -1,5 +1,6 @@
 import { Injectable } from '@angular/core';
 import { PlayerStatus, PointWallet, SeasonProgress, PlayerMetadata } from '@model/gamification-dashboard.model';
+import { resolveTeamDisplayNameForPlayerSidebar } from '@utils/game4u-user-id.util';
 
 @Injectable({
   providedIn: 'root'
@@ -34,15 +35,22 @@ export class PlayerMapper {
   private extractMetadata(apiResponse: any): PlayerMetadata {
     const extra = apiResponse.extra || {};
     const teams = apiResponse.teams || [];
-    
-    // Extract team info if available
-    const teamInfo = teams.length > 0 ? teams[0] : {};
-    
+    const teamInfo = teams.length > 0 ? teams[0] : undefined;
+    const time =
+      resolveTeamDisplayNameForPlayerSidebar(
+        teamInfo,
+        extra as Record<string, unknown>,
+        apiResponse as Record<string, unknown>
+      ) ||
+      (typeof extra.time === 'string' ? extra.time : '');
+
+    const teamObj = teamInfo && typeof teamInfo === 'object' ? teamInfo : {};
+
     return {
-      area: extra.area || teamInfo.area || '',
-      time: teamInfo.name || extra.time || '',
-      squad: extra.squad || teamInfo.squad || '',
-      ...extra
+      ...extra,
+      area: extra.area || (teamObj as { area?: string }).area || '',
+      time,
+      squad: extra.squad || (teamObj as { squad?: string }).squad || ''
     };
   }
 

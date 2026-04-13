@@ -19,6 +19,7 @@ module.exports = {
             // `process.env['NAME']` quando só existe o objeto abaixo — aí o valor some
             // no bundle e o código cai no fallback (ex.: BACKEND_URL_BASE = http://localhost).
             'process.env.G4U_API_BASE': JSON.stringify(getEnv('G4U_API_BASE')),
+            'process.env.USE_API_PROXY': JSON.stringify(getEnv('USE_API_PROXY')),
             'process.env.g4u_api_base': JSON.stringify(getEnv('g4u_api_base')),
             'process.env': JSON.stringify({
                 // Uppercase (standard convention)

@@ -1,8 +1,7 @@
 import { Component, OnInit, OnDestroy, HostListener, ChangeDetectionStrategy, ChangeDetectorRef, AfterViewInit } from '@angular/core';
-import { HttpErrorResponse } from '@angular/common/http';
 import { ActivatedRoute, Router } from '@angular/router';
-import { Subject, forkJoin, of } from 'rxjs';
-import { takeUntil, switchMap, finalize, map } from 'rxjs/operators';
+import { Subject, forkJoin, of, firstValueFrom } from 'rxjs';
+import { takeUntil, switchMap, map } from 'rxjs/operators';
 
 import { PlayerService } from '@services/player.service';
 import { CompanyService } from '@services/company.service';
@@ -14,14 +13,14 @@ import { CnpjLookupService } from '@services/cnpj-lookup.service';
 import { SessaoProvider } from '@providers/sessao/sessao.provider';
 import { SystemParamsService } from '@services/system-params.service';
 import { FinanceiroOmieRecebiveisService } from '@services/financeiro-omie-recebiveis.service';
-import { BackendActionApiService } from '@services/backend-action-api.service';
+import { GoalsReceitaBackendService } from '@services/goals-receita-backend.service';
 import { UserActionDashboardService } from '@services/user-action-dashboard.service';
-import { environment } from '../../../../environments/environment';
-import { 
-  PlayerStatus, 
-  PointWallet, 
-  SeasonProgress, 
-  Company, 
+import {
+  PlayerStatus,
+  PlayerMetadata,
+  PointWallet,
+  SeasonProgress,
+  Company,
   KPIData,
   ActivityMetrics,
   ProcessMetrics
@@ -31,6 +30,15 @@ import { ProgressCardType } from '@components/c4u-activity-progress/c4u-activity
 import { ProgressListType } from '@modals/modal-progress-list/modal-progress-list.component';
 import { SEASON_GAME_ACTION_RANGE } from '@app/constants/season-action-range';
 import { filterCompanyDisplaysByClienteSearch } from '@utils/cliente-carteira-search.util';
+import {
+  looksLikeEmail,
+  pickSessionEmailForGameApi,
+  pickTeamIdFromUserProfile,
+  resolveTeamDisplayNameForPlayerSidebar
+} from '@utils/game4u-user-id.util';
+import { FUNIFIER_HTTP_DISABLED } from '@app/config/funifier-requests-disabled';
+import { TemporadaService } from '@services/temporada.service';
+import { TIPO_CONSULTA_COLABORADOR } from '../dashboard.component';
 
 @Component({
   selector: 'app-gamification-dashboard',
@@ -41,7 +49,14 @@ import { filterCompanyDisplaysByClienteSearch } from '@utils/cliente-carteira-se
 export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterViewInit {
   private destroy$ = new Subject<void>();
   private endRenderMeasurement: (() => void) | null = null;
-  private static readonly FINANCE_TEAM_ID = 'Fouegv0';
+  /** Time Financeiro na base Game4U (substitui o id legado Funifier). */
+  private static readonly FINANCE_TEAM_ID = '6';
+  private static readonly VALOR_CONCEDIDO_KPI_ID = 'valor-concedido';
+  /**
+   * `injectFinanceBillingKpi` pode disparar-se em paralelo (ex.: `loadKPIData` + `loadPlayerDataFromGame4u`).
+   * Só a última conclusão deve acrescentar o circular; as outras ignoram-se após os awaits.
+   */
+  private financeBillingKpiLoadGeneration = 0;
   
   // Responsive properties
   isMobile = false;
@@ -108,9 +123,6 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   // Refresh state
   lastRefreshTime: Date | null = null;
 
-  /** Teste GET `/action` no backend (`backend_url_base`). */
-  isActionApiLoading = false;
-  
   /** Intervalo exibido e usado em GET `/game/actions?start&end` para o cartão de temporada (fixo mar–abr/2026). */
   private readonly seasonDates = SEASON_GAME_ACTION_RANGE;
   
@@ -130,8 +142,9 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     private sessaoProvider: SessaoProvider,
     private systemParamsService: SystemParamsService,
     private financeiroOmieRecebiveisService: FinanceiroOmieRecebiveisService,
-    private backendActionApiService: BackendActionApiService,
+    private goalsReceitaBackendService: GoalsReceitaBackendService,
     private userActionDashboard: UserActionDashboardService,
+    private temporadaService: TemporadaService,
     private route: ActivatedRoute,
     private router: Router
   ) {
@@ -153,17 +166,26 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     if (playerIdParam && typeof playerIdParam === 'string') {
       return playerIdParam;
     }
-    
-    // Try to get from current user session
+
     const usuario = this.sessaoProvider.usuario;
     if (usuario) {
-      const sessionPlayerId = usuario._id || usuario.email;
+      // E-mail real primeiro: Funifier + GET `/game/actions?user=` esperam e-mail, não UUID em `_id`.
+      const gameEmail = pickSessionEmailForGameApi(usuario, this.sessaoProvider.token ?? null);
+      if (gameEmail) {
+        return gameEmail;
+      }
+      const sessionPlayerId =
+        usuario._id ||
+        usuario.email ||
+        (usuario as { id?: string }).id;
       if (sessionPlayerId && typeof sessionPlayerId === 'string') {
         return sessionPlayerId;
       }
+      if (sessionPlayerId != null) {
+        return String(sessionPlayerId);
+      }
     }
-    
-    // Fallback to 'me' (current authenticated user)
+
     return 'me';
   }
   
@@ -252,9 +274,14 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   private loadPlayerData(): void {
     this.isLoadingPlayer = true;
     this.cdr.markForCheck();
-    
+
     const playerId = this.getPlayerId();
-    
+
+    if (FUNIFIER_HTTP_DISABLED) {
+      void this.loadPlayerDataFromGame4u(playerId);
+      return;
+    }
+
     // Load player status
     // Safety timeout to prevent infinite loading state
     const loadingTimeout = setTimeout(() => {
@@ -264,7 +291,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
         this.cdr.markForCheck();
       }
     }, 20000); // 20 second timeout
-    
+
     this.playerService.getPlayerStatus(playerId)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
@@ -330,7 +357,131 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
         }
       });
   }
-  
+
+  /**
+   * Com Funifier desligado, `player/{id}/status` não existe — nome e metadados vêm da sessão;
+   * carteira Bloqueados/Desbloqueados na temporada soma GET `/game/actions` (DONE / DELIVERED);
+   * nível do cartão pode ainda vir de GET `/game/stats`.
+   */
+  private async loadPlayerDataFromGame4u(playerId: string): Promise<void> {
+    const loadingTimeout = setTimeout(() => {
+      if (this.isLoadingPlayer) {
+        console.warn('📊 Loading timeout reached, forcing loading state to false');
+        this.isLoadingPlayer = false;
+        this.cdr.markForCheck();
+      }
+    }, 20000);
+
+    const u = this.sessaoProvider.usuario;
+    const token = this.sessaoProvider.token ?? null;
+    const email = pickSessionEmailForGameApi(u, token);
+    const statsUser = looksLikeEmail(playerId) ? playerId.trim() : email;
+    const displayName = String(
+      (u as { full_name?: string; name?: string })?.full_name ||
+        (u as { full_name?: string; name?: string })?.name ||
+        email ||
+        playerId ||
+        'Jogador'
+    ).trim();
+
+    this.playerStatus = {
+      _id: statsUser || playerId,
+      name: displayName,
+      email: statsUser || email || playerId,
+      level: 0,
+      seasonLevel: 0,
+      levelName: '',
+      percentCompleted: 0,
+      metadata: this.buildPlayerMetadataFromSession(),
+      created: Date.now(),
+      updated: Date.now()
+    };
+    this.pointWallet = { bloqueados: 0, desbloqueados: 0, moedas: 0 };
+
+    const range = SEASON_GAME_ACTION_RANGE;
+    try {
+      const items = await firstValueFrom(
+        this.userActionDashboard.getActionsForPlayerDateRange(playerId, range.start, range.end)
+      );
+      const wallet = this.userActionDashboard.getSeasonPointWalletDoneDelivered(
+        items,
+        range.start,
+        range.end
+      );
+      this.pointWallet = { bloqueados: wallet.bloqueados, desbloqueados: wallet.desbloqueados, moedas: 0 };
+
+      const teamFromActions = this.userActionDashboard.pickPrimaryTeamNameFromActions(
+        items,
+        range.start,
+        range.end
+      );
+      if (
+        teamFromActions &&
+        this.playerStatus &&
+        !String(this.playerStatus.metadata?.time || '').trim()
+      ) {
+        this.playerStatus = {
+          ...this.playerStatus,
+          metadata: { ...this.playerStatus.metadata, time: teamFromActions }
+        };
+      }
+    } catch (e) {
+      console.error('📊 Game4U /game/actions (carteira temporada / time):', e);
+    }
+
+    if (statsUser) {
+      try {
+        const seasonIso = {
+          start: range.start.toISOString(),
+          end: range.end.toISOString()
+        };
+        const dash = await this.temporadaService.getDadosTemporadaDashboard(
+          statsUser,
+          TIPO_CONSULTA_COLABORADOR,
+          seasonIso
+        );
+        const nivel = Math.floor(Number(dash.nivel?.nivelAtual) || 0);
+        this.playerStatus.seasonLevel = nivel;
+        this.playerStatus.level = nivel;
+      } catch (e) {
+        console.error('📊 Game4U /game/stats (nível jogador):', e);
+      }
+    }
+
+    clearTimeout(loadingTimeout);
+    this.isLoadingPlayer = false;
+    this.seasonProgress = {
+      metas: { current: 0, target: 0 },
+      clientes: 0,
+      tarefasFinalizadas: 0,
+      seasonDates: { ...this.seasonDates }
+    };
+    this.maybeInjectFinanceBillingKpiForPlayer(playerId);
+    this.cdr.markForCheck();
+    this.loadSeasonProgressDetails();
+  }
+
+  private buildPlayerMetadataFromSession(): PlayerMetadata {
+    const u = this.sessaoProvider.usuario as
+      | { teams?: unknown; extra?: Record<string, unknown> }
+      | null
+      | undefined;
+    const teams = u?.teams;
+    const first = Array.isArray(teams) && teams.length > 0 ? teams[0] : undefined;
+    const extra = u?.extra && typeof u.extra === 'object' ? u.extra : {};
+    const time = resolveTeamDisplayNameForPlayerSidebar(
+      first,
+      extra as Record<string, unknown>,
+      u as Record<string, unknown> | null | undefined
+    );
+    return {
+      ...extra,
+      area: typeof extra['area'] === 'string' ? extra['area'] : '',
+      time,
+      squad: typeof extra['squad'] === 'string' ? extra['squad'] : ''
+    };
+  }
+
   /**
    * Load additional season progress details:
    * - Metas: count of KPIs above target from metric_targets__c
@@ -338,10 +489,8 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
    * - Tarefas finalizadas: count of actions from action_log
    */
   private loadSeasonProgressDetails(): void {
-    const usuario = this.sessaoProvider.usuario as { _id?: string; email?: string } | null;
-    const playerId: string = (usuario?._id || usuario?.email || '') as string;
-    
-    if (!playerId) {
+    const playerId = this.getPlayerId();
+    if (!playerId || playerId === 'me') {
       return;
     }
 
@@ -440,11 +589,9 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
    */
   private loadCarteiraData(): void {
     this.isLoadingCarteira = true;
-    
-    const usuario = this.sessaoProvider.usuario as { _id?: string; email?: string } | null;
-    const playerId: string = (usuario?._id || usuario?.email || '') as string;
-    
-    if (!playerId) {
+
+    const playerId = this.getPlayerId();
+    if (!playerId || playerId === 'me') {
       console.warn('📊 No player ID available for carteira data');
       this.isLoadingCarteira = false;
       this.cdr.markForCheck();
@@ -494,7 +641,8 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (kpis) => {
-          const baseKpis = kpis || [];
+          const vcId = GamificationDashboardComponent.VALOR_CONCEDIDO_KPI_ID;
+          const baseKpis = (kpis || []).filter(k => k.id !== vcId);
           this.playerKPIs = baseKpis;
           this.isLoadingKPIs = false;
           
@@ -517,69 +665,182 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
       });
   }
 
+  /**
+   * Id do time Financeiro (`6`), nome com "financeiro", ou `metadata.time` (ex.: `/game/actions`).
+   * Critério alinhado ao `isSelectedFinanceTeam` do painel de gestão de equipa.
+   */
   private isFinanceTeamMember(): boolean {
-    const teams = (this.sessaoProvider.usuario as any)?.teams;
-    if (!teams || !Array.isArray(teams)) return false;
-    return teams.some((t: any) => {
-      if (typeof t === 'string') return t === GamificationDashboardComponent.FINANCE_TEAM_ID;
-      if (t && typeof t === 'object') return t._id === GamificationDashboardComponent.FINANCE_TEAM_ID || t.id === GamificationDashboardComponent.FINANCE_TEAM_ID;
-      return false;
-    });
+    const fid = GamificationDashboardComponent.FINANCE_TEAM_ID;
+    const labelIsFinance = (s: string): boolean => s.trim().toLowerCase().includes('financeiro');
+
+    const u = this.sessaoProvider.usuario as Record<string, unknown> | null | undefined;
+    if (u) {
+      const rootTid = u['team_id'] ?? u['teamId'];
+      if (rootTid != null && String(rootTid).trim() === fid) {
+        return true;
+      }
+
+      const teams = u['teams'];
+      if (Array.isArray(teams)) {
+        for (const t of teams) {
+          if (t != null && (typeof t === 'string' || typeof t === 'number')) {
+            const sid = String(t).trim();
+            if (sid === fid) {
+              return true;
+            }
+            if (typeof t === 'string' && labelIsFinance(t)) {
+              return true;
+            }
+          } else if (t && typeof t === 'object') {
+            const o = t as Record<string, unknown>;
+            const id = o['_id'] ?? o['id'] ?? o['team_id'];
+            if (id != null && String(id).trim() === fid) {
+              return true;
+            }
+            for (const k of ['name', 'team_name', 'label', 'title']) {
+              const v = o[k];
+              if (typeof v === 'string' && labelIsFinance(v)) {
+                return true;
+              }
+            }
+          }
+        }
+      }
+      const extra = u['extra'];
+      if (extra && typeof extra === 'object' && !Array.isArray(extra)) {
+        const ex = extra as Record<string, unknown>;
+        const exTid = ex['team_id'] ?? ex['teamId'];
+        if (exTid != null && String(exTid).trim() === fid) {
+          return true;
+        }
+        for (const k of ['team_name', 'teamName']) {
+          const v = ex[k];
+          if (typeof v === 'string' && labelIsFinance(v)) {
+            return true;
+          }
+        }
+      }
+      for (const k of ['team_name', 'teamName']) {
+        const v = u[k];
+        if (typeof v === 'string' && labelIsFinance(v)) {
+          return true;
+        }
+      }
+    }
+
+    const timeMeta = String(this.playerStatus?.metadata?.time || '').toLowerCase();
+    if (timeMeta.includes('financeiro')) {
+      return true;
+    }
+
+    return false;
+  }
+
+  private maybeInjectFinanceBillingKpiForPlayer(playerId: string): void {
+    if (!playerId || playerId === 'me') {
+      return;
+    }
+    if (!this.isFinanceTeamMember()) {
+      return;
+    }
+    this.injectFinanceBillingKpi(playerId);
   }
 
   private injectFinanceBillingKpi(playerId: string): void {
     void playerId;
-    // Sempre refetch Omie ao montar KPIs (evita KPI antigo após mudança de mês / recarga).
-    this.playerKPIs = this.playerKPIs.filter(k => k.id !== 'valor-concedido');
+    this.playerKPIs = this.playerKPIs.filter(
+      k => k.id !== GamificationDashboardComponent.VALOR_CONCEDIDO_KPI_ID
+    );
+    void this.loadFinanceBillingKpiLikeTeamManagement();
+  }
 
-    this.financeiroOmieRecebiveisService
-      .getValorConcedidoFinanceiro(GamificationDashboardComponent.FINANCE_TEAM_ID, this.selectedMonth)
-      .pipe(takeUntil(this.destroy$))
-      .subscribe({
-        next: (currentBilling) => {
-          this.systemParamsService
-            .getParam<number>('financeiro_monthly_billing_goal' as any)
-            .then(goal => {
-              const safeCurrent = typeof currentBilling === 'number' && isFinite(currentBilling) ? currentBilling : 0;
-              const target = typeof goal === 'number' && goal > 0 ? goal : 0;
-              const superTarget = target > 0 ? Math.ceil(target * 1.5) : undefined;
+  /**
+   * Mesma montagem que o team-management dashboard: goals/logs → fallback Omie.
+   */
+  private async loadFinanceBillingKpiLikeTeamManagement(): Promise<void> {
+    const gen = ++this.financeBillingKpiLoadGeneration;
+    const vcId = GamificationDashboardComponent.VALOR_CONCEDIDO_KPI_ID;
+    this.playerKPIs = this.playerKPIs.filter(k => k.id !== vcId);
+    try {
+      const billingGoal = await this.systemParamsService.getParam<number>(
+        'financeiro_monthly_billing_goal' as any
+      );
+      const paramTarget =
+        typeof billingGoal === 'number' && billingGoal > 0 ? billingGoal : 0;
 
-              const billingKpi: KPIData = {
-                id: 'valor-concedido',
-                label: 'Valor concedido',
-                current: safeCurrent,
-                target,
-                superTarget,
-                unit: 'R$',
-                color: target > 0 && superTarget != null
-                  ? (safeCurrent >= superTarget ? 'green' : safeCurrent >= target ? 'yellow' : 'red')
-                  : 'red',
-                percentage: target > 0 ? Math.round((safeCurrent / target) * 100) : 0
-              };
+      const goalsKpi = await this.goalsReceitaBackendService.tryGetReceitaConcedidaKpi(
+        this.selectedMonth
+      );
 
-              this.playerKPIs = [...this.playerKPIs, billingKpi];
-              this.cdr.markForCheck();
-            })
-            .catch(() => {
-              // Even without goal, we can still show the current billing.
-              const safeCurrent = typeof currentBilling === 'number' && isFinite(currentBilling) ? currentBilling : 0;
-              const billingKpi: KPIData = {
-                id: 'valor-concedido',
-                label: 'Valor concedido',
-                current: safeCurrent,
-                target: 0,
-                unit: 'R$',
-                color: 'red',
-                percentage: 0
-              };
-              this.playerKPIs = [...this.playerKPIs, billingKpi];
-              this.cdr.markForCheck();
-            });
-        },
-        error: () => {
-          // Silent failure: don't block KPI rendering.
-        }
-      });
+      let safeCurrentBilling = 0;
+      let targetBilling = 0;
+      let kpiPercent = 0;
+
+      if (goalsKpi != null) {
+        safeCurrentBilling = goalsKpi.current;
+        targetBilling = goalsKpi.target > 0 ? goalsKpi.target : paramTarget;
+        kpiPercent =
+          targetBilling > 0
+            ? Math.min(100, Math.round((safeCurrentBilling / targetBilling) * 100))
+            : goalsKpi.percent;
+      } else {
+        const teamIdForOmie =
+          pickTeamIdFromUserProfile(this.sessaoProvider.usuario) ||
+          GamificationDashboardComponent.FINANCE_TEAM_ID;
+        const currentBilling = await firstValueFrom(
+          this.financeiroOmieRecebiveisService
+            .getValorConcedidoFinanceiro(teamIdForOmie, this.selectedMonth)
+            .pipe(takeUntil(this.destroy$))
+        );
+        safeCurrentBilling =
+          typeof currentBilling === 'number' && isFinite(currentBilling) ? currentBilling : 0;
+        targetBilling = paramTarget;
+        kpiPercent =
+          targetBilling > 0 ? Math.round((safeCurrentBilling / targetBilling) * 100) : 0;
+      }
+
+      const superTargetBilling =
+        targetBilling > 0 ? Math.ceil(targetBilling * 1.5) : undefined;
+
+      if (gen !== this.financeBillingKpiLoadGeneration) {
+        return;
+      }
+
+      this.playerKPIs = this.playerKPIs.filter(k => k.id !== vcId);
+
+      const billingKpi: KPIData = {
+        id: vcId,
+        label: 'Valor concedido',
+        current: safeCurrentBilling,
+        target: targetBilling,
+        superTarget: superTargetBilling,
+        unit: 'R$',
+        color:
+          targetBilling > 0 && superTargetBilling != null
+            ? this.getKPIColorByGoals(safeCurrentBilling, targetBilling, superTargetBilling)
+            : 'red',
+        percentage: Math.min(100, kpiPercent)
+      };
+
+      this.playerKPIs = [...this.playerKPIs, billingKpi];
+      this.cdr.markForCheck();
+    } catch (error) {
+      console.error('Error loading finance billing KPI (player panel):', error);
+    }
+  }
+
+  private getKPIColorByGoals(
+    current: number,
+    target: number,
+    superTarget: number
+  ): 'red' | 'yellow' | 'green' {
+    if (current >= superTarget) {
+      return 'green';
+    }
+    if (current >= target) {
+      return 'yellow';
+    }
+    return 'red';
   }
   
   /**
@@ -615,11 +876,9 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
    */
   private loadProgressData(): void {
     this.isLoadingProgress = true;
-    
-    const usuario = this.sessaoProvider.usuario as { _id?: string; email?: string } | null;
-    const playerId: string = (usuario?._id || usuario?.email || '') as string;
-    
-    if (!playerId) {
+
+    const playerId = this.getPlayerId();
+    if (!playerId || playerId === 'me') {
       console.warn('📊 No player ID available for progress data');
       this.activityMetrics = { pendentes: 0, emExecucao: 0, finalizadas: 0, pontos: 0 };
       this.processMetrics = { pendentes: 0, incompletas: 0, finalizadas: 0 };
@@ -814,58 +1073,20 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   }
   
   /**
-   * Get current player ID for modals (email-based)
+   * Chave do jogador para modais (carteira, lista de progresso): mesmo critério que {@link getPlayerId}
+   * — e-mail para GET `/game/actions?user=`, não UUID em `_id`.
    */
   get currentPlayerId(): string {
-    const usuario = this.sessaoProvider.usuario as { _id?: string; email?: string } | null;
-    if (!usuario) {
-      return '';
-    }
-    return (usuario._id || usuario.email || '') as string;
-  }
-  
-  /**
-   * GET `{backend_url_base}/action` com header `client_id` (e Bearer via interceptor).
-   */
-  fetchBackendActions(): void {
-    const base = environment.backend_url_base?.trim();
-    if (!base) {
-      this.toastService.error('Configure backend_url_base no ambiente.');
-      return;
-    }
-    this.isActionApiLoading = true;
-    this.cdr.markForCheck();
-    this.backendActionApiService
-      .getActions()
-      .pipe(
-        takeUntil(this.destroy$),
-        finalize(() => {
-          this.isActionApiLoading = false;
-          this.cdr.markForCheck();
-        })
-      )
-      .subscribe({
-        next: (body) => {
-          console.log('GET /action response', body);
-          this.toastService.success('GET /action concluído com sucesso.');
-        },
-        error: (err: unknown) => {
-          let msg = 'Erro ao chamar GET /action';
-          if (err instanceof HttpErrorResponse) {
-            if (typeof err.error === 'string' && err.error.trim()) {
-              msg = err.error;
-            } else if (err.error && typeof err.error === 'object' && 'message' in err.error) {
-              const m = (err.error as { message?: string }).message;
-              if (m) msg = m;
-            } else if (err.message) {
-              msg = err.message;
-            }
-          }
-          this.toastService.error(msg);
-        }
-      });
+    return this.getPlayerId();
   }
 
+  /**
+   * Id do time (Funifier) para o modal de entrega: GET `/game/team-actions` e todas as ações da delivery.
+   */
+  get carteiraModalTeamIdForDelivery(): string | null {
+    return pickTeamIdFromUserProfile(this.sessaoProvider.usuario);
+  }
+  
   /**
    * Manual refresh mechanism
    */

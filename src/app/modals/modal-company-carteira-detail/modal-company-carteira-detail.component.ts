@@ -28,6 +28,10 @@ export class ModalCompanyCarteiraDetailComponent implements OnInit, OnDestroy {
    * Vários jogadores (ex.: todos os membros do time na gestão de equipa) — agrega atividades da mesma `deliveryId`.
    */
   @Input() actionContextPlayerIds: string[] | null = null;
+  /**
+   * Legado; o detalhe da entrega usa GET `/user-action/search` por `deliveryId` (não envia `team`).
+   */
+  @Input() teamIdForDeliveryActions: string | null = null;
   @Output() closed = new EventEmitter<void>();
 
   private destroy$ = new Subject<void>();
@@ -139,37 +143,14 @@ export class ModalCompanyCarteiraDetailComponent implements OnInit, OnDestroy {
     this.cdr.markForCheck();
 
     const month = this.month || new Date();
-    const usuario = this.sessao.usuario as { _id?: string; email?: string } | null;
-    const sessionPlayer = ((usuario?._id || usuario?.email || '') as string).trim();
-
-    const multiIds =
-      this.actionContextPlayerIds && this.actionContextPlayerIds.length > 0
-        ? this.actionContextPlayerIds.map(id => String(id).trim()).filter(Boolean)
-        : null;
-    const singleFromInput =
-      this.actionContextPlayerId != null && String(this.actionContextPlayerId).trim() !== ''
-        ? String(this.actionContextPlayerId).trim()
-        : null;
 
     let tasks$: Observable<ClienteActionItem[]>;
 
     if (this.company.deliveryId) {
-      if (multiIds && multiIds.length > 0) {
-        tasks$ = this.userActionDashboard.getClienteActionsForDeliveryForPlayers(
-          multiIds,
-          this.company.deliveryId,
-          month
-        );
-      } else {
-        const playerKey = singleFromInput || sessionPlayer;
-        tasks$ = playerKey
-          ? this.userActionDashboard.getClienteActionsForDelivery(
-              playerKey,
-              this.company.deliveryId,
-              month
-            )
-          : of([]);
-      }
+      tasks$ = this.userActionDashboard.getDeliveryDetailActionsFromUserActionSearch(
+        this.company.deliveryId,
+        month
+      );
     } else {
       tasks$ = this.actionLogService.getActionsByCnpj(this.company.cnpj, this.month);
     }

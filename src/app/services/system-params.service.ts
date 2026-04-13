@@ -182,7 +182,7 @@ export class SystemParamsService {
         enable_challenges: { value: true, inherited: false },
         season_start_date: { value: '2025-01-01', inherited: false },
         team_monthly_goal: { value: 10000, inherited: false },
-        // Meta mensal (R$) do time financeiro (Team ID: Fouegv0)
+        // Meta mensal (R$) do time financeiro (team id Game4U: 6)
         financeiro_monthly_billing_goal: { value: 0, inherited: false },
         financeiro_omie_painel_json_url: { value: '', inherited: false },
         financeiro_omie_caixa_json_url: { value: '', inherited: false },

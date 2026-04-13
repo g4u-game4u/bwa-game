@@ -353,12 +353,13 @@
   background: rgba(255, 255, 255, 0.02);
   border-radius: 8px;
 
-  // Fixed width for "Cliente" column in the activities table
+  // Largura fixa da coluna empresa (CNPJ) na tabela de atividades
   $client-col-width: 220px;
+  $delivery-name-col-width: 160px;
 
   .task-header {
     display: grid;
-    grid-template-columns: 2fr 1.5fr 1.5fr 1fr;
+    grid-template-columns: 2fr $delivery-name-col-width 1.5fr 1.5fr 1fr;
     gap: $spacing-md;
     padding: $spacing-md $spacing-lg;
     background: #323339;
@@ -375,17 +376,17 @@
     
     // Adjust grid for pontos type
     &.with-points {
-      grid-template-columns: 2fr 1.5fr 1.5fr 1fr 1fr;
+      grid-template-columns: 2fr $delivery-name-col-width 1.5fr 1.5fr 1fr 1fr;
     }
 
     // Adjust grid to include Cliente column
     &.with-client {
-      grid-template-columns: 2fr $client-col-width 1.5fr 1.5fr 1fr;
+      grid-template-columns: 2fr $client-col-width $delivery-name-col-width 1.5fr 1.5fr 1fr;
     }
 
     // Cliente + Pontos
     &.with-client.with-points {
-      grid-template-columns: 2fr $client-col-width 1.5fr 1.5fr 1fr 1fr;
+      grid-template-columns: 2fr $client-col-width $delivery-name-col-width 1.5fr 1.5fr 1fr 1fr;
     }
     
     // Adjust grid for processes
@@ -402,7 +403,7 @@
 
   .task-row {
     display: grid;
-    grid-template-columns: 2fr 1.5fr 1.5fr 1fr;
+    grid-template-columns: 2fr $delivery-name-col-width 1.5fr 1.5fr 1fr;
     gap: $spacing-md;
     padding: $spacing-md $spacing-lg;
     background: rgba(255, 255, 255, 0.02);
@@ -419,17 +420,17 @@
     
     // Adjust grid for pontos type
     &.with-points {
-      grid-template-columns: 2fr 1.5fr 1.5fr 1fr 1fr;
+      grid-template-columns: 2fr $delivery-name-col-width 1.5fr 1.5fr 1fr 1fr;
     }
 
     // Adjust grid to include Cliente column
     &.with-client {
-      grid-template-columns: 2fr $client-col-width 1.5fr 1.5fr 1fr;
+      grid-template-columns: 2fr $client-col-width $delivery-name-col-width 1.5fr 1.5fr 1fr;
     }
 
     // Cliente + Pontos
     &.with-client.with-points {
-      grid-template-columns: 2fr $client-col-width 1.5fr 1.5fr 1fr 1fr;
+      grid-template-columns: 2fr $client-col-width $delivery-name-col-width 1.5fr 1.5fr 1fr 1fr;
     }
     
     // Adjust grid for processes
@@ -459,14 +460,32 @@
     }
 
     .task-col-client {
+      min-width: 0;
+      max-width: $client-col-width;
+
       .task-client {
         color: $text-secondary;
         font-size: 0.875rem;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
-        display: inline-block;
-        max-width: 100%;
+        display: block;
+        width: 100%;
+      }
+    }
+
+    .task-col-delivery-name {
+      min-width: 0;
+      max-width: $delivery-name-col-width;
+
+      .task-delivery-name {
+        color: $text-secondary;
+        font-size: 0.875rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        display: block;
+        width: 100%;
       }
     }
 
@@ -885,6 +904,12 @@
       }
 
       .task-col-client::before {
+        content: 'Empresa: ';
+        font-weight: 600;
+        color: $text-secondary;
+      }
+
+      .task-col-delivery-name::before {
         content: 'Cliente: ';
         font-weight: 600;
         color: $text-secondary;

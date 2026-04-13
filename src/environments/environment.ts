@@ -1,25 +1,33 @@
+const useApiProxyFlag = (() => {
+  const v = String(process.env.USE_API_PROXY ?? '').trim().toLowerCase();
+  return v === 'true' || v === '1';
+})();
+
 export const environment = {
   production: false,
   // client_id: 'cidadania4u',
   client_id: 'revisaprev',
   /**
    * API backend. Com `ng serve`, lê `BACKEND_URL_BASE` ou `backend_url_base` do `.env` (DefinePlugin).
-   * Fallback local alinhado à porta padrão da API em desenvolvimento.
+   * CORS no browser: no `.env` use `USE_API_PROXY=true` e base vazia — os pedidos vão para o mesmo host do `ng serve`
+   * e o `proxy.conf.json` encaminha para a API (ex. :3001).
    */
-  backend_url_base:
-    process.env['BACKEND_URL_BASE'] ||
-    process.env['backend_url_base'] ||
-    'http://localhost:3001',
+  backend_url_base: useApiProxyFlag
+    ? ''
+    : process.env['BACKEND_URL_BASE'] ||
+      process.env['backend_url_base'] ||
+      'http://localhost:3001',
 
   /**
-   * Base da API Game4U (login em POST /auth/login). Se vazio, usa a mesma ordem de fallback de `backend_url_base`.
+   * Base da API Game4U (login em POST /auth/login). Com `USE_API_PROXY=true`, deixe implícito vazio (mesmo host + proxy).
    */
-  g4u_api_base:
-    process.env.G4U_API_BASE ||
-    process.env.g4u_api_base ||
-    process.env['BACKEND_URL_BASE'] ||
-    process.env['backend_url_base'] ||
-    'http://localhost:3001',
+  g4u_api_base: useApiProxyFlag
+    ? ''
+    : process.env.G4U_API_BASE ||
+      process.env.g4u_api_base ||
+      process.env['BACKEND_URL_BASE'] ||
+      process.env['backend_url_base'] ||
+      'http://localhost:3001',
   
   // Funifier API Configuration
   funifier_api_url: 'https://service2.funifier.com/v3/',

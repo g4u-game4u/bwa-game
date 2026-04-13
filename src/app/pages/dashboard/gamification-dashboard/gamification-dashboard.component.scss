@@ -387,8 +387,7 @@
       flex: 0 0 auto;
     }
     
-    .refresh-button,
-    .action-api-button {
+    .refresh-button {
       position: absolute;
       top: 50%;
       transform: translateY(-50%);
@@ -429,12 +428,8 @@
       }
     }
 
-    .action-api-button {
-      right: 260px;
-    }
-
     .refresh-button {
-      right: 120px; // Increased from 80px to add more spacing between buttons
+      right: 120px;
 
       .refresh-time {
         font-size: $font-size-small;
@@ -478,8 +473,7 @@
       flex-direction: column;
       align-items: center;
       
-      .refresh-button,
-      .action-api-button {
+      .refresh-button {
         position: static;
         transform: none;
         margin-top: $spacing-sm;

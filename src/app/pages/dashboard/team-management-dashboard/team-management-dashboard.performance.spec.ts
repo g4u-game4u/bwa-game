@@ -56,7 +56,7 @@ describe('TeamManagementDashboardComponent Performance Tests', () => {
       'createChartDatasets'
     ]);
     const seasonDatesServiceSpy = jasmine.createSpyObj('SeasonDatesService', ['getSeasonDates']);
-    const toastServiceSpy = jasmine.createSpyObj('ToastService', ['error', 'success']);
+    const toastServiceSpy = jasmine.createSpyObj('ToastService', ['error', 'success', 'alert']);
     const sessaoProviderSpy = jasmine.createSpyObj('SessaoProvider', [], {
       usuario: { extra: { teams: ['Team A', 'Team B'] } }
     });
@@ -94,6 +94,7 @@ describe('TeamManagementDashboardComponent Performance Tests', () => {
 
     fixture = TestBed.createComponent(TeamManagementDashboardComponent);
     component = fixture.componentInstance;
+    component.productivityAnalysisInMaintenance = false;
     changeDetectorRef = fixture.debugElement.injector.get(ChangeDetectorRef);
   });
 
