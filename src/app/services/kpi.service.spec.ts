@@ -2,6 +2,8 @@ import { TestBed } from '@angular/core/testing';
 import { KPIService } from './kpi.service';
 import { FunifierApiService } from './funifier-api.service';
 import { KPIMapper } from './kpi-mapper.service';
+import { PlayerService } from './player.service';
+import { UserActionDashboardService } from './user-action-dashboard.service';
 import * as fc from 'fast-check';
 import { of } from 'rxjs';
 
@@ -9,22 +11,31 @@ describe('KPIService', () => {
   let service: KPIService;
   let funifierApiSpy: jasmine.SpyObj<FunifierApiService>;
   let mapperSpy: jasmine.SpyObj<KPIMapper>;
+  let playerServiceSpy: jasmine.SpyObj<PlayerService>;
 
   beforeEach(() => {
     const apiSpy = jasmine.createSpyObj('FunifierApiService', ['get']);
     const kpiMapperSpy = jasmine.createSpyObj('KPIMapper', ['toKPIDataArray']);
+    const playerSpy = jasmine.createSpyObj('PlayerService', ['getCurrentPlayerData', 'getRawPlayerData']);
+    const userActionSpy = jasmine.createSpyObj('UserActionDashboardService', ['getDeliveryCount']);
+    userActionSpy.getDeliveryCount.and.returnValue(of(0));
+    playerSpy.getRawPlayerData.and.returnValue(of({ _id: 'test-player', extra: {} }));
+    playerSpy.getCurrentPlayerData.and.returnValue(of({ _id: 'test-player', extra: {} }));
 
     TestBed.configureTestingModule({
       providers: [
         KPIService,
         { provide: FunifierApiService, useValue: apiSpy },
-        { provide: KPIMapper, useValue: kpiMapperSpy }
+        { provide: KPIMapper, useValue: kpiMapperSpy },
+        { provide: PlayerService, useValue: playerSpy },
+        { provide: UserActionDashboardService, useValue: userActionSpy }
       ]
     });
 
     service = TestBed.inject(KPIService);
     funifierApiSpy = TestBed.inject(FunifierApiService) as jasmine.SpyObj<FunifierApiService>;
     mapperSpy = TestBed.inject(KPIMapper) as jasmine.SpyObj<KPIMapper>;
+    playerServiceSpy = TestBed.inject(PlayerService) as jasmine.SpyObj<PlayerService>;
   });
 
   it('should be created', () => {
@@ -191,13 +202,13 @@ describe('KPIService', () => {
         }
       };
 
-      funifierApiSpy.get.and.returnValue(of(mockPlayerStatus));
+      playerServiceSpy.getRawPlayerData.and.returnValue(of(mockPlayerStatus));
 
       service.getPlayerKPIs('test-player').subscribe(result => {
         const empresasKPI = result.find(kpi => kpi.id === 'numero-empresas');
         
         expect(empresasKPI).toBeDefined();
-        expect(empresasKPI!.label).toBe('Número de Empresas');
+        expect(empresasKPI!.label).toBe('Clientes atendidos');
         expect(empresasKPI!.current).toBe(6);
         expect(empresasKPI!.target).toBe(10);
         expect(empresasKPI!.superTarget).toBe(15);
@@ -217,7 +228,7 @@ describe('KPIService', () => {
         }
       };
 
-      funifierApiSpy.get.and.returnValue(of(mockPlayerStatus));
+      playerServiceSpy.getRawPlayerData.and.returnValue(of(mockPlayerStatus));
 
       service.getPlayerKPIs('test-player').subscribe(result => {
         const entregasKPI = result.find(kpi => kpi.id === 'entregas-prazo');
@@ -240,7 +251,7 @@ describe('KPIService', () => {
         // No extra field
       };
 
-      funifierApiSpy.get.and.returnValue(of(mockPlayerStatus));
+      playerServiceSpy.getRawPlayerData.and.returnValue(of(mockPlayerStatus));
 
       service.getPlayerKPIs('test-player').subscribe(result => {
         expect(result).toEqual([]);
@@ -258,7 +269,7 @@ describe('KPIService', () => {
         }
       };
 
-      funifierApiSpy.get.and.returnValue(of(mockPlayerStatus));
+      playerServiceSpy.getRawPlayerData.and.returnValue(of(mockPlayerStatus));
 
       service.getPlayerKPIs('test-player').subscribe(result => {
         const empresasKPI = result.find(kpi => kpi.id === 'numero-empresas');
@@ -280,7 +291,7 @@ describe('KPIService', () => {
         }
       };
 
-      funifierApiSpy.get.and.returnValue(of(mockPlayerStatus));
+      playerServiceSpy.getRawPlayerData.and.returnValue(of(mockPlayerStatus));
 
       service.getPlayerKPIs('test-player').subscribe(result => {
         const empresasKPI = result.find(kpi => kpi.id === 'numero-empresas');
@@ -303,7 +314,7 @@ describe('KPIService', () => {
         }
       };
 
-      funifierApiSpy.get.and.returnValue(of(mockPlayerStatus));
+      playerServiceSpy.getRawPlayerData.and.returnValue(of(mockPlayerStatus));
 
       service.getPlayerKPIs('test-player').subscribe(result => {
         const entregasKPI = result.find(kpi => kpi.id === 'entregas-prazo');
@@ -326,7 +337,7 @@ describe('KPIService', () => {
         }
       };
 
-      funifierApiSpy.get.and.returnValue(of(mockPlayerStatus));
+      playerServiceSpy.getRawPlayerData.and.returnValue(of(mockPlayerStatus));
 
       service.getPlayerKPIs('test-player').subscribe(result => {
         const empresasKPI = result.find(kpi => kpi.id === 'numero-empresas');

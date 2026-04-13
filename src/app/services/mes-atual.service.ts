@@ -4,6 +4,7 @@ import {ResumoMes} from "../model/resumoMes.model";
 import {TIPO_CONSULTA_TIME} from "@app/pages/dashboard/dashboard.component";
 import {HttpClient} from '@angular/common/http';
 import {environment} from '../../environments/environment';
+import { buildGame4uQueryString } from '@utils/game4u-query-encode.util';
 import {DetalheAtividade} from '../model/detalheAtividade.model';
 import {DetalheMacro} from '../model/detalheMacro.model';
 
@@ -23,7 +24,7 @@ export class MesAtualService {
     ) {
     }
 
-    public async getDadosMesAtualDashboard(id: number, tipo: number): Promise<ResumoMes> {
+    public async getDadosMesAtualDashboard(id: string | number, tipo: number): Promise<ResumoMes> {
         // Check if backend_url_base is configured - if not, return empty data
         if (!environment.backend_url_base || environment.backend_url_base === 'http://localhost') {
             console.warn('⚠️ MesAtualService: backend_url_base not configured, returning empty data');
@@ -31,23 +32,25 @@ export class MesAtualService {
         }
 
         try {
-            let url = this.basePath;
+            let path = this.basePath;
 
             // Usar primeiro e último dia do mês atual
             this.firstDayOfMonth.setUTCHours(0, 0, 0, 0);
             this.lastDayOfMonth.setUTCHours(23, 59, 59, 999);
 
-            let queryParams = '?start=' + this.firstDayOfMonth.toISOString() +
-                             '&end=' + this.lastDayOfMonth.toISOString();
+            const params: Record<string, string> = {
+                start: this.firstDayOfMonth.toISOString(),
+                end: this.lastDayOfMonth.toISOString()
+            };
 
             if (tipo === TIPO_CONSULTA_TIME) {
-                url = '/game/team-stats';
-                queryParams += '&team=' + id;
+                path = '/game/team-stats';
+                params['team'] = String(id);
             } else {
-                queryParams += '&user=' + id;
+                params['user'] = String(id);
             }
 
-            const response = await this.api.get<any>(url + queryParams);
+            const response = await this.api.get<any>(path, { params });
 
             return <ResumoMes>{
                 pontos: (response?.action_stats?.total_points || 0) + (response?.action_stats?.total_blocked_points || 0),
@@ -99,10 +102,10 @@ export class MesAtualService {
             params.user = id;
         }
 
-        return this.http.get<DetalheAtividade | DetalheMacro>(
-            baseUrl,
-            { params }
-        ).toPromise();
+        const qs = buildGame4uQueryString(params as Record<string, string>);
+        return this.http
+            .get<DetalheAtividade | DetalheMacro>(qs ? `${baseUrl}?${qs}` : baseUrl)
+            .toPromise();
     }
 
     getGameDeliveries(status: string, page: number, pageSize: number, id?: string, tipo?: number) {
@@ -126,9 +129,9 @@ export class MesAtualService {
             params.user = id;
         }
 
-        return this.http.get<DetalheAtividade | DetalheMacro>(
-            baseUrl,
-            { params }
-        ).toPromise();
+        const qs = buildGame4uQueryString(params as Record<string, string>);
+        return this.http
+            .get<DetalheAtividade | DetalheMacro>(qs ? `${baseUrl}?${qs}` : baseUrl)
+            .toPromise();
     }
 }

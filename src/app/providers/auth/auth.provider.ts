@@ -1,41 +1,43 @@
 import {Injectable} from '@angular/core';
 import {HttpClient} from '@angular/common/http';
 import {environment} from "../../../environments/environment";
-import {firstValueFrom, Observable} from "rxjs";
+import {firstValueFrom, Observable, of} from "rxjs";
+import { FUNIFIER_HTTP_DISABLED } from "../../config/funifier-requests-disabled";
 
 @Injectable({
   providedIn: 'root',
 })
 export class AuthProvider {
   private readonly funifierBaseUrl = environment.funifier_base_url || 'https://service2.funifier.com/v3/';
-  private readonly funifierApiKey = environment.funifier_api_key;
+  private readonly g4uApiBase = environment.g4u_api_base || environment.backend_url_base;
 
   constructor(private http: HttpClient) {
   }
 
+  /**
+   * Login na API Game4U (POST /auth/login em `G4U_API_BASE`, com fallback para `BACKEND_URL_BASE`).
+   */
   async login(email: string, password: string) {
-    // baseUrl already includes /v3/, so just use auth/token
-    const authUrl = `${this.funifierBaseUrl}auth/token`;
-    // Use Funifier authentication
-    // Trim username to prevent spaces from breaking the Funifier profile
-    const authBody = {
-      apiKey: this.funifierApiKey,
-      grant_type: 'password',
-      username: email.trim(),
-      password: password
-    };
-    // Don't add custom headers - Funifier blocks them via CORS
-    // The interceptor will recognize Funifier URLs by domain
+    const base = String(this.g4uApiBase || '').replace(/\/+$/, '');
+    const authUrl = `${base}/auth/login`;
     return firstValueFrom(
-      this.http.post<LoginResponse>(authUrl, authBody)
+      this.http.post<LoginResponse>(
+        authUrl,
+        { email: email.trim(), password },
+        { headers: { client_id: environment.client_id } }
+      )
     );
   }
 
+  /**
+   * Perfil do utilizador autenticado.
+   * Com Funifier desligado, usa GET `/auth/user` na mesma base do login (roles, times, email).
+   */
   userInfo(): Observable<any> {
-    // Get user info from Funifier player/me endpoint (faster than player/me/status)
-    // This returns cnpj_resp, entrega, goals directly in the extra field
-    // baseUrl already includes /v3/, so just use player/me
-    // The interceptor will add the Bearer token from sessionStorage
+    if (FUNIFIER_HTTP_DISABLED) {
+      const base = String(this.g4uApiBase || '').replace(/\/+$/, '');
+      return this.http.get<any>(`${base}/auth/user`);
+    }
     return this.http.get(`${this.funifierBaseUrl}player/me`);
   }
 
@@ -44,6 +46,9 @@ export class AuthProvider {
    * @deprecated Use userInfo() for faster response with essential data
    */
   userInfoFull(): Observable<any> {
+    if (FUNIFIER_HTTP_DISABLED) {
+      return of({});
+    }
     return this.http.get(`${this.funifierBaseUrl}player/me/status`);
   }
 

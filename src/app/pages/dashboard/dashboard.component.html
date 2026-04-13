@@ -3,7 +3,6 @@
     <div class="h-full w-full flex md:block">
       <page-season class="flex-auto" (seasonData)="getSeasonData($event)" [collapse]="!menuOpen" [idConsulta]="idConsulta"
                    [tipoConsulta]="tipoConsulta" [nomeConsulta]="nomeConsulta" [time]="time"
-                   [showTeamGoal]="showDashColaborador"
                    [isCSLayout]="false"></page-season>
       <div class="min-w-[80px] flex-auto md:hidden" (click)="toggleMenu()"></div>
     </div>
@@ -25,7 +24,7 @@
         </button>
       </div>
 
-      <c4u-seletor-mes [seasonData]="seasonData" flexItem="0" class="md:mb-4 md:mt-10 mb-4"
+      <c4u-seletor-mes flexItem="0" class="md:mb-4 md:mt-10 mb-4"
                        (onSelectedMonth)="mesSelecionado($event)"></c4u-seletor-mes>
 
       <div class="flex flex-col md:flex-row gap-4 md:gap-10 w-full sub-content" *ngIf="showDashGestor">

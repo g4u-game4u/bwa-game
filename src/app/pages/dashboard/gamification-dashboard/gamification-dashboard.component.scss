@@ -389,7 +389,6 @@
     
     .refresh-button {
       position: absolute;
-      right: 120px; // Increased from 80px to add more spacing between buttons
       top: 50%;
       transform: translateY(-50%);
       display: flex;
@@ -403,26 +402,35 @@
       cursor: pointer;
       transition: all 0.2s ease;
       white-space: nowrap;
-      
+
       &:hover:not(:disabled) {
         background: rgba($primary-electric-blue, 0.1);
         border-color: $primary-electric-blue;
         color: $primary-electric-blue;
       }
-      
+
       &:disabled {
         opacity: 0.5;
         cursor: not-allowed;
       }
-      
+
       i {
         font-size: 1rem;
-        
+
         &.spinning {
           animation: spin 1s linear infinite;
         }
       }
-      
+
+      span {
+        font-size: $font-size-small;
+        font-weight: 500;
+      }
+    }
+
+    .refresh-button {
+      right: 120px;
+
       .refresh-time {
         font-size: $font-size-small;
       }
@@ -550,6 +558,44 @@
   
   // Carteira section with card background
   .carteira-section {
+    .section-header--carteira-clientes {
+      flex-wrap: wrap;
+      gap: $spacing-sm;
+      align-items: center;
+
+      .section-title {
+        flex: 0 1 auto;
+        min-width: 0;
+
+        .clientes-count {
+          font-weight: 500;
+          opacity: 0.9;
+        }
+      }
+    }
+
+    .carteira-clientes-search {
+      flex: 1 1 200px;
+      min-width: 180px;
+      max-width: 360px;
+      padding: 8px 12px;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      background: rgba(0, 0, 0, 0.2);
+      color: #e5e7eb;
+      font-size: 14px;
+
+      &::placeholder {
+        color: rgba(156, 163, 175, 0.9);
+      }
+
+      &:focus {
+        outline: 2px solid #3b82f6;
+        outline-offset: 2px;
+        border-color: rgba(59, 130, 246, 0.5);
+      }
+    }
+
     .carteira-card {
       display: block;
       width: 100%;

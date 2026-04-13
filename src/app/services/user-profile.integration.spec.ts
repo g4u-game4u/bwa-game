@@ -18,9 +18,10 @@ describe('UserProfileService Integration Tests', () => {
   let mockSessaoProvider: jasmine.SpyObj<SessaoProvider>;
 
   beforeEach(() => {
-    mockSessaoProvider = jasmine.createSpyObj('SessaoProvider', [], {
+    mockSessaoProvider = jasmine.createSpyObj('SessaoProvider', ['isAdmin'], {
       usuario: null
     });
+    mockSessaoProvider.isAdmin.and.returnValue(false);
 
     TestBed.configureTestingModule({
       providers: [
@@ -49,6 +50,15 @@ describe('UserProfileService Integration Tests', () => {
       });
 
       expect(userProfileService.getCurrentUserProfile()).toBe(UserProfile.JOGADOR);
+    });
+
+    it('should return GESTOR when GET /auth/user traz role GESTOR e times vazios', () => {
+      Object.defineProperty(mockSessaoProvider, 'usuario', {
+        get: () => ({ teams: [], roles: ['GESTOR', 'ACCESS_PLAYER_PANEL'] })
+      });
+
+      expect(userProfileService.getCurrentUserProfile()).toBe(UserProfile.GESTOR);
+      expect(userProfileService.canAccessTeamManagement()).toBe(true);
     });
 
     it('should return JOGADOR when user is null', () => {
@@ -276,12 +286,25 @@ describe('UserProfileService Integration Tests', () => {
     });
 
     it('should deny team management access for JOGADOR', () => {
+      mockSessaoProvider.isAdmin.and.returnValue(false);
       Object.defineProperty(mockSessaoProvider, 'usuario', {
         get: () => ({ teams: ['regular-team'] })
       });
 
       expect(userProfileService.canAccessTeamManagement()).toBe(false);
       expect(userProfileService.isManagementUser()).toBe(false);
+    });
+
+    it('should allow team management and all teams for ADMIN (JOGADOR por times)', () => {
+      mockSessaoProvider.isAdmin.and.returnValue(true);
+      Object.defineProperty(mockSessaoProvider, 'usuario', {
+        get: () => ({ teams: [], roles: ['ADMIN'] })
+      });
+
+      expect(userProfileService.getCurrentUserProfile()).toBe(UserProfile.JOGADOR);
+      expect(userProfileService.canAccessTeamManagement()).toBe(true);
+      expect(userProfileService.canSeeAllTeams()).toBe(true);
+      expect(userProfileService.getAccessibleTeamIds()).toEqual([]);
     });
 
     it('should indicate SUPERVISOR can only see own team', () => {

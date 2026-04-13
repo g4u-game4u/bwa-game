@@ -1,4 +1,4 @@
-import { Component, EventEmitter, Input, OnChanges, OnInit, Output } from '@angular/core';
+import { Component, EventEmitter, Input, OnChanges, OnInit, Output, SimpleChanges } from '@angular/core';
 import { Router } from '@angular/router';
 import { NgbModal } from "@ng-bootstrap/ng-bootstrap";
 import { FeaturesService } from '@services/features.service';
@@ -7,14 +7,12 @@ import { SystemParamsService } from '@services/system-params.service';
 import { TemporadaDashboard } from 'src/app/model/temporadaDashboard.model';
 import { SessaoProvider } from 'src/app/providers/sessao/sessao.provider';
 import { AliasService, SystemAliases } from 'src/app/services/alias.service';
-import { TemporadaService } from 'src/app/services/temporada.service';
+import { TemporadaService } from '@services/temporada.service';
 import { FreeChallengeAllowedTeam, FreeChallengeAllowedRole } from 'src/app/model/system-params.model';
 import { ModalGerenciarPontosAvulsosProvider } from "../../../providers/modal-gerenciar-pontos-avulsos.provider";
 import { TIPO_CONSULTA_TIME } from "../dashboard.component";
 import { ModalDetalheExecutorComponent } from "./modal-detalhe-executor/modal-detalhe-executor.component";
 import { environment } from 'src/environments/environment';
-import { ActionLogService } from '@services/action-log.service';
-import { firstValueFrom } from 'rxjs';
 
 @Component({
   selector: 'page-season',    
@@ -71,8 +69,12 @@ export class SeasonComponent implements OnInit, OnChanges {
   clientId: string | null = null;
   clientIdLoading = false;
 
-  // Pontos recalculados no front (base action-template-pontos.md)
-  seasonPointsFromTable: number | null = null;
+  /**
+   * Carteira de pontos da temporada montada no front (action-template-pontos.md),
+   * agregando o action_log no intervalo real da temporada — jogador ou time.
+   */
+  seasonPointsWallet: { total: number; bloqueados: number; desbloqueados: number } | null = null;
+  seasonWalletLoading = false;
 
   // Propriedades para verificação de permissão de times
   freeChallengesAllowedTeams: FreeChallengeAllowedTeam[] | null = null;
@@ -83,9 +85,13 @@ export class SeasonComponent implements OnInit, OnChanges {
   restrictFreeChallengesByRole: boolean = false;
   freeChallengesRolesLoading = false;
 
+  /** Chave estável do contexto (colaborador/time) — ignora churn de collapse, nomeConsulta, showTeamGoal, etc. */
+  private lastSeasonLoadKey: string | null = null;
+  /** Invalida callbacks HTTP quando um novo carregamento é pedido. */
+  private seasonDataLoadGeneration = 0;
+
   constructor(
     private modal: NgbModal,
-    private sessaoProvider: SessaoProvider,
     private temporadaService: TemporadaService,
     private sessao: SessaoProvider,
     private seasonDatesService: SeasonDatesService,
@@ -93,13 +99,11 @@ export class SeasonComponent implements OnInit, OnChanges {
     private featuresService: FeaturesService,
     private router: Router,
     private systemParamsService: SystemParamsService,
-    private modalGerenciarPontosAvulsosProvider: ModalGerenciarPontosAvulsosProvider,
-    private actionLogService: ActionLogService
+    private modalGerenciarPontosAvulsosProvider: ModalGerenciarPontosAvulsosProvider
   ) {
   }
 
   async ngOnInit() {
-    this.init();
     this.loadAliases();
     this.loadSeasonDates();
     this.loadClientInfo();
@@ -108,25 +112,68 @@ export class SeasonComponent implements OnInit, OnChanges {
     this.loadFreeChallengesRoles();
   }
 
-  ngOnChanges() {
+  /**
+   * Recarrega só quando o contexto real muda (quem está selecionado). Qualquer outro @Input
+   * (collapse, nomeConsulta, showTeamGoal, nova referência de `time` com o mesmo id) não dispara API.
+   */
+  ngOnChanges(_changes: SimpleChanges): void {
+    if (!this.idConsulta) {
+      this.lastSeasonLoadKey = null;
+      this.seasonDataLoadGeneration++;
+      this.apiReady = false;
+      this.apiTeamReady = false;
+      this.seasonPointsWallet = null;
+      this.seasonWalletLoading = false;
+      return;
+    }
+
+    const key = this.seasonLoadKey();
+    if (key === this.lastSeasonLoadKey) {
+      return;
+    }
+
+    this.lastSeasonLoadKey = key;
+    this.seasonDataLoadGeneration++;
+    const loadGen = this.seasonDataLoadGeneration;
+
     this.apiReady = false;
     this.apiTeamReady = false;
-    this.init();
-  }
 
-  init() {
-    if (this.idConsulta) {
-      this.getDadosTemporada();
-      // this.getDadosTimeUsuario();
+    this.getDadosTemporada(loadGen);
+    if (this.seasonDates?.start && this.seasonDates?.end) {
+      void this.recalculateSeasonWalletFromTemplate(loadGen);
     }
   }
 
-  getDadosTemporada() {
-    this.temporadaService.getDadosTemporadaDashboard(this.idConsulta, this.tipoConsulta).then(data => {
-      this.seasonData.emit(data);
-      this.seasonInfo = data;
-      this.apiReady = true;
-    });
+  private seasonLoadKey(): string {
+    const t = this.time;
+    const teamPart =
+      t == null || t === ''
+        ? ''
+        : typeof t === 'object' && t !== null && 'id' in (t as object)
+          ? String((t as { id?: unknown }).id ?? '')
+          : String(t);
+    return `${String(this.tipoConsulta ?? '')}|${String(this.idConsulta ?? '')}|${teamPart}`;
+  }
+
+  private getDadosTemporada(loadGen: number): void {
+    const range =
+      this.seasonDates?.start && this.seasonDates?.end
+        ? {
+            start: new Date(this.seasonDates.start).toISOString(),
+            end: new Date(this.seasonDates.end).toISOString()
+          }
+        : undefined;
+    void this.temporadaService
+      .getDadosTemporadaDashboard(this.idConsulta, this.tipoConsulta, range)
+      .then(data => {
+        if (loadGen !== this.seasonDataLoadGeneration) {
+          return;
+        }
+        this.seasonData.emit(data);
+        this.seasonInfo = data;
+        this.apiReady = true;
+      });
   }
 
   get isTeam() {
@@ -134,9 +181,15 @@ export class SeasonComponent implements OnInit, OnChanges {
   }
 
   getPercentPontosBloqueados() {
-    // return Math.floor((this.seasonInfo.pontos.bloqueados / this.seasonInfo.pontos.total) * 100);
-    const totalPontos = this.seasonInfo.blocked_points + this.seasonInfo.unblocked_points;
-    return Math.floor((this.seasonInfo.blocked_points / Number(totalPontos)) * 100);
+    const w = this.seasonPointsWallet;
+    if (!w) {
+      return 0;
+    }
+    const totalPontos = w.bloqueados + w.desbloqueados;
+    if (totalPontos <= 0) {
+      return 0;
+    }
+    return Math.floor((w.bloqueados / totalPontos) * 100);
   }
 
   extratoTemporadaBeta() {
@@ -452,53 +505,73 @@ export class SeasonComponent implements OnInit, OnChanges {
       this.seasonDates = await this.seasonDatesService.getSeasonDates();
     } catch (error) {
       console.error('Erro ao carregar datas da temporada:', error);
-      // Fallback para datas padrão
       this.seasonDates = {
-        start: new Date('2025-05-01T03:00:00.000Z'),
-        end: new Date('2025-06-30T03:00:00.000Z')
+        start: new Date(2026, 2, 1),
+        end: new Date(2026, 3, 30, 23, 59, 59, 999)
       };
     } finally {
       this.seasonDatesLoading = false;
-      this.recalculateSeasonPointsFromTable();
+      const gen = this.seasonDataLoadGeneration;
+      void this.recalculateSeasonWalletFromTemplate(gen);
     }
   }
 
-  private async recalculateSeasonPointsFromTable() {
+  private async recalculateSeasonWalletFromTemplate(loadGen: number): Promise<void> {
+    if (loadGen !== this.seasonDataLoadGeneration) {
+      return;
+    }
+    if (!this.idConsulta || !this.seasonDates?.start || !this.seasonDates?.end) {
+      this.seasonPointsWallet = null;
+      this.seasonWalletLoading = false;
+      return;
+    }
+
+    const rangeStart = new Date(this.seasonDates.start);
+    const rangeEnd = new Date(this.seasonDates.end);
+    if (isNaN(rangeStart.getTime()) || isNaN(rangeEnd.getTime())) {
+      this.seasonPointsWallet = null;
+      return;
+    }
+
+    this.seasonWalletLoading = true;
     try {
-      const email = this.sessaoProvider.usuario?.email;
-      if (!email || !this.seasonDates?.start || !this.seasonDates?.end) {
-        this.seasonPointsFromTable = null;
+      const dash = await this.temporadaService.getDadosTemporadaDashboard(
+        this.idConsulta,
+        this.tipoConsulta,
+        { start: rangeStart.toISOString(), end: rangeEnd.toISOString() }
+      );
+      if (loadGen !== this.seasonDataLoadGeneration) {
         return;
       }
-
-      const start = new Date(this.seasonDates.start);
-      const end = new Date(this.seasonDates.end);
-      if (isNaN(start.getTime()) || isNaN(end.getTime())) {
-        this.seasonPointsFromTable = null;
-        return;
-      }
-
-      // Soma mês a mês, usando a mesma regra do painel mensal (ActionLogService.getPontosForMonth)
-      const cursor = new Date(start.getFullYear(), start.getMonth(), 1);
-      const endMonth = new Date(end.getFullYear(), end.getMonth(), 1);
-      let total = 0;
-
-      while (cursor <= endMonth) {
-        const monthPoints = await firstValueFrom(this.actionLogService.getPontosForMonth(email, cursor));
-        total += Number(monthPoints) || 0;
-        cursor.setMonth(cursor.getMonth() + 1);
-      }
-
-      this.seasonPointsFromTable = Math.floor(total);
+      const bloq = Math.floor(Number(dash.blocked_points) || 0);
+      const desb = Math.floor(Number(dash.unblocked_points) || 0);
+      this.seasonPointsWallet = {
+        total: bloq + desb,
+        bloqueados: bloq,
+        desbloqueados: desb
+      };
     } catch (error) {
-      console.error('Erro ao recalcular pontos da temporada pela tabela:', error);
-      this.seasonPointsFromTable = null;
+      console.error('Erro ao montar carteira de pontos da temporada (/game/stats):', error);
+      if (loadGen === this.seasonDataLoadGeneration) {
+        this.seasonPointsWallet = { total: 0, bloqueados: 0, desbloqueados: 0 };
+      }
+    } finally {
+      if (loadGen === this.seasonDataLoadGeneration) {
+        this.seasonWalletLoading = false;
+      }
     }
   }
 
   get totalSeasonPoints(): number {
-    const fallback = Math.floor((this.seasonInfo?.blocked_points || 0) + (this.seasonInfo?.unblocked_points || 0));
-    return this.seasonPointsFromTable != null ? this.seasonPointsFromTable : fallback;
+    return Math.floor(this.seasonPointsWallet?.total ?? 0);
+  }
+
+  get displaySeasonBlockedPoints(): number {
+    return Math.floor(this.seasonPointsWallet?.bloqueados ?? 0);
+  }
+
+  get displaySeasonUnblockedPoints(): number {
+    return Math.floor(this.seasonPointsWallet?.desbloqueados ?? 0);
   }
 
   /**

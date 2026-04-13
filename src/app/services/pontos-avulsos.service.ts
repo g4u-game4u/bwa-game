@@ -8,6 +8,7 @@ import { environment } from '../../environments/environment';
 import { SessaoProvider } from '../providers/sessao/sessao.provider';
 import { AuthProvider } from '../providers/auth/auth.provider';
 import { lookupActivityPoints } from '@utils/activity-points.util';
+import { extractGame4uUserIdFromUserPayload } from '@utils/game4u-user-id.util';
 
 export interface ActionTemplate {
   id: string;
@@ -86,45 +87,6 @@ export interface AtividadeDetalhe {
 
 export interface PaginatedResponse<T> {
   items: T[];
-  total: number;
-  page: number;
-  limit: number;
-  totalPages: number;
-}
-
-export interface UserActionSearchResponse {
-  items: Array<{
-    id: string;
-    points: number;
-    status: string;
-    team_id: number;
-    user_id: string;
-    approved: boolean;
-    comments: Array<{
-      id: string;
-      type: string;
-      message: string;
-      created_at: string;
-      created_by: string;
-      updated_at: string;
-    }>;
-    client_id: string;
-    dismissed: boolean;
-    team_name: string;
-    created_at: string;
-    created_by: string;
-    updated_at: string;
-    user_email: string;
-    approved_by: string | null;
-    delivery_id: string;
-    finished_at: string | null;
-    finished_by: string | null;
-    funifier_id: string;
-    action_title: string;
-    delivery_title: string;
-    integration_id: string;
-    action_template_id: string;
-  }>;
   total: number;
   page: number;
   limit: number;
@@ -314,7 +276,7 @@ export class PontosAvulsosService {
 
 
       if (isTeamContext && timeId) {
-        // Contexto de time - usar /user-action/search com team_id
+        // Contexto de time - usar /game/actions ou /game/team-actions com team_id
         // Buscar PENDING e DOING em uma única requisição (dismissed=false)
         const response = await this.getUserActions(
           ['PENDING', 'DOING'], 
@@ -335,7 +297,7 @@ export class PontosAvulsosService {
           totalPages: response.totalPages || 0
         };
       } else if (!isTeamContext && userId) {
-        // Contexto de colaborador - usar /user-action/search com paginação
+        // Contexto de colaborador - usar /game/actions ou /game/team-actions com paginação
         // Otimizado: uma única requisição com múltiplos status (status=PENDING&status=DOING)
         // Buscar PENDING e DOING em uma única requisição (dismissed=false)
         const response = await this.getUserActions(
@@ -400,7 +362,7 @@ export class PontosAvulsosService {
       
       // Buscar atividades com status DONE
       if (isTeamContext && timeId) {
-        // Contexto de time - usar /user-action/search com team_id
+        // Contexto de time - usar /game/actions ou /game/team-actions com team_id
         // Buscar todas as atividades DONE para filtrar corretamente por approved=false
         // Usar um limite alto (1000) para buscar a maioria dos casos em uma única chamada
         const allDoneResponse = await this.getUserActions(
@@ -555,8 +517,8 @@ export class PontosAvulsosService {
       const startDateISO = await this.seasonDatesService.getSeasonStartDateISO();
       const endDateISO = await this.seasonDatesService.getSeasonEndDateISO();
       if (isTeamContext && timeId) {
-        // Contexto de time - usar /user-action/search com team_id
-        // Buscar atividades DELIVERED e DONE aprovadas usando /user-action/search
+        // Contexto de time - usar /game/actions ou /game/team-actions com team_id
+        // Buscar atividades DELIVERED e DONE aprovadas usando /game/actions ou /game/team-actions
         const [deliveredResponse, doneResponse] = await Promise.all([
           this.getUserActions(
             'DELIVERED', 
@@ -762,7 +724,7 @@ export class PontosAvulsosService {
       const endDateISO = await this.seasonDatesService.getSeasonEndDateISO();
 
       if (isTeamContext && timeId) {
-        // Contexto de time - usar /user-action/search com team_id
+        // Contexto de time - usar /game/actions ou /game/team-actions com team_id
         // Para cancelados: dismissed=true e todos os status possíveis
         const allStatuses = ['PENDING', 'DOING', 'DONE', 'DELIVERED', 'CANCELLED', 'INCOMPLETE'];
         return await this.getUserActions(
@@ -777,7 +739,7 @@ export class PontosAvulsosService {
           filtros
         );
       } else if (!isTeamContext && userId) {
-        // Contexto de colaborador - usar /user-action/search com paginação
+        // Contexto de colaborador - usar /game/actions ou /game/team-actions com paginação
         // Para cancelados: dismissed=true e todos os status possíveis
         const allStatuses = ['PENDING', 'DOING', 'DONE', 'DELIVERED', 'CANCELLED', 'INCOMPLETE'];
         return await this.getUserActions(
@@ -1083,18 +1045,70 @@ export class PontosAvulsosService {
     }
   }
 
+  /** `/game/actions?user=` espera e-mail; se vier UUID do utilizador logado, converte para o e-mail da sessão. */
+  private resolveGameUserQueryParamForActions(userId: string): string {
+    const uid = String(userId).trim();
+    if (uid.includes('@')) {
+      return uid;
+    }
+    const u = this.sessao.usuario;
+    const sessEmail = (u?.email && String(u.email).trim()) || '';
+    const sid = extractGame4uUserIdFromUserPayload(u, this.sessao.token ?? null);
+    if (sid && uid === sid && sessEmail) {
+      return sessEmail;
+    }
+    return uid;
+  }
+
+  private mapGameActionApiItemToAtividadeDetalhe(item: any): AtividadeDetalhe {
+    const title =
+      typeof item.action_title === 'string'
+        ? item.action_title
+        : typeof item.title === 'string'
+          ? item.title
+          : '';
+    const hit = lookupActivityPoints(title);
+    return {
+      id: String(item.id),
+      action_title: title,
+      user_email: item.user_email,
+      status: item.status,
+      created_at: item.created_at,
+      finished_at: item.finished_at || undefined,
+      points: hit.found ? hit.points : item.points,
+      integration_id: item.integration_id,
+      delivery_id: item.delivery_id,
+      delivery_title: item.delivery_title,
+      action_id: item.action_template_id ?? item.action_id,
+      action_template_id: item.action_template_id,
+      approved: item.approved,
+      approved_by: item.approved_by,
+      dismissed: item.dismissed,
+      comments: Array.isArray(item.comments)
+        ? item.comments.map((comment: any) => ({
+            id: String(comment.id),
+            message: comment.message,
+            created_by: comment.created_by,
+            created_at: comment.created_at,
+            updated_at: comment.updated_at,
+            type: comment.type
+          }))
+        : [],
+      attachments: item.attachments || [],
+      created_by: item.created_by,
+      updated_at: item.updated_at,
+      finished_by: item.finished_by,
+      team_id: item.team_id,
+      team_name: item.team_name,
+      user_id: item.user_id,
+      client_id: item.client_id,
+      funifier_id: item.funifier_id
+    };
+  }
+
   /**
-   * Busca atividades do usuário usando GET /user-action/search
-   * @param status Status das atividades (ou array de status para múltiplos)
-   * @param userId ID do usuário (será usado como user_email, opcional se teamId fornecido)
-   * @param startDate Data de início (será usado como created_at_start)
-   * @param endDate Data de fim (será usado como created_at_end)
-   * @param page Página atual (padrão: 1)
-   * @param limit Limite de itens por página (padrão: 10)
-   * @param dismissed Se deve filtrar por dismissed (padrão: false)
-   * @param teamId ID do time (opcional, será usado como team_id no query param)
-   * @param filtros Filtros adicionais (busca, executor, created_at_start, created_at_end, finished_at_start, finished_at_end)
-   * @returns Promise com resposta paginada contendo items e metadata de paginação
+   * Lista atividades via GET `/game/actions?start&end&user` ou `/game/team-actions?start&end&team`.
+   * Filtra por status, dismissed e filtros no cliente; paginação local.
    */
   private async getUserActions(
     status: string | string[],
@@ -1115,135 +1129,118 @@ export class PontosAvulsosService {
     }
   ): Promise<PaginatedResponse<AtividadeDetalhe>> {
     try {
-      const url = '/user-action/search';
-      
-      // Usar HttpParams para suportar múltiplos valores no mesmo query param
-      let httpParams = new HttpParams()
-        .set('created_at_start', startDate)
-        .set('created_at_end', endDate)
-        .set('dismissed', dismissed.toString())
-        .set('page', page.toString())
-        .set('limit', limit.toString());
+      const rangeStart =
+        (filtros?.created_at_start && filtros.created_at_start.trim()) || startDate;
+      const rangeEnd = (filtros?.created_at_end && filtros.created_at_end.trim()) || endDate;
 
-      // Se teamId fornecido, adicionar team_id; caso contrário, usar user_email
+      const baseUrl = teamId ? '/game/team-actions' : '/game/actions';
+      const params: Record<string, string> = {
+        start: rangeStart,
+        end: rangeEnd
+      };
+
       if (teamId) {
-        httpParams = httpParams.set('team_id', teamId.toString());
+        params['team'] = String(teamId);
       } else if (userId) {
-        httpParams = httpParams.set('user_email', userId);
-      }
-
-      // Para múltiplos status, adicionar cada um separadamente: status=PENDING&status=DOING...
-      if (Array.isArray(status)) {
-        status.forEach(s => {
-          httpParams = httpParams.append('status', s);
-        });
+        params['user'] = this.resolveGameUserQueryParamForActions(String(userId).trim());
       } else {
-        httpParams = httpParams.set('status', status);
-      }
-
-      // Adicionar filtros opcionais de busca
-      if (filtros) {
-        // Busca por texto (título/ID) agora é feita no frontend, não enviar search para o backend
-        
-        if (filtros.executor && filtros.executor.trim()) {
-          // Filtro específico por executor (sobrescreve o user_email se fornecido)
-          httpParams = httpParams.set('executor_email', filtros.executor.trim());
-        }
-        
-        // Datas de criação personalizadas (sobrescrevem as datas da temporada se fornecidas)
-        if (filtros.created_at_start && filtros.created_at_start.trim()) {
-          httpParams = httpParams.set('created_at_start', filtros.created_at_start.trim());
-        }
-        
-        if (filtros.created_at_end && filtros.created_at_end.trim()) {
-          httpParams = httpParams.set('created_at_end', filtros.created_at_end.trim());
-        }
-        
-        // Datas de finalização personalizadas
-        if (filtros.finished_at_start && filtros.finished_at_start.trim()) {
-          httpParams = httpParams.set('finished_at_start', filtros.finished_at_start.trim());
-        }
-        
-        if (filtros.finished_at_end && filtros.finished_at_end.trim()) {
-          httpParams = httpParams.set('finished_at_end', filtros.finished_at_end.trim());
-        }
-      }
-
-      // Converter HttpParams para objeto simples para compatibilidade com ApiProvider
-      const paramsObj: any = {};
-      httpParams.keys().forEach(key => {
-        const values = httpParams.getAll(key);
-        if (values && values.length > 1) {
-          paramsObj[key] = values; // Array para múltiplos valores
-        } else if (values && values.length === 1) {
-          paramsObj[key] = values[0]; // Valor único
-        }
-      });
-      // Usar ApiProvider.get para fazer GET com query params
-      const response: UserActionSearchResponse = await this.api.get<any>(url, { params: paramsObj });
-      // Transformar a resposta para o formato AtividadeDetalhe
-      if (response && response.items && Array.isArray(response.items)) {
-        const items = response.items.map(item => ({
-          id: item.id,
-          action_title: item.action_title,
-          user_email: item.user_email,
-          status: item.status,
-          created_at: item.created_at,
-          finished_at: item.finished_at || undefined,
-          points: (() => {
-            const hit = lookupActivityPoints(item.action_title);
-            return hit.found ? hit.points : item.points;
-          })(),
-          integration_id: item.integration_id,
-          delivery_id: item.delivery_id,
-          delivery_title: item.delivery_title,
-          action_id: item.action_template_id, // Usar action_template_id como action_id
-          action_template_id: item.action_template_id,
-          approved: item.approved,
-          approved_by: item.approved_by,
-          dismissed: item.dismissed,
-          comments: item.comments ? item.comments.map(comment => ({
-            id: comment.id,
-            message: comment.message,
-            created_by: comment.created_by,
-            created_at: comment.created_at,
-            updated_at: comment.updated_at,
-            type: comment.type
-          })) : [],
-          attachments: [], // Será carregado separadamente se necessário
-          created_by: item.created_by,
-          updated_at: item.updated_at,
-          finished_by: item.finished_by,
-          team_id: item.team_id,
-          team_name: item.team_name,
-          user_id: item.user_id,
-          client_id: item.client_id,
-          funifier_id: item.funifier_id
-        }));
-
         return {
-          items,
-          total: response.total || 0,
-          page: response.page || 1,
-          limit: response.limit || limit,
-          totalPages: response.totalPages || 1
+          items: [],
+          total: 0,
+          page,
+          limit,
+          totalPages: 0
         };
       }
-      
+
+      const raw = await this.api.get<any>(baseUrl, { params });
+      let items: AtividadeDetalhe[] = Array.isArray(raw)
+        ? raw.map((row: any) => this.mapGameActionApiItemToAtividadeDetalhe(row))
+        : [];
+
+      const wantStatus = (Array.isArray(status) ? status : [status]).map(s =>
+        String(s).trim().toUpperCase()
+      );
+      items = items.filter(a => wantStatus.includes(String(a.status || '').trim().toUpperCase()));
+
+      if (!dismissed) {
+        items = items.filter(a => !a.dismissed);
+      } else {
+        items = items.filter(a => !!a.dismissed);
+      }
+
+      if (filtros?.executor?.trim()) {
+        const ex = filtros.executor.trim();
+        items = items.filter(a => a.user_email === ex);
+      }
+
+      if (filtros?.created_at_start || filtros?.created_at_end) {
+        items = items.filter(atividade => {
+          const createdAt = atividade.created_at;
+          if (!createdAt) {
+            return false;
+          }
+          const dataAtividade = new Date(createdAt);
+          if (filtros!.created_at_start?.trim()) {
+            const dataInicio = new Date(filtros!.created_at_start!.trim());
+            if (dataAtividade < dataInicio) {
+              return false;
+            }
+          }
+          if (filtros!.created_at_end?.trim()) {
+            const dataFim = new Date(filtros!.created_at_end!.trim());
+            dataFim.setHours(23, 59, 59, 999);
+            if (dataAtividade > dataFim) {
+              return false;
+            }
+          }
+          return true;
+        });
+      }
+
+      if (filtros?.finished_at_start || filtros?.finished_at_end) {
+        items = items.filter(atividade => {
+          const finishedAt = atividade.finished_at;
+          if (!finishedAt) {
+            return false;
+          }
+          const dataAtividade = new Date(finishedAt);
+          if (filtros!.finished_at_start?.trim()) {
+            const dataInicio = new Date(filtros!.finished_at_start!.trim());
+            if (dataAtividade < dataInicio) {
+              return false;
+            }
+          }
+          if (filtros!.finished_at_end?.trim()) {
+            const dataFim = new Date(filtros!.finished_at_end!.trim());
+            dataFim.setHours(23, 59, 59, 999);
+            if (dataAtividade > dataFim) {
+              return false;
+            }
+          }
+          return true;
+        });
+      }
+
+      const total = items.length;
+      const totalPages = total === 0 ? 0 : Math.max(1, Math.ceil(total / limit));
+      const startIdx = (page - 1) * limit;
+      const pageItems = items.slice(startIdx, startIdx + limit);
+
       return {
-        items: [],
-        total: 0,
-        page: page,
-        limit: limit,
-        totalPages: 0
+        items: pageItems,
+        total,
+        page,
+        limit,
+        totalPages
       };
     } catch (error) {
       console.error(`Erro ao buscar atividades do usuário com status ${status}:`, error);
       return {
         items: [],
         total: 0,
-        page: page,
-        limit: limit,
+        page,
+        limit,
         totalPages: 0
       };
     }

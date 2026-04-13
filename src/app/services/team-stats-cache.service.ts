@@ -6,7 +6,7 @@ import { MesAtualService } from './mes-atual.service';
 import { MesAnteriorService } from './mes-anterior.service';
 
 export interface TeamStatsCacheKey {
-  teamId: number;
+  teamId: string | number;
   period: 'current' | 'previous';
   monthsAgo?: number;
 }
@@ -28,7 +28,7 @@ export class TeamStatsCacheService {
   /**
    * Obtém dados do time com cache
    */
-  async getTeamStats(teamId: number, tipo: number, monthsAgo: number = 0): Promise<ResumoMes> {
+  async getTeamStats(teamId: string | number, tipo: number, monthsAgo: number = 0): Promise<ResumoMes> {
     const cacheKey = this.createCacheKey({ teamId, period: monthsAgo > 0 ? 'previous' : 'current', monthsAgo });
 
     // Verifica se já está carregando
@@ -58,7 +58,7 @@ export class TeamStatsCacheService {
   /**
    * Faz a requisição real para a API
    */
-  private async fetchTeamStats(teamId: number, tipo: number, monthsAgo: number): Promise<ResumoMes> {
+  private async fetchTeamStats(teamId: string | number, tipo: number, monthsAgo: number): Promise<ResumoMes> {
     if (monthsAgo > 0) {
       return this.mesAnteriorService.getDadosMesAnteriorDashboard(teamId, tipo, monthsAgo);
     } else {
@@ -76,7 +76,7 @@ export class TeamStatsCacheService {
   /**
    * Limpa o cache para um time específico
    */
-  clearTeamCache(teamId: number): void {
+  clearTeamCache(teamId: string | number): void {
     const keysToDelete: string[] = [];
     for (const key of this.cache.keys()) {
       if (key.startsWith(`${teamId}-`)) {

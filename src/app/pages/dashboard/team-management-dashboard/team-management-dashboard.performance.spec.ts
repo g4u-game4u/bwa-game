@@ -56,7 +56,7 @@ describe('TeamManagementDashboardComponent Performance Tests', () => {
       'createChartDatasets'
     ]);
     const seasonDatesServiceSpy = jasmine.createSpyObj('SeasonDatesService', ['getSeasonDates']);
-    const toastServiceSpy = jasmine.createSpyObj('ToastService', ['error', 'success']);
+    const toastServiceSpy = jasmine.createSpyObj('ToastService', ['error', 'success', 'alert']);
     const sessaoProviderSpy = jasmine.createSpyObj('SessaoProvider', [], {
       usuario: { extra: { teams: ['Team A', 'Team B'] } }
     });
@@ -94,6 +94,7 @@ describe('TeamManagementDashboardComponent Performance Tests', () => {
 
     fixture = TestBed.createComponent(TeamManagementDashboardComponent);
     component = fixture.componentInstance;
+    component.productivityAnalysisInMaintenance = false;
     changeDetectorRef = fixture.debugElement.injector.get(ChangeDetectorRef);
   });
 
@@ -403,12 +404,12 @@ describe('TeamManagementDashboardComponent Performance Tests', () => {
 
       const startTime = performance.now();
 
-      // Navigate through months
-      component.onMonthChange(1);
+      // Navigate through months (mar. / abr. 2026)
+      component.onMonthChange(new Date(2026, 2, 1));
       tick();
-      component.onMonthChange(2);
+      component.onMonthChange(new Date(2026, 3, 1));
       tick();
-      component.onMonthChange(0);
+      component.onMonthChange(new Date(2026, 2, 1));
       tick();
 
       const endTime = performance.now();

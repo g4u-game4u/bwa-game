@@ -78,7 +78,7 @@
               type="text"
               [value]="searchTerm"
               (input)="onSearchInput($event)"
-              placeholder="Buscar por título, executor ou data"
+              placeholder="Buscar por título, cliente (entrega), executor ou data"
               aria-label="Buscar tarefas"
               class="search-input" />
           </div>
@@ -92,7 +92,8 @@
           <div *ngIf="filteredActivityItems.length > 0" class="tasks-table">
             <div class="task-header" [class.with-points]="showPointsColumn" [class.with-client]="showClientColumn">
               <div class="task-col-title">Tarefa</div>
-              <div class="task-col-client" *ngIf="showClientColumn">Cliente</div>
+              <div class="task-col-client" *ngIf="showClientColumn">Empresa</div>
+              <div class="task-col-delivery-name">Cliente</div>
               <div class="task-col-executor">Executor</div>
               <div class="task-col-date">Data</div>
               <div class="task-col-status">Status</div>
@@ -104,7 +105,16 @@
                   <span class="task-title">{{ item.title }}</span>
                 </div>
                 <div class="task-col-client" *ngIf="showClientColumn">
-                  <span class="task-client">{{ getCompanyDisplayName(item.cnpj) || '—' }}</span>
+                  <span
+                    class="task-client"
+                    [title]="getCompanyDisplayName(item.cnpj) || ''">
+                    {{ abbreviateClientLabel(getCompanyDisplayName(item.cnpj)) || '—' }}
+                  </span>
+                </div>
+                <div class="task-col-delivery-name">
+                  <span class="task-delivery-name" [title]="item.deliveryName || ''">{{
+                    abbreviateClientLabel(item.deliveryName) || '—'
+                  }}</span>
                 </div>
                 <div class="task-col-executor">
                   <span class="task-executor">{{ formatEmailToName(item.player) }}</span>

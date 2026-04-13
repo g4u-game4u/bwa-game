@@ -21,6 +21,10 @@ export interface CompanyDisplay {
   actionCount: number; // Number of actions for this company
   processCount?: number; // Number of unique processes (delivery_id) for this company
   deliveryKpi?: KPIData; // Delivery KPI from cnpj__c
+  /** Presente quando a linha da carteira veio de uma entrega (GET /user-action). */
+  deliveryId?: string;
+  /** Título da entrega vindo da API (`delivery_title`), quando existir. */
+  deliveryTitle?: string;
 }
 
 interface CacheEntry<T> {
@@ -137,7 +141,13 @@ export class CompanyKpiService {
    * @returns Observable of enriched company display data with KPI information
    */
   enrichCompaniesWithKpis(
-    companies: { cnpj: string; actionCount: number; processCount?: number }[]
+    companies: {
+      cnpj: string;
+      actionCount: number;
+      processCount?: number;
+      deliveryId?: string;
+      deliveryTitle?: string;
+    }[]
   ): Observable<CompanyDisplay[]> {
     if (!companies || companies.length === 0) {
       return of([]);
@@ -161,7 +171,9 @@ export class CompanyKpiService {
         cnpj: c.cnpj,
         cnpjId: c.cnpjId || undefined,
         actionCount: c.actionCount,
-        processCount: c.processCount || 0
+        processCount: c.processCount || 0,
+        deliveryId: c.deliveryId,
+        deliveryTitle: c.deliveryTitle
       })));
     }
 
@@ -174,7 +186,9 @@ export class CompanyKpiService {
             cnpj: company.cnpj,
             cnpjId: company.cnpjId || undefined,
             actionCount: company.actionCount,
-            processCount: company.processCount || 0
+            processCount: company.processCount || 0,
+            deliveryId: company.deliveryId,
+            deliveryTitle: company.deliveryTitle
           };
 
           // Add KPI data if available
@@ -193,7 +207,9 @@ export class CompanyKpiService {
           cnpj: c.cnpj,
           cnpjId: c.cnpjId || undefined,
           actionCount: c.actionCount,
-          processCount: c.processCount || 0
+          processCount: c.processCount || 0,
+          deliveryId: c.deliveryId,
+          deliveryTitle: c.deliveryTitle
         })));
       })
     );

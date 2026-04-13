@@ -4,6 +4,7 @@ import { ModalCarteiraComponent } from './modal-carteira.component';
 import { ActionLogService } from '@services/action-log.service';
 import { CompanyKpiService } from '@services/company-kpi.service';
 import { CnpjLookupService } from '@services/cnpj-lookup.service';
+import { UserActionDashboardService } from '@services/user-action-dashboard.service';
 import { NO_ERRORS_SCHEMA } from '@angular/core';
 
 describe('ModalCarteiraComponent', () => {
@@ -20,13 +21,15 @@ describe('ModalCarteiraComponent', () => {
     ]);
     const companyKpiSpy = jasmine.createSpyObj('CompanyKpiService', ['enrichCompaniesWithKpis']);
     const cnpjLookupSpy = jasmine.createSpyObj('CnpjLookupService', ['enrichCnpjList']);
+    const userActionSpy = jasmine.createSpyObj('UserActionDashboardService', ['getCarteiraEnriched']);
 
     await TestBed.configureTestingModule({
       declarations: [ModalCarteiraComponent],
       providers: [
         { provide: ActionLogService, useValue: actionLogSpy },
         { provide: CompanyKpiService, useValue: companyKpiSpy },
-        { provide: CnpjLookupService, useValue: cnpjLookupSpy }
+        { provide: CnpjLookupService, useValue: cnpjLookupSpy },
+        { provide: UserActionDashboardService, useValue: userActionSpy }
       ],
       schemas: [NO_ERRORS_SCHEMA]
     }).compileComponents();
@@ -115,21 +118,25 @@ describe('ModalCarteiraComponent', () => {
 
       actionLogServiceSpy.getActionsByCnpj.and.returnValue(of(mockActions));
 
-      component.selectCliente('1748');
+      const cliente = { cnpj: '1748', actionCount: 2 };
+      component.useBackendUserActions = false;
+      component.selectCliente(cliente);
 
       setTimeout(() => {
-        expect(component.selectedCnpj).toBe('1748');
+        expect(component.selectedListRowKey).toBe('c:1748');
         expect(component.selectedClienteActions.length).toBe(1);
         expect(component.isLoadingActions).toBe(false);
         done();
       }, 100);
     });
 
-    it('should collapse if same CNPJ is selected', () => {
-      component.selectedCnpj = '1748';
-      component.selectCliente('1748');
+    it('should collapse if same row is selected', () => {
+      const cliente = { cnpj: '1748', actionCount: 2 };
+      component.useBackendUserActions = false;
+      component.selectedListRowKey = 'c:1748';
+      component.selectCliente(cliente);
 
-      expect(component.selectedCnpj).toBeNull();
+      expect(component.selectedListRowKey).toBeNull();
       expect(component.selectedClienteActions.length).toBe(0);
     });
   });

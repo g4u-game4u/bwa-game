@@ -1,13 +1,33 @@
+const useApiProxyFlag = (() => {
+  const v = String(process.env.USE_API_PROXY ?? '').trim().toLowerCase();
+  return v === 'true' || v === '1';
+})();
+
 export const environment = {
   production: false,
   // client_id: 'cidadania4u',
   client_id: 'revisaprev',
-  // backend_url_base: 'https://integrador-n8n.grupo4u.com.br/webhook/game4u/taxall',
-  backend_url_base: 'http://localhost',
-  // backend_url_base: 'https://g4u-mvp-api.onrender.com',
-  // backend_url_base: 'https://g4u-mvp-api-staging.onrender.com',
-  // backend_url_base: 'https://g4u-mvp-api-1.onrender.com',
-  // backend_url_base: 'http://194.163.158.136:1935'
+  /**
+   * API backend. Com `ng serve`, lê `BACKEND_URL_BASE` ou `backend_url_base` do `.env` (DefinePlugin).
+   * CORS no browser: no `.env` use `USE_API_PROXY=true` e base vazia — os pedidos vão para o mesmo host do `ng serve`
+   * e o `proxy.conf.json` encaminha para a API (ex. :3001).
+   */
+  backend_url_base: useApiProxyFlag
+    ? ''
+    : process.env['BACKEND_URL_BASE'] ||
+      process.env['backend_url_base'] ||
+      'http://localhost:3001',
+
+  /**
+   * Base da API Game4U (login em POST /auth/login). Com `USE_API_PROXY=true`, deixe implícito vazio (mesmo host + proxy).
+   */
+  g4u_api_base: useApiProxyFlag
+    ? ''
+    : process.env.G4U_API_BASE ||
+      process.env.g4u_api_base ||
+      process.env['BACKEND_URL_BASE'] ||
+      process.env['backend_url_base'] ||
+      'http://localhost:3001',
   
   // Funifier API Configuration
   funifier_api_url: 'https://service2.funifier.com/v3/',
@@ -28,5 +48,32 @@ export const environment = {
   supervisorTeamCode: 'Fkmdmko',
   gestorTeamCode: 'FkmdnFU',
   diretorTeamCode: 'FkmdhZ9',
-  logo_url: 'https://i.ibb.co/Fk92q8hv/Logo-Revisa-Prev-removebg-preview.png'
+  logo_url: 'https://i.ibb.co/Fk92q8hv/Logo-Revisa-Prev-removebg-preview.png',
+
+  /**
+   * Integração Omie — KPI circular "Valor concedido" (time financeiro).
+   * Modo A: painelJsonUrl → JSON já processado (omie_painel_recebiveis.json).
+   * Modo B: caixaJsonUrl → export bruto; o front aplica as mesmas regras do Python.
+   * Sobrescritos por system params homônimos quando preenchidos.
+   */
+  financeiroOmieRecebiveis: {
+    painelJsonUrl: '',
+    caixaJsonUrl: '',
+    categoriasCodigos: '',
+    categoriasDesc: ''
+  },
+
+  /**
+   * Supabase (projeto RevisaPrev). Com `ng serve`, o webpack injeta `process.env` a partir do `.env`.
+   * Variáveis: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_SECRET.
+   * Documentação relacionada ao produto: https://g4u-mvp-api.onrender.com/api#/
+   */
+  supabaseRevisaprev: {
+    url: process.env['SUPABASE_URL'] || process.env['supabase_url'] || '',
+    anonKey: process.env['SUPABASE_ANON_KEY'] || process.env['supabase_anon_key'] || '',
+    serviceRoleSecret:
+      process.env['SUPABASE_SERVICE_ROLE_SECRET'] ||
+      process.env['supabase_service_role_secret'] ||
+      ''
+  }
 };

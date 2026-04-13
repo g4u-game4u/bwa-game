@@ -33,17 +33,21 @@ export class UserProfileService {
     if (!user) {
       return UserProfile.JOGADOR;
     }
-    return determineUserProfile(user.teams, this.teamCodeService.getTeamCodes());
+    return determineUserProfile(
+      user.teams,
+      this.teamCodeService.getTeamCodes(),
+      user.roles
+    );
   }
 
   /**
    * Check if current user can access team management dashboard
    * 
-   * @returns true if user is SUPERVISOR, GESTOR, or DIRETOR
+   * @returns true if user is SUPERVISOR, GESTOR, DIRETOR, or ADMIN (role ACCESS_ADMIN_PANEL)
    */
   canAccessTeamManagement(): boolean {
     const profile = this.getCurrentUserProfile();
-    return profile !== UserProfile.JOGADOR;
+    return profile !== UserProfile.JOGADOR || !!this.sessao.isAdmin();
   }
 
   /**
@@ -75,17 +79,20 @@ export class UserProfileService {
     if (!user) {
       return [];
     }
+    if (!!this.sessao.isAdmin()) {
+      return [];
+    }
     const profile = this.getCurrentUserProfile();
     return getAccessibleTeamIds(user.teams, profile, this.teamCodeService.getTeamCodes());
   }
 
   /**
-   * Check if current user can see all teams (DIRETOR only)
+   * Check if current user can see all teams (DIRETOR or ADMIN)
    * 
-   * @returns true if user is DIRETOR
+   * @returns true if user is DIRETOR or has role ACCESS_ADMIN_PANEL
    */
   canSeeAllTeams(): boolean {
-    return this.getCurrentUserProfile() === UserProfile.DIRETOR;
+    return this.getCurrentUserProfile() === UserProfile.DIRETOR || !!this.sessao.isAdmin();
   }
 
   /**

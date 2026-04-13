@@ -6,9 +6,17 @@ import { delay } from 'rxjs/operators';
 import { GamificationDashboardComponent } from './gamification-dashboard.component';
 import { PlayerService } from '@services/player.service';
 import { CompanyService } from '@services/company.service';
+import { UserActionDashboardService } from '@services/user-action-dashboard.service';
+import { TemporadaService } from '@services/temporada.service';
 import { KPIService } from '@services/kpi.service';
 import { ToastService } from '@services/toast.service';
 import { ActionLogService } from '@services/action-log.service';
+import { CnpjLookupService } from '@services/cnpj-lookup.service';
+import { SystemParamsService } from '@services/system-params.service';
+import { FinanceiroOmieRecebiveisService } from '@services/financeiro-omie-recebiveis.service';
+import { GoalsReceitaBackendService } from '@services/goals-receita-backend.service';
+import { Router } from '@angular/router';
+import { ActivatedRoute } from '@angular/router';
 import { CompanyKpiService, CompanyDisplay } from '@services/company-kpi.service';
 import { PerformanceMonitorService } from '@services/performance-monitor.service';
 import { SessaoProvider } from '@providers/sessao/sessao.provider';
@@ -42,8 +50,10 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
     ]);
     
     const kpiServiceSpy = jasmine.createSpyObj('KPIService', [
-      'getPlayerKPIs'
+      'getPlayerKPIs',
+      'getPlayerKPIsForDateRange'
     ]);
+    kpiServiceSpy.getPlayerKPIsForDateRange.and.returnValue(of([]));
     
     const toastServiceSpy = jasmine.createSpyObj('ToastService', [
       'error',
@@ -55,8 +65,12 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
       'getProgressMetrics',
       'getPlayerCnpjListWithCount',
       'getUniqueClientesCount',
-      'getCompletedTasksCount'
+      'getCompletedTasksCount',
+      'getProcessMetrics'
     ]);
+    actionLogServiceSpy.getProcessMetrics.and.returnValue(
+      of({ pendentes: 0, incompletas: 0, finalizadas: 0 })
+    );
     actionLogServiceSpy.getProgressMetrics.and.returnValue(of({
       activity: { pendentes: 0, emExecucao: 0, finalizadas: 0, pontos: 0 },
       macro: { pendentes: 0, incompletas: 0, finalizadas: 0 }
@@ -84,6 +98,72 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
       usuario: { _id: 'test-user', email: 'test@example.com', roles: [] }
     });
 
+    const cnpjLookupSpy = jasmine.createSpyObj('CnpjLookupService', ['enrichCnpjList']);
+    cnpjLookupSpy.enrichCnpjList.and.returnValue(of(new Map()));
+
+    const systemParamsSpy = jasmine.createSpyObj('SystemParamsService', ['getParam']);
+    systemParamsSpy.getParam.and.returnValue(Promise.resolve(null));
+
+    const financeiroOmieSpy = jasmine.createSpyObj('FinanceiroOmieRecebiveisService', [
+      'getValorConcedidoFinanceiro'
+    ]);
+    financeiroOmieSpy.getValorConcedidoFinanceiro.and.returnValue(of(null));
+
+    const goalsReceitaSpy = jasmine.createSpyObj('GoalsReceitaBackendService', [
+      'tryGetReceitaConcedidaKpi'
+    ]);
+    goalsReceitaSpy.tryGetReceitaConcedidaKpi.and.returnValue(Promise.resolve(null));
+
+    const temporadaServiceSpy = jasmine.createSpyObj('TemporadaService', ['getDadosTemporadaDashboard']);
+    temporadaServiceSpy.getDadosTemporadaDashboard.and.returnValue(
+      Promise.resolve({
+        blocked_points: 0,
+        unblocked_points: 0,
+        pendingTasks: 0,
+        doingTasks: 0,
+        completedTasks: 0,
+        pendingDeliveries: 0,
+        incompleteDeliveries: 0,
+        completedDeliveries: 0,
+        total_points: 0,
+        total_blocked_points: 0,
+        total_actions: 0,
+        nivel: { nivelAtual: 0, nivelMax: 0 }
+      })
+    );
+
+    const userActionDashboardSpy = jasmine.createSpyObj('UserActionDashboardService', [
+      'getCarteiraEnriched',
+      'getDeliveryCountInRange',
+      'getActionsForPlayerDateRange',
+      'getActions',
+      'countFinalizadasInRange',
+      'getActivityMetricsFromActions',
+      'getMonthlyPointsBreakdownFromActions',
+      'clearCache'
+    ]);
+    userActionDashboardSpy.getCarteiraEnriched.and.returnValue(of([]));
+    userActionDashboardSpy.getDeliveryCountInRange.and.returnValue(of(0));
+    userActionDashboardSpy.getActionsForPlayerDateRange.and.returnValue(of([]));
+    userActionDashboardSpy.getActions.and.returnValue(of([]));
+    userActionDashboardSpy.countFinalizadasInRange.and.returnValue(0);
+    userActionDashboardSpy.getActivityMetricsFromActions.and.returnValue({
+      pendentes: 0,
+      emExecucao: 0,
+      finalizadas: 0,
+      pontos: 0
+    });
+    userActionDashboardSpy.getMonthlyPointsBreakdownFromActions.and.returnValue({
+      bloqueados: 0,
+      desbloqueados: 0
+    });
+
+    const routerSpy = jasmine.createSpyObj('Router', ['navigate']);
+    const activatedRouteStub = {
+      snapshot: { queryParams: {} },
+      queryParams: of({})
+    };
+
     await TestBed.configureTestingModule({
       declarations: [GamificationDashboardComponent],
       providers: [
@@ -94,7 +174,15 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
         { provide: ActionLogService, useValue: actionLogServiceSpy },
         { provide: CompanyKpiService, useValue: companyKpiServiceSpy },
         { provide: PerformanceMonitorService, useValue: performanceMonitorSpy },
-        { provide: SessaoProvider, useValue: sessaoProviderSpy }
+        { provide: SessaoProvider, useValue: sessaoProviderSpy },
+        { provide: CnpjLookupService, useValue: cnpjLookupSpy },
+        { provide: SystemParamsService, useValue: systemParamsSpy },
+        { provide: FinanceiroOmieRecebiveisService, useValue: financeiroOmieSpy },
+        { provide: GoalsReceitaBackendService, useValue: goalsReceitaSpy },
+        { provide: TemporadaService, useValue: temporadaServiceSpy },
+        { provide: UserActionDashboardService, useValue: userActionDashboardSpy },
+        { provide: Router, useValue: routerSpy },
+        { provide: ActivatedRoute, useValue: activatedRouteStub }
       ],
       schemas: [NO_ERRORS_SCHEMA]
     }).compileComponents();
@@ -284,16 +372,15 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
       companyService.getCompanies.calls.reset();
       kpiService.getPlayerKPIs.calls.reset();
 
-      const monthsAgo = 1; // 1 month ago
+      const picked = new Date(2026, 2, 1);
 
       // Act
-      component.onMonthChange(monthsAgo);
+      component.onMonthChange(picked);
       tick();
 
       // Assert
-      const expectedMonth = new Date();
-      expectedMonth.setMonth(expectedMonth.getMonth() - monthsAgo);
-      expect(component.selectedMonth.getMonth()).toEqual(expectedMonth.getMonth());
+      expect(component.selectedMonth.getFullYear()).toBe(2026);
+      expect(component.selectedMonth.getMonth()).toBe(2);
       expect(playerService.getPlayerStatus).toHaveBeenCalled();
       expect(companyService.getCompanies).toHaveBeenCalled();
       expect(kpiService.getPlayerKPIs).toHaveBeenCalled();
@@ -307,16 +394,14 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
       companyService.getCompanies.and.returnValue(of([]));
       kpiService.getPlayerKPIs.and.returnValue(of([]));
       
-      const monthsAgo = 2; // 2 months ago
+      const picked = new Date(2026, 2, 1);
 
       // Act
-      component.onMonthChange(monthsAgo);
+      component.onMonthChange(picked);
       tick();
 
       // Assert
-      const expectedMonth = new Date();
-      expectedMonth.setMonth(expectedMonth.getMonth() - monthsAgo);
-      expect(component.selectedMonth.getMonth()).toEqual(expectedMonth.getMonth());
+      expect(component.selectedMonth.getMonth()).toBe(2);
     }));
   });
 
@@ -1218,7 +1303,7 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
       companyKpiService.enrichCompaniesWithKpis.and.returnValue(of(newEnrichedData));
 
       // Act - Change month
-      component.onMonthChange(1); // 1 month ago
+      component.onMonthChange(new Date(2026, 2, 1));
       tick();
 
       // Assert

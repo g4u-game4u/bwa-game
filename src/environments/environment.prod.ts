@@ -9,6 +9,12 @@ export const environment = {
   production: true,
   client_id: process.env['CLIENT_ID'] || process.env['client_id'] || 'bwa',
   backend_url_base: process.env['BACKEND_URL_BASE'] || process.env['backend_url_base'] || '',
+  g4u_api_base:
+    process.env.G4U_API_BASE ||
+    process.env.g4u_api_base ||
+    process.env['BACKEND_URL_BASE'] ||
+    process.env['backend_url_base'] ||
+    '',
   
   // Funifier API Configuration
   funifier_api_url: 'https://service2.funifier.com/v3/',
@@ -28,5 +34,25 @@ export const environment = {
   // Team Code Configuration (supports both uppercase and lowercase env var names)
   supervisorTeamCode: process.env['SUPERVISOR_TEAM_CODE'] || process.env['supervisor_team_code'] || 'Fkmdmko',
   gestorTeamCode: process.env['GESTOR_TEAM_CODE'] || process.env['gestor_team_code'] || 'FkmdnFU',
-  diretorTeamCode: process.env['DIRETOR_TEAM_CODE'] || process.env['diretor_team_code'] || 'FkmdhZ9'
+  diretorTeamCode: process.env['DIRETOR_TEAM_CODE'] || process.env['diretor_team_code'] || 'FkmdhZ9',
+
+  financeiroOmieRecebiveis: {
+    painelJsonUrl: process.env['FINANCEIRO_OMIE_PAINEL_JSON_URL'] || process.env['financeiro_omie_painel_json_url'] || '',
+    caixaJsonUrl: process.env['FINANCEIRO_OMIE_CAIXA_JSON_URL'] || process.env['financeiro_omie_caixa_json_url'] || '',
+    categoriasCodigos: process.env['PAINEL_CATEGORIAS'] || process.env['painel_categorias'] || '',
+    categoriasDesc: process.env['PAINEL_CATEGORIAS_DESC'] || process.env['painel_categorias_desc'] || ''
+  },
+
+  /**
+   * Supabase (projeto RevisaPrev). Variáveis: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_SECRET.
+   * Documentação relacionada ao produto: https://g4u-mvp-api.onrender.com/api#/
+   */
+  supabaseRevisaprev: {
+    url: process.env['SUPABASE_URL'] || process.env['supabase_url'] || '',
+    anonKey: process.env['SUPABASE_ANON_KEY'] || process.env['supabase_anon_key'] || '',
+    serviceRoleSecret:
+      process.env['SUPABASE_SERVICE_ROLE_SECRET'] ||
+      process.env['supabase_service_role_secret'] ||
+      ''
+  }
 };

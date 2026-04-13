@@ -46,10 +46,18 @@ export interface SystemParams {
   season_start_date: SystemParamValue;
   team_monthly_goal: SystemParamValue;
   /**
-   * Meta mensal (R$) para o time do financeiro (Team ID: Fouegv0).
+   * Meta mensal (R$) para o time do financeiro (team id Game4U: 6).
    * Opcional para manter compatibilidade com ambientes que ainda não têm esse parâmetro.
    */
   financeiro_monthly_billing_goal?: SystemParamValue;
+  /** URL GET do JSON omie_painel_recebiveis (modo A). Opcional. */
+  financeiro_omie_painel_json_url?: SystemParamValue;
+  /** URL GET do export omie_caixa_recebimentos (modo B — recalcular no cliente). Opcional. */
+  financeiro_omie_caixa_json_url?: SystemParamValue;
+  /** Filtro Omie: códigos de categoria separados por vírgula (ex.: 1.01.01,1.04.97). */
+  financeiro_omie_categorias_codigos?: SystemParamValue;
+  /** Filtro Omie: descrições exatas separadas por ; (case-insensitive no match). */
+  financeiro_omie_categorias_desc?: SystemParamValue;
   allow_theme_switch: SystemParamValue;
   enable_achievements: SystemParamValue;
   enable_leaderboards: SystemParamValue;

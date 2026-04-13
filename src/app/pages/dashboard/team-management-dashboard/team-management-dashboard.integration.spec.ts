@@ -114,6 +114,7 @@ describe('TeamManagementDashboardComponent - Integration Tests', () => {
 
     fixture = TestBed.createComponent(TeamManagementDashboardComponent);
     component = fixture.componentInstance;
+    component.productivityAnalysisInMaintenance = false;
   });
 
   describe('Dashboard Initialization', () => {
@@ -250,20 +251,19 @@ describe('TeamManagementDashboardComponent - Integration Tests', () => {
       const callCountBefore = mockTeamAggregateService.getTeamSeasonPoints.calls.count();
 
       // Change month
-      component.onMonthChange(1); // 1 month ago
+      component.onMonthChange(new Date(2026, 2, 1));
       tick();
 
       // Verify data was reloaded
       expect(mockTeamAggregateService.getTeamSeasonPoints.calls.count()).toBeGreaterThan(callCountBefore);
-      expect(component.selectedMonthsAgo).toBe(1);
+      expect(component.selectedMonth.getMonth()).toBe(2);
     }));
 
     it('should calculate correct date range for selected month', fakeAsync(() => {
-      component.onMonthChange(2); // 2 months ago
+      component.onMonthChange(new Date(2026, 3, 1));
       tick();
 
-      // Verify selectedMonth is updated
-      expect(component.selectedMonthsAgo).toBe(2);
+      expect(component.selectedMonth.getMonth()).toBe(3);
     }));
   });
 
@@ -288,7 +288,7 @@ describe('TeamManagementDashboardComponent - Integration Tests', () => {
       // Set up state
       component.selectedTeam = 'Financeiro';
       component.selectedCollaborator = 'user1@test.com';
-      component.selectedMonthsAgo = 1;
+      component.selectedMonth = new Date(2026, 2, 1);
 
       // Switch tabs
       component.switchTab('productivity');
@@ -297,7 +297,7 @@ describe('TeamManagementDashboardComponent - Integration Tests', () => {
       // Verify state is preserved
       expect(component.selectedTeam).toBe('Financeiro');
       expect(component.selectedCollaborator).toBe('user1@test.com');
-      expect(component.selectedMonthsAgo).toBe(1);
+      expect(component.selectedMonth.getMonth()).toBe(2);
 
       // Switch back
       component.switchTab('goals');
@@ -453,9 +453,9 @@ describe('TeamManagementDashboardComponent - Integration Tests', () => {
       expect(component.selectedCollaborator).toBe('user2@test.com');
 
       // Step 3: Change month
-      component.onMonthChange(1);
+      component.onMonthChange(new Date(2026, 2, 1));
       tick();
-      expect(component.selectedMonthsAgo).toBe(1);
+      expect(component.selectedMonth.getMonth()).toBe(2);
 
       // Step 4: Switch to productivity tab
       component.switchTab('productivity');
@@ -470,7 +470,7 @@ describe('TeamManagementDashboardComponent - Integration Tests', () => {
       // Verify all state is correct
       expect(component.selectedTeam).toBe('Financeiro');
       expect(component.selectedCollaborator).toBe('user2@test.com');
-      expect(component.selectedMonthsAgo).toBe(1);
+      expect(component.selectedMonth.getMonth()).toBe(2);
       expect(component.activeTab).toBe('productivity');
       expect(component.selectedPeriod).toBe(30);
 

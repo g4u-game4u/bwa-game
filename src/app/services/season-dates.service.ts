@@ -95,6 +95,15 @@ export class SeasonDatesService {
     return Math.max(1, monthDiff + 1); // +1 para incluir o mês inicial
   }
 
+  /** Rótulo abreviado do mês (pt-BR), ex.: MAR, ABR — para o seletor do painel. */
+  public formatMonthAbbrevPtBr(date: Date): string {
+    return date
+      .toLocaleDateString('pt-BR', { month: 'short' })
+      .replace(/\./g, '')
+      .trim()
+      .toUpperCase();
+  }
+
   /**
    * Obtém os meses disponíveis para seleção baseado na temporada
    */
@@ -106,14 +115,9 @@ export class SeasonDatesService {
     let id = 0;
     
     while (currentDate <= end) {
-      const monthName = currentDate.toLocaleDateString('pt-BR', { 
-        month: 'short', 
-        year: '2-digit' 
-      }).toUpperCase();
-      
       months.push({
         id: id++,
-        name: monthName,
+        name: this.formatMonthAbbrevPtBr(currentDate),
         date: new Date(currentDate)
       });
       

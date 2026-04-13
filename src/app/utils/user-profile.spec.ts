@@ -97,6 +97,18 @@ describe('User Profile Utility', () => {
     });
   });
 
+  describe('determineUserProfile() - role GESTOR', () => {
+    it('should return GESTOR when roles include GESTOR and user has a non-meta team', () => {
+      expect(
+        determineUserProfile(['operational-team-1'], DEFAULT_CODES, ['GESTOR', 'ACCESS_PLAYER_PANEL'])
+      ).toBe(UserProfile.GESTOR);
+    });
+
+    it('should return GESTOR for role GESTOR when API envia times vazios (GET /auth/user)', () => {
+      expect(determineUserProfile([], DEFAULT_CODES, ['GESTOR'])).toBe(UserProfile.GESTOR);
+    });
+  });
+
   describe('determineUserProfile() - Custom Team Codes', () => {
     it('should return JOGADOR when teams do not contain custom codes', () => {
       expect(determineUserProfile(['team1', 'team2'], CUSTOM_CODES)).toBe(UserProfile.JOGADOR);
@@ -177,6 +189,10 @@ describe('User Profile Utility', () => {
       expect(determineUserProfile(teams, CUSTOM_CODES)).toBe(UserProfile.DIRETOR);
     });
 
+    it('should handle team ids numéricos (API Game4U)', () => {
+      expect(determineUserProfile([42, 99], DEFAULT_CODES, ['GESTOR'])).toBe(UserProfile.GESTOR);
+    });
+
     it('should handle mixed team formats (strings and objects)', () => {
       const teams = [
         'team1',
@@ -230,9 +246,13 @@ describe('User Profile Utility', () => {
       expect(getUserOwnTeamId(teams, UserProfile.SUPERVISOR)).toBe(DEFAULT_CODES.supervisor);
     });
 
-    it('should return gestor code for GESTOR profile', () => {
+    it('should return first managed team for GESTOR profile (not meta GESTAO)', () => {
       const teams = [DEFAULT_CODES.gestor, 'managed_team1', 'managed_team2'];
-      expect(getUserOwnTeamId(teams, UserProfile.GESTOR)).toBe(DEFAULT_CODES.gestor);
+      expect(getUserOwnTeamId(teams, UserProfile.GESTOR)).toBe('managed_team1');
+    });
+
+    it('should return meta GESTAO when it is the only team for GESTOR', () => {
+      expect(getUserOwnTeamId([DEFAULT_CODES.gestor], UserProfile.GESTOR)).toBe(DEFAULT_CODES.gestor);
     });
 
     it('should return null for null teams', () => {
@@ -254,9 +274,9 @@ describe('User Profile Utility', () => {
       expect(getUserOwnTeamId(teams, UserProfile.SUPERVISOR, CUSTOM_CODES)).toBe(CUSTOM_CODES.supervisor);
     });
 
-    it('should return custom gestor code for GESTOR profile', () => {
+    it('should return first managed team for GESTOR profile with custom codes', () => {
       const teams = [CUSTOM_CODES.gestor, 'managed_team1', 'managed_team2'];
-      expect(getUserOwnTeamId(teams, UserProfile.GESTOR, CUSTOM_CODES)).toBe(CUSTOM_CODES.gestor);
+      expect(getUserOwnTeamId(teams, UserProfile.GESTOR, CUSTOM_CODES)).toBe('managed_team1');
     });
 
     it('should return null when custom supervisor code not in teams', () => {
@@ -286,7 +306,7 @@ describe('User Profile Utility', () => {
 
     it('should handle teams as objects with custom codes', () => {
       const teams = [{ _id: CUSTOM_CODES.gestor }, { _id: 'managed_team' }];
-      expect(getUserOwnTeamId(teams, UserProfile.GESTOR, CUSTOM_CODES)).toBe(CUSTOM_CODES.gestor);
+      expect(getUserOwnTeamId(teams, UserProfile.GESTOR, CUSTOM_CODES)).toBe('managed_team');
     });
 
     it('should handle mixed team formats', () => {
@@ -526,7 +546,7 @@ describe('User Profile Utility', () => {
       
       expect(profile).toBe(UserProfile.GESTOR);
       expect(accessible).toEqual(['team_A', 'team_B']);
-      expect(ownTeam).toBe(DEFAULT_CODES.gestor);
+      expect(ownTeam).toBe('team_A');
     });
 
     it('should correctly determine profile and accessible teams for diretor', () => {
@@ -562,7 +582,7 @@ describe('User Profile Utility', () => {
       
       expect(profile).toBe(UserProfile.GESTOR);
       expect(accessible).toEqual(['team_X', 'team_Y']);
-      expect(ownTeam).toBe(CUSTOM_CODES.gestor);
+      expect(ownTeam).toBe('team_X');
     });
   });
 });

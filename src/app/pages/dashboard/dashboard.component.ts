@@ -189,8 +189,15 @@ export class DashboardComponent implements AfterViewInit, OnInit {
         this.rightMenuOpen = !this.rightMenuOpen;
     }
 
-    mesSelecionado(mesesAnteriores: number) {
-        this.mesAnterior = mesesAnteriores;
+    /** Recebe o mês do c4u-seletor-mes e converte para “meses atrás” em relação ao mês corrente (API legada). */
+    mesSelecionado(value: Date) {
+        const picked = new Date(value.getFullYear(), value.getMonth(), 1);
+        const now = new Date();
+        const nowMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        const monthsAgo =
+            (nowMonth.getFullYear() - picked.getFullYear()) * 12 +
+            (nowMonth.getMonth() - picked.getMonth());
+        this.mesAnterior = Math.max(0, monthsAgo);
     }
 
     selecionaTime(time: any) {

@@ -2,6 +2,7 @@ import { Injectable } from '@angular/core';
 import { environment } from '../../environments/environment';
 import { HttpClient } from '@angular/common/http';
 import { SessaoProvider } from './sessao/sessao.provider';
+import { buildGame4uQueryString } from '@utils/game4u-query-encode.util';
 
 @Injectable({ providedIn: 'root' })
 export class ApiProvider {
@@ -18,13 +19,30 @@ export class ApiProvider {
     body?: any,
     params?: Object
   ): Promise<T> {
-    let url = encodeURI(path.startsWith("https") ? path : (environment.backend_url_base + path));
+    const apiBase = String(environment.g4u_api_base || environment.backend_url_base || '').replace(/\/$/, '');
+    const pathPart = path.startsWith('https') ? path : `${apiBase}${path.startsWith('/') ? path : `/${path}`}`;
+    const encodedPath = encodeURI(pathPart);
+
+    let url = encodedPath;
+    let requestParams = params;
+
+    if (
+      method === 'GET' &&
+      params &&
+      typeof params === 'object' &&
+      !Array.isArray(params) &&
+      path.includes('/game/')
+    ) {
+      const qs = buildGame4uQueryString(params as Record<string, string | string[] | undefined | null>);
+      url = qs ? `${encodedPath}?${qs}` : encodedPath;
+      requestParams = undefined;
+    }
 
     return new Promise<T>((resolve, reject) => {
       const options: any = { headers: { ...headers, ...this.defaultHeaders } };
 
       if (body) options.body = body;
-      if (params) options.params = params;
+      if (requestParams) options.params = requestParams;
       const request = this.http.request(method, url, options);
 
       request.subscribe({

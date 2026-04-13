@@ -27,10 +27,25 @@
         </div>
       </div>
 
-      <!-- Tasks Section -->
+      <!-- Volume diário (tarefas finalizadas no mês) -->
+      <div class="chart-section" *ngIf="!isLoadingTasks">
+        <h3 class="section-title chart-section-title">
+          <i class="ri-bar-chart-line section-icon" aria-hidden="true"></i>
+          Tarefas finalizadas por dia
+        </h3>
+        <div class="chart-container" *ngIf="chartDatasets.length > 0">
+          <c4u-grafico-barras
+            [labels]="chartLabels"
+            [datasets]="chartDatasets"
+            [showLegend]="false">
+          </c4u-grafico-barras>
+        </div>
+      </div>
+
+      <!-- Atividades da entrega (delivery) -->
       <div class="tasks-section">
         <h3 class="section-title">
-          Tarefas
+          Atividades desta entrega
           <span class="result-count" *ngIf="tasks.length > 0 && filteredTasks.length !== tasks.length">
             ({{ filteredTasks.length }} de {{ tasks.length }})
           </span>
@@ -39,14 +54,14 @@
         <!-- Loading Tasks -->
         <div *ngIf="isLoadingTasks" class="loading-tasks">
           <i class="ri-loader-4-line loading-icon"></i>
-          <span>Carregando tarefas...</span>
+          <span>Carregando atividades...</span>
         </div>
 
         <!-- Tasks List -->
         <div *ngIf="!isLoadingTasks" class="tasks-list">
           <div *ngIf="tasks.length === 0" class="empty-state">
             <i class="ri-file-list-line empty-icon"></i>
-            <span>Nenhuma tarefa encontrada</span>
+            <span>Nenhuma atividade encontrada para esta entrega no mês selecionado</span>
           </div>
 
           <ng-container *ngIf="tasks.length > 0">
@@ -56,7 +71,7 @@
                 [value]="searchTerm"
                 (input)="onSearchInput($event)"
                 placeholder="Buscar por título, executor ou data"
-                aria-label="Buscar tarefas"
+                aria-label="Buscar atividades"
                 class="search-input" />
             </div>
 
@@ -65,13 +80,13 @@
               <span>Nenhum resultado para a busca</span>
             </div>
 
-            <div *ngIf="filteredTasks.length > 0" class="tasks-table">
+            <div *ngIf="filteredTasks.length > 0" class="tasks-table" [class.without-task-points]="!showTaskPointsForGestor">
             <div class="task-header">
               <div class="task-col-title">Tarefa</div>
               <div class="task-col-executor">Executor</div>
               <div class="task-col-date">Data</div>
               <div class="task-col-status">Status</div>
-              <div class="task-col-points">Pontos</div>
+              <div class="task-col-points" *ngIf="showTaskPointsForGestor">Pontos</div>
             </div>
             <div *ngFor="let task of filteredTasks" class="task-row">
               <div class="task-col-title">
@@ -88,7 +103,7 @@
                   {{ getStatusLabel(task.status) }}
                 </span>
               </div>
-              <div class="task-col-points">
+              <div class="task-col-points" *ngIf="showTaskPointsForGestor">
                 <span class="task-points" [class.locked]="task.pointsLocked">+{{ task.points || 0 }} pts</span>
               </div>
             </div>

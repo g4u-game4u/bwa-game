@@ -5,6 +5,7 @@ import { FunifierApiService } from './funifier-api.service';
 import { KPIMapper } from './kpi-mapper.service';
 import { KPIData } from '@model/gamification-dashboard.model';
 import { PlayerService } from './player.service';
+import { UserActionDashboardService } from './user-action-dashboard.service';
 
 interface CacheEntry<T> {
   data: Observable<T>;
@@ -32,7 +33,8 @@ export class KPIService {
   constructor(
     private funifierApi: FunifierApiService,
     private mapper: KPIMapper,
-    private playerService: PlayerService
+    private playerService: PlayerService,
+    private userActionDashboard: UserActionDashboardService
   ) {}
 
   /**
@@ -78,9 +80,9 @@ export class KPIService {
    * 
    * @param playerId - Player ID or 'me' for current player
    * @param selectedMonth - Selected month for filtering (optional, defaults to current month)
-   * @param actionLogService - ActionLogService instance (passed to avoid circular dependency)
+   * @param _actionLogService - Legado; ignorado. Contagem de carteira usa GET `/user-action`.
    */
-  getPlayerKPIs(playerId: string, selectedMonth?: Date, actionLogService?: any): Observable<KPIData[]> {
+  getPlayerKPIs(playerId: string, selectedMonth?: Date, _actionLogService?: unknown): Observable<KPIData[]> {
     // Create cache key that includes month to avoid cache conflicts
     const monthKey = selectedMonth ? `_${selectedMonth.getFullYear()}-${selectedMonth.getMonth()}` : '_current';
     const cacheKey = `${playerId}${monthKey}`;
@@ -102,12 +104,10 @@ export class KPIService {
           (selectedMonth.getFullYear() === now.getFullYear() && 
            selectedMonth.getMonth() === now.getMonth());
 
-        // Clientes na Carteira - unique CNPJs with activity in the selected month (action_log)
-        if (actionLogService && selectedMonth) {
-          return actionLogService.getPlayerCnpjListWithCount(playerId, selectedMonth).pipe(
-            map((cnpjList: { cnpj: string; actionCount: number }[]) => {
-              // Current value must match carteira: one row per cliente (deal) with actions in the month
-              const companyCount = cnpjList.length;
+        // Clientes na Carteira — entregas distintas no mês (GET /user-action)
+        if (selectedMonth) {
+          return this.userActionDashboard.getDeliveryCount(playerId, selectedMonth).pipe(
+            map((companyCount: number) => {
               
               // Get target from player's extra.client_goals (number), fallback to default 10
               const clientGoals = playerStatus.extra?.client_goals;
@@ -153,7 +153,7 @@ export class KPIService {
               return kpis;
             }),
             catchError(error => {
-              console.error('📊 Error loading companies from action_log:', error);
+              console.error('📊 Error loading delivery count from user-action:', error);
               // Return at least the empresas KPI with 0 count on error
               // Get target from player's extra.client_goals (number), fallback to default 10
               // Support both formats: client_goals as number or client_goals.goalValue (backward compatibility)
@@ -203,7 +203,7 @@ export class KPIService {
             })
           );
         } else {
-          // Fallback: use extra.cnpj if actionLogService not available
+          // Sem mês selecionado: usar extra.cnpj
                  // Always add Clientes na Carteira KPI, even if count is 0
                  const companyCount = playerStatus.extra?.cnpj 
                    ? playerStatus.extra.cnpj.split(',').filter((item: string) => item.trim()).length 
@@ -256,6 +256,127 @@ export class KPIService {
       catchError(error => {
         console.error('📊 Error fetching player KPIs:', error);
         // Return empty array instead of throwing - don't block the UI
+        return of([]);
+      }),
+      shareReplay({ bufferSize: 1, refCount: true, windowTime: this.CACHE_DURATION })
+    );
+
+    this.setCachedData(this.playerKPICache, cacheKey, request$);
+    return request$;
+  }
+
+  /**
+   * KPIs para um intervalo explícito (ex.: temporada fixa), via GET `/game/actions?start&end`.
+   * Usado pelo cartão de progresso da temporada para não seguir o filtro de mês do painel.
+   */
+  getPlayerKPIsForDateRange(
+    playerId: string,
+    rangeStart: Date,
+    rangeEnd: Date
+  ): Observable<KPIData[]> {
+    const cacheKey = `${playerId}_range_${rangeStart.getTime()}_${rangeEnd.getTime()}`;
+    const cached = this.getCachedData(this.playerKPICache, cacheKey);
+    if (cached) {
+      return cached;
+    }
+
+    const playerData$ = playerId === 'me'
+      ? this.playerService.getCurrentPlayerData()
+      : this.playerService.getRawPlayerData(playerId);
+
+    const request$: Observable<KPIData[]> = playerData$.pipe(
+      switchMap((playerStatus): Observable<KPIData[]> => {
+        const kpis: KPIData[] = [];
+        const now = new Date();
+        const inRange =
+          now.getTime() >= rangeStart.getTime() && now.getTime() <= rangeEnd.getTime();
+
+        return this.userActionDashboard.getDeliveryCountInRange(playerId, rangeStart, rangeEnd).pipe(
+          map((companyCount: number) => {
+            const clientGoals = playerStatus.extra?.client_goals;
+            const goalValue =
+              typeof clientGoals === 'number' ? clientGoals : clientGoals?.goalValue;
+            const target =
+              goalValue !== undefined && goalValue !== null
+                ? typeof goalValue === 'number'
+                  ? goalValue
+                  : parseInt(String(goalValue), 10)
+                : 10;
+            const superTarget = Math.ceil(target * 1.5);
+
+            kpis.push({
+              id: 'numero-empresas',
+              label: 'Clientes atendidos',
+              current: companyCount,
+              target,
+              superTarget,
+              unit: 'clientes',
+              color: this.getKPIColorByGoals(companyCount, target, superTarget),
+              percentage: target > 0 ? Math.round((companyCount / target) * 100) : 0
+            });
+
+            if (inRange && playerStatus.extra?.entrega) {
+              const deliveryPercentage = parseFloat(playerStatus.extra.entrega);
+              kpis.push({
+                id: 'entregas-prazo',
+                label: 'Entregas no Prazo',
+                current: deliveryPercentage,
+                target: 90,
+                superTarget: 100,
+                unit: '%',
+                color: this.getKPIColorByGoals(deliveryPercentage, 90, 100),
+                percentage: Math.min((deliveryPercentage / 100) * 100, 100)
+              });
+            }
+
+            return kpis;
+          }),
+          catchError(error => {
+            console.error('📊 Error loading delivery count (date range) from user-action:', error);
+            const clientGoals = playerStatus.extra?.client_goals;
+            const goalValue =
+              typeof clientGoals === 'number' ? clientGoals : clientGoals?.goalValue;
+            const target =
+              goalValue !== undefined && goalValue !== null
+                ? typeof goalValue === 'number'
+                  ? goalValue
+                  : parseInt(String(goalValue), 10)
+                : 10;
+            const superTarget = Math.ceil(target * 1.5);
+            const errorCompanyCount = playerStatus.extra?.cnpj
+              ? playerStatus.extra.cnpj.split(',').filter((item: string) => item.trim()).length
+              : 0;
+            const errorKpis: KPIData[] = [
+              {
+                id: 'numero-empresas',
+                label: 'Clientes atendidos',
+                current: errorCompanyCount,
+                target,
+                superTarget,
+                unit: 'clientes',
+                color: 'red' as const,
+                percentage: 0
+              }
+            ];
+            if (inRange && playerStatus.extra?.entrega) {
+              const deliveryPercentage = parseFloat(playerStatus.extra.entrega);
+              errorKpis.push({
+                id: 'entregas-prazo',
+                label: 'Entregas no Prazo',
+                current: deliveryPercentage,
+                target: 90,
+                superTarget: 100,
+                unit: '%',
+                color: this.getKPIColorByGoals(deliveryPercentage, 90, 100),
+                percentage: Math.min((deliveryPercentage / 100) * 100, 100)
+              });
+            }
+            return of(errorKpis);
+          })
+        );
+      }),
+      catchError(error => {
+        console.error('📊 Error fetching player KPIs (date range):', error);
         return of([]);
       }),
       shareReplay({ bufferSize: 1, refCount: true, windowTime: this.CACHE_DURATION })

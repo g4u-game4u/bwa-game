@@ -763,6 +763,16 @@
       margin-bottom: $spacing-lg;
       box-sizing: border-box;
 
+      .tab-productivity-maintenance-wrap {
+        flex: 1;
+        display: flex;
+        min-width: 0;
+
+        .tab-button {
+          width: 100%;
+        }
+      }
+
       .tab-button {
         flex: 1;
         display: flex;
@@ -786,7 +796,7 @@
           transition: transform $transition-duration $transition-easing;
         }
 
-        &:hover:not(.active) {
+        &:hover:not(.active):not(:disabled) {
           background-color: rgba($primary-electric-blue, 0.1);
           color: $primary-electric-blue;
           transform: translateY(-1px);
@@ -810,6 +820,19 @@
 
         &:focus-visible {
           @include focus-visible;
+        }
+
+        &:disabled,
+        &:disabled:hover {
+          cursor: not-allowed;
+          opacity: 0.55;
+          transform: none;
+          background-color: transparent;
+          color: $text-secondary;
+
+          i {
+            transform: none;
+          }
         }
 
         @include tablet-only {
@@ -1024,6 +1047,50 @@
     width: 100%;
     box-sizing: border-box;
 
+    .section-header--carteira-clientes {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: $spacing-sm;
+      margin-bottom: $spacing-md;
+
+      .section-title {
+        margin-bottom: 0;
+
+        .clientes-count {
+          font-weight: 500;
+          opacity: 0.9;
+        }
+      }
+    }
+
+    .carteira-clientes-search {
+      flex: 1 1 200px;
+      min-width: 180px;
+      max-width: 360px;
+      padding: 8px 12px;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      background: rgba(0, 0, 0, 0.2);
+      color: #e5e7eb;
+      font-size: 14px;
+
+      &::placeholder {
+        color: rgba(156, 163, 175, 0.9);
+      }
+
+      &:focus {
+        outline: 2px solid #3b82f6;
+        outline-offset: 2px;
+        border-color: rgba(59, 130, 246, 0.5);
+      }
+
+      &:focus-visible {
+        @include focus-visible;
+      }
+    }
+
     .carteira-card {
       display: block;
       width: 100%;
@@ -1086,7 +1153,8 @@
             flex: 1;
             min-width: 0;
 
-            i {
+            i,
+            .carteira-item-icon {
               color: $primary-electric-blue;
               font-size: 1.25rem;
               flex-shrink: 0;
@@ -1098,6 +1166,32 @@
               white-space: nowrap;
               overflow: hidden;
               text-overflow: ellipsis;
+            }
+
+            &.carteira-item-info-stack {
+              align-items: flex-start;
+
+              .carteira-item-text {
+                display: flex;
+                flex-direction: column;
+                gap: 2px;
+                min-width: 0;
+              }
+
+              .carteira-cnpj {
+                white-space: normal;
+                display: -webkit-box;
+                -webkit-line-clamp: 2;
+                -webkit-box-orient: vertical;
+                overflow: hidden;
+              }
+
+              .carteira-delivery-id {
+                font-size: 0.7rem;
+                color: $text-secondary;
+                font-family: ui-monospace, monospace;
+                word-break: break-all;
+              }
             }
           }
 

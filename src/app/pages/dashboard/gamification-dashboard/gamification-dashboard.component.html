@@ -174,11 +174,23 @@
     
     <!-- Company Portfolio Section -->
     <section class="dashboard-section carteira-section" aria-labelledby="company-section-title">
-      <div class="section-header">
+      <div class="section-header section-header--carteira-clientes">
         <h3 id="company-section-title" class="section-title">
           Clientes
-          <span *ngIf="!isLoadingCarteira">({{ carteiraClientes.length }})</span>
+          <span *ngIf="!isLoadingCarteira" class="clientes-count">
+            ({{ filteredCarteiraClientes.length }}<ng-container *ngIf="carteiraClienteSearchTerm.trim()"> / {{ carteiraClientes.length }}</ng-container>)
+          </span>
         </h3>
+        <input
+          *ngIf="!isLoadingCarteira && carteiraClientes.length > 0"
+          id="carteira-clientes-search"
+          type="search"
+          class="carteira-clientes-search"
+          [value]="carteiraClienteSearchTerm"
+          (input)="onCarteiraClienteSearchInput($event)"
+          placeholder="Buscar por nome ou ID da entrega"
+          autocomplete="off"
+          aria-label="Buscar cliente ou entrega na carteira" />
         <!-- <button
           type="button"
           class="carteira-expand-btn"
@@ -192,7 +204,7 @@
       <c4u-card class="carteira-card">
         <div *ngIf="carteiraClientes.length > 0" class="carteira-list">
           <div
-            *ngFor="let cliente of carteiraClientes"
+            *ngFor="let cliente of filteredCarteiraClientes"
             class="carteira-item"
             (click)="openCompanyDetailModal(cliente)"
             role="button"
@@ -211,6 +223,10 @@
         </div>
 
         <c4u-shimmer *ngIf="isLoadingCarteira"></c4u-shimmer>
+
+        <div *ngIf="!isLoadingCarteira && carteiraClientes.length > 0 && filteredCarteiraClientes.length === 0" class="empty-state">
+          <p>Nenhum resultado para “{{ carteiraClienteSearchTerm.trim() }}”</p>
+        </div>
 
         <div *ngIf="!isLoadingCarteira && carteiraClientes.length === 0" class="empty-state">
           <p>Nenhum cliente encontrado na carteira</p>
@@ -233,6 +249,7 @@
     [listType]="progressModalType"
     [month]="selectedMonth"
     [showPointsInActivityList]="false"
+    [useBackendUserActions]="true"
     (closed)="onProgressModalClosed()">
   </modal-progress-list>
   
@@ -241,6 +258,8 @@
     *ngIf="isCompanyCarteiraDetailModalOpen && selectedCarteiraCompany"
     [company]="selectedCarteiraCompany"
     [month]="selectedMonth"
+    [teamIdForDeliveryActions]="carteiraModalTeamIdForDelivery"
+    [actionContextPlayerId]="getPlayerId()"
     (closed)="onCompanyCarteiraDetailModalClosed()">
   </modal-company-carteira-detail>
   
@@ -249,6 +268,7 @@
     *ngIf="isCarteiraModalOpen"
     [playerId]="currentPlayerId"
     [month]="selectedMonth"
+    [useBackendUserActions]="true"
     (closed)="onCarteiraModalClosed()">
   </modal-carteira>
 </div>

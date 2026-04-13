@@ -124,3 +124,6 @@ coverage/
 *.swp
 *.swo
 *~
+
+# Cron job logs (scripts/cron)
+/scripts/cron/logs/
