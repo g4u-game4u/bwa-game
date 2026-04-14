@@ -6,7 +6,7 @@ import { SessaoProvider } from '@providers/sessao/sessao.provider';
 import { BackendUserActionApiService } from './backend-user-action-api.service';
 import { CompanyKpiService, CompanyDisplay } from './company-kpi.service';
 import { ActivityListItem, ClienteActionItem } from './action-log.service';
-import { ActivityMetrics } from '@model/gamification-dashboard.model';
+import { ActivityMetrics, ProcessMetrics } from '@model/gamification-dashboard.model';
 import { lookupActivityPoints } from '@utils/activity-points.util';
 import {
   extractGame4uUserIdFromUserPayload,
@@ -531,6 +531,49 @@ export class UserActionDashboardService {
   }
 
   /**
+   * Um pedido GET `/game/team-actions?start&end&team=` e métricas de atividades + processos (entregas)
+   * no intervalo, usando {@link referenceTimestamp} (prioriza `finished_at`).
+   */
+  getTeamActivityAndProcessMetricsInRange(
+    teamId: string,
+    rangeStart: Date,
+    rangeEnd: Date
+  ): Observable<{ activity: ActivityMetrics; processo: ProcessMetrics }> {
+    const tid = String(teamId || '').trim();
+    if (!tid) {
+      return of({
+        activity: { pendentes: 0, emExecucao: 0, finalizadas: 0, pontos: 0 },
+        processo: { pendentes: 0, incompletas: 0, finalizadas: 0 }
+      });
+    }
+    const start = rangeStart.toISOString();
+    const end = rangeEnd.toISOString();
+    return from(
+      this.fetchAllUserActionsWithParams({
+        team_id: tid,
+        start,
+        end
+      })
+    ).pipe(
+      map(items => ({
+        activity: this.getActivityMetricsFromActionsInRange(items, rangeStart, rangeEnd),
+        processo: this.getProcessMetricsFromActionsInRange(items, rangeStart, rangeEnd)
+      }))
+    );
+  }
+
+  getProcessMetricsForPlayerInRange(
+    playerId: string,
+    rangeStart: Date,
+    rangeEnd: Date,
+    roster?: ReadonlyArray<GameActionsUserRosterEntry> | null
+  ): Observable<ProcessMetrics> {
+    return this.getActionsForPlayerDateRange(playerId, rangeStart, rangeEnd, roster ?? null).pipe(
+      map(items => this.getProcessMetricsFromActionsInRange(items, rangeStart, rangeEnd))
+    );
+  }
+
+  /**
    * Métricas de atividade no mês para um jogador (GET `/game/actions`).
    */
   getActivityMetricsForPlayer(
@@ -689,6 +732,42 @@ export class UserActionDashboardService {
       finalizadas,
       pontos
     };
+  }
+
+  /**
+   * Processos (entregas) no intervalo a partir das mesmas linhas `/game/actions` / `team-actions`:
+   * agrupa por `delivery_id`; entrega «finalizada» se existir linha DELIVERED no período;
+   * «incompleta» se há atividade finalizada no período sem DELIVERED nessa entrega.
+   */
+  getProcessMetricsFromActionsInRange(
+    items: UserActionRow[],
+    rangeStart: Date,
+    rangeEnd: Date
+  ): ProcessMetrics {
+    const rows = this.filterDateRange(items, rangeStart, rangeEnd).filter(r => !r.dismissed);
+    const byDid = new Map<string, UserActionRow[]>();
+    for (const r of rows) {
+      const did = (r.delivery_id || '').trim();
+      if (!did) {
+        continue;
+      }
+      const arr = byDid.get(did) || [];
+      arr.push(r);
+      byDid.set(did, arr);
+    }
+    let finalizadas = 0;
+    let incompletas = 0;
+    for (const [, arr] of byDid) {
+      const hasDelivered = arr.some(r => this.statusComparable(r) === 'DELIVERED');
+      if (hasDelivered) {
+        finalizadas++;
+        continue;
+      }
+      if (arr.some(r => this.isFinalizedStatus(r))) {
+        incompletas++;
+      }
+    }
+    return { pendentes: 0, incompletas, finalizadas };
   }
 
   /** Comparação de `status` tolerando acentos e caixa (ex.: Concluído → CONCLUIDO). */

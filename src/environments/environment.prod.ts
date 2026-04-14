@@ -43,6 +43,11 @@ export const environment = {
     categoriasDesc: process.env['PAINEL_CATEGORIAS_DESC'] || process.env['painel_categorias_desc'] || ''
   },
 
+  receitaConcedidaGoalTemplateId:
+    process.env['RECEITA_CONCEDIDA_GOAL_TEMPLATE_ID'] ||
+    process.env['receita_concedida_goal_template_id'] ||
+    '',
+
   /**
    * Supabase (projeto RevisaPrev). Variáveis: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_SECRET.
    * Documentação relacionada ao produto: https://g4u-mvp-api.onrender.com/api#/

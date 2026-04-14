@@ -50,6 +50,11 @@ export interface SystemParams {
    * Opcional para manter compatibilidade com ambientes que ainda não têm esse parâmetro.
    */
   financeiro_monthly_billing_goal?: SystemParamValue;
+  /**
+   * ID do goal template Game4U usado no KPI circular «Valor concedido» (GET /goals/logs?goal_template_id=).
+   * Opcional; quando ausente, o cliente tenta identificar o template pela lista GET /goals/templates.
+   */
+  receita_concedida_goal_template_id?: SystemParamValue;
   /** URL GET do JSON omie_painel_recebiveis (modo A). Opcional. */
   financeiro_omie_painel_json_url?: SystemParamValue;
   /** URL GET do export omie_caixa_recebimentos (modo B — recalcular no cliente). Opcional. */

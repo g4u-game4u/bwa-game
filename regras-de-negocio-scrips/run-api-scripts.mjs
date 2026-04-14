@@ -24,12 +24,14 @@
 import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
+import { createRequire } from 'module';
 import { stdin as stdinIo, stdout as stdoutIo } from 'process';
 import { createInterface } from 'readline/promises';
 import { config as loadDotenv } from 'dotenv';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..');
+const require = createRequire(import.meta.url);
 loadDotenv({ path: join(ROOT, '.env') });
 
 const CONFIG_PATH = join(__dirname, 'api-scripts.config.json');
@@ -680,21 +682,100 @@ function zohoActivityMatchesTagFlowKey(activity, tagFlowKey) {
   return false;
 }
 
+/** Ordenação estável entre atividades (Modified → Created). */
+function zohoActivitySortTimeMs(activity) {
+  if (!activity || typeof activity !== 'object') return 0;
+  const raw =
+    activity.Modified_Time ||
+    activity.modified_time ||
+    activity.Created_Time ||
+    activity.created_time ||
+    '';
+  const n = Date.parse(String(raw));
+  return Number.isFinite(n) ? n : 0;
+}
+
+/** Texto após "Tag: …" (ou a chave inteira) para desempate de especificidade. */
+function zohoTagFlowLabelForSort(tagFlowKey) {
+  const m = String(tagFlowKey).match(/Tag:\s*(.+)$/i);
+  return m ? m[1].trim() : String(tagFlowKey).trim();
+}
+
 /**
- * Última atividade (mais recente na lista) que casa com tagFlowTitleToActionTemplateId.
+ * Uma atividade pode casar com várias chaves (ex.: label "Protocolo" dentro de Subject
+ * "Agendar Protocolo"). Prioriza o maior comprimento do texto "Tag: …" e, em empate, a
+ * chave completa — evita escolher "Protocolo" quando existe "Agendar Protocolo".
  */
-function findLatestActivityWithTagFlow(activityList, map) {
+function zohoBestTagMatchForActivity(activity, map) {
   const tagMap = map.tagFlowTitleToActionTemplateId || {};
-  const entries = Object.entries(tagMap).sort((a, b) => b[0].length - a[0].length);
-  if (!Array.isArray(activityList) || !entries.length) return null;
-  for (let i = activityList.length - 1; i >= 0; i--) {
-    const a = activityList[i];
-    if (!a || typeof a !== 'object') continue;
-    for (const [tagFlowKey, actionId] of entries) {
-      if (zohoActivityMatchesTagFlowKey(a, tagFlowKey)) return { activity: a, tagFlowKey, actionId };
+  let bestKey = null;
+  let bestActionId = null;
+  let bestLabelLen = -1;
+  let bestKeyLen = -1;
+  for (const [tagFlowKey, actionId] of Object.entries(tagMap)) {
+    if (!zohoActivityMatchesTagFlowKey(activity, tagFlowKey)) continue;
+    const labelLen = zohoTagFlowLabelForSort(tagFlowKey).length;
+    const keyLen = String(tagFlowKey).length;
+    if (labelLen > bestLabelLen || (labelLen === bestLabelLen && keyLen > bestKeyLen)) {
+      bestLabelLen = labelLen;
+      bestKeyLen = keyLen;
+      bestKey = tagFlowKey;
+      bestActionId = actionId;
     }
   }
-  return null;
+  if (!bestKey || bestActionId == null) return null;
+  return { tagFlowKey: bestKey, actionId: String(bestActionId) };
+}
+
+function zohoActivityDedupeKey(activity, indexInList) {
+  if (activity?.id != null && String(activity.id).trim()) return `id:${String(activity.id)}`;
+  return `idx:${indexInList}`;
+}
+
+/**
+ * Para cada action_template_id em tagFlowTitleToActionTemplateId, a atividade mais recente
+ * cuja melhor correspondência de tag (mais específica) é exatamente esse template.
+ * Evita perder tags quando a última atividade global casa só com outro template; evita
+ * dois POSTs para a mesma tarefa Zoho por colisão "Protocolo" vs "Agendar Protocolo".
+ */
+function findLatestActivitiesPerJurActionTemplate(activityList, map) {
+  const tagMap = map.tagFlowTitleToActionTemplateId || {};
+  const keysByAction = new Map();
+  for (const [tagFlowKey, actionId] of Object.entries(tagMap)) {
+    const aid = String(actionId);
+    if (!keysByAction.has(aid)) keysByAction.set(aid, []);
+    keysByAction.get(aid).push(tagFlowKey);
+  }
+  for (const keys of keysByAction.values()) {
+    keys.sort((a, b) => b.length - a.length);
+  }
+  if (!Array.isArray(activityList) || !keysByAction.size) return [];
+
+  const bestByActivity = new Map();
+  for (let i = 0; i < activityList.length; i++) {
+    const a = activityList[i];
+    if (!a || typeof a !== 'object') continue;
+    const bm = zohoBestTagMatchForActivity(a, map);
+    if (bm) bestByActivity.set(zohoActivityDedupeKey(a, i), bm);
+  }
+
+  const hits = [];
+  for (const [actionId] of keysByAction) {
+    let activity = null;
+    let tagFlowKey = null;
+    for (let i = activityList.length - 1; i >= 0; i--) {
+      const a = activityList[i];
+      if (!a || typeof a !== 'object') continue;
+      const bm = bestByActivity.get(zohoActivityDedupeKey(a, i));
+      if (!bm || bm.actionId !== String(actionId)) continue;
+      activity = a;
+      tagFlowKey = bm.tagFlowKey;
+      break;
+    }
+    if (activity && tagFlowKey) hits.push({ activity, tagFlowKey, actionId });
+  }
+  hits.sort((x, y) => zohoActivitySortTimeMs(x.activity) - zohoActivitySortTimeMs(y.activity));
+  return hits;
 }
 
 function isFinanceStageName(stageName, map, deal) {
@@ -736,7 +817,8 @@ function buildGameProcessPayloadZohoStageProcess({
   oldVal,
   newVal,
   audited,
-  integrationComment
+  integrationComment,
+  dismissed
 }) {
   const email =
     (typeof userEmail === 'string' && userEmail.trim()) ||
@@ -769,7 +851,7 @@ function buildGameProcessPayloadZohoStageProcess({
     comments,
     approved: false,
     approved_by: null,
-    dismissed: false
+    dismissed: dismissed === true
   };
   if (status === 'DONE' && finishedAt) payload.finished_at = finishedAt;
   return payload;
@@ -1691,6 +1773,92 @@ function zohoModifiedTimeRange() {
   return { from, to, kf, kt };
 }
 
+/** zoho-tasks: restringir Deals/search a abril (Modified_Time), p.ex. para testar na API local. */
+function isZohoTasksAprilDealsOnly(argv) {
+  if (argv?.includes('--zoho-tasks-april-deals')) return true;
+  const e = String(process.env.G4U_ZOHO_TASKS_APRIL_DEALS || '').trim().toLowerCase();
+  return e === '1' || e === 'true' || e === 'yes' || e === 'on';
+}
+
+function parseZohoTasksAprilYear(argv) {
+  const envY = process.env.G4U_ZOHO_TASKS_APRIL_YEAR?.trim();
+  if (envY && /^\d{4}$/.test(envY)) return parseInt(envY, 10);
+  const yi = argv?.indexOf('--zoho-tasks-april-year');
+  if (yi >= 0 && argv[yi + 1] && /^\d{4}$/.test(String(argv[yi + 1]).trim())) {
+    return parseInt(String(argv[yi + 1]).trim(), 10);
+  }
+  return new Date().getUTCFullYear();
+}
+
+/** Abril completo (UTC) para critério Modified_Time:between no Deals/search. */
+function zohoAprilDealsModifiedBetweenUtc(year) {
+  const raw = Number(year);
+  const y =
+    Number.isFinite(raw) && raw >= 2000 && raw <= 2100 ? Math.trunc(raw) : new Date().getUTCFullYear();
+  return {
+    from: `${y}-04-01T00:00:00+00:00`,
+    to: `${y}-04-30T23:59:59+00:00`,
+    year: y
+  };
+}
+
+/**
+ * Intervalo Modified_Time para zoho-tasks (env ou filtro abril).
+ * @returns {{ from: string, to: string, kf: string, kt: string, aprilYear: number|null }}
+ */
+function zohoTasksResolveSearchRange(argv) {
+  let { from, to, kf, kt } = zohoModifiedTimeRange();
+  let aprilYear = null;
+  if (isZohoTasksAprilDealsOnly(argv)) {
+    const y = parseZohoTasksAprilYear(argv);
+    const apr = zohoAprilDealsModifiedBetweenUtc(y);
+    from = apr.from;
+    to = apr.to;
+    aprilYear = apr.year;
+  } else if (!from || !to) {
+    throw new Error(`Defina ${kf} e ${kt} (ou alias ZOHO_MOVIFIED_FROM / ZOHO_MOVIFIED_TO se usar o typo)`);
+  }
+  return { from, to, kf, kt, aprilYear };
+}
+
+function pushZohoDebugSample(arr, entry, max = 10) {
+  if (!Array.isArray(arr) || arr.length >= max) return;
+  arr.push(entry);
+}
+
+/** Atribuir pontos ao Owner da task Zoho em vez do responsável jur do deal (fallback para jur do deal). */
+function isZohoTasksPreferTaskOwnerEmail(argv) {
+  if (argv?.includes('--zoho-tasks-task-owner-email')) return true;
+  const e = String(process.env.G4U_ZOHO_JUR_TASK_USER_EMAIL || '').trim().toLowerCase();
+  return e === 'owner' || e === 'task_owner' || e === '1' || e === 'true' || e === 'yes';
+}
+
+/**
+ * E-mail para POST jur: Owner da task (se preferTaskOwner e lookup OK) ou responsável jur do deal.
+ */
+async function zohoResolveEmailForJurHit(
+  jur,
+  dealId,
+  token,
+  zohoUserEmailCache,
+  zohoDealRowCacheForJur,
+  hitActivity,
+  preferTaskOwner
+) {
+  if (preferTaskOwner && hitActivity?.Owner && typeof hitActivity.Owner === 'object') {
+    const fromOwner = await zohoResolveUserEmailFromLookup(hitActivity.Owner, token, zohoUserEmailCache);
+    if (fromOwner) return fromOwner;
+  }
+  return zohoResolveJuridicoResponsibleEmail(
+    jur,
+    dealId,
+    token,
+    zohoUserEmailCache,
+    zohoDealRowCacheForJur,
+    hitActivity
+  );
+}
+
 /** Search Records v8: GET .../Deals/search?criteria=...&page=&per_page= (per_page máx. 200). */
 function buildZohoDealsSearchUrl(criteria, page = 1) {
   const perPage = Math.min(
@@ -1832,6 +2000,273 @@ function buildZohoDealTimelineUrl(dealId, auditedFrom, auditedTo) {
  * Fim: ZOHO_TIMELINE_AUDITED_TO ou ZOHO_MODIFIED_TO; opcional ZOHO_TIMELINE_EXTEND_TO_NOW=1 alarga o fim até agora
  * (algumas orgs Zoho devolvem __timeline vazio se o between incluir instante futuro — use com cuidado).
  */
+function argvFlagValue(argv, flag) {
+  const i = argv.indexOf(flag);
+  if (i < 0 || i + 1 >= argv.length) return null;
+  const v = argv[i + 1];
+  if (!v || String(v).startsWith('--')) return null;
+  return String(v).trim();
+}
+
+/** Caminho absoluto ou relativo à raiz do repositório. */
+function resolvePathFromRepoRoot(p) {
+  const s = String(p || '').trim();
+  if (!s) return null;
+  if (s.startsWith('/') || /^[A-Za-z]:[\\/]/.test(s)) return s;
+  return join(ROOT, s);
+}
+
+function parseCsvLineBasic(line) {
+  const out = [];
+  let cur = '';
+  let inQ = false;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (c === '"') {
+      inQ = !inQ;
+      continue;
+    }
+    if (!inQ && c === ',') {
+      out.push(cur);
+      cur = '';
+      continue;
+    }
+    cur += c;
+  }
+  out.push(cur);
+  return out;
+}
+
+/**
+ * Lê coluna deal_id (ou fallback) do CSV do diff Zoho×Game4U — uma linha por id único.
+ * @param {{ onlyFoundNo?: boolean }} opts — só linhas com found_in_game4u = no (divergência diff).
+ */
+function readDealIdsFromDiffCsv(csvPathRel, opts = {}) {
+  const abs = resolvePathFromRepoRoot(csvPathRel);
+  if (!abs || !existsSync(abs)) {
+    throw new Error(`Arquivo CSV não encontrado: ${csvPathRel} → ${abs || '(inválido)'}`);
+  }
+  const text = readFileSync(abs, 'utf8');
+  const lines = text.split(/\r?\n/).filter((ln) => ln.length > 0);
+  if (!lines.length) return [];
+  const headerCells = parseCsvLineBasic(lines[0]).map((h) =>
+    h.replace(/^\ufeff/, '').trim().toLowerCase()
+  );
+  let col = headerCells.findIndex((h) => h === 'deal_id');
+  if (col < 0) col = headerCells.findIndex((h) => h.includes('deal') && h.includes('id'));
+  if (col < 0) col = 4;
+  const colFoundNo =
+    opts.onlyFoundNo === true ? headerCells.findIndex((h) => h === 'found_in_game4u') : -1;
+  const seen = new Set();
+  const ids = [];
+  for (let li = 1; li < lines.length; li++) {
+    const cells = parseCsvLineBasic(lines[li]);
+    if (colFoundNo >= 0) {
+      const fv = (cells[colFoundNo] ?? '').trim().toLowerCase();
+      if (fv !== 'no') continue;
+    }
+    const raw = (cells[col] ?? '').trim().replace(/^"|"$/g, '');
+    const m = raw.match(/(\d{10,})/);
+    const id = m ? m[1] : '';
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    ids.push(id);
+  }
+  return ids;
+}
+
+/** Filtro opcional: só transições Stage cujo audited_time cai no intervalo (ex. abril = transições vistas nesse mês). */
+function parseTransitionAuditedBoundsFromArgv(argv) {
+  const mo = argvFlagValue(argv, '--zoho-transitions-only-month');
+  if (mo) {
+    const m = /^(\d{4})-(\d{2})$/.exec(mo);
+    if (m) {
+      const y = parseInt(m[1], 10);
+      const month = parseInt(m[2], 10);
+      if (y >= 2000 && y <= 2100 && month >= 1 && month <= 12) {
+        const start = new Date(Date.UTC(y, month - 1, 1, 0, 0, 0, 0));
+        const end = new Date(Date.UTC(y, month, 0, 23, 59, 59, 999));
+        return { from: start.toISOString(), to: end.toISOString(), label: mo };
+      }
+    }
+    throw new Error(`--zoho-transitions-only-month esperado YYYY-MM, recebido: ${mo}`);
+  }
+  const from = argvFlagValue(argv, '--zoho-transition-audited-from');
+  const to = argvFlagValue(argv, '--zoho-transition-audited-to');
+  if (from && to) return { from, to, label: `${from}..${to}` };
+  return null;
+}
+
+function filterStageHitsByAuditedWindow(hits, bounds) {
+  if (!bounds || !Array.isArray(hits) || !hits.length) return hits;
+  const t0 = Date.parse(bounds.from);
+  const t1 = Date.parse(bounds.to);
+  if (Number.isNaN(t0) || Number.isNaN(t1)) return hits;
+  return hits.filter((hit) => {
+    const at = Date.parse(String(hit.row?.audited_time ?? hit.row?.Audited_Time ?? ''));
+    if (Number.isNaN(at)) return false;
+    return at >= t0 && at <= t1;
+  });
+}
+
+const TAREFAS_POR_TIMES_XLSX_PATH = join(__dirname, 'Tarefas por times.xlsx');
+
+/** Texto estável para cruzar Stage Zoho ↔ células da planilha (case e acentos). */
+function tarefasPorTimesNormLoose(s) {
+  return String(s ?? '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/\p{M}/gu, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/** Categoria da planilha → chave alinhada a cfg.teamsDefinition[].key */
+function excelCategoryToTeamKey(cat) {
+  const x = tarefasPorTimesNormLoose(cat);
+  if (!x) return null;
+  if (x === 'cs') return 'cs';
+  if (x === 'juridico') return 'juridico';
+  if (x === 'financeiro') return 'financeiro';
+  return null;
+}
+
+/** Parte principal do nome do serviço (antes de sufixos " - Tag: …"). */
+function stripTarefasServicoStem(raw) {
+  const s = String(raw ?? '').trim();
+  if (!s) return '';
+  const cut = s.split(/\s+-\s+Tag\s*:/i)[0];
+  return cut.trim();
+}
+
+/**
+ * Linhas { servico, categoriaTeamKey } a partir de `Tarefas por times.xlsx` (colunas Nome do Serviço, Categoria).
+ * Requer pacote `xlsx` (devDependency na raiz do repo).
+ */
+function loadTarefasPorTimesRowsFromXlsx() {
+  if (!existsSync(TAREFAS_POR_TIMES_XLSX_PATH)) {
+    console.warn(
+      `${colors.yellow}Planilha de times por tarefa não encontrada: ${TAREFAS_POR_TIMES_XLSX_PATH}${colors.reset}`
+    );
+    return [];
+  }
+  let XLSX;
+  try {
+    XLSX = require('xlsx');
+  } catch (e) {
+    console.warn(
+      `${colors.yellow}Pacote 'xlsx' não disponível — instale na raiz (npm i -D xlsx) para validação abril planilha×time. ${e?.message || e}${colors.reset}`
+    );
+    return [];
+  }
+  const wb = XLSX.readFile(TAREFAS_POR_TIMES_XLSX_PATH);
+  const name = wb.SheetNames?.[0];
+  if (!name) return [];
+  const rows = XLSX.utils.sheet_to_json(wb.Sheets[name], { defval: '' });
+  const out = [];
+  for (const r of rows) {
+    const serv =
+      r['Nome do Serviço'] ??
+      r['Nome do Servico'] ??
+      r['nome_do_servico'] ??
+      r['servico'] ??
+      '';
+    const cat = r['Categoria'] ?? r['categoria'] ?? '';
+    const teamKey = excelCategoryToTeamKey(cat);
+    const stem = stripTarefasServicoStem(serv);
+    if (!stem || !teamKey) continue;
+    out.push({ servicoStem: tarefasPorTimesNormLoose(stem), teamKey });
+  }
+  return out;
+}
+
+/**
+ * Devolve função (stageTitle) => teamKey | null — compara título do Stage com a coluna Nome do Serviço (stem).
+ */
+function buildTarefasPorTimesStageCategoryLookup(tableRows) {
+  const rows = Array.isArray(tableRows) ? tableRows.filter((x) => x?.servicoStem && x?.teamKey) : [];
+  return function lookupStageTeamCategory(stageTitle) {
+    const st = tarefasPorTimesNormLoose(stageTitle);
+    if (!st) return null;
+    let bestKey = null;
+    let bestScore = 0;
+    for (const { servicoStem: svc, teamKey } of rows) {
+      if (!svc) continue;
+      let score = 0;
+      if (st === svc) {
+        score = 100000 + svc.length;
+      } else if (st.includes(svc) || svc.includes(st)) {
+        const m = Math.min(st.length, svc.length);
+        if (m >= 8) score = 5000 + m;
+      }
+      if (score > bestScore) {
+        bestScore = score;
+        bestKey = teamKey;
+      }
+    }
+    return bestScore > 0 ? bestKey : null;
+  };
+}
+
+/** Abril: `--zoho-transitions-only-month YYYY-04` (qualquer ano). */
+function zohoAprilTransitionTeamDismissEnabled(bounds) {
+  if (!bounds?.label) return false;
+  return /^\d{4}-04$/.test(String(bounds.label));
+}
+
+/**
+ * e-mail (normalizado) → teamsDefinition.key do 1º team_id do utilizador que casa com GET /team.
+ */
+async function buildGame4uEmailToTeamKeyIndex() {
+  const map = new Map();
+  const teamNameToId = await loadTeamNameToId();
+  const teamIdToKey = new Map();
+  for (const def of cfg.teamsDefinition || []) {
+    const want = String(def?.apiTeamName || '').trim();
+    if (!want) continue;
+    const wantN = tarefasPorTimesNormLoose(want);
+    for (const [nm, id] of teamNameToId.entries()) {
+      if (tarefasPorTimesNormLoose(nm) === wantN) {
+        teamIdToKey.set(String(id), def.key);
+        break;
+      }
+    }
+  }
+  let users = await loadAllUsersFromApi();
+  if (!users.length) users = await loadUsersViaSearchPaginated({ maxPages: 50 });
+  for (const u of users) {
+    const em = userRecordEmailNorm(u);
+    if (!em) continue;
+    const ids = extractGame4uUserTeamIds(u);
+    let key = null;
+    for (const tid of ids) {
+      const k = teamIdToKey.get(String(tid));
+      if (k) {
+        key = k;
+        break;
+      }
+    }
+    if (key) map.set(em, key);
+  }
+  return map;
+}
+
+function shouldDismissForAprilStageTeamMismatch({
+  lookupCat,
+  emailToTeamKey,
+  stageTitle,
+  userEmail
+}) {
+  if (!lookupCat || !emailToTeamKey || !userEmail) return false;
+  const cat = lookupCat(stageTitle);
+  if (cat == null) return false;
+  const em = userRecordEmailNorm({ email: userEmail });
+  const userKey = emailToTeamKey.get(em);
+  if (userKey == null) return false;
+  return cat !== userKey;
+}
+
 function zohoTimelineAuditedRangeForStageHistory(modifiedFrom, modifiedTo) {
   const envFrom = process.env.ZOHO_TIMELINE_AUDITED_FROM?.trim();
   const envTo = process.env.ZOHO_TIMELINE_AUDITED_TO?.trim();
@@ -2135,7 +2570,7 @@ function zohoTimelineFieldIsStage(fieldHistoryEntry) {
   const n = String(fieldHistoryEntry?.api_name ?? fieldHistoryEntry?.field?.api_name ?? '')
     .trim()
     .toLowerCase();
-  return n === 'stage';
+  return n === 'stage' || n === 'deal_stage';
 }
 
 function zohoParseJsonObjectIfString(raw) {
@@ -2522,6 +2957,12 @@ async function cmdZohoStages(argv) {
     cobrancaFinanceiroUser &&
     (argv.includes('--zoho-cobranca-all-transitions') ||
       process.env.ZOHO_COBRANCA_ALL_TIMELINE_TRANSITIONS === '1');
+  const stageReplayAllTimeline =
+    !cobrancaFinanceiroUser &&
+    (argv.includes('--zoho-stage-replay-all-timeline') ||
+      process.env.ZOHO_STAGE_REPLAY_ALL_TIMELINE === '1');
+  const transitionAuditedBounds = parseTransitionAuditedBoundsFromArgv(argv);
+  const dealIdsCsvRel = argvFlagValue(argv, '--deal-ids-csv');
   const cobrancaGameUserResolveOpts = { strictFinanceiroOnly: cobrancaFinanceiroEmailStrict };
   const map = loadZohoCrmActionMap();
   const { from, to, kf, kt } = zohoModifiedTimeRange();
@@ -2533,9 +2974,38 @@ async function cmdZohoStages(argv) {
     : zohoDealsSearchCriteria(from, to, argv);
   const token = await zohoRefreshToken();
   const zohoUserEmailCache = new Map();
-  const allDealsFetched = await zohoFetchAllDealsSearchPages(criteria, token);
+  const dealRowCacheForCsv = new Map();
+  let allDealsFetched;
+  if (dealIdsCsvRel) {
+    const ids = readDealIdsFromDiffCsv(dealIdsCsvRel, {
+      onlyFoundNo: argv.includes('--deal-ids-csv-only-found-no')
+    });
+    console.log(
+      `${colors.cyan}--deal-ids-csv:${colors.reset} ${ids.length} deal_id(s) únicos a hidratar via GET Deals/{id}` +
+        (argv.includes('--deal-ids-csv-only-found-no') ? ' (só linhas found_in_game4u=no)' : '')
+    );
+    const fields =
+      String(cfg.zoho?.dealsSearch?.searchIncludeFields || '').trim() ||
+      'id,Layout,Pipeline,Stage,Deal_Name,Owner,Financeiro_Respons_vel,Respons_vel_Jur,Jur_dico_Respons_vel';
+    allDealsFetched = [];
+    for (let ii = 0; ii < ids.length; ii++) {
+      if (ii > 0) await sleep(55);
+      const row = await zohoGetDealRowCached(ids[ii], token, fields, dealRowCacheForCsv);
+      if (row && row.id != null) {
+        allDealsFetched.push(row);
+      } else {
+        console.warn(
+          `${colors.yellow}deal_id ${ids[ii]}: GET Deals não devolveu registo — omitido do lote.${colors.reset}`
+        );
+      }
+    }
+  } else {
+    allDealsFetched = await zohoFetchAllDealsSearchPages(criteria, token);
+  }
   if (!allDealsFetched.length) {
-    console.warn(`${colors.yellow}Nenhum deal no Deals/search (todas as páginas).${colors.reset}`);
+    console.warn(
+      `${colors.yellow}Nenhum deal (search ou --deal-ids-csv).${colors.reset}`
+    );
     return;
   }
   const maxDeals = zohoRunnerMaxDeals(argv);
@@ -2558,6 +3028,18 @@ async function cmdZohoStages(argv) {
         `created_at do DONE = audited_time da linha (sem search). delivery/complete só na última transição se aplicável.`
     );
   }
+  if (stageReplayAllTimeline) {
+    console.log(
+      `${colors.cyan}zoho-stages:${colors.reset} ${colors.green}--zoho-stage-replay-all-timeline${colors.reset} — ` +
+        `replay de **todas** as transições Stage no __timeline (ordem cronológica): DONE (old) + PENDING (new); ` +
+        `created_at do DONE = audited_time da linha (como Cobrança all-transitions).`
+    );
+  }
+  if (transitionAuditedBounds) {
+    console.log(
+      `${colors.cyan}Filtro transições:${colors.reset} só linhas com audited_time em ${transitionAuditedBounds.label} (${transitionAuditedBounds.from} .. ${transitionAuditedBounds.to})`
+    );
+  }
   if (pageDeals.length < allDealsFetched.length) {
     console.log(
       `${colors.cyan}Deals/search: ${allDealsFetched.length} no total; processando ${pageDeals.length} (--max-deals ou ZOHO_MAX_DEALS).${colors.reset}`
@@ -2573,14 +3055,67 @@ async function cmdZohoStages(argv) {
     process.env.ZOHO_TIMELINE_BARE === '1' ||
     process.env.ZOHO_TIMELINE_BARE === 'true';
 
-  const { from: timelineAuditedFrom, to: timelineAuditedTo } = bareTimeline
+  let { from: timelineAuditedFrom, to: timelineAuditedTo } = bareTimeline
     ? { from, to }
     : zohoTimelineAuditedRangeForStageHistory(from, to);
+  if (transitionAuditedBounds && !bareTimeline) {
+    const bfMs = Date.parse(transitionAuditedBounds.from);
+    const wfMs = Date.parse(timelineAuditedFrom);
+    /**
+     * Só antecipa o início ao 1º dia do mês filtrado quando o timeline calculado começa depois.
+     * Não reescrever datas com toISOString() — trocar +00:00 por .000Z no filters quebra o __timeline nesta org.
+     */
+    if (!Number.isNaN(bfMs) && !Number.isNaN(wfMs) && wfMs > bfMs) {
+      timelineAuditedFrom = transitionAuditedBounds.from;
+      console.log(
+        `${colors.dim}__timeline início antecipado ao 1º dia do mês filtrado (${timelineAuditedFrom}).${colors.reset}`
+      );
+    }
+  }
   if (!bareTimeline && (timelineAuditedFrom !== from || timelineAuditedTo !== to)) {
     console.log(
       `${colors.dim}__timeline audited_time: ${timelineAuditedFrom} .. ${timelineAuditedTo} ` +
         `(alargado vs Modified_Time do search para histórico Stage CS/Financeiro).${colors.reset}`
     );
+  }
+
+  /** Zoho: intervalo audited_time com fim no futuro costuma devolver __timeline vazio (ver dealTimelineStages no config). */
+  if (!bareTimeline) {
+    const nowCap = new Date().toISOString();
+    const tEnd = Date.parse(timelineAuditedTo);
+    const tNow = Date.parse(nowCap);
+    if (!Number.isNaN(tEnd) && !Number.isNaN(tNow) && tEnd > tNow) {
+      console.log(
+        `${colors.dim}__timeline audited fim capado ao instante atual (${nowCap}) — evita resposta vazia com data final futura.${colors.reset}`
+      );
+      timelineAuditedTo = nowCap;
+    }
+  }
+
+  /**
+   * Opcional: recuar só o início do GET __timeline (dias antes do 1º dia do mês em --zoho-transitions-only-month).
+   * Valores altos (ex. 90+) podem fazer a Zoho devolver __timeline vazio — use 0 para desligar ou 7–21.
+   */
+  if (transitionAuditedBounds && !bareTimeline) {
+    const slackRaw = process.env.ZOHO_TIMELINE_TRANSITION_FETCH_SLACK_DAYS?.trim();
+    const slackDays =
+      slackRaw === '' || slackRaw === undefined
+        ? 0
+        : Math.min(Math.max(parseInt(slackRaw, 10), 0), 45);
+    if (slackDays > 0) {
+      const bf = Date.parse(transitionAuditedBounds.from);
+      let wf = Date.parse(timelineAuditedFrom);
+      if (!Number.isNaN(bf) && !Number.isNaN(wf)) {
+        const backMs = bf - slackDays * 86400000;
+        const wfNew = Math.min(wf, backMs);
+        if (wfNew < wf) {
+          timelineAuditedFrom = new Date(wfNew).toISOString();
+          console.log(
+            `${colors.dim}__timeline início recuado ${slackDays}d antes de ${transitionAuditedBounds.from} (ZOHO_TIMELINE_TRANSITION_FETCH_SLACK_DAYS).${colors.reset}`
+          );
+        }
+      }
+    }
   }
 
   if (!noPost) await ensureToken();
@@ -2601,8 +3136,37 @@ async function cmdZohoStages(argv) {
     }
   }
 
+  let aprilStageTeamDismissActive = false;
+  let aprilStageLookupCat = null;
+  let aprilEmailToTeamKey = null;
+  if (
+    !noPost &&
+    zohoAprilTransitionTeamDismissEnabled(transitionAuditedBounds) &&
+    !argv.includes('--zoho-skip-april-stage-team-dismiss')
+  ) {
+    const tarefasRows = loadTarefasPorTimesRowsFromXlsx();
+    if (tarefasRows.length) {
+      aprilStageLookupCat = buildTarefasPorTimesStageCategoryLookup(tarefasRows);
+      try {
+        aprilEmailToTeamKey = await buildGame4uEmailToTeamKeyIndex();
+        aprilStageTeamDismissActive = true;
+        console.log(
+          `${colors.cyan}Abril — validação "Tarefas por times.xlsx" × equipa G4U:${colors.reset} ` +
+            `${tarefasRows.length} linha(s) na planilha; ${aprilEmailToTeamKey.size} e-mail(es) com team_id mapeado (teamsDefinition). ` +
+            `Stage casado na planilha com categoria **diferente** do time do jogador ⇒ POST com dismissed=true (DONE no OLD, PENDING no NEW). ` +
+            `${colors.dim}Desligar: --zoho-skip-april-stage-team-dismiss${colors.reset}`
+        );
+      } catch (e) {
+        console.warn(
+          `${colors.yellow}Abril planilha×time: falha ao carregar /team ou utilizadores: ${e?.message || e}${colors.reset}`
+        );
+      }
+    }
+  }
+
   let builtPayloads = 0;
   let postsOk = 0;
+  let postsDismissedApril = 0;
   let deliveryCompleteOk = 0;
   const totalDeals = pageDeals.length;
   const cobrancaFinanceiroEmailByDealId = new Map();
@@ -2640,11 +3204,20 @@ async function cmdZohoStages(argv) {
     );
 
     let hits;
-    if (cobrancaReplayAllTimeline) {
+    if (cobrancaReplayAllTimeline || stageReplayAllTimeline) {
       hits = timelineStageChangesToHitsAsc(j2).filter((h) => h.oldVal || h.newVal);
     } else {
       const h = pickLatestStageChangeFromTimeline(j2, deal);
       hits = h ? [h] : [];
+    }
+    if (transitionAuditedBounds) {
+      const before = hits.length;
+      hits = filterStageHitsByAuditedWindow(hits, transitionAuditedBounds);
+      if (before && !hits.length) {
+        console.warn(
+          `${colors.dim}deal ${deal.id}: ${before} transição(ões) Stage no __timeline, nenhuma com audited_time no intervalo filtrado — pulando.${colors.reset}`
+        );
+      }
     }
     if (!hits.length) {
       console.warn(
@@ -2684,7 +3257,7 @@ async function cmdZohoStages(argv) {
       const hit = hits[ti];
       const isLastHit = ti === hits.length - 1;
       const transition = normalizeZohoDealStageTransition(deal, map, hit, {
-        skipDealStageNewFallback: cobrancaReplayAllTimeline
+        skipDealStageNewFallback: cobrancaReplayAllTimeline || stageReplayAllTimeline
       });
       let {
         oldVal,
@@ -2699,7 +3272,7 @@ async function cmdZohoStages(argv) {
         usedDealStageFallback
       } = transition;
 
-      if (cobrancaReplayAllTimeline) {
+      if (cobrancaReplayAllTimeline || stageReplayAllTimeline) {
         wantCompleteDelivery = Boolean(isLastHit && stageNameCompletesDelivery(newVal));
       }
 
@@ -2760,7 +3333,7 @@ async function cmdZohoStages(argv) {
           let createdAtForDone = null;
           if (noPost) {
             createdAtForDone = auditedAt;
-          } else if (cobrancaReplayAllTimeline) {
+          } else if (cobrancaReplayAllTimeline || stageReplayAllTimeline) {
             createdAtForDone = auditedAt;
           } else {
             const searchRes = await game4uFetchUserActionsForDoneLookup(deal.id);
@@ -2787,6 +3360,19 @@ async function cmdZohoStages(argv) {
               `${colors.yellow}deal ${deal.id}:${repTag(ti)} DONE omitido — user_action PENDING/CANCELLED do estágio OLD não encontrada (action ${actionIdOld}; integration_id ${buildZohoStableIntegrationId(deal.id, actionIdOld)}; legado timeline-*). Aumente G4U_USER_ACTION_SEARCH_LIMIT ou G4U_USER_ACTION_SEARCH_MAX_PAGES; se a linha estiver dismissed, use G4U_USER_ACTION_DONE_LOOKUP_INCLUDE_DISMISSED=1.${colors.reset}`
             );
           } else {
+            const dismissAprilDone =
+              aprilStageTeamDismissActive &&
+              shouldDismissForAprilStageTeamMismatch({
+                lookupCat: aprilStageLookupCat,
+                emailToTeamKey: aprilEmailToTeamKey,
+                stageTitle: oldVal,
+                userEmail: emailOld
+              });
+            if (dismissAprilDone) {
+              console.log(
+                `${colors.dim}deal ${deal.id}:${repTag(ti)} DONE estágio OLD "${oldVal}" — categoria (planilha) ≠ time G4U do utilizador → dismissed=true.${colors.reset}`
+              );
+            }
             const doneBody = buildGameProcessPayloadZohoStageProcess({
               deal,
               actionId: actionIdOld,
@@ -2797,7 +3383,8 @@ async function cmdZohoStages(argv) {
               finishedAt: auditedAt,
               oldVal,
               newVal,
-              audited: auditedAt
+              audited: auditedAt,
+              dismissed: dismissAprilDone
             });
             dealBuilt++;
             log(
@@ -2820,6 +3407,7 @@ async function cmdZohoStages(argv) {
               if (isGameActionProcessResponseOk(prDone)) {
                 anyOkThisDeal = true;
                 postsOk++;
+                if (dismissAprilDone) postsDismissedApril++;
               }
               await sleep(80);
             }
@@ -2835,6 +3423,19 @@ async function cmdZohoStages(argv) {
           );
         } else {
           const stableNew = buildZohoStableIntegrationId(deal.id, actionIdNew);
+          const dismissAprilPending =
+            aprilStageTeamDismissActive &&
+            shouldDismissForAprilStageTeamMismatch({
+              lookupCat: aprilStageLookupCat,
+              emailToTeamKey: aprilEmailToTeamKey,
+              stageTitle: newVal,
+              userEmail: pendingAssigneeEmail
+            });
+          if (dismissAprilPending) {
+            console.log(
+              `${colors.dim}deal ${deal.id}:${repTag(ti)} PENDING estágio NEW "${newVal}" — categoria (planilha) ≠ time G4U → dismissed=true.${colors.reset}`
+            );
+          }
           const pendingBody = buildGameProcessPayloadZohoStageProcess({
             deal,
             actionId: actionIdNew,
@@ -2845,7 +3446,8 @@ async function cmdZohoStages(argv) {
             finishedAt: null,
             oldVal,
             newVal,
-            audited: auditedAt
+            audited: auditedAt,
+            dismissed: dismissAprilPending
           });
           dealBuilt++;
           log(
@@ -2868,6 +3470,7 @@ async function cmdZohoStages(argv) {
             if (isGameActionProcessResponseOk(prPen)) {
               anyOkThisDeal = true;
               postsOk++;
+              if (dismissAprilPending) postsDismissedApril++;
             }
             await sleep(80);
           }
@@ -2920,7 +3523,10 @@ async function cmdZohoStages(argv) {
     );
   } else {
     console.log(
-      `\nResumo Zoho→Game4U: ${postsOk} POST(s) /game/action/process OK, ${deliveryCompleteOk} delivery complete OK, ${builtPayloads} payload(s) montados (estimativa).`
+      `\nResumo Zoho→Game4U: ${postsOk} POST(s) /game/action/process OK, ${deliveryCompleteOk} delivery complete OK, ${builtPayloads} payload(s) montados (estimativa)` +
+        (postsDismissedApril > 0
+          ? `; ${postsDismissedApril} POST(s) OK com dismissed=true (abr.: planilha "Tarefas por times" × time G4U).`
+          : '.')
     );
     if (builtPayloads === 0) {
       console.warn(
@@ -2930,16 +3536,240 @@ async function cmdZohoStages(argv) {
   }
 }
 
+/**
+ * Diagnóstico sem POST: contagens alinhadas ao plano (skips Zoho + DONE jur vs /user-action/search).
+ * Flags: --zoho-tasks-debug-verbose (log por deal), --zoho-tasks-debug-skip-game-lookup (só Zoho, sem token Game4U).
+ */
+async function cmdZohoTasksDebugSummary(argv) {
+  const map = loadZohoCrmActionMap();
+  const verbose = argv.includes('--zoho-tasks-debug-verbose');
+  const skipGame = argv.includes('--zoho-tasks-debug-skip-game-lookup');
+  const preferOwner = isZohoTasksPreferTaskOwnerEmail(argv);
+
+  const { from, to, kf, kt, aprilYear } = zohoTasksResolveSearchRange(argv);
+  if (aprilYear != null) {
+    console.log(
+      `${colors.cyan}zoho-tasks: filtro abril ativo — Deals/search só Modified_Time ${from} .. ${to} (ano ${aprilYear}). ` +
+        `ZOHO_MODIFIED_* do .env é ignorado neste run.${colors.reset}`
+    );
+  }
+
+  const criteria = zohoDealsSearchCriteria(from, to, argv);
+  console.log(
+    `${colors.cyan}zoho-tasks-debug-summary: critério Deals/search (Modified_Time + pipeline se ativo).${colors.reset}\n` +
+      `  from=${from}\n  to=${to}\n  aprilYear=${aprilYear ?? '(não)'}\n  env keys (referência): ${kf}, ${kt}\n` +
+      `  skipGameLookup=${skipGame}  preferTaskOwnerEmail=${preferOwner}`
+  );
+
+  const token = await zohoRefreshToken();
+  const zohoUserEmailCache = new Map();
+  const zohoDealRowCacheForJur = new Map();
+  const allDealsFetched = await zohoFetchAllDealsSearchPages(criteria, token);
+  const maxDeals = zohoRunnerMaxDeals(argv);
+  const subset = allDealsFetched.slice(0, maxDeals);
+
+  const stats = {
+    deals_search_total: allDealsFetched.length,
+    deals_visited_max: subset.length,
+    skipped_no_jur: 0,
+    skipped_no_hits: 0,
+    skipped_no_email: 0,
+    deals_with_hits: 0,
+    hit_pending: 0,
+    hit_done: 0,
+    done_rows_pending_found: 0,
+    done_rows_missing_pending: 0,
+    done_would_backfill_with_task_created_at: 0,
+    samples_no_jur: [],
+    samples_no_hits: [],
+    samples_no_email: [],
+    samples_done_missing_pending: [],
+    spot_check_done_missing: []
+  };
+
+  let gameLookupOk = !skipGame;
+  if (gameLookupOk) {
+    try {
+      await ensureToken();
+    } catch (e) {
+      gameLookupOk = false;
+      console.warn(
+        `${colors.yellow}Login Game4U falhou — use --zoho-tasks-debug-skip-game-lookup ou defina G4U_ADMIN_EMAIL/PASSWORD. ${String(
+          e?.message || e
+        )}${colors.reset}`
+      );
+    }
+  }
+
+  const jurCfg = cfg.zoho?.jurActivitiesFromZoho || {};
+  const allowDoneFromTaskTime =
+    jurCfg.allowDoneUsingTaskCreatedAtWhenSearchMiss === true ||
+    process.env.G4U_ZOHO_JUR_DONE_USE_TASK_CREATED_AT === '1';
+
+  for (let i = 0; i < subset.length; i++) {
+    const deal = subset[i];
+    if (!deal?.id) continue;
+    if (i > 0) await sleep(120);
+
+    const jur = getZohoJuridicoResponsibleLookup(deal);
+    if (!zohoJuridicoResponsiblePresent(jur)) {
+      stats.skipped_no_jur++;
+      pushZohoDebugSample(stats.samples_no_jur, { deal_id: String(deal.id), deal_name: deal.Deal_Name });
+      if (verbose) {
+        console.warn(
+          `${colors.dim}deal ${deal.id}: sem Respons_vel_Jur / Jur_dico_Respons_vel — pulando.${colors.reset}`
+        );
+      }
+      continue;
+    }
+
+    const list = await zohoFetchAllActivitiesChronologicalForDeal(deal.id, token);
+    const hits = findLatestActivitiesPerJurActionTemplate(list, map);
+    if (!hits.length) {
+      stats.skipped_no_hits++;
+      pushZohoDebugSample(stats.samples_no_hits, { deal_id: String(deal.id), activities: list.length });
+      if (verbose) {
+        console.warn(
+          `${colors.dim}deal ${deal.id}: nenhuma atividade com texto de tagFlowTitleToActionTemplateId — pulando.${colors.reset}`
+        );
+      }
+      continue;
+    }
+
+    stats.deals_with_hits++;
+
+    for (const hit of hits) {
+      const taskStatusRaw = zohoActivityTaskStatus(hit.activity);
+      const g4uStatus = mapZohoTaskStatusToGame4uStatus(taskStatusRaw);
+      const stableIntId = buildZohoJurStableIntegrationId(deal.id, hit.actionId);
+
+      const email = await zohoResolveEmailForJurHit(
+        jur,
+        deal.id,
+        token,
+        zohoUserEmailCache,
+        zohoDealRowCacheForJur,
+        hit.activity,
+        preferOwner
+      );
+      if (!email) {
+        stats.skipped_no_email++;
+        pushZohoDebugSample(stats.samples_no_email, {
+          deal_id: String(deal.id),
+          action_id: hit.actionId
+        });
+        continue;
+      }
+
+      if (g4uStatus === 'PENDING') {
+        stats.hit_pending++;
+        continue;
+      }
+
+      stats.hit_done++;
+      if (!gameLookupOk) {
+        continue;
+      }
+      let createdAtUse = null;
+      const searchRes = await game4uFetchUserActionsForDoneLookup(deal.id);
+      await sleep(35);
+      if (searchRes.ok) {
+        const items = unwrapGame4uUserActionSearchItems(searchRes);
+        const row = findPendingUserActionToClose(items, deal.id, stableIntId, hit.actionId);
+        if (row?.created_at) createdAtUse = row.created_at;
+      }
+      if (createdAtUse) {
+        stats.done_rows_pending_found++;
+      } else if (allowDoneFromTaskTime) {
+        stats.done_would_backfill_with_task_created_at++;
+      } else {
+        stats.done_rows_missing_pending++;
+        pushZohoDebugSample(stats.samples_done_missing_pending, {
+          deal_id: String(deal.id),
+          action_id: hit.actionId,
+          integration_id: stableIntId,
+          subject: String(hit.activity.Subject ?? hit.activity.subject ?? '').slice(0, 120),
+          zoho_status: taskStatusRaw
+        });
+        if (stats.spot_check_done_missing.length < 5) {
+          stats.spot_check_done_missing.push({
+            deal_id: String(deal.id),
+            action_id: hit.actionId,
+            integration_id: stableIntId,
+            subject: String(hit.activity.Subject ?? hit.activity.subject ?? ''),
+            task_owner: hit.activity.Owner?.email || hit.activity.Owner?.name || null,
+            jur_resolved_email: email
+          });
+        }
+      }
+    }
+  }
+
+  const jf = join(ROOT, 'zoho-tasks-debug-summary.json');
+  try {
+    writeFileSync(jf, JSON.stringify(stats, null, 2), 'utf8');
+    console.log(`${colors.cyan}Resumo escrito em ${jf}${colors.reset}`);
+  } catch (e) {
+    console.warn(`${colors.yellow}Não foi possível gravar JSON: ${e}${colors.reset}`);
+  }
+
+  console.log('\n━━ zoho-tasks-debug-summary (objeto) ━━');
+  dump(stats, 20000);
+
+  console.log(
+    `\n${colors.cyan}Leitura rápida:${colors.reset}\n` +
+      `  deals no search: ${stats.deals_search_total} (visitados ${stats.deals_visited_max})\n` +
+      `  sem jur no deal: ${stats.skipped_no_jur}\n` +
+      `  sem hit de tag no mapa: ${stats.skipped_no_hits}\n` +
+      `  sem e-mail (jur/task): ${stats.skipped_no_email}\n` +
+      `  deals com ≥1 hit: ${stats.deals_with_hits}\n` +
+      `  hits PENDING (POST criaria/atualizaria aberto): ${stats.hit_pending}\n` +
+      `  hits DONE: ${stats.hit_done}\n` +
+      `    DONE com PENDING/CANCELLED no G4U (POST fecharia): ${stats.done_rows_pending_found}\n` +
+      `    DONE sem linha jur no search (POST omitido hoje): ${stats.done_rows_missing_pending}\n` +
+      `    DONE que o backfill por task created_at salvaria (flag já ativa): ${stats.done_would_backfill_with_task_created_at}\n`
+  );
+
+  if (stats.done_rows_missing_pending > 0 && !allowDoneFromTaskTime) {
+    console.log(
+      `${colors.yellow}Sugestão: muitos DONE sem PENDING prévio — ative temporariamente G4U_ZOHO_JUR_DONE_USE_TASK_CREATED_AT=1 ` +
+        `ou jurActivitiesFromZoho.allowDoneUsingTaskCreatedAtWhenSearchMiss no api-scripts.config.json (ver nota de risco no config).${colors.reset}`
+    );
+  }
+  if (preferOwner) {
+    console.log(
+      `${colors.dim}Task-owner e-mail já está ativo para o runner normal (--zoho-tasks-task-owner-email / G4U_ZOHO_JUR_TASK_USER_EMAIL=owner).${colors.reset}`
+    );
+  } else if (stats.hit_done + stats.hit_pending > 0) {
+    console.log(
+      `${colors.dim}Se o painel filtra pelo executor da task: experimente --zoho-tasks-task-owner-email ou env G4U_ZOHO_JUR_TASK_USER_EMAIL=owner.${colors.reset}`
+    );
+  }
+}
+
 async function cmdZohoTasks(argv) {
+  if (argv.includes('--zoho-tasks-debug-summary')) {
+    return cmdZohoTasksDebugSummary(argv);
+  }
+
   const noPost = argv.includes('--no-post-process');
   const postAllMapped = argv.includes('--post-all-mapped');
   const map = loadZohoCrmActionMap();
+  const preferTaskOwner = isZohoTasksPreferTaskOwnerEmail(argv);
 
-  const { from, to, kf, kt } = zohoModifiedTimeRange();
-  if (!from || !to) {
-    throw new Error(`Defina ${kf} e ${kt} (ou alias ZOHO_MOVIFIED_FROM / ZOHO_MOVIFIED_TO se usar o typo)`);
+  const { from, to, kf, kt, aprilYear } = zohoTasksResolveSearchRange(argv);
+  if (aprilYear != null) {
+    console.log(
+      `${colors.cyan}zoho-tasks: filtro abril ativo — Deals/search só Modified_Time ${from} .. ${to} (ano ${aprilYear}). ` +
+        `ZOHO_MODIFIED_* do .env é ignorado neste run. Desligue com G4U_ZOHO_TASKS_APRIL_DEALS=0 ou omita --zoho-tasks-april-deals.${colors.reset}`
+    );
   }
   const criteria = zohoDealsSearchCriteria(from, to, argv);
+  if (preferTaskOwner) {
+    console.log(
+      `${colors.dim}zoho-tasks: user_email = Owner da task quando resolvível (--zoho-tasks-task-owner-email / G4U_ZOHO_JUR_TASK_USER_EMAIL=owner).${colors.reset}`
+    );
+  }
   const token = await zohoRefreshToken();
   const zohoUserEmailCache = new Map();
   const zohoDealRowCacheForJur = new Map();
@@ -2988,133 +3818,144 @@ async function cmdZohoTasks(argv) {
       `${list.length} atividade(s) (todas as páginas)`,
       list.length <= 12 ? list : { total: list.length, preview: list.slice(0, 3) }
     );
-    const hit = findLatestActivityWithTagFlow(list, map);
-    if (!hit) {
+    const hits = findLatestActivitiesPerJurActionTemplate(list, map);
+    if (!hits.length) {
       console.warn(
         `${colors.dim}deal ${deal.id}: nenhuma atividade com texto de tagFlowTitleToActionTemplateId — pulando.${colors.reset}`
       );
       continue;
     }
 
-    const taskStatusRaw = zohoActivityTaskStatus(hit.activity);
-    const g4uStatus = mapZohoTaskStatusToGame4uStatus(taskStatusRaw);
-    const audited =
-      hit.activity.Modified_Time ||
-      hit.activity.modified_time ||
-      hit.activity.Created_Time ||
-      hit.activity.created_time ||
-      new Date().toISOString();
-    const stableIntId = buildZohoJurStableIntegrationId(deal.id, hit.actionId);
+    for (let hi = 0; hi < hits.length; hi++) {
+      const hit = hits[hi];
+      if (hi > 0) await sleep(80);
 
-    const email = await zohoResolveJuridicoResponsibleEmail(
-      jur,
-      deal.id,
-      token,
-      zohoUserEmailCache,
-      zohoDealRowCacheForJur,
-      hit.activity
-    );
-    if (!email) {
-      console.warn(
-        `${colors.yellow}deal ${deal.id}: jurídico sem e-mail resolvido — pulando POST.${colors.reset}`
+      const email = await zohoResolveEmailForJurHit(
+        jur,
+        deal.id,
+        token,
+        zohoUserEmailCache,
+        zohoDealRowCacheForJur,
+        hit.activity,
+        preferTaskOwner
       );
-      continue;
-    }
-
-    let createdAtUse =
-      hit.activity.Created_Time || hit.activity.created_time || audited;
-
-    if (g4uStatus === 'DONE') {
-      createdAtUse = null;
-      if (!noPost) {
-        const searchRes = await game4uFetchUserActionsForDoneLookup(deal.id);
-        log(
-          `GET user-action/search (deal ${deal.id}, jur DONE ${hit.actionId}; PENDING+CANCELLED)`,
-          `status ${searchRes.status}`,
-          searchRes.json
-        );
-        if (searchRes.ok) {
-          const items = unwrapGame4uUserActionSearchItems(searchRes);
-          const row = findPendingUserActionToClose(items, deal.id, stableIntId, hit.actionId);
-          if (row?.created_at) createdAtUse = row.created_at;
-        }
-      } else {
-        createdAtUse = audited;
-      }
-      const jurCfg = cfg.zoho?.jurActivitiesFromZoho || {};
-      const allowDoneFromTaskTime =
-        jurCfg.allowDoneUsingTaskCreatedAtWhenSearchMiss === true ||
-        process.env.G4U_ZOHO_JUR_DONE_USE_TASK_CREATED_AT === '1';
-      if (!createdAtUse && allowDoneFromTaskTime) {
-        createdAtUse =
-          hit.activity.Created_Time || hit.activity.created_time || audited;
+      if (!email) {
         console.warn(
-          `${colors.yellow}deal ${deal.id}: DONE jur usando created_at da task Zoho (sem PENDING no search; risco se o registo G4U existir com outro created_at).${colors.reset}`
+          `${colors.yellow}deal ${deal.id}: jurídico/task Owner sem e-mail resolvido — pulando hit ${hi + 1}/${hits.length}.${colors.reset}`
         );
-      }
-      if (!createdAtUse) {
-        console.warn(
-          `${colors.yellow}deal ${deal.id}: DONE jur omitido — user_action PENDING/CANCELLED não encontrada (integration_id esperado ${stableIntId}).${colors.reset}`
-        );
-        announceDone(i + 1, totalDeals, `Zoho Jur→G4U deal ${deal.id}`, false, lastHttpStatus, {
-          skipped: 'DONE sem created_at da API'
-        });
-        await maybePauseBetweenOps(argv);
         continue;
       }
-    }
 
-    const integrationComment = `Zoho CRM (Jurídico): "${hit.tagFlowKey}" — status "${taskStatusRaw}"`;
-    const body = buildGameProcessPayloadZohoStageProcess({
-      deal,
-      actionId: hit.actionId,
-      userEmail: email,
-      status: g4uStatus,
-      integrationId: stableIntId,
-      createdAt: createdAtUse,
-      finishedAt: g4uStatus === 'DONE' ? audited : null,
-      oldVal: hit.tagFlowKey,
-      newVal: taskStatusRaw,
-      audited,
-      integrationComment: g4uStatus === 'PENDING' ? integrationComment : undefined
-    });
+      const taskStatusRaw = zohoActivityTaskStatus(hit.activity);
+      const g4uStatus = mapZohoTaskStatusToGame4uStatus(taskStatusRaw);
+      const audited =
+        hit.activity.Modified_Time ||
+        hit.activity.modified_time ||
+        hit.activity.Created_Time ||
+        hit.activity.created_time ||
+        new Date().toISOString();
+      const stableIntId = buildZohoJurStableIntegrationId(deal.id, hit.actionId);
 
-    dealBuilt++;
-    builtPayloads += dealBuilt;
-    log(
-      `POST /game/action/process JUR ${g4uStatus} (deal ${deal.id}, ${i + 1}/${totalDeals})`,
-      `action_id=${hit.actionId}`,
-      body
-    );
+      let createdAtUse =
+        hit.activity.Created_Time || hit.activity.created_time || audited;
 
-    if (!noPost) {
-      const pr = await game4uActionProcessWithRestoreOnCancelledPending(
-        cfg.gameActionProcess.path,
-        cfg.gameActionProcess.method,
+      if (g4uStatus === 'DONE') {
+        createdAtUse = null;
+        if (!noPost) {
+          const searchRes = await game4uFetchUserActionsForDoneLookup(deal.id);
+          log(
+            `GET user-action/search (deal ${deal.id}, jur DONE ${hit.actionId}; PENDING+CANCELLED)`,
+            `status ${searchRes.status}`,
+            searchRes.json
+          );
+          if (searchRes.ok) {
+            const items = unwrapGame4uUserActionSearchItems(searchRes);
+            const row = findPendingUserActionToClose(items, deal.id, stableIntId, hit.actionId);
+            if (row?.created_at) createdAtUse = row.created_at;
+          }
+        } else {
+          createdAtUse = audited;
+        }
+        const jurCfg = cfg.zoho?.jurActivitiesFromZoho || {};
+        const allowDoneFromTaskTime =
+          jurCfg.allowDoneUsingTaskCreatedAtWhenSearchMiss === true ||
+          process.env.G4U_ZOHO_JUR_DONE_USE_TASK_CREATED_AT === '1';
+        if (!createdAtUse && allowDoneFromTaskTime) {
+          createdAtUse =
+            hit.activity.Created_Time || hit.activity.created_time || audited;
+          console.warn(
+            `${colors.yellow}deal ${deal.id}: DONE jur usando created_at da task Zoho (sem PENDING no search; risco se o registo G4U existir com outro created_at).${colors.reset}`
+          );
+        }
+        if (!createdAtUse) {
+          console.warn(
+            `${colors.yellow}deal ${deal.id}: DONE jur omitido — user_action PENDING/CANCELLED não encontrada (integration_id esperado ${stableIntId}).${colors.reset}`
+          );
+          announceDone(
+            i + 1,
+            totalDeals,
+            `Zoho Jur→G4U deal ${deal.id} [${hi + 1}/${hits.length}]`,
+            false,
+            lastHttpStatus,
+            { skipped: 'DONE sem created_at da API', action_id: hit.actionId }
+          );
+          await maybePauseBetweenOps(argv);
+          continue;
+        }
+      }
+
+      const integrationComment = `Zoho CRM (Jurídico): "${hit.tagFlowKey}" — status "${taskStatusRaw}"`;
+      const body = buildGameProcessPayloadZohoStageProcess({
+        deal,
+        actionId: hit.actionId,
+        userEmail: email,
+        status: g4uStatus,
+        integrationId: stableIntId,
+        createdAt: createdAtUse,
+        finishedAt: g4uStatus === 'DONE' ? audited : null,
+        oldVal: hit.tagFlowKey,
+        newVal: taskStatusRaw,
+        audited,
+        integrationComment: g4uStatus === 'PENDING' ? integrationComment : undefined
+      });
+
+      dealBuilt++;
+      builtPayloads++;
+      log(
+        `POST /game/action/process JUR ${g4uStatus} (deal ${deal.id}, ${i + 1}/${totalDeals}; hit ${hi + 1}/${hits.length})`,
+        `action_id=${hit.actionId}`,
         body
       );
-      lastHttpStatus = pr.status;
-      log(
-        `${cfg.gameActionProcess.method} ${cfg.gameActionProcess.path} JUR deal ${deal.id}`,
-        `status ${pr.status}`,
-        pr.json
-      );
-      if (isGameActionProcessResponseOk(pr)) {
-        anyOkThisDeal = true;
-        postsOk++;
-      }
-      await sleep(80);
-    }
 
-    announceDone(
-      i + 1,
-      totalDeals,
-      `Zoho Jur→G4U deal ${deal.id} (${g4uStatus})`,
-      noPost ? dealBuilt > 0 : anyOkThisDeal,
-      lastHttpStatus,
-      { dealBuilt, g4uStatus, integration_id: stableIntId }
-    );
-    await maybePauseBetweenOps(argv);
+      if (!noPost) {
+        const pr = await game4uActionProcessWithRestoreOnCancelledPending(
+          cfg.gameActionProcess.path,
+          cfg.gameActionProcess.method,
+          body
+        );
+        lastHttpStatus = pr.status;
+        log(
+          `${cfg.gameActionProcess.method} ${cfg.gameActionProcess.path} JUR deal ${deal.id}`,
+          `status ${pr.status}`,
+          pr.json
+        );
+        if (isGameActionProcessResponseOk(pr)) {
+          anyOkThisDeal = true;
+          postsOk++;
+        }
+        await sleep(80);
+      }
+
+      announceDone(
+        i + 1,
+        totalDeals,
+        `Zoho Jur→G4U deal ${deal.id} (${g4uStatus}) [hit ${hi + 1}/${hits.length}]`,
+        noPost ? dealBuilt > 0 : anyOkThisDeal,
+        lastHttpStatus,
+        { dealBuilt, g4uStatus, integration_id: stableIntId, action_id: hit.actionId }
+      );
+      await maybePauseBetweenOps(argv);
+    }
 
     if (anyOkThisDeal && !postAllMapped && !noPost) {
       console.log(
@@ -3669,6 +4510,15 @@ Comandos:
                                 CS/financeiro/Jur. __timeline alarga audited_time (histórico Stage) vs Modified_Time do search.
                                 Opções: --no-post-process --post-all-mapped --max-deals N (cap opcional)
                                 --zoho-timeline-bare --zoho-ignore-pipeline-filter
+                                --zoho-stage-replay-all-timeline (ou ZOHO_STAGE_REPLAY_ALL_TIMELINE=1) — todas as transições
+                                no __timeline em ordem: DONE(old)+PENDING(new); DONE com created_at=audited_time
+                                --zoho-transitions-only-month YYYY-MM — só transições com audited_time nesse mês (_value.old/new nessa linha)
+                                Com YYYY-04: lê regras-de-negocio-scrips/Tarefas por times.xlsx; se o Stage (OLD no DONE, NEW no PENDING)
+                                casar com a planilha e a categoria (CS/Jurídico/Financeiro) ≠ time do jogador no G4U, POST com dismissed=true.
+                                --zoho-skip-april-stage-team-dismiss — desliga essa validação mesmo em abril.
+                                --zoho-transition-audited-from ISO --zoho-transition-audited-to ISO (alternativa ao mês)
+                                --deal-ids-csv caminho.csv — GET Deals/{id} em vez do search (ex. diff Zoho×G4U)
+                                --deal-ids-csv-only-found-no — com CSV do diff, só deal_id onde found_in_game4u=no
                                 Env: ZOHO_* ZOHO_MODIFIED_* ZOHO_TIMELINE_EXTRA_DAYS_BACK (0=defeito; ex. 730) ZOHO_TIMELINE_AUDITED_FROM/TO
                                 G4U_ZOHO_CANCELLED_PENDING_RESTORE_MAX  ZOHO_DEALS_SEARCH_MAX_PAGES  ZOHO_TIMELINE_MAX_PAGES
                                 ZOHO_MAX_DEALS  G4U_ZOHO_*  ZOHO_DEALS_PIPELINE_FILTER
@@ -3679,8 +4529,15 @@ Comandos:
                                 Stage no __timeline (cronológico); DONE com created_at = audited_time (sem search).
                                 Env: ZOHO_COBRANCA_PIPELINE_NAME (opcional)
   zoho-tasks                    Mesmo Deals/search paginado; Activities_Chronological com page_token (todas páginas).
-                                Jur + tags; POST process; integration_id jur estável. --max-deals / ZOHO_MAX_DEALS
+                                Jur + tags: uma atividade mais recente por action template (tagFlowTitleToActionTemplateId);
+                                POST process; integration_id jur estável por template. --max-deals / ZOHO_MAX_DEALS
                                 limitam quantos deals processar após o search completo (omitir = todos).
+                                Filtro abril (só deals com Modified_Time em abril UTC): --zoho-tasks-april-deals
+                                e opcional --zoho-tasks-april-year YYYY (default ano UTC atual) ou env G4U_ZOHO_TASKS_APRIL_DEALS=1
+                                e G4U_ZOHO_TASKS_APRIL_YEAR (ignora ZOHO_MODIFIED_* nesse modo).
+                                --zoho-tasks-debug-summary: sem POST; contagens + zoho-tasks-debug-summary.json na raiz do repo;
+                                --zoho-tasks-debug-verbose; --zoho-tasks-debug-skip-game-lookup (só Zoho).
+                                --zoho-tasks-task-owner-email ou G4U_ZOHO_JUR_TASK_USER_EMAIL=owner: user_email = Owner da task (fallback jur).
                                 Env: ZOHO_ACTIVITIES_MAX_PAGES  (+ G4U_ZOHO_JUR_DONE_USE_TASK_CREATED_AT se precisar)
   zoho-pipeline-probe           Só Zoho: teste Layout.display_label (= / ≠ "Layout CS e Jurídico", sem Pipeline);
                                 histograma = união por allowedDisplayNames (evita limite ~2000 Zoho); Pipeline:equals; runner.

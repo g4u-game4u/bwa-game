@@ -64,6 +64,15 @@ export const environment = {
   },
 
   /**
+   * ID fixo do goal template para o KPI «Valor concedido» (logs em /goals/logs).
+   * Variáveis: RECEITA_CONCEDIDA_GOAL_TEMPLATE_ID ou receita_concedida_goal_template_id no `.env` (build).
+   */
+  receitaConcedidaGoalTemplateId:
+    process.env['RECEITA_CONCEDIDA_GOAL_TEMPLATE_ID'] ||
+    process.env['receita_concedida_goal_template_id'] ||
+    '',
+
+  /**
    * Supabase (projeto RevisaPrev). Com `ng serve`, o webpack injeta `process.env` a partir do `.env`.
    * Variáveis: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_SECRET.
    * Documentação relacionada ao produto: https://g4u-mvp-api.onrender.com/api#/

@@ -311,6 +311,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
           clearTimeout(loadingTimeout);
           this.playerStatus = status;
           this.isLoadingPlayer = false;
+          this.maybeInjectFinanceBillingKpiForPlayer(this.getPlayerId());
           this.cdr.markForCheck();
         },
         error: (error) => {
@@ -662,10 +663,8 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
 
           this.cdr.markForCheck();
 
-          // Add billing KPI for Finance team members
-          if (this.isFinanceTeamMember()) {
-            this.injectFinanceBillingKpi(playerId);
-          }
+          // Metas coletivas do financeiro: reavalia após KPIs (evita corrida com `loadPlayerDataFromGame4u`).
+          this.maybeInjectFinanceBillingKpiForPlayer(playerId);
         },
         error: (error) => {
           console.error('📊 Failed to load KPIs:', error);
@@ -684,6 +683,11 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   private isFinanceTeamMember(): boolean {
     const fid = GamificationDashboardComponent.FINANCE_TEAM_ID;
     const labelIsFinance = (s: string): boolean => s.trim().toLowerCase().includes('financeiro');
+
+    const tid = pickTeamIdFromUserProfile(this.sessaoProvider.usuario);
+    if (tid != null && String(tid).trim() === fid) {
+      return true;
+    }
 
     const u = this.sessaoProvider.usuario as Record<string, unknown> | null | undefined;
     if (u) {

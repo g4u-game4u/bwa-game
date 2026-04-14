@@ -11,7 +11,7 @@ João Pedro Tobias	joaopedro.tobias@revisaprev.com.br	dO325}l!	JURÍDICO	PLAYER
 Pamela Costa 	pamela.costa@revisaprev.com.br 	54aE(eF0	LÍDER CS 	LEADER
 Bianca Pereira 	bianca.pereira@revisaprev.com.br 	4M4b6}A<	CS 	PLAYER
 Pedro Oliveira 	pedro.oliveira@revisaprev.com.br 	P5f8^8rd	CS 	PLAYER
-Fernanda Arantes 	fernanda.arantes@revisaprev.com 	Rp$764Bv	CS 	PLAYER
+Fernanda Arantes 	fernanda.arantes@revisaprev.com.br 	Rp$764Bv	CS 	PLAYER
 Maria Alice Nunes 	maria.alice@revisaprev.com.br 	\330Y0r?	CS 	PLAYER
 Gabriel Lopes 	gabriel.lopes@revisaprev.com.br 	635(D1gZ	CS 	PLAYER
 Luiza Evangelista 	luiza.birck@revisaprev.com.br 	"899bOus	CS 	PLAYER

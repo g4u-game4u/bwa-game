@@ -26,7 +26,8 @@ import { FinanceiroOmieRecebiveisService } from '@services/financeiro-omie-receb
 import { GoalsReceitaBackendService } from '@services/goals-receita-backend.service';
 import {
   GameActionsUserRosterEntry,
-  UserActionDashboardService
+  UserActionDashboardService,
+  UserActionRow
 } from '@services/user-action-dashboard.service';
 import { TemporadaService } from '@services/temporada.service';
 import { TIPO_CONSULTA_COLABORADOR, TIPO_CONSULTA_TIME } from '../dashboard.component';
@@ -1016,38 +1017,108 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
               start: SEASON_GAME_ACTION_RANGE.start.toISOString(),
               end: SEASON_GAME_ACTION_RANGE.end.toISOString()
             };
-            const dash = await this.temporadaService.getDadosTemporadaDashboard(
+            const monthIso = {
+              start: dateRange.start.toISOString(),
+              end: dateRange.end.toISOString()
+            };
+            const dashSeason = await this.temporadaService.getDadosTemporadaDashboard(
               userEmail,
               TIPO_CONSULTA_COLABORADOR,
               seasonIso
             );
-            const bloq = Math.floor(Number(dash.blocked_points) || 0);
-            const desb = Math.floor(Number(dash.unblocked_points) || 0);
-            const totalPts = Math.floor(Number(dash.total_points) || bloq + desb);
+            const dashMonth = await this.temporadaService.getDadosTemporadaDashboard(
+              userEmail,
+              TIPO_CONSULTA_COLABORADOR,
+              monthIso
+            );
+            let bloq = Math.floor(Number(dashSeason.blocked_points) || 0);
+            let desb = Math.floor(Number(dashSeason.unblocked_points) || 0);
+            let totalPts = Math.floor(Number(dashSeason.total_points) || bloq + desb);
+
+            let seasonActions: UserActionRow[] = [];
+            try {
+              seasonActions = await firstValueFrom(
+                this.userActionDashboard
+                  .getActionsForPlayerDateRange(
+                    collaboratorId,
+                    SEASON_GAME_ACTION_RANGE.start,
+                    SEASON_GAME_ACTION_RANGE.end,
+                    this.collaborators
+                  )
+                  .pipe(takeUntil(this.destroy$))
+              );
+            } catch (e) {
+              console.warn('[TeamManagement] GET /game/actions (temporada) para carteira/mês:', e);
+            }
+            const walletFromActions = this.userActionDashboard.getSeasonPointWalletDoneDelivered(
+              seasonActions,
+              SEASON_GAME_ACTION_RANGE.start,
+              SEASON_GAME_ACTION_RANGE.end
+            );
+            if (bloq === 0 && desb === 0) {
+              bloq = walletFromActions.bloqueados;
+              desb = walletFromActions.desbloqueados;
+            } else {
+              bloq = Math.max(bloq, walletFromActions.bloqueados);
+              desb = Math.max(desb, walletFromActions.desbloqueados);
+            }
+            totalPts = Math.floor(bloq + desb);
+
+            const uaRange = await firstValueFrom(
+              this.userActionDashboard
+                .getActivityMetricsForPlayerInRange(
+                  collaboratorId,
+                  dateRange.start,
+                  dateRange.end,
+                  this.collaborators
+                )
+                .pipe(takeUntil(this.destroy$))
+            ).catch(() => ({
+              pendentes: 0,
+              emExecucao: 0,
+              finalizadas: 0,
+              pontos: 0
+            }));
+
+            const procRange = await firstValueFrom(
+              this.userActionDashboard
+                .getProcessMetricsForPlayerInRange(
+                  collaboratorId,
+                  dateRange.start,
+                  dateRange.end,
+                  this.collaborators
+                )
+                .pipe(takeUntil(this.destroy$))
+            ).catch(() => ({
+              pendentes: 0,
+              incompletas: 0,
+              finalizadas: 0
+            }));
+
             this.seasonPoints = {
               total: totalPts,
               bloqueados: bloq,
               desbloqueados: desb
             };
             this.progressMetrics = {
-              processosIncompletos: Math.floor(dash.incompleteDeliveries || 0),
-              atividadesFinalizadas: Math.floor(dash.completedTasks || 0),
-              processosFinalizados: Math.floor(dash.completedDeliveries || 0)
+              processosIncompletos: Math.floor(dashMonth.incompleteDeliveries || 0),
+              atividadesFinalizadas: Math.floor(uaRange.finalizadas),
+              processosFinalizados: Math.floor(procRange.finalizadas)
             };
             this.teamActivityMetrics = {
-              pendentes: Math.floor(dash.pendingTasks || 0),
-              emExecucao: Math.floor(dash.doingTasks ?? 0),
-              finalizadas: Math.floor(dash.completedTasks || 0),
-              pontos: totalPts
+              pendentes: Math.floor(dashMonth.pendingTasks || 0),
+              emExecucao: Math.floor(dashMonth.doingTasks ?? 0),
+              finalizadas: Math.floor(uaRange.finalizadas),
+              pontos: Math.max(0, uaRange.pontos)
             };
             this.teamProcessMetrics = {
-              pendentes: Math.floor(dash.pendingDeliveries || 0),
-              incompletas: Math.floor(dash.incompleteDeliveries || 0),
-              finalizadas: Math.floor(dash.completedDeliveries || 0)
+              pendentes: Math.floor(dashMonth.pendingDeliveries || 0),
+              incompletas: Math.floor(procRange.incompletas),
+              finalizadas: Math.floor(procRange.finalizadas)
             };
             this.teamTotalPoints = totalPts;
             this.teamAveragePoints = totalPts;
-            this.teamTotalTasks = Math.floor(dash.completedTasks || 0);
+            this.teamTotalTasks = Math.floor(uaRange.finalizadas);
             this.teamTotalBlockedPoints = bloq;
             this.updateFormattedSidebarData();
             this.refreshSeasonProgressSidebarCounts();
@@ -1185,10 +1256,17 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
             bloqueados: bloq,
             desbloqueados: desb
           };
+          // Tarefas/processos no mês vêm de `loadTeamActivityAndMacroData` (GET /game/actions); dash é temporada.
           this.progressMetrics = {
-            processosIncompletos: Math.floor(dash.incompleteDeliveries || 0),
-            atividadesFinalizadas: Math.floor(dash.completedTasks || 0),
-            processosFinalizados: Math.floor(dash.completedDeliveries || 0)
+            processosIncompletos: Math.floor(
+              this.teamProcessMetrics?.incompletas ?? dash.incompleteDeliveries ?? 0
+            ),
+            atividadesFinalizadas: Math.floor(
+              this.teamActivityMetrics?.finalizadas ?? dash.completedTasks ?? 0
+            ),
+            processosFinalizados: Math.floor(
+              this.teamProcessMetrics?.finalizadas ?? dash.completedDeliveries ?? 0
+            )
           };
           this.updateFormattedSidebarData();
           this.refreshSeasonProgressSidebarCounts();
@@ -2108,44 +2186,87 @@ private calculateCollaboratorTotals(memberData: Array<{
         console.warn('⚠️ No team members to aggregate data from');
         return;
       }
-      
-      const metrics = await firstValueFrom(
-        this.teamAggregateService.getTeamActivityMetrics(
-          this.selectedTeamId,
-          dateRange.start,
-          dateRange.end
-        ).pipe(takeUntil(this.destroy$))
-      ).catch((error) => {
-        console.error('Error loading team activity metrics:', error);
-        return { finalizadas: 0, pontos: 0, processosFinalizados: 0, processosIncompletos: 0 };
-      });
 
       const zeros: ActivityMetrics = { pendentes: 0, emExecucao: 0, finalizadas: 0, pontos: 0 };
+      const zeroProcess: ProcessMetrics = { pendentes: 0, incompletas: 0, finalizadas: 0 };
+
       let uaTeam: ActivityMetrics = { ...zeros };
+      let uaProcess: ProcessMetrics = { ...zeroProcess };
 
       if (FUNIFIER_HTTP_DISABLED && this.selectedTeamId) {
-        uaTeam = await firstValueFrom(
+        const combined = await firstValueFrom(
           this.userActionDashboard
-            .getActivityMetricsForTeam(this.selectedTeamId, this.selectedMonth)
+            .getTeamActivityAndProcessMetricsInRange(
+              this.selectedTeamId,
+              dateRange.start,
+              dateRange.end
+            )
             .pipe(takeUntil(this.destroy$))
         ).catch((error) => {
           console.error('Error loading team /game/team-actions metrics:', error);
-          return zeros;
+          return { activity: zeros, processo: zeroProcess };
         });
+        uaTeam = combined.activity;
+        uaProcess = combined.processo;
+
         if (
           this.teamMemberIds.length > 0 &&
           uaTeam.finalizadas === 0 &&
-          uaTeam.pontos === 0
+          uaTeam.pontos === 0 &&
+          uaProcess.finalizadas === 0 &&
+          uaProcess.incompletas === 0
         ) {
-          uaTeam = await firstValueFrom(
-            this.userActionDashboard
-              .sumTeamActivityInMonth(this.teamMemberIds, this.selectedMonth, this.collaborators)
-              .pipe(takeUntil(this.destroy$))
+          const actList = await firstValueFrom(
+            forkJoin(
+              this.teamMemberIds.map(id =>
+                this.userActionDashboard.getActivityMetricsForPlayerInRange(
+                  id,
+                  dateRange.start,
+                  dateRange.end,
+                  this.collaborators
+                )
+              )
+            ).pipe(takeUntil(this.destroy$))
           ).catch((error) => {
             console.error('Error loading team user-action metrics (por membro):', error);
-            return zeros;
+            return [] as ActivityMetrics[];
           });
+          if (actList.length > 0) {
+            uaTeam = actList.reduce(
+              (acc, m) => ({
+                pendentes: acc.pendentes + m.pendentes,
+                emExecucao: acc.emExecucao + m.emExecucao,
+                finalizadas: acc.finalizadas + m.finalizadas,
+                pontos: acc.pontos + m.pontos
+              }),
+              { ...zeros }
+            );
+          }
+
+          const procList = await firstValueFrom(
+            forkJoin(
+              this.teamMemberIds.map(id =>
+                this.userActionDashboard.getProcessMetricsForPlayerInRange(
+                  id,
+                  dateRange.start,
+                  dateRange.end,
+                  this.collaborators
+                )
+              )
+            ).pipe(takeUntil(this.destroy$))
+          ).catch(() => [] as ProcessMetrics[]);
+          if (procList.length > 0) {
+            uaProcess = procList.reduce(
+              (acc, p) => ({
+                pendentes: acc.pendentes + p.pendentes,
+                incompletas: acc.incompletas + p.incompletas,
+                finalizadas: acc.finalizadas + p.finalizadas
+              }),
+              { ...zeroProcess }
+            );
+          }
         }
+
         this.teamTotalPoints = uaTeam.pontos;
         this.teamAveragePoints =
           this.teamMemberIds.length > 0
@@ -2153,28 +2274,53 @@ private calculateCollaboratorTotals(memberData: Array<{
             : 0;
         this.teamTotalTasks = uaTeam.finalizadas;
         this.teamTotalBlockedPoints = 0;
-      } else if (this.teamMemberIds.length > 0) {
-        uaTeam = await firstValueFrom(
-          this.userActionDashboard
-            .sumTeamActivityInMonth(this.teamMemberIds, this.selectedMonth, this.collaborators)
+      } else {
+        const metrics = await firstValueFrom(
+          this.teamAggregateService
+            .getTeamActivityMetrics(this.selectedTeamId, dateRange.start, dateRange.end)
             .pipe(takeUntil(this.destroy$))
         ).catch((error) => {
-          console.error('Error loading team user-action metrics:', error);
-          return zeros;
+          console.error('Error loading team activity metrics:', error);
+          return { finalizadas: 0, pontos: 0, processosFinalizados: 0, processosIncompletos: 0 };
         });
+
+        if (this.teamMemberIds.length > 0) {
+          uaTeam = await firstValueFrom(
+            this.userActionDashboard
+              .sumTeamActivityInMonth(this.teamMemberIds, this.selectedMonth, this.collaborators)
+              .pipe(takeUntil(this.destroy$))
+          ).catch((error) => {
+            console.error('Error loading team user-action metrics:', error);
+            return zeros;
+          });
+        }
+
+        uaProcess = {
+          pendentes: 0,
+          incompletas: Math.max(0, metrics.processosIncompletos),
+          finalizadas: metrics.processosFinalizados
+        };
+
+        this.teamTotalPoints = uaTeam.pontos;
+        this.teamAveragePoints =
+          this.teamMemberIds.length > 0
+            ? Math.floor(uaTeam.pontos / this.teamMemberIds.length)
+            : 0;
+        this.teamTotalTasks = uaTeam.finalizadas;
+        this.teamTotalBlockedPoints = 0;
       }
-      
+
       this.teamActivityMetrics = {
         pendentes: 0,
         emExecucao: 0,
         finalizadas: uaTeam.finalizadas,
         pontos: uaTeam.pontos
       };
-      
+
       this.teamProcessMetrics = {
         pendentes: 0,
-        incompletas: Math.max(0, metrics.processosIncompletos),
-        finalizadas: metrics.processosFinalizados
+        incompletas: Math.max(0, uaProcess.incompletas),
+        finalizadas: uaProcess.finalizadas
       };
       this.cdr.markForCheck();
     } catch (error) {
@@ -3011,6 +3157,73 @@ private calculateCollaboratorTotals(memberData: Array<{
   }
 
   /**
+   * KPI circular «Valor concedido» (metas coletivas do time financeiro via /goals/logs ou Omie).
+   * Usado na vista do **time** e na vista de **um colaborador** (mesmos números).
+   */
+  private async appendFinanceValorConcedidoKpiIfFinance(target: KPIData[]): Promise<void> {
+    if (!this.isSelectedFinanceTeam()) {
+      return;
+    }
+    for (let i = target.length - 1; i >= 0; i--) {
+      if (target[i].id === 'valor-concedido') {
+        target.splice(i, 1);
+      }
+    }
+    try {
+      const billingGoal = await this.systemParamsService.getParam<number>(
+        'financeiro_monthly_billing_goal' as any
+      );
+      const paramTarget = typeof billingGoal === 'number' && billingGoal > 0 ? billingGoal : 0;
+
+      const goalsKpi = await this.goalsReceitaBackendService.tryGetReceitaConcedidaKpi(
+        this.selectedMonth
+      );
+
+      let safeCurrentBilling = 0;
+      let targetBilling = 0;
+      let kpiPercent = 0;
+
+      if (goalsKpi != null) {
+        safeCurrentBilling = goalsKpi.current;
+        targetBilling = goalsKpi.target > 0 ? goalsKpi.target : paramTarget;
+        kpiPercent =
+          targetBilling > 0
+            ? Math.min(100, Math.round((safeCurrentBilling / targetBilling) * 100))
+            : goalsKpi.percent;
+      } else {
+        const currentBilling = await firstValueFrom(
+          this.financeiroOmieRecebiveisService
+            .getValorConcedidoFinanceiro(this.selectedTeamId, this.selectedMonth)
+            .pipe(takeUntil(this.destroy$))
+        );
+        safeCurrentBilling =
+          typeof currentBilling === 'number' && isFinite(currentBilling) ? currentBilling : 0;
+        targetBilling = paramTarget;
+        kpiPercent =
+          targetBilling > 0 ? Math.round((safeCurrentBilling / targetBilling) * 100) : 0;
+      }
+
+      const superTargetBilling = targetBilling > 0 ? Math.ceil(targetBilling * 1.5) : undefined;
+
+      target.push({
+        id: 'valor-concedido',
+        label: 'Valor concedido',
+        current: safeCurrentBilling,
+        target: targetBilling,
+        superTarget: superTargetBilling,
+        unit: 'R$',
+        color:
+          targetBilling > 0 && superTargetBilling != null
+            ? this.getKPIColorByGoals(safeCurrentBilling, targetBilling, superTargetBilling)
+            : 'red',
+        percentage: Math.min(100, kpiPercent)
+      });
+    } catch (error) {
+      console.error('Error loading team collective billing KPI:', error);
+    }
+  }
+
+  /**
    * Load team KPIs
    * OPTIMIZED: Uses already-loaded teamCarteiraClientes for company count
    * and single aggregate query for delivery percentage
@@ -3033,7 +3246,9 @@ private calculateCollaboratorTotals(memberData: Array<{
           this.kpiService.getPlayerKPIs(kpiPlayerId, this.selectedMonth, this.actionLogService)
             .pipe(takeUntil(this.destroy$))
         );
-        this.teamKPIs = kpis || [];
+        const merged: KPIData[] = [...(kpis || []).filter(k => k.id !== 'valor-concedido')];
+        await this.appendFinanceValorConcedidoKpiIfFinance(merged);
+        this.teamKPIs = merged;
       } else {
         // OPTIMIZED: For team, use already-loaded data instead of N individual calls
         const teamKPIs: KPIData[] = [];
@@ -3181,63 +3396,9 @@ private calculateCollaboratorTotals(memberData: Array<{
           }
         }
 
-        // 3. Valor concedido (coletivo; apenas time do financeiro) — GET /goals/templates + /goals/logs?goal_template_id=…
-        if (this.isSelectedFinanceTeam()) {
-          try {
-            const billingGoal = await this.systemParamsService.getParam<number>(
-              'financeiro_monthly_billing_goal' as any
-            );
-            const paramTarget =
-              typeof billingGoal === 'number' && billingGoal > 0 ? billingGoal : 0;
+        // 3. Valor concedido (coletivo; time financeiro) — mesmo KPI na vista equipa ou colaborador
+        await this.appendFinanceValorConcedidoKpiIfFinance(teamKPIs);
 
-            const goalsKpi = await this.goalsReceitaBackendService.tryGetReceitaConcedidaKpi(
-              this.selectedMonth
-            );
-
-            let safeCurrentBilling = 0;
-            let targetBilling = 0;
-            let kpiPercent = 0;
-
-            if (goalsKpi != null) {
-              safeCurrentBilling = goalsKpi.current;
-              targetBilling = goalsKpi.target > 0 ? goalsKpi.target : paramTarget;
-              kpiPercent =
-                targetBilling > 0
-                  ? Math.min(100, Math.round((safeCurrentBilling / targetBilling) * 100))
-                  : goalsKpi.percent;
-            } else {
-              const currentBilling = await firstValueFrom(
-                this.financeiroOmieRecebiveisService
-                  .getValorConcedidoFinanceiro(this.selectedTeamId, this.selectedMonth)
-                  .pipe(takeUntil(this.destroy$))
-              );
-              safeCurrentBilling =
-                typeof currentBilling === 'number' && isFinite(currentBilling) ? currentBilling : 0;
-              targetBilling = paramTarget;
-              kpiPercent =
-                targetBilling > 0 ? Math.round((safeCurrentBilling / targetBilling) * 100) : 0;
-            }
-
-            const superTargetBilling = targetBilling > 0 ? Math.ceil(targetBilling * 1.5) : undefined;
-
-            teamKPIs.push({
-              id: 'valor-concedido',
-              label: 'Valor concedido',
-              current: safeCurrentBilling,
-              target: targetBilling,
-              superTarget: superTargetBilling,
-              unit: 'R$',
-              color:
-                targetBilling > 0 && superTargetBilling != null
-                  ? this.getKPIColorByGoals(safeCurrentBilling, targetBilling, superTargetBilling)
-                  : 'red',
-              percentage: Math.min(100, kpiPercent)
-            });
-          } catch (error) {
-            console.error('Error loading team collective billing KPI:', error);
-          }
-        }
-        
         this.teamKPIs = teamKPIs;
       }
       
@@ -3296,10 +3457,10 @@ private calculateCollaboratorTotals(memberData: Array<{
 
   /**
    * Cartão c4u-season-progress: tarefas e clientes via GET `/game/actions` (ou team-actions)
-   * com `start`/`end` na temporada fixa — independente do mês selecionado.
+   * no intervalo do **mês selecionado** (alinhado ao seletor e a {@link calculateDateRange}).
    */
   private refreshSeasonProgressSidebarCounts(): void {
-    const { start, end } = SEASON_GAME_ACTION_RANGE;
+    const { start, end } = this.calculateDateRange();
     const collab = this.selectedCollaborator;
     const teamId = this.selectedTeamId;
 
@@ -3390,6 +3551,8 @@ private calculateCollaboratorTotals(memberData: Array<{
         ? this.teamSeasonClienteCount
         : this.teamCarteiraClientes?.length || 0;
 
+    const progressRange = this.calculateDateRange();
+
     this.teamSeasonProgress = {
       metas: {
         current: metasAchieved,
@@ -3400,9 +3563,14 @@ private calculateCollaboratorTotals(memberData: Array<{
         this.teamSeasonTarefasFinalizadas != null
           ? this.teamSeasonTarefasFinalizadas
           : this.progressMetrics?.atividadesFinalizadas || 0,
-      seasonDates: this.seasonDates
+      seasonDates: {
+        start: progressRange.start,
+        end: progressRange.end
+      }
     };
     this.cdr.markForCheck();
+    // Após await (ex.: GET `/game/stats`), só `markForCheck` por vezes não redesenha a sidebar OnPush até haver outro evento.
+    this.cdr.detectChanges();
   }
 
   /**

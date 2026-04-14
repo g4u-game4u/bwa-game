@@ -127,3 +127,6 @@ coverage/
 
 # Cron job logs (scripts/cron)
 /scripts/cron/logs/
+
+# Zoho runner debug output
+/zoho-tasks-debug-summary.json

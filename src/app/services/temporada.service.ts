@@ -16,6 +16,123 @@ export class TemporadaService {
     private seasonDatesService: SeasonDatesService
   ) {}
 
+  /** Respostas G4U por vezes vêm em `data` / `payload` / `result`. */
+  private unwrapStatsPayload(raw: unknown): Record<string, unknown> {
+    if (!raw || typeof raw !== 'object') {
+      return {};
+    }
+    const o = raw as Record<string, unknown>;
+    const nested = o['data'] ?? o['payload'] ?? o['result'] ?? o['body'];
+    if (nested && typeof nested === 'object' && !Array.isArray(nested)) {
+      return nested as Record<string, unknown>;
+    }
+    return o;
+  }
+
+  private pickFiniteNumber(...candidates: unknown[]): number {
+    for (const v of candidates) {
+      if (v == null || v === '') {
+        continue;
+      }
+      const n = typeof v === 'number' ? v : Number(v);
+      if (Number.isFinite(n)) {
+        return n;
+      }
+    }
+    return 0;
+  }
+
+  /** Contagem em `action_stats.DONE` / `done` / objeto `{ count }`. */
+  private actionStatsBucketCount(
+    ast: Record<string, unknown> | undefined,
+    ...bucketNames: string[]
+  ): number {
+    if (!ast) {
+      return 0;
+    }
+    for (const name of bucketNames) {
+      for (const key of [name, String(name).toUpperCase(), String(name).toLowerCase()]) {
+        const v = ast[key];
+        if (typeof v === 'number' && Number.isFinite(v)) {
+          return v;
+        }
+        if (v && typeof v === 'object' && 'count' in (v as object)) {
+          const c = Number((v as { count?: unknown }).count);
+          if (Number.isFinite(c)) {
+            return c;
+          }
+        }
+      }
+    }
+    return 0;
+  }
+
+  private mapPayloadToTemporadaDashboard(r: Record<string, unknown>): TemporadaDashboard {
+    const ast = (r['action_stats'] ?? r['actionStats']) as Record<string, unknown> | undefined;
+    const del = (r['delivery_stats'] ?? r['deliveryStats']) as Record<string, unknown> | undefined;
+    const nivelRaw = r['nivel'] as Record<string, unknown> | undefined;
+
+    const blocked = this.pickFiniteNumber(
+      ast?.['total_blocked_points'],
+      ast?.['totalBlockedPoints'],
+      ast?.['locked_points'],
+      r['blocked_points'],
+      r['blockedPoints'],
+      r['total_blocked_points'],
+      r['locked_points'],
+      r['pontos_bloqueados'],
+      r['pontosBloqueados']
+    );
+    const unblocked = this.pickFiniteNumber(
+      ast?.['total_points'],
+      ast?.['totalPoints'],
+      ast?.['unlocked_points'],
+      r['unblocked_points'],
+      r['unblockedPoints'],
+      r['total_points'],
+      r['unlocked_points'],
+      r['pontos_desbloqueados'],
+      r['pontosDesbloqueados']
+    );
+
+    const pending = ast?.['PENDING'] as { count?: unknown } | undefined;
+    const doing = ast?.['DOING'] as { count?: unknown } | undefined;
+    const done = ast?.['DONE'] as { count?: unknown } | undefined;
+
+    const doneFromBuckets =
+      this.actionStatsBucketCount(ast, 'DONE', 'done') +
+      this.actionStatsBucketCount(ast, 'DELIVERED', 'delivered');
+
+    const completedTasks = Math.max(
+      this.pickFiniteNumber(done?.count),
+      this.pickFiniteNumber(
+        r['completed_tasks'],
+        r['completedTasks'],
+        r['tasks_completed'],
+        r['tasksCompleted']
+      ),
+      doneFromBuckets
+    );
+
+    return {
+      blocked_points: blocked,
+      unblocked_points: unblocked,
+      pendingTasks: this.pickFiniteNumber(pending?.count),
+      doingTasks: this.pickFiniteNumber(doing?.count),
+      completedTasks,
+      pendingDeliveries: this.pickFiniteNumber(del?.['PENDING'], r['pendingDeliveries']),
+      incompleteDeliveries: this.pickFiniteNumber(del?.['INCOMPLETE'], r['incompleteDeliveries']),
+      completedDeliveries: this.pickFiniteNumber(del?.['DELIVERED'], r['completedDeliveries']),
+      total_points: unblocked + blocked,
+      total_blocked_points: blocked,
+      total_actions: this.pickFiniteNumber(ast?.['total_actions'], r['total_actions']),
+      nivel: {
+        nivelAtual: this.pickFiniteNumber(nivelRaw?.['nivelAtual'], r['nivelAtual']),
+        nivelMax: this.pickFiniteNumber(nivelRaw?.['nivelMax'], r['nivelMax'])
+      }
+    };
+  }
+
   /**
    * GET `/game/stats?start&end&user=` (colaborador) ou `/game/team-stats?start&end&team=` (time).
    * `user` deve ser o e-mail do utilizador, tal como na API Game4U.
@@ -56,35 +173,8 @@ export class TemporadaService {
       }
 
       const response = await this.api.get<any>(url, { params });
-
-      /**
-       * Contrato típico G4U (definido no backend): `action_stats` agrega por estado
-       * (`PENDING`, `DOING`, `DONE`, …) em `count`; `total_points` / `total_blocked_points`
-       * costumam refletir apenas pontos de ações concluídas (aprovadas vs bloqueadas),
-       * não a soma de pontos de tarefas abertas. Se o teu serviço somar tudo, alinha-o no API.
-       */
-      const blocked =
-        response?.action_stats?.total_blocked_points ?? response?.blocked_points ?? 0;
-      const unblocked =
-        response?.action_stats?.total_points ?? response?.unblocked_points ?? 0;
-
-      return {
-        blocked_points: blocked,
-        unblocked_points: unblocked,
-        pendingTasks: response?.action_stats?.PENDING?.count || 0,
-        doingTasks: response?.action_stats?.DOING?.count || 0,
-        completedTasks: response?.action_stats?.DONE?.count || 0,
-        pendingDeliveries: response?.delivery_stats?.PENDING || 0,
-        incompleteDeliveries: response?.delivery_stats?.INCOMPLETE || 0,
-        completedDeliveries: response?.delivery_stats?.DELIVERED || 0,
-        total_points: unblocked + blocked,
-        total_blocked_points: blocked,
-        total_actions: response?.action_stats?.total_actions ?? 0,
-        nivel: {
-          nivelAtual: response?.nivel?.nivelAtual ?? 0,
-          nivelMax: response?.nivel?.nivelMax ?? 0
-        }
-      };
+      const r = this.unwrapStatsPayload(response);
+      return this.mapPayloadToTemporadaDashboard(r);
     } catch (error) {
       console.error('❌ TemporadaService: erro ao obter dados da temporada:', error);
       return this.getEmptyTemporadaDashboard();
