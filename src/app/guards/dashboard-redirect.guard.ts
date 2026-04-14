@@ -79,7 +79,11 @@ export class DashboardRedirectGuardService {
       // SUPERVISOR, GESTOR, DIRETOR, and ADMIN go to team management dashboard
       if (!isOnTeamManagement) {
         // Management user is not on team management, redirect
-        const navigationResult = await this.router.navigate(['/dashboard/team-management']);
+        const preserved =
+          route.queryParams && Object.keys(route.queryParams).length > 0
+            ? { queryParams: route.queryParams }
+            : {};
+        await this.router.navigate(['/dashboard/team-management'], preserved);
         return false;
       } else {
         // Management user is already on team management, allow access

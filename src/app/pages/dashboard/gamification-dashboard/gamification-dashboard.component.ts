@@ -156,15 +156,28 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
    * Get current player ID from query params, session, or use 'me' for Funifier API
    * 
    * Priority:
-   * 1. Query parameter 'playerId' (when viewing another player's dashboard)
-   * 2. Current user from session
-   * 3. 'me' as fallback
+   * 1. Query `playerId` (e-mail ou id interno) ou `playerEmail` quando `playerId` é UUID (gestores / links externos)
+   * 2. Utilizador da sessão
+   * 3. 'me' como último recurso
    */
   getPlayerId(): string {
-    // Check for playerId in query params (when viewing another player's dashboard)
-    const playerIdParam = this.route.snapshot.queryParams['playerId'];
+    const qp = this.route.snapshot.queryParams;
+    const playerIdParam = qp['playerId'];
+    const playerEmailParam = qp['playerEmail'];
+
     if (playerIdParam && typeof playerIdParam === 'string') {
-      return playerIdParam;
+      const trimmed = playerIdParam.trim();
+      if (looksLikeEmail(trimmed)) {
+        return trimmed;
+      }
+      if (
+        playerEmailParam &&
+        typeof playerEmailParam === 'string' &&
+        looksLikeEmail(playerEmailParam.trim())
+      ) {
+        return playerEmailParam.trim();
+      }
+      return trimmed;
     }
 
     const usuario = this.sessaoProvider.usuario;
@@ -196,8 +209,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     this.route.queryParams
       .pipe(takeUntil(this.destroy$))
       .subscribe(params => {
-        const playerId = params['playerId'];
-        if (playerId) {
+        if (params['playerId'] || params['playerEmail']) {
           this.loadDashboardData();
         }
       });

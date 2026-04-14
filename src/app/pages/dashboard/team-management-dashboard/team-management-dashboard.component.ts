@@ -915,10 +915,10 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
    */
   private async loadCollaboratorData(collaboratorId: string, dateRange: { start: Date; end: Date }): Promise<void> {
     try {
-      // Load collaborator-specific data in parallel
+      // Roster tem de existir antes da sidebar: ela resolve UUID→e-mail para `/game/stats` e GET `/game/actions`.
+      await this.loadCollaborators();
       await Promise.all([
         this.loadCollaboratorSidebarData(collaboratorId, dateRange),
-        this.loadCollaborators(), // Still load collaborators list
         this.loadCollaboratorGoalsData(collaboratorId, dateRange),
         this.loadCollaboratorProductivityData(collaboratorId, dateRange),
         this.loadMonthlyPointsBreakdown(collaboratorId)
@@ -953,6 +953,43 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
   }
 
   /**
+   * E-mail do colaborador para `/game/stats` e `?user=` em `/game/actions` (contrato = e-mail).
+   * Usa {@link collaborators} e {@link teamMembersData} para cobrir UUID Game4U e evitar corrida com `loadCollaborators`.
+   */
+  private resolveCollaboratorEmailForGame4u(collaboratorId: string): string {
+    const id = (collaboratorId || '').trim();
+    if (!id) {
+      return '';
+    }
+    if (looksLikeEmail(id)) {
+      return id;
+    }
+    const byRoster = this.collaborators.find(
+      c => c.userId === id || (c.email && c.email.trim() === id)
+    );
+    const fromList = byRoster?.email?.trim() || '';
+    if (fromList && looksLikeEmail(fromList)) {
+      return fromList;
+    }
+    for (const playerStatus of this.teamMembersData as any[]) {
+      if (!playerStatus) {
+        continue;
+      }
+      const mail = String(playerStatus.email ?? '').trim();
+      const idStr = String(playerStatus._id ?? '').trim();
+      const game4u = String(playerStatus.game4uUserId ?? '').trim();
+      const emailRow =
+        (looksLikeEmail(mail) ? mail : '') || (looksLikeEmail(idStr) ? idStr : '');
+      if (game4u === id || idStr === id) {
+        if (emailRow) {
+          return emailRow;
+        }
+      }
+    }
+    return '';
+  }
+
+  /**
    * Load sidebar data for a specific collaborator
    * 
    * @private
@@ -968,12 +1005,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       this.sidebarErrorMessage = '';
 
       if (FUNIFIER_HTTP_DISABLED) {
-        const fromRow = this.collaborators.find(c => c.userId === collaboratorId)?.email?.trim() || '';
-        const userEmail = looksLikeEmail(fromRow)
-          ? fromRow
-          : looksLikeEmail(collaboratorId)
-            ? collaboratorId.trim()
-            : '';
+        const userEmail = this.resolveCollaboratorEmailForGame4u(collaboratorId);
         if (!userEmail) {
           console.warn('⚠️ Colaborador sem e-mail para /game/stats:', collaboratorId);
           this.hasSidebarError = true;
