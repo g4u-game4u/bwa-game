@@ -106,9 +106,9 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
   selectedMonth: Date = new Date(2026, 3, 1);
   activeTab: 'goals' | 'productivity' = 'goals';
   /**
-   * Aba "Análise de produtividade" desativada (toast ao hover). Nos testes, usar `false` para exercitar a aba.
+   * Quando `true`, o separador de produtividade fica desativado (toast ao hover). Nos testes pode forçar-se `true`.
    */
-  productivityAnalysisInMaintenance = true;
+  productivityAnalysisInMaintenance = false;
 
   private lastProductivityMaintenanceToastAt = 0;
 
@@ -2791,6 +2791,8 @@ private calculateCollaboratorTotals(memberData: Array<{
     this.activeTab = tab;
     if (tab === 'goals') {
       void this.loadTeamKPIs();
+    } else if (tab === 'productivity' && !this.selectedCollaborator) {
+      void this.loadProductivityData(this.calculateDateRange());
     }
   }
 

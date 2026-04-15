@@ -716,6 +716,51 @@ export class UserActionDashboardService {
     return result;
   }
 
+  /**
+   * Por dia (calendário local) e por e-mail do executor: contagem de tarefas finalizadas e soma de pontos,
+   * alinhado a {@link getActivityMetricsFromActionsInRange} (data de referência + {@link isFinalizedStatus}).
+   * Usado na aba «Análise de produtividade» com GET `/game/team-actions`.
+   */
+  buildDailyFinalizedActivityAndPointsByUserEmail(
+    items: UserActionRow[],
+    rangeStart: Date,
+    rangeEnd: Date
+  ): Map<string, Map<string, { activities: number; points: number }>> {
+    const out = new Map<string, Map<string, { activities: number; points: number }>>();
+    const rows = this.filterDateRange(items, rangeStart, rangeEnd).filter(r =>
+      this.isFinalizedStatus(r)
+    );
+    for (const r of rows) {
+      const email = (r.user_email || '').trim().toLowerCase();
+      if (!email) {
+        continue;
+      }
+      const ts = this.referenceTimestamp(r);
+      if (ts <= 0) {
+        continue;
+      }
+      const dateStr = this.localCalendarDateKey(ts);
+      let byDay = out.get(email);
+      if (!byDay) {
+        byDay = new Map();
+        out.set(email, byDay);
+      }
+      const cur = byDay.get(dateStr) || { activities: 0, points: 0 };
+      cur.activities += 1;
+      cur.points += this.rowPoints(r);
+      byDay.set(dateStr, cur);
+    }
+    return out;
+  }
+
+  private localCalendarDateKey(ms: number): string {
+    const d = new Date(ms);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  }
+
   getActivityMetricsFromActionsInRange(
     items: UserActionRow[],
     rangeStart: Date,

@@ -182,6 +182,17 @@
       "Liquidado",
       "Processo Deferido (Parceiro)"
     ],
+    "deliveryCancelRestoreFromLostStages": {
+      "description": "Runner zoho-delivery-cancel-restore: no __timeline, cancel quando _value.new é estágio perdido; restore quando _value.old é perdido e _value.new está permitido.",
+      "cancelWhenNewStageNames": [
+        "Fechado e Perdido",
+        "Sem Negociação Pagto (Inad/Perda)"
+      ],
+      "restoreWhenNewStageNamesSource": "stageMapKeys",
+      "restoreWhenNewStageNames": [],
+      "restoreWhenNewStageNamesExtra": [],
+      "restoreWhenNewStageNamesSourceNote": "stageMapKeys = chaves de stageTitleToActionTemplateId em zoho-crm-action-map.json; explicit = só restoreWhenNewStageNames + extra + env G4U_ZOHO_DELIVERY_RESTORE_ALLOWED_NEW_STAGES."
+    },
     "jurActivitiesFromZoho": {
       "allowDoneUsingTaskCreatedAtWhenSearchMiss": false,
       "allowDoneUsingTaskCreatedAtWhenSearchMissNote": "Se true (ou env G4U_ZOHO_JUR_DONE_USE_TASK_CREATED_AT=1), DONE jur envia created_at da task Zoho quando /user-action/search não achar PENDING — útil para sincronizar tarefas já concluídas no CRM; use com cuidado.",

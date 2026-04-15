@@ -13,6 +13,7 @@
  *   node regras-de-negocio-scrips/run-api-scripts.mjs zoho-pipeline-probe
  *   node regras-de-negocio-scrips/run-api-scripts.mjs probe-game-action-process
  *   node regras-de-negocio-scrips/run-api-scripts.mjs game4u-cs-tarefas-planilha --dry-run
+ *   node regras-de-negocio-scrips/run-api-scripts.mjs zoho-delivery-cancel-restore --dry-run
  *
  * Env (.env na raiz):
  *   G4U_API_BASE (opcional, default do config)
@@ -364,6 +365,11 @@ async function game4uPostDeliveryRestore(deliveryId, userEmail) {
   }
   const path = `/game/delivery/${encodeURIComponent(String(deliveryId))}/restore`;
   return game4uFetch(path, { method: 'POST', body: { user_email: em } });
+}
+
+async function game4uPostDeliveryCancel(deliveryId) {
+  const path = `/game/delivery/${encodeURIComponent(String(deliveryId))}/cancel`;
+  return game4uFetch(path, { method: 'POST', body: {} });
 }
 
 /**
@@ -3088,6 +3094,73 @@ function zohoNormStageLabelForMatch(s) {
   return normalizeZohoPicklistLabel(zohoPicklistDisplayString(s));
 }
 
+function parseCommaSeparatedStageLabels(raw) {
+  if (raw == null || !String(raw).trim()) return [];
+  return String(raw)
+    .split(',')
+    .map((x) => x.trim())
+    .filter(Boolean);
+}
+
+/** Estágios Zoho (_value.new) que disparam POST /game/delivery/{id}/cancel (normalizados NFC). */
+function getZohoDeliveryLostCancelNewStageNormSet() {
+  const block = cfg.zoho?.deliveryCancelRestoreFromLostStages;
+  let labels = [];
+  if (Array.isArray(block?.cancelWhenNewStageNames) && block.cancelWhenNewStageNames.length) {
+    labels = block.cancelWhenNewStageNames;
+  } else {
+    const fromEnv = parseCommaSeparatedStageLabels(process.env.G4U_ZOHO_DELIVERY_CANCEL_NEW_STAGES);
+    labels =
+      fromEnv.length > 0
+        ? fromEnv
+        : ['Fechado e Perdido', 'Sem Negociação Pagto (Inad/Perda)'];
+  }
+  const set = new Set();
+  for (const lab of labels) {
+    const n = zohoNormStageLabelForMatch(lab);
+    if (n) set.add(n);
+  }
+  return set;
+}
+
+/**
+ * Estágios permitidos em _value.new para POST /game/delivery/{id}/restore quando _value.old é "perdido".
+ * Default: chaves de stageTitleToActionTemplateId (zoho-crm-action-map.json) + extra (config/env), excluindo os de cancel.
+ */
+function buildZohoDeliveryRestoreAllowedNewNormSet(map, lostNormSet) {
+  const block = cfg.zoho?.deliveryCancelRestoreFromLostStages;
+  const source = String(block?.restoreWhenNewStageNamesSource || 'stageMapKeys').toLowerCase();
+  const set = new Set();
+  if (source === 'explicit' && Array.isArray(block?.restoreWhenNewStageNames) && block.restoreWhenNewStageNames.length) {
+    for (const lab of block.restoreWhenNewStageNames) {
+      const n = zohoNormStageLabelForMatch(lab);
+      if (n) set.add(n);
+    }
+  } else {
+    for (const k of Object.keys(map?.stageTitleToActionTemplateId || {})) {
+      const n = zohoNormStageLabelForMatch(k);
+      if (n) set.add(n);
+    }
+  }
+  const cfgExtra = block?.restoreWhenNewStageNamesExtra;
+  const extras = [
+    ...(Array.isArray(cfgExtra) ? cfgExtra : []),
+    ...parseCommaSeparatedStageLabels(process.env.G4U_ZOHO_DELIVERY_RESTORE_ALLOWED_NEW_STAGES)
+  ];
+  for (const lab of extras) {
+    const n = zohoNormStageLabelForMatch(lab);
+    if (n) set.add(n);
+  }
+  for (const ln of lostNormSet) set.delete(ln);
+  return set;
+}
+
+function resolveZohoDealOwnerOrFallbackEmail(deal) {
+  const em = zohoUserLookupEmail(deal?.Owner);
+  if (em) return em;
+  return process.env.G4U_ZOHO_FALLBACK_USER_EMAIL?.trim() || '';
+}
+
 /**
  * Última transição Stage relevante para o deal atual:
  * - Ordena por audited_time (mais recente primeiro), depois timelineIndex (linhas mais à frente no merge).
@@ -4915,6 +4988,235 @@ async function cmdZohoPipelineProbe(argv = []) {
   );
 }
 
+/**
+ * Zoho __timeline: todas as transições de Stage (replay cronológico).
+ * - _value.new ∈ estágios "perdido" → POST /game/delivery/{dealId}/cancel
+ * - _value.old ∈ "perdido" e _value.new ∈ estágios permitidos (map + extra) → POST /game/delivery/{dealId}/restore
+ */
+async function cmdZohoDeliveryCancelRestore(argv) {
+  const dryRun = argv.includes('--dry-run');
+  const transitionAuditedBounds = parseTransitionAuditedBoundsFromArgv(argv);
+  const dealIdsCsvRel = argvFlagValue(argv, '--deal-ids-csv');
+  const map = loadZohoCrmActionMap();
+  const lostNormSet = getZohoDeliveryLostCancelNewStageNormSet();
+  const allowedRestoreNormSet = buildZohoDeliveryRestoreAllowedNewNormSet(map, lostNormSet);
+  const { from, to, kf, kt } = zohoModifiedTimeRange();
+  if (!from || !to) {
+    throw new Error(`Defina ${kf} e ${kt} (ou alias ZOHO_MOVIFIED_FROM / ZOHO_MOVIFIED_TO se usar o typo)`);
+  }
+  const criteria = zohoDealsSearchCriteria(from, to, argv);
+  const token = await zohoRefreshToken();
+  const dealRowCacheForCsv = new Map();
+  let allDealsFetched;
+  if (dealIdsCsvRel) {
+    const ids = readDealIdsFromDiffCsv(dealIdsCsvRel, {
+      onlyFoundNo: argv.includes('--deal-ids-csv-only-found-no')
+    });
+    console.log(
+      `${colors.cyan}--deal-ids-csv:${colors.reset} ${ids.length} deal_id(s) únicos a hidratar via GET Deals/{id}` +
+        (argv.includes('--deal-ids-csv-only-found-no') ? ' (só linhas found_in_game4u=no)' : '')
+    );
+    const fields =
+      String(cfg.zoho?.dealsSearch?.searchIncludeFields || '').trim() ||
+      'id,Layout,Pipeline,Stage,Deal_Name,Owner,Financeiro_Respons_vel,Respons_vel_Jur,Jur_dico_Respons_vel';
+    allDealsFetched = [];
+    for (let ii = 0; ii < ids.length; ii++) {
+      if (ii > 0) await sleep(55);
+      const row = await zohoGetDealRowCached(ids[ii], token, fields, dealRowCacheForCsv);
+      if (row && row.id != null) {
+        allDealsFetched.push(row);
+      } else {
+        console.warn(
+          `${colors.yellow}deal_id ${ids[ii]}: GET Deals não devolveu registo — omitido do lote.${colors.reset}`
+        );
+      }
+    }
+  } else {
+    allDealsFetched = await zohoFetchAllDealsSearchPages(criteria, token);
+  }
+  if (!allDealsFetched.length) {
+    console.warn(`${colors.yellow}Nenhum deal (search ou --deal-ids-csv).${colors.reset}`);
+    return;
+  }
+  const maxDeals = zohoRunnerMaxDeals(argv);
+  const pageDeals = allDealsFetched.slice(0, maxDeals);
+
+  console.log(
+    `${colors.cyan}zoho-delivery-cancel-restore:${colors.reset} new→cancel (perdido): ` +
+      `${[...lostNormSet].join(' | ')}; restore: old perdido + new permitido (${allowedRestoreNormSet.size} rótulo(s) normalizado(s)).`
+  );
+  if (transitionAuditedBounds) {
+    console.log(
+      `${colors.cyan}Filtro transições:${colors.reset} só linhas com audited_time em ${transitionAuditedBounds.label} (${transitionAuditedBounds.from} .. ${transitionAuditedBounds.to})`
+    );
+  }
+  if (pageDeals.length < allDealsFetched.length) {
+    console.log(
+      `${colors.cyan}Deals:${colors.reset} ${allDealsFetched.length} no total; processando ${pageDeals.length} (--max-deals ou ZOHO_MAX_DEALS).`
+    );
+  }
+
+  const bareTimeline =
+    argv.includes('--zoho-timeline-bare') ||
+    process.env.ZOHO_TIMELINE_BARE === '1' ||
+    process.env.ZOHO_TIMELINE_BARE === 'true';
+
+  let { from: timelineAuditedFrom, to: timelineAuditedTo } = bareTimeline
+    ? { from, to }
+    : zohoTimelineAuditedRangeForStageHistory(from, to);
+  if (transitionAuditedBounds && !bareTimeline) {
+    const bfMs = Date.parse(transitionAuditedBounds.from);
+    const wfMs = Date.parse(timelineAuditedFrom);
+    if (!Number.isNaN(bfMs) && !Number.isNaN(wfMs) && wfMs > bfMs) {
+      timelineAuditedFrom = transitionAuditedBounds.from;
+      console.log(
+        `${colors.dim}__timeline início antecipado ao 1º dia do mês filtrado (${timelineAuditedFrom}).${colors.reset}`
+      );
+    }
+  }
+  if (!bareTimeline && (timelineAuditedFrom !== from || timelineAuditedTo !== to)) {
+    console.log(
+      `${colors.dim}__timeline audited_time: ${timelineAuditedFrom} .. ${timelineAuditedTo} (alargado vs Modified_Time).${colors.reset}`
+    );
+  }
+
+  if (!bareTimeline) {
+    const nowCap = new Date().toISOString();
+    const tEnd = Date.parse(timelineAuditedTo);
+    const tNow = Date.parse(nowCap);
+    if (!Number.isNaN(tEnd) && !Number.isNaN(tNow) && tEnd > tNow) {
+      console.log(
+        `${colors.dim}__timeline audited fim capado ao instante atual (${nowCap}).${colors.reset}`
+      );
+      timelineAuditedTo = nowCap;
+    }
+  }
+
+  if (transitionAuditedBounds && !bareTimeline) {
+    const slackRaw = process.env.ZOHO_TIMELINE_TRANSITION_FETCH_SLACK_DAYS?.trim();
+    const slackDays =
+      slackRaw === '' || slackRaw === undefined ? 0 : Math.min(Math.max(parseInt(slackRaw, 10), 0), 45);
+    if (slackDays > 0) {
+      const bf = Date.parse(transitionAuditedBounds.from);
+      let wf = Date.parse(timelineAuditedFrom);
+      if (!Number.isNaN(bf) && !Number.isNaN(wf)) {
+        const backMs = bf - slackDays * 86400000;
+        const wfNew = Math.min(wf, backMs);
+        if (wfNew < wf) {
+          timelineAuditedFrom = new Date(wfNew).toISOString();
+          console.log(
+            `${colors.dim}__timeline início recuado ${slackDays}d (ZOHO_TIMELINE_TRANSITION_FETCH_SLACK_DAYS).${colors.reset}`
+          );
+        }
+      }
+    }
+  }
+
+  if (!dryRun) await ensureToken();
+
+  let cancelOk = 0;
+  let cancelFail = 0;
+  let cancelDry = 0;
+  let restoreOk = 0;
+  let restoreFail = 0;
+  let restoreDry = 0;
+  let restoreSkipNoEmail = 0;
+
+  const totalDeals = pageDeals.length;
+  for (let i = 0; i < pageDeals.length; i++) {
+    const deal = pageDeals[i];
+    if (!deal?.id) continue;
+    if (i > 0) await sleep(120);
+
+    const j2 = await zohoFetchMergedDealTimeline(
+      deal.id,
+      timelineAuditedFrom,
+      timelineAuditedTo,
+      token,
+      bareTimeline
+    );
+    let hits = timelineStageChangesToHitsAsc(j2).filter((h) => h.oldVal || h.newVal);
+    if (transitionAuditedBounds) {
+      hits = filterStageHitsByAuditedWindow(hits, transitionAuditedBounds);
+    }
+    if (!hits.length) {
+      continue;
+    }
+
+    const ownerEmail = resolveZohoDealOwnerOrFallbackEmail(deal);
+
+    for (let hi = 0; hi < hits.length; hi++) {
+      const hit = hits[hi];
+      const nNew = hit.newVal || '';
+      const nOld = hit.oldVal || '';
+      const audited = String(hit.row?.audited_time ?? hit.row?.Audited_Time ?? '');
+
+      const wantCancel = Boolean(nNew && lostNormSet.has(nNew));
+      let wantRestore = Boolean(nOld && lostNormSet.has(nOld) && nNew && allowedRestoreNormSet.has(nNew));
+      if (wantCancel && wantRestore) {
+        wantRestore = false;
+      }
+
+      if (!wantCancel && !wantRestore) continue;
+
+      const deliveryId = String(deal.id);
+      const tag = `deal ${deliveryId} audited=${audited} old="${nOld}" new="${nNew}"`;
+
+      if (wantCancel) {
+        if (dryRun) {
+          cancelDry++;
+          console.log(`${colors.dim}[dry-run]${colors.reset} POST /game/delivery/.../cancel ${tag}`);
+        } else {
+          await sleep(80);
+          const pr = await game4uPostDeliveryCancel(deliveryId);
+          if (pr.ok) {
+            cancelOk++;
+            console.log(`${colors.green}cancel ok${colors.reset} ${tag}`);
+          } else {
+            cancelFail++;
+            console.warn(
+              `${colors.yellow}cancel ${pr.status}${colors.reset} ${tag} — ${JSON.stringify(pr.json || pr.raw).slice(0, 400)}`
+            );
+          }
+        }
+      }
+      if (wantRestore) {
+        if (!ownerEmail) {
+          restoreSkipNoEmail++;
+          console.warn(
+            `${colors.yellow}restore omitido (sem Owner.email nem G4U_ZOHO_FALLBACK_USER_EMAIL):${colors.reset} ${tag}`
+          );
+          continue;
+        }
+        if (dryRun) {
+          restoreDry++;
+          console.log(
+            `${colors.dim}[dry-run]${colors.reset} POST /game/delivery/.../restore user=${ownerEmail} ${tag}`
+          );
+        } else {
+          await sleep(80);
+          const pr = await game4uPostDeliveryRestore(deliveryId, ownerEmail);
+          if (pr.ok) {
+            restoreOk++;
+            console.log(`${colors.green}restore ok${colors.reset} ${tag} user=${ownerEmail}`);
+          } else {
+            restoreFail++;
+            console.warn(
+              `${colors.yellow}restore ${pr.status}${colors.reset} ${tag} — ${JSON.stringify(pr.json || pr.raw).slice(0, 400)}`
+            );
+          }
+        }
+      }
+    }
+  }
+
+  console.log(
+    `${colors.cyan}Resumo zoho-delivery-cancel-restore:${colors.reset} ` +
+      `cancel ok=${cancelOk} fail=${cancelFail} dry=${cancelDry}; ` +
+      `restore ok=${restoreOk} fail=${restoreFail} dry=${restoreDry} skip_no_email=${restoreSkipNoEmail} (${totalDeals} deal(s))`
+  );
+}
+
 function cmdHelp() {
   console.log(`
 ${colors.cyan}Game4U API scripts runner${colors.reset}
@@ -4955,6 +5257,14 @@ Comandos:
                                 Opção: --zoho-cobranca-all-transitions (ou ZOHO_COBRANCA_ALL_TIMELINE_TRANSITIONS=1) — cada mudança
                                 Stage no __timeline (cronológico); DONE com created_at = audited_time (sem search).
                                 Env: ZOHO_COBRANCA_PIPELINE_NAME (opcional)
+  zoho-delivery-cancel-restore  Zoho: replay de todas as transições Stage no __timeline; POST /game/delivery/{dealId}/cancel
+                                quando _value.new é estágio "perdido"; POST .../restore quando _value.old é perdido e _value.new
+                                está nos estágios permitidos (stageTitleToActionTemplateId + extra no config/env).
+                                Opções: --dry-run  --max-deals N  --zoho-timeline-bare  --zoho-ignore-pipeline-filter
+                                --zoho-transitions-only-month YYYY-MM  --zoho-transition-audited-from/to ISO
+                                --deal-ids-csv caminho.csv  --deal-ids-csv-only-found-no
+                                Restore: user_email = Owner do deal ou G4U_ZOHO_FALLBACK_USER_EMAIL.
+                                Env: G4U_ZOHO_DELIVERY_CANCEL_NEW_STAGES (CSV)  G4U_ZOHO_DELIVERY_RESTORE_ALLOWED_NEW_STAGES (CSV extra)
   zoho-tasks                    Mesmo Deals/search paginado; Activities_Chronological com page_token (todas páginas).
                                 Jur + tags: uma atividade mais recente por action template (tagFlowTitleToActionTemplateId);
                                 POST process; integration_id jur estável por template. --max-deals / ZOHO_MAX_DEALS
@@ -4991,6 +5301,8 @@ Env úteis:
   G4U_USER_ACTION_SEARCH_MAX_PAGES       Máx. páginas por status no DONE lookup (default 80)
   G4U_USER_ACTION_DONE_LOOKUP_INCLUDE_DISMISSED  1/true — junta também search com dismissed=true
   G4U_ZOHO_STAGE_DONE_USE_AUDITED_WHEN_SEARCH_MISS  default ligado — Stage DONE usa audited_time se search não achar created_at; 0/false desliga
+  G4U_ZOHO_DELIVERY_CANCEL_NEW_STAGES   CSV opcional — rótulos Zoho em _value.new que disparam cancel (default config)
+  G4U_ZOHO_DELIVERY_RESTORE_ALLOWED_NEW_STAGES  CSV — estágios extra permitidos para restore (além do mapa)
   G4U_CS_TEAM_ID                Id do time CS no GET /game/team-actions (default 4 se GET /team não casar nome)
   G4U_ACCESS_TOKEN              Pula login se já autenticado
   G4U_SEED_DEFAULT_PASSWORD     Senha fallback se linha do .md não bater por e-mail
@@ -5032,6 +5344,9 @@ const cmd = argv[0] || 'help';
           '--zoho-pipeline-only-cobranca',
           ...argv.slice(1)
         ]);
+        break;
+      case 'zoho-delivery-cancel-restore':
+        await cmdZohoDeliveryCancelRestore(argv);
         break;
       case 'zoho-tasks':
         await cmdZohoTasks(argv);
