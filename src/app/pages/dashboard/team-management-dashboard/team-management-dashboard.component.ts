@@ -3183,13 +3183,20 @@ private calculateCollaboratorTotals(memberData: Array<{
       let targetBilling = 0;
       let kpiPercent = 0;
 
+      let animateProgressFromPercent: number | undefined;
+      let progressEvolutionLabel: string | undefined;
+
       if (goalsKpi != null) {
         safeCurrentBilling = goalsKpi.current;
         targetBilling = goalsKpi.target > 0 ? goalsKpi.target : paramTarget;
-        kpiPercent =
-          targetBilling > 0
-            ? Math.min(100, Math.round((safeCurrentBilling / targetBilling) * 100))
-            : goalsKpi.percent;
+        kpiPercent = Math.min(100, goalsKpi.percent);
+        progressEvolutionLabel = goalsKpi.progressEvolutionLabel;
+        if (
+          goalsKpi.previousRingPercent != null &&
+          goalsKpi.previousRingPercent !== kpiPercent
+        ) {
+          animateProgressFromPercent = goalsKpi.previousRingPercent;
+        }
       } else {
         const currentBilling = await firstValueFrom(
           this.financeiroOmieRecebiveisService
@@ -3216,7 +3223,12 @@ private calculateCollaboratorTotals(memberData: Array<{
           targetBilling > 0 && superTargetBilling != null
             ? this.getKPIColorByGoals(safeCurrentBilling, targetBilling, superTargetBilling)
             : 'red',
-        percentage: Math.min(100, kpiPercent)
+        percentage: Math.min(100, kpiPercent),
+        ...(animateProgressFromPercent != null
+          ? { animateProgressFromPercent, progressEvolutionLabel }
+          : progressEvolutionLabel != null
+            ? { progressEvolutionLabel }
+            : {})
       });
     } catch (error) {
       console.error('Error loading team collective billing KPI:', error);

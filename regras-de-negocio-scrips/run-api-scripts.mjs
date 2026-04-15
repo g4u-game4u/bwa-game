@@ -12,6 +12,7 @@
  *   node regras-de-negocio-scrips/run-api-scripts.mjs zoho-tasks
  *   node regras-de-negocio-scrips/run-api-scripts.mjs zoho-pipeline-probe
  *   node regras-de-negocio-scrips/run-api-scripts.mjs probe-game-action-process
+ *   node regras-de-negocio-scrips/run-api-scripts.mjs game4u-cs-tarefas-planilha --dry-run
  *
  * Env (.env na raiz):
  *   G4U_API_BASE (opcional, default do config)
@@ -2265,6 +2266,432 @@ function shouldDismissForAprilStageTeamMismatch({
   const userKey = emailToTeamKey.get(em);
   if (userKey == null) return false;
   return cat !== userKey;
+}
+
+/** Stems normalizados só das linhas Categoria=CS da planilha. */
+function collectCsTarefasStemsFromRows(rows) {
+  const stems = new Set();
+  for (const r of rows || []) {
+    if (r?.teamKey === 'cs' && r.servicoStem) stems.add(String(r.servicoStem));
+  }
+  return [...stems];
+}
+
+/**
+ * Mesma lógica de proximidade que buildTarefasPorTimesStageCategoryLookup (exact ou substring min 8).
+ */
+function actionTitleMatchesTarefasStems(actionTitle, stems) {
+  const st = tarefasPorTimesNormLoose(actionTitle);
+  if (!st || !Array.isArray(stems) || !stems.length) return false;
+  for (const svc of stems) {
+    if (!svc) continue;
+    if (st === svc) return true;
+    if (st.includes(svc) || svc.includes(st)) {
+      const m = Math.min(st.length, svc.length);
+      if (m >= 8) return true;
+    }
+  }
+  return false;
+}
+
+function game4uUnwrapActionsBodyItems(body) {
+  if (!body) return [];
+  if (Array.isArray(body)) return body;
+  if (typeof body === 'object') {
+    const o = body;
+    for (const k of ['items', 'data', 'actions', 'results', 'records', 'rows']) {
+      if (Array.isArray(o[k])) return o[k];
+    }
+  }
+  return [];
+}
+
+function game4uExtractNextPageToken(body) {
+  if (!body || typeof body !== 'object') return null;
+  const tok = body.next_page_token ?? body.nextPageToken ?? body.Next_Page_Token;
+  return typeof tok === 'string' && tok.trim() ? tok.trim() : null;
+}
+
+function game4uPickRawActionId(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  for (const k of ['id', '_id', 'user_action_id', 'userActionId', 'action_id', 'actionId']) {
+    const v = raw[k];
+    if (v != null && String(v).trim()) return String(v).trim();
+  }
+  return null;
+}
+
+/** Uma linha de GET /game/actions ou /game/team-actions. */
+function game4uNormalizeTeamActionRow(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  const id = game4uPickRawActionId(raw);
+  if (!id) return null;
+  const titleFromGame =
+    typeof raw.action_title === 'string'
+      ? raw.action_title
+      : typeof raw.title === 'string'
+        ? raw.title
+        : '';
+  const user_email = typeof raw.user_email === 'string' ? raw.user_email : '';
+  const status = typeof raw.status === 'string' ? raw.status : '';
+  const created_at = typeof raw.created_at === 'string' ? raw.created_at : '';
+  const finishedRaw = raw.finished_at;
+  const finished_at =
+    finishedRaw === null || finishedRaw === undefined
+      ? null
+      : typeof finishedRaw === 'string'
+        ? finishedRaw
+        : null;
+  const delivery_id = raw.delivery_id != null ? String(raw.delivery_id) : '';
+  const delivery_title =
+    typeof raw.delivery_title === 'string' ? raw.delivery_title : '';
+  const integration_id = raw.integration_id != null ? String(raw.integration_id) : '';
+  const action_template_id =
+    raw.action_template_id != null
+      ? String(raw.action_template_id)
+      : raw.action_id != null
+        ? String(raw.action_id)
+        : '';
+  const dismissed = raw.dismissed === true;
+  return {
+    id,
+    action_title: titleFromGame,
+    user_email,
+    status,
+    created_at,
+    finished_at,
+    delivery_id,
+    delivery_title,
+    integration_id,
+    action_template_id,
+    dismissed
+  };
+}
+
+async function game4uFetchAllTeamActions(teamId, startIso, endIso) {
+  const merged = [];
+  let pageToken = null;
+  const maxIter = Math.min(
+    Math.max(parseInt(process.env.G4U_TEAM_ACTIONS_MAX_PAGES?.trim() || '200', 10), 1),
+    250
+  );
+  for (let iter = 0; iter < maxIter; iter++) {
+    const qs = new URLSearchParams({
+      start: String(startIso),
+      end: String(endIso),
+      team: String(teamId)
+    });
+    if (pageToken) qs.set('next_page_token', pageToken);
+    const path = `/game/team-actions?${qs.toString()}`;
+    const r = await game4uFetch(path);
+    if (!r.ok) {
+      console.warn(
+        `${colors.yellow}GET /game/team-actions falhou (iter ${iter + 1}): HTTP ${r.status}${colors.reset}`,
+        r.json
+      );
+      break;
+    }
+    const items = game4uUnwrapActionsBodyItems(r.json);
+    for (const it of items) {
+      const row = game4uNormalizeTeamActionRow(it);
+      if (row) merged.push(row);
+    }
+    const next = game4uExtractNextPageToken(r.json);
+    if (next) {
+      pageToken = next;
+      await sleep(40);
+      continue;
+    }
+    break;
+  }
+  const byId = new Map();
+  for (const row of merged) {
+    byId.set(row.id, row);
+  }
+  return [...byId.values()];
+}
+
+/**
+ * GET /game/actions?user=&start=&end= (carteira / painel do jogador — não confundir com /game/team-actions).
+ */
+async function game4uFetchAllUserActions(userEmail, startIso, endIso) {
+  const merged = [];
+  let pageToken = null;
+  const maxIter = Math.min(
+    Math.max(
+      parseInt(
+        process.env.G4U_USER_ACTIONS_MAX_PAGES?.trim() ||
+          process.env.G4U_TEAM_ACTIONS_MAX_PAGES?.trim() ||
+          '200',
+        10
+      ),
+      1
+    ),
+    250
+  );
+  const user = String(userEmail || '').trim();
+  if (!user) return [];
+  for (let iter = 0; iter < maxIter; iter++) {
+    const qs = new URLSearchParams({
+      start: String(startIso),
+      end: String(endIso),
+      user
+    });
+    if (pageToken) qs.set('next_page_token', pageToken);
+    const path = `/game/actions?${qs.toString()}`;
+    const r = await game4uFetch(path);
+    if (!r.ok) {
+      console.warn(
+        `${colors.yellow}GET /game/actions falhou user=${user} (iter ${iter + 1}): HTTP ${r.status}${colors.reset}`,
+        r.json
+      );
+      break;
+    }
+    const items = game4uUnwrapActionsBodyItems(r.json);
+    for (const it of items) {
+      const row = game4uNormalizeTeamActionRow(it);
+      if (row) merged.push(row);
+    }
+    const next = game4uExtractNextPageToken(r.json);
+    if (next) {
+      pageToken = next;
+      await sleep(40);
+      continue;
+    }
+    break;
+  }
+  const byId = new Map();
+  for (const row of merged) {
+    byId.set(row.id, row);
+  }
+  return [...byId.values()];
+}
+
+/** E-mails de utilizadores com team_id = time CS (para GET /game/actions por jogador). */
+async function collectEmailAddressesForGame4uTeam(teamIdStr) {
+  const tid = String(teamIdStr).trim();
+  let users = await loadAllUsersFromApi();
+  if (!users.length) users = await loadUsersViaSearchPaginated({ maxPages: 80 });
+  const emails = new Set();
+  for (const u of users) {
+    const ids = extractGame4uUserTeamIds(u).map((x) => String(x));
+    if (!ids.includes(tid)) continue;
+    const em = userRecordEmailNorm(u);
+    if (em) emails.add(em);
+  }
+  return [...emails].sort();
+}
+
+/** Id numérico do time CS no Game4U (revisaprev); override: --team-id ou G4U_CS_TEAM_ID. */
+const GAME4U_CS_TEAM_ID_DEFAULT = '4';
+
+async function resolveGame4uCsTeamIdForTeamActions(argv) {
+  const forced = argvFlagValue(argv, '--team-id');
+  if (forced && String(forced).trim()) return String(forced).trim();
+  const envId = process.env.G4U_CS_TEAM_ID?.trim();
+  if (envId) return envId;
+  const nameToId = await loadTeamNameToId();
+  const def = (cfg.teamsDefinition || []).find((t) => t.key === 'cs');
+  const wantN = tarefasPorTimesNormLoose(def?.apiTeamName || 'CS');
+  for (const [nm, id] of nameToId.entries()) {
+    if (tarefasPorTimesNormLoose(nm) === wantN) return String(id);
+  }
+  console.log(
+    `${colors.dim}Time "CS" não encontrado em GET /team — usando id default ${GAME4U_CS_TEAM_ID_DEFAULT}.${colors.reset}`
+  );
+  return GAME4U_CS_TEAM_ID_DEFAULT;
+}
+
+function buildGameProcessPayloadDismissCsPlanilhaMismatch(row) {
+  const tid = row.action_template_id?.trim();
+  if (!tid) return null;
+  const integ = row.integration_id?.trim() || `g4u-user-action-${row.id}`;
+  const audited = new Date().toISOString();
+  const statusPayload = String(row.status || 'PENDING').trim() || 'PENDING';
+  const stUp = statusPayload.toUpperCase();
+  const payload = {
+    status: statusPayload,
+    user_email: row.user_email.trim(),
+    action_id: tid,
+    delivery_id: String(row.delivery_id || ''),
+    delivery_title: String(row.delivery_title || '').trim() || `Delivery ${row.delivery_id}`,
+    created_at: row.created_at || audited,
+    integration_id: integ,
+    comments: [
+      {
+        id: 0,
+        message:
+          'Script game4u-cs-tarefas-planilha: action_title não casa com "Tarefas por times.xlsx" (CS).',
+        created_by: 'game4u-script',
+        created_at: audited,
+        type: 'integration'
+      }
+    ],
+    approved: false,
+    approved_by: null,
+    dismissed: true
+  };
+  if (stUp === 'DONE' || stUp === 'DELIVERED') {
+    const fin = row.finished_at && String(row.finished_at).trim() ? String(row.finished_at).trim() : null;
+    if (fin) payload.finished_at = fin;
+  }
+  return payload;
+}
+
+/**
+ * Planilha "Tarefas por times.xlsx" (só Categoria CS) vs action_title:
+ * 1) GET /game/team-actions (time CS)
+ * 2) GET /game/actions?user= por cada jogador com team_id CS — alinha com o painel/carteira do jogador
+ * PENDING, DOING, DONE e DELIVERED (--only-open = só PENDING+DOING) sem match → POST dismissed=true.
+ * --only-team-actions omite o passo 2.
+ */
+async function cmdGame4uCsTarefasPlanilha(argv) {
+  const dry = argv.includes('--dry-run');
+  const onlyOpen = argv.includes('--only-open');
+  const onlyTeamActions = argv.includes('--only-team-actions');
+  const tableRows = loadTarefasPorTimesRowsFromXlsx();
+  const csStems = collectCsTarefasStemsFromRows(tableRows);
+  if (!csStems.length) {
+    throw new Error(
+      'Sem stems CS na planilha (colunas Nome do Serviço + Categoria=CS). Verifique Tarefas por times.xlsx.'
+    );
+  }
+  console.log(
+    `${colors.cyan}game4u-cs-tarefas-planilha:${colors.reset} ${csStems.length} rótulo(s) de serviço CS distintos na planilha.`
+  );
+
+  await ensureToken();
+  const teamId = await resolveGame4uCsTeamIdForTeamActions(argv);
+  const start =
+    argvFlagValue(argv, '--from') ||
+    process.env.G4U_CS_TEAM_ACTIONS_FROM?.trim() ||
+    '2000-01-01T00:00:00.000Z';
+  const end =
+    argvFlagValue(argv, '--to') || process.env.G4U_CS_TEAM_ACTIONS_TO?.trim() || new Date().toISOString();
+
+  const wantStatuses = onlyOpen
+    ? new Set(['PENDING', 'DOING'])
+    : new Set(['PENDING', 'DOING', 'DONE', 'DELIVERED']);
+  const maxDismiss = Math.min(
+    Math.max(parseInt(argvFlagValue(argv, '--max-dismiss') || '5000', 10) || 5000, 1),
+    20000
+  );
+
+  let matched = 0;
+  let skipped = 0;
+  let mismatch = 0;
+  let postOk = 0;
+  let postFail = 0;
+  let dryListed = 0;
+  let dedupeSkipped = 0;
+  const processedActionIds = new Set();
+
+  async function considerRowAsync(row, sourceLabel) {
+    if (processedActionIds.has(row.id)) {
+      dedupeSkipped++;
+      return;
+    }
+    if (row.dismissed) {
+      skipped++;
+      return;
+    }
+    const st = String(row.status || '').toUpperCase();
+    if (!wantStatuses.has(st)) {
+      skipped++;
+      return;
+    }
+    if (!row.user_email?.trim()) {
+      skipped++;
+      return;
+    }
+    if (!row.action_template_id?.trim()) {
+      skipped++;
+      return;
+    }
+    if (actionTitleMatchesTarefasStems(row.action_title, csStems)) {
+      matched++;
+      processedActionIds.add(row.id);
+      return;
+    }
+    if (postOk + postFail + dryListed >= maxDismiss) {
+      return;
+    }
+    const payload = buildGameProcessPayloadDismissCsPlanilhaMismatch(row);
+    if (!payload) {
+      skipped++;
+      return;
+    }
+    mismatch++;
+    if (dry) {
+      console.log(
+        `${colors.dim}[dry-run] ${sourceLabel} id=${row.id} status=${row.status} user=${row.user_email} title="${row.action_title}"${colors.reset}`
+      );
+      dryListed++;
+      processedActionIds.add(row.id);
+      return;
+    }
+    const pr = await game4uActionProcessWithRestoreOnCancelledPending(
+      cfg.gameActionProcess.path,
+      cfg.gameActionProcess.method,
+      payload
+    );
+    if (isGameActionProcessResponseOk(pr)) {
+      postOk++;
+    } else {
+      postFail++;
+      console.warn(
+        `${colors.yellow}POST dismiss falhou ${sourceLabel} id=${row.id} HTTP ${pr.status}${colors.reset}`,
+        pr.json
+      );
+    }
+    processedActionIds.add(row.id);
+    await sleep(100);
+  }
+
+  async function runPass(rows, sourceLabel) {
+    for (const row of rows) {
+      if (postOk + postFail + dryListed >= maxDismiss) {
+        console.warn(
+          `${colors.yellow}Limite --max-dismiss ${maxDismiss} atingido (${sourceLabel}).${colors.reset}`
+        );
+        break;
+      }
+      await considerRowAsync(row, sourceLabel);
+    }
+  }
+
+  log(`GET /game/team-actions (CS)`, `team=${teamId}`, { start, end });
+  const allTeam = await game4uFetchAllTeamActions(teamId, start, end);
+  console.log(`${colors.cyan}Fase 1 — /game/team-actions:${colors.reset} ${allTeam.length} ação(ões) (dedupe por id)`);
+  await runPass(allTeam, 'team-actions');
+  if (!dry) await sleep(80);
+
+  if (!onlyTeamActions) {
+    const players = await collectEmailAddressesForGame4uTeam(teamId);
+    console.log(
+      `${colors.cyan}Fase 2 — /game/actions por jogador CS:${colors.reset} ${players.length} e-mail(is) com team_id=${teamId}`
+    );
+    for (let pi = 0; pi < players.length; pi++) {
+      if (postOk + postFail + dryListed >= maxDismiss) break;
+      const em = players[pi];
+      if (pi > 0) await sleep(55);
+      const personal = await game4uFetchAllUserActions(em, start, end);
+      console.log(
+        `${colors.dim}  [${pi + 1}/${players.length}] ${em}: ${personal.length} ação(ões)${colors.reset}`
+      );
+      await runPass(personal, 'game/actions');
+    }
+  } else {
+    console.log(`${colors.dim}Fase 2 omitida (--only-team-actions).${colors.reset}`);
+  }
+
+  console.log(
+    `\n${colors.cyan}Resumo game4u-cs-tarefas-planilha${dry ? ' (dry-run)' : ''}:${colors.reset} ` +
+      `match_planilha=${matched} mismatch=${mismatch} omitidas=${skipped} dedupe_omitidas=${dedupeSkipped}` +
+      (dry ? ` listadas=${dryListed}` : ` POST_OK=${postOk} POST_falhou=${postFail}`) +
+      ` | filtro status: ${[...wantStatuses].sort().join(',')}${onlyOpen ? ' (--only-open)' : ''}` +
+      `${onlyTeamActions ? ' | só team-actions' : ' | team-actions + game/actions por jogador'}`
+  );
 }
 
 function zohoTimelineAuditedRangeForStageHistory(modifiedFrom, modifiedTo) {
@@ -4545,6 +4972,12 @@ Comandos:
                                 Env: ZOHO_MODIFIED_*  ZOHO_PROBE_PIPELINE_NAMES  ZOHO_PROBE_LAYOUT_LABEL
                                 ZOHO_PROBE_LAYOUT_FIELD (default Layout.display_label)
   probe-game-action-process      POST /game/action/process com corpo de exemplo (ver resposta da API)
+  game4u-cs-tarefas-planilha     Fase 1: GET /game/team-actions (CS). Fase 2: GET /game/actions?user= por cada jogador
+                                com team_id CS (igual ao painel/carteira). Planilha: só Categoria CS; sem match → dismissed=true.
+                                --only-team-actions = só fase 1. Id CS: G4U_CS_TEAM_ID ou --team-id (default 4).
+                                Status: PENDING, DOING, DONE, DELIVERED (--only-open = só PENDING+DOING).
+                                Opções: --dry-run  --only-open  --only-team-actions  --from ISO  --to ISO  --max-dismiss N (default 5000)
+                                Env: G4U_CS_TEAM_ID  G4U_CS_TEAM_ACTIONS_FROM / TO  G4U_TEAM_ACTIONS_MAX_PAGES  G4U_USER_ACTIONS_MAX_PAGES
   probe-zoho-timeline-stage-values  Só Zoho: N deals + __timeline; mostra _value e _value.old do Stage
                                 Opções: --sample-deals N (default 10)  --zoho-timeline-bare  --zoho-ignore-pipeline-filter
   probe-zoho-cobranca-april-timeline  Só Zoho: pipeline Cobrança + abril (Modified_Time); amostra; _value.old no __timeline
@@ -4558,6 +4991,7 @@ Env úteis:
   G4U_USER_ACTION_SEARCH_MAX_PAGES       Máx. páginas por status no DONE lookup (default 80)
   G4U_USER_ACTION_DONE_LOOKUP_INCLUDE_DISMISSED  1/true — junta também search com dismissed=true
   G4U_ZOHO_STAGE_DONE_USE_AUDITED_WHEN_SEARCH_MISS  default ligado — Stage DONE usa audited_time se search não achar created_at; 0/false desliga
+  G4U_CS_TEAM_ID                Id do time CS no GET /game/team-actions (default 4 se GET /team não casar nome)
   G4U_ACCESS_TOKEN              Pula login se já autenticado
   G4U_SEED_DEFAULT_PASSWORD     Senha fallback se linha do .md não bater por e-mail
   G4U_SEED_AVATAR_URL           URL opcional enviada como avatar_url em cada POST /user
@@ -4613,6 +5047,9 @@ const cmd = argv[0] || 'help';
         break;
       case 'probe-zoho-cobranca-april-timeline':
         await cmdProbeZohoCobrancaAprilTimeline(argv);
+        break;
+      case 'game4u-cs-tarefas-planilha':
+        await cmdGame4uCsTarefasPlanilha(argv);
         break;
       default:
         console.error(`${colors.red}Comando desconhecido: ${cmd}${colors.reset}`);

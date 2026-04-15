@@ -19,8 +19,13 @@
       [valor]="percentage"
       [total]="null"
       [percent]="percentage"
+      [animationFromPercent]="animateProgressFromPercent ?? null"
+      [enableRingAnimation]="ringProgressAnimationEnabled"
       [theme]="progressColor">
     </c4u-porcentagem-circular>
+  </div>
+  <div class="kpi-evolution" *ngIf="progressEvolutionLabel" aria-hidden="true">
+    {{ progressEvolutionLabel }}
   </div>
   <div class="kpi-value" aria-hidden="true">{{ displayValue }}</div>
   <div class="kpi-target" aria-hidden="true">{{ targetDisplayValue }}</div>

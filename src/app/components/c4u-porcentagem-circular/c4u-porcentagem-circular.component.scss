@@ -11,7 +11,11 @@
 }
 
 .circle {
-  transition: stroke-dashoffset 1s;
+  transition: stroke-dashoffset 1.1s ease-out;
+
+  &.no-dash-transition {
+    transition: none !important;
+  }
 
   &.red {
     stroke: url(#redColor);

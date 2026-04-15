@@ -58,6 +58,10 @@ export interface KPIData {
   unit?: string;
   color?: 'red' | 'yellow' | 'green';
   percentage?: number;
+  /** Anel: animar desde este % (0–100), ex. meta «Valor concedido» vs log anterior. */
+  animateProgressFromPercent?: number;
+  /** Texto curto sob o anel (ex. ganho em p.p. vs penúltimo log). */
+  progressEvolutionLabel?: string;
 }
 
 // Company Models

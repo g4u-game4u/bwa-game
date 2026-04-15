@@ -7,6 +7,12 @@ export interface ReceitaConcedidaGoalsKpi {
   current: number;
   target: number;
   percent: number;
+  /** % do anel no penúltimo log (para animação e comparação). */
+  previousRingPercent?: number;
+  /** Diferença em pontos percentuais (último − penúltimo). */
+  deltaProgressPercentPoints?: number;
+  /** Texto pronto para UI (ex.: «+4,2 p.p. vs registo anterior»). */
+  progressEvolutionLabel?: string;
 }
 
 /**
@@ -339,8 +345,72 @@ export class GoalsReceitaBackendService {
     if (rows.length === 0) {
       return null;
     }
-    // Sempre o registo mais recente (por `updated_at` / `created_at`); evita ficar preso a um mês com `extra.reference_month` desatualizado.
-    const row = this.pickLatestRow(rows);
+    const sorted = [...rows].sort((a, b) => {
+      const d = this.rowUpdatedTs(b) - this.rowUpdatedTs(a);
+      if (d !== 0) {
+        return d;
+      }
+      return this.rowStableSortKey(b).localeCompare(this.rowStableSortKey(a));
+    });
+
+    const latest = this.extractConcedidaMetricsFromRow(sorted[0]);
+    if (!latest) {
+      return null;
+    }
+
+    let previousRingPercent: number | undefined;
+    let deltaProgressPercentPoints: number | undefined;
+    let progressEvolutionLabel: string | undefined;
+
+    if (sorted.length >= 2) {
+      const prev = this.extractConcedidaMetricsFromRow(sorted[1]);
+      if (prev) {
+        previousRingPercent = prev.ringPercent;
+        const delta = latest.percentFloat - prev.percentFloat;
+        if (Number.isFinite(delta) && Math.abs(delta) >= 0.0005) {
+          deltaProgressPercentPoints = delta;
+          progressEvolutionLabel = this.formatProgressDeltaLabel(delta);
+        }
+      }
+    }
+
+    return {
+      current: latest.current,
+      target: latest.target,
+      percent: latest.ringPercent,
+      previousRingPercent,
+      deltaProgressPercentPoints,
+      progressEvolutionLabel
+    };
+  }
+
+  /** Chave estável quando `updated_at` é igual (ordenação determinística). */
+  private rowStableSortKey(row: unknown): string {
+    if (row == null || typeof row !== 'object') {
+      return '';
+    }
+    const o = row as Record<string, unknown>;
+    for (const key of ['id', '_id', 'goal_log_id', 'goalLogId']) {
+      const v = o[key];
+      if (typeof v === 'string' && v.trim()) {
+        return v.trim();
+      }
+      if (typeof v === 'number' && Number.isFinite(v)) {
+        return String(v);
+      }
+    }
+    return '';
+  }
+
+  /**
+   * Métricas de um log (último / penúltimo) para o KPI e para comparação temporal.
+   */
+  private extractConcedidaMetricsFromRow(row: unknown): {
+    current: number;
+    target: number;
+    ringPercent: number;
+    percentFloat: number;
+  } | null {
     if (!row || typeof row !== 'object') {
       return null;
     }
@@ -374,7 +444,7 @@ export class GoalsReceitaBackendService {
       'log_value',
       'logValue'
     ]);
-    let percent = this.rowNum(o, [
+    let apiPercent = this.rowNum(o, [
       'cumulative_percentual_progress',
       'cumulativePercentualProgress',
       'updated_percentual_progress',
@@ -391,13 +461,27 @@ export class GoalsReceitaBackendService {
     if (!Number.isFinite(current)) {
       return null;
     }
-    if (!Number.isFinite(percent) || percent < 0) {
-      percent = Math.min(100, Math.round((current / target) * 100));
-    } else {
-      percent = Math.min(100, Math.round(percent));
-    }
 
-    return { current, target, percent };
+    let percentFloat: number;
+    if (!Number.isFinite(apiPercent) || apiPercent < 0) {
+      percentFloat = Math.min(100, (current / target) * 100);
+    } else {
+      percentFloat = Math.min(100, apiPercent);
+    }
+    const ringPercent = Math.min(100, Math.round(percentFloat));
+
+    return { current, target, ringPercent, percentFloat };
+  }
+
+  private formatProgressDeltaLabel(delta: number): string {
+    const sign = delta > 0 ? '+' : '';
+    const abs = Math.abs(delta);
+    const decimals = abs >= 10 ? 0 : 1;
+    const s = abs.toLocaleString('pt-BR', {
+      minimumFractionDigits: decimals,
+      maximumFractionDigits: decimals
+    });
+    return `${sign}${s} p.p. vs registo anterior`;
   }
 
   private unwrapLogRows(body: unknown): unknown[] {
@@ -510,22 +594,6 @@ export class GoalsReceitaBackendService {
       }
     }
     return null;
-  }
-
-  private pickLatestRow(rows: unknown[]): unknown {
-    if (rows.length === 1) {
-      return rows[0];
-    }
-    let best: unknown = null;
-    let bestTs = -1;
-    for (const r of rows) {
-      const ts = this.rowUpdatedTs(r);
-      if (ts >= bestTs) {
-        bestTs = ts;
-        best = r;
-      }
-    }
-    return best ?? rows[rows.length - 1];
   }
 
   private rowUpdatedTs(row: unknown): number {

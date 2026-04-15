@@ -14,6 +14,12 @@ export class C4uKpiCircularProgressComponent {
   @Input() color?: 'red' | 'yellow' | 'green';
   @Input() unit?: string = '';
   @Input() size: 'small' | 'medium' | 'large' = 'medium';
+
+  /** % inicial do anel (penúltimo log «Valor concedido»); anima até `percentage`. */
+  @Input() animateProgressFromPercent?: number | null;
+
+  /** Texto curto sob o anel (ex. ganho em p.p.). */
+  @Input() progressEvolutionLabel?: string | null;
   
   @HostBinding('class')
   get hostClasses(): string {
@@ -202,7 +208,11 @@ export class C4uKpiCircularProgressComponent {
     const unitText = this.unit ? ` ${this.unit}` : '';
     const metaRef =
       this.unit === '%' ? (this.target > 0 ? this.target : 100) : this.target;
-    return `${this.label}: ${this.percentage}% da meta (${this.current}${unitText} de ${metaRef}${unitText}). ${this.goalStatus}`;
+    const evo =
+      this.progressEvolutionLabel != null && String(this.progressEvolutionLabel).trim()
+        ? ` ${String(this.progressEvolutionLabel).trim()}.`
+        : '';
+    return `${this.label}: ${this.percentage}% da meta (${this.current}${unitText} de ${metaRef}${unitText}).${evo} ${this.goalStatus}`;
   }
 
   /**
@@ -210,5 +220,14 @@ export class C4uKpiCircularProgressComponent {
    */
   get ariaValueText(): string {
     return `${this.percentage}% da meta`;
+  }
+
+  /** Anima o anel desde o penúltimo registo quando faz sentido visualmente. */
+  get ringProgressAnimationEnabled(): boolean {
+    const from = this.animateProgressFromPercent;
+    if (from == null || !Number.isFinite(from)) {
+      return false;
+    }
+    return Math.abs(this.percentage - from) >= 0.35;
   }
 }

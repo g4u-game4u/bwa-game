@@ -291,7 +291,9 @@
                     [superTarget]="kpi.superTarget ? roundValue(kpi.superTarget) : undefined"
                     [color]="kpi.color"
                     [unit]="kpi.unit"
-                    [colorIndex]="i">
+                    [colorIndex]="i"
+                    [animateProgressFromPercent]="kpi.animateProgressFromPercent ?? null"
+                    [progressEvolutionLabel]="kpi.progressEvolutionLabel ?? null">
                   </c4u-kpi-circular-progress>
                   <c4u-kpi-circular-progress
                     *ngIf="kpi.id !== 'numero-empresas' && (kpi.id !== 'valor-concedido' || isSelectedFinanceTeam())"
@@ -301,7 +303,9 @@
                     [superTarget]="kpi.superTarget ? roundValue(kpi.superTarget) : undefined"
                     [color]="kpi.color"
                     [unit]="kpi.unit"
-                    [colorIndex]="i">
+                    [colorIndex]="i"
+                    [animateProgressFromPercent]="kpi.animateProgressFromPercent ?? null"
+                    [progressEvolutionLabel]="kpi.progressEvolutionLabel ?? null">
                   </c4u-kpi-circular-progress>
                 </ng-container>
               </div>
