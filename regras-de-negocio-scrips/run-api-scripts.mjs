@@ -14,6 +14,7 @@
  *   node regras-de-negocio-scrips/run-api-scripts.mjs probe-game-action-process
  *   node regras-de-negocio-scrips/run-api-scripts.mjs game4u-cs-tarefas-planilha --dry-run
  *   node regras-de-negocio-scrips/run-api-scripts.mjs zoho-delivery-cancel-restore --dry-run
+ *   node regras-de-negocio-scrips/run-api-scripts.mjs zoho-cancel-jur-lost-deals --dry-run
  *
  * Env (.env na raiz):
  *   G4U_API_BASE (opcional, default do config)
@@ -370,6 +371,97 @@ async function game4uPostDeliveryRestore(deliveryId, userEmail) {
 async function game4uPostDeliveryCancel(deliveryId) {
   const path = `/game/delivery/${encodeURIComponent(String(deliveryId))}/cancel`;
   return game4uFetch(path, { method: 'POST', body: {} });
+}
+
+function game4uDeliveryPathIdLooksLikeUuid(s) {
+  const x = String(s || '').trim();
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(x);
+}
+
+function game4uCollectDeliveryPathIdCandidatesFromUserAction(it) {
+  const out = [];
+  if (!it || typeof it !== 'object') return out;
+  const push = (v) => {
+    if (v == null) return;
+    const t = String(v).trim();
+    if (t) out.push(t);
+  };
+  push(it.game_delivery_id);
+  push(it.delivery_uuid);
+  push(it.canonical_delivery_id);
+  push(it.delivery_id);
+  const d = it.delivery;
+  if (d && typeof d === 'object') {
+    push(d.id);
+    push(d.delivery_id);
+    push(d.external_id ?? d.externalId);
+  }
+  return out;
+}
+
+/**
+ * POST /game/delivery/{id}/cancel|restore pode exigir o UUID da tabela delivery; o deal Zoho é outro id.
+ * Sem user_actions no G4U, o backend costuma falhar com "Cannot coerce the result to a single JSON object".
+ * Env G4U_ZOHO_DELIVERY_PATH_WITHOUT_USER_ACTIONS=1 — mantém deal.id Zoho mesmo sem user_actions (comportamento antigo).
+ */
+async function game4uResolveDeliveryPathIdForZohoDeal(zohoDealId) {
+  const zid = String(zohoDealId);
+  if (game4uDeliveryPathIdLooksLikeUuid(zid)) {
+    return {
+      pathId: zid,
+      source: 'deal-id-is-uuid',
+      itemCount: -1,
+      skip: false,
+      uuidChoices: null
+    };
+  }
+  const allowNoUa =
+    String(process.env.G4U_ZOHO_DELIVERY_PATH_WITHOUT_USER_ACTIONS || '')
+      .trim()
+      .match(/^(1|true|yes|on)$/i) != null;
+
+  const statuses = ['PENDING', 'DONE', 'CANCELLED', 'DELIVERED', 'DOING'];
+  const uuids = new Set();
+  let itemCount = 0;
+
+  for (const st of statuses) {
+    const { items } = await game4uFetchUserActionSearchAllItems(zid, st, { limit: 100 });
+    itemCount += items.length;
+    for (const it of items) {
+      for (const c of game4uCollectDeliveryPathIdCandidatesFromUserAction(it)) {
+        if (game4uDeliveryPathIdLooksLikeUuid(c)) uuids.add(c);
+      }
+    }
+  }
+
+  if (uuids.size === 1) {
+    return {
+      pathId: [...uuids][0],
+      source: 'user-action-delivery-uuid',
+      itemCount,
+      skip: false,
+      uuidChoices: null
+    };
+  }
+  if (uuids.size > 1) {
+    return {
+      pathId: zid,
+      source: 'ambiguous-delivery-uuid',
+      itemCount,
+      skip: true,
+      uuidChoices: [...uuids]
+    };
+  }
+  if (itemCount === 0 && !allowNoUa) {
+    return { pathId: zid, source: 'no-user-actions', itemCount: 0, skip: true, uuidChoices: null };
+  }
+  return {
+    pathId: zid,
+    source: itemCount ? 'fallback-zoho-deal-id' : 'zoho-deal-id-no-ua-forced',
+    itemCount,
+    skip: false,
+    uuidChoices: null
+  };
 }
 
 /**
@@ -1965,6 +2057,20 @@ function zohoDealsSearchCriteria(from, to, argv) {
 }
 
 /**
+ * Deals/search só por Pipeline + Stage (sem Modified_Time).
+ * Usado para cancelar deliveries no G4U para todos os deals num estado atual (ex.: Jurídico + Fechado e Perdido).
+ */
+function buildZohoDealsSearchCriteriaPipelineAndStage(pipelineDisplayName, stageDisplayName) {
+  const pf = cfg.zoho.dealsSearch?.pipelineFilter;
+  const pipeField =
+    process.env.ZOHO_DEALS_PIPELINE_FIELD?.trim() || pf?.fieldApiName || 'Pipeline';
+  const stageField = process.env.ZOHO_DEALS_STAGE_FIELD?.trim() || 'Stage';
+  const p = escapeZohoSearchCriteriaValue(String(pipelineDisplayName || '').trim());
+  const s = escapeZohoSearchCriteriaValue(String(stageDisplayName || '').trim());
+  return `((${pipeField}:equals:${p}) and (${stageField}:equals:${s}))`;
+}
+
+/**
  * Timeline v8: URL inicial com sort_by, per_page, filters (audited_time between), include_inner_details; páginas
  * seguintes via page_token (ver zohoFetchMergedDealTimeline).
  * @see https://www.zoho.com/crm/developer/docs/api/v8/timeline-of-a-record.html
@@ -3159,6 +3265,30 @@ function resolveZohoDealOwnerOrFallbackEmail(deal) {
   const em = zohoUserLookupEmail(deal?.Owner);
   if (em) return em;
   return process.env.G4U_ZOHO_FALLBACK_USER_EMAIL?.trim() || '';
+}
+
+/** Stage atual do registo Deal (search/GET), normalizado para comparar com lostNormSet. */
+function zohoDealRecordStageNorm(deal) {
+  if (!deal?.Stage) return '';
+  return zohoNormStageLabelForMatch(deal.Stage);
+}
+
+/**
+ * POST cancel também quando o campo Stage do deal já é "perdido" mas o __timeline filtrado não tem linha new→perdido
+ * (ex.: entrou em perdido há meses; só Modified_Time recente no search).
+ * Env G4U_ZOHO_DELIVERY_CANCEL_WHEN_DEAL_STAGE_LOST=0 desliga; config cancelWhenDealRecordStageMatchesLost false idem.
+ */
+function zohoCancelWhenDealRecordStageMatchesLostEnabled() {
+  const envRaw = process.env.G4U_ZOHO_DELIVERY_CANCEL_WHEN_DEAL_STAGE_LOST;
+  if (envRaw != null && String(envRaw).trim() !== '') {
+    return !String(envRaw)
+      .trim()
+      .toLowerCase()
+      .match(/^(0|false|no|off)$/i);
+  }
+  const c = cfg.zoho?.deliveryCancelRestoreFromLostStages?.cancelWhenDealRecordStageMatchesLost;
+  if (c === false) return false;
+  return true;
 }
 
 /**
@@ -5043,7 +5173,10 @@ async function cmdZohoDeliveryCancelRestore(argv) {
 
   console.log(
     `${colors.cyan}zoho-delivery-cancel-restore:${colors.reset} new→cancel (perdido): ` +
-      `${[...lostNormSet].join(' | ')}; restore: old perdido + new permitido (${allowedRestoreNormSet.size} rótulo(s) normalizado(s)).`
+      `${[...lostNormSet].join(' | ')}; restore: old perdido + new permitido (${allowedRestoreNormSet.size} rótulo(s) normalizado(s)).` +
+      (zohoCancelWhenDealRecordStageMatchesLostEnabled()
+        ? ` ${colors.dim}| cancel se Stage atual do deal = perdido e timeline filtrado sem new→perdido${colors.reset}`
+        : ` ${colors.dim}| só transições __timeline (G4U_ZOHO_DELIVERY_CANCEL_WHEN_DEAL_STAGE_LOST=0)${colors.reset}`)
   );
   if (transitionAuditedBounds) {
     console.log(
@@ -5121,6 +5254,8 @@ async function cmdZohoDeliveryCancelRestore(argv) {
   let restoreFail = 0;
   let restoreDry = 0;
   let restoreSkipNoEmail = 0;
+  let deliverySkipNoUserActions = 0;
+  let deliverySkipAmbiguousUuid = 0;
 
   const totalDeals = pageDeals.length;
   for (let i = 0; i < pageDeals.length; i++) {
@@ -5139,11 +5274,68 @@ async function cmdZohoDeliveryCancelRestore(argv) {
     if (transitionAuditedBounds) {
       hits = filterStageHitsByAuditedWindow(hits, transitionAuditedBounds);
     }
-    if (!hits.length) {
+
+    const stageNormNow = zohoDealRecordStageNorm(deal);
+    const currentStageIsLost = Boolean(stageNormNow && lostNormSet.has(stageNormNow));
+    const cancelFromDealRecord = zohoCancelWhenDealRecordStageMatchesLostEnabled();
+
+    let timelineHasNewLost = false;
+    let needsG4uDelivery = false;
+    for (const hit0 of hits) {
+      const nn = hit0.newVal || '';
+      const oo = hit0.oldVal || '';
+      if (nn && lostNormSet.has(nn)) timelineHasNewLost = true;
+      const wc = Boolean(nn && lostNormSet.has(nn));
+      let wr = Boolean(oo && lostNormSet.has(oo) && nn && allowedRestoreNormSet.has(nn));
+      if (wc && wr) wr = false;
+      if (wc || wr) {
+        needsG4uDelivery = true;
+      }
+    }
+    if (currentStageIsLost && cancelFromDealRecord) {
+      needsG4uDelivery = true;
+    }
+
+    if (!needsG4uDelivery) {
       continue;
     }
 
+    let deliveryPathId = String(deal.id);
+    let deliveryPathResolved = null;
+    if (needsG4uDelivery && !dryRun) {
+      deliveryPathResolved = await game4uResolveDeliveryPathIdForZohoDeal(deal.id);
+      if (deliveryPathResolved.skip) {
+        if (deliveryPathResolved.source === 'no-user-actions') {
+          deliverySkipNoUserActions++;
+          console.warn(
+            `${colors.dim}deal ${deal.id}: sem user_actions no G4U — skip cancel/restore ` +
+              `(G4U_ZOHO_DELIVERY_PATH_WITHOUT_USER_ACTIONS=1 força id Zoho).${colors.reset}`
+          );
+        } else if (deliveryPathResolved.source === 'ambiguous-delivery-uuid') {
+          deliverySkipAmbiguousUuid++;
+          const uu = (deliveryPathResolved.uuidChoices || []).slice(0, 6).join(', ');
+          console.warn(
+            `${colors.yellow}deal ${deal.id}: vários UUID de delivery nos user_actions — skip cancel/restore (${uu}).${colors.reset}`
+          );
+        }
+        continue;
+      }
+      deliveryPathId = deliveryPathResolved.pathId;
+      if (
+        deliveryPathResolved.source === 'user-action-delivery-uuid' &&
+        deliveryPathResolved.pathId !== String(deal.id)
+      ) {
+        console.log(
+          `${colors.dim}deal ${deal.id}: POST delivery/* usa UUID interno (${String(deliveryPathResolved.pathId).slice(0, 8)}…) ` +
+            `via ${deliveryPathResolved.source} (${deliveryPathResolved.itemCount} user_action(s)).${colors.reset}`
+        );
+      }
+    }
+
     const ownerEmail = resolveZohoDealOwnerOrFallbackEmail(deal);
+
+    const wantCancelFromCurrentDealStage =
+      cancelFromDealRecord && currentStageIsLost && !timelineHasNewLost;
 
     for (let hi = 0; hi < hits.length; hi++) {
       const hit = hits[hi];
@@ -5159,8 +5351,9 @@ async function cmdZohoDeliveryCancelRestore(argv) {
 
       if (!wantCancel && !wantRestore) continue;
 
-      const deliveryId = String(deal.id);
-      const tag = `deal ${deliveryId} audited=${audited} old="${nOld}" new="${nNew}"`;
+      const zohoDealId = String(deal.id);
+      const tag = `deal ${zohoDealId} audited=${audited} old="${nOld}" new="${nNew}"`;
+      const pathId = dryRun ? zohoDealId : deliveryPathId;
 
       if (wantCancel) {
         if (dryRun) {
@@ -5168,7 +5361,7 @@ async function cmdZohoDeliveryCancelRestore(argv) {
           console.log(`${colors.dim}[dry-run]${colors.reset} POST /game/delivery/.../cancel ${tag}`);
         } else {
           await sleep(80);
-          const pr = await game4uPostDeliveryCancel(deliveryId);
+          const pr = await game4uPostDeliveryCancel(pathId);
           if (pr.ok) {
             cancelOk++;
             console.log(`${colors.green}cancel ok${colors.reset} ${tag}`);
@@ -5195,7 +5388,7 @@ async function cmdZohoDeliveryCancelRestore(argv) {
           );
         } else {
           await sleep(80);
-          const pr = await game4uPostDeliveryRestore(deliveryId, ownerEmail);
+          const pr = await game4uPostDeliveryRestore(pathId, ownerEmail);
           if (pr.ok) {
             restoreOk++;
             console.log(`${colors.green}restore ok${colors.reset} ${tag} user=${ownerEmail}`);
@@ -5208,12 +5401,125 @@ async function cmdZohoDeliveryCancelRestore(argv) {
         }
       }
     }
+
+    if (wantCancelFromCurrentDealStage) {
+      const zohoDealId = String(deal.id);
+      const tag = `deal ${zohoDealId} Stage-atual-perdido="${stageNormNow}" (sem linha new→perdido no __timeline filtrado)`;
+      const pathId = dryRun ? zohoDealId : deliveryPathId;
+      if (dryRun) {
+        cancelDry++;
+        console.log(`${colors.dim}[dry-run]${colors.reset} POST /game/delivery/.../cancel ${tag}`);
+      } else {
+        await sleep(80);
+        const pr = await game4uPostDeliveryCancel(pathId);
+        if (pr.ok) {
+          cancelOk++;
+          console.log(`${colors.green}cancel ok${colors.reset} ${tag}`);
+        } else {
+          cancelFail++;
+          console.warn(
+            `${colors.yellow}cancel ${pr.status}${colors.reset} ${tag} — ${JSON.stringify(pr.json || pr.raw).slice(0, 400)}`
+          );
+        }
+      }
+    }
   }
 
   console.log(
     `${colors.cyan}Resumo zoho-delivery-cancel-restore:${colors.reset} ` +
       `cancel ok=${cancelOk} fail=${cancelFail} dry=${cancelDry}; ` +
-      `restore ok=${restoreOk} fail=${restoreFail} dry=${restoreDry} skip_no_email=${restoreSkipNoEmail} (${totalDeals} deal(s))`
+      `restore ok=${restoreOk} fail=${restoreFail} dry=${restoreDry} skip_no_email=${restoreSkipNoEmail}; ` +
+      `skip_sem_user_actions=${deliverySkipNoUserActions} skip_uuid_ambiguous=${deliverySkipAmbiguousUuid} (${totalDeals} deal(s))`
+  );
+}
+
+/**
+ * Deals/search: Pipeline Jurídico (ou --pipeline) + Stage "Fechado e Perdido" (ou --stage), sem filtro Modified_Time.
+ * Para cada deal: resolve UUID da delivery no G4U (user_actions) e POST /game/delivery/{id}/cancel.
+ */
+async function cmdZohoCancelJurPipelineLostDeals(argv) {
+  const dryRun = argv.includes('--dry-run');
+  const pipeline =
+    argvFlagValue(argv, '--pipeline') ||
+    process.env.G4U_ZOHO_JUR_PIPELINE_LOST_CANCEL?.trim() ||
+    process.env.ZOHO_JUR_PIPELINE_LOST_CANCEL?.trim() ||
+    'Jurídico';
+  const stage =
+    argvFlagValue(argv, '--stage') ||
+    process.env.G4U_ZOHO_JUR_STAGE_LOST_CANCEL?.trim() ||
+    'Fechado e Perdido';
+
+  const criteria = buildZohoDealsSearchCriteriaPipelineAndStage(pipeline, stage);
+  console.log(
+    `${colors.cyan}zoho-cancel-jur-lost-deals:${colors.reset} ` +
+      `Deals/search (sem Modified_Time) Pipeline="${pipeline}" Stage="${stage}"\n` +
+      `  criteria=${criteria}`
+  );
+
+  const token = await zohoRefreshToken();
+  const allDeals = await zohoFetchAllDealsSearchPages(criteria, token);
+  if (!allDeals.length) {
+    console.warn(`${colors.yellow}Nenhum deal encontrado no Zoho com esse Pipeline+Stage.${colors.reset}`);
+    return;
+  }
+  const maxDeals = zohoRunnerMaxDeals(argv);
+  const deals = allDeals.slice(0, maxDeals);
+  if (deals.length < allDeals.length) {
+    console.log(
+      `${colors.cyan}Deals:${colors.reset} ${allDeals.length} no total; processando ${deals.length} (--max-deals / ZOHO_MAX_DEALS).`
+    );
+  }
+
+  if (!dryRun) await ensureToken();
+
+  let ok = 0;
+  let fail = 0;
+  let skipped = 0;
+  let dry = 0;
+
+  for (let i = 0; i < deals.length; i++) {
+    const deal = deals[i];
+    if (!deal?.id) continue;
+    if (i > 0) await sleep(100);
+
+    if (dryRun) {
+      dry++;
+      console.log(
+        `${colors.dim}[dry-run]${colors.reset} POST /game/delivery/.../cancel deal ${deal.id} ${deal.Deal_Name || ''}`
+      );
+      continue;
+    }
+
+    const resolved = await game4uResolveDeliveryPathIdForZohoDeal(deal.id);
+    if (resolved.skip) {
+      skipped++;
+      const why =
+        resolved.source === 'no-user-actions'
+          ? 'sem user_actions no G4U (G4U_ZOHO_DELIVERY_PATH_WITHOUT_USER_ACTIONS=1 força id Zoho)'
+          : resolved.source === 'ambiguous-delivery-uuid'
+            ? 'vários UUID de delivery nos user_actions'
+            : String(resolved.source || 'skip');
+      console.warn(`${colors.yellow}deal ${deal.id}: omitido — ${why}.${colors.reset}`);
+      continue;
+    }
+    const pathId = resolved.pathId;
+    await sleep(70);
+    const pr = await game4uPostDeliveryCancel(pathId);
+    if (pr.ok) {
+      ok++;
+      console.log(
+        `${colors.green}cancel ok${colors.reset} deal ${deal.id} path=${String(pathId).slice(0, 13)}…`
+      );
+    } else {
+      fail++;
+      console.warn(
+        `${colors.yellow}cancel ${pr.status}${colors.reset} deal ${deal.id} — ${JSON.stringify(pr.json || pr.raw).slice(0, 400)}`
+      );
+    }
+  }
+
+  console.log(
+    `${colors.cyan}Resumo zoho-cancel-jur-lost-deals:${colors.reset} ok=${ok} fail=${fail} skipped=${skipped} dry=${dry} (${deals.length} deal(s))`
   );
 }
 
@@ -5257,14 +5563,24 @@ Comandos:
                                 Opção: --zoho-cobranca-all-transitions (ou ZOHO_COBRANCA_ALL_TIMELINE_TRANSITIONS=1) — cada mudança
                                 Stage no __timeline (cronológico); DONE com created_at = audited_time (sem search).
                                 Env: ZOHO_COBRANCA_PIPELINE_NAME (opcional)
-  zoho-delivery-cancel-restore  Zoho: replay de todas as transições Stage no __timeline; POST /game/delivery/{dealId}/cancel
+  zoho-delivery-cancel-restore  Zoho: replay de todas as transições Stage no __timeline; POST /game/delivery/{id}/cancel
                                 quando _value.new é estágio "perdido"; POST .../restore quando _value.old é perdido e _value.new
                                 está nos estágios permitidos (stageTitleToActionTemplateId + extra no config/env).
+                                Id no path: resolve UUID via /user-action/search quando existir; sem user_actions no G4U omite (evita
+                                erro backend "Cannot coerce…"); G4U_ZOHO_DELIVERY_PATH_WITHOUT_USER_ACTIONS=1 força id Zoho.
+                                Stage atual do deal = perdido sem new→perdido no timeline: cancel extra (default ligado;
+                                G4U_ZOHO_DELIVERY_CANCEL_WHEN_DEAL_STAGE_LOST=0 ou cancelWhenDealRecordStageMatchesLost false desliga).
                                 Opções: --dry-run  --max-deals N  --zoho-timeline-bare  --zoho-ignore-pipeline-filter
                                 --zoho-transitions-only-month YYYY-MM  --zoho-transition-audited-from/to ISO
                                 --deal-ids-csv caminho.csv  --deal-ids-csv-only-found-no
                                 Restore: user_email = Owner do deal ou G4U_ZOHO_FALLBACK_USER_EMAIL.
                                 Env: G4U_ZOHO_DELIVERY_CANCEL_NEW_STAGES (CSV)  G4U_ZOHO_DELIVERY_RESTORE_ALLOWED_NEW_STAGES (CSV extra)
+  zoho-cancel-jur-lost-deals    Zoho: Deals/search **sem Modified_Time** — (Pipeline + Stage) iguais ao Jurídico em
+                                "Fechado e Perdido" (rótulos configuráveis). Para cada deal: resolve UUID da delivery
+                                (GET /user-action/search) e **POST /game/delivery/{id}/cancel** (mesma regra que cancel-restore).
+                                Opções: --dry-run  --max-deals N  --pipeline "Nome"  --stage "Nome do estágio"
+                                Env: G4U_ZOHO_JUR_PIPELINE_LOST_CANCEL  G4U_ZOHO_JUR_STAGE_LOST_CANCEL (defaults: Jurídico, Fechado e Perdido)
+                                ZOHO_DEALS_PIPELINE_FIELD / ZOHO_DEALS_STAGE_FIELD se os api_name forem diferentes
   zoho-tasks                    Mesmo Deals/search paginado; Activities_Chronological com page_token (todas páginas).
                                 Jur + tags: uma atividade mais recente por action template (tagFlowTitleToActionTemplateId);
                                 POST process; integration_id jur estável por template. --max-deals / ZOHO_MAX_DEALS
@@ -5303,6 +5619,8 @@ Env úteis:
   G4U_ZOHO_STAGE_DONE_USE_AUDITED_WHEN_SEARCH_MISS  default ligado — Stage DONE usa audited_time se search não achar created_at; 0/false desliga
   G4U_ZOHO_DELIVERY_CANCEL_NEW_STAGES   CSV opcional — rótulos Zoho em _value.new que disparam cancel (default config)
   G4U_ZOHO_DELIVERY_RESTORE_ALLOWED_NEW_STAGES  CSV — estágios extra permitidos para restore (além do mapa)
+  G4U_ZOHO_DELIVERY_PATH_WITHOUT_USER_ACTIONS  1/true — cancel/restore com id Zoho mesmo sem user_actions no G4U (default: omitir)
+  G4U_ZOHO_DELIVERY_CANCEL_WHEN_DEAL_STAGE_LOST  0/false — não cancelar só porque Stage do deal já é perdido (default: ligado)
   G4U_CS_TEAM_ID                Id do time CS no GET /game/team-actions (default 4 se GET /team não casar nome)
   G4U_ACCESS_TOKEN              Pula login se já autenticado
   G4U_SEED_DEFAULT_PASSWORD     Senha fallback se linha do .md não bater por e-mail
@@ -5347,6 +5665,9 @@ const cmd = argv[0] || 'help';
         break;
       case 'zoho-delivery-cancel-restore':
         await cmdZohoDeliveryCancelRestore(argv);
+        break;
+      case 'zoho-cancel-jur-lost-deals':
+        await cmdZohoCancelJurPipelineLostDeals(argv);
         break;
       case 'zoho-tasks':
         await cmdZohoTasks(argv);

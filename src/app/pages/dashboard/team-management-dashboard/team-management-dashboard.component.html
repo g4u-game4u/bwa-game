@@ -257,7 +257,10 @@
               productivityAnalysisInMaintenance
                 ? 'Análise de produtividade em manutenção'
                 : 'Visualizar análise de produtividade'
-            ">
+            "
+            (click)="switchTab('productivity')"
+            (keydown.enter)="switchTab('productivity')"
+            (keydown.space)="switchTab('productivity'); $event.preventDefault()">
             <i class="fas fa-chart-line" aria-hidden="true"></i>
             <span>Análise de Produtividade</span>
           </button>

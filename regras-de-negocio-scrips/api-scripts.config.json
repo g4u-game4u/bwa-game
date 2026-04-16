@@ -184,6 +184,8 @@
     ],
     "deliveryCancelRestoreFromLostStages": {
       "description": "Runner zoho-delivery-cancel-restore: no __timeline, cancel quando _value.new é estágio perdido; restore quando _value.old é perdido e _value.new está permitido.",
+      "cancelWhenDealRecordStageMatchesLost": true,
+      "cancelWhenDealRecordStageMatchesLostNote": "Se true: cancel também quando o campo Stage do Deal já é perdido e o __timeline filtrado não tem transição new→perdido (negócio há tempo em perdido). Desligar: false ou env G4U_ZOHO_DELIVERY_CANCEL_WHEN_DEAL_STAGE_LOST=0.",
       "cancelWhenNewStageNames": [
         "Fechado e Perdido",
         "Sem Negociação Pagto (Inad/Perda)"

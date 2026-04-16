@@ -15,6 +15,7 @@
     "api-scripts:zoho-stages": "node regras-de-negocio-scrips/run-api-scripts.mjs zoho-stages",
     "api-scripts:zoho-cobranca-stages": "node regras-de-negocio-scrips/run-api-scripts.mjs zoho-cobranca-stages",
     "api-scripts:zoho-delivery-cancel-restore": "node regras-de-negocio-scrips/run-api-scripts.mjs zoho-delivery-cancel-restore",
+    "api-scripts:zoho-cancel-jur-lost-deals": "node regras-de-negocio-scrips/run-api-scripts.mjs zoho-cancel-jur-lost-deals",
     "api-scripts:zoho-tasks": "node regras-de-negocio-scrips/run-api-scripts.mjs zoho-tasks",
     "api-scripts:zoho-tasks:april": "node regras-de-negocio-scrips/run-api-scripts.mjs zoho-tasks --zoho-tasks-april-deals",
     "api-scripts:zoho-tasks:debug": "node regras-de-negocio-scrips/run-api-scripts.mjs zoho-tasks --zoho-tasks-debug-summary",

@@ -954,6 +954,23 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
   }
 
   /**
+   * Janela dos gráficos de produtividade: últimos `selectedPeriod` dias dentro do mês do dashboard,
+   * com fim no último dia do mês ou em hoje (o que for menor).
+   */
+  private getProductivityChartRange(): { start: dayjs.Dayjs; end: dayjs.Dayjs } {
+    const { start: mStart, end: mEnd } = this.calculateDateRange();
+    const monthStart = dayjs(mStart).startOf('day');
+    const monthEnd = dayjs(mEnd).endOf('day');
+    const now = dayjs();
+    const endDj = monthEnd.isAfter(now, 'day') ? now.endOf('day') : monthEnd;
+    let startDj = endDj.subtract(this.selectedPeriod, 'day');
+    if (startDj.isBefore(monthStart)) {
+      startDj = monthStart;
+    }
+    return { start: startDj, end: endDj };
+  }
+
+  /**
    * E-mail do colaborador para `/game/stats` e `?user=` em `/game/actions` (contrato = e-mail).
    * Usa {@link collaborators} e {@link teamMembersData} para cobrir UUID Game4U e evitar corrida com `loadCollaborators`.
    */
@@ -1249,10 +1266,35 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
             TIPO_CONSULTA_TIME,
             seasonIso
           );
-          const bloq = Math.floor(Number(dash.blocked_points) || 0);
-          const desb = Math.floor(Number(dash.unblocked_points) || 0);
+          let bloq = Math.floor(Number(dash.blocked_points) || 0);
+          let desb = Math.floor(Number(dash.unblocked_points) || 0);
+
+          let seasonTeamActions: UserActionRow[] = [];
+          try {
+            seasonTeamActions = await this.userActionDashboard.fetchAllUserActionsWithParams({
+              team_id: this.selectedTeamId,
+              start: SEASON_GAME_ACTION_RANGE.start.toISOString(),
+              end: SEASON_GAME_ACTION_RANGE.end.toISOString()
+            });
+          } catch (e) {
+            console.warn('[TeamManagement] GET /game/team-actions (temporada) para carteira:', e);
+          }
+          const walletFromActions = this.userActionDashboard.getSeasonPointWalletDoneDelivered(
+            seasonTeamActions,
+            SEASON_GAME_ACTION_RANGE.start,
+            SEASON_GAME_ACTION_RANGE.end
+          );
+          if (bloq === 0 && desb === 0) {
+            bloq = walletFromActions.bloqueados;
+            desb = walletFromActions.desbloqueados;
+          } else {
+            bloq = Math.max(bloq, walletFromActions.bloqueados);
+            desb = Math.max(desb, walletFromActions.desbloqueados);
+          }
+          const totalPts = Math.floor(bloq + desb);
+
           this.seasonPoints = {
-            total: Math.floor(bloq + desb),
+            total: totalPts,
             bloqueados: bloq,
             desbloqueados: desb
           };
@@ -1538,17 +1580,15 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       const collaborator = this.collaborators.find(c => c.userId === collaboratorId);
       const memberName = this.formatCollaboratorName(collaboratorId, collaborator?.name);
       
-      // For productivity tab, use the selected period instead of month range
-      const endDate = dayjs();
-      const startDate = endDate.subtract(this.selectedPeriod, 'day');
-      
+      const { start: startDate, end: endDate } = this.getProductivityChartRange();
+
       // Query action_log for daily completed tasks count for this collaborator
       const aggregateBody = [
         {
           $match: {
             userId: collaboratorId,
             time: {
-              $gte: { $date: startDate.toISOString() },
+              $gte: { $date: startDate.startOf('day').toISOString() },
               $lte: { $date: endDate.toISOString() }
             }
           }
@@ -1678,7 +1718,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
             player: collaboratorId,
             type: 0, // type 0 = points
             time: {
-              $gte: { $date: startDate.toISOString() },
+              $gte: { $date: startDate.startOf('day').toISOString() },
               $lte: { $date: endDate.toISOString() }
             }
           }
@@ -1791,11 +1831,39 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
         return;
       }
       
-      // For productivity tab, use the selected period instead of month range
-      const endDate = dayjs();
-      const startDate = endDate.subtract(this.selectedPeriod, 'day');
-      
+      // Eixo temporal: mês selecionado (calculateDateRange) + janela de selectedPeriod dias
+      void dateRange;
+      const { start: startDate, end: endDate } = this.getProductivityChartRange();
+
       try {
+        if (FUNIFIER_HTTP_DISABLED && this.selectedTeamId) {
+          let allRows: UserActionRow[] = [];
+          try {
+            allRows = await this.userActionDashboard.fetchAllUserActionsWithParams({
+              team_id: this.selectedTeamId,
+              start: startDate.startOf('day').toISOString(),
+              end: endDate.toISOString()
+            });
+          } catch (e) {
+            console.error('Error loading team-actions for productivity:', e);
+            allRows = [];
+          }
+          const dailyByEmail = this.userActionDashboard.buildDailyFinalizedActivityAndPointsByUserEmail(
+            allRows,
+            startDate.toDate(),
+            endDate.toDate()
+          );
+          const validMemberDataG4u = this.buildProductivityMemberSeriesFromTeamGameActions(
+            dailyByEmail,
+            startDate,
+            endDate
+          );
+          this.applyProductivityChartsFromValidMemberData(
+            validMemberDataG4u,
+            startDate,
+            endDate
+          );
+        } else {
         // OPTIMIZED: Single aggregate query with $lookup to get all action logs for the team
         // This replaces N individual requests with 1 aggregate request
         const actionLogsAggregateBody = [
@@ -1814,7 +1882,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
             $match: {
               'playerData.teams': this.selectedTeamId,
               time: {
-                $gte: { $date: startDate.toISOString() },
+                $gte: { $date: startDate.startOf('day').toISOString() },
                 $lte: { $date: endDate.toISOString() }
               }
             }
@@ -1845,7 +1913,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
               player: { $in: this.teamMemberIds },
               type: 0, // type 0 = points
               time: {
-                $gte: { $date: startDate.toISOString() },
+                $gte: { $date: startDate.startOf('day').toISOString() },
                 $lte: { $date: endDate.toISOString() }
               }
             }
@@ -1956,86 +2024,10 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
             pointsDataPoints
           });
         });
-        
-        // Create multiple datasets (one per member) for activities and points
-        if (validMemberData.length > 0) {
-          // Generate date labels
-          const dateLabels = this.graphDataProcessor.getDateLabels(this.selectedPeriod);
-          
-          // Create datasets for activities (one per member)
-          this.graphDatasets = validMemberData.map((memberData, index) => {
-            const colors = this.getColorForIndex(index);
-            return {
-              label: memberData.memberName,
-              data: memberData.activitiesDataPoints.map(point => point.value),
-              borderColor: colors.border,
-              backgroundColor: colors.background,
-              fill: false
-            };
-          });
-          
-          // Create datasets for points (one per member)
-          this.pointsGraphDatasets = validMemberData.map((memberData, index) => {
-            const colors = this.getColorForIndex(index);
-            return {
-              label: memberData.memberName,
-              data: memberData.pointsDataPoints.map(point => point.value),
-              borderColor: colors.border,
-              backgroundColor: colors.background,
-              fill: false
-            };
-          });
-          
-          // Also set graphData for backward compatibility (aggregated activities)
-          const aggregatedActivitiesMap = new Map<string, number>();
-          validMemberData.forEach(memberData => {
-            memberData.activitiesDataPoints.forEach(point => {
-              const dateStr = dayjs(point.date).format('YYYY-MM-DD');
-              aggregatedActivitiesMap.set(dateStr, (aggregatedActivitiesMap.get(dateStr) || 0) + point.value);
-            });
-          });
-          
-          // Aggregate points data
-          const aggregatedPointsMap = new Map<string, number>();
-          validMemberData.forEach(memberData => {
-            memberData.pointsDataPoints.forEach(point => {
-              const dateStr = dayjs(point.date).format('YYYY-MM-DD');
-              aggregatedPointsMap.set(dateStr, (aggregatedPointsMap.get(dateStr) || 0) + point.value);
-            });
-          });
-          
-          const aggregatedActivities: GraphDataPoint[] = [];
-          const aggregatedPoints: GraphDataPoint[] = [];
-          let currentDate = startDate;
-          while (currentDate.isBefore(endDate) || currentDate.isSame(endDate, 'day')) {
-            const dateStr = currentDate.format('YYYY-MM-DD');
-            aggregatedActivities.push({
-              date: currentDate.toDate(),
-              value: aggregatedActivitiesMap.get(dateStr) || 0
-            });
-            aggregatedPoints.push({
-              date: currentDate.toDate(),
-              value: Math.floor(aggregatedPointsMap.get(dateStr) || 0) // Round down points
-            });
-            currentDate = currentDate.add(1, 'day');
-          }
-          
-          this.graphData = aggregatedActivities;
-          this.pointsGraphData = aggregatedPoints;
-          
-          // Calculate totals by collaborator for bar charts
-          this.calculateCollaboratorTotals(validMemberData);
-        } else {
-          this.graphData = [];
-          this.graphDatasets = [];
-          this.pointsGraphData = [];
-          this.pointsGraphDatasets = [];
-          this.activitiesByCollaboratorGraphData = [];
-          this.activitiesByCollaboratorDatasets = [];
-          this.pointsByCollaboratorGraphData = [];
-          this.pointsByCollaboratorDatasets = [];
+
+        this.applyProductivityChartsFromValidMemberData(validMemberData, startDate, endDate);
         }
-        
+
         this.hasProductivityError = false;
         this.cdr.markForCheck();
       } catch (error) {
@@ -2068,12 +2060,152 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
     this.productivityErrorMessage = 'Erro ao carregar dados de produtividade';
     this.isLoadingProductivity = false;
   }
-}
+  }
 
-/**
- * Calculate total activities and points by collaborator for bar charts
- */
-private calculateCollaboratorTotals(memberData: Array<{ 
+  private applyProductivityChartsFromValidMemberData(
+    validMemberData: Array<{
+      memberId: string;
+      memberName: string;
+      activitiesDataPoints: GraphDataPoint[];
+      pointsDataPoints: GraphDataPoint[];
+    }>,
+    startDate: dayjs.Dayjs,
+    endDate: dayjs.Dayjs
+  ): void {
+    if (validMemberData.length === 0) {
+      this.graphData = [];
+      this.graphDatasets = [];
+      this.pointsGraphData = [];
+      this.pointsGraphDatasets = [];
+      this.activitiesByCollaboratorGraphData = [];
+      this.activitiesByCollaboratorDatasets = [];
+      this.activitiesByCollaboratorLabels = [];
+      this.pointsByCollaboratorGraphData = [];
+      this.pointsByCollaboratorDatasets = [];
+      this.pointsByCollaboratorLabels = [];
+      return;
+    }
+
+    this.graphDatasets = validMemberData.map((memberData, index) => {
+      const colors = this.getColorForIndex(index);
+      return {
+        label: memberData.memberName,
+        data: memberData.activitiesDataPoints.map(point => point.value),
+        borderColor: colors.border,
+        backgroundColor: colors.background,
+        fill: false
+      };
+    });
+
+    this.pointsGraphDatasets = validMemberData.map((memberData, index) => {
+      const colors = this.getColorForIndex(index);
+      return {
+        label: memberData.memberName,
+        data: memberData.pointsDataPoints.map(point => point.value),
+        borderColor: colors.border,
+        backgroundColor: colors.background,
+        fill: false
+      };
+    });
+
+    const aggregatedActivitiesMap = new Map<string, number>();
+    validMemberData.forEach(memberData => {
+      memberData.activitiesDataPoints.forEach(point => {
+        const dateStr = dayjs(point.date).format('YYYY-MM-DD');
+        aggregatedActivitiesMap.set(dateStr, (aggregatedActivitiesMap.get(dateStr) || 0) + point.value);
+      });
+    });
+
+    const aggregatedPointsMap = new Map<string, number>();
+    validMemberData.forEach(memberData => {
+      memberData.pointsDataPoints.forEach(point => {
+        const dateStr = dayjs(point.date).format('YYYY-MM-DD');
+        aggregatedPointsMap.set(dateStr, (aggregatedPointsMap.get(dateStr) || 0) + point.value);
+      });
+    });
+
+    const aggregatedActivities: GraphDataPoint[] = [];
+    const aggregatedPoints: GraphDataPoint[] = [];
+    let currentDate = startDate;
+    while (currentDate.isBefore(endDate) || currentDate.isSame(endDate, 'day')) {
+      const dateStr = currentDate.format('YYYY-MM-DD');
+      aggregatedActivities.push({
+        date: currentDate.toDate(),
+        value: aggregatedActivitiesMap.get(dateStr) || 0
+      });
+      aggregatedPoints.push({
+        date: currentDate.toDate(),
+        value: Math.floor(aggregatedPointsMap.get(dateStr) || 0)
+      });
+      currentDate = currentDate.add(1, 'day');
+    }
+
+    this.graphData = aggregatedActivities;
+    this.pointsGraphData = aggregatedPoints;
+
+    this.calculateCollaboratorTotals(validMemberData);
+  }
+
+  private buildProductivityMemberSeriesFromTeamGameActions(
+    dailyByEmail: Map<string, Map<string, { activities: number; points: number }>>,
+    startDate: dayjs.Dayjs,
+    endDate: dayjs.Dayjs
+  ): Array<{
+    memberId: string;
+    memberName: string;
+    activitiesDataPoints: GraphDataPoint[];
+    pointsDataPoints: GraphDataPoint[];
+  }> {
+    const validMemberData: Array<{
+      memberId: string;
+      memberName: string;
+      activitiesDataPoints: GraphDataPoint[];
+      pointsDataPoints: GraphDataPoint[];
+    }> = [];
+
+    this.teamMemberIds.forEach(memberId => {
+      const collaborator = this.collaborators.find(c => c.userId === memberId);
+      const memberName = this.formatCollaboratorName(memberId, collaborator?.name);
+      const email = (
+        this.userActionDashboard.resolvePlayerKeyWithRoster(memberId, this.collaborators) || ''
+      )
+        .trim()
+        .toLowerCase();
+      const dayMap = email ? dailyByEmail.get(email) : undefined;
+
+      const activitiesDataPoints: GraphDataPoint[] = [];
+      const pointsDataPoints: GraphDataPoint[] = [];
+
+      let currentDate = startDate;
+      while (currentDate.isBefore(endDate) || currentDate.isSame(endDate, 'day')) {
+        const dateStr = currentDate.format('YYYY-MM-DD');
+        const cell = dayMap?.get(dateStr);
+        activitiesDataPoints.push({
+          date: currentDate.toDate(),
+          value: cell?.activities ?? 0
+        });
+        pointsDataPoints.push({
+          date: currentDate.toDate(),
+          value: Math.floor(cell?.points ?? 0)
+        });
+        currentDate = currentDate.add(1, 'day');
+      }
+
+      validMemberData.push({
+        memberId,
+        memberName,
+        activitiesDataPoints,
+        pointsDataPoints
+      });
+    });
+
+    return validMemberData;
+  }
+
+  /**
+   * Calculate total activities and points by collaborator for bar charts
+   */
+  private calculateCollaboratorTotals(memberData: Array<{ 
   memberId: string; 
   memberName: string; 
   activitiesDataPoints: GraphDataPoint[]; 
@@ -2773,11 +2905,7 @@ private calculateCollaboratorTotals(memberData: Array<{
    */
   onPeriodChange(period: number): void {
     this.selectedPeriod = period;
-    const dateRange = {
-      start: dayjs().subtract(period, 'day').toDate(),
-      end: new Date()
-    };
-    this.loadProductivityData(dateRange);
+    void this.loadProductivityData(this.calculateDateRange());
   }
 
 
@@ -2794,6 +2922,7 @@ private calculateCollaboratorTotals(memberData: Array<{
     } else if (tab === 'productivity' && !this.selectedCollaborator) {
       void this.loadProductivityData(this.calculateDateRange());
     }
+    this.cdr.markForCheck();
   }
 
   /** Toast ao passar o rato no separador de produtividade em manutenção (com debounce simples). */

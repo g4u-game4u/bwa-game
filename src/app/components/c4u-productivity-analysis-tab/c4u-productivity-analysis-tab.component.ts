@@ -1,6 +1,7 @@
 import { Component, EventEmitter, Input, OnInit, Output, OnChanges, SimpleChanges, ChangeDetectionStrategy } from '@angular/core';
 import { Subject } from 'rxjs';
 import { debounceTime } from 'rxjs/operators';
+import * as dayjs from 'dayjs';
 import { GraphDataPoint, ChartDataset } from '../../model/gamification-dashboard.model';
 import { GraphDataProcessorService } from '../../services/graph-data-processor.service';
 
@@ -160,7 +161,12 @@ export class C4uProductivityAnalysisTabComponent implements OnInit, OnChanges {
   private updateChartData(): void {
     // If pre-configured datasets are provided, use them
     if (this.chartDatasetsInput && this.chartDatasetsInput.length > 0) {
-      this.chartLabels = this.graphDataProcessor.getDateLabels(this.selectedPeriod);
+      const n = this.chartDatasetsInput[0]?.data?.length ?? 0;
+      if (this.graphData?.length > 0 && this.graphData.length === n) {
+        this.chartLabels = this.graphData.map(p => dayjs(p.date).format('DD/MM'));
+      } else {
+        this.chartLabels = this.graphDataProcessor.getDateLabels(this.selectedPeriod);
+      }
       this.chartDatasets = this.chartDatasetsInput;
       return;
     }
