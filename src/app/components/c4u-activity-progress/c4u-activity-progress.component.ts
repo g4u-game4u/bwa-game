@@ -14,6 +14,9 @@ export interface MonthlyPointsBreakdown {
   styleUrls: ['./c4u-activity-progress.component.scss']
 })
 export class C4uActivityProgressComponent {
+  /** Rótulos «Movimentações» em vez de «Tarefas» (times CS / Financeiro). */
+  @Input() useMovimentacoesLabels = false;
+
   @Input() activities: ActivityMetrics = {
     pendentes: 0,
     emExecucao: 0,

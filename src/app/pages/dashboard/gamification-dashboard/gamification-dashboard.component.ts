@@ -36,6 +36,7 @@ import {
   pickTeamIdFromUserProfile,
   resolveTeamDisplayNameForPlayerSidebar
 } from '@utils/game4u-user-id.util';
+import { usesMovimentacoesTerminology } from '@utils/team-terminology-movimentacoes.util';
 import { FUNIFIER_HTTP_DISABLED } from '@app/config/funifier-requests-disabled';
 import { TemporadaService } from '@services/temporada.service';
 import { TIPO_CONSULTA_COLABORADOR } from '../dashboard.component';
@@ -1040,7 +1041,11 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
       case 'atividades-finalizadas':
         this.progressModalType = 'atividades';
         this.isProgressModalOpen = true;
-        this.announceToScreenReader('Abrindo lista de atividades finalizadas');
+        this.announceToScreenReader(
+          this.useMovimentacoesTerminology
+            ? 'Abrindo lista de movimentações finalizadas'
+            : 'Abrindo lista de atividades finalizadas'
+        );
         break;
       case 'atividades-pontos':
         this.progressModalType = 'pontos';
@@ -1153,6 +1158,27 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
    */
   get enabledKPIs(): KPIData[] {
     return this.playerKPIs;
+  }
+
+  /**
+   * Textos «tarefas/atividades» → «movimentações» para membros dos times CS e Financeiro.
+   */
+  get useMovimentacoesTerminology(): boolean {
+    const u = this.sessaoProvider.usuario as
+      | { teams?: unknown; extra?: Record<string, unknown> }
+      | null
+      | undefined;
+    const tid = pickTeamIdFromUserProfile(this.sessaoProvider.usuario);
+    const teams = u?.teams;
+    const first = Array.isArray(teams) && teams.length > 0 ? teams[0] : undefined;
+    const extra = u?.extra && typeof u.extra === 'object' ? u.extra : undefined;
+    const fromProfile = resolveTeamDisplayNameForPlayerSidebar(
+      first,
+      extra as Record<string, unknown> | undefined,
+      u as Record<string, unknown> | null | undefined
+    );
+    const fromMeta = String(this.playerStatus?.metadata?.time || '').trim();
+    return usesMovimentacoesTerminology(tid, fromProfile || fromMeta);
   }
 
   /**

@@ -26,8 +26,11 @@
     <div class="progress-row">
       <div class="row-left">
         <i class="ri-checkbox-circle-line icon tarefas"></i>
-        <span class="label">Tarefas Finalizadas</span>
-        <c4u-info-button infoKey="tarefas-finalizadas" position="top"></c4u-info-button>
+        <span class="label">{{ useMovimentacoesLabels ? 'Movimentações Finalizadas' : 'Tarefas Finalizadas' }}</span>
+        <c4u-info-button
+          [infoKey]="useMovimentacoesLabels ? 'tarefas-finalizadas-movimentacoes' : 'tarefas-finalizadas'"
+          position="top">
+        </c4u-info-button>
       </div>
       <span class="value">{{ progress.tarefasFinalizadas | number:'1.0-0':'pt-BR' }}</span>
     </div>

@@ -54,7 +54,8 @@
           <c4u-season-progress
             *ngIf="teamSeasonProgress"
             [progress]="teamSeasonProgress"
-            [processosFinalizados]="progressMetrics.processosFinalizados">
+            [processosFinalizados]="progressMetrics.processosFinalizados"
+            [useMovimentacoesLabels]="isMovimentacoesTerminologyTeam()">
           </c4u-season-progress>
           
           <c4u-shimmer *ngIf="isLoadingSidebar && !teamSeasonProgress"></c4u-shimmer>
@@ -328,6 +329,7 @@
                 [activities]="teamActivityMetrics"
                 [processos]="teamProcessMetrics"
                 [monthlyPointsBreakdown]="monthlyPointsBreakdown"
+                [useMovimentacoesLabels]="isMovimentacoesTerminologyTeam()"
                 (cardClicked)="onProgressCardClicked($event)">
               </c4u-activity-progress>
               
@@ -390,7 +392,7 @@
               </div>
 
               <div *ngIf="!isLoadingCarteira && teamCarteiraClientes.length === 0" class="empty-state">
-                <p>Nenhuma entrega/cliente com tarefas neste mês (via Funifier ou Game4U).</p>
+                <p>{{ carteiraEmptyTasksMessage }}</p>
               </div>
             </c4u-card>
           </section>
@@ -429,14 +431,15 @@
 
             <!-- Activities Chart -->
             <section class="dashboard-section" aria-labelledby="activities-chart-title">
-              <h3 id="activities-chart-title" class="section-title">Volume de Atividades por Dia</h3>
+              <h3 id="activities-chart-title" class="section-title">{{ productivityVolumeActivitiesTitle }}</h3>
               <c4u-productivity-analysis-tab
                 [graphData]="graphData"
                 [chartDatasetsInput]="graphDatasets"
                 [selectedPeriod]="selectedPeriod"
                 [isLoading]="isLoadingProductivity"
                 [externalChartType]="'line'"
-                [hideHeader]="true">
+                [hideHeader]="true"
+                [activitiesDatasetLabel]="productivityActivitiesDatasetLabel">
               </c4u-productivity-analysis-tab>
             </section>
 
@@ -455,7 +458,7 @@
 
             <!-- Activities by Collaborator Chart -->
             <section class="dashboard-section" aria-labelledby="activities-by-collaborator-chart-title">
-              <h3 id="activities-by-collaborator-chart-title" class="section-title">Total de Atividades por Colaborador</h3>
+              <h3 id="activities-by-collaborator-chart-title" class="section-title">{{ productivityTotalByCollaboratorTitle }}</h3>
               <div class="chart-container" [class.loading]="isLoadingProductivity">
                 <div *ngIf="isLoadingProductivity" class="loading-overlay" role="status" aria-live="polite">
                   <div class="spinner-border text-primary" role="status" aria-hidden="true">
@@ -469,7 +472,7 @@
                     [datasets]="activitiesByCollaboratorDatasets"
                     [showLegend]="false"
                     role="img"
-                    [attr.aria-label]="'Gráfico de barras mostrando total de atividades por colaborador'">
+                    [attr.aria-label]="productivityBarChartAriaLabel">
                   </c4u-grafico-barras>
                 </div>
                 <div *ngIf="!isLoadingProductivity && activitiesByCollaboratorDatasets.length === 0" class="empty-state" role="status" aria-live="polite">
@@ -526,6 +529,7 @@
     [month]="selectedMonth"
     [showPointsInActivityList]="true"
     [useBackendUserActions]="true"
+    [useMovimentacoesLabels]="isMovimentacoesTerminologyTeam()"
     [gameActionsUserRoster]="gameActionsUserRosterForModal"
     (closed)="onProgressModalClosed()">
   </modal-progress-list>

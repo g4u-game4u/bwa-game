@@ -7,6 +7,12 @@ import { SeasonProgress } from '@model/gamification-dashboard.model';
   styleUrls: ['./c4u-season-progress.component.scss']
 })
 export class C4uSeasonProgressComponent {
+  /**
+   * Quando true (ex.: times CS ou Financeiro), o rótulo da linha passa a «Movimentações Finalizadas»
+   * e o texto de ajuda usa a chave `tarefas-finalizadas-movimentacoes`.
+   */
+  @Input() useMovimentacoesLabels = false;
+
   @Input() progress: SeasonProgress = {
     metas: { current: 0, target: 0 },
     clientes: 0,

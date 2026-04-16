@@ -60,6 +60,9 @@ export class C4uProductivityAnalysisTabComponent implements OnInit, OnChanges {
    */
   @Input() hideHeader: boolean = false;
 
+  /** Rótulo da série quando só há `graphData` (ex.: «Movimentações Finalizadas» para CS/Financeiro). */
+  @Input() activitiesDatasetLabel = 'Atividades Finalizadas';
+
   /**
    * Event emitted when time period changes
    */
@@ -145,7 +148,13 @@ export class C4uProductivityAnalysisTabComponent implements OnInit, OnChanges {
    * Requirement 8.5: Graph data updates
    */
   ngOnChanges(changes: SimpleChanges): void {
-    if (changes['graphData'] || changes['selectedPeriod'] || changes['chartDatasetsInput'] || changes['externalChartType']) {
+    if (
+      changes['graphData'] ||
+      changes['selectedPeriod'] ||
+      changes['chartDatasetsInput'] ||
+      changes['externalChartType'] ||
+      changes['activitiesDatasetLabel']
+    ) {
       // Trigger debounced update
       this.chartDataUpdate$.next();
     }
@@ -181,10 +190,9 @@ export class C4uProductivityAnalysisTabComponent implements OnInit, OnChanges {
     this.chartLabels = this.graphDataProcessor.getDateLabels(this.selectedPeriod);
 
     // Create dataset for productivity data
-    this.chartDatasets = this.graphDataProcessor.createChartDatasets(
-      this.graphData,
-      ['Atividades Finalizadas']
-    );
+    this.chartDatasets = this.graphDataProcessor.createChartDatasets(this.graphData, [
+      this.activitiesDatasetLabel
+    ]);
   }
 
   /**

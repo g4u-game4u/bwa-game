@@ -13,7 +13,9 @@
  *   node regras-de-negocio-scrips/run-api-scripts.mjs zoho-pipeline-probe
  *   node regras-de-negocio-scrips/run-api-scripts.mjs probe-game-action-process
  *   node regras-de-negocio-scrips/run-api-scripts.mjs game4u-cs-tarefas-planilha --dry-run
+ *   node regras-de-negocio-scrips/run-api-scripts.mjs export-user-actions-json [--out ficheiro.json] [--max-pages N]
  *   node regras-de-negocio-scrips/run-api-scripts.mjs zoho-delivery-cancel-restore --dry-run
+ *   node regras-de-negocio-scrips/run-api-scripts.mjs zoho-delivery-unlock-by-stage --dry-run
  *   node regras-de-negocio-scrips/run-api-scripts.mjs zoho-cancel-jur-lost-deals --dry-run
  *
  * Env (.env na raiz):
@@ -25,7 +27,7 @@
  */
 
 import { readFileSync, writeFileSync, existsSync } from 'fs';
-import { dirname, join } from 'path';
+import { dirname, join, isAbsolute } from 'path';
 import { fileURLToPath } from 'url';
 import { createRequire } from 'module';
 import { stdin as stdinIo, stdout as stdoutIo } from 'process';
@@ -555,6 +557,151 @@ function buildGame4uUserActionSearchQuery(deliveryId, status, opts = {}) {
 }
 
 /**
+ * GET /user-action/search só com intervalo temporal + dismissed + paginação (sem delivery_id nem status).
+ */
+function buildGame4uUserActionSearchGlobalPath(opts = {}) {
+  const c = cfg.game4uUserActionSearch || {};
+  const pathBase = c.path || '/user-action/search';
+  const envLim = process.env.G4U_USER_ACTION_SEARCH_LIMIT?.trim();
+  const baseLimit = Number(c.defaultLimit) || 100;
+  const parsedEnv = envLim ? parseInt(envLim, 10) : NaN;
+  let limit =
+    opts.limit != null && Number(opts.limit) > 0
+      ? Number(opts.limit)
+      : Number.isFinite(parsedEnv) && parsedEnv > 0
+        ? parsedEnv
+        : baseLimit;
+  limit = Math.min(Math.max(limit, 1), 500);
+  const start =
+    String(opts.createdAtStart || process.env.G4U_EXPORT_USER_ACTIONS_FROM?.trim() || '').trim() ||
+    c.createdAtStartDefault ||
+    '2000-01-01T00:00:00.000Z';
+  const end = String(
+    opts.createdAtEnd ||
+      process.env.G4U_EXPORT_USER_ACTIONS_TO?.trim() ||
+      new Date().toISOString()
+  ).trim();
+  const dismissed =
+    opts.dismissed !== undefined && opts.dismissed !== null ? String(opts.dismissed) : 'false';
+  const qs = new URLSearchParams({
+    created_at_start: start,
+    created_at_end: end,
+    dismissed,
+    limit: String(limit)
+  });
+  const page = opts.page != null ? String(opts.page) : '1';
+  if (opts.pageToken) {
+    qs.set('page_token', String(opts.pageToken));
+  } else {
+    qs.set('page', page);
+  }
+  return { path: `${pathBase}?${qs.toString()}`, limit };
+}
+
+/** Indica se a última resposta PaginatedResponseModel ainda tem páginas por consumir. */
+function game4uUserActionSearchResponseHasMore(j) {
+  if (!j || typeof j !== 'object') return false;
+  const nextTok = j.next_page_token ?? j.nextPageToken ?? j.Next_Page_Token;
+  if (typeof nextTok === 'string' && nextTok.trim()) return true;
+  const totalPages = j.total_pages ?? j.totalPages;
+  const curPage = j.page;
+  if (typeof totalPages === 'number' && typeof curPage === 'number' && curPage < totalPages) {
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Máximo de pedidos HTTP por ramo (dismissed=false ou true). Não reutiliza G4U_USER_ACTION_SEARCH_MAX_PAGES
+ * (usado no Zoho, tipicamente baixo) para não truncar exports grandes.
+ * --max-pages N no export-user-actions-json, ou env G4U_EXPORT_USER_ACTIONS_MAX_PAGES (teto absoluto 500_000).
+ */
+function resolveExportUserActionsMaxPages(argv = []) {
+  const cap = 500000;
+  const i = argv.indexOf('--max-pages');
+  if (i >= 0 && argv[i + 1] != null) {
+    const n = parseInt(String(argv[i + 1]), 10);
+    if (Number.isFinite(n) && n >= 1) return Math.min(n, cap);
+  }
+  const e = process.env.G4U_EXPORT_USER_ACTIONS_MAX_PAGES?.trim();
+  if (e) {
+    const n = parseInt(e, 10);
+    if (Number.isFinite(n) && n >= 1) return Math.min(n, cap);
+  }
+  return 20000;
+}
+
+async function game4uFetchAllUserActionSearchGlobal({ dismissed, maxPages, label }) {
+  const all = [];
+  let page = 1;
+  let pageToken = null;
+  let lastLimit = 100;
+  let lastJ = null;
+  let pagesFetched = 0;
+
+  for (let iter = 0; iter < maxPages; iter++) {
+    const { path, limit } = buildGame4uUserActionSearchGlobalPath({
+      dismissed,
+      page,
+      pageToken
+    });
+    lastLimit = limit;
+    const r = await game4uFetch(path);
+    if (!r.ok) {
+      return {
+        ok: false,
+        status: r.status,
+        json: r.json,
+        items: all,
+        pagesFetched: iter + 1,
+        truncated: false,
+        lastJson: lastJ
+      };
+    }
+    const j = r.json;
+    lastJ = j;
+    const chunk = unwrapGame4uUserActionSearchItems(r);
+    all.push(...chunk);
+    pagesFetched = iter + 1;
+
+    if (label && (iter === 0 || (iter + 1) % 200 === 0)) {
+      const tp = j?.total_pages ?? j?.totalPages;
+      const cp = j?.page;
+      const tpStr = typeof tp === 'number' ? String(tp) : '?';
+      const cpStr = typeof cp === 'number' ? String(cp) : '?';
+      console.log(
+        `${colors.dim}[export ${label}] pedido ${iter + 1}/${maxPages} · página ${cpStr}/${tpStr} · acumulado ${all.length} linhas${colors.reset}`
+      );
+    }
+
+    const nextTok =
+      j && typeof j === 'object'
+        ? j.next_page_token ?? j.nextPageToken ?? j.Next_Page_Token ?? null
+        : null;
+    if (typeof nextTok === 'string' && nextTok.trim()) {
+      pageToken = nextTok.trim();
+      continue;
+    }
+    pageToken = null;
+
+    const totalPages = j?.total_pages ?? j?.totalPages;
+    const curPage = typeof j?.page === 'number' ? j.page : page;
+    if (typeof totalPages === 'number' && typeof curPage === 'number' && curPage < totalPages) {
+      page = curPage + 1;
+      continue;
+    }
+
+    if (!chunk.length || chunk.length < lastLimit) {
+      break;
+    }
+    page += 1;
+  }
+
+  const truncated = pagesFetched === maxPages && game4uUserActionSearchResponseHasMore(lastJ);
+  return { ok: true, items: all, truncated, lastJson: lastJ, pagesFetched };
+}
+
+/**
  * Todas as páginas de /user-action/search para um delivery+status (evita perder linhas além do limit).
  * Respeita G4U_USER_ACTION_SEARCH_MAX_PAGES (default 80).
  */
@@ -711,6 +858,37 @@ async function game4uPostDeliveryCompleteIfConfigured(deliveryId, finishedAt) {
   const path = tmpl.replace('{{deliveryId}}', encodeURIComponent(String(deliveryId)));
   const method = gc.method || 'POST';
   return game4uFetch(path, { method, body: { finished_at: finishedAt } });
+}
+
+/** `finished_at` em POST /game/delivery/.../complete: Modified_Time do deal Zoho se parseável, senão agora (UTC). */
+function zohoDealModifiedTimeIsoForDeliveryComplete(deal) {
+  const m = deal?.Modified_Time ?? deal?.modified_time;
+  if (m != null && String(m).trim()) {
+    const p = Date.parse(String(m).trim());
+    if (!Number.isNaN(p)) return new Date(p).toISOString();
+    return String(m).trim();
+  }
+  return new Date().toISOString();
+}
+
+/**
+ * Estágios no registo Deal (campo Stage) para os quais o runner chama POST /game/delivery/{id}/complete (desbloquear na carteira).
+ * Env G4U_ZOHO_DELIVERY_UNLOCK_STAGE_NAMES=Liquidado,Acompanhamento Liquidação (CSV). Default: só Liquidado.
+ */
+function getZohoDeliveryUnlockStageNormSet() {
+  const fromEnv = parseCommaSeparatedStageLabels(process.env.G4U_ZOHO_DELIVERY_UNLOCK_STAGE_NAMES);
+  const fromCfg =
+    Array.isArray(cfg.zoho?.deliveryUnlockFromZohoDealStages) &&
+    cfg.zoho.deliveryUnlockFromZohoDealStages.length
+      ? cfg.zoho.deliveryUnlockFromZohoDealStages
+      : null;
+  const labels = fromEnv.length > 0 ? fromEnv : fromCfg || ['Liquidado'];
+  const set = new Set();
+  for (const lab of labels) {
+    const n = zohoNormStageLabelForMatch(lab);
+    if (n) set.add(n);
+  }
+  return set;
 }
 
 function mapZohoTaskStatusToGame4uStatus(rawStatus) {
@@ -1901,6 +2079,26 @@ function zohoAprilDealsModifiedBetweenUtc(year) {
   };
 }
 
+/** Março + abril completos (UTC) para critério Modified_Time:between (zoho-cancel-jur-lost-deals). */
+function zohoMarchAprilDealsModifiedBetweenUtc(year) {
+  const raw = Number(year);
+  const y =
+    Number.isFinite(raw) && raw >= 2000 && raw <= 2100 ? Math.trunc(raw) : new Date().getUTCFullYear();
+  return {
+    from: `${y}-03-01T00:00:00+00:00`,
+    to: `${y}-04-30T23:59:59+00:00`,
+    year: y
+  };
+}
+
+function parseZohoCancelLostDealsYear(argv) {
+  const yi = argv?.indexOf('--zoho-cancel-year');
+  if (yi >= 0 && argv[yi + 1] && /^\d{4}$/.test(String(argv[yi + 1]).trim())) {
+    return parseInt(String(argv[yi + 1]).trim(), 10);
+  }
+  return new Date().getUTCFullYear();
+}
+
 /**
  * Intervalo Modified_Time para zoho-tasks (env ou filtro abril).
  * @returns {{ from: string, to: string, kf: string, kt: string, aprilYear: number|null }}
@@ -2058,7 +2256,7 @@ function zohoDealsSearchCriteria(from, to, argv) {
 
 /**
  * Deals/search só por Pipeline + Stage (sem Modified_Time).
- * Usado para cancelar deliveries no G4U para todos os deals num estado atual (ex.: Jurídico + Fechado e Perdido).
+ * Usado para cancelar deliveries no G4U para todos os deals num estado atual (ex.: Cobrança + Fechado e Perdido).
  */
 function buildZohoDealsSearchCriteriaPipelineAndStage(pipelineDisplayName, stageDisplayName) {
   const pf = cfg.zoho.dealsSearch?.pipelineFilter;
@@ -4716,6 +4914,104 @@ async function cmdProbeGameActionProcess(argv = []) {
 }
 
 /**
+ * Exporta user actions para JSON.
+ * Por defeito: GET /user-action/search paginado em dois ramos (dismissed=false e dismissed=true), união por id —
+ * inclui todas as linhas, inclusive com dismissed=true no JSON (campo dismissed em cada objeto).
+ * --raw: só GET /user-action (rápido; pode truncar no backend).
+ * Opções: --out caminho (relativo à raiz do repo ou absoluto).
+ * Env: G4U_EXPORT_USER_ACTIONS_FROM / G4U_EXPORT_USER_ACTIONS_TO (ISO), G4U_EXPORT_USER_ACTIONS_MAX_PAGES, G4U_USER_ACTION_SEARCH_LIMIT
+ * --max-pages N: máximo de pedidos HTTP por ramo dismissed (default 20000; alinhar com totalPages da API).
+ */
+async function cmdExportUserActionsJson(argv = []) {
+  await ensureToken();
+  const maxPages = resolveExportUserActionsMaxPages(argv);
+  const oi = argv.indexOf('--out');
+  const raw = oi >= 0 ? String(argv[oi + 1] || '').trim() : '';
+  const defaultName = `user-actions-all-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.json`;
+  const outPath =
+    raw === '' ? join(ROOT, defaultName) : isAbsolute(raw) ? raw : join(ROOT, raw);
+
+  console.log(
+    `${colors.cyan}export-user-actions-json:${colors.reset} até ${maxPages} pedidos por ramo; ` +
+      `dois GET /user-action/search (dismissed=false e dismissed=true), união no JSON. ` +
+      `Paginação: https://g4u-mvp-api.onrender.com/api-json`
+  );
+
+  let payload;
+  let source;
+
+  if (argv.includes('--raw')) {
+    const r = await game4uFetch('/user-action');
+    if (!r.ok) {
+      console.error(
+        `${colors.red}GET /user-action falhou: HTTP ${r.status}${colors.reset}`,
+        r.json
+      );
+      process.exit(1);
+    }
+    payload = r.json;
+    source = 'GET /user-action';
+  } else {
+    const a = await game4uFetchAllUserActionSearchGlobal({
+      dismissed: 'false',
+      maxPages,
+      label: 'dismissed=false'
+    });
+    const b = await game4uFetchAllUserActionSearchGlobal({
+      dismissed: 'true',
+      maxPages,
+      label: 'dismissed=true'
+    });
+    if (!a.ok) {
+      console.error(
+        `${colors.red}GET /user-action/search (dismissed=false) falhou: HTTP ${a.status}${colors.reset}`,
+        a.json
+      );
+      process.exit(1);
+    }
+    if (!b.ok) {
+      console.error(
+        `${colors.red}GET /user-action/search (dismissed=true) falhou: HTTP ${b.status} — export abortado (é obrigatório incluir dismissed=true).${colors.reset}`,
+        b.json
+      );
+      process.exit(1);
+    }
+    const byId = new Map();
+    for (const it of a.items) {
+      if (it && typeof it === 'object' && it.id != null) byId.set(String(it.id), it);
+    }
+    for (const it of b.items) {
+      if (it && typeof it === 'object' && it.id != null) byId.set(String(it.id), it);
+    }
+    payload = [...byId.values()];
+    source = 'GET /user-action/search (dismissed=false ∪ dismissed=true, união por id)';
+    if (a.truncated || b.truncated) {
+      console.warn(
+        `${colors.yellow}Export pode estar incompleto: truncated dismissed=false=${Boolean(
+          a.truncated
+        )} dismissed=true=${Boolean(b.truncated)}. Aumente --max-pages ou G4U_EXPORT_USER_ACTIONS_MAX_PAGES (totalPages na API).${colors.reset}`
+      );
+    }
+    const nDismissedTrue = payload.filter(row => row && row.dismissed === true).length;
+    console.log(
+      `${colors.dim}Resumo: pedidos HTTP dismissed=false ${a.pagesFetched ?? '?'} (${a.items.length} linhas) · dismissed=true ${b.pagesFetched ?? '?'} (${b.items.length} linhas) · únicos no JSON ${payload.length} (com dismissed=true: ${nDismissedTrue})${colors.reset}`
+    );
+  }
+
+  const count = Array.isArray(payload) ? payload.length : null;
+  writeFileSync(outPath, JSON.stringify(payload, null, 2), 'utf8');
+  console.log(
+    `${colors.green}${source} OK${colors.reset} → ${outPath}` +
+      (count != null ? ` (${count} itens)` : '')
+  );
+  if (argv.includes('--raw') && count === 1000) {
+    console.warn(
+      `${colors.yellow}Foram exatamente 1000 itens — o backend pode estar a limitar. Repita sem --raw para export via /user-action/search.${colors.reset}`
+    );
+  }
+}
+
+/**
  * Só Zoho: N deals do Deals/search + GET __timeline; imprime _value bruto e _value.old dos field_history com api_name stage.
  * Opções: --sample-deals N (default 10)  --zoho-timeline-bare  --zoho-ignore-pipeline-filter
  */
@@ -5434,32 +5730,179 @@ async function cmdZohoDeliveryCancelRestore(argv) {
 }
 
 /**
- * Deals/search: Pipeline Jurídico (ou --pipeline) + Stage "Fechado e Perdido" (ou --stage), sem filtro Modified_Time.
+ * Zoho: Deals com Stage atual na lista (default **Liquidado**) → `POST /game/delivery/{id}/complete` com `finished_at`
+ * (desbloqueia na carteira / entrega). Por defeito **só pipeline Cobrança** (Financeiro); `--zoho-all-pipelines` alarga ao search normal.
+ */
+async function cmdZohoDeliveryUnlockByStage(argv) {
+  const dryRun = argv.includes('--dry-run');
+  const allPipelines = argv.includes('--zoho-all-pipelines');
+  const dealIdsCsvRel = argvFlagValue(argv, '--deal-ids-csv');
+
+  const { from, to, kf, kt } = zohoModifiedTimeRange();
+  if (!from || !to) {
+    throw new Error(`Defina ${kf} e ${kt} (ou alias ZOHO_MOVIFIED_FROM / ZOHO_MOVIFIED_TO se usar o typo)`);
+  }
+  const token = await zohoRefreshToken();
+  const dealRowCacheForCsv = new Map();
+  let allDealsFetched;
+  if (dealIdsCsvRel) {
+    const ids = readDealIdsFromDiffCsv(dealIdsCsvRel, {
+      onlyFoundNo: argv.includes('--deal-ids-csv-only-found-no')
+    });
+    console.log(
+      `${colors.cyan}zoho-delivery-unlock-by-stage:${colors.reset} modo ${colors.green}--deal-ids-csv${colors.reset} — ` +
+        `${ids.length} id(s); Stage alvo: lista env/config (default Liquidado).`
+    );
+    const fields =
+      String(cfg.zoho?.dealsSearch?.searchIncludeFields || '').trim() ||
+      'id,Layout,Pipeline,Stage,Deal_Name,Owner,Financeiro_Respons_vel,Respons_vel_Jur,Jur_dico_Respons_vel,Modified_Time';
+    allDealsFetched = [];
+    for (let ii = 0; ii < ids.length; ii++) {
+      if (ii > 0) await sleep(55);
+      const row = await zohoGetDealRowCached(ids[ii], token, fields, dealRowCacheForCsv);
+      if (row && row.id != null) {
+        allDealsFetched.push(row);
+      } else {
+        console.warn(
+          `${colors.yellow}deal_id ${ids[ii]}: GET Deals não devolveu registo — omitido do lote.${colors.reset}`
+        );
+      }
+    }
+  } else {
+    const criteria = allPipelines
+      ? zohoDealsSearchCriteria(from, to, argv)
+      : buildZohoSinglePipelineSearchCriteria(zohoCobrancaPipelineDisplayName(), from, to);
+    console.log(
+      `${colors.cyan}zoho-delivery-unlock-by-stage:${colors.reset} ` +
+        (allPipelines
+          ? 'pipelines permitidos no config (search como zoho-stages)'
+          : `pipeline "${zohoCobrancaPipelineDisplayName()}" (Financeiro/Cobrança; ZOHO_COBRANCA_PIPELINE_NAME altera o rótulo)`) +
+        `; Modified_Time ${from} .. ${to}`
+    );
+    allDealsFetched = await zohoFetchAllDealsSearchPages(criteria, token);
+  }
+
+  if (!allDealsFetched.length) {
+    console.warn(`${colors.yellow}Nenhum deal (search ou --deal-ids-csv).${colors.reset}`);
+    return;
+  }
+
+  const maxDeals = zohoRunnerMaxDeals(argv);
+  const pageDeals = allDealsFetched.slice(0, maxDeals);
+  const unlockNormSet = getZohoDeliveryUnlockStageNormSet();
+  console.log(
+    `${colors.cyan}Estágios no Deal.Stage → POST …/complete:${colors.reset} ${[...unlockNormSet].join(' | ')} ` +
+      `${colors.dim}(G4U_ZOHO_DELIVERY_UNLOCK_STAGE_NAMES CSV ou zoho.deliveryUnlockFromZohoDealStages no config)${colors.reset}`
+  );
+  if (pageDeals.length < allDealsFetched.length) {
+    console.log(
+      `${colors.cyan}Deals:${colors.reset} ${allDealsFetched.length} no total; processando ${pageDeals.length} (--max-deals ou ZOHO_MAX_DEALS).`
+    );
+  }
+
+  if (!dryRun) await ensureToken();
+
+  let ok = 0;
+  let fail = 0;
+  let dry = 0;
+  let skipResolve = 0;
+  let matchedStage = 0;
+
+  for (let i = 0; i < pageDeals.length; i++) {
+    const deal = pageDeals[i];
+    if (!deal?.id) continue;
+    const stageNorm = zohoDealRecordStageNorm(deal);
+    if (!stageNorm || !unlockNormSet.has(stageNorm)) {
+      continue;
+    }
+    matchedStage++;
+    if (i > 0) await sleep(100);
+
+    const pipeLog = getZohoDealPipelineName(deal);
+    const dealLabel = `deal ${deal.id} Stage="${stageNorm}" Pipeline="${pipeLog || ''}"`;
+
+    if (dryRun) {
+      dry++;
+      console.log(`${colors.dim}[dry-run]${colors.reset} POST …/complete ${dealLabel}`);
+      continue;
+    }
+
+    const resolved = await game4uResolveDeliveryPathIdForZohoDeal(deal.id);
+    if (resolved.skip) {
+      skipResolve++;
+      const why =
+        resolved.source === 'no-user-actions'
+          ? 'sem user_actions (G4U_ZOHO_DELIVERY_PATH_WITHOUT_USER_ACTIONS=1 força id Zoho)'
+          : resolved.source === 'ambiguous-delivery-uuid'
+            ? 'vários UUID nos user_actions'
+            : String(resolved.source || 'skip');
+      console.warn(`${colors.yellow}${dealLabel}: omitido — ${why}.${colors.reset}`);
+      continue;
+    }
+    const finishedAt = zohoDealModifiedTimeIsoForDeliveryComplete(deal);
+    await sleep(80);
+    const pr = await game4uPostDeliveryCompleteIfConfigured(resolved.pathId, finishedAt);
+    if (pr.ok) {
+      ok++;
+      console.log(`${colors.green}complete ok${colors.reset} ${dealLabel} finished_at=${finishedAt}`);
+    } else {
+      fail++;
+      console.warn(
+        `${colors.yellow}complete ${pr.status}${colors.reset} ${dealLabel} — ${JSON.stringify(pr.json || pr.raw).slice(0, 400)}`
+      );
+    }
+  }
+
+  console.log(
+    `${colors.cyan}Resumo zoho-delivery-unlock-by-stage:${colors.reset} ok=${ok} fail=${fail} dry=${dry} ` +
+      `skip_resolve=${skipResolve} deals_com_stage_alvo=${matchedStage} (${pageDeals.length} deal(s) no lote)`
+  );
+}
+
+/**
+ * Deals/search: Pipeline Cobrança (ou --pipeline) + Stage "Fechado e Perdido" (ou --stage).
+ * Opcional: Modified_Time com --zoho-cancel-march-april [--zoho-cancel-year YYYY] ou
+ * --zoho-cancel-modified-from / --zoho-cancel-modified-to (ISO, ambos obrigatórios se um for usado).
  * Para cada deal: resolve UUID da delivery no G4U (user_actions) e POST /game/delivery/{id}/cancel.
  */
 async function cmdZohoCancelJurPipelineLostDeals(argv) {
   const dryRun = argv.includes('--dry-run');
-  const pipeline =
-    argvFlagValue(argv, '--pipeline') ||
-    process.env.G4U_ZOHO_JUR_PIPELINE_LOST_CANCEL?.trim() ||
-    process.env.ZOHO_JUR_PIPELINE_LOST_CANCEL?.trim() ||
-    'Jurídico';
-  const stage =
-    argvFlagValue(argv, '--stage') ||
-    process.env.G4U_ZOHO_JUR_STAGE_LOST_CANCEL?.trim() ||
-    'Fechado e Perdido';
+  const pipeline = argvFlagValue(argv, '--pipeline') || 'Cobrança';
+  const stage = argvFlagValue(argv, '--stage') || 'Fechado e Perdido';
 
-  const criteria = buildZohoDealsSearchCriteriaPipelineAndStage(pipeline, stage);
+  let modifiedFrom = argvFlagValue(argv, '--zoho-cancel-modified-from');
+  let modifiedTo = argvFlagValue(argv, '--zoho-cancel-modified-to');
+  if (argv.includes('--zoho-cancel-march-april')) {
+    const y = parseZohoCancelLostDealsYear(argv);
+    const marApr = zohoMarchAprilDealsModifiedBetweenUtc(y);
+    modifiedFrom = marApr.from;
+    modifiedTo = marApr.to;
+  }
+  let pipeStageCriteria = buildZohoDealsSearchCriteriaPipelineAndStage(pipeline, stage);
+  let criteria = pipeStageCriteria;
+  let modifiedNote = 'sem Modified_Time';
+  if (modifiedFrom && modifiedTo) {
+    const timePart = zohoCriteriaModifiedBetween(String(modifiedFrom).trim(), String(modifiedTo).trim());
+    criteria = `((${timePart}) and (${pipeStageCriteria}))`;
+    modifiedNote = `Modified_Time ${String(modifiedFrom).trim()} .. ${String(modifiedTo).trim()}`;
+  } else if (modifiedFrom || modifiedTo) {
+    throw new Error(
+      'zoho-cancel-jur-lost-deals: use --zoho-cancel-modified-from e --zoho-cancel-modified-to juntos, ou --zoho-cancel-march-april [--zoho-cancel-year YYYY].'
+    );
+  }
+
   console.log(
     `${colors.cyan}zoho-cancel-jur-lost-deals:${colors.reset} ` +
-      `Deals/search (sem Modified_Time) Pipeline="${pipeline}" Stage="${stage}"\n` +
+      `Deals/search Pipeline="${pipeline}" Stage="${stage}" (${modifiedNote})\n` +
       `  criteria=${criteria}`
   );
 
   const token = await zohoRefreshToken();
   const allDeals = await zohoFetchAllDealsSearchPages(criteria, token);
   if (!allDeals.length) {
-    console.warn(`${colors.yellow}Nenhum deal encontrado no Zoho com esse Pipeline+Stage.${colors.reset}`);
+    console.warn(
+      `${colors.yellow}Nenhum deal encontrado no Zoho com o critério atual (Pipeline, Stage${modifiedFrom && modifiedTo ? ', Modified_Time' : ''}).${colors.reset}`
+    );
     return;
   }
   const maxDeals = zohoRunnerMaxDeals(argv);
@@ -5575,11 +6018,17 @@ Comandos:
                                 --deal-ids-csv caminho.csv  --deal-ids-csv-only-found-no
                                 Restore: user_email = Owner do deal ou G4U_ZOHO_FALLBACK_USER_EMAIL.
                                 Env: G4U_ZOHO_DELIVERY_CANCEL_NEW_STAGES (CSV)  G4U_ZOHO_DELIVERY_RESTORE_ALLOWED_NEW_STAGES (CSV extra)
-  zoho-cancel-jur-lost-deals    Zoho: Deals/search **sem Modified_Time** — (Pipeline + Stage) iguais ao Jurídico em
-                                "Fechado e Perdido" (rótulos configuráveis). Para cada deal: resolve UUID da delivery
-                                (GET /user-action/search) e **POST /game/delivery/{id}/cancel** (mesma regra que cancel-restore).
+  zoho-delivery-unlock-by-stage Zoho: deals com Stage atual na lista (default Liquidado) → POST /game/delivery/{id}/complete
+                                com finished_at = Modified_Time do deal ou agora (desbloqueia na carteira / Financeiro).
+                                Por defeito só pipeline Cobrança; --zoho-all-pipelines = mesmo search que zoho-stages.
+                                Opções: --dry-run  --max-deals N  --deal-ids-csv  --deal-ids-csv-only-found-no  --zoho-ignore-pipeline-filter
+                                Env: G4U_ZOHO_DELIVERY_UNLOCK_STAGE_NAMES (CSV; override a zoho.deliveryUnlockFromZohoDealStages)
+  zoho-cancel-jur-lost-deals    Zoho: Deals/search — (Pipeline + Stage) default **Cobrança** + **Fechado e Perdido**
+                                (override --pipeline / --stage). Opcional janela Modified_Time: **--zoho-cancel-march-april**
+                                (1 mar–30 abr UTC; ano com **--zoho-cancel-year YYYY**, default ano UTC atual) ou par
+                                **--zoho-cancel-modified-from** / **--zoho-cancel-modified-to** (ISO). Para cada deal:
+                                resolve UUID (GET /user-action/search) e **POST /game/delivery/{id}/cancel**.
                                 Opções: --dry-run  --max-deals N  --pipeline "Nome"  --stage "Nome do estágio"
-                                Env: G4U_ZOHO_JUR_PIPELINE_LOST_CANCEL  G4U_ZOHO_JUR_STAGE_LOST_CANCEL (defaults: Jurídico, Fechado e Perdido)
                                 ZOHO_DEALS_PIPELINE_FIELD / ZOHO_DEALS_STAGE_FIELD se os api_name forem diferentes
   zoho-tasks                    Mesmo Deals/search paginado; Activities_Chronological com page_token (todas páginas).
                                 Jur + tags: uma atividade mais recente por action template (tagFlowTitleToActionTemplateId);
@@ -5604,6 +6053,10 @@ Comandos:
                                 Status: PENDING, DOING, DONE, DELIVERED (--only-open = só PENDING+DOING).
                                 Opções: --dry-run  --only-open  --only-team-actions  --from ISO  --to ISO  --max-dismiss N (default 5000)
                                 Env: G4U_CS_TEAM_ID  G4U_CS_TEAM_ACTIONS_FROM / TO  G4U_TEAM_ACTIONS_MAX_PAGES  G4U_USER_ACTIONS_MAX_PAGES
+  export-user-actions-json      Exporta todas as linhas para JSON: dois GET /user-action/search paginados
+                                (dismissed=false e dismissed=true), união por id — inclui dismissed=true no array.
+                                --raw = só GET /user-action (pode truncar ~1000). Opções: --out ficheiro.json  --max-pages N (por ramo).
+                                Env: G4U_EXPORT_USER_ACTIONS_FROM/TO, G4U_EXPORT_USER_ACTIONS_MAX_PAGES, G4U_USER_ACTION_SEARCH_LIMIT
   probe-zoho-timeline-stage-values  Só Zoho: N deals + __timeline; mostra _value e _value.old do Stage
                                 Opções: --sample-deals N (default 10)  --zoho-timeline-bare  --zoho-ignore-pipeline-filter
   probe-zoho-cobranca-april-timeline  Só Zoho: pipeline Cobrança + abril (Modified_Time); amostra; _value.old no __timeline
@@ -5615,12 +6068,15 @@ Env úteis:
   G4U_USER_ACTION_DONE_LOOKUP_STATUSES   Ex.: CANCELLED (default) — statuses extra no search para created_at do DONE
   G4U_USER_ACTION_SEARCH_LIMIT           Limite por página no search (default config; máx. 500)
   G4U_USER_ACTION_SEARCH_MAX_PAGES       Máx. páginas por status no DONE lookup (default 80)
+  G4U_EXPORT_USER_ACTIONS_FROM / TO     ISO — janela no export-user-actions-json (search)
+  G4U_EXPORT_USER_ACTIONS_MAX_PAGES     Pedidos HTTP máx. por ramo dismissed no export (default 20000; teto 500000)
   G4U_USER_ACTION_DONE_LOOKUP_INCLUDE_DISMISSED  1/true — junta também search com dismissed=true
   G4U_ZOHO_STAGE_DONE_USE_AUDITED_WHEN_SEARCH_MISS  default ligado — Stage DONE usa audited_time se search não achar created_at; 0/false desliga
   G4U_ZOHO_DELIVERY_CANCEL_NEW_STAGES   CSV opcional — rótulos Zoho em _value.new que disparam cancel (default config)
   G4U_ZOHO_DELIVERY_RESTORE_ALLOWED_NEW_STAGES  CSV — estágios extra permitidos para restore (além do mapa)
   G4U_ZOHO_DELIVERY_PATH_WITHOUT_USER_ACTIONS  1/true — cancel/restore com id Zoho mesmo sem user_actions no G4U (default: omitir)
   G4U_ZOHO_DELIVERY_CANCEL_WHEN_DEAL_STAGE_LOST  0/false — não cancelar só porque Stage do deal já é perdido (default: ligado)
+  G4U_ZOHO_DELIVERY_UNLOCK_STAGE_NAMES   CSV — estágios Zoho (Stage do deal) que disparam POST …/complete (default Liquidado)
   G4U_CS_TEAM_ID                Id do time CS no GET /game/team-actions (default 4 se GET /team não casar nome)
   G4U_ACCESS_TOKEN              Pula login se já autenticado
   G4U_SEED_DEFAULT_PASSWORD     Senha fallback se linha do .md não bater por e-mail
@@ -5666,6 +6122,9 @@ const cmd = argv[0] || 'help';
       case 'zoho-delivery-cancel-restore':
         await cmdZohoDeliveryCancelRestore(argv);
         break;
+      case 'zoho-delivery-unlock-by-stage':
+        await cmdZohoDeliveryUnlockByStage(argv);
+        break;
       case 'zoho-cancel-jur-lost-deals':
         await cmdZohoCancelJurPipelineLostDeals(argv);
         break;
@@ -5686,6 +6145,9 @@ const cmd = argv[0] || 'help';
         break;
       case 'game4u-cs-tarefas-planilha':
         await cmdGame4uCsTarefasPlanilha(argv);
+        break;
+      case 'export-user-actions-json':
+        await cmdExportUserActionsJson(argv);
         break;
       default:
         console.error(`${colors.red}Comando desconhecido: ${cmd}${colors.reset}`);

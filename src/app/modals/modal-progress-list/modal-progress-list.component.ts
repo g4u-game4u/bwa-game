@@ -41,6 +41,8 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
   @Input() showClientColumnInActivityList = false;
   /** Se true, listas de atividades/pontos vêm do GET `/user-action` (cache no UserActionDashboardService). */
   @Input() useBackendUserActions = false;
+  /** Rótulos e títulos do modal alinhados a «movimentações» (times CS / Financeiro). */
+  @Input() useMovimentacoesLabels = false;
   /**
    * Mapeia `userId` (ex.: UUID Game4U) → e-mail para GET `/game/actions?user=` quando {@link playerId} não é e-mail.
    * Usado na gestão de equipa ao agregar vários membros.
@@ -92,7 +94,7 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
   get modalTitle(): string {
     switch (this.listType) {
       case 'atividades':
-        return 'Tarefas Finalizadas';
+        return this.useMovimentacoesLabels ? 'Movimentações Finalizadas' : 'Tarefas Finalizadas';
       case 'pontos':
         return 'Pontos Obtidos';
       case 'processos-pendentes':
@@ -136,6 +138,30 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
 
   get showClientColumn(): boolean {
     return this.isActivityList && this.showClientColumnInActivityList;
+  }
+
+  get activityVolumeChartTitle(): string {
+    return this.useMovimentacoesLabels ? 'Volume de Movimentações por Dia' : 'Volume de Tarefas por Dia';
+  }
+
+  get activityTableSectionTitle(): string {
+    return this.useMovimentacoesLabels ? 'Movimentações' : 'Tarefas';
+  }
+
+  get activityColumnSingular(): string {
+    return this.useMovimentacoesLabels ? 'Movimentação' : 'Tarefa';
+  }
+
+  get activitySearchAriaLabel(): string {
+    return this.useMovimentacoesLabels ? 'Buscar movimentações' : 'Buscar tarefas';
+  }
+
+  get emptyActivityListNone(): string {
+    return this.useMovimentacoesLabels ? 'Nenhuma movimentação encontrada' : 'Nenhuma tarefa encontrada';
+  }
+
+  private chartDatasetActivityPlural(): string {
+    return this.useMovimentacoesLabels ? 'Movimentações' : 'Tarefas';
   }
 
   onSearchInput(event: Event): void {
@@ -521,7 +547,7 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
 
           // Create new array reference for datasets
           this.chartDatasets = [{
-            label: 'Tarefas',
+            label: this.chartDatasetActivityPlural(),
             data: [...newDailyCounts], // Create new array reference with actual data
             backgroundColor: backgroundColorArray,
             borderColor: borderColorArray,
@@ -536,7 +562,7 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
           // Initialize empty chart on error
           this.chartLabels = Array.from({ length: daysInMonth }, (_, i) => String(i + 1));
           this.chartDatasets = [{
-            label: 'Tarefas',
+            label: this.chartDatasetActivityPlural(),
             data: dailyCounts,
             backgroundColor: 'rgba(255, 255, 255, 0.05)',
             borderColor: 'rgba(255, 255, 255, 0.1)',
@@ -600,7 +626,7 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
     });
 
     this.chartDatasets = [{
-      label: 'Tarefas',
+      label: this.chartDatasetActivityPlural(),
       data: [...newDailyCounts],
       backgroundColor: backgroundColorArray,
       borderColor: borderColorArray,

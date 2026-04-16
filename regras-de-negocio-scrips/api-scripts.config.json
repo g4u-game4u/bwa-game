@@ -195,6 +195,10 @@
       "restoreWhenNewStageNamesExtra": [],
       "restoreWhenNewStageNamesSourceNote": "stageMapKeys = chaves de stageTitleToActionTemplateId em zoho-crm-action-map.json; explicit = só restoreWhenNewStageNames + extra + env G4U_ZOHO_DELIVERY_RESTORE_ALLOWED_NEW_STAGES."
     },
+    "deliveryUnlockFromZohoDealStages": [
+      "Liquidado"
+    ],
+    "deliveryUnlockFromZohoDealStagesNote": "Runner zoho-delivery-unlock-by-stage: Stage atual do deal (GET/search) nesta lista → POST /game/delivery/{id}/complete. Override: env G4U_ZOHO_DELIVERY_UNLOCK_STAGE_NAMES (CSV).",
     "jurActivitiesFromZoho": {
       "allowDoneUsingTaskCreatedAtWhenSearchMiss": false,
       "allowDoneUsingTaskCreatedAtWhenSearchMissNote": "Se true (ou env G4U_ZOHO_JUR_DONE_USE_TASK_CREATED_AT=1), DONE jur envia created_at da task Zoho quando /user-action/search não achar PENDING — útil para sincronizar tarefas já concluídas no CRM; use com cuidado.",

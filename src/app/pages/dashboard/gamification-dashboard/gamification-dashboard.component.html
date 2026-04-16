@@ -40,7 +40,8 @@
         <div class="sidebar-section">
           <c4u-season-progress
             *ngIf="seasonProgress"
-            [progress]="seasonProgress">
+            [progress]="seasonProgress"
+            [useMovimentacoesLabels]="useMovimentacoesTerminology">
           </c4u-season-progress>
           
           <c4u-shimmer *ngIf="isLoadingPlayer && !seasonProgress"></c4u-shimmer>
@@ -168,6 +169,7 @@
         [activities]="activityMetrics"
         [processos]="processMetrics"
         [monthlyPointsBreakdown]="monthlyPointsBreakdown"
+        [useMovimentacoesLabels]="useMovimentacoesTerminology"
         (cardClicked)="onProgressCardClicked($event)">
       </c4u-activity-progress>
       
@@ -211,7 +213,7 @@
             (click)="openCompanyDetailModal(cliente)"
             role="button"
             tabindex="0"
-            [attr.aria-label]="'Ver tarefas de ' + getCompanyDisplayName(cliente.cnpj)"
+            [attr.aria-label]="(useMovimentacoesTerminology ? 'Ver movimentações de ' : 'Ver tarefas de ') + getCompanyDisplayName(cliente.cnpj)"
             (keydown.enter)="openCompanyDetailModal(cliente)"
             (keydown.space)="openCompanyDetailModal(cliente); $event.preventDefault()">
             <div class="carteira-item-info">
@@ -252,6 +254,7 @@
     [month]="selectedMonth"
     [showPointsInActivityList]="false"
     [useBackendUserActions]="true"
+    [useMovimentacoesLabels]="useMovimentacoesTerminology"
     (closed)="onProgressModalClosed()">
   </modal-progress-list>
   

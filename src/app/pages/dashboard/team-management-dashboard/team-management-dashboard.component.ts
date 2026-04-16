@@ -38,6 +38,7 @@ import { FUNIFIER_HTTP_DISABLED } from '../../../config/funifier-requests-disabl
 import { SEASON_GAME_ACTION_RANGE } from '@app/constants/season-action-range';
 import { filterCompanyDisplaysByClienteSearch } from '@utils/cliente-carteira-search.util';
 import { looksLikeEmail } from '@utils/game4u-user-id.util';
+import { usesMovimentacoesTerminology } from '@utils/team-terminology-movimentacoes.util';
 
 /** Listagem de times (Funifier ou Game4U): garante array — evita `.filter` em `{}` quando Funifier está desligado. */
 function normalizeTeamsListPayload(raw: unknown): any[] {
@@ -274,6 +275,57 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
     const team = this.teams.find(t => String(t.id) === String(this.selectedTeamId));
     const label = (team?.name || this.displayTeamName || '').trim().toLowerCase();
     return label.includes('financeiro');
+  }
+
+  /**
+   * Textos «tarefas/atividades» → «movimentações» para o time selecionado CS ou Financeiro.
+   */
+  isMovimentacoesTerminologyTeam(): boolean {
+    const team = this.teams.find(t => String(t.id) === String(this.selectedTeamId));
+    const name = (team?.name || this.displayTeamName || this.selectedTeam || '').trim();
+    return usesMovimentacoesTerminology(this.selectedTeamId, name);
+  }
+
+  get productivityVolumeActivitiesTitle(): string {
+    return this.isMovimentacoesTerminologyTeam()
+      ? 'Volume de Movimentações por Dia'
+      : 'Volume de Atividades por Dia';
+  }
+
+  get productivityTotalByCollaboratorTitle(): string {
+    return this.isMovimentacoesTerminologyTeam()
+      ? 'Total de Movimentações por Colaborador'
+      : 'Total de Atividades por Colaborador';
+  }
+
+  get productivityBarChartAriaLabel(): string {
+    return this.isMovimentacoesTerminologyTeam()
+      ? 'Gráfico de barras mostrando total de movimentações por colaborador'
+      : 'Gráfico de barras mostrando total de atividades por colaborador';
+  }
+
+  get productivityActivitiesDatasetLabel(): string {
+    return this.isMovimentacoesTerminologyTeam()
+      ? 'Movimentações Finalizadas'
+      : 'Atividades Finalizadas';
+  }
+
+  get carteiraEmptyTasksMessage(): string {
+    return this.isMovimentacoesTerminologyTeam()
+      ? 'Nenhuma entrega/cliente com movimentações neste mês (via Funifier ou Game4U).'
+      : 'Nenhuma entrega/cliente com tarefas neste mês (via Funifier ou Game4U).';
+  }
+
+  private goalsAtividadesFinalizadasLabel(): string {
+    return this.isMovimentacoesTerminologyTeam()
+      ? 'Movimentações Finalizadas'
+      : 'Atividades Finalizadas';
+  }
+
+  private productivityBarTotalsDatasetLabel(): string {
+    return this.isMovimentacoesTerminologyTeam()
+      ? 'Total de Movimentações'
+      : 'Total de Atividades';
   }
 
   ngOnInit(): void {
@@ -1504,7 +1556,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
         },
         {
           id: 'atividades-finalizadas',
-          label: 'Atividades Finalizadas',
+          label: this.goalsAtividadesFinalizadasLabel(),
           current: uaActivity.finalizadas,
           target: 500, // TODO: Get from configuration
           unit: ''
@@ -1544,7 +1596,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
         },
         {
           id: 'atividades-finalizadas',
-          label: 'Atividades Finalizadas',
+          label: this.goalsAtividadesFinalizadasLabel(),
           current: this.progressMetrics.atividadesFinalizadas,
           target: 500, // TODO: Get from configuration
           unit: ''
@@ -1656,7 +1708,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       const activitiesTotal = dataPoints.reduce((sum, point) => sum + point.value, 0);
       this.activitiesByCollaboratorGraphData = [{ date: new Date(), value: activitiesTotal }];
       this.activitiesByCollaboratorDatasets = [{
-        label: 'Total de Atividades',
+        label: this.productivityBarTotalsDatasetLabel(),
         data: [activitiesTotal],
         backgroundColor: ['rgba(79, 70, 229, 0.6)'],
         borderColor: ['rgba(79, 70, 229, 1)'],
@@ -2248,7 +2300,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
   }));
   
   this.activitiesByCollaboratorDatasets = [{
-    label: 'Total de Atividades',
+    label: this.productivityBarTotalsDatasetLabel(),
     data: activitiesTotals.map(item => item.total),
     backgroundColor: activitiesTotals.map((_, index) => {
       const colors = this.getColorForIndex(index);
@@ -3237,6 +3289,12 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
   /** Texto do contador na lista de clientes: singular/plural com "sua(s)". */
   formatClienteTasksLabel(actionCount: number): string {
     const n = Math.round(Number(actionCount)) || 0;
+    if (this.isMovimentacoesTerminologyTeam()) {
+      if (n === 1) {
+        return '1 movimentação sua';
+      }
+      return `${n} movimentações suas`;
+    }
     if (n === 1) {
       return '1 tarefa sua';
     }

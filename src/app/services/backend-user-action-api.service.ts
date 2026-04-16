@@ -89,7 +89,7 @@ export class BackendUserActionApiService {
   }
 
   /**
-   * GET `/user-action/search` — alinhado ao `UserActionController_search` (delivery_id, status, created_at_*, limit, page | page_token, dismissed).
+   * GET `/user-action/search` — alinhado ao `UserActionController_search` (delivery_id, status, `finished_at_*` ou `created_at_*`, limit, page | page_token, dismissed).
    * Query montada com o mesmo encoding de datas que `/game/actions`.
    */
   getUserActionSearch(entries: Record<string, string>): Observable<unknown> {

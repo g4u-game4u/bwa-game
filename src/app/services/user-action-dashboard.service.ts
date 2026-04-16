@@ -132,6 +132,32 @@ export class UserActionDashboardService {
   }
 
   /** Identificador estável da linha: vários backends usam `_id` / `user_action_id` em vez de `id`. */
+  /**
+   * Extrai ISO string de campos de data na resposta Game4U (string, `{ $date }` ou epoch ms).
+   * Não usa `updated_at` — só chaves explicitamente pedidas.
+   */
+  private pickIsoDateString(raw: Record<string, unknown>, ...keys: string[]): string {
+    for (const key of keys) {
+      const v = raw[key];
+      if (typeof v === 'string' && v.trim()) {
+        return v.trim();
+      }
+      if (v && typeof v === 'object' && v !== null && '$date' in (v as Record<string, unknown>)) {
+        const d = (v as { $date?: unknown }).$date;
+        if (typeof d === 'string' && d.trim()) {
+          return d.trim();
+        }
+        if (typeof d === 'number' && isFinite(d)) {
+          return new Date(d).toISOString();
+        }
+      }
+      if (typeof v === 'number' && isFinite(v)) {
+        return new Date(v).toISOString();
+      }
+    }
+    return '';
+  }
+
   private pickRawActionId(raw: Record<string, unknown>): string | null {
     const keys = [
       'id',
@@ -169,15 +195,9 @@ export class UserActionDashboardService {
     const user_email =
       typeof raw['user_email'] === 'string' ? raw['user_email'] : '';
     const status = typeof raw['status'] === 'string' ? raw['status'] : '';
-    const created_at =
-      typeof raw['created_at'] === 'string' ? raw['created_at'] : '';
-    const finishedRaw = raw['finished_at'];
-    const finished_at =
-      finishedRaw === null || finishedRaw === undefined
-        ? null
-        : typeof finishedRaw === 'string'
-          ? finishedRaw
-          : null;
+    const created_at = this.pickIsoDateString(raw, 'created_at', 'createdAt');
+    const finishedStr = this.pickIsoDateString(raw, 'finished_at', 'finishedAt');
+    const finished_at = finishedStr ? finishedStr : null;
     const delivery_id =
       raw['delivery_id'] != null ? String(raw['delivery_id']) : undefined;
     const delivery_title =
@@ -266,7 +286,7 @@ export class UserActionDashboardService {
   }
 
   /**
-   * Todas as páginas de GET `/user-action/search` (delivery_id, created_at_*, dismissed, limit; sem `status` — todos os estados).
+   * Todas as páginas de GET `/user-action/search` (delivery_id, datas, dismissed, limit; sem `status` — todos os estados).
    * Paginação: `page` ou `page_token`; continuação pelo corpo (`next_page_token` / variantes).
    */
   private async fetchUserActionSearchAllPages(
@@ -328,11 +348,12 @@ export class UserActionDashboardService {
 
   /**
    * Todas as user actions da entrega na janela: duas buscas (dismissed false / true), sem filtro `status`.
+   * Usa `finished_at_start` / `finished_at_end` (não `created_at_*` / `updated_at`) para alinhar ao modal e ao painel.
    */
   private async fetchDeliveryActionsViaUserActionSearch(
     deliveryId: string,
-    createdAtStart: string,
-    createdAtEnd: string
+    finishedAtStart: string,
+    finishedAtEnd: string
   ): Promise<UserActionRow[]> {
     const did = String(deliveryId || '').trim();
     if (!did) {
@@ -340,8 +361,8 @@ export class UserActionDashboardService {
     }
     const base = {
       delivery_id: did,
-      created_at_start: createdAtStart,
-      created_at_end: createdAtEnd,
+      finished_at_start: finishedAtStart,
+      finished_at_end: finishedAtEnd,
       limit: '200'
     };
     const [a, b] = await Promise.all([
@@ -638,7 +659,8 @@ export class UserActionDashboardService {
   }
 
   /**
-   * Data de referência para filtro por mês: finalização se existir; senão criação.
+   * Data de referência para filtro por mês/intervalo no painel e modais Game4U:
+   * `finished_at` quando existir; senão `created_at`. **Nunca** `updated_at`.
    */
   private referenceTimestamp(row: UserActionRow): number {
     const ft = this.parseInstant(row.finished_at);
@@ -657,14 +679,13 @@ export class UserActionDashboardService {
     return d.getFullYear() === month.getFullYear() && d.getMonth() === month.getMonth();
   }
 
-  /** Inclui `referenceTimestamp` em [rangeStart, rangeEnd] (comparado em ms). */
+  /** Inclui `referenceTimestamp` (finished_at → created_at, nunca updated_at) em [rangeStart, rangeEnd]. */
   inDateRange(row: UserActionRow, rangeStart: Date, rangeEnd: Date): boolean {
     const ts = this.referenceTimestamp(row);
     if (ts <= 0) {
       return false;
     }
-    const t = ts;
-    return t >= rangeStart.getTime() && t <= rangeEnd.getTime();
+    return ts >= rangeStart.getTime() && ts <= rangeEnd.getTime();
   }
 
   filterDateRange(items: UserActionRow[], rangeStart: Date, rangeEnd: Date): UserActionRow[] {
@@ -1127,7 +1148,7 @@ export class UserActionDashboardService {
   }
 
   /**
-   * Detalhe da entrega no modal: GET `/user-action/search` (`delivery_id`, `created_at_start` / `created_at_end` do mês, `status`, `dismissed`, `limit`, `page` ou `page_token`).
+   * Detalhe da entrega no modal: GET `/user-action/search` (`delivery_id`, `finished_at_start` / `finished_at_end` do mês, `dismissed`, `limit`, `page` ou `page_token`).
    */
   getDeliveryDetailActionsFromUserActionSearch(
     deliveryId: string,
@@ -1194,6 +1215,7 @@ export class UserActionDashboardService {
     return this.getActionsForPlayerDateRange(playerId, rangeStart, rangeEnd, roster ?? null).pipe(
       map(items =>
         items
+          .filter(r => this.inDateRange(r, rangeStart, rangeEnd))
           .filter(r => this.isFinalizedStatus(r))
           .map(r => this.toActivityListItem(r))
           .sort((a, b) => b.created - a.created)

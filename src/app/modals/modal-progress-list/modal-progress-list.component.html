@@ -43,7 +43,7 @@
       <div *ngIf="isActivityList" class="chart-section">
         <h3 class="section-title">
           <i class="ri-bar-chart-line section-icon" aria-hidden="true"></i>
-          Volume de Tarefas por Dia
+          {{ activityVolumeChartTitle }}
         </h3>
         <div *ngIf="isLoadingChart" class="loading-chart">
           <i class="ri-loader-4-line loading-icon"></i>
@@ -67,7 +67,7 @@
         <div class="table-section">
           <h3 class="section-title">
             <i class="ri-task-line section-icon" aria-hidden="true"></i>
-            Tarefas
+            {{ activityTableSectionTitle }}
             <span class="result-count" *ngIf="filteredActivityItems.length !== activityItems.length">
               ({{ filteredActivityItems.length }} de {{ activityItems.length }})
             </span>
@@ -79,19 +79,19 @@
               [value]="searchTerm"
               (input)="onSearchInput($event)"
               placeholder="Buscar por título, cliente (entrega), executor ou data"
-              aria-label="Buscar tarefas"
+              [attr.aria-label]="activitySearchAriaLabel"
               class="search-input" />
           </div>
           
           <div *ngIf="filteredActivityItems.length === 0" class="empty-state">
             <i class="ri-inbox-line empty-icon"></i>
-            <span *ngIf="activityItems.length === 0">Nenhuma tarefa encontrada</span>
+            <span *ngIf="activityItems.length === 0">{{ emptyActivityListNone }}</span>
             <span *ngIf="activityItems.length > 0">Nenhum resultado para os filtros aplicados</span>
           </div>
           
           <div *ngIf="filteredActivityItems.length > 0" class="tasks-table">
             <div class="task-header" [class.with-points]="showPointsColumn" [class.with-client]="showClientColumn">
-              <div class="task-col-title">Tarefa</div>
+              <div class="task-col-title">{{ activityColumnSingular }}</div>
               <div class="task-col-client" *ngIf="showClientColumn">Empresa</div>
               <div class="task-col-delivery-name">Cliente</div>
               <div class="task-col-executor">Executor</div>
