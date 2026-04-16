@@ -972,6 +972,25 @@ function zohoActivitySortTimeMs(activity) {
   return Number.isFinite(n) ? n : 0;
 }
 
+/** max(Modified, Created) em ms — útil para “atividade nova desde …”. */
+function zohoActivityNewestWallClockMs(activity) {
+  if (!activity || typeof activity !== 'object') return 0;
+  const m = activity.Modified_Time || activity.modified_time;
+  const c = activity.Created_Time || activity.created_time;
+  const pm = Date.parse(String(m || ''));
+  const pc = Date.parse(String(c || ''));
+  const vm = Number.isFinite(pm) ? pm : 0;
+  const vc = Number.isFinite(pc) ? pc : 0;
+  return Math.max(vm, vc);
+}
+
+/** Mantém atividades cuja data mais recente (Modified ou Created) é >= sinceIso. */
+function zohoFilterActivitiesSince(activityList, sinceIso) {
+  const t0 = Date.parse(String(sinceIso || '').trim());
+  if (!Number.isFinite(t0) || !Array.isArray(activityList)) return activityList || [];
+  return activityList.filter((a) => zohoActivityNewestWallClockMs(a) >= t0);
+}
+
 /** Texto após "Tag: …" (ou a chave inteira) para desempate de especificidade. */
 function zohoTagFlowLabelForSort(tagFlowKey) {
   const m = String(tagFlowKey).match(/Tag:\s*(.+)$/i);
@@ -2100,18 +2119,28 @@ function parseZohoCancelLostDealsYear(argv) {
 }
 
 /**
- * Intervalo Modified_Time para zoho-tasks (env ou filtro abril).
+ * Intervalo Modified_Time para zoho-tasks (filtro abril, --zoho-tasks-modified-from/to, ou env).
  * @returns {{ from: string, to: string, kf: string, kt: string, aprilYear: number|null }}
  */
 function zohoTasksResolveSearchRange(argv) {
   let { from, to, kf, kt } = zohoModifiedTimeRange();
   let aprilYear = null;
+  const argvFrom = argvFlagValue(argv, '--zoho-tasks-modified-from');
+  const argvTo = argvFlagValue(argv, '--zoho-tasks-modified-to');
+
   if (isZohoTasksAprilDealsOnly(argv)) {
     const y = parseZohoTasksAprilYear(argv);
     const apr = zohoAprilDealsModifiedBetweenUtc(y);
     from = apr.from;
     to = apr.to;
     aprilYear = apr.year;
+  } else if (argvFrom && argvTo) {
+    from = String(argvFrom).trim();
+    to = String(argvTo).trim();
+  } else if (argvFrom || argvTo) {
+    throw new Error(
+      'zoho-tasks: use --zoho-tasks-modified-from e --zoho-tasks-modified-to em conjunto (ISO), ou --zoho-tasks-april-deals, ou defina ZOHO_MODIFIED_FROM / ZOHO_MODIFIED_TO.'
+    );
   } else if (!from || !to) {
     throw new Error(`Defina ${kf} e ${kt} (ou alias ZOHO_MOVIFIED_FROM / ZOHO_MOVIFIED_TO se usar o typo)`);
   }
@@ -4373,6 +4402,12 @@ async function cmdZohoTasksDebugSummary(argv) {
   const verbose = argv.includes('--zoho-tasks-debug-verbose');
   const skipGame = argv.includes('--zoho-tasks-debug-skip-game-lookup');
   const preferOwner = isZohoTasksPreferTaskOwnerEmail(argv);
+  const activitySince = argvFlagValue(argv, '--zoho-tasks-activity-since');
+  if (activitySince) {
+    console.log(
+      `${colors.cyan}zoho-tasks: só atividades com Modified/Created ≥ ${String(activitySince).trim()} antes do mapa de tags.${colors.reset}`
+    );
+  }
 
   const { from, to, kf, kt, aprilYear } = zohoTasksResolveSearchRange(argv);
   if (aprilYear != null) {
@@ -4412,7 +4447,8 @@ async function cmdZohoTasksDebugSummary(argv) {
     samples_no_hits: [],
     samples_no_email: [],
     samples_done_missing_pending: [],
-    spot_check_done_missing: []
+    spot_check_done_missing: [],
+    recent_tag_hits: []
   };
 
   let gameLookupOk = !skipGame;
@@ -4451,11 +4487,16 @@ async function cmdZohoTasksDebugSummary(argv) {
       continue;
     }
 
-    const list = await zohoFetchAllActivitiesChronologicalForDeal(deal.id, token);
+    const listRaw = await zohoFetchAllActivitiesChronologicalForDeal(deal.id, token);
+    const list = activitySince ? zohoFilterActivitiesSince(listRaw, activitySince) : listRaw;
     const hits = findLatestActivitiesPerJurActionTemplate(list, map);
     if (!hits.length) {
       stats.skipped_no_hits++;
-      pushZohoDebugSample(stats.samples_no_hits, { deal_id: String(deal.id), activities: list.length });
+      pushZohoDebugSample(stats.samples_no_hits, {
+        deal_id: String(deal.id),
+        activities_total: listRaw.length,
+        activities_after_since: list.length
+      });
       if (verbose) {
         console.warn(
           `${colors.dim}deal ${deal.id}: nenhuma atividade com texto de tagFlowTitleToActionTemplateId — pulando.${colors.reset}`
@@ -4467,6 +4508,18 @@ async function cmdZohoTasksDebugSummary(argv) {
     stats.deals_with_hits++;
 
     for (const hit of hits) {
+      if (stats.recent_tag_hits.length < 150) {
+        stats.recent_tag_hits.push({
+          deal_id: String(deal.id),
+          deal_name: String(deal.Deal_Name ?? '').slice(0, 120),
+          action_id: hit.actionId,
+          tag_flow_key: String(hit.tagFlowKey).slice(0, 220),
+          Created_Time: hit.activity.Created_Time ?? hit.activity.created_time ?? null,
+          Modified_Time: hit.activity.Modified_Time ?? hit.activity.modified_time ?? null,
+          Subject: String(hit.activity.Subject ?? hit.activity.subject ?? '').slice(0, 200),
+          Status: zohoActivityTaskStatus(hit.activity)
+        });
+      }
       const taskStatusRaw = zohoActivityTaskStatus(hit.activity);
       const g4uStatus = mapZohoTaskStatusToGame4uStatus(taskStatusRaw);
       const stableIntId = buildZohoJurStableIntegrationId(deal.id, hit.actionId);
@@ -4584,6 +4637,12 @@ async function cmdZohoTasks(argv) {
   const postAllMapped = argv.includes('--post-all-mapped');
   const map = loadZohoCrmActionMap();
   const preferTaskOwner = isZohoTasksPreferTaskOwnerEmail(argv);
+  const activitySince = argvFlagValue(argv, '--zoho-tasks-activity-since');
+  if (activitySince) {
+    console.log(
+      `${colors.cyan}zoho-tasks: só atividades com Modified/Created ≥ ${String(activitySince).trim()} antes do mapa de tags.${colors.reset}`
+    );
+  }
 
   const { from, to, kf, kt, aprilYear } = zohoTasksResolveSearchRange(argv);
   if (aprilYear != null) {
@@ -4640,10 +4699,13 @@ async function cmdZohoTasks(argv) {
       continue;
     }
 
-    const list = await zohoFetchAllActivitiesChronologicalForDeal(deal.id, token);
+    const listRaw = await zohoFetchAllActivitiesChronologicalForDeal(deal.id, token);
+    const list = activitySince ? zohoFilterActivitiesSince(listRaw, activitySince) : listRaw;
     log(
       `Zoho Activities_Chronological [${i + 1}/${totalDeals}] deal ${deal.id}`,
-      `${list.length} atividade(s) (todas as páginas)`,
+      activitySince
+        ? `${listRaw.length} atividade(s) total; ${list.length} após filtro --zoho-tasks-activity-since`
+        : `${list.length} atividade(s) (todas as páginas)`,
       list.length <= 12 ? list : { total: list.length, preview: list.slice(0, 3) }
     );
     const hits = findLatestActivitiesPerJurActionTemplate(list, map);
@@ -6037,6 +6099,8 @@ Comandos:
                                 Filtro abril (só deals com Modified_Time em abril UTC): --zoho-tasks-april-deals
                                 e opcional --zoho-tasks-april-year YYYY (default ano UTC atual) ou env G4U_ZOHO_TASKS_APRIL_DEALS=1
                                 e G4U_ZOHO_TASKS_APRIL_YEAR (ignora ZOHO_MODIFIED_* nesse modo).
+                                Alternativa ao mês: **--zoho-tasks-modified-from** e **--zoho-tasks-modified-to** (ISO; ambos).
+                                **--zoho-tasks-activity-since** (ISO): antes do mapa de tags, só atividades com max(Modified,Created) ≥ esse instante.
                                 --zoho-tasks-debug-summary: sem POST; contagens + zoho-tasks-debug-summary.json na raiz do repo;
                                 --zoho-tasks-debug-verbose; --zoho-tasks-debug-skip-game-lookup (só Zoho).
                                 --zoho-tasks-task-owner-email ou G4U_ZOHO_JUR_TASK_USER_EMAIL=owner: user_email = Owner da task (fallback jur).
