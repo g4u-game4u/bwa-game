@@ -4,5 +4,14 @@
   <c4u-spinner></c4u-spinner>
 </div>
 
+<div class="maintenance-notice" role="status" aria-live="polite">
+  <i class="ri-tools-line maintenance-notice__icon" aria-hidden="true"></i>
+  <div class="maintenance-notice__body">
+    <strong class="maintenance-notice__title">Manutenção em andamento</strong>
+    <p class="maintenance-notice__text">
+      Estamos passando por manutenção. O sistema pode apresentar instabilidade ou indisponibilidade momentânea.
+    </p>
+  </div>
+</div>
 
 <router-outlet *ngIf="translateReady && paramReady"></router-outlet>

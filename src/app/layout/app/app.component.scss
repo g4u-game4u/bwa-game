@@ -1,6 +1,52 @@
 @import "tailwind";
 @reference "tailwind";
+@import "src/assets/styles/variables";
 
 :host {
     @apply block size-full relative;
+}
+
+.maintenance-notice {
+    position: fixed;
+    right: 1rem;
+    bottom: 1rem;
+    z-index: 2000;
+    display: flex;
+    gap: 0.75rem;
+    align-items: flex-start;
+    max-width: min(22rem, calc(100vw - 2rem));
+    padding: 0.875rem 1rem;
+    font-size: 0.875rem;
+    line-height: 1.45;
+    color: $texto-branco;
+    background: $background-escuro;
+    border: 1px solid rgba($text-orange, 0.4);
+    border-left: 4px solid $text-orange;
+    border-radius: 8px;
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.05) inset;
+}
+
+.maintenance-notice__icon {
+    flex-shrink: 0;
+    margin-top: 0.1rem;
+    font-size: 1.35rem;
+    color: $text-orange;
+}
+
+.maintenance-notice__body {
+    min-width: 0;
+}
+
+.maintenance-notice__title {
+    display: block;
+    margin-bottom: 0.35rem;
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+.maintenance-notice__text {
+    margin: 0;
+    color: $texto-cinza;
+    font-size: 0.875rem;
+    font-weight: 400;
 }
