@@ -1,7 +1,7 @@
 import { Component, OnInit, OnDestroy, HostListener, ChangeDetectionStrategy, ChangeDetectorRef, AfterViewInit } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { NgbModal } from '@ng-bootstrap/ng-bootstrap';
-import { Subject, of, forkJoin, from } from 'rxjs';
+import { Subject, of, from } from 'rxjs';
 import { takeUntil, switchMap, map, catchError } from 'rxjs/operators';
 
 import { PlayerService } from '@services/player.service';
@@ -326,40 +326,20 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
         }
       });
     
-    // Carteira: bloqueados/moedas vêm do status Funifier; desbloqueados = todas as entradas do action_log × 3 (igual tarefas finalizadas da temporada; sem filtro de mês)
-    console.log('📊 Starting point wallet (status + action_log pontos)...');
-    forkJoin({
-      wallet: this.playerService.getPlayerPoints(playerId).pipe(
-        catchError(err => {
-          console.error('📊 Point wallet status error:', err);
-          return of({ moedas: 0, bloqueados: 0, desbloqueados: 0 } as PointWallet);
-        })
-      ),
-      pontosActionLog: this.actionLogService.getPontosForMonth(playerId).pipe(
-        catchError(err => {
-          console.error('📊 Pontos action_log error:', err);
-          return of(0);
-        })
-      )
-    })
+    // Pontos e Moedas vêm direto do Funifier player status (point_categories)
+    console.log('📊 Starting point wallet (Funifier player status)...');
+    this.playerService.getPlayerPoints(playerId)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
-        next: ({ wallet, pontosActionLog }) => {
-          const desbloqueados = Math.floor(Number(pontosActionLog) || 0);
-          this.pointWallet = {
-            ...wallet,
-            desbloqueados
-          };
-          console.log('📊 Point wallet merged:', { bloqueados: wallet.bloqueados, desbloqueados, moedas: wallet.moedas });
+        next: (wallet) => {
+          this.pointWallet = wallet;
+          console.log('📊 Point wallet from Funifier:', { bloqueados: wallet.bloqueados, desbloqueados: wallet.desbloqueados, moedas: wallet.moedas });
           this.cdr.markForCheck();
         },
         error: (error) => {
           console.error('📊 Failed to load point wallet:', error);
           this.pointWallet = { moedas: 0, bloqueados: 0, desbloqueados: 0 };
           this.cdr.markForCheck();
-        },
-        complete: () => {
-          console.log('📊 Point wallet request completed');
         }
       });
     
