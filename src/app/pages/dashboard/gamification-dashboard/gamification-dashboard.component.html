@@ -155,9 +155,33 @@
     <section class="dashboard-section" aria-labelledby="kpi-section-title">
       <h3 id="kpi-section-title" class="section-title">Minha Carteira</h3>
       
-      <div class="kpi-grid" *ngIf="!isLoadingKPIs && playerKPIs.length > 0" role="group" aria-labelledby="kpi-section-title">
+      <div class="kpi-grid" *ngIf="!isLoadingKPIs" role="group" aria-labelledby="kpi-section-title">
+        <c4u-monthly-points-goal-progress
+          [current]="monthlyPointsProgressData.current"
+          [target]="monthlyPointsProgressData.target"
+          [isLoading]="isLoadingProgress"
+          [color]="monthlyPointsGoalColor">
+        </c4u-monthly-points-goal-progress>
+        <!--
+          KPI circular "Clientes na Carteira" (id numero-empresas) — meta de empresas na carteira:
+          mantido comentado; a meta visível de pontos do mês é o c4u-monthly-points-goal-progress acima.
+          <ng-container *ngFor="let kpi of playerKPIs; let i = index; trackBy: trackByKpiId">
+            <c4u-kpi-circular-progress
+              *ngIf="kpi.id === 'numero-empresas'"
+              [label]="kpi.label"
+              [current]="roundValue(getKpiCurrentValue(kpi))"
+              [target]="roundValue(kpi.target)"
+              [superTarget]="kpi.superTarget ? roundValue(kpi.superTarget) : undefined"
+              [color]="kpi.color"
+              [unit]="kpi.unit"
+              [colorIndex]="i"
+              [isMissing]="!!kpi.isMissing">
+            </c4u-kpi-circular-progress>
+          </ng-container>
+        -->
         <ng-container *ngFor="let kpi of playerKPIs; let i = index; trackBy: trackByKpiId">
           <c4u-kpi-circular-progress
+            *ngIf="kpi.id !== 'numero-empresas'"
             [label]="kpi.label"
             [current]="kpi.id === 'entregas-prazo' ? getKpiCurrentValue(kpi) : roundValue(getKpiCurrentValue(kpi))"
             [target]="roundValue(kpi.target)"

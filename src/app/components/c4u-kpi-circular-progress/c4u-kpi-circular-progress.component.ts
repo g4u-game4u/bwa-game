@@ -17,6 +17,8 @@ export class C4uKpiCircularProgressComponent {
   @Input() isMissing: boolean = false;
   /** Só o valor percentual visível (sem rótulo, meta nem status) — ex.: entregas no prazo. */
   @Input() compactPercentOnly = false;
+  /** Quando preenchido, substitui o texto de ajuda do botão de informação. */
+  @Input() helpDescription = '';
   
   @HostBinding('class')
   get hostClasses(): string {
@@ -99,6 +101,9 @@ export class C4uKpiCircularProgressComponent {
     }
     
     // For count-based KPIs (like "Clientes na Carteira"), show the raw count
+    if (this.unit === 'pts') {
+      return `${Math.round(this.current)} pts`;
+    }
     return `${Math.round(this.current)}`;
   }
 
@@ -130,6 +135,10 @@ export class C4uKpiCircularProgressComponent {
     // Check for clients/clientes related labels (using same icon as sidebar)
     if (labelLower.includes('clientes') || labelLower.includes('carteira') || labelLower.includes('empresas')) {
       return 'ri-building-line';
+    }
+
+    if (labelLower.includes('pontos')) {
+      return 'ri-trophy-line';
     }
     
     // Default icon for other KPIs
@@ -169,6 +178,8 @@ export class C4uKpiCircularProgressComponent {
     
     if ((labelLower.includes('clientes') || labelLower.includes('empresas')) && labelLower.includes('carteira')) {
       return 'clientes-na-carteira';
+    } else if (labelLower.includes('pontos') && labelLower.includes('mês')) {
+      return 'pontos-no-mes';
     } else if (labelLower.includes('entregas') && labelLower.includes('prazo')) {
       return 'entregas-no-prazo';
     }
@@ -183,14 +194,22 @@ export class C4uKpiCircularProgressComponent {
    * Only for "clientes-na-carteira" and "entregas-no-prazo" KPIs
    */
   get customHelpText(): string {
+    const trimmed = this.helpDescription?.trim();
+    if (trimmed) {
+      return trimmed;
+    }
+
     const key = this.helpTextKey;
     
     // Only add custom text for these specific KPIs
-    if (key === 'clientes-na-carteira' || key === 'entregas-no-prazo') {
+    if (key === 'clientes-na-carteira' || key === 'entregas-no-prazo' || key === 'pontos-no-mes') {
       if (this.isMissing) {
         return 'Dado não disponível';
       }
       const unitText = this.unit ? ` ${this.unit}` : '';
+      if (key === 'pontos-no-mes') {
+        return `${Math.round(this.current)} pts de meta ${Math.round(this.target)} pts (mês selecionado).`;
+      }
       return `${this.current}${unitText} de ${this.target}${unitText}`;
     }
     

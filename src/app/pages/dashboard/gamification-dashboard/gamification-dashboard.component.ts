@@ -28,6 +28,7 @@ import { CompanyDisplay, CarteiraSupabaseKpiRow } from '@services/company-kpi.se
 import { ProgressCardType } from '@components/c4u-activity-progress/c4u-activity-progress.component';
 import { ProgressListType } from '@modals/modal-progress-list/modal-progress-list.component';
 import { ModalSeasonFaqComponent } from '@modals/modal-season-faq/modal-season-faq.component';
+import { PONTOS_POR_ATIVIDADE_FINALIZADA_ACTION_LOG } from '@app/constants/pontos-por-atividade-action-log';
 
 @Component({
   selector: 'app-gamification-dashboard',
@@ -1072,11 +1073,31 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   }
 
   /**
-   * Get enabled KPIs (excluding commented/disabled ones)
-   * Currently excludes 'numero-empresas' (Clientes na Carteira)
+   * KPIs exibidos na barra lateral recolhida (sem "Clientes na Carteira", alinhado ao painel principal).
    */
   get enabledKPIs(): KPIData[] {
-    return this.playerKPIs;
+    return this.playerKPIs.filter(k => k.id !== 'numero-empresas');
+  }
+
+  /**
+   * Pontos do mês (action_log) vs meta provisória: (processos pendentes + incompletos) × pts/atividade.
+   * A meta será refinada com tarefas pendentes no Supabase.
+   */
+  get monthlyPointsProgressData(): { current: number; target: number } {
+    const current = Math.floor(this.activityMetrics?.pontos ?? 0);
+    const pendingTasks =
+      (this.processMetrics?.pendentes ?? 0) + (this.processMetrics?.incompletas ?? 0);
+    const target =
+      pendingTasks > 0
+        ? pendingTasks * PONTOS_POR_ATIVIDADE_FINALIZADA_ACTION_LOG
+        : Math.max(current, 1);
+    return { current, target };
+  }
+
+  get monthlyPointsGoalColor(): 'red' | 'yellow' | 'green' | 'pink' {
+    const { current, target } = this.monthlyPointsProgressData;
+    const superGoal = Math.ceil(target * 1.5);
+    return this.kpiService.getKPIColorByGoals(current, target, superGoal);
   }
 
   /**

@@ -597,7 +597,8 @@
     gap: $spacing-xxl;
     justify-content: center;
     
-    c4u-kpi-circular-progress {
+    c4u-kpi-circular-progress,
+    c4u-monthly-points-goal-progress {
       flex: 0 0 auto;
     }
     
