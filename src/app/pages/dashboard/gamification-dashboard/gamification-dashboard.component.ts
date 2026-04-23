@@ -97,8 +97,8 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   participacaoClientes: CompanyDisplay[] = [];
   isLoadingParticipacao = true;
   
-  // Active tab for Clientes section
-  clientesActiveTab: 'carteira' | 'participacao' = 'carteira';
+  /** Mantido para sync de KPI; UI sem abas — sempre visão participação. */
+  clientesActiveTab: 'carteira' | 'participacao' = 'participacao';
   
   // Month selection
   selectedMonth: Date | undefined = new Date();

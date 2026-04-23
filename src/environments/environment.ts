@@ -72,5 +72,19 @@ export const environment = {
     process.env.GAMIFICACAO_API_TOKEN ||
     process.env.gamificacao_api_token ||
     ''
-  ).trim()
+  ).trim(),
+
+  /** Base URL da API Game4U (BWA), ex.: https://g4u-api-bwa.onrender.com/api */
+  game4uApiUrl: (
+    process.env['GAME4U_API_URL'] ||
+    process.env['game4u_api_url'] ||
+    'https://g4u-api-bwa.onrender.com/api'
+  )
+    .trim()
+    .replace(/\/$/, ''),
+
+  /** Quando true e `game4uApiUrl` definido, pontos/ações/deliveries vêm da API Game4U em vez do Funifier/action_log. */
+  useGame4uApi:
+    String(process.env['GAME4U_USE_API'] ?? process.env['game4u_use_api'] ?? 'true').toLowerCase() !==
+    'false'
 };

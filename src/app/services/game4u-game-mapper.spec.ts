@@ -1,0 +1,89 @@
+import {
+  filterGame4uActionsByMonth,
+  mapGame4uActionsToProcessMetrics,
+  mapGame4uStatsToPointWallet,
+  mergeGame4uDeliveryParticipation,
+  mergeGame4uTeamDeliveryRows
+} from './game4u-game-mapper';
+import type { Game4uDeliveryModel, Game4uUserActionModel } from '@model/game4u-api.model';
+
+describe('game4u-game-mapper', () => {
+  describe('mapGame4uStatsToPointWallet', () => {
+    it('maps blocked and unlocked totals', () => {
+      const w = mapGame4uStatsToPointWallet({
+        stats: [],
+        total_actions: 0,
+        total_points: 99,
+        total_blocked_points: 11
+      });
+      expect(w).toEqual({ bloqueados: 11, desbloqueados: 99, moedas: 0 });
+    });
+  });
+
+  describe('filterGame4uActionsByMonth', () => {
+    it('filters by calendar month', () => {
+      const month = new Date(2024, 5, 15);
+      const actions: Game4uUserActionModel[] = [
+        {
+          id: '1',
+          points: 1,
+          status: 'DONE',
+          created_at: '2024-05-10T12:00:00.000Z'
+        },
+        {
+          id: '2',
+          points: 1,
+          status: 'DONE',
+          created_at: '2024-06-01T12:00:00.000Z'
+        }
+      ];
+      const out = filterGame4uActionsByMonth(actions, month);
+      expect(out.map(a => a.id)).toEqual(['1']);
+    });
+  });
+
+  describe('mapGame4uActionsToProcessMetrics', () => {
+    it('counts finalized deliveries', () => {
+      const actions: Game4uUserActionModel[] = [
+        {
+          id: 'a1',
+          points: 0,
+          status: 'DOING',
+          created_at: '2024-01-01T00:00:00.000Z',
+          delivery_id: 'd1'
+        },
+        {
+          id: 'a2',
+          points: 0,
+          status: 'DELIVERED',
+          created_at: '2024-01-02T00:00:00.000Z',
+          delivery_id: 'd1'
+        }
+      ];
+      expect(mapGame4uActionsToProcessMetrics(actions)).toEqual({
+        pendentes: 0,
+        incompletas: 0,
+        finalizadas: 1
+      });
+    });
+  });
+
+  describe('mergeGame4uDeliveryParticipation', () => {
+    it('dedupes delivery ids across status lists', () => {
+      const d: Game4uDeliveryModel[] = [{ id: 'x', status: 'DELIVERED' }];
+      const merged = mergeGame4uDeliveryParticipation(d, [{ id: 'x', status: 'PENDING' }]);
+      expect(merged).toEqual([{ cnpj: 'x', actionCount: 2 }]);
+    });
+  });
+
+  describe('mergeGame4uTeamDeliveryRows', () => {
+    it('aggregates processCount for delivered', () => {
+      const rows = mergeGame4uTeamDeliveryRows(
+        [{ id: 'c1', status: 'DELIVERED' }],
+        [{ id: 'c2', status: 'PENDING' }]
+      );
+      expect(rows).toContain(jasmine.objectContaining({ cnpj: 'c1', processCount: 1 }));
+      expect(rows).toContain(jasmine.objectContaining({ cnpj: 'c2', processCount: 0 }));
+    });
+  });
+});

@@ -271,9 +271,34 @@
             <section class="dashboard-section" aria-labelledby="kpi-section-title">
               <h3 id="kpi-section-title" class="section-title">Carteira da Equipe</h3>
               
-              <div class="kpi-grid" *ngIf="teamKPIs.length > 0" role="group" aria-labelledby="kpi-section-title">
+              <div class="kpi-grid" *ngIf="!isLoadingKPIs" role="group" aria-labelledby="kpi-section-title">
+                <c4u-monthly-points-goal-progress
+                  [label]="monthlyPointsProgressLabel"
+                  [helpDescription]="teamMonthlyPointsHelpText"
+                  [current]="monthlyPointsProgressData.current"
+                  [target]="monthlyPointsProgressData.target"
+                  [color]="monthlyPointsGoalColor">
+                </c4u-monthly-points-goal-progress>
+                <!--
+                  KPI "Clientes na Carteira" (numero-empresas) — meta de empresas na carteira: comentado;
+                  meta de pontos do período no componente acima.
+                  <ng-container *ngFor="let kpi of teamKPIs; let i = index; trackBy: trackByKpiId">
+                    <c4u-kpi-circular-progress
+                      *ngIf="kpi.id === 'numero-empresas'"
+                      [label]="kpi.label"
+                      [current]="roundValue(kpi.current)"
+                      [target]="roundValue(kpi.target)"
+                      [superTarget]="kpi.superTarget ? roundValue(kpi.superTarget) : undefined"
+                      [color]="kpi.color"
+                      [unit]="kpi.unit"
+                      [colorIndex]="i"
+                      [isMissing]="!!kpi.isMissing">
+                    </c4u-kpi-circular-progress>
+                  </ng-container>
+                -->
                 <ng-container *ngFor="let kpi of teamKPIs; let i = index; trackBy: trackByKpiId">
                   <c4u-kpi-circular-progress
+                    *ngIf="kpi.id !== 'numero-empresas'"
                     [label]="kpi.label"
                     [current]="roundValue(kpi.current)"
                     [target]="roundValue(kpi.target)"
@@ -287,6 +312,7 @@
               </div>
               
               <div class="kpi-grid" *ngIf="isLoadingKPIs">
+                <c4u-shimmer></c4u-shimmer>
                 <c4u-shimmer></c4u-shimmer>
                 <c4u-shimmer></c4u-shimmer>
               </div>
@@ -307,65 +333,53 @@
               <c4u-shimmer *ngIf="isLoadingGoals"></c4u-shimmer>
             </section>
             
-            <!-- Company Portfolio Section (commented out) -->
-            <ng-container *ngIf="false">
-              <section class="dashboard-section carteira-section" aria-labelledby="company-section-title">
-                <div class="section-header">
-                  <h3 id="company-section-title" class="section-title">Clientes</h3>
-                  <!-- <button 
-                    type="button" 
-                    class="carteira-expand-btn"
-                    (click)="openCarteiraModal()"
-                    aria-label="Ver todos os clientes">
-                    <i class="ri-external-link-line"></i>
-                    Ver todos
-                  </button> -->
-                </div>
-                
-                <c4u-card class="carteira-card">
-                  <!-- Carteira list from action_log CNPJs -->
-                  <div *ngIf="teamCarteiraClientes.length > 0" class="carteira-list">
-                    <div *ngFor="let cliente of teamCarteiraClientes" 
-                         class="carteira-item"
-                         (click)="openCompanyDetailModal(cliente)"
-                         role="button"
-                         tabindex="0"
-                         [attr.aria-label]="'Ver detalhes de ' + getCompanyDisplayName(cliente.cnpj)"
-                         (keydown.enter)="openCompanyDetailModal(cliente)"
-                         (keydown.space)="openCompanyDetailModal(cliente); $event.preventDefault()">
-                      <div class="carteira-item-info">
-                        <i class="ri-building-line"></i>
-                        <span class="carteira-cnpj">{{ getCompanyDisplayName(cliente.cnpj) }}</span>
-                        <span class="status-badge" *ngIf="getCompanyStatus(cliente.cnpj)" 
-                              [class.active]="isCompanyActive(cliente.cnpj)"
-                              [class.inactive]="!isCompanyActive(cliente.cnpj)">
-                          {{ getCompanyStatus(cliente.cnpj) }}
-                        </span>
+            <!-- Clientes atendidos: lista única (CNPJs com participação no período via action_log agregado); sem abas Carteira/Participação. -->
+            <section class="dashboard-section carteira-section" aria-labelledby="company-section-title">
+              <div class="section-header">
+                <h3 id="company-section-title" class="section-title">Clientes atendidos</h3>
+              </div>
+              
+              <c4u-card class="carteira-card">
+                <c4u-shimmer *ngIf="isLoadingCarteira"></c4u-shimmer>
+
+                <div *ngIf="!isLoadingCarteira && teamCarteiraClientes.length > 0" class="carteira-list">
+                  <div *ngFor="let cliente of teamCarteiraClientes" 
+                       class="carteira-item"
+                       (click)="openCompanyDetailModal(cliente)"
+                       role="button"
+                       tabindex="0"
+                       [attr.aria-label]="'Ver detalhes de ' + getCompanyDisplayName(cliente.cnpj)"
+                       (keydown.enter)="openCompanyDetailModal(cliente)"
+                       (keydown.space)="openCompanyDetailModal(cliente); $event.preventDefault()">
+                    <div class="carteira-item-info">
+                      <i class="ri-building-line"></i>
+                      <span class="carteira-cnpj">{{ getCompanyDisplayName(cliente.cnpj) }}</span>
+                      <span class="status-badge" *ngIf="getCompanyStatus(cliente.cnpj)" 
+                            [class.active]="isCompanyActive(cliente.cnpj)"
+                            [class.inactive]="!isCompanyActive(cliente.cnpj)">
+                        {{ getCompanyStatus(cliente.cnpj) }}
+                      </span>
+                    </div>
+                    <div class="carteira-item-meta">
+                      <div *ngIf="cliente.deliveryKpi" 
+                           class="carteira-kpi-compact" 
+                           [ngClass]="'kpi-' + (cliente.deliveryKpi.color || 'default')"
+                           [title]="getKpiTooltip(cliente.deliveryKpi)">
+                        <span class="kpi-value">{{ formatKpiValue(cliente.deliveryKpi) }}</span>
+                        <i class="ri-time-line kpi-icon" aria-hidden="true"></i>
                       </div>
-                      <div class="carteira-item-meta">
-                        <!-- KPI Indicator - Compact Display -->
-                        <div *ngIf="cliente.deliveryKpi" 
-                             class="carteira-kpi-compact" 
-                             [ngClass]="'kpi-' + (cliente.deliveryKpi.color || 'default')"
-                             [title]="getKpiTooltip(cliente.deliveryKpi)">
-                          <span class="kpi-value">{{ formatKpiValue(cliente.deliveryKpi) }}</span>
-                          <i class="ri-time-line kpi-icon" aria-hidden="true"></i>
-                        </div>
-                        <span *ngIf="!cliente.deliveryKpi" class="kpi-na">N/A</span>
-                        <span class="carteira-action-count">{{ cliente.actionCount }} tarefas</span>
-                        <span class="carteira-process-count">{{ cliente.processCount }} processos</span>
-                      </div>
+                      <span *ngIf="!cliente.deliveryKpi" class="kpi-na">N/A</span>
+                      <span class="carteira-action-count">{{ cliente.actionCount }} tarefas</span>
+                      <span class="carteira-process-count">{{ cliente.processCount }} processos</span>
                     </div>
                   </div>
-                  
-                  <c4u-shimmer *ngIf="isLoadingCarteira"></c4u-shimmer>
-                  
-                  <div *ngIf="!isLoadingCarteira && teamCarteiraClientes.length === 0" class="empty-state">
-                    <p>Nenhum cliente encontrado na carteira da equipe</p>
-                  </div>
-                </c4u-card>
-              </section>
-            </ng-container>
+                </div>
+                
+                <div *ngIf="!isLoadingCarteira && teamCarteiraClientes.length === 0" class="empty-state">
+                  <p>Nenhum cliente atendido neste período</p>
+                </div>
+              </c4u-card>
+            </section>
           </div>
 
           <c4u-shimmer *ngIf="isLoadingGoals"></c4u-shimmer>

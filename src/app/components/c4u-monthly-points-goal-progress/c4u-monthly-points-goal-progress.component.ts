@@ -11,12 +11,20 @@ export class C4uMonthlyPointsGoalProgressComponent {
   @Input() target = 1;
   @Input() isLoading = false;
   @Input() color: 'red' | 'yellow' | 'green' | 'pink' = 'red';
+  /** Rótulo do cartão (ex.: visão equipe vs colaborador). */
+  @Input() label = 'Pontos no mês';
+  /** Texto do botão de ajuda; se vazio, usa o texto padrão abaixo. */
+  @Input() helpDescription = '';
 
-  readonly label = 'Pontos no mês';
   readonly unit = 'pts';
 
-  readonly helpText =
+  private readonly fallbackHelp =
     'Pontos conquistados no mês selecionado no painel. A meta provisória soma processos pendentes e incompletos do action_log e multiplica por 3 (mesma regra das atividades); em seguida será calculada a partir das tarefas pendentes no Supabase.';
+
+  get resolvedHelpDescription(): string {
+    const t = this.helpDescription?.trim();
+    return t ? t : this.fallbackHelp;
+  }
 
   get superTarget(): number {
     return Math.ceil(this.target * 1.5);

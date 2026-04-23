@@ -2875,10 +2875,44 @@ private calculateCollaboratorTotals(memberData: Array<{
   }
 
   /**
-   * Get enabled KPIs (all KPIs)
+   * KPIs na barra lateral compacta (sem meta de empresas na carteira, alinhado ao painel principal).
    */
   get enabledKPIs(): KPIData[] {
-    return this.teamKPIs;
+    return this.teamKPIs.filter(k => k.id !== 'numero-empresas');
+  }
+
+  /**
+   * Pontos do período (soma da equipe ou do colaborador) vs meta provisória a partir de processos pendentes/incompletos × pts/atividade.
+   */
+  get monthlyPointsProgressData(): { current: number; target: number } {
+    const current = Math.floor(this.teamActivityMetrics?.pontos ?? 0);
+    const pendingTasks =
+      (this.teamProcessMetrics?.pendentes ?? 0) + (this.teamProcessMetrics?.incompletas ?? 0);
+    const target =
+      pendingTasks > 0
+        ? pendingTasks * PONTOS_POR_ATIVIDADE_FINALIZADA_ACTION_LOG
+        : Math.max(current, 1);
+    return { current, target };
+  }
+
+  get monthlyPointsGoalColor(): 'red' | 'yellow' | 'green' | 'pink' {
+    const { current, target } = this.monthlyPointsProgressData;
+    const superGoal = Math.ceil(target * 1.5);
+    return this.kpiService.getKPIColorByGoals(current, target, superGoal);
+  }
+
+  get monthlyPointsProgressLabel(): string {
+    return this.selectedCollaborator ? 'Pontos no mês' : 'Pontos no mês (equipe)';
+  }
+
+  get teamMonthlyPointsHelpText(): string {
+    const scope = this.selectedCollaborator
+      ? 'Pontos deste colaborador no período selecionado (filtro do painel). '
+      : 'Pontos somados de todos os membros da equipe no período selecionado. ';
+    return (
+      scope +
+      'A meta provisória soma processos pendentes e incompletos do action_log e multiplica por 3 (mesma regra das atividades); depois será calculada a partir das tarefas pendentes no Supabase.'
+    );
   }
 
   /**

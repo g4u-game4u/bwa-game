@@ -1,34 +1,57 @@
 import { TestBed } from '@angular/core/testing';
+import { HttpClientTestingModule } from '@angular/common/http/testing';
 import { PlayerService } from './player.service';
 import { FunifierApiService } from './funifier-api.service';
 import { PlayerMapper } from './player-mapper.service';
+import { Game4uApiService } from './game4u-api.service';
+import { SessaoProvider } from '@providers/sessao/sessao.provider';
 import { of, throwError } from 'rxjs';
 import { PlayerStatus, PointWallet, SeasonProgress } from '@model/gamification-dashboard.model';
+import { environment } from '../../environments/environment';
 
 describe('PlayerService', () => {
   let service: PlayerService;
   let funifierApiSpy: jasmine.SpyObj<FunifierApiService>;
   let mapperSpy: jasmine.SpyObj<PlayerMapper>;
+  let game4uSpy: jasmine.SpyObj<Game4uApiService>;
+  let savedUseGame4uApi: boolean | undefined;
 
   beforeEach(() => {
+    savedUseGame4uApi = environment.useGame4uApi;
+    environment.useGame4uApi = false;
+
     const apiSpy = jasmine.createSpyObj('FunifierApiService', ['get']);
     const playerMapperSpy = jasmine.createSpyObj('PlayerMapper', [
       'toPlayerStatus',
       'toPointWallet',
       'toSeasonProgress'
     ]);
+    const game4uSpy = jasmine.createSpyObj('Game4uApiService', ['getGameStats', 'toQueryRange', 'isConfigured']);
+    game4uSpy.isConfigured.and.returnValue(true);
+    game4uSpy.toQueryRange.and.returnValue({
+      start: '2000-01-01T00:00:00.000Z',
+      end: '2099-12-31T23:59:59.999Z'
+    });
 
     TestBed.configureTestingModule({
+      imports: [HttpClientTestingModule],
       providers: [
         PlayerService,
         { provide: FunifierApiService, useValue: apiSpy },
-        { provide: PlayerMapper, useValue: playerMapperSpy }
+        { provide: PlayerMapper, useValue: playerMapperSpy },
+        { provide: Game4uApiService, useValue: game4uSpy },
+        { provide: SessaoProvider, useValue: { usuario: { email: 'john@example.com' } } }
       ]
     });
 
     service = TestBed.inject(PlayerService);
     funifierApiSpy = TestBed.inject(FunifierApiService) as jasmine.SpyObj<FunifierApiService>;
     mapperSpy = TestBed.inject(PlayerMapper) as jasmine.SpyObj<PlayerMapper>;
+    game4uSpy = TestBed.inject(Game4uApiService) as jasmine.SpyObj<Game4uApiService>;
+  });
+
+  afterEach(() => {
+    environment.useGame4uApi = savedUseGame4uApi;
   });
 
   it('should be created', () => {
@@ -173,6 +196,25 @@ describe('PlayerService', () => {
           expect(result).toEqual(mockPointWallet);
           done();
         });
+      });
+    });
+
+    it('should map wallet from Game4U stats when enabled', done => {
+      environment.useGame4uApi = true;
+      game4uSpy.getGameStats.and.returnValue(
+        of({
+          stats: [],
+          total_actions: 0,
+          total_points: 42,
+          total_blocked_points: 5
+        })
+      );
+
+      service.getPlayerPoints('me').subscribe(result => {
+        expect(result).toEqual({ bloqueados: 5, desbloqueados: 42, moedas: 0 });
+        expect(game4uSpy.getGameStats).toHaveBeenCalled();
+        expect(funifierApiSpy.get).not.toHaveBeenCalled();
+        done();
       });
     });
   });

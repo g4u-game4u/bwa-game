@@ -6,6 +6,10 @@ import { PlayerMapper } from './player-mapper.service';
 import { PlayerStatus, PointWallet, SeasonProgress } from '@model/gamification-dashboard.model';
 import { HttpClient } from '@angular/common/http';
 import { environment } from '../../environments/environment';
+import { isGame4uDataEnabled } from '@model/game4u-api.model';
+import { Game4uApiService } from './game4u-api.service';
+import { mapGame4uStatsToPointWallet } from './game4u-game-mapper';
+import { SessaoProvider } from '@providers/sessao/sessao.provider';
 
 interface CacheEntry {
   data$: Observable<any>;
@@ -26,8 +30,18 @@ export class PlayerService {
   constructor(
     private funifierApi: FunifierApiService,
     private mapper: PlayerMapper,
-    private http: HttpClient
+    private http: HttpClient,
+    private game4uApi: Game4uApiService,
+    private sessao: SessaoProvider
   ) {}
+
+  private resolvePlayerEmail(playerId: string): string {
+    const id = (playerId || '').trim();
+    if (!id || id === 'me') {
+      return (this.sessao.usuario?.email || '').trim();
+    }
+    return id;
+  }
 
   /**
    * Get raw player data - fetches fresh or returns cached Observable
@@ -143,6 +157,25 @@ export class PlayerService {
    * Get player points
    */
   getPlayerPoints(playerId: string): Observable<PointWallet> {
+    if (isGame4uDataEnabled() && this.game4uApi.isConfigured()) {
+      const email = this.resolvePlayerEmail(playerId);
+      if (!email) {
+        return throwError(() => new Error('No user email for Game4U wallet'));
+      }
+      const range = this.game4uApi.toQueryRange();
+      return this.game4uApi.getGameStats({ user: email, ...range }).pipe(
+        map(stats => {
+          const points = mapGame4uStatsToPointWallet(stats);
+          console.log('📊 Mapped point wallet (Game4U):', points);
+          return points;
+        }),
+        catchError(error => {
+          console.error('Error mapping point wallet (Game4U):', error);
+          return throwError(() => error);
+        })
+      );
+    }
+
     return this.fetchPlayerData(playerId).pipe(
       map(response => {
         const points = this.mapper.toPointWallet(response);

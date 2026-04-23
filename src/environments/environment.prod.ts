@@ -61,5 +61,17 @@ export const environment = {
     process.env.GAMIFICACAO_API_TOKEN ||
     process.env.gamificacao_api_token ||
     ''
-  ).trim()
+  ).trim(),
+
+  game4uApiUrl: (
+    process.env['GAME4U_API_URL'] ||
+    process.env['game4u_api_url'] ||
+    'https://g4u-api-bwa.onrender.com/api'
+  )
+    .trim()
+    .replace(/\/$/, ''),
+
+  useGame4uApi:
+    String(process.env['GAME4U_USE_API'] ?? process.env['game4u_use_api'] ?? 'true').toLowerCase() !==
+    'false'
 };

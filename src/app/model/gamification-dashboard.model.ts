@@ -122,6 +122,26 @@ export interface ProcessMetrics {
   finalizadas: number;
 }
 
+/** Item de lista de atividades (modal de progresso / action_log ou Game4U). */
+export interface ActivityListItem {
+  id: string;
+  title: string;
+  points: number;
+  created: number;
+  player?: string;
+  status?: 'finalizado' | 'pendente' | 'dispensado';
+  cnpj?: string;
+}
+
+/** Item de lista de processos (modal de progresso). */
+export interface ProcessListItem {
+  deliveryId: string;
+  title: string;
+  actionCount: number;
+  isFinalized: boolean;
+  cnpj?: string;
+}
+
 // Team Management Models
 export interface Team {
   id: string;

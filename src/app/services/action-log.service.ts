@@ -2,8 +2,25 @@ import { Injectable } from '@angular/core';
 import { Observable, of, forkJoin } from 'rxjs';
 import { map, catchError, shareReplay, switchMap } from 'rxjs/operators';
 import { FunifierApiService } from './funifier-api.service';
-import { ActivityMetrics, ProcessMetrics } from '@model/gamification-dashboard.model';
+import {
+  ActivityListItem,
+  ActivityMetrics,
+  ProcessListItem,
+  ProcessMetrics
+} from '@model/gamification-dashboard.model';
 import { PONTOS_POR_ATIVIDADE_FINALIZADA_ACTION_LOG } from '@app/constants/pontos-por-atividade-action-log';
+import { isGame4uDataEnabled } from '@model/game4u-api.model';
+import { Game4uApiService, Game4uUserScopedQuery } from './game4u-api.service';
+import { SessaoProvider } from '@providers/sessao/sessao.provider';
+import {
+  filterGame4uActionsByMonth,
+  mapGame4uActionsToActivityList,
+  mapGame4uActionsToProcessList,
+  mapGame4uActionsToProcessMetrics,
+  mapGame4uStatsToActivityMetrics,
+  mapGame4uStatsToPointWallet,
+  mergeGame4uDeliveryParticipation
+} from './game4u-game-mapper';
 
 export interface ActionLogEntry {
   _id: string;
@@ -37,23 +54,7 @@ export interface ActionLogEntry {
   delivery_title?: string; // Deprecated: use attributes.delivery_title
 }
 
-export interface ActivityListItem {
-  id: string;
-  title: string; // attributes.acao
-  points: number;
-  created: number;
-  player?: string; // userId (email do executor)
-  status?: 'finalizado' | 'pendente' | 'dispensado'; // Status da atividade
-  cnpj?: string; // CNPJ da empresa associada à atividade
-}
-
-export interface ProcessListItem {
-  deliveryId: string;
-  title: string; // delivery_title
-  actionCount: number;
-  isFinalized: boolean;
-  cnpj?: string; // CNPJ da empresa associada ao processo
-}
+export type { ActivityListItem, ProcessListItem } from '@model/gamification-dashboard.model';
 
 export interface ClienteListItem {
   cnpj: string;
@@ -308,7 +309,27 @@ export class ActionLogService {
   private pontosForMonthCache = new Map<string, CacheEntry<number>>();
   private monthlyPointsBreakdownCache = new Map<string, CacheEntry<{ bloqueados: number; desbloqueados: number }>>();
 
-  constructor(private funifierApi: FunifierApiService) {}
+  constructor(
+    private funifierApi: FunifierApiService,
+    private game4u: Game4uApiService,
+    private sessao: SessaoProvider
+  ) {}
+
+  private resolveGame4uUserEmail(playerId: string): string {
+    const id = (playerId || '').trim();
+    if (!id || id === 'me') {
+      return (this.sessao.usuario?.email || '').trim();
+    }
+    return id;
+  }
+
+  private game4uUserQuery(playerId: string, month?: Date): Game4uUserScopedQuery | null {
+    const user = this.resolveGame4uUserEmail(playerId);
+    if (!user) {
+      return null;
+    }
+    return { user, ...this.game4u.toQueryRange(month) };
+  }
 
   private getMonthCacheKey(month?: Date): string {
     if (!month) {
@@ -435,6 +456,20 @@ export class ActionLogService {
    * Now uses getPlayerActionLogForMonth (which fetches ALL data) and filters on frontend
    */
   getAtividadesFinalizadas(playerId: string, month?: Date): Observable<number> {
+    if (isGame4uDataEnabled() && this.game4u.isConfigured()) {
+      const q = this.game4uUserQuery(playerId, month);
+      if (!q) {
+        return of(0);
+      }
+      return this.game4u.getGameStats(q).pipe(
+        map(s => Math.floor(Number(s.total_actions) || 0)),
+        catchError(error => {
+          console.error('Error fetching Game4U activity count:', error);
+          return of(0);
+        })
+      );
+    }
+
     // Use the main action log method and filter by month on frontend
     return this.getPlayerActionLogForMonth(playerId, month).pipe(
       map(actions => {
@@ -565,6 +600,23 @@ export class ActionLogService {
    * Cached with shareReplay to avoid duplicate requests
    */
   getMonthlyPointsBreakdown(playerId: string, month?: Date): Observable<{ bloqueados: number; desbloqueados: number }> {
+    if (isGame4uDataEnabled() && this.game4u.isConfigured()) {
+      const q = this.game4uUserQuery(playerId, month);
+      if (!q) {
+        return of({ bloqueados: 0, desbloqueados: 0 });
+      }
+      return this.game4u.getGameStats(q).pipe(
+        map(stats => {
+          const w = mapGame4uStatsToPointWallet(stats);
+          return { bloqueados: w.bloqueados, desbloqueados: w.desbloqueados };
+        }),
+        catchError(error => {
+          console.error('Error in getMonthlyPointsBreakdown (Game4U):', error);
+          return of({ bloqueados: 0, desbloqueados: 0 });
+        })
+      );
+    }
+
     return this.getAllAchievements(playerId).pipe(
       map(achievements => {
         // Filter by month on frontend
@@ -597,6 +649,20 @@ export class ActionLogService {
    * Não consulta mais achievement/delivery_ids no Funifier.
    */
   getPontosForMonth(playerId: string, month?: Date): Observable<number> {
+    if (isGame4uDataEnabled() && this.game4u.isConfigured()) {
+      const q = this.game4uUserQuery(playerId, month);
+      if (!q) {
+        return of(0);
+      }
+      return this.game4u.getGameStats(q).pipe(
+        map(s => mapGame4uStatsToActivityMetrics(s).pontos),
+        catchError(error => {
+          console.error('Error in getPontosForMonth (Game4U):', error);
+          return of(0);
+        })
+      );
+    }
+
     return this.getPlayerActionLogForMonth(playerId, month).pipe(
       map(actions => {
         const filtered = filterByMonth(actions, month);
@@ -624,6 +690,16 @@ export class ActionLogService {
    * Cached with shareReplay to avoid duplicate requests
    */
   getUniqueClientesCount(playerId: string, month?: Date): Observable<number> {
+    if (isGame4uDataEnabled() && this.game4u.isConfigured()) {
+      return this.getPlayerCnpjListWithCount(playerId, month).pipe(
+        map(rows => rows.length),
+        catchError(error => {
+          console.error('Error counting unique clientes (Game4U):', error);
+          return of(0);
+        })
+      );
+    }
+
     return this.getPlayerActionLogForMonth(playerId, month).pipe(
       map(actions => {
         // Filter by month on frontend
@@ -655,6 +731,22 @@ export class ActionLogService {
    * Cached with shareReplay to avoid duplicate requests
    */
   getProcessMetrics(playerId: string, month?: Date): Observable<ProcessMetrics> {
+    if (isGame4uDataEnabled() && this.game4u.isConfigured()) {
+      const q = this.game4uUserQuery(playerId, month);
+      if (!q) {
+        return of({ pendentes: 0, incompletas: 0, finalizadas: 0 });
+      }
+      return this.game4u.getGameActions(q).pipe(
+        map(actions =>
+          mapGame4uActionsToProcessMetrics(filterGame4uActionsByMonth(actions, month))
+        ),
+        catchError(error => {
+          console.error('Error calculating process metrics (Game4U):', error);
+          return of({ pendentes: 0, incompletas: 0, finalizadas: 0 });
+        })
+      );
+    }
+
     const cacheKey = `${playerId}_all_process_metrics`;
     const cached = this.getCachedData(this.processMetricsCache, cacheKey);
     if (cached) {
@@ -747,6 +839,38 @@ export class ActionLogService {
    * All data is fetched without time filtering, then filtered by month on frontend
    */
   getProgressMetrics(playerId: string, month?: Date): Observable<{ activity: ActivityMetrics; processo: ProcessMetrics }> {
+    if (isGame4uDataEnabled() && this.game4u.isConfigured()) {
+      const q = this.game4uUserQuery(playerId, month);
+      if (!q) {
+        return of({
+          activity: { pendentes: 0, emExecucao: 0, finalizadas: 0, pontos: 0 },
+          processo: { pendentes: 0, incompletas: 0, finalizadas: 0 }
+        });
+      }
+      return forkJoin({
+        stats: this.game4u.getGameStats(q),
+        actions: this.game4u.getGameActions(q)
+      }).pipe(
+        map(({ stats, actions }) => {
+          const scoped = filterGame4uActionsByMonth(actions, month);
+          const finalizadas = Math.floor(Number(stats.total_actions) || scoped.length);
+          const pontos = mapGame4uStatsToActivityMetrics(stats).pontos;
+          const processo = mapGame4uActionsToProcessMetrics(scoped);
+          return {
+            activity: { pendentes: 0, emExecucao: 0, finalizadas, pontos },
+            processo
+          };
+        }),
+        catchError(error => {
+          console.error('Error calculating progress metrics (Game4U):', error);
+          return of({
+            activity: { pendentes: 0, emExecucao: 0, finalizadas: 0, pontos: 0 },
+            processo: { pendentes: 0, incompletas: 0, finalizadas: 0 }
+          });
+        })
+      );
+    }
+
     // Cache key without month - we fetch ALL data
     const cacheKey = `metrics_${playerId}_all`;
     
@@ -784,6 +908,20 @@ export class ActionLogService {
    * Fetches ALL data and filters by month on frontend
    */
   getActivityList(playerId: string, month?: Date): Observable<ActivityListItem[]> {
+    if (isGame4uDataEnabled() && this.game4u.isConfigured()) {
+      const q = this.game4uUserQuery(playerId, month);
+      if (!q) {
+        return of([]);
+      }
+      return this.game4u.getGameActions(q).pipe(
+        map(actions => mapGame4uActionsToActivityList(actions, month)),
+        catchError(error => {
+          console.error('Error fetching activity list (Game4U):', error);
+          return of([]);
+        })
+      );
+    }
+
     return this.getPlayerActionLogForMonth(playerId, month).pipe(
       map(actions => {
         const filtered = filterByMonth(actions, month);
@@ -812,6 +950,20 @@ export class ActionLogService {
    * Cached with shareReplay to avoid duplicate requests
    */
   getProcessList(playerId: string, month?: Date): Observable<ProcessListItem[]> {
+    if (isGame4uDataEnabled() && this.game4u.isConfigured()) {
+      const q = this.game4uUserQuery(playerId, month);
+      if (!q) {
+        return of([]);
+      }
+      return this.game4u.getGameActions(q).pipe(
+        map(actions => mapGame4uActionsToProcessList(actions, month)),
+        catchError(error => {
+          console.error('Error fetching process list (Game4U):', error);
+          return of([]);
+        })
+      );
+    }
+
     // Cache key without month - we fetch ALL data
     const cacheKey = `${playerId}_all_process_list`;
     const cached = this.getCachedData(this.processListCache, cacheKey);
@@ -934,6 +1086,29 @@ export class ActionLogService {
       const cached = this.getCachedData(this.cnpjListWithCountCache, cacheKey);
       if (cached) {
         return cached;
+      }
+
+      if (isGame4uDataEnabled() && this.game4u.isConfigured()) {
+        const q = this.game4uUserQuery(playerId, month);
+        if (!q) {
+          return of([]);
+        }
+        const request$ = forkJoin({
+          delivered: this.game4u.getGameDeliveries({ ...q, status: 'DELIVERED' }),
+          incomplete: this.game4u.getGameDeliveries({ ...q, status: 'INCOMPLETE' }),
+          pending: this.game4u.getGameDeliveries({ ...q, status: 'PENDING' })
+        }).pipe(
+          map(({ delivered, incomplete, pending }) =>
+            mergeGame4uDeliveryParticipation(delivered, incomplete, pending)
+          ),
+          catchError(error => {
+            console.error('Error fetching player deliveries (Game4U):', error);
+            return of([]);
+          }),
+          shareReplay({ bufferSize: 1, refCount: true, windowTime: this.CACHE_DURATION })
+        );
+        this.setCachedData(this.cnpjListWithCountCache, cacheKey, request$);
+        return request$;
       }
 
       // NO time filtering - fetch ALL action logs and filter on frontend
