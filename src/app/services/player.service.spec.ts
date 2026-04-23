@@ -26,7 +26,7 @@ describe('PlayerService', () => {
       'toPointWallet',
       'toSeasonProgress'
     ]);
-    const game4uSpy = jasmine.createSpyObj('Game4uApiService', ['getGameStats', 'toQueryRange', 'isConfigured']);
+    game4uSpy = jasmine.createSpyObj('Game4uApiService', ['getGameStats', 'toQueryRange', 'isConfigured']);
     game4uSpy.isConfigured.and.returnValue(true);
     game4uSpy.toQueryRange.and.returnValue({
       start: '2000-01-01T00:00:00.000Z',
@@ -47,11 +47,12 @@ describe('PlayerService', () => {
     service = TestBed.inject(PlayerService);
     funifierApiSpy = TestBed.inject(FunifierApiService) as jasmine.SpyObj<FunifierApiService>;
     mapperSpy = TestBed.inject(PlayerMapper) as jasmine.SpyObj<PlayerMapper>;
-    game4uSpy = TestBed.inject(Game4uApiService) as jasmine.SpyObj<Game4uApiService>;
   });
 
   afterEach(() => {
-    environment.useGame4uApi = savedUseGame4uApi;
+    if (savedUseGame4uApi !== undefined) {
+      environment.useGame4uApi = savedUseGame4uApi;
+    }
   });
 
   it('should be created', () => {

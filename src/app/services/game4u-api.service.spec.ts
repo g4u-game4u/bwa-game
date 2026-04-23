@@ -40,10 +40,12 @@ describe('Game4uApiService', () => {
 
     const req = httpMock.expectOne(
       r =>
-        r.url === `${baseUrl}/game/stats` &&
-        r.params.get('user') === 'u@example.com' &&
-        r.params.get('start')?.startsWith('2024-01-01') &&
-        !!r.params.get('end')
+        !!(
+          r.url === `${baseUrl}/game/stats` &&
+          r.params.get('user') === 'u@example.com' &&
+          (r.params.get('start') ?? '').startsWith('2024-01-01') &&
+          !!r.params.get('end')
+        )
     );
     expect(req.request.headers.get('client_id')).toBeTruthy();
     req.flush({ stats: [], total_actions: 0, total_points: 5, total_blocked_points: 0 });

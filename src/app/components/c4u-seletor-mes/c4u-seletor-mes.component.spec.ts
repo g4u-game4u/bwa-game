@@ -8,6 +8,7 @@ import * as moment from 'moment';
 import { C4uSeletorMesComponent } from './c4u-seletor-mes.component';
 import { SessaoProvider } from '@providers/sessao/sessao.provider';
 import { SeasonDatesService } from '@services/season-dates.service';
+import { ActionLogService } from '@services/action-log.service';
 import { configureTestBed } from '@app/testing/test-fixtures';
 
 describe('C4uSeletorMesComponent', () => {
@@ -15,10 +16,12 @@ describe('C4uSeletorMesComponent', () => {
   let fixture: ComponentFixture<C4uSeletorMesComponent>;
   let mockSessaoProvider: jasmine.SpyObj<SessaoProvider>;
   let mockSeasonDatesService: jasmine.SpyObj<SeasonDatesService>;
+  let mockActionLogService: jasmine.SpyObj<ActionLogService>;
 
   beforeEach(async () => {
     mockSessaoProvider = jasmine.createSpyObj('SessaoProvider', ['isAdmin']);
     mockSeasonDatesService = jasmine.createSpyObj('SeasonDatesService', ['getMonthsSinceSeasonStart']);
+    mockActionLogService = jasmine.createSpyObj('ActionLogService', ['getPlayerActionLogForMonth']);
     
     // Default mock behavior
     mockSessaoProvider.isAdmin.and.returnValue(false);
@@ -33,7 +36,8 @@ describe('C4uSeletorMesComponent', () => {
       ],
       providers: [
         { provide: SessaoProvider, useValue: mockSessaoProvider },
-        { provide: SeasonDatesService, useValue: mockSeasonDatesService }
+        { provide: SeasonDatesService, useValue: mockSeasonDatesService },
+        { provide: ActionLogService, useValue: mockActionLogService }
       ]
     });
 
@@ -359,7 +363,11 @@ describe('C4uSeletorMesComponent', () => {
       it('should initialize with months based on season dates', async () => {
         mockSeasonDatesService.getMonthsSinceSeasonStart.and.returnValue(Promise.resolve(3));
         
-        const newComponent = new C4uSeletorMesComponent(mockSessaoProvider, mockSeasonDatesService);
+        const newComponent = new C4uSeletorMesComponent(
+          mockSessaoProvider,
+          mockSeasonDatesService,
+          mockActionLogService
+        );
         await newComponent.ngOnInit();
 
         expect(newComponent.months.length).toBe(3);
@@ -368,7 +376,11 @@ describe('C4uSeletorMesComponent', () => {
       it('should show 6 months for admin users', async () => {
         mockSessaoProvider.isAdmin.and.returnValue(true);
         
-        const newComponent = new C4uSeletorMesComponent(mockSessaoProvider, mockSeasonDatesService);
+        const newComponent = new C4uSeletorMesComponent(
+          mockSessaoProvider,
+          mockSeasonDatesService,
+          mockActionLogService
+        );
         await newComponent.ngOnInit();
 
         expect(newComponent.months.length).toBe(6);
@@ -377,7 +389,11 @@ describe('C4uSeletorMesComponent', () => {
       it('should handle initialization errors gracefully', async () => {
         mockSeasonDatesService.getMonthsSinceSeasonStart.and.returnValue(Promise.reject('Error'));
         
-        const newComponent = new C4uSeletorMesComponent(mockSessaoProvider, mockSeasonDatesService);
+        const newComponent = new C4uSeletorMesComponent(
+          mockSessaoProvider,
+          mockSeasonDatesService,
+          mockActionLogService
+        );
         await newComponent.ngOnInit();
 
         // Should fallback to at least 1 month
