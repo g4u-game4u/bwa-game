@@ -33,6 +33,13 @@ export const environment = {
   // Supabase (companies / Carteira)
   supabaseUrl: process.env['SUPABASE_URL'] || process.env['supabase_url'] || '',
   supabaseAnonKey: process.env['SUPABASE_ANON_KEY'] || process.env['supabase_anon_key'] || '',
+  supabaseServiceRoleKey: (
+    process.env['SUPABASE_SERVICE_ROLE_KEY'] ||
+    process.env['supabase_service_role_key'] ||
+    process.env['SUPABASE_SERVICE_ROLE_SECRET'] ||
+    process.env['supabase_service_role_secret'] ||
+    ''
+  ).trim(),
   supabaseProjectId: process.env['SUPABASE_PROJECT_ID'] || process.env['supabase_project_id'] || '',
   supabaseCompaniesTable:
     process.env['SUPABASE_COMPANIES_TABLE'] || process.env['supabase_companies_table'] || 'companies',
@@ -52,6 +59,23 @@ export const environment = {
     process.env['SUPABASE_MOCK_FEED_ALL_USERS'] !== 'false' &&
     process.env['supabase_mock_feed_all_users'] !== 'false',
 
+  supabaseGameUserActionsTable:
+    process.env['SUPABASE_GAME_USER_ACTIONS_TABLE'] ||
+    process.env['supabase_game_user_actions_table'] ||
+    'user_actions',
+  supabaseGameDeliveriesTable:
+    process.env['SUPABASE_GAME_DELIVERIES_TABLE'] ||
+    process.env['supabase_game_deliveries_table'] ||
+    'deliveries',
+  supabaseGameTeamFilterColumn:
+    process.env['SUPABASE_GAME_TEAM_FILTER_COLUMN'] ||
+    process.env['supabase_game_team_filter_column'] ||
+    'team_id',
+  supabaseGameUserEmailColumn:
+    process.env['SUPABASE_GAME_USER_EMAIL_COLUMN'] ||
+    process.env['supabase_game_user_email_column'] ||
+    'user_email',
+
   gamificacaoApiUrl: (
     process.env.GAMIFICACAO_API_URL ||
     process.env.gamificacao_api_url ||
@@ -63,15 +87,12 @@ export const environment = {
     ''
   ).trim(),
 
-  game4uApiUrl: (
-    process.env['GAME4U_API_URL'] ||
-    process.env['game4u_api_url'] ||
-    'https://g4u-api-bwa.onrender.com/api'
-  )
-    .trim()
-    .replace(/\/$/, ''),
-
   useGame4uApi:
     String(process.env['GAME4U_USE_API'] ?? process.env['game4u_use_api'] ?? 'true').toLowerCase() !==
-    'false'
+    'false',
+
+  useGame4uSupabaseFallback:
+    String(
+      process.env['GAME4U_SUPABASE_FALLBACK'] ?? process.env['game4u_supabase_fallback'] ?? 'true'
+    ).toLowerCase() !== 'false'
 };

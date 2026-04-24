@@ -10,7 +10,8 @@ import {
 } from '@model/gamification-dashboard.model';
 import { PONTOS_POR_ATIVIDADE_FINALIZADA_ACTION_LOG } from '@app/constants/pontos-por-atividade-action-log';
 import { isGame4uDataEnabled } from '@model/game4u-api.model';
-import { Game4uApiService, Game4uUserScopedQuery } from './game4u-api.service';
+import { Game4uApiService } from './game4u-api.service';
+import type { Game4uUserScopedQuery } from '@model/game4u-api.model';
 import { SessaoProvider } from '@providers/sessao/sessao.provider';
 import {
   filterGame4uActionsByMonth,

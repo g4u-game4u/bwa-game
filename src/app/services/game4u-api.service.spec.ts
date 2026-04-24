@@ -1,6 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { HttpClientTestingModule, HttpTestingController } from '@angular/common/http/testing';
 import { Game4uApiService } from './game4u-api.service';
+import { Game4uSupabaseFallbackService } from './game4u-supabase-fallback.service';
 import { environment } from '../../environments/environment';
 
 describe('Game4uApiService', () => {
@@ -9,13 +10,19 @@ describe('Game4uApiService', () => {
   let baseUrl: string;
 
   beforeEach(() => {
+    const fb = jasmine.createSpyObj('Game4uSupabaseFallbackService', ['isAvailable', 'getGameStats']);
+    fb.isAvailable.and.returnValue(false);
+
     TestBed.configureTestingModule({
       imports: [HttpClientTestingModule],
-      providers: [Game4uApiService]
+      providers: [
+        Game4uApiService,
+        { provide: Game4uSupabaseFallbackService, useValue: fb }
+      ]
     });
     service = TestBed.inject(Game4uApiService);
     httpMock = TestBed.inject(HttpTestingController);
-    baseUrl = (environment.game4uApiUrl || '').replace(/\/$/, '');
+    baseUrl = (environment.backend_url_base || '').trim().replace(/\/$/, '');
   });
 
   afterEach(() => {

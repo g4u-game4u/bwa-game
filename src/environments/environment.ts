@@ -13,9 +13,10 @@ function supabaseMockExplicitlyDisabled(
 export const environment = {
   production: false,
   // client_id: 'cidadania4u',
-  client_id: 'revisaprev',
+  client_id: process.env['CLIENT_ID'] || process.env['client_id'],
   // backend_url_base: 'https://integrador-n8n.grupo4u.com.br/webhook/game4u/taxall',
-  backend_url_base: 'http://localhost',
+  backend_url_base:
+    (process.env['BACKEND_URL_BASE'] || process.env['backend_url_base'] || 'http://localhost').trim(),
   // backend_url_base: 'https://g4u-mvp-api.onrender.com',
   // backend_url_base: 'https://g4u-mvp-api-staging.onrender.com',
   // backend_url_base: 'https://g4u-mvp-api-1.onrender.com',
@@ -45,6 +46,37 @@ export const environment = {
   // Supabase — filled from .env via custom-webpack DefinePlugin when running ng serve / build
   supabaseUrl: process.env['SUPABASE_URL'] || process.env['supabase_url'] || '',
   supabaseAnonKey: process.env['SUPABASE_ANON_KEY'] || process.env['supabase_anon_key'] || '',
+  /**
+   * Opcional. Preferir RLS + anon no browser; service role no bundle = risco (ignora RLS).
+   * Aceita SUPABASE_SERVICE_ROLE_SECRET (nome pedido no projeto) ou KEY.
+   */
+  supabaseServiceRoleKey: (
+    process.env['SUPABASE_SERVICE_ROLE_KEY'] ||
+    process.env['supabase_service_role_key'] ||
+    process.env['SUPABASE_SERVICE_ROLE_SECRET'] ||
+    process.env['supabase_service_role_secret'] ||
+    ''
+  ).trim(),
+
+  /** Tabelas PostgREST para fallback de `/game/actions` e `/game/stats` (agregação no cliente). */
+  supabaseGameUserActionsTable:
+    process.env['SUPABASE_GAME_USER_ACTIONS_TABLE'] ||
+    process.env['supabase_game_user_actions_table'] ||
+    'user_actions',
+  supabaseGameDeliveriesTable:
+    process.env['SUPABASE_GAME_DELIVERIES_TABLE'] ||
+    process.env['supabase_game_deliveries_table'] ||
+    'deliveries',
+  /** Coluna para filtrar time em fallback (ex.: team_id ou team_name). */
+  supabaseGameTeamFilterColumn:
+    process.env['SUPABASE_GAME_TEAM_FILTER_COLUMN'] ||
+    process.env['supabase_game_team_filter_column'] ||
+    'team_id',
+  /** Coluna do email do utilizador nas tabelas de jogo (ex.: user_email). */
+  supabaseGameUserEmailColumn:
+    process.env['SUPABASE_GAME_USER_EMAIL_COLUMN'] ||
+    process.env['supabase_game_user_email_column'] ||
+    'user_email',
   supabaseProjectId: process.env['SUPABASE_PROJECT_ID'] || process.env['supabase_project_id'] || '',
   supabaseCompaniesTable:
     process.env['SUPABASE_COMPANIES_TABLE'] || process.env['supabase_companies_table'] || 'companies',
@@ -74,17 +106,14 @@ export const environment = {
     ''
   ).trim(),
 
-  /** Base URL da API Game4U (BWA), ex.: https://g4u-api-bwa.onrender.com/api */
-  game4uApiUrl: (
-    process.env['GAME4U_API_URL'] ||
-    process.env['game4u_api_url'] ||
-    'https://g4u-api-bwa.onrender.com/api'
-  )
-    .trim()
-    .replace(/\/$/, ''),
-
-  /** Quando true e `game4uApiUrl` definido, pontos/ações/deliveries vêm da API Game4U em vez do Funifier/action_log. */
+  /** Com `backend_url_base` definido: rotas `/game/*` (Game4uApiService, mes-atual, etc.). Se true, dados de gamificação vêm desta API em vez do Funifier/action_log. */
   useGame4uApi:
     String(process.env['GAME4U_USE_API'] ?? process.env['game4u_use_api'] ?? 'true').toLowerCase() !==
-    'false'
+    'false',
+
+  /** Se false, não usa Supabase quando o HTTP `/game/*` falha. Default: true quando credenciais existem. */
+  useGame4uSupabaseFallback:
+    String(
+      process.env['GAME4U_SUPABASE_FALLBACK'] ?? process.env['game4u_supabase_fallback'] ?? 'true'
+    ).toLowerCase() !== 'false'
 };

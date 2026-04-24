@@ -1,0 +1,19 @@
+{
+  "name": "bwa-migration-tools",
+  "private": true,
+  "description": "Funifier+CSV user export, Supabase auth SQL, deliveries → Game4U /game/action/process.",
+  "scripts": {
+    "users:export": "ts-node --transpile-only src/users-export.ts",
+    "users:sql": "ts-node --transpile-only src/users-sql.ts",
+    "deliveries:sync": "ts-node --transpile-only src/deliveries-sync.ts",
+    "deliveries:sync:sample": "ts-node --transpile-only src/deliveries-sync.ts --dry-run --limit 5"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.7",
+    "bcryptjs": "^3.0.2",
+    "csv-parse": "^5.6.0",
+    "dotenv": "^16.4.7",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.7.3"
+  }
+}

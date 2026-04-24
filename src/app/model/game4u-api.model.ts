@@ -13,6 +13,19 @@ export type Game4uUserActionStatus =
 
 export type Game4uDeliveryStatus = 'PENDING' | 'INCOMPLETE' | 'DELIVERED' | 'CANCELLED';
 
+export interface Game4uDateRangeQuery {
+  start: string;
+  end: string;
+}
+
+export interface Game4uUserScopedQuery extends Game4uDateRangeQuery {
+  user: string;
+}
+
+export interface Game4uTeamScopedQuery extends Game4uDateRangeQuery {
+  team: string;
+}
+
 export interface Game4uUserActionStatsModel {
   status: Game4uUserActionStatus;
   count: number;
@@ -59,10 +72,23 @@ export interface Game4uDeliveryModel {
   [key: string]: unknown;
 }
 
-export function isGame4uDataEnabled(): boolean {
-  return (
-    environment.useGame4uApi !== false &&
-    typeof environment.game4uApiUrl === 'string' &&
-    environment.game4uApiUrl.trim().length > 0
+function supabaseGameFallbackCredentials(): boolean {
+  const url = (environment.supabaseUrl || '').trim();
+  const key = (
+    (environment.supabaseServiceRoleKey || '').trim() ||
+    (environment.supabaseAnonKey || '').trim()
   );
+  return url.length > 0 && key.length > 0;
+}
+
+/** True quando dá para ler `/game/*` via HTTP (`backend_url_base`) ou via fallback Supabase. */
+export function isGame4uDataEnabled(): boolean {
+  if (environment.useGame4uApi === false) {
+    return false;
+  }
+  const base = (environment.backend_url_base || '').trim();
+  if (base.length > 0) {
+    return true;
+  }
+  return supabaseGameFallbackCredentials();
 }
