@@ -1,9 +1,8 @@
-ENV VARS:
-BACKEND_URL_BASE=https://g4u-api-bwa.onrender.com
-CLIENT_ID=bwa
-G4U_ADMIN_EMAIL=game@grupo4u.com.br
-G4U_ADMIN_PASSWORD=9Uen;w*FzgOU
+ENV VARS (preencher no `.env` da raiz do repo; ver [.env.example](../../.env.example)):
 
+- `BACKEND_URL_BASE` — base da API Game4u **com** `/api`, ex.: `https://g4u-api-bwa.onrender.com/api`
+- `CLIENT_ID` — ex.: `bwa`
+- `GAME4U_LOGIN_EMAIL`, `GAME4U_LOGIN_PASSWORD` — admin (aliases: `G4U_ADMIN_*`, `MIGRATION_G4U_*`)
 
 3. Devemos buscar uma lista de 'deliveries' no supabase 'https://zarptqqopvuwognexpon.supabase.co', parsear os dados, logar como admin e enviar os user-actions como post para '/game/action/process' no 'backend_url_base' do game4u. (API DOC: https://g4u-api-bwa.onrender.com/api)
 

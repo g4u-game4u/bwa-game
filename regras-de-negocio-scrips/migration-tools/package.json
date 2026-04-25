@@ -1,12 +1,17 @@
 {
   "name": "bwa-migration-tools",
   "private": true,
-  "description": "Funifier+CSV user export, Supabase auth SQL, deliveries → Game4U /game/action/process.",
+  "description": "Funifier+CSV user export, Supabase auth SQL, deliveries → Game4U /game/action/process, action templates → /action, organogram from companies JSON.",
   "scripts": {
     "users:export": "ts-node --transpile-only src/users-export.ts",
     "users:sql": "ts-node --transpile-only src/users-sql.ts",
     "deliveries:sync": "ts-node --transpile-only src/deliveries-sync.ts",
-    "deliveries:sync:sample": "ts-node --transpile-only src/deliveries-sync.ts --dry-run --limit 5"
+    "deliveries:sync:sample": "ts-node --transpile-only src/deliveries-sync.ts --dry-run --limit 5",
+    "action-templates:upload": "ts-node --transpile-only src/action-templates-upload.ts",
+    "action-templates:upload:dry": "ts-node --transpile-only src/action-templates-upload.ts --dry-run",
+    "organogram:from-json": "ts-node --transpile-only src/organogram-from-companies-json.ts",
+    "organogram:from-json:help": "ts-node --transpile-only src/organogram-from-companies-json.ts --help",
+    "organogram:csv-to-xlsx": "ts-node --transpile-only src/organogram-csv-to-xlsx.ts"
   },
   "devDependencies": {
     "@types/node": "^22.10.7",
@@ -14,6 +19,7 @@
     "csv-parse": "^5.6.0",
     "dotenv": "^16.4.7",
     "ts-node": "^10.9.2",
-    "typescript": "^5.7.3"
+    "typescript": "^5.7.3",
+    "xlsx": "^0.18.5"
   }
 }
