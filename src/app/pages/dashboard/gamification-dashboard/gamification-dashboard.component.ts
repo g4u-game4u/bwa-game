@@ -12,7 +12,6 @@ import { PerformanceMonitorService } from '@services/performance-monitor.service
 import { ActionLogService } from '@services/action-log.service';
 import { CompanyKpiService } from '@services/company-kpi.service';
 import { CnpjLookupService } from '@services/cnpj-lookup.service';
-import { SupabaseCompaniesService } from '@services/supabase-companies.service';
 import { SessaoProvider } from '@providers/sessao/sessao.provider';
 import { CacheManagerService } from '@services/cache-manager.service';
 import { 
@@ -79,7 +78,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   companies: Company[] = [];
   selectedCompany: Company | null = null;
   
-  // Carteira from Supabase companies (mock when configured) + Funifier cnpj__c KPI enrichment
+  // Carteira: empresas do jogador (player + cnpj_performance) + hook gamificação para KPIs
   carteiraClientes: CompanyDisplay[] = [];
   isLoadingCarteira = true;
   cnpjNameMap = new Map<string, string>(); // Map of empid → clean empresa name from empid_cnpj__c
@@ -140,7 +139,6 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     private actionLogService: ActionLogService,
     private companyKpiService: CompanyKpiService,
     private cnpjLookupService: CnpjLookupService,
-    private supabaseCompaniesService: SupabaseCompaniesService,
     private sessaoProvider: SessaoProvider,
     private cacheManagerService: CacheManagerService,
     private route: ActivatedRoute,
@@ -158,8 +156,8 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
    * 1. Query parameter 'playerId' (when viewing another player's dashboard)
    * 2. 'me' for current authenticated user (uses faster player/me endpoint)
    * 
-   * NOTE: We always use 'me' for the current user to leverage the faster
-   * player/me endpoint instead of player/{id}/status
+   * NOTE: We always use 'me' for the current user to leverage `/auth/user`
+   * (sem GET …/player/…/status) no fluxo de dados do jogador.
    */
   getPlayerId(): string {
     // Check for playerId in query params (when viewing another player's dashboard)
@@ -327,16 +325,16 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
         }
       });
     
-    // Carteira: bloqueados/moedas vêm do status Funifier; desbloqueados = todas as entradas do action_log × 3 (igual tarefas finalizadas da temporada; sem filtro de mês)
-    console.log('📊 Starting point wallet (status + action_log pontos)...');
+    // Game4U: pontos da carteira vêm de `/game/stats` (action_stats.done). Sem Game4U: action_log × constante.
+    console.log('📊 Starting point wallet...');
     forkJoin({
-      wallet: this.playerService.getPlayerPoints(playerId).pipe(
+      wallet: this.playerService.getPlayerPoints(playerId, this.selectedMonth).pipe(
         catchError(err => {
           console.error('📊 Point wallet status error:', err);
           return of({ moedas: 0, bloqueados: 0, desbloqueados: 0 } as PointWallet);
         })
       ),
-      pontosActionLog: this.actionLogService.getPontosForMonth(playerId).pipe(
+      pontosActionLog: this.actionLogService.getPontosForMonth(playerId, this.selectedMonth).pipe(
         catchError(err => {
           console.error('📊 Pontos action_log error:', err);
           return of(0);
@@ -346,12 +344,15 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: ({ wallet, pontosActionLog }) => {
-          const desbloqueados = Math.floor(Number(pontosActionLog) || 0);
+          const fromStats = this.playerService.usesGame4uWalletFromStats();
+          const desbloqueados = fromStats
+            ? wallet.desbloqueados
+            : Math.floor(Number(pontosActionLog) || 0);
           this.pointWallet = {
             ...wallet,
             desbloqueados
           };
-          console.log('📊 Point wallet merged:', { bloqueados: wallet.bloqueados, desbloqueados, moedas: wallet.moedas });
+          console.log('📊 Point wallet merged:', { bloqueados: wallet.bloqueados, desbloqueados, moedas: wallet.moedas, fromStats });
           this.cdr.markForCheck();
         },
         error: (error) => {
@@ -396,7 +397,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   
   /**
    * Load additional season progress details:
-   * - Tarefas finalizadas: total no action_log (sem filtro de mês — alinhado ao escopo da temporada no card)
+   * - Tarefas finalizadas: com Game4U, count de `action_stats.done` no intervalo do mês selecionado; senão action_log.
    * Note: Clientes count comes from player_company__c (cnpj_resp) via loadClientesData()
    */
   private loadSeasonProgressDetails(): void {
@@ -406,7 +407,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     }
 
     this.actionLogService
-      .getCompletedTasksCount(playerId)
+      .getCompletedTasksCount(playerId, this.selectedMonth)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (count: number) => {
@@ -456,8 +457,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   }
 
   /**
-   * Carteira: primeiro GET gamificação (`fetchGamificacaoMapsAsync`), depois Supabase;
-   * só então cruza % entregas com `id` / EmpID / CNPJ (`enrichCarteiraRowsWithMaps`).
+   * Carteira: empresas via `CompanyService` (sem Supabase), GET gamificação e cruzamento EmpID/CNPJ.
    */
   private loadClientesData(): void {
     this.isLoadingClientes = true;
@@ -476,13 +476,13 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     from(this.companyKpiService.fetchGamificacaoMapsAsync())
       .pipe(
         switchMap(maps =>
-          this.supabaseCompaniesService.getCompaniesForPlayer(playerId).pipe(
-            map(rows => ({ maps, rows }))
+          this.companyService.getCompanies(playerId).pipe(
+            map(companies => ({ maps, companies }))
           )
         ),
-        map(({ maps, rows }) => {
-          const cnpjs = rows.map(r => r.cnpj).filter(c => !!c && c.trim().length > 0);
-          console.log('📊 Carteira CNPJs (Supabase/mock):', cnpjs);
+        map(({ maps, companies }) => {
+          const cnpjs = companies.map(c => c.cnpj).filter(c => !!c && String(c).trim().length > 0);
+          console.log('📊 Carteira CNPJs (player companies):', cnpjs.length);
           this.cnpjRespIds = cnpjs;
 
           if (this.seasonProgress) {
@@ -492,23 +492,22 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
             };
           }
 
-          this.supabaseCompaniesService.applyRowsToCnpjMaps(
-            rows,
-            this.cnpjNameMap,
-            this.cnpjStatusMap,
-            this.cnpjNumberMap
-          );
+          companies.forEach((c: Company) => {
+            const key = (c.cnpj || '').trim();
+            if (!key) return;
+            this.cnpjNameMap.set(key, c.name || key);
+            this.cnpjNumberMap.set(key, key);
+          });
 
           if (cnpjs.length === 0) {
             return [] as CompanyDisplay[];
           }
 
-          const carteiraRows: CarteiraSupabaseKpiRow[] = rows
-            .filter(r => !!r.cnpj && String(r.cnpj).trim().length > 0)
-            .map(r => ({
-              cnpj: r.cnpj,
-              supabaseId: r.id,
-              empId: r.emp_id
+          const carteiraRows: CarteiraSupabaseKpiRow[] = companies
+            .filter(c => !!c.cnpj && String(c.cnpj).trim().length > 0)
+            .map(c => ({
+              cnpj: c.cnpj,
+              empId: c.id
             }));
 
           return this.companyKpiService.enrichCarteiraRowsWithMaps(carteiraRows, maps);
@@ -823,14 +822,14 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
       this.announceToScreenReader(`Mês alterado para ${monthName}`);
     }
 
-    // Reload month-scoped data: KPIs, progress metrics, participação (action_log).
-    // Carteira de empresas (Supabase) e lista de companies permanecem; pontos da carteira não dependem do mês.
+    // Reload month-scoped data: KPIs, progress metrics, participação, stats Game4U (`start`/`end` do mês).
+    // Carteira de empresas (lista `companies`) e clientes permanecem.
     this.loadMonthDependentData();
   }
 
   /**
    * Load only data that depends on the selected month (KPIs, progress, participação via action_log).
-   * Pontos desbloqueados na carteira vêm do total do action_log e não mudam com o mês.
+   * Com Game4U, pontos/tarefas do cartão de temporada seguem o mês; sem Game4U, action_log.
    */
   private loadMonthDependentData(): void {
     // Cancel any in-flight month-dependent requests
@@ -1081,7 +1080,6 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
 
   /**
    * Pontos do mês (action_log) vs meta provisória: (processos pendentes + incompletos) × pts/atividade.
-   * A meta será refinada com tarefas pendentes no Supabase.
    */
   get monthlyPointsProgressData(): { current: number; target: number } {
     const current = Math.floor(this.activityMetrics?.pontos ?? 0);

@@ -1,3 +1,5 @@
+import { readBackendUrlBaseFromProcessEnv } from './backend-url';
+
 /**
  * Production environment configuration
  * 
@@ -8,15 +10,9 @@
 export const environment = {
   production: true,
   client_id: process.env['CLIENT_ID'] || process.env['client_id'] || 'bwa',
-  backend_url_base: process.env['BACKEND_URL_BASE'] || process.env['backend_url_base'] || '',
+  backend_url_base: readBackendUrlBaseFromProcessEnv(),
   
-  // Funifier API Configuration
-  funifier_api_url: 'https://service2.funifier.com/v3/',
-  funifier_api_key: process.env['FUNIFIER_API_KEY'] || process.env['funifier_api_key'] || '690a785ce179d46fce59ed65',
-  funifier_base_url: process.env['FUNIFIER_BASE_URL'] || process.env['funifier_base_url'] || 'https://service2.funifier.com/v3/',
-  funifier_basic_token: process.env['FUNIFIER_BASIC_TOKEN'] || process.env['funifier_basic_token'] || 'NjkwYTc4NWNlMTc5ZDQ2ZmNlNTllZDY1OjY3ZWM0ZTRhMjMyN2Y3NGYzYTJmOTZmNQ==',
-  
-  // Cache Configuration
+    // Cache Configuration
   cacheTimeout: 300000, // 5 minutes in milliseconds
   
   // Feature Flags
@@ -93,6 +89,6 @@ export const environment = {
 
   useGame4uSupabaseFallback:
     String(
-      process.env['GAME4U_SUPABASE_FALLBACK'] ?? process.env['game4u_supabase_fallback'] ?? 'true'
-    ).toLowerCase() !== 'false'
+      process.env['GAME4U_SUPABASE_FALLBACK'] ?? process.env['game4u_supabase_fallback'] ?? ''
+    ).toLowerCase() === 'true'
 };

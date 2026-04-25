@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { HttpClient, HttpHeaders } from '@angular/common/http';
+import { HttpClient } from '@angular/common/http';
 import { environment } from '../../environments/environment';
 import { Observable } from 'rxjs';
 
@@ -131,7 +131,6 @@ export type AchievementResponse = Achievement[];
 @Injectable({ providedIn: 'root' })
 export class RecompensasService {
   private baseUrl = environment.backend_url_base;
-  // private funifier_base_url = environment.funifier_base_url;
 
   constructor(private http: HttpClient) {}
 
@@ -161,20 +160,6 @@ export class RecompensasService {
     return this.http.get<AchievementResponse>(url);
   }
 
-  // // Métodos do Funifier (mantidos para compatibilidade se necessário)
-  // private fetchFunifier(endpoint: string) {
-  //   // const url = `${environment.funifier_base_url}${endpoint}`;
-  //   const headers = new HttpHeaders({
-  //     'Authorization': `Basic ${environment.funifier_basic_token}`,
-  //     'Content-Type': 'application/json',
-  //     'X-Funifier-Request': 'true'
-  //   });
-  //   return this.http.get(url, { headers });
-  // }
-
-  // listCatalogsFunifier() {
-  //   return this.fetchFunifier('/virtualgoods/catalog');
-  // }
 
   // listItemsFunifier() {
   //   return this.fetchFunifier('/virtualgoods/item');

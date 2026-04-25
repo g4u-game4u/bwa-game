@@ -19,9 +19,38 @@ import { PONTOS_POR_ATIVIDADE_FINALIZADA_ACTION_LOG } from '@app/constants/ponto
 const FINAL: Game4uUserActionStatus[] = ['DONE', 'DELIVERED', 'PAID'];
 const OPEN: Game4uUserActionStatus[] = ['PENDING', 'DOING'];
 
+/** Bucket `DONE` / `done` em `action_stats` (resposta `/game/stats`). */
+export function getGame4uActionStatsDone(stats: Game4uUserActionStatsResponse): {
+  count: number;
+  totalPoints: number;
+} {
+  const a = stats.action_stats;
+  const bucket = a?.DONE ?? a?.done;
+  return {
+    count: Math.floor(Number(bucket?.count) || 0),
+    totalPoints: Math.floor(Number(bucket?.total_points) || 0)
+  };
+}
+
+function aggregateBlockedPoints(stats: Game4uUserActionStatsResponse): number {
+  const fromNested = stats.action_stats?.total_blocked_points;
+  if (fromNested !== undefined && fromNested !== null) {
+    return Math.floor(Number(fromNested) || 0);
+  }
+  return Math.floor(Number(stats.total_blocked_points) || 0);
+}
+
+/**
+ * Carteira de pontos: desbloqueados = `action_stats.done|DONE.total_points` (com fallback ao total da raiz).
+ * Bloqueados = `action_stats.total_blocked_points` ou raiz.
+ */
 export function mapGame4uStatsToPointWallet(stats: Game4uUserActionStatsResponse): PointWallet {
-  const bloqueados = Math.floor(Number(stats.total_blocked_points) || 0);
-  const desbloqueados = Math.floor(Number(stats.total_points) || 0);
+  const done = getGame4uActionStatsDone(stats);
+  const bloqueados = aggregateBlockedPoints(stats);
+  const desbloqueados =
+    stats.action_stats != null
+      ? done.totalPoints
+      : Math.floor(Number(stats.total_points) || 0);
   return {
     bloqueados,
     desbloqueados,
@@ -39,6 +68,15 @@ export function mapGame4uStatsToTeamSeasonPoints(stats: Game4uUserActionStatsRes
 }
 
 export function mapGame4uStatsToActivityMetrics(stats: Game4uUserActionStatsResponse): ActivityMetrics {
+  const done = getGame4uActionStatsDone(stats);
+  if (stats.action_stats != null) {
+    return {
+      pendentes: 0,
+      emExecucao: 0,
+      finalizadas: done.count,
+      pontos: done.totalPoints
+    };
+  }
   let finalizadas = 0;
   for (const row of stats.stats || []) {
     if (FINAL.includes(row.status)) {

@@ -890,27 +890,8 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
         };
       });
       
-      // Get player status to get blocked points
-      const status = await firstValueFrom(
-        this.funifierApi.get<any>(`/v3/player/${collaboratorId}/status`).pipe(takeUntil(this.destroy$))
-      ).catch((error) => {
-        console.error('Error loading collaborator status:', error);
-        return null;
-      });
-      
-      // Calculate blocked points from status
-      let blockedPoints = 0;
-      if (status) {
-        if (status.point_categories?.locked_points) {
-          if (typeof status.point_categories.locked_points === 'object' && status.point_categories.locked_points.total) {
-            blockedPoints = status.point_categories.locked_points.total;
-          } else if (typeof status.point_categories.locked_points === 'number') {
-            blockedPoints = status.point_categories.locked_points;
-          }
-        } else if (status.point_wallet?.bloqueados) {
-          blockedPoints = status.point_wallet.bloqueados;
-        }
-      }
+      // Pontos bloqueados: não usar GET …/player/…/status no painel do gestor; métricas vêm do action_log.
+      const blockedPoints = 0;
       
       const totalPoints = metrics.activity.pontos;
       const unlockedPoints = Math.max(0, totalPoints - blockedPoints);
@@ -2911,7 +2892,7 @@ private calculateCollaboratorTotals(memberData: Array<{
       : 'Pontos somados de todos os membros da equipe no período selecionado. ';
     return (
       scope +
-      'A meta provisória soma processos pendentes e incompletos do action_log e multiplica por 3 (mesma regra das atividades); depois será calculada a partir das tarefas pendentes no Supabase.'
+      'A meta provisória soma processos pendentes e incompletos do action_log e multiplica por 3 (mesma regra das atividades).'
     );
   }
 

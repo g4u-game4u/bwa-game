@@ -4,7 +4,6 @@ import {ApiProvider} from "../providers/api.provider";
 import {TIPO_CONSULTA_TIME} from "@app/pages/dashboard/dashboard.component";
 import {SeasonDatesService} from "./season-dates.service";
 import {environment} from '../../environments/environment';
-import { PONTOS_POR_ATIVIDADE_FINALIZADA_ACTION_LOG } from '@app/constants/pontos-por-atividade-action-log';
 
 @Injectable({
   providedIn: 'root'
@@ -45,21 +44,24 @@ export class TemporadaService {
 
       const response = await this.api.get<any>(url + queryParams);
 
-      const completedTasks = response?.action_stats?.DONE?.count || 0;
-      const blockedPoints = response?.action_stats?.total_blocked_points || 0;
-      const unblockedFromActivities = Math.floor(
-        completedTasks * PONTOS_POR_ATIVIDADE_FINALIZADA_ACTION_LOG
-      );
+      const doneBucket = response?.action_stats?.DONE ?? response?.action_stats?.done;
+      const completedTasks = Math.floor(Number(doneBucket?.count) || 0);
+      const rootTp = Math.floor(Number(response?.total_points) || 0);
+      const rootTbp = Math.floor(Number(response?.total_blocked_points) || 0);
+      const aggTp = Math.floor(Number(response?.action_stats?.total_points) || 0);
+      const aggTbp = Math.floor(Number(response?.action_stats?.total_blocked_points) || 0);
+      const unblockedPoints = rootTp || aggTp;
+      const blockedPoints = rootTbp || aggTbp;
 
       return <TemporadaDashboard>{
         blocked_points: blockedPoints,
-        unblocked_points: unblockedFromActivities,
+        unblocked_points: unblockedPoints,
         pendingTasks: response?.action_stats?.PENDING?.count || 0,
         completedTasks,
         pendingDeliveries: response?.delivery_stats?.PENDING || 0,
         incompleteDeliveries: response?.delivery_stats?.INCOMPLETE || 0,
         completedDeliveries: response?.delivery_stats?.DELIVERED || 0,
-        total_points: blockedPoints + unblockedFromActivities,
+        total_points: unblockedPoints + blockedPoints,
         total_blocked_points: blockedPoints,
         total_actions: completedTasks,
       };

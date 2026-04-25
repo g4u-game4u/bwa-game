@@ -1,283 +1,178 @@
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpErrorResponse, HttpHeaders } from '@angular/common/http';
-import { Observable, throwError } from 'rxjs';
+import { Observable, of, throwError } from 'rxjs';
 import { catchError, retry, tap } from 'rxjs/operators';
 import { environment } from '../../environments/environment';
+import { joinApiPath } from '../../environments/backend-url';
 
 export interface AuthCredentials {
-  apiKey: string;
-  grant_type: string;
+  /** E-mail do utilizador (compatível com o nome antigo `username`). */
   username: string;
   password: string;
+  /** Ignorados — mantidos para compatibilidade com chamadas antigas. */
+  apiKey?: string;
+  grant_type?: string;
 }
 
 export interface AuthToken {
   access_token: string;
   token_type: string;
   expires_in: number;
+  refresh_token?: string;
 }
 
 @Injectable({
   providedIn: 'root'
 })
 export class FunifierApiService {
-  private readonly baseUrl = environment.funifier_base_url || 'https://service2.funifier.com/v3/';
-  private readonly apiKey = environment.funifier_api_key;
-  private readonly basicToken = environment.funifier_basic_token;
+  private readonly baseUrl: string;
   private authToken: string | null = null;
   private tokenExpiry: number | null = null;
 
   constructor(private http: HttpClient) {
-    // Load token from localStorage on service initialization
+    this.baseUrl = (environment.backend_url_base || '').trim().replace(/\/+$/, '');
     this.loadStoredToken();
   }
 
-  /**
-   * Load stored token from localStorage
-   */
   private loadStoredToken(): void {
     const token = localStorage.getItem('funifier_token');
     const expiry = localStorage.getItem('funifier_token_expiry');
-    
+
     if (token && expiry) {
       const expiryTime = parseInt(expiry, 10);
       if (Date.now() < expiryTime) {
         this.authToken = token;
         this.tokenExpiry = expiryTime;
       } else {
-        // Token expired, clear it
         this.clearAuth();
       }
     }
   }
 
   /**
-   * Authenticate with Funifier API using username and password
-   * POST /auth/token
-   * baseUrl already includes /v3/, so just use auth/token
+   * Autenticação Game4U: POST /auth/login
    */
   authenticate(credentials: AuthCredentials): Observable<AuthToken> {
-    const authBody = {
-      apiKey: credentials.apiKey || this.apiKey,
-      grant_type: credentials.grant_type || 'password',
-      username: credentials.username,
+    const authUrl = joinApiPath(this.baseUrl, '/auth/login');
+    const body = {
+      email: credentials.username.trim(),
       password: credentials.password
     };
 
-    // Ensure baseUrl ends with / and endpoint doesn't start with /
-    const cleanBaseUrl = this.baseUrl.endsWith('/') ? this.baseUrl : `${this.baseUrl}/`;
-    const authUrl = `${cleanBaseUrl}auth/token`;
-    
-    console.log('🔐 FunifierAPI authenticate URL:', authUrl);
-    
-    return this.http.post<AuthToken>(authUrl, authBody).pipe(
+    return this.http.post<AuthToken>(authUrl, body).pipe(
       tap(response => {
         this.authToken = response.access_token;
-        this.tokenExpiry = response.expires_in;
-        
-        // Store token and expiry in localStorage
+        const ttlSec = Number(response.expires_in);
+        const ms = (Number.isFinite(ttlSec) && ttlSec > 0 ? ttlSec : 3600) * 1000;
+        this.tokenExpiry = Date.now() + ms;
+
         localStorage.setItem('funifier_token', response.access_token);
-        localStorage.setItem('funifier_token_expiry', response.expires_in.toString());
-        
-        console.log('Funifier authentication successful');
+        localStorage.setItem('funifier_token_expiry', String(this.tokenExpiry));
       }),
       catchError(this.handleError)
     );
   }
 
-  /**
-   * Check if user is authenticated and token is valid
-   */
   isAuthenticated(): boolean {
     if (!this.authToken || !this.tokenExpiry) {
       return false;
     }
-    
-    // Check if token is expired
     return Date.now() < this.tokenExpiry;
   }
 
-  /**
-   * Get current auth token
-   */
   getToken(): string | null {
     return this.authToken;
   }
 
-  /**
-   * GET request to Funifier API
-   * Endpoint should not include /v3/ prefix as it's already in baseUrl
-   */
   get<T>(endpoint: string, params?: any): Observable<T> {
-    const headers = this.getHeaders(endpoint);
-    // Remove leading /v3/ if present to avoid duplication
+    if (endpoint.toLowerCase().includes('aggregate')) {
+      console.warn('[Game4U API] GET aggregate desativado:', endpoint);
+      return of([] as unknown as T);
+    }
+    const headers = this.getHeaders();
     let cleanEndpoint = endpoint.startsWith('/v3/') ? endpoint.substring(4) : endpoint;
-    // Remove leading / if present to avoid double slashes
     cleanEndpoint = cleanEndpoint.startsWith('/') ? cleanEndpoint.substring(1) : cleanEndpoint;
-    // Ensure baseUrl ends with /
-    const cleanBaseUrl = this.baseUrl.endsWith('/') ? this.baseUrl : `${this.baseUrl}/`;
-    const url = `${cleanBaseUrl}${cleanEndpoint}`;
-    
-    console.log('🌐 FunifierAPI GET:', url);
-    console.log('🌐 Headers keys:', headers.keys());
-    console.log('🌐 Authorization header:', headers.get('Authorization'));
-    console.log('🌐 Is database endpoint:', endpoint.includes('/database'));
-    
+    const url = joinApiPath(this.baseUrl, cleanEndpoint);
+
     return this.http.get<T>(url, { headers, params }).pipe(
-      tap(response => console.log('🌐 FunifierAPI Response:', response)),
-      retry({ count: 2, delay: 1000 }), // Reduced retries
-      catchError(error => {
-        console.error('🌐 FunifierAPI Error after retries:', error);
-        console.error('🌐 Error status:', error.status);
-        console.error('🌐 Error message:', error.message);
-        return this.handleError(error);
-      })
+      retry({ count: 2, delay: 1000 }),
+      catchError(error => this.handleError(error))
     );
   }
 
-  /**
-   * POST request to Funifier API
-   * Endpoint should not include /v3/ prefix as it's already in baseUrl
-   * @param endpoint - API endpoint
-   * @param body - Request body
-   * @param options - Optional request options (e.g., custom headers)
-   */
   post<T>(endpoint: string, body: any, options?: { headers?: { [key: string]: string } }): Observable<T> {
-    let headers = this.getHeaders(endpoint);
-    
-    // Merge custom headers if provided
+    if (endpoint.toLowerCase().includes('aggregate')) {
+      console.warn('[Game4U API] POST aggregate desativado:', endpoint);
+      return of([] as unknown as T);
+    }
+    let headers = this.getHeaders();
+
     if (options?.headers) {
       Object.entries(options.headers).forEach(([key, value]) => {
         headers = headers.set(key, value);
       });
     }
-    
-    // Remove leading /v3/ if present to avoid duplication
+
     let cleanEndpoint = endpoint.startsWith('/v3/') ? endpoint.substring(4) : endpoint;
-    // Remove leading / if present to avoid double slashes
     cleanEndpoint = cleanEndpoint.startsWith('/') ? cleanEndpoint.substring(1) : cleanEndpoint;
-    // Ensure baseUrl ends with / 
-    const cleanBaseUrl = this.baseUrl.endsWith('/') ? this.baseUrl : `${this.baseUrl}/`;
-    const url = `${cleanBaseUrl}${cleanEndpoint}`;
-    
-    console.log('🌐 FunifierAPI POST:', url);
-    
+    const url = joinApiPath(this.baseUrl, cleanEndpoint);
+
     return this.http.post<T>(url, body, { headers }).pipe(
       retry({ count: 3, delay: 1000 }),
       catchError(this.handleError)
     );
   }
 
-  /**
-   * PUT request to Funifier API
-   * Endpoint should not include /v3/ prefix as it's already in baseUrl
-   * @param endpoint - API endpoint
-   * @param body - Request body
-   * @param options - Optional request options (e.g., custom headers)
-   */
   put<T>(endpoint: string, body: any, options?: { headers?: { [key: string]: string } }): Observable<T> {
-    let headers = this.getHeaders(endpoint);
-    
-    // Merge custom headers if provided
+    let headers = this.getHeaders();
+
     if (options?.headers) {
       Object.entries(options.headers).forEach(([key, value]) => {
         headers = headers.set(key, value);
       });
     }
-    
-    // Remove leading /v3/ if present to avoid duplication
+
     let cleanEndpoint = endpoint.startsWith('/v3/') ? endpoint.substring(4) : endpoint;
-    // Remove leading / if present to avoid double slashes
     cleanEndpoint = cleanEndpoint.startsWith('/') ? cleanEndpoint.substring(1) : cleanEndpoint;
-    // Ensure baseUrl ends with /
-    const cleanBaseUrl = this.baseUrl.endsWith('/') ? this.baseUrl : `${this.baseUrl}/`;
-    const url = `${cleanBaseUrl}${cleanEndpoint}`;
-    
-    console.log('🌐 FunifierAPI PUT:', url);
-    
+    const url = joinApiPath(this.baseUrl, cleanEndpoint);
+
     return this.http.put<T>(url, body, { headers }).pipe(
       retry({ count: 3, delay: 1000 }),
       catchError(this.handleError)
     );
   }
 
-  /**
-   * PATCH request to Funifier API
-   * Endpoint should not include /v3/ prefix as it's already in baseUrl
-   * @param endpoint - API endpoint
-   * @param body - Request body
-   * @param options - Optional request options (e.g., custom headers)
-   */
   patch<T>(endpoint: string, body: any, options?: { headers?: { [key: string]: string } }): Observable<T> {
-    let headers = this.getHeaders(endpoint);
-    
-    // Merge custom headers if provided
+    let headers = this.getHeaders();
+
     if (options?.headers) {
       Object.entries(options.headers).forEach(([key, value]) => {
         headers = headers.set(key, value);
       });
     }
-    
-    // Remove leading /v3/ if present to avoid duplication
+
     let cleanEndpoint = endpoint.startsWith('/v3/') ? endpoint.substring(4) : endpoint;
-    // Remove leading / if present to avoid double slashes
     cleanEndpoint = cleanEndpoint.startsWith('/') ? cleanEndpoint.substring(1) : cleanEndpoint;
-    // Ensure baseUrl ends with /
-    const cleanBaseUrl = this.baseUrl.endsWith('/') ? this.baseUrl : `${this.baseUrl}/`;
-    const url = `${cleanBaseUrl}${cleanEndpoint}`;
-    
-    console.log('🌐 FunifierAPI PATCH:', url);
-    
+    const url = joinApiPath(this.baseUrl, cleanEndpoint);
+
     return this.http.patch<T>(url, body, { headers }).pipe(
       retry({ count: 3, delay: 1000 }),
       catchError(this.handleError)
     );
   }
 
-  /**
-   * Get authorization headers for Funifier API
-   * Uses Basic Auth for /database endpoints, Bearer token for others
-   * Note: For player endpoints, the AuthInterceptor will add the Bearer token
-   * from the session, so we don't need to add it here
-   */
-  private getHeaders(endpoint: string): HttpHeaders {
-    let headers = new HttpHeaders({
+  private getHeaders(): HttpHeaders {
+    return new HttpHeaders({
       'Content-Type': 'application/json'
-      // Don't add X-Funifier-Request - Funifier blocks custom headers via CORS
-      // The interceptor recognizes Funifier URLs by domain
     });
-
-    // Check if this is a database endpoint
-    const isDatabaseEndpoint = endpoint.includes('/database');
-
-    if (isDatabaseEndpoint) {
-      // Use Basic Auth for database operations
-      if (this.basicToken) {
-        headers = headers.set('Authorization', `Basic ${this.basicToken}`);
-        console.log('🔐 Using Basic Auth for database endpoint:', endpoint);
-        console.log('🔐 Basic token present:', !!this.basicToken);
-      } else {
-        console.error('🔐 ERROR: Basic token is empty! Check funifier_basic_token env variable');
-        console.error('🔐 Environment funifier_basic_token:', environment.funifier_basic_token);
-      }
-    }
-    // For non-database endpoints, the AuthInterceptor will add the Bearer token
-    // from the session storage, so we don't add it here to avoid conflicts
-
-    return headers;
   }
 
-  /**
-   * Handle HTTP errors
-   */
   private handleError(error: HttpErrorResponse): Observable<never> {
     let errorMessage = 'Erro ao comunicar com o servidor de gamificação';
 
     if (error.error instanceof ErrorEvent) {
-      // Client-side error
       errorMessage = `Erro de conexão: ${error.error.message}`;
     } else {
-      // Server-side error
       switch (error.status) {
         case 0:
           errorMessage = 'Erro de conexão. Verifique sua internet.';
@@ -301,13 +196,10 @@ export class FunifierApiService {
       }
     }
 
-    console.error('Funifier API Error:', errorMessage, error);
+    console.error('Game4U API Error:', errorMessage, error);
     return throwError(() => new Error(errorMessage));
   }
 
-  /**
-   * Clear stored authentication token
-   */
   clearAuth(): void {
     this.authToken = null;
     this.tokenExpiry = null;

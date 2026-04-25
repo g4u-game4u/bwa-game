@@ -1,6 +1,7 @@
 import {
   filterGame4uActionsByMonth,
   mapGame4uActionsToProcessMetrics,
+  mapGame4uStatsToActivityMetrics,
   mapGame4uStatsToPointWallet,
   mergeGame4uDeliveryParticipation,
   mergeGame4uTeamDeliveryRows
@@ -17,6 +18,36 @@ describe('game4u-game-mapper', () => {
         total_blocked_points: 11
       });
       expect(w).toEqual({ bloqueados: 11, desbloqueados: 99, moedas: 0 });
+    });
+
+    it('uses action_stats.done for desbloqueados when action_stats is present', () => {
+      const w = mapGame4uStatsToPointWallet({
+        stats: [],
+        total_actions: 10,
+        total_points: 99,
+        total_blocked_points: 5,
+        action_stats: {
+          total_blocked_points: 7,
+          done: { count: 4, total_points: 42 }
+        }
+      });
+      expect(w).toEqual({ bloqueados: 7, desbloqueados: 42, moedas: 0 });
+    });
+  });
+
+  describe('mapGame4uStatsToActivityMetrics', () => {
+    it('uses action_stats.done for finalizadas and pontos', () => {
+      const m = mapGame4uStatsToActivityMetrics({
+        stats: [{ status: 'DELIVERED', count: 9, total_points: 0 }],
+        total_actions: 99,
+        total_points: 1,
+        total_blocked_points: 0,
+        action_stats: {
+          DONE: { count: 3, total_points: 100 }
+        }
+      });
+      expect(m.finalizadas).toBe(3);
+      expect(m.pontos).toBe(100);
     });
   });
 

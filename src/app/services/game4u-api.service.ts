@@ -35,7 +35,7 @@ export class Game4uApiService {
 
   private useSupabaseOnHttpFailure(): boolean {
     return (
-      environment.useGame4uSupabaseFallback !== false && this.supabaseFallback.isAvailable()
+      environment.useGame4uSupabaseFallback === true && this.supabaseFallback.isAvailable()
     );
   }
 
@@ -92,11 +92,11 @@ export class Game4uApiService {
 
   getGameStats(q: Game4uUserScopedQuery): Observable<Game4uUserActionStatsResponse> {
     if (!this.isConfigured()) {
-      if (this.supabaseFallback.isAvailable()) {
+      if (this.useSupabaseOnHttpFailure()) {
         return this.supabaseFallback.getGameStats(q);
       }
       return throwError(
-        () => new Error('[Game4U] stats: defina backend_url_base ou Supabase (URL + chave).')
+        () => new Error('[Game4U] stats: defina backend_url_base (ou GAME4U_SUPABASE_FALLBACK=true + Supabase).')
       );
     }
     const params = new HttpParams()
@@ -114,11 +114,11 @@ export class Game4uApiService {
     q: Game4uUserScopedQuery & { status?: Game4uUserActionStatus }
   ): Observable<Game4uUserActionModel[]> {
     if (!this.isConfigured()) {
-      if (this.supabaseFallback.isAvailable()) {
+      if (this.useSupabaseOnHttpFailure()) {
         return this.supabaseFallback.getGameActions(q);
       }
       return throwError(
-        () => new Error('[Game4U] actions: defina backend_url_base ou Supabase (URL + chave).')
+        () => new Error('[Game4U] actions: defina backend_url_base (ou GAME4U_SUPABASE_FALLBACK=true + Supabase).')
       );
     }
     let params = new HttpParams().set('start', q.start).set('end', q.end).set('user', q.user);
@@ -136,11 +136,11 @@ export class Game4uApiService {
     q: Game4uUserScopedQuery & { status: Game4uDeliveryStatus }
   ): Observable<Game4uDeliveryModel[]> {
     if (!this.isConfigured()) {
-      if (this.supabaseFallback.isAvailable()) {
+      if (this.useSupabaseOnHttpFailure()) {
         return this.supabaseFallback.getGameDeliveries(q);
       }
       return throwError(
-        () => new Error('[Game4U] deliveries: defina backend_url_base ou Supabase (URL + chave).')
+        () => new Error('[Game4U] deliveries: defina backend_url_base (ou GAME4U_SUPABASE_FALLBACK=true + Supabase).')
       );
     }
     const params = new HttpParams()
@@ -157,11 +157,11 @@ export class Game4uApiService {
 
   getGameTeamStats(q: Game4uTeamScopedQuery): Observable<Game4uUserActionStatsResponse> {
     if (!this.isConfigured()) {
-      if (this.supabaseFallback.isAvailable()) {
+      if (this.useSupabaseOnHttpFailure()) {
         return this.supabaseFallback.getGameTeamStats(q);
       }
       return throwError(
-        () => new Error('[Game4U] team-stats: defina backend_url_base ou Supabase (URL + chave).')
+        () => new Error('[Game4U] team-stats: defina backend_url_base (ou GAME4U_SUPABASE_FALLBACK=true + Supabase).')
       );
     }
     const params = new HttpParams().set('start', q.start).set('end', q.end).set('team', q.team);
@@ -176,11 +176,11 @@ export class Game4uApiService {
     q: Game4uTeamScopedQuery & { status?: Game4uUserActionStatus }
   ): Observable<Game4uUserActionModel[]> {
     if (!this.isConfigured()) {
-      if (this.supabaseFallback.isAvailable()) {
+      if (this.useSupabaseOnHttpFailure()) {
         return this.supabaseFallback.getGameTeamActions(q);
       }
       return throwError(
-        () => new Error('[Game4U] team-actions: defina backend_url_base ou Supabase (URL + chave).')
+        () => new Error('[Game4U] team-actions: defina backend_url_base (ou GAME4U_SUPABASE_FALLBACK=true + Supabase).')
       );
     }
     let params = new HttpParams().set('start', q.start).set('end', q.end);
@@ -199,12 +199,12 @@ export class Game4uApiService {
     q: Game4uTeamScopedQuery & { status: Game4uDeliveryStatus }
   ): Observable<Game4uDeliveryModel[]> {
     if (!this.isConfigured()) {
-      if (this.supabaseFallback.isAvailable()) {
+      if (this.useSupabaseOnHttpFailure()) {
         return this.supabaseFallback.getGameTeamDeliveries(q);
       }
       return throwError(
         () =>
-          new Error('[Game4U] team-deliveries: defina backend_url_base ou Supabase (URL + chave).')
+          new Error('[Game4U] team-deliveries: defina backend_url_base (ou GAME4U_SUPABASE_FALLBACK=true + Supabase).')
       );
     }
     const params = new HttpParams()

@@ -3,6 +3,7 @@ import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { Observable, of, forkJoin } from 'rxjs';
 import { map, catchError, tap, switchMap } from 'rxjs/operators';
 import { environment } from '../../environments/environment';
+import { joinApiPath } from '../../environments/backend-url';
 
 export interface CnpjEntry {
   _id: number;
@@ -24,8 +25,10 @@ export interface CnpjEnrichedInfo {
   providedIn: 'root'
 })
 export class CnpjLookupService {
-  private readonly apiUrl = 'https://service2.funifier.com/v3/database/empid_cnpj__c';
-  private readonly basicToken = environment.funifier_basic_token;
+  private readonly apiUrl = joinApiPath(
+    (environment.backend_url_base || '').trim().replace(/\/+$/, ''),
+    '/database/empid_cnpj__c'
+  );
 
   constructor(private http: HttpClient) {}
 
@@ -42,9 +45,7 @@ export class CnpjLookupService {
 
     console.log('📊 Fetching CNPJ entries for empids:', empids.length, 'empids');
 
-    // Create headers with Basic Auth
     const headers = new HttpHeaders({
-      'Authorization': `Basic ${this.basicToken}`,
       'Content-Type': 'application/json'
     });
 
@@ -106,6 +107,11 @@ export class CnpjLookupService {
 
     console.log(`📊 Fetching CNPJ batch: ${rangeHeader} (accumulated: ${accumulatedResults.length})`);
 
+    if (url.toLowerCase().includes('/aggregate')) {
+      console.warn('[CnpjLookup] POST aggregate Funifier desativado; sem enriquecimento empid→CNPJ.');
+      return of(accumulatedResults.length ? accumulatedResults : []);
+    }
+
     return this.http.post<CnpjEntry[]>(url, aggregateBody, { headers: headersWithRange }).pipe(
       switchMap(response => {
         // Handle response format
@@ -158,7 +164,6 @@ export class CnpjLookupService {
     console.log('📊 Fetching CNPJ entries by full CNPJ:', fullCnpjs.length, 'items');
 
     const headers = new HttpHeaders({
-      'Authorization': `Basic ${this.basicToken}`,
       'Content-Type': 'application/json'
     });
 

@@ -1,3 +1,5 @@
+import { readBackendUrlBaseFromProcessEnv } from './backend-url';
+
 /** Treats common “off” spellings; dotenv values are always strings at build time. */
 function supabaseMockExplicitlyDisabled(
   a: string | undefined,
@@ -15,18 +17,11 @@ export const environment = {
   // client_id: 'cidadania4u',
   client_id: process.env['CLIENT_ID'] || process.env['client_id'],
   // backend_url_base: 'https://integrador-n8n.grupo4u.com.br/webhook/game4u/taxall',
-  backend_url_base:
-    (process.env['BACKEND_URL_BASE'] || process.env['backend_url_base'] || 'http://localhost').trim(),
+  backend_url_base: readBackendUrlBaseFromProcessEnv(),
   // backend_url_base: 'https://g4u-mvp-api.onrender.com',
   // backend_url_base: 'https://g4u-mvp-api-staging.onrender.com',
   // backend_url_base: 'https://g4u-mvp-api-1.onrender.com',
   // backend_url_base: 'http://194.163.158.136:1935'
-  
-  // Funifier API Configuration
-  funifier_api_url: 'https://service2.funifier.com/v3/',
-  funifier_api_key: '69b1ff7c607db81962c1fa86',
-  funifier_base_url: 'https://service2.funifier.com/v3/',
-  funifier_basic_token: 'NjliMWZmN2M2MDdkYjgxOTYyYzFmYTg2OjY3ZWM0ZTRhMjMyN2Y3NGYzYTJmOTZmNQ==',
   
   // Cache Configuration
   cacheTimeout: 300000, // 5 minutes in milliseconds
@@ -111,9 +106,12 @@ export const environment = {
     String(process.env['GAME4U_USE_API'] ?? process.env['game4u_use_api'] ?? 'true').toLowerCase() !==
     'false',
 
-  /** Se false, não usa Supabase quando o HTTP `/game/*` falha. Default: true quando credenciais existem. */
+  /**
+   * Só com `true` explícito: fallback HTTP `/game/*` → leitura Supabase (SUPABASE_URL).
+   * Painéis jogador/gestor não devem depender disto.
+   */
   useGame4uSupabaseFallback:
     String(
-      process.env['GAME4U_SUPABASE_FALLBACK'] ?? process.env['game4u_supabase_fallback'] ?? 'true'
-    ).toLowerCase() !== 'false'
+      process.env['GAME4U_SUPABASE_FALLBACK'] ?? process.env['game4u_supabase_fallback'] ?? ''
+    ).toLowerCase() === 'true'
 };

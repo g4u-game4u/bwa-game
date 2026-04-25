@@ -36,8 +36,7 @@ export class CompanyService {
       return cached;
     }
 
-    // Use getCurrentPlayerData for 'me' (faster player/me endpoint with up-to-date cnpj_resp)
-    // Use getRawPlayerData for other players (player/{id}/status endpoint)
+    // Use getCurrentPlayerData for 'me' (`/auth/user`); outros ids usam GET perfil sem `/status`.
     const playerData$ = playerId === 'me' 
       ? this.playerService.getCurrentPlayerData()
       : this.playerService.getRawPlayerData(playerId);

@@ -65,10 +65,7 @@ Ensure these are set in Vercel Dashboard → Settings → Environment Variables:
 | Variable | Status | Notes |
 |----------|--------|-------|
 | `CLIENT_ID` | ✅ Added | Client identifier |
-| `BACKEND_URL_BASE` | ✅ Added | Backend API URL |
-| `FUNIFIER_API_KEY` | ✅ Added | Funifier API key |
-| `FUNIFIER_BASE_URL` | ✅ Added | Funifier base URL |
-| `FUNIFIER_BASIC_TOKEN` | ✅ Added | Funifier auth token |
+| `BACKEND_URL_BASE` ou `G4U_API_BASE` | ✅ Added | Base da API Game4U (ex.: `https://g4u-api-bwa.onrender.com/api`) |
 
 ## 🚨 Troubleshooting
 

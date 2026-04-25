@@ -152,7 +152,7 @@ Funifier supports relative date expressions in aggregate queries, avoiding manua
 
 #### Acceptance Criteria
 
-1. WHEN the "Minha Carteira" section loads THEN the system SHALL display three KPI circular progress indicators
+1. WHEN the "Minhas Metas" section loads THEN the system SHALL display three KPI circular progress indicators
 2. WHEN displaying each KPI THEN the system SHALL show the current value, target value, and completion percentage
 3. THE system SHALL color-code progress indicators based on completion status (red for low, green for complete)
 4. THE system SHALL fetch KPI data from the Funifier API

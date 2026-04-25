@@ -15,6 +15,7 @@ import type { Game4uUserScopedQuery } from '@model/game4u-api.model';
 import { SessaoProvider } from '@providers/sessao/sessao.provider';
 import {
   filterGame4uActionsByMonth,
+  getGame4uActionStatsDone,
   mapGame4uActionsToActivityList,
   mapGame4uActionsToProcessList,
   mapGame4uActionsToProcessMetrics,
@@ -463,7 +464,12 @@ export class ActionLogService {
         return of(0);
       }
       return this.game4u.getGameStats(q).pipe(
-        map(s => Math.floor(Number(s.total_actions) || 0)),
+        map(s => {
+          if (s.action_stats != null) {
+            return getGame4uActionStatsDone(s).count;
+          }
+          return Math.floor(Number(s.total_actions) || 0);
+        }),
         catchError(error => {
           console.error('Error fetching Game4U activity count:', error);
           return of(0);
@@ -656,7 +662,11 @@ export class ActionLogService {
         return of(0);
       }
       return this.game4u.getGameStats(q).pipe(
-        map(s => mapGame4uStatsToActivityMetrics(s).pontos),
+        map(s =>
+          s.action_stats != null
+            ? getGame4uActionStatsDone(s).totalPoints
+            : mapGame4uStatsToActivityMetrics(s).pontos
+        ),
         catchError(error => {
           console.error('Error in getPontosForMonth (Game4U):', error);
           return of(0);
@@ -854,8 +864,15 @@ export class ActionLogService {
       }).pipe(
         map(({ stats, actions }) => {
           const scoped = filterGame4uActionsByMonth(actions, month);
-          const finalizadas = Math.floor(Number(stats.total_actions) || scoped.length);
-          const pontos = mapGame4uStatsToActivityMetrics(stats).pontos;
+          const done = getGame4uActionStatsDone(stats);
+          const finalizadas =
+            stats.action_stats != null
+              ? done.count
+              : Math.floor(Number(stats.total_actions) || scoped.length);
+          const pontos =
+            stats.action_stats != null
+              ? done.totalPoints
+              : mapGame4uStatsToActivityMetrics(stats).pontos;
           const processo = mapGame4uActionsToProcessMetrics(scoped);
           return {
             activity: { pendentes: 0, emExecucao: 0, finalizadas, pontos },

@@ -5,7 +5,7 @@ import { FunifierApiService } from './funifier-api.service';
 import { KPIMapper } from './kpi-mapper.service';
 import { KPIData } from '@model/gamification-dashboard.model';
 import { PlayerService } from './player.service';
-import { SupabaseCompaniesService } from './supabase-companies.service';
+import { CompanyService } from './company.service';
 
 interface CacheEntry<T> {
   data: Observable<T>;
@@ -34,7 +34,7 @@ export class KPIService {
     private funifierApi: FunifierApiService,
     private mapper: KPIMapper,
     private playerService: PlayerService,
-    private supabaseCompanies: SupabaseCompaniesService
+    private companyService: CompanyService
   ) {}
 
   /**
@@ -94,18 +94,17 @@ export class KPIService {
       return cached;
     }
 
-    // Carteira count from Supabase companies (mock until live credentials + SUPABASE_USE_MOCK=false)
     const request$: Observable<KPIData[]> = forkJoin({
       playerStatus: this.playerService.getRawPlayerData(playerId),
-      carteiraRows: this.supabaseCompanies.getCompaniesForPlayer(playerId)
+      carteiraCompanies: this.companyService.getCompanies(playerId)
     }).pipe(
-      map(({ playerStatus, carteiraRows }) => {
+      map(({ playerStatus, carteiraCompanies }) => {
         console.log('📊 Player status received:', playerStatus);
-        console.log('📊 Carteira companies count (Supabase/mock):', carteiraRows.length);
+        console.log('📊 Carteira companies count (player portfolio):', carteiraCompanies.length);
         
         const kpis: KPIData[] = [];
 
-        const companyCount = carteiraRows.length;
+        const companyCount = carteiraCompanies.length;
         
         // Get target from player's extra.client_goals (number), fallback to default 100
         const clientGoals = playerStatus.extra?.client_goals;

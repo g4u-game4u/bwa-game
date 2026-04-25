@@ -85,7 +85,7 @@ describe('PlayerService', () => {
 
       service.getPlayerStatus('player123').subscribe(result => {
         expect(result).toEqual(mockPlayerStatus);
-        expect(funifierApiSpy.get).toHaveBeenCalledWith('/v3/player/player123/status');
+        expect(funifierApiSpy.get).toHaveBeenCalledWith('/v3/player/player123');
         expect(mapperSpy.toPlayerStatus).toHaveBeenCalledWith(mockApiResponse);
         done();
       });
@@ -170,7 +170,7 @@ describe('PlayerService', () => {
 
       service.getPlayerPoints('player123').subscribe(result => {
         expect(result).toEqual(mockPointWallet);
-        expect(funifierApiSpy.get).toHaveBeenCalledWith('/v3/player/player123/status');
+        expect(funifierApiSpy.get).toHaveBeenCalledWith('/v3/player/player123');
         expect(mapperSpy.toPointWallet).toHaveBeenCalledWith(mockApiResponse);
         done();
       });
@@ -213,44 +213,62 @@ describe('PlayerService', () => {
 
       service.getPlayerPoints('me').subscribe(result => {
         expect(result).toEqual({ bloqueados: 5, desbloqueados: 42, moedas: 0 });
+        expect(game4uSpy.toQueryRange).toHaveBeenCalledWith(undefined);
         expect(game4uSpy.getGameStats).toHaveBeenCalled();
         expect(funifierApiSpy.get).not.toHaveBeenCalled();
+        done();
+      });
+    });
+
+    it('should pass selected month into toQueryRange for Game4U /game/stats', done => {
+      environment.useGame4uApi = true;
+      const month = new Date(2026, 2, 15);
+      game4uSpy.toQueryRange.calls.reset();
+      game4uSpy.toQueryRange.and.returnValue({
+        start: '2026-03-01T03:00:00.000Z',
+        end: '2026-03-31T02:59:59.999Z'
+      });
+      game4uSpy.getGameStats.and.returnValue(
+        of({
+          stats: [],
+          total_actions: 0,
+          total_points: 1,
+          total_blocked_points: 0
+        })
+      );
+
+      service.getPlayerPoints('me', month).subscribe(() => {
+        expect(game4uSpy.toQueryRange).toHaveBeenCalledWith(month);
+        expect(game4uSpy.getGameStats).toHaveBeenCalledWith({
+          user: 'john@example.com',
+          start: '2026-03-01T03:00:00.000Z',
+          end: '2026-03-31T02:59:59.999Z'
+        });
         done();
       });
     });
   });
 
   describe('getSeasonProgress', () => {
-    it('should fetch and map season progress correctly', (done) => {
+    it('should map season shell without calling /status', (done) => {
       const seasonDates = {
         start: new Date('2023-01-01'),
         end: new Date('2023-12-31')
       };
 
-      const mockApiResponse = {
-        progress: {
-          metas: { current: 5, target: 10 },
-          clientes: 20,
-          tarefasFinalizadas: 50
-        }
-      };
-
       const mockProgress: SeasonProgress = {
-        metas: { current: 5, target: 10 },
-        clientes: 20,
-        tarefasFinalizadas: 50,
+        metas: { current: 0, target: 0 },
+        clientes: 0,
+        tarefasFinalizadas: 0,
         seasonDates
       };
 
-      funifierApiSpy.get.and.returnValue(of(mockApiResponse));
       mapperSpy.toSeasonProgress.and.returnValue(mockProgress);
 
       service.getSeasonProgress('player123', seasonDates).subscribe(result => {
         expect(result).toEqual(mockProgress);
-        expect(funifierApiSpy.get).toHaveBeenCalledWith('/v3/player/player123/progress', {
-          start_date: seasonDates.start.toISOString(),
-          end_date: seasonDates.end.toISOString()
-        });
+        expect(funifierApiSpy.get).not.toHaveBeenCalled();
+        expect(mapperSpy.toSeasonProgress).toHaveBeenCalledWith({}, seasonDates);
         done();
       });
     });

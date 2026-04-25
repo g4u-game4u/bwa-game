@@ -14,7 +14,6 @@ import { TIPO_CONSULTA_TIME } from "../dashboard.component";
 import { ModalDetalheExecutorComponent } from "./modal-detalhe-executor/modal-detalhe-executor.component";
 import { ModalSeasonFaqComponent } from "@modals/modal-season-faq/modal-season-faq.component";
 import { environment } from 'src/environments/environment';
-import { PONTOS_POR_ATIVIDADE_FINALIZADA_ACTION_LOG } from '@app/constants/pontos-por-atividade-action-log';
 
 @Component({
   selector: 'page-season',    
@@ -127,21 +126,18 @@ export class SeasonComponent implements OnInit, OnChanges {
   }
 
   /**
-   * Ignora total_points / pontos desbloqueados vindos da API (ex.: action_stats.total_points ou status).
-   * Exibe no season: desbloqueados = tarefas finalizadas × constante (alinhado ao restante do app).
+   * Alinha totais ao `/game/stats`: total exibido = pontos desbloqueados + bloqueados da API
+   * (`total_points` + `total_blocked_points` na resposta, já refletidos em `unblocked_points` / `blocked_points`).
    */
   private normalizeSeasonPointsFromCompletedTasks(data: TemporadaDashboard): TemporadaDashboard {
-    const completed =
-      typeof data.completedTasks === 'number' && !Number.isNaN(data.completedTasks)
-        ? data.completedTasks
-        : 0;
-    const unblocked = Math.floor(completed * PONTOS_POR_ATIVIDADE_FINALIZADA_ACTION_LOG);
     const blocked = Number(data.blocked_points) || 0;
+    const unblocked = Number(data.unblocked_points) || 0;
+    const sum = Number(data.total_points) || blocked + unblocked;
     return {
       ...data,
+      blocked_points: blocked,
       unblocked_points: unblocked,
-      total_points: blocked + unblocked,
-      total_actions: completed,
+      total_points: sum,
       total_blocked_points: data.total_blocked_points ?? blocked
     };
   }

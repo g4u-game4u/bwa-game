@@ -16,13 +16,14 @@ import {Router} from "@angular/router";
 import {jwtDecode} from "jwt-decode";
 import moment from "moment";
 import {LoginResponse} from "@providers/auth/auth.provider";
+import {joinApiPath} from "../../environments/backend-url";
 
+/** Backend Game4U / utilitários: não exigem sessão BWA no interceptor. */
 const WHITELISTED_URLS = [
     '/auth/login',
     '/auth/refresh',
     '/client/system-params',
     '/campaign/current',
-    'funifier.com', // Whitelist all Funifier API calls
     'integrador-n8n.grupo4u.com.br' // Whitelist help button webhook (external, no auth needed)
 ]
 
@@ -47,9 +48,24 @@ export class AuthInterceptor implements HttpInterceptor {
     }
 
     /**
-     * Hook BWA gamificação: autenticação apenas com `x-api-token` (sem Bearer da sessão Funifier).
-     * Sem este bypass, o fluxo padrão exige `sessao.token` e a requisição nem chega a ser enviada.
+     * Pedidos à mesma origem que `backend_url_base` (Game4U): login/refresh sem sessão;
+     * com sessão, anexar Bearer sem duplicar o ramo genérico que força `client_id`.
      */
+    private isGame4uBackendRequestUrl(requestUrl: string): boolean {
+        const base = (environment.backend_url_base || '').trim();
+        if (!base) {
+            return false;
+        }
+        try {
+            const resolvedBase = base.startsWith('http') ? base : `https://${base}`;
+            const b = new URL(resolvedBase);
+            const u = new URL(requestUrl);
+            return u.origin === b.origin;
+        } catch {
+            return false;
+        }
+    }
+
     private isGamificacaoApiKeyRequest(request: HttpRequest<unknown>): boolean {
         if (!request.headers.has('x-api-token')) {
             return false;
@@ -84,32 +100,38 @@ export class AuthInterceptor implements HttpInterceptor {
             return next.handle(request);
         }
 
-        // Check if this is a Funifier API request by URL
-        const isFunifierRequest = WHITELISTED_URLS.some(item => requestUrl.includes(item));
-        
-        // Check if this is a database endpoint (requires Basic Auth, not Bearer)
-        const isDatabaseEndpoint = requestUrl.includes('/database');
-        
-        // For Funifier requests, add Bearer token if available (but don't add client_id)
-        if (isFunifierRequest) {
-            // Don't modify requests that already have Authorization header (e.g., Basic Auth for database)
-            // Also explicitly skip database endpoints - they use Basic Auth set by the service
-            if (request.headers.has('Authorization') || isDatabaseEndpoint) {
-                console.log('🔐 Interceptor: Passing through request with existing auth or database endpoint:', requestUrl);
+        const isWhitelistedBackend = WHITELISTED_URLS.some(item => requestUrl.includes(item));
+        const isGame4uBackend = this.isGame4uBackendRequestUrl(requestUrl);
+
+        // Game4U ou URLs explicitamente isentas: não forçar o ramo genérico (clone completo do header set)
+        if (isWhitelistedBackend || isGame4uBackend) {
+            if (request.headers.has('Authorization')) {
                 return next.handle(request);
             }
-            
+
             const token = this.sessao.token;
-            if (token && !requestUrl.includes('/auth/token')) {
-                // Add Bearer token for authenticated Funifier requests
-                const modifiedRequest = request.clone({
-                    setHeaders: {
-                        'Authorization': `Bearer ${token}`
-                    }
-                });
-                return next.handle(modifiedRequest);
+            const isAuthAnonymous =
+                requestUrl.includes('/auth/login') ||
+                requestUrl.includes('/auth/refresh') ||
+                requestUrl.includes('/auth/token');
+
+            const extra: { [k: string]: string } = {};
+            if (isGame4uBackend && environment.client_id) {
+                extra['client_id'] = environment.client_id;
             }
-            // For login endpoint or when no token, pass through unchanged
+            if (token && !isAuthAnonymous) {
+                extra['Authorization'] = `Bearer ${token}`;
+            }
+            if (Object.keys(extra).length > 0) {
+                return next.handle(
+                    request.clone({
+                        setHeaders: {
+                            ...this.headersToObject(request.headers),
+                            ...extra
+                        }
+                    })
+                );
+            }
             return next.handle(request);
         }
 
@@ -171,7 +193,9 @@ export class AuthInterceptor implements HttpInterceptor {
 
     private refreshToken(request: HttpRequest<any>, next: HttpHandler) {
         if (!this.refreshChain)
-            this.refreshChain = this.http.post<HttpRequest<any>>(environment.backend_url_base + '/auth/refresh', {
+            this.refreshChain = this.http.post<HttpRequest<any>>(
+                joinApiPath((environment.backend_url_base || '').trim(), '/auth/refresh'),
+                {
                 refresh_token: this.sessao.refreshToken
             }).pipe(
                 tap(res => {

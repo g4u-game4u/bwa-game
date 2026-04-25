@@ -1,79 +1,73 @@
 import {Injectable} from '@angular/core';
 import {HttpClient} from '@angular/common/http';
 import {environment} from "../../../environments/environment";
+import {joinApiPath} from "../../../environments/backend-url";
 import {firstValueFrom, Observable} from "rxjs";
+import {map} from "rxjs/operators";
 
 @Injectable({
   providedIn: 'root',
 })
 export class AuthProvider {
-  private readonly funifierBaseUrl = environment.funifier_base_url || 'https://service2.funifier.com/v3/';
-  private readonly funifierApiKey = environment.funifier_api_key;
+  private apiBase(): string {
+    return (environment.backend_url_base || '').trim().replace(/\/+$/, '');
+  }
 
   constructor(private http: HttpClient) {
   }
 
   async login(email: string, password: string) {
-    console.log('🔐 AuthProvider.login called');
-    // baseUrl already includes /v3/, so just use auth/token
-    const authUrl = `${this.funifierBaseUrl}auth/token`;
-    console.log('🔐 Funifier URL:', authUrl);
-    console.log('🔐 API Key:', this.funifierApiKey);
-    console.log('🔐 Username:', email);
-    
-    // Use Funifier authentication
-    // Trim username to prevent spaces from breaking the Funifier profile
+    const base = this.apiBase();
+    const authUrl = joinApiPath(base, '/auth/login');
     const authBody = {
-      apiKey: this.funifierApiKey,
-      grant_type: 'password',
-      username: email.trim(),
-      password: password
+      email: email.trim(),
+      password
     };
 
-    console.log('🔐 Making POST request to Funifier...');
-    
-    // Don't add custom headers - Funifier blocks them via CORS
-    // The interceptor will recognize Funifier URLs by domain
     return firstValueFrom(
       this.http.post<LoginResponse>(authUrl, authBody)
     );
   }
 
   userInfo(): Observable<any> {
-    // Get user info from Funifier player/me endpoint (faster than player/me/status)
-    // This returns cnpj_resp, entrega, goals directly in the extra field
-    // baseUrl already includes /v3/, so just use player/me
-    // The interceptor will add the Bearer token from sessionStorage
-    return this.http.get(`${this.funifierBaseUrl}player/me`);
+    const url = joinApiPath(this.apiBase(), '/auth/user');
+    return this.http.get<any>(url).pipe(map(u => this.normalizeUserProfile(u)));
   }
 
   /**
-   * Get full player status (slower, use only when needed)
-   * @deprecated Use userInfo() for faster response with essential data
+   * Perfil completo (mesmo endpoint até existir rota dedicada no backend).
    */
   userInfoFull(): Observable<any> {
-    // Get full user info from Funifier player/me/status (slower)
-    return this.http.get(`${this.funifierBaseUrl}player/me/status`);
+    return this.userInfo();
   }
 
+  private normalizeUserProfile(u: any): any {
+    if (!u || typeof u !== 'object') {
+      return u;
+    }
+    const out = {...u};
+    if (!out._id && out.id != null) {
+      out._id = out.id;
+    }
+    if (!out.email && out._id && typeof out._id === 'string' && out._id.includes('@')) {
+      out.email = out._id;
+    }
+    return out;
+  }
+
+  /**
+   * Pedido de redefinição de senha (o backend deve expor a rota correspondente).
+   */
   async requestPasswordReset(email: string) {
-    // Use Funifier's public password reset endpoint
-    const apiKey = environment.funifier_api_key;
-    const resetUrl = `${this.funifierBaseUrl}pub/${apiKey}/passwordreset`;
-    
-    return firstValueFrom(this.http.post(resetUrl, {
-      email: email
-    }));
+    const url = joinApiPath(this.apiBase(), '/auth/password-reset-request');
+    return firstValueFrom(this.http.post(url, {email}));
   }
 
   async resetPassword(userId: string, token: string, newPassword: string) {
-    // Use Funifier's public update password endpoint
-    const apiKey = environment.funifier_api_key;
-    const updateUrl = `${this.funifierBaseUrl}pub/${apiKey}/updatepassword`;
-    
-    return firstValueFrom(this.http.post(updateUrl, {
+    const url = joinApiPath(this.apiBase(), '/auth/password-reset-confirm');
+    return firstValueFrom(this.http.post(url, {
       user: userId,
-      token: token,
+      token,
       password: newPassword
     }));
   }

@@ -19,6 +19,13 @@ const gamificacaoApiToken =
     getEnv('gamificacao_api_token') ||
     '';
 
+const backendUrlBase =
+    getEnv('G4U_API_BASE') ||
+    getEnv('g4u_api_base') ||
+    getEnv('BACKEND_URL_BASE') ||
+    getEnv('backend_url_base') ||
+    'https://g4u-api-bwa.onrender.com/api';
+
 if (!gamificacaoApiToken && process.env['NODE_ENV'] !== 'production') {
     console.warn(
         '[webpack] GAMIFICACAO_API_TOKEN is empty after loading .env — expected GAMIFICACAO_API_TOKEN or gamificacao_api_token in .env next to custom-webpack.config.ts'
@@ -32,11 +39,9 @@ module.exports = {
             // This replaces process.env references at build time
             'process.env': JSON.stringify({
                 // Uppercase (standard convention)
-                BACKEND_URL_BASE: getEnv('BACKEND_URL_BASE'),
+                BACKEND_URL_BASE: backendUrlBase,
+                G4U_API_BASE: backendUrlBase,
                 CLIENT_ID: getEnv('CLIENT_ID'),
-                FUNIFIER_BASIC_TOKEN: getEnv('FUNIFIER_BASIC_TOKEN'),
-                FUNIFIER_BASE_URL: getEnv('FUNIFIER_BASE_URL'),
-                FUNIFIER_API_KEY: getEnv('FUNIFIER_API_KEY'),
                 LOGO_URL: getEnv('LOGO_URL'),
                 SUPERVISOR_TEAM_CODE: getEnv('SUPERVISOR_TEAM_CODE'),
                 GESTOR_TEAM_CODE: getEnv('GESTOR_TEAM_CODE'),
@@ -50,11 +55,9 @@ module.exports = {
                 SUPABASE_USE_MOCK: getEnv('SUPABASE_USE_MOCK', ''),
                 SUPABASE_MOCK_FEED_ALL_USERS: getEnv('SUPABASE_MOCK_FEED_ALL_USERS', ''),
                 // Lowercase (Vercel compatibility)
-                backend_url_base: getEnv('backend_url_base'),
+                backend_url_base: backendUrlBase,
+                g4u_api_base: backendUrlBase,
                 client_id: getEnv('client_id'),
-                funifier_basic_token: getEnv('funifier_basic_token'),
-                funifier_base_url: getEnv('funifier_base_url'),
-                funifier_api_key: getEnv('funifier_api_key'),
                 logo_url: getEnv('logo_url'),
                 supervisor_team_code: getEnv('supervisor_team_code'),
                 gestor_team_code: getEnv('gestor_team_code'),

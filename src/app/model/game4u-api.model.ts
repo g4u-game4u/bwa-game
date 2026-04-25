@@ -32,11 +32,30 @@ export interface Game4uUserActionStatsModel {
   total_points: number;
 }
 
+/** Agregados por status na resposta de `/game/stats` (ex.: `action_stats.DONE`). */
+export interface Game4uActionStatBucket {
+  count?: number;
+  total_points?: number;
+}
+
+export interface Game4uActionStatsNested {
+  total_points?: number;
+  total_blocked_points?: number;
+  DONE?: Game4uActionStatBucket;
+  done?: Game4uActionStatBucket;
+  PENDING?: Game4uActionStatBucket;
+  DOING?: Game4uActionStatBucket;
+  DELIVERED?: Game4uActionStatBucket;
+  PAID?: Game4uActionStatBucket;
+}
+
 export interface Game4uUserActionStatsResponse {
   stats: Game4uUserActionStatsModel[];
   total_actions: number;
   total_points: number;
   total_blocked_points: number;
+  /** Quando presente, o painel usa `DONE`/`done` para tarefas e pontos “finalizados”. */
+  action_stats?: Game4uActionStatsNested;
   total_cancelled_points?: number;
   cancelled_actions_count?: number;
 }
@@ -81,7 +100,7 @@ function supabaseGameFallbackCredentials(): boolean {
   return url.length > 0 && key.length > 0;
 }
 
-/** True quando dá para ler `/game/*` via HTTP (`backend_url_base`) ou via fallback Supabase. */
+/** True quando dá para ler `/game/*` via HTTP (`backend_url_base`), ou Supabase só se o fallback estiver explícito. */
 export function isGame4uDataEnabled(): boolean {
   if (environment.useGame4uApi === false) {
     return false;
@@ -90,5 +109,7 @@ export function isGame4uDataEnabled(): boolean {
   if (base.length > 0) {
     return true;
   }
-  return supabaseGameFallbackCredentials();
+  return (
+    environment.useGame4uSupabaseFallback === true && supabaseGameFallbackCredentials()
+  );
 }
