@@ -162,6 +162,22 @@ function actionLogEntryMatchesCompanyKey(entry: ActionLogEntry, companyKey: stri
   return false;
 }
 
+function mapGame4uStatusToClienteTaskStatus(
+  status: string | undefined
+): 'finalizado' | 'pendente' | 'dispensado' | undefined {
+  const u = String(status ?? '').toUpperCase();
+  if (u === 'DONE' || u === 'DELIVERED' || u === 'PAID') {
+    return 'finalizado';
+  }
+  if (u === 'PENDING' || u === 'DOING') {
+    return 'pendente';
+  }
+  if (u === 'CANCELLED' || u === 'LOST') {
+    return 'dispensado';
+  }
+  return undefined;
+}
+
 /**
  * Helper to generate Funifier date expressions (relative or absolute)
  * Funifier supports: -0d-, -0d+, -1d-, -0M-, -0M+, -0y-, etc.
@@ -554,6 +570,55 @@ export class ActionLogService {
     }
     return this.getCompletedTasksCount(playerId, month).pipe(
       map(tarefasFinalizadas => ({ tarefasFinalizadas }))
+    );
+  }
+
+  /**
+   * Todas as user-actions Game4U com o mesmo `delivery_id` (intervalo alinhado ao mês do painel ou temporada).
+   */
+  getGame4uUserActionsForDeliveryId(
+    playerId: string,
+    deliveryId: string,
+    month?: Date
+  ): Observable<ClienteActionItem[]> {
+    const id = (deliveryId || '').trim();
+    if (!id || !(isGame4uDataEnabled() && this.game4u.isConfigured())) {
+      return of([]);
+    }
+    const qActions =
+      month != null
+        ? this.game4uUserQueryActionsForCompetenceMonth(playerId, month)
+        : this.game4uUserQuery(playerId, month);
+    if (!qActions) {
+      return of([]);
+    }
+    return this.game4u.getGameActions(qActions).pipe(
+      map(actions => {
+        const scoped =
+          month != null
+            ? filterGame4uActionsByCompetenceMonth(actions, month)
+            : filterGame4uActionsByMonth(actions, month);
+        const rows = scoped.filter(a => String(a.delivery_id ?? '').trim() === id);
+        rows.sort((a, b) => {
+          const ta = Date.parse(String(a.created_at));
+          const tb = Date.parse(String(b.created_at));
+          return (Number.isNaN(tb) ? 0 : tb) - (Number.isNaN(ta) ? 0 : ta);
+        });
+        return rows.map(a => ({
+          id: a.id,
+          title:
+            (typeof a.action_title === 'string' && a.action_title.trim()) || 'Ação',
+          player: String(a.user_email ?? ''),
+          created: Date.parse(String(a.created_at)) || 0,
+          processTitle:
+            (typeof a.delivery_title === 'string' && a.delivery_title.trim()) || undefined,
+          status: mapGame4uStatusToClienteTaskStatus(a.status)
+        }));
+      }),
+      catchError(error => {
+        console.error('Error fetching Game4U actions by delivery_id:', error);
+        return of([]);
+      })
     );
   }
 
@@ -1200,7 +1265,7 @@ export class ActionLogService {
   getPlayerCnpjListWithCount(
     playerId: string,
     month?: Date
-  ): Observable<{ cnpj: string; actionCount: number; delivery_title?: string }[]> {
+  ): Observable<{ cnpj: string; actionCount: number; delivery_title?: string; deliveryId?: string }[]> {
       // Month must be part of the key: the inner map closes over `month` when the cached observable is built.
       const monthKey = this.getMonthCacheKey(month);
       const cacheKey = `${playerId}_cnpj_list_count_${monthKey}`;
@@ -1218,7 +1283,10 @@ export class ActionLogService {
           const request$ = this.game4u.getGameActions(qActions).pipe(
             map(actions => {
               const scoped = filterGame4uActionsByCompetenceMonth(actions, month);
-              const byCnpj = new Map<string, { actionCount: number; delivery_title?: string }>();
+              const byCnpj = new Map<
+                string,
+                { actionCount: number; delivery_title?: string; delivery_id?: string }
+              >();
               for (const a of scoped) {
                 const cnpj = String(a.integration_id ?? '').trim();
                 if (!cnpj) {
@@ -1226,6 +1294,13 @@ export class ActionLogService {
                 }
                 const cur = byCnpj.get(cnpj) || { actionCount: 0 };
                 cur.actionCount += 1;
+                const did =
+                  a.delivery_id != null && String(a.delivery_id).trim() !== ''
+                    ? String(a.delivery_id).trim()
+                    : '';
+                if (did && !cur.delivery_id) {
+                  cur.delivery_id = did;
+                }
                 const dt =
                   typeof a.delivery_title === 'string' ? a.delivery_title.trim() : '';
                 if (dt && !cur.delivery_title) {
@@ -1234,12 +1309,20 @@ export class ActionLogService {
                 byCnpj.set(cnpj, cur);
               }
               return [...byCnpj.entries()].map(([cnpj, v]) => {
-                const row: { cnpj: string; actionCount: number; delivery_title?: string } = {
+                const row: {
+                  cnpj: string;
+                  actionCount: number;
+                  delivery_title?: string;
+                  deliveryId?: string;
+                } = {
                   cnpj,
                   actionCount: v.actionCount
                 };
                 if (v.delivery_title) {
                   row.delivery_title = v.delivery_title;
+                }
+                if (v.delivery_id) {
+                  row.deliveryId = v.delivery_id;
                 }
                 return row;
               });

@@ -3,6 +3,7 @@ import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { ActionLogService, ClienteActionItem } from '@services/action-log.service';
 import { CompanyKpiService, CompanyDisplay } from '@services/company-kpi.service';
+import { isGame4uDataEnabled } from '@model/game4u-api.model';
 import { KPIService } from '@services/kpi.service';
 import { KPIData } from '@model/gamification-dashboard.model';
 import { CnpjLookupService } from '@services/cnpj-lookup.service';
@@ -131,16 +132,19 @@ export class ModalCompanyCarteiraDetailComponent implements OnInit, OnDestroy {
 
     const uid = this.actionLogUserId?.trim() || undefined;
     const tid = !uid && this.actionLogTeamId?.trim() ? this.actionLogTeamId.trim() : undefined;
+    const deliveryId = this.company.deliveryId?.trim();
 
-    // Colaborador: mesmo action_log do painel (aggregate userId + sort) e filtro por CNPJ/deal no cliente.
-    // Time: aggregate com lookup em player (comportamento anterior).
+    // Colaborador + Game4U + linha com `deliveryId`: todas as user-actions da mesma entrega.
+    // Senão: action_log por CNPJ (individual) ou aggregate por time.
     const tasks$ =
-      uid && !tid
-        ? this.actionLogService.getUserActionsForCompanyUsingPlayerActionLog(uid, this.company.cnpj, this.month)
-        : this.actionLogService.getActionsByCnpj(this.company.cnpj, this.month, {
-            userId: uid,
-            teamId: tid
-          });
+      uid && !tid && deliveryId && isGame4uDataEnabled()
+        ? this.actionLogService.getGame4uUserActionsForDeliveryId(uid, deliveryId, this.month)
+        : uid && !tid
+          ? this.actionLogService.getUserActionsForCompanyUsingPlayerActionLog(uid, this.company.cnpj, this.month)
+          : this.actionLogService.getActionsByCnpj(this.company.cnpj, this.month, {
+              userId: uid,
+              teamId: tid
+            });
 
     tasks$.pipe(takeUntil(this.destroy$)).subscribe({
         next: (tasks) => {

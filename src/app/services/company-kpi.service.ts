@@ -54,6 +54,8 @@ export interface CompanyDisplay {
   deliveryKpi?: KPIData;
   /** Game4U participação: título da entrega (exibir no lugar do id da entrega). */
   delivery_title?: string;
+  /** Game4U: `delivery_id` da entrega representada na linha (detalhe = user-actions desta entrega). */
+  deliveryId?: string;
 }
 
 /** Linha da carteira vinda do Supabase para enriquecer com o GET da gamificação. */
@@ -481,7 +483,13 @@ export class CompanyKpiService {
   }
 
   enrichCompaniesWithKpis(
-    companies: { cnpj: string; actionCount: number; processCount?: number; delivery_title?: string }[]
+    companies: {
+      cnpj: string;
+      actionCount: number;
+      processCount?: number;
+      delivery_title?: string;
+      deliveryId?: string;
+    }[]
   ): Observable<CompanyDisplay[]> {
     if (!companies || companies.length === 0) {
       return of([]);
@@ -500,7 +508,8 @@ export class CompanyKpiService {
             cnpjId: company.cnpjId || undefined,
             actionCount: company.actionCount,
             processCount: company.processCount || 0,
-            delivery_title: company.delivery_title?.trim() || undefined
+            delivery_title: company.delivery_title?.trim() || undefined,
+            ...(company.deliveryId?.trim() ? { deliveryId: company.deliveryId.trim() } : {})
           };
 
           const kpiData = this.resolveKpiForActionLogCompany(company, maps);
@@ -517,7 +526,8 @@ export class CompanyKpiService {
             cnpjId: c.cnpjId || undefined,
             actionCount: c.actionCount,
             processCount: c.processCount || 0,
-            delivery_title: c.delivery_title?.trim() || undefined
+            delivery_title: c.delivery_title?.trim() || undefined,
+            ...(c.deliveryId?.trim() ? { deliveryId: c.deliveryId.trim() } : {})
           }))
         );
       })

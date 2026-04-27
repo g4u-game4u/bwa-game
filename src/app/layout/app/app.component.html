@@ -6,4 +6,21 @@
 
 
 <router-outlet *ngIf="translateReady && paramReady"></router-outlet>
+
+<aside
+  *ngIf="showMaintenanceBanner"
+  class="maintenance-toast"
+  role="status"
+  aria-live="polite"
+>
+  <span class="maintenance-toast__icon" aria-hidden="true">&#9881;</span>
+  <div class="maintenance-toast__body">
+    <strong class="maintenance-toast__title">Manutenção em curso</strong>
+    <p class="maintenance-toast__message">
+      A plataforma pode apresentar instabilidade ao longo do dia enquanto passa por manutenção.
+      Obrigado pela compreensão.
+    </p>
+  </div>
+</aside>
+
 <c4u-help-button></c4u-help-button>

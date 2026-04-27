@@ -88,5 +88,13 @@ export const environment = {
   useGame4uSupabaseFallback:
     String(
       process.env['GAME4U_SUPABASE_FALLBACK'] ?? process.env['game4u_supabase_fallback'] ?? ''
-    ).toLowerCase() === 'true'
+    ).toLowerCase() === 'true',
+
+  /** Aviso fixo de manutenção. Desligar: SHOW_MAINTENANCE_BANNER=false */
+  showMaintenanceBanner:
+    String(
+      process.env['SHOW_MAINTENANCE_BANNER'] ?? process.env['show_maintenance_banner'] ?? 'true'
+    )
+      .trim()
+      .toLowerCase() !== 'false'
 };

@@ -631,9 +631,9 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
       component.refreshData();
       tick();
 
-      // Assert - Context preserved despite error
+      // Assert - Context preserved despite error (sem toast de erro)
       expect(component.selectedMonth).toEqual(selectedMonth);
-      expect(toastService.error).toHaveBeenCalled();
+      expect(toastService.error).not.toHaveBeenCalled();
     }));
 
     /**
@@ -724,7 +724,7 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
       // Assert
       expect(component.playerStatus).toBeNull();
       expect(component.isLoadingPlayer).toBe(false);
-      expect(toastService.error).toHaveBeenCalledWith('Erro ao carregar dados do jogador');
+      expect(toastService.error).not.toHaveBeenCalled();
     }));
 
     it('should handle company data loading errors gracefully', fakeAsync(() => {
@@ -743,7 +743,7 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
       // Assert
       expect(component.companies).toEqual([]);
       expect(component.isLoadingCompanies).toBe(false);
-      expect(toastService.error).toHaveBeenCalledWith('Erro ao carregar carteira de empresas');
+      expect(toastService.error).not.toHaveBeenCalled();
     }));
 
     it('should handle KPI data loading errors gracefully', fakeAsync(() => {
@@ -762,7 +762,7 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
       // Assert
       expect(component.playerKPIs).toEqual([]);
       expect(component.isLoadingKPIs).toBe(false);
-      expect(toastService.error).toHaveBeenCalledWith('Erro ao carregar KPIs');
+      expect(toastService.error).not.toHaveBeenCalled();
     }));
 
     it('should continue loading other sections when one fails', fakeAsync(() => {

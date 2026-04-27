@@ -150,14 +150,8 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   }
   
   /**
-   * Get current player ID from query params or use 'me' for Funifier API
-   * 
-   * Priority:
-   * 1. Query parameter 'playerId' (when viewing another player's dashboard)
-   * 2. 'me' for current authenticated user (uses faster player/me endpoint)
-   * 
-   * NOTE: We always use 'me' for the current user to leverage `/auth/user`
-   * (sem GET …/player/…/status) no fluxo de dados do jogador.
+   * Identificador do jogador para action_log, empresas e agregados Funifier (email / `_id` / query).
+   * Não usar para perfil lateral: isso dispara `GET /v3/player/{id}`; use {@link getFunifierProfilePlayerId}.
    */
   getPlayerId(): string {
     // Check for playerId in query params (when viewing another player's dashboard)
@@ -179,6 +173,18 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     
     // Fallback to 'me' (current authenticated user)
     console.log('📊 Using default player ID: me');
+    return 'me';
+  }
+
+  /**
+   * Perfil e carteira (pontos legado Funifier): `me` → `/auth/user`, sem `GET /v3/player/...`.
+   * Com `?playerId=` na URL, mantém o outro jogador via `/v3/player/{id}`.
+   */
+  private getFunifierProfilePlayerId(): string {
+    const q = this.route.snapshot.queryParams['playerId'];
+    if (typeof q === 'string' && q.trim().length > 0) {
+      return q.trim();
+    }
     return 'me';
   }
   
@@ -287,9 +293,10 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     this.cdr.markForCheck();
     
     const playerId = this.getPlayerId();
+    const profilePlayerId = this.getFunifierProfilePlayerId();
     
     // Load player status
-    console.log('📊 Loading player data for:', playerId);
+    console.log('📊 Loading player data for:', playerId, 'profile API id:', profilePlayerId);
     console.log('📊 Token available:', !!this.sessaoProvider.token);
     console.log('📊 Token value:', this.sessaoProvider.token?.substring(0, 20) + '...');
     
@@ -302,7 +309,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
       }
     }, 20000); // 20 second timeout
     
-    this.playerService.getPlayerStatus(playerId)
+    this.playerService.getPlayerStatus(profilePlayerId)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (status) => {
@@ -315,7 +322,6 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
         error: (error) => {
           console.error('📊 Failed to load player status:', error);
           clearTimeout(loadingTimeout);
-          this.toastService.error('Erro ao carregar dados do jogador');
           this.isLoadingPlayer = false;
           this.cdr.markForCheck();
         },
@@ -328,7 +334,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     // Game4U: pontos da carteira vêm de `/game/stats` (action_stats.done). Sem Game4U: action_log × constante.
     console.log('📊 Starting point wallet...');
     forkJoin({
-      wallet: this.playerService.getPlayerPoints(playerId, this.selectedMonth).pipe(
+      wallet: this.playerService.getPlayerPoints(profilePlayerId, this.selectedMonth).pipe(
         catchError(err => {
           console.error('📊 Point wallet status error:', err);
           return of({ moedas: 0, bloqueados: 0, desbloqueados: 0 } as PointWallet);
@@ -453,7 +459,6 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
         },
         error: (error) => {
           console.error('📊 Failed to load companies:', error);
-          this.toastService.error('Erro ao carregar carteira de empresas');
           this.isLoadingCompanies = false;
           this.cdr.markForCheck();
         }
@@ -564,10 +569,15 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
           const empids = items.map(i => i.cnpj).filter((c): c is string => !!c && String(c).trim().length > 0);
           const actionCountByCnpj = new Map(items.map(i => [i.cnpj, i.actionCount]));
           const deliveryTitleByKey = new Map<string, string>();
+          const deliveryIdByCnpj = new Map<string, string>();
           for (const i of items) {
             const t = i.delivery_title?.trim();
             if (t) {
               deliveryTitleByKey.set(i.cnpj, t);
+            }
+            const d = i.deliveryId?.trim();
+            if (d) {
+              deliveryIdByCnpj.set(i.cnpj, d);
             }
           }
 
@@ -591,7 +601,8 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
                   clientes.map(c => ({
                     ...c,
                     actionCount: actionCountByCnpj.get(c.cnpj) ?? c.actionCount,
-                    delivery_title: deliveryTitleByKey.get(c.cnpj) ?? c.delivery_title
+                    delivery_title: deliveryTitleByKey.get(c.cnpj) ?? c.delivery_title,
+                    deliveryId: deliveryIdByCnpj.get(c.cnpj) ?? c.deliveryId
                   }))
                 )
               );
@@ -729,7 +740,6 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
         },
         error: (error) => {
           console.error('📊 Failed to load KPIs:', error);
-          this.toastService.error('Erro ao carregar KPIs');
           this.isLoadingKPIs = false;
           // Don't update metas on error - preserve existing values
           this.cdr.markForCheck();

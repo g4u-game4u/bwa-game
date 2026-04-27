@@ -270,11 +270,9 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
         console.log('✅ Initial team selected:', teamToSelect);
       } else {
         console.error('❌ No teams available for user');
-        this.toastService.error('Usuário não tem acesso a nenhum time');
       }
     } catch (error) {
       console.error('❌ Error initializing dashboard:', error);
-      this.toastService.error('Erro ao carregar dashboard');
     } finally {
       this.isLoading = false;
       console.log('🏁 Dashboard initialization complete, isLoading:', this.isLoading);
@@ -471,7 +469,6 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       console.error('Error in loadAvailableTeams:', error);
       this.teams = [];
       this.isLoadingTeams = false;
-      this.toastService.error('Erro ao carregar equipes');
     }
   }
 
@@ -736,7 +733,6 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       this.lastRefresh = new Date();
     } catch (error) {
       console.error('Error loading team data:', error);
-      this.toastService.error('Erro ao carregar dados da equipe');
     } finally {
       this.isLoading = false;
       this.cdr.markForCheck();
@@ -780,7 +776,6 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       console.log('✅ Collaborator data loaded for:', collaboratorId);
     } catch (error) {
       console.error('Error loading collaborator data:', error);
-      this.toastService.error('Erro ao carregar dados do colaborador');
     }
   }
 
@@ -971,7 +966,6 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
           console.error('Error loading season points:', error);
           this.hasSidebarError = true;
           this.sidebarErrorMessage = 'Erro ao carregar pontos da temporada';
-          this.toastService.error('Erro ao carregar pontos da temporada');
           return { total: 0, bloqueados: 0, desbloqueados: 0 };
         }),
         firstValueFrom(
@@ -982,7 +976,6 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
           console.error('Error loading progress metrics:', error);
           this.hasSidebarError = true;
           this.sidebarErrorMessage = 'Erro ao carregar métricas de progresso';
-          this.toastService.error('Erro ao carregar métricas de progresso');
           return {
             processosIncompletos: 0,
             atividadesFinalizadas: 0,
@@ -1164,7 +1157,6 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       this.isLoadingGoals = false;
       this.hasGoalsError = true;
       this.goalsErrorMessage = 'Erro ao carregar dados de metas';
-      this.toastService.error('Erro ao carregar dados de metas');
     }
   }
 
@@ -1203,7 +1195,6 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       this.isLoadingGoals = false;
       this.hasGoalsError = true;
       this.goalsErrorMessage = 'Erro ao carregar dados de metas';
-      this.toastService.error('Erro ao carregar dados de metas');
     }
   }
 
@@ -1640,7 +1631,6 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       this.pointsByCollaboratorDatasets = [];
       this.hasProductivityError = true;
       this.productivityErrorMessage = 'Erro ao carregar dados de produtividade';
-      this.toastService.error('Erro ao carregar dados de produtividade');
     } finally {
       this.isLoadingProductivity = false;
     }
@@ -2073,7 +2063,6 @@ private calculateCollaboratorTotals(memberData: Array<{
       this.cdr.markForCheck();
     } catch (error) {
       console.error('Error in onTeamChange:', error);
-      this.toastService.error('Erro ao carregar dados do time');
     }
   }
 
@@ -3050,7 +3039,6 @@ private calculateCollaboratorTotals(memberData: Array<{
       console.error('Error saving clientes meta:', error);
       this.metaSaveMessage = error?.message || 'Erro ao salvar meta. Tente novamente.';
       this.metaSaveSuccess = false;
-      this.toastService.error('Erro ao salvar meta de clientes');
     } finally {
       this.isSavingMeta = false;
       this.cdr.markForCheck();
