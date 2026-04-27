@@ -1,36 +1,35 @@
-/**
- * Base da API Game4U (ex.: https://g4u-api-bwa.onrender.com/api).
- * Prioridade: G4U_API_BASE → BACKEND_URL_BASE (e variantes em minúsculas).
- */
-export const DEFAULT_BACKEND_URL_BASE = 'https://g4u-api-bwa.onrender.com/api';
-
-/** Evita embutir `.env` de desenvolvimento (`http://localhost`) em bundles prod/homol. */
-export function isLoopbackBackendUrl(url: string): boolean {
-  const s = (url || '').trim();
-  if (!s) {
-    return false;
-  }
-  try {
-    const withScheme = /^https?:\/\//i.test(s) ? s : `https://${s}`;
-    const u = new URL(withScheme);
-    return u.hostname === 'localhost' || u.hostname === '127.0.0.1' || u.hostname === '[::1]';
-  } catch {
-    return /^https?:\/\/(localhost|127\.0\.0\.1)\b/i.test(s);
-  }
-}
-
-export type ReadBackendUrlOptions = {
+export type ReadBackendUrlBaseOptions = {
   /**
-   * Em `environment.prod` / `homol`: se a URL resolvida for localhost/127.0.0.1
-   * (ex.: vinda de `.env` no PC do build), usa {@link DEFAULT_BACKEND_URL_BASE}.
+   * Se true, devolve string vazia quando a base apontar para localhost / 127.0.0.1 / ::1
+   * (evita builds prod/homol com API local por engano).
    */
   rejectLoopback?: boolean;
 };
 
-export function readBackendUrlBaseFromProcessEnv(
-  env: Record<string, string | undefined> = process.env as Record<string, string | undefined>,
-  options?: ReadBackendUrlOptions
-): string {
+function isLoopbackBackendUrl(base: string): boolean {
+  const b = base.trim().toLowerCase();
+  if (!b) {
+    return false;
+  }
+  if (/\blocalhost\b/.test(b) || /127\.0\.0\.1/.test(b) || /\[::1\]/.test(b) || /\b::1\b/.test(b)) {
+    return true;
+  }
+  try {
+    const forParse = /^https?:\/\//i.test(b) ? b : `https://${b}`;
+    const h = new URL(forParse).hostname.toLowerCase();
+    return h === 'localhost' || h === '127.0.0.1' || h === '::1' || h.endsWith('.localhost');
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Base da API Game4U (ex.: https://example.com/api).
+ * Prioridade: G4U_API_BASE → BACKEND_URL_BASE (e variantes em minúsculas).
+ * Lê via `const env = process.env` para o DefinePlugin substituir `process.env` pelo objeto literal no bundle.
+ */
+export function readBackendUrlBaseFromProcessEnv(options?: ReadBackendUrlBaseOptions): string {
+  const env = process.env as Record<string, string | undefined>;
   const raw = (
     env['G4U_API_BASE'] ??
     env['g4u_api_base'] ??
@@ -40,13 +39,14 @@ export function readBackendUrlBaseFromProcessEnv(
   )
     .toString()
     .trim();
-  let resolved =
-    raw.length > 0 ? raw.replace(/\/+$/, '') : DEFAULT_BACKEND_URL_BASE.replace(/\/+$/, '');
-
-  if (options?.rejectLoopback && isLoopbackBackendUrl(resolved)) {
-    return DEFAULT_BACKEND_URL_BASE.replace(/\/+$/, '');
+  if (raw.length === 0) {
+    return '';
   }
-  return resolved;
+  const normalized = raw.replace(/\/+$/, '');
+  if (options?.rejectLoopback && isLoopbackBackendUrl(normalized)) {
+    return '';
+  }
+  return normalized;
 }
 
 export function joinApiPath(base: string, path: string): string {

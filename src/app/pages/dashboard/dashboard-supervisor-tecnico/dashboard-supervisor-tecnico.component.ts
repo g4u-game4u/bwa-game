@@ -7,7 +7,7 @@ import * as dayjs from 'dayjs';
 import { ACLService, AclMetadata } from '@services/acl.service';
 import { PlayerService } from '@services/player.service';
 import { KPIService } from '@services/kpi.service';
-import { FunifierApiService } from '@services/funifier-api.service';
+import { BackendApiService } from '@services/backend-api.service';
 import { SessaoProvider } from '@providers/sessao/sessao.provider';
 import { TeamAggregateService } from '@services/team-aggregate.service';
 import { ActionLogService } from '@services/action-log.service';
@@ -151,7 +151,7 @@ export class DashboardSupervisorTecnicoComponent implements OnInit, OnDestroy {
     private aclService: ACLService,
     private playerService: PlayerService,
     private kpiService: KPIService,
-    private funifierApi: FunifierApiService,
+    private backendApi: BackendApiService,
     private sessaoProvider: SessaoProvider,
     private teamAggregateService: TeamAggregateService,
     private actionLogService: ActionLogService,
@@ -322,7 +322,7 @@ export class DashboardSupervisorTecnicoComponent implements OnInit, OnDestroy {
       const aggregatePayload = [{ $match: { teams: teamId } }];
 
       const allPlayersStatus = await firstValueFrom(
-        this.funifierApi.post<any[]>(
+        this.backendApi.post<any[]>(
           '/database/player_status/aggregate?strict=true',
           aggregatePayload,
           { headers: { 'Range': 'items=0-200' } }
@@ -595,7 +595,7 @@ export class DashboardSupervisorTecnicoComponent implements OnInit, OnDestroy {
           ];
 
           const playerCnpjGoals = await firstValueFrom(
-            this.funifierApi.post<{ _id: string; cnpj_goal?: number }[]>(
+            this.backendApi.post<{ _id: string; cnpj_goal?: number }[]>(
               '/database/player_status/aggregate?strict=true',
               aggregateQuery
             ).pipe(takeUntil(this.destroy$))
@@ -644,7 +644,7 @@ export class DashboardSupervisorTecnicoComponent implements OnInit, OnDestroy {
             ];
 
             const playerEntregas = await firstValueFrom(
-              this.funifierApi.post<{ _id: string; entrega?: string; entrega_goal?: number }[]>(
+              this.backendApi.post<{ _id: string; entrega?: string; entrega_goal?: number }[]>(
                 '/database/player_status/aggregate?strict=true',
                 aggregateQuery
               ).pipe(takeUntil(this.destroy$))
@@ -776,7 +776,7 @@ export class DashboardSupervisorTecnicoComponent implements OnInit, OnDestroy {
     try {
       // Load collaborator's player status
       const status = await firstValueFrom(
-        this.funifierApi.get<any>(`/v3/player/${collaboratorId}/status`).pipe(takeUntil(this.destroy$))
+        this.backendApi.get<any>(`/v3/player/${collaboratorId}/status`).pipe(takeUntil(this.destroy$))
       ).catch(() => null);
 
       if (status) {

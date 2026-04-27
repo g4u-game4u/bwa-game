@@ -560,6 +560,12 @@
         margin-left: 4px;
         vertical-align: middle;
       }
+
+      .section-title-count {
+        font-weight: 500;
+        color: $text-secondary;
+        margin-left: 0.125rem;
+      }
     }
     
     .carteira-expand-btn {
@@ -780,6 +786,12 @@
             &--na {
               font-weight: 500;
               color: $text-secondary;
+            }
+
+            &--pending {
+              font-weight: 500;
+              color: $text-secondary;
+              letter-spacing: 0.05em;
             }
           }
 

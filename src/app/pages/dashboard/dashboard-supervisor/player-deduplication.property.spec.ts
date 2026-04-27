@@ -3,7 +3,7 @@ import {
   deduplicatePlayers,
   TeamMemberGroup,
   TeamMember,
-  DeduplicatedPlayer,
+  DeduplicatedPlayer
 } from '@utils/player-deduplication';
 
 // Feature: acl-dashboard-refactor, Property 5: Player deduplication across teams
@@ -101,7 +101,7 @@ describe('Property 5: Player deduplication across teams', () => {
     fc.assert(
       fc.property(scenarioArb, ({ groups }) => {
         const result = deduplicatePlayers(groups);
-        const ids = result.map(p => p.playerId);
+        const ids = result.map((p: DeduplicatedPlayer) => p.playerId);
         const uniqueIds = new Set(ids);
         expect(ids.length).toBe(uniqueIds.size);
       }),
@@ -124,7 +124,7 @@ describe('Property 5: Player deduplication across teams', () => {
         }
 
         const result = deduplicatePlayers(groups);
-        const outputIds = new Set(result.map(p => p.playerId));
+        const outputIds = new Set(result.map((p: DeduplicatedPlayer) => p.playerId));
 
         expect(outputIds.size).toBe(inputIds.size);
         for (const id of inputIds) {

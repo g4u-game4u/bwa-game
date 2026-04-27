@@ -6,19 +6,86 @@ import { PlayerStatus, PointWallet, SeasonProgress, PlayerMetadata } from '@mode
 })
 export class PlayerMapper {
   /**
+   * Display name for sidebar: `/auth/user` e perfil costumam usar `full_name`;
+   * Funifier legado usa `name`; `_id` pode ser e-mail.
+   */
+  private resolveDisplayName(api: any): string {
+    if (!api || typeof api !== 'object') {
+      return '';
+    }
+    const candidates = [
+      api.name,
+      api.full_name,
+      api.fullName,
+      api.display_name,
+      api.displayName,
+      api.username
+    ];
+    for (const c of candidates) {
+      if (typeof c === 'string' && c.trim()) {
+        return c.trim();
+      }
+    }
+    const email =
+      (typeof api.email === 'string' && api.email.trim()) ||
+      (typeof api._id === 'string' && api._id.includes('@') ? api._id.trim() : '');
+    if (email.includes('@')) {
+      const local = email.split('@')[0];
+      return local?.trim() || email;
+    }
+    return '';
+  }
+
+  private resolveEmail(api: any): string {
+    if (!api || typeof api !== 'object') {
+      return '';
+    }
+    if (typeof api.email === 'string' && api.email.trim()) {
+      return api.email.trim();
+    }
+    if (typeof api._id === 'string' && api._id.includes('@')) {
+      return api._id.trim();
+    }
+    return typeof api._id === 'string' ? api._id : '';
+  }
+
+  /**
    * Map Funifier API response to PlayerStatus model
    * Based on actual /v3/player/me/status response structure
    */
   toPlayerStatus(apiResponse: any): PlayerStatus {
     const levelProgress = apiResponse.level_progress || {};
     const nextLevel = levelProgress.next_level || {};
-    
+    const fromProgress = Number(nextLevel?.position);
+    const hasProgressLevel =
+      apiResponse.level_progress &&
+      typeof apiResponse.level_progress === 'object' &&
+      apiResponse.level_progress.next_level != null &&
+      Number.isFinite(fromProgress);
+
+    /** Nível “principal” só vem de `level_progress` (Funifier); sem isso fica 0. */
+    const level = hasProgressLevel ? fromProgress : 0;
+
+    const rawExtraSeason = apiResponse.extra?.seasonLevel;
+    const extraSeasonNum = Number(rawExtraSeason);
+    const hasExtraSeason =
+      rawExtraSeason !== undefined &&
+      rawExtraSeason !== null &&
+      `${rawExtraSeason}`.trim() !== '' &&
+      Number.isFinite(extraSeasonNum);
+
+    const seasonLevel = hasExtraSeason
+      ? extraSeasonNum
+      : hasProgressLevel
+        ? level
+        : Number(apiResponse.level) || 0;
+
     return {
       _id: apiResponse._id || '',
-      name: apiResponse.name || '',
-      email: apiResponse._id || '', // _id is the email in Funifier
-      level: nextLevel.position || 0,
-      seasonLevel: nextLevel.position || 0,
+      name: this.resolveDisplayName(apiResponse),
+      email: this.resolveEmail(apiResponse),
+      level,
+      seasonLevel,
       levelName: nextLevel.level || '',
       percentCompleted: levelProgress.percent_completed || 0,
       metadata: this.extractMetadata(apiResponse),

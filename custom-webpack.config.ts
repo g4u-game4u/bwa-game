@@ -28,31 +28,8 @@ const rawBackendFromEnv =
     getEnv('backend_url_base') ||
     '';
 
-const argvJoined = process.argv.join(' ');
-const isDevelopmentAngularBuild =
-    argvJoined.includes('configuration=development') || argvJoined.includes(':build:development');
-
-function looksLikeLoopbackApiBase(url: string): boolean {
-    const s = (url || '').trim();
-    if (!s) return false;
-    try {
-        const u = new URL(/^https?:\/\//i.test(s) ? s : `https://${s}`);
-        return u.hostname === 'localhost' || u.hostname === '127.0.0.1' || u.hostname === '[::1]';
-    } catch {
-        return /^https?:\/\/(localhost|127\.0\.0\.1)\b/i.test(s);
-    }
-}
-
-let backendUrlBase = rawBackendFromEnv.trim() || defaultBackendBase;
-backendUrlBase = backendUrlBase.replace(/\/+$/, '') || defaultBackendBase;
-
-/** Build prod/homolog não deve herdar `http://localhost` do `.env` local quando o CI não define a base. */
-if (!isDevelopmentAngularBuild && looksLikeLoopbackApiBase(backendUrlBase)) {
-    console.warn(
-        '[webpack] BACKEND_URL_BASE / G4U_API_BASE aponta para localhost em build não-development; usando base padrão. Defina BACKEND_URL_BASE no CI (Vercel, etc.).'
-    );
-    backendUrlBase = defaultBackendBase;
-}
+/** API base injetada no bundle (DefinePlugin); fallback alinhado a `defaultBackendBase`. */
+const backendUrlBase = (rawBackendFromEnv.trim() || defaultBackendBase).replace(/\/+$/, '');
 
 if (!gamificacaoApiToken && process.env['NODE_ENV'] !== 'production') {
     console.warn(
@@ -109,7 +86,11 @@ module.exports = {
             'process.env.GAMIFICACAO_API_URL': JSON.stringify(gamificacaoApiUrl),
             'process.env.GAMIFICACAO_API_TOKEN': JSON.stringify(gamificacaoApiToken),
             'process.env.gamificacao_api_url': JSON.stringify(gamificacaoApiUrl),
-            'process.env.gamificacao_api_token': JSON.stringify(gamificacaoApiToken)
+            'process.env.gamificacao_api_token': JSON.stringify(gamificacaoApiToken),
+            'process.env.BACKEND_URL_BASE': JSON.stringify(backendUrlBase),
+            'process.env.G4U_API_BASE': JSON.stringify(backendUrlBase),
+            'process.env.backend_url_base': JSON.stringify(backendUrlBase),
+            'process.env.g4u_api_base': JSON.stringify(backendUrlBase)
         })
     ]
 };

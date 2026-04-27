@@ -54,7 +54,7 @@ describe('C4uProductivityAnalysisTabComponent - Property-Based Tests', () => {
           fc.integer({ min: 1, max: 10 }), // number of refreshes
           (chartType, graphData, refreshCount) => {
             // Set initial chart type
-            component.chartType = chartType;
+            (component as any)._internalChartType = chartType;
             fixture.detectChanges();
 
             // Verify initial state
@@ -81,7 +81,7 @@ describe('C4uProductivityAnalysisTabComponent - Property-Based Tests', () => {
           fc.array(fc.constantFrom(7, 15, 30, 60, 90), { minLength: 2, maxLength: 5 }),
           (chartType, periods) => {
             // Set initial chart type
-            component.chartType = chartType;
+            (component as any)._internalChartType = chartType;
             fixture.detectChanges();
 
             // Change periods multiple times
@@ -105,7 +105,7 @@ describe('C4uProductivityAnalysisTabComponent - Property-Based Tests', () => {
           fc.integer({ min: 1, max: 20 }), // number of toggles
           (initialChartType, toggleCount) => {
             // Set initial chart type
-            component.chartType = initialChartType;
+            (component as any)._internalChartType = initialChartType;
             fixture.detectChanges();
 
             // Perform multiple toggles
@@ -133,7 +133,7 @@ describe('C4uProductivityAnalysisTabComponent - Property-Based Tests', () => {
           fc.constantFrom('line' as const, 'bar' as const),
           (initialChartType) => {
             // Set initial chart type
-            component.chartType = initialChartType;
+            (component as any)._internalChartType = initialChartType;
             fixture.detectChanges();
 
             // Track emitted values
@@ -164,7 +164,7 @@ describe('C4uProductivityAnalysisTabComponent - Property-Based Tests', () => {
           fc.boolean(),
           (chartType, isLoading) => {
             // Set chart type and loading state
-            component.chartType = chartType;
+            (component as any)._internalChartType = chartType;
             component.isLoading = isLoading;
             fixture.detectChanges();
 
@@ -190,7 +190,7 @@ describe('C4uProductivityAnalysisTabComponent - Property-Based Tests', () => {
           fc.constantFrom('line' as const, 'bar' as const),
           (chartType) => {
             // Set chart type with empty data
-            component.chartType = chartType;
+            (component as any)._internalChartType = chartType;
             component.graphData = [];
             fixture.detectChanges();
 
@@ -213,7 +213,7 @@ describe('C4uProductivityAnalysisTabComponent - Property-Based Tests', () => {
           }), { minLength: 1, maxLength: 30 }),
           (chartType, graphData) => {
             // Set initial state
-            component.chartType = chartType;
+            (component as any)._internalChartType = chartType;
             component.graphData = graphData;
             fixture.detectChanges();
 
@@ -242,7 +242,7 @@ describe('C4uProductivityAnalysisTabComponent - Property-Based Tests', () => {
         fc.property(
           fc.constantFrom('line' as const, 'bar' as const),
           (initialType) => {
-            component.chartType = initialType;
+            (component as any)._internalChartType = initialType;
             fixture.detectChanges();
 
             // Toggle twice

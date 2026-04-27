@@ -6,11 +6,19 @@ import * as fc from 'fast-check';
 import { GamificationDashboardComponent } from './gamification-dashboard.component';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { HttpClientTestingModule } from '@angular/common/http/testing';
-import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { TranslateModule } from '@ngx-translate/core';
+import { ActivatedRoute, Router } from '@angular/router';
+import { NgbModal } from '@ng-bootstrap/ng-bootstrap';
 import { PlayerService } from '@services/player.service';
-import { CompanyService } from '@services/company.service';
 import { KPIService } from '@services/kpi.service';
 import { ToastService } from '@services/toast.service';
+import { ActionLogService } from '@services/action-log.service';
+import { CompanyKpiService } from '@services/company-kpi.service';
+import { PerformanceMonitorService } from '@services/performance-monitor.service';
+import { SessaoProvider } from '@providers/sessao/sessao.provider';
+import { CacheManagerService } from '@services/cache-manager.service';
+import { SeasonDatesService } from '@services/season-dates.service';
+import { CnpjLookupService } from '@services/cnpj-lookup.service';
 import { of } from 'rxjs';
 
 /**
@@ -39,14 +47,10 @@ describe('GamificationDashboardComponent - Property 11: Responsive Layout Adapta
     getSeasonProgress: jasmine.createSpy('getSeasonProgress').and.returnValue(of({
       currentProgress: 50,
       totalGoal: 100
-    }))
-  };
-
-  const mockCompanyService = {
-    getCompanies: jasmine.createSpy('getCompanies').and.returnValue(of([
-      { id: '1', name: 'Company A', health: 85 },
-      { id: '2', name: 'Company B', health: 92 }
-    ]))
+    })),
+    getPlayerCnpj: jasmine.createSpy('getPlayerCnpj').and.returnValue(of([])),
+    getPlayerCnpjResp: jasmine.createSpy('getPlayerCnpjResp').and.returnValue(of([])),
+    clearCache: jasmine.createSpy('clearCache')
   };
 
   const mockKPIService = {
@@ -63,6 +67,68 @@ describe('GamificationDashboardComponent - Property 11: Responsive Layout Adapta
   };
 
   beforeEach(async () => {
+    const actionLogServiceSpy = jasmine.createSpyObj('ActionLogService', [
+      'getProgressMetrics',
+      'getPlayerCnpjListWithCount',
+      'getUniqueClientesCount',
+      'getCompletedTasksCount',
+      'getPontosForMonth'
+    ]);
+    actionLogServiceSpy.getProgressMetrics.and.returnValue(
+      of({
+        activity: { pendentes: 0, emExecucao: 0, finalizadas: 0, pontos: 0 },
+        processo: { pendentes: 0, incompletas: 0, finalizadas: 0 }
+      })
+    );
+    actionLogServiceSpy.getPlayerCnpjListWithCount.and.returnValue(of([]));
+    actionLogServiceSpy.getUniqueClientesCount.and.returnValue(of(0));
+    actionLogServiceSpy.getCompletedTasksCount.and.returnValue(of(0));
+    actionLogServiceSpy.getPontosForMonth.and.returnValue(of(500));
+
+    const emptyGamificacaoMaps = { byEmpId: new Map(), byCnpjNorm: new Map() };
+    const companyKpiServiceSpy = jasmine.createSpyObj('CompanyKpiService', [
+      'extractCnpjId',
+      'getKpiData',
+      'enrichCompaniesWithKpis',
+      'enrichFromCnpjResp',
+      'fetchGamificacaoMapsAsync',
+      'enrichCarteiraRowsWithMaps',
+      'prefetchGamificacaoSnapshot',
+      'clearCache'
+    ]);
+    companyKpiServiceSpy.enrichCompaniesWithKpis.and.returnValue(of([]));
+    companyKpiServiceSpy.enrichFromCnpjResp.and.returnValue(of([]));
+    companyKpiServiceSpy.fetchGamificacaoMapsAsync.and.returnValue(Promise.resolve(emptyGamificacaoMaps));
+    companyKpiServiceSpy.enrichCarteiraRowsWithMaps.and.returnValue([]);
+
+    const performanceMonitorSpy = jasmine.createSpyObj('PerformanceMonitorService', [
+      'measureRenderTime',
+      'trackChangeDetection',
+      'logPerformanceReport'
+    ]);
+    performanceMonitorSpy.measureRenderTime.and.returnValue(() => {});
+
+    const cacheManagerSpy = jasmine.createSpyObj('CacheManagerService', ['clearAllCaches']);
+    const seasonDatesServiceSpy = jasmine.createSpyObj('SeasonDatesService', ['getSeasonDates']);
+    seasonDatesServiceSpy.getSeasonDates.and.returnValue(
+      Promise.resolve({
+        start: new Date(2023, 3, 1, 0, 0, 0, 0),
+        end: new Date(2023, 8, 30, 23, 59, 59, 999)
+      })
+    );
+    const cnpjLookupSpy = jasmine.createSpyObj('CnpjLookupService', ['enrichCnpjListFull']);
+    cnpjLookupSpy.enrichCnpjListFull.and.returnValue(of(new Map()));
+    const ngbModalSpy = jasmine.createSpyObj('NgbModal', ['open']);
+    const activatedRouteSpy = {
+      snapshot: { queryParams: {} },
+      queryParams: of({})
+    };
+    const routerSpy = jasmine.createSpyObj('Router', ['navigate']);
+    const sessaoProviderSpy = jasmine.createSpyObj('SessaoProvider', [], {
+      usuario: { _id: 'test-user', email: 'test@example.com', roles: [] },
+      token: 'test-token'
+    });
+
     await TestBed.configureTestingModule({
       declarations: [GamificationDashboardComponent],
       imports: [
@@ -73,9 +139,18 @@ describe('GamificationDashboardComponent - Property 11: Responsive Layout Adapta
       ],
       providers: [
         { provide: PlayerService, useValue: mockPlayerService },
-        { provide: CompanyService, useValue: mockCompanyService },
         { provide: KPIService, useValue: mockKPIService },
-        { provide: ToastService, useValue: mockToastService }
+        { provide: ToastService, useValue: mockToastService },
+        { provide: ActionLogService, useValue: actionLogServiceSpy },
+        { provide: CompanyKpiService, useValue: companyKpiServiceSpy },
+        { provide: PerformanceMonitorService, useValue: performanceMonitorSpy },
+        { provide: SessaoProvider, useValue: sessaoProviderSpy },
+        { provide: CacheManagerService, useValue: cacheManagerSpy },
+        { provide: SeasonDatesService, useValue: seasonDatesServiceSpy },
+        { provide: CnpjLookupService, useValue: cnpjLookupSpy },
+        { provide: NgbModal, useValue: ngbModalSpy },
+        { provide: ActivatedRoute, useValue: activatedRouteSpy },
+        { provide: Router, useValue: routerSpy }
       ],
       schemas: [NO_ERRORS_SCHEMA]
     }).compileComponents();

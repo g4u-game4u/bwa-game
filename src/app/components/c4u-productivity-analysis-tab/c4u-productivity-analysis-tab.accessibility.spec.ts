@@ -217,7 +217,7 @@ describe('C4uProductivityAnalysisTabComponent - Accessibility', () => {
     });
 
     it('should render line chart when selected', () => {
-      component.chartType = 'line';
+      (component as any)._internalChartType = 'line';
       component.graphData = [
         { date: new Date(), value: 10 }
       ];
@@ -231,7 +231,7 @@ describe('C4uProductivityAnalysisTabComponent - Accessibility', () => {
     });
 
     it('should render bar chart when selected', () => {
-      component.chartType = 'bar';
+      (component as any)._internalChartType = 'bar';
       component.graphData = [
         { date: new Date(), value: 10 }
       ];

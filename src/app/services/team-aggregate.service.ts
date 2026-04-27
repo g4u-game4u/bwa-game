@@ -2,7 +2,7 @@ import { Injectable } from '@angular/core';
 import { Observable, of, throwError, forkJoin } from 'rxjs';
 import { PONTOS_POR_ATIVIDADE_FINALIZADA_ACTION_LOG } from '@app/constants/pontos-por-atividade-action-log';
 import { map, catchError, tap, switchMap } from 'rxjs/operators';
-import { FunifierApiService } from './funifier-api.service';
+import { BackendApiService } from './backend-api.service';
 import { AggregateQueryBuilderService, AggregateQuery } from './aggregate-query-builder.service';
 import { PerformanceMonitorService } from './performance-monitor.service';
 import { isGame4uDataEnabled } from '@model/game4u-api.model';
@@ -54,7 +54,7 @@ interface CacheEntry<T> {
  * Service for managing team aggregate data queries and processing.
  * 
  * This service uses the AggregateQueryBuilderService to construct MongoDB
- * aggregate queries and the FunifierApiService to execute them. It processes
+ * aggregate queries and the BackendApiService to execute them. It processes
  * the raw aggregate results into component-ready models.
  * 
  * Implements caching with 5-minute TTL to optimize performance and reduce
@@ -68,7 +68,7 @@ export class TeamAggregateService {
   private readonly cacheTTL = 5 * 60 * 1000; // 5 minutes in milliseconds
 
   constructor(
-    private funifierApi: FunifierApiService,
+    private backendApi: BackendApiService,
     private queryBuilder: AggregateQueryBuilderService,
     private performanceMonitor: PerformanceMonitorService,
     private game4u: Game4uApiService
@@ -417,7 +417,7 @@ export class TeamAggregateService {
     
     console.log(`🔍 Executing aggregate query on ${collection}:`, JSON.stringify(aggregatePipeline));
     
-    return this.funifierApi.post<T[] | { result: T[] }>(endpoint, aggregatePipeline).pipe(
+    return this.backendApi.post<T[] | { result: T[] }>(endpoint, aggregatePipeline).pipe(
       map(response => {
         // Funifier may return results in a 'result' property or directly as an array
         if (response && Array.isArray(response)) {
@@ -495,7 +495,7 @@ export class TeamAggregateService {
     
     console.log(`📦 Fetching batch: ${rangeHeader}`);
     
-    return this.funifierApi.post<T[]>(
+    return this.backendApi.post<T[]>(
       endpoint,
       aggregatePipeline,
       { headers: { 'Range': rangeHeader } }
@@ -760,7 +760,7 @@ export class TeamAggregateService {
 
     console.log('🔍 Team activity metrics aggregate query');
 
-    return this.funifierApi.post<any[]>(
+    return this.backendApi.post<any[]>(
       '/database/action_log/aggregate?strict=true',
       aggregateQuery
     ).pipe(
@@ -849,7 +849,7 @@ export class TeamAggregateService {
       }
     ];
 
-    return this.funifierApi.post<any[]>(
+    return this.backendApi.post<any[]>(
       '/database/action_log/aggregate?strict=true',
       aggregateQuery
     ).pipe(
@@ -954,7 +954,7 @@ export class TeamAggregateService {
 
     console.log('🔍 Team CNPJ list aggregate query');
 
-    return this.funifierApi.post<any[]>(
+    return this.backendApi.post<any[]>(
       '/database/action_log/aggregate?strict=true',
       actionCountQuery
     ).pipe(
@@ -1038,7 +1038,7 @@ export class TeamAggregateService {
     console.log('🔍 Team monthly points breakdown (achievement + action_log)');
 
     return forkJoin({
-      ach: this.funifierApi.post<any[]>(
+      ach: this.backendApi.post<any[]>(
         '/database/achievement/aggregate?strict=true',
         achievementQuery
       ),
@@ -1106,7 +1106,7 @@ export class TeamAggregateService {
 
     console.log('🔍 Team total activity points (action_log count × constant)');
 
-    return this.funifierApi.post<any[]>(
+    return this.backendApi.post<any[]>(
       '/database/action_log/aggregate?strict=true',
       aggregateQuery
     ).pipe(

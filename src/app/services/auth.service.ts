@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { Observable, BehaviorSubject } from 'rxjs';
 import { tap, map } from 'rxjs/operators';
-import { FunifierApiService, AuthCredentials, AuthToken } from './funifier-api.service';
+import { BackendApiService, AuthCredentials, AuthToken } from './backend-api.service';
 
 @Injectable({
   providedIn: 'root'
@@ -10,10 +10,10 @@ export class AuthService {
   private currentUserSubject = new BehaviorSubject<string | null>(null);
   public currentUser$ = this.currentUserSubject.asObservable();
 
-  constructor(private funifierApi: FunifierApiService) {
+  constructor(private backendApi: BackendApiService) {
     // Check if user is already authenticated
     const storedUser = localStorage.getItem('funifier_user');
-    if (storedUser && this.funifierApi.isAuthenticated()) {
+    if (storedUser && this.backendApi.isAuthenticated()) {
       this.currentUserSubject.next(storedUser);
     }
   }
@@ -27,7 +27,7 @@ export class AuthService {
       password
     };
 
-    return this.funifierApi.authenticate(credentials).pipe(
+    return this.backendApi.authenticate(credentials).pipe(
       tap(response => {
         // Store username
         localStorage.setItem('funifier_user', username);
@@ -40,7 +40,7 @@ export class AuthService {
    * Logout user
    */
   logout(): void {
-    this.funifierApi.clearAuth();
+    this.backendApi.clearAuth();
     localStorage.removeItem('funifier_user');
     this.currentUserSubject.next(null);
   }
@@ -49,7 +49,7 @@ export class AuthService {
    * Check if user is authenticated
    */
   isAuthenticated(): boolean {
-    return this.funifierApi.isAuthenticated();
+    return this.backendApi.isAuthenticated();
   }
 
   /**

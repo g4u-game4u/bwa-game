@@ -1,4 +1,4 @@
-import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testing';
+import { ComponentFixture, TestBed, fakeAsync, tick, flushMicrotasks } from '@angular/core/testing';
 import { NO_ERRORS_SCHEMA } from '@angular/core';
 import { of, throwError } from 'rxjs';
 import { delay } from 'rxjs/operators';
@@ -7,7 +7,6 @@ import { NgbModal } from '@ng-bootstrap/ng-bootstrap';
 
 import { GamificationDashboardComponent } from './gamification-dashboard.component';
 import { PlayerService } from '@services/player.service';
-import { CompanyService } from '@services/company.service';
 import { KPIService } from '@services/kpi.service';
 import { ToastService } from '@services/toast.service';
 import { ActionLogService } from '@services/action-log.service';
@@ -15,6 +14,7 @@ import { CompanyKpiService, CompanyDisplay } from '@services/company-kpi.service
 import { PerformanceMonitorService } from '@services/performance-monitor.service';
 import { SessaoProvider } from '@providers/sessao/sessao.provider';
 import { CacheManagerService } from '@services/cache-manager.service';
+import { SeasonDatesService } from '@services/season-dates.service';
 import { CnpjLookupService } from '@services/cnpj-lookup.service';
 import { 
   generatePlayerStatus, 
@@ -38,18 +38,15 @@ function companiesFromCnpjList(list: { cnpj: string }[]): Company[] {
   });
 }
 
-function carteiraRowsFromCompanies(companies: Company[]) {
-  return companies.map(c => ({
-    cnpj: c.cnpj,
-    empId: c.id
-  }));
+/** IDs devolvidos por `PlayerService.getPlayerCnpjResp` (CNPJ / chave da carteira). */
+function cnpjRespIdsFromList(list: { cnpj: string }[]): string[] {
+  return companiesFromCnpjList(list).map(c => c.cnpj);
 }
 
 describe('GamificationDashboardComponent - Integration Tests', () => {
   let component: GamificationDashboardComponent;
   let fixture: ComponentFixture<GamificationDashboardComponent>;
   let playerService: jasmine.SpyObj<PlayerService>;
-  let companyService: jasmine.SpyObj<CompanyService>;
   let kpiService: jasmine.SpyObj<KPIService>;
   let toastService: jasmine.SpyObj<ToastService>;
   let actionLogService: jasmine.SpyObj<ActionLogService>;
@@ -60,14 +57,11 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
       'getPlayerPoints',
       'getSeasonProgress',
       'getPlayerCnpj',
+      'getPlayerCnpjResp',
       'clearCache'
     ]);
-    
-    const companyServiceSpy = jasmine.createSpyObj('CompanyService', [
-      'getCompanies'
-    ]);
-    companyServiceSpy.getCompanies.and.returnValue(of([]));
-    
+    playerServiceSpy.getPlayerCnpjResp.and.returnValue(of([]));
+
     const kpiServiceSpy = jasmine.createSpyObj('KPIService', [
       'getPlayerKPIs'
     ]);
@@ -113,6 +107,13 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
     companyKpiServiceSpy.enrichCarteiraRowsWithMaps.and.returnValue([]);
 
     const cacheManagerSpy = jasmine.createSpyObj('CacheManagerService', ['clearAllCaches']);
+    const seasonDatesServiceSpy = jasmine.createSpyObj('SeasonDatesService', ['getSeasonDates']);
+    seasonDatesServiceSpy.getSeasonDates.and.returnValue(
+      Promise.resolve({
+        start: new Date(2023, 3, 1, 0, 0, 0, 0),
+        end: new Date(2023, 8, 30, 23, 59, 59, 999)
+      })
+    );
     const cnpjLookupSpy = jasmine.createSpyObj('CnpjLookupService', ['enrichCnpjListFull']);
     const ngbModalSpy = jasmine.createSpyObj('NgbModal', ['open']);
     const activatedRouteSpy = {
@@ -139,7 +140,6 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
       declarations: [GamificationDashboardComponent],
       providers: [
         { provide: PlayerService, useValue: playerServiceSpy },
-        { provide: CompanyService, useValue: companyServiceSpy },
         { provide: KPIService, useValue: kpiServiceSpy },
         { provide: ToastService, useValue: toastServiceSpy },
         { provide: ActionLogService, useValue: actionLogServiceSpy },
@@ -147,6 +147,7 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
         { provide: PerformanceMonitorService, useValue: performanceMonitorSpy },
         { provide: SessaoProvider, useValue: sessaoProviderSpy },
         { provide: CacheManagerService, useValue: cacheManagerSpy },
+        { provide: SeasonDatesService, useValue: seasonDatesServiceSpy },
         { provide: CnpjLookupService, useValue: cnpjLookupSpy },
         { provide: NgbModal, useValue: ngbModalSpy },
         { provide: ActivatedRoute, useValue: activatedRouteSpy },
@@ -156,7 +157,6 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
     }).compileComponents();
 
     playerService = TestBed.inject(PlayerService) as jasmine.SpyObj<PlayerService>;
-    companyService = TestBed.inject(CompanyService) as jasmine.SpyObj<CompanyService>;
     kpiService = TestBed.inject(KPIService) as jasmine.SpyObj<KPIService>;
     toastService = TestBed.inject(ToastService) as jasmine.SpyObj<ToastService>;
     actionLogService = TestBed.inject(ActionLogService) as jasmine.SpyObj<ActionLogService>;
@@ -182,18 +182,19 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
       playerService.getPlayerStatus.and.returnValue(of(mockPlayerStatus));
       playerService.getPlayerPoints.and.returnValue(of(mockPointWallet));
       playerService.getSeasonProgress.and.returnValue(of(mockSeasonProgress));
-      companyService.getCompanies.and.returnValue(of(mockCompanies));
+      playerService.getPlayerCnpjResp.and.returnValue(of(mockCompanies.map(c => c.cnpj)));
       kpiService.getPlayerKPIs.and.returnValue(of(mockKPIs));
 
       // Act
-      fixture.detectChanges(); // Triggers ngOnInit
+      fixture.detectChanges();
+      flushMicrotasks(); // Triggers ngOnInit
       tick();
 
       // Assert
       expect(component.playerStatus).toEqual(mockPlayerStatus);
       expect(component.pointWallet).toEqual(mockPointWallet);
       expect(component.seasonProgress).toEqual(mockSeasonProgress);
-      expect(component.companies).toEqual(mockCompanies);
+      expect(component.companies).toEqual([]);
       expect(component.playerKPIs).toEqual(mockKPIs);
       expect(component.isLoadingPlayer).toBe(false);
       expect(component.isLoadingCompanies).toBe(false);
@@ -205,11 +206,12 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
       playerService.getPlayerStatus.and.returnValue(of(generatePlayerStatus()).pipe(delay(100)));
       playerService.getPlayerPoints.and.returnValue(of(generatePointWallet()).pipe(delay(100)));
       playerService.getSeasonProgress.and.returnValue(of(generateSeasonProgress()).pipe(delay(100)));
-      companyService.getCompanies.and.returnValue(of([]).pipe(delay(100)));
+      playerService.getPlayerCnpjResp.and.returnValue(of([]).pipe(delay(100)));
       kpiService.getPlayerKPIs.and.returnValue(of([]).pipe(delay(100)));
 
       // Act
       fixture.detectChanges();
+      flushMicrotasks();
 
       // Assert - Initially loading
       expect(component.isLoadingPlayer).toBe(true);
@@ -235,11 +237,12 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
       playerService.getPlayerStatus.and.returnValue(of(mockPlayerStatus));
       playerService.getPlayerPoints.and.returnValue(of(generatePointWallet()));
       playerService.getSeasonProgress.and.returnValue(of(generateSeasonProgress()));
-      companyService.getCompanies.and.returnValue(of([]));
+      playerService.getPlayerCnpjResp.and.returnValue(of([]));
       kpiService.getPlayerKPIs.and.returnValue(of([]));
 
       // Act
       fixture.detectChanges();
+      flushMicrotasks();
       tick();
 
       // Assert
@@ -255,11 +258,12 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
       playerService.getPlayerStatus.and.returnValue(of(generatePlayerStatus()));
       playerService.getPlayerPoints.and.returnValue(of(mockPointWallet));
       playerService.getSeasonProgress.and.returnValue(of(generateSeasonProgress()));
-      companyService.getCompanies.and.returnValue(of([]));
+      playerService.getPlayerCnpjResp.and.returnValue(of([]));
       kpiService.getPlayerKPIs.and.returnValue(of([]));
 
       // Act
       fixture.detectChanges();
+      flushMicrotasks();
       tick();
 
       // Assert
@@ -272,11 +276,12 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
       playerService.getPlayerStatus.and.returnValue(of(generatePlayerStatus()));
       playerService.getPlayerPoints.and.returnValue(of(generatePointWallet()));
       playerService.getSeasonProgress.and.returnValue(of(mockSeasonProgress));
-      companyService.getCompanies.and.returnValue(of([]));
+      playerService.getPlayerCnpjResp.and.returnValue(of([]));
       kpiService.getPlayerKPIs.and.returnValue(of([]));
 
       // Act
       fixture.detectChanges();
+      flushMicrotasks();
       tick();
 
       // Assert
@@ -289,16 +294,16 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
       playerService.getPlayerStatus.and.returnValue(of(generatePlayerStatus()));
       playerService.getPlayerPoints.and.returnValue(of(generatePointWallet()));
       playerService.getSeasonProgress.and.returnValue(of(generateSeasonProgress()));
-      companyService.getCompanies.and.returnValue(of(mockCompanies));
+      playerService.getPlayerCnpjResp.and.returnValue(of(mockCompanies.map(c => c.cnpj)));
       kpiService.getPlayerKPIs.and.returnValue(of([]));
 
       // Act
       fixture.detectChanges();
+      flushMicrotasks();
       tick();
 
-      // Assert
-      expect(component.companies).toEqual(mockCompanies);
-      expect(component.companies.length).toBe(3);
+      // Assert — lista `companies` (cnpj_performance) não é mais carregada aqui
+      expect(component.companies).toEqual([]);
     }));
 
     it('should pass correct data to KPI components', fakeAsync(() => {
@@ -311,11 +316,12 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
       playerService.getPlayerStatus.and.returnValue(of(generatePlayerStatus()));
       playerService.getPlayerPoints.and.returnValue(of(generatePointWallet()));
       playerService.getSeasonProgress.and.returnValue(of(generateSeasonProgress()));
-      companyService.getCompanies.and.returnValue(of([]));
+      playerService.getPlayerCnpjResp.and.returnValue(of([]));
       kpiService.getPlayerKPIs.and.returnValue(of(mockKPIs));
 
       // Act
       fixture.detectChanges();
+      flushMicrotasks();
       tick();
 
       // Assert
@@ -330,10 +336,11 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
       playerService.getPlayerStatus.and.returnValue(of(generatePlayerStatus()));
       playerService.getPlayerPoints.and.returnValue(of(generatePointWallet()));
       playerService.getSeasonProgress.and.returnValue(of(generateSeasonProgress()));
-      companyService.getCompanies.and.returnValue(of([]));
+      playerService.getPlayerCnpjResp.and.returnValue(of([]));
       kpiService.getPlayerKPIs.and.returnValue(of([]));
 
       fixture.detectChanges();
+      flushMicrotasks();
       tick();
 
       // Reset call counts (month change only reloads KPIs + progress)
@@ -359,7 +366,7 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
       playerService.getPlayerStatus.and.returnValue(of(generatePlayerStatus()));
       playerService.getPlayerPoints.and.returnValue(of(generatePointWallet()));
       playerService.getSeasonProgress.and.returnValue(of(generateSeasonProgress()));
-      companyService.getCompanies.and.returnValue(of([]));
+      playerService.getPlayerCnpjResp.and.returnValue(of([]));
       kpiService.getPlayerKPIs.and.returnValue(of([]));
       
       const monthsAgo = 2; // 2 months ago
@@ -385,17 +392,18 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
       playerService.getPlayerStatus.and.returnValue(of(generatePlayerStatus()));
       playerService.getPlayerPoints.and.returnValue(of(generatePointWallet()));
       playerService.getSeasonProgress.and.returnValue(of(generateSeasonProgress()));
-      companyService.getCompanies.and.returnValue(of([]));
+      playerService.getPlayerCnpjResp.and.returnValue(of([]));
       kpiService.getPlayerKPIs.and.returnValue(of([]));
 
       fixture.detectChanges();
+      flushMicrotasks();
       tick();
 
       // Reset call counts
       playerService.getPlayerStatus.calls.reset();
       playerService.getPlayerPoints.calls.reset();
       playerService.getSeasonProgress.calls.reset();
-      companyService.getCompanies.calls.reset();
+      playerService.getPlayerCnpjResp.calls.reset();
       kpiService.getPlayerKPIs.calls.reset();
 
       // Act
@@ -406,7 +414,7 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
       expect(playerService.getPlayerStatus).toHaveBeenCalled();
       expect(playerService.getPlayerPoints).toHaveBeenCalled();
       expect(playerService.getSeasonProgress).toHaveBeenCalled();
-      expect(companyService.getCompanies).toHaveBeenCalled();
+      expect(playerService.getPlayerCnpjResp).toHaveBeenCalled();
       expect(kpiService.getPlayerKPIs).toHaveBeenCalled();
       expect(toastService.alert).toHaveBeenCalledWith('Atualizando dados...');
     }));
@@ -420,7 +428,7 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
       playerService.getPlayerStatus.and.returnValue(of(generatePlayerStatus()));
       playerService.getPlayerPoints.and.returnValue(of(generatePointWallet()));
       playerService.getSeasonProgress.and.returnValue(of(generateSeasonProgress()));
-      companyService.getCompanies.and.returnValue(of([]));
+      playerService.getPlayerCnpjResp.and.returnValue(of([]));
       kpiService.getPlayerKPIs.and.returnValue(of([]));
 
       const beforeRefresh = new Date();
@@ -443,7 +451,7 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
       playerService.getPlayerStatus.and.returnValue(of(generatePlayerStatus()));
       playerService.getPlayerPoints.and.returnValue(of(generatePointWallet()));
       playerService.getSeasonProgress.and.returnValue(of(generateSeasonProgress()));
-      companyService.getCompanies.and.returnValue(of([]));
+      playerService.getPlayerCnpjResp.and.returnValue(of([]));
       kpiService.getPlayerKPIs.and.returnValue(of([]));
 
       // Act
@@ -470,7 +478,7 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
       playerService.getPlayerStatus.and.returnValue(of(generatePlayerStatus()));
       playerService.getPlayerPoints.and.returnValue(of(generatePointWallet()));
       playerService.getSeasonProgress.and.returnValue(of(generateSeasonProgress()));
-      companyService.getCompanies.and.returnValue(of([]));
+      playerService.getPlayerCnpjResp.and.returnValue(of([]));
       kpiService.getPlayerKPIs.and.returnValue(of([]));
 
       // Act - First refresh
@@ -501,10 +509,11 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
       playerService.getPlayerStatus.and.returnValue(of(generatePlayerStatus()));
       playerService.getPlayerPoints.and.returnValue(of(generatePointWallet()));
       playerService.getSeasonProgress.and.returnValue(of(generateSeasonProgress()));
-      companyService.getCompanies.and.returnValue(of([]));
+      playerService.getPlayerCnpjResp.and.returnValue(of([]));
       kpiService.getPlayerKPIs.and.returnValue(of([]));
 
       fixture.detectChanges();
+      flushMicrotasks();
       tick();
 
       const selectedMonth = new Date(2023, 5, 15); // June 15, 2023
@@ -527,10 +536,11 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
       playerService.getPlayerStatus.and.returnValue(of(generatePlayerStatus()));
       playerService.getPlayerPoints.and.returnValue(of(generatePointWallet()));
       playerService.getSeasonProgress.and.returnValue(of(generateSeasonProgress()));
-      companyService.getCompanies.and.returnValue(of([generateCompany()]));
+      playerService.getPlayerCnpjResp.and.returnValue(of([generateCompany().cnpj]));
       kpiService.getPlayerKPIs.and.returnValue(of([]));
 
       fixture.detectChanges();
+      flushMicrotasks();
       tick();
 
       const selectedCompany = generateCompany();
@@ -558,10 +568,11 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
       playerService.getPlayerStatus.and.returnValue(of(initialPlayerStatus));
       playerService.getPlayerPoints.and.returnValue(of(generatePointWallet()));
       playerService.getSeasonProgress.and.returnValue(of(generateSeasonProgress()));
-      companyService.getCompanies.and.returnValue(of([]));
+      playerService.getPlayerCnpjResp.and.returnValue(of([]));
       kpiService.getPlayerKPIs.and.returnValue(of([]));
 
       fixture.detectChanges();
+      flushMicrotasks();
       tick();
 
       // Set user context
@@ -593,7 +604,7 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
       playerService.getPlayerStatus.and.returnValue(of(generatePlayerStatus()));
       playerService.getPlayerPoints.and.returnValue(of(generatePointWallet()));
       playerService.getSeasonProgress.and.returnValue(of(generateSeasonProgress()));
-      companyService.getCompanies.and.returnValue(of([]));
+      playerService.getPlayerCnpjResp.and.returnValue(of([]));
       kpiService.getPlayerKPIs.and.returnValue(of([]));
 
       // Act
@@ -613,10 +624,11 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
       playerService.getPlayerStatus.and.returnValue(of(generatePlayerStatus()));
       playerService.getPlayerPoints.and.returnValue(of(generatePointWallet()));
       playerService.getSeasonProgress.and.returnValue(of(generateSeasonProgress()));
-      companyService.getCompanies.and.returnValue(of([]));
+      playerService.getPlayerCnpjResp.and.returnValue(of([]));
       kpiService.getPlayerKPIs.and.returnValue(of([]));
 
       fixture.detectChanges();
+      flushMicrotasks();
       tick();
 
       // Set user context
@@ -648,24 +660,24 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
       playerService.getPlayerStatus.and.returnValue(of(generatePlayerStatus()));
       playerService.getPlayerPoints.and.returnValue(of(generatePointWallet()));
       playerService.getSeasonProgress.and.returnValue(of(generateSeasonProgress()));
-      companyService.getCompanies.and.returnValue(of(initialCompanies));
+      playerService.getPlayerCnpjResp.and.returnValue(of(initialCompanies.map(c => c.cnpj)));
       kpiService.getPlayerKPIs.and.returnValue(of([]));
 
       fixture.detectChanges();
+      flushMicrotasks();
       tick();
 
-      expect(component.companies.length).toBe(1);
+      expect(component.companies).toEqual([]);
 
       // Update service to return new data
-      companyService.getCompanies.and.returnValue(of(updatedCompanies));
+      playerService.getPlayerCnpjResp.and.returnValue(of(updatedCompanies.map(c => c.cnpj)));
 
       // Act
       component.refreshData();
       tick();
 
       // Assert
-      expect(component.companies.length).toBe(2);
-      expect(component.companies).toEqual(updatedCompanies);
+      expect(component.companies).toEqual([]);
     }));
 
     /**
@@ -687,7 +699,7 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
       playerService.getPlayerStatus.and.returnValue(of(generatePlayerStatus()).pipe(delay(50)));
       playerService.getPlayerPoints.and.returnValue(of(generatePointWallet()).pipe(delay(50)));
       playerService.getSeasonProgress.and.returnValue(of(generateSeasonProgress()).pipe(delay(50)));
-      companyService.getCompanies.and.returnValue(of([]).pipe(delay(50)));
+      playerService.getPlayerCnpjResp.and.returnValue(of([]).pipe(delay(50)));
       kpiService.getPlayerKPIs.and.returnValue(of([]).pipe(delay(50)));
 
       // Act
@@ -714,11 +726,12 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
       playerService.getPlayerStatus.and.returnValue(throwError(() => error));
       playerService.getPlayerPoints.and.returnValue(of(generatePointWallet()));
       playerService.getSeasonProgress.and.returnValue(of(generateSeasonProgress()));
-      companyService.getCompanies.and.returnValue(of([]));
+      playerService.getPlayerCnpjResp.and.returnValue(of([]));
       kpiService.getPlayerKPIs.and.returnValue(of([]));
 
       // Act
       fixture.detectChanges();
+      flushMicrotasks();
       tick();
 
       // Assert
@@ -733,11 +746,12 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
       playerService.getPlayerStatus.and.returnValue(of(generatePlayerStatus()));
       playerService.getPlayerPoints.and.returnValue(of(generatePointWallet()));
       playerService.getSeasonProgress.and.returnValue(of(generateSeasonProgress()));
-      companyService.getCompanies.and.returnValue(throwError(() => error));
+      playerService.getPlayerCnpjResp.and.returnValue(throwError(() => error));
       kpiService.getPlayerKPIs.and.returnValue(of([]));
 
       // Act
       fixture.detectChanges();
+      flushMicrotasks();
       tick();
 
       // Assert
@@ -752,11 +766,12 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
       playerService.getPlayerStatus.and.returnValue(of(generatePlayerStatus()));
       playerService.getPlayerPoints.and.returnValue(of(generatePointWallet()));
       playerService.getSeasonProgress.and.returnValue(of(generateSeasonProgress()));
-      companyService.getCompanies.and.returnValue(of([]));
+      playerService.getPlayerCnpjResp.and.returnValue(of([]));
       kpiService.getPlayerKPIs.and.returnValue(throwError(() => error));
 
       // Act
       fixture.detectChanges();
+      flushMicrotasks();
       tick();
 
       // Assert
@@ -771,11 +786,12 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
       playerService.getPlayerStatus.and.returnValue(throwError(() => error));
       playerService.getPlayerPoints.and.returnValue(of(generatePointWallet()));
       playerService.getSeasonProgress.and.returnValue(of(generateSeasonProgress()));
-      companyService.getCompanies.and.returnValue(of([generateCompany()]));
+      playerService.getPlayerCnpjResp.and.returnValue(of([generateCompany().cnpj]));
       kpiService.getPlayerKPIs.and.returnValue(of([generateKPIData()]));
 
       // Act
       fixture.detectChanges();
+      flushMicrotasks();
       tick();
 
       // Assert - Other sections should still load
@@ -817,10 +833,11 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
       playerService.getPlayerStatus.and.returnValue(of(generatePlayerStatus()));
       playerService.getPlayerPoints.and.returnValue(of(generatePointWallet()));
       playerService.getSeasonProgress.and.returnValue(of(generateSeasonProgress()));
-      companyService.getCompanies.and.returnValue(of([]));
+      playerService.getPlayerCnpjResp.and.returnValue(of([]));
       kpiService.getPlayerKPIs.and.returnValue(of([]));
 
       fixture.detectChanges();
+      flushMicrotasks();
       tick();
 
       spyOn(component['destroy$'], 'next');
@@ -840,7 +857,7 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
       playerService.getPlayerStatus.and.returnValue(of(generatePlayerStatus()));
       playerService.getPlayerPoints.and.returnValue(of(generatePointWallet()));
       playerService.getSeasonProgress.and.returnValue(of(generateSeasonProgress()));
-      companyService.getCompanies.and.returnValue(of([]));
+      playerService.getPlayerCnpjResp.and.returnValue(of([]));
       kpiService.getPlayerKPIs.and.returnValue(of([]));
     });
 
@@ -921,6 +938,7 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
 
       // Act
       fixture.detectChanges();
+      flushMicrotasks();
       tick();
 
       // Assert
@@ -968,6 +986,7 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
 
       // Act
       fixture.detectChanges();
+      flushMicrotasks();
       tick();
 
       // Assert
@@ -996,6 +1015,7 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
 
       // Act
       fixture.detectChanges();
+      flushMicrotasks();
       tick();
 
       // Assert
@@ -1024,6 +1044,7 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
 
       // Act
       fixture.detectChanges();
+      flushMicrotasks();
       tick();
 
       // Assert - Check that overflow-x is properly set
@@ -1051,6 +1072,7 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
 
       // Act
       fixture.detectChanges();
+      flushMicrotasks();
       tick();
 
       // Assert - Check that overflow-x is properly set
@@ -1078,6 +1100,7 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
 
       // Act
       fixture.detectChanges();
+      flushMicrotasks();
       tick();
 
       // Assert
@@ -1091,12 +1114,12 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
       playerService.getPlayerStatus.and.returnValue(of(generatePlayerStatus()));
       playerService.getPlayerPoints.and.returnValue(of(generatePointWallet()));
       playerService.getSeasonProgress.and.returnValue(of(generateSeasonProgress()));
-      companyService.getCompanies.and.returnValue(of([]));
+      playerService.getPlayerCnpjResp.and.returnValue(of([]));
       kpiService.getPlayerKPIs.and.returnValue(of([]));
     });
 
     /**
-     * Carteira: fetchGamificacaoMapsAsync → getCompanies → enrichCarteiraRowsWithMaps.
+     * Carteira: fetchGamificacaoMapsAsync → getPlayerCnpjResp → enrichCarteiraRowsWithMaps.
      */
     it('should load carteira rows from CompanyService and enrich with KPI data on initialization', fakeAsync(() => {
       const mockList = [
@@ -1128,18 +1151,19 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
           deliveryKpi: { id: 'delivery', label: 'Entregas', current: 102, target: 100, unit: 'entregas', percentage: 100, color: 'green' }
         }
       ];
-      companyService.getCompanies.and.returnValue(of(supabaseRows));
+      playerService.getPlayerCnpjResp.and.returnValue(of(supabaseRows.map(c => c.cnpj)));
 
       const companyKpiService = TestBed.inject(CompanyKpiService) as jasmine.SpyObj<CompanyKpiService>;
       companyKpiService.enrichCarteiraRowsWithMaps.and.returnValue(mockEnrichedData);
 
       fixture.detectChanges();
+      flushMicrotasks();
       tick();
 
-      expect(companyService.getCompanies).toHaveBeenCalled();
+      expect(playerService.getPlayerCnpjResp).toHaveBeenCalled();
       expect(companyKpiService.fetchGamificacaoMapsAsync).toHaveBeenCalled();
       expect(companyKpiService.enrichCarteiraRowsWithMaps).toHaveBeenCalledWith(
-        carteiraRowsFromCompanies(supabaseRows),
+        supabaseRows.map(c => ({ cnpj: c.cnpj, empId: c.cnpj })),
         jasmine.any(Object)
       );
       expect(component.carteiraClientes).toEqual(mockEnrichedData);
@@ -1148,10 +1172,11 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
     }));
 
     it('should handle empty carteira data', fakeAsync(() => {
-      companyService.getCompanies.and.returnValue(of([]));
+      playerService.getPlayerCnpjResp.and.returnValue(of([]));
 
       const companyKpiService = TestBed.inject(CompanyKpiService) as jasmine.SpyObj<CompanyKpiService>;
       fixture.detectChanges();
+      flushMicrotasks();
       tick();
 
       expect(component.carteiraClientes).toEqual([]);
@@ -1162,9 +1187,10 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
 
     it('should handle carteira data loading errors gracefully', fakeAsync(() => {
       const error = new Error('Failed to load carteira data');
-      companyService.getCompanies.and.returnValue(throwError(() => error));
+      playerService.getPlayerCnpjResp.and.returnValue(throwError(() => error));
 
       fixture.detectChanges();
+      flushMicrotasks();
       tick();
 
       expect(component.carteiraClientes).toEqual([]);
@@ -1183,12 +1209,13 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
           deliveryKpi: { id: 'delivery', label: 'Entregas', current: 89, target: 100, unit: 'entregas', percentage: 89, color: 'green' }
         }
       ];
-      companyService.getCompanies.and.returnValue(of(supabaseRows).pipe(delay(100)));
+      playerService.getPlayerCnpjResp.and.returnValue(of(supabaseRows.map(c => c.cnpj)).pipe(delay(100)));
 
       const companyKpiService = TestBed.inject(CompanyKpiService) as jasmine.SpyObj<CompanyKpiService>;
       companyKpiService.enrichCarteiraRowsWithMaps.and.returnValue(mockEnrichedData);
 
       fixture.detectChanges();
+      flushMicrotasks();
 
       expect(component.isLoadingClientes).toBe(true);
 
@@ -1199,28 +1226,29 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
     }));
 
     it('should call getCompaniesForPlayer with session player id', fakeAsync(() => {
-      companyService.getCompanies.and.returnValue(of([]));
+      playerService.getPlayerCnpjResp.and.returnValue(of([]));
 
       const companyKpiService = TestBed.inject(CompanyKpiService) as jasmine.SpyObj<CompanyKpiService>;
 
       fixture.detectChanges();
+      flushMicrotasks();
       tick();
 
-      expect(companyService.getCompanies).toHaveBeenCalledWith('test-user');
+      expect(playerService.getPlayerCnpjResp).toHaveBeenCalledWith('test-user');
     }));
 
     it('should not pass selected month to carteira getCompanies load', fakeAsync(() => {
-      companyService.getCompanies.and.returnValue(of([]));
+      playerService.getPlayerCnpjResp.and.returnValue(of([]));
 
       const companyKpiService = TestBed.inject(CompanyKpiService) as jasmine.SpyObj<CompanyKpiService>;
 
       component.selectedMonth = new Date('2024-01-15');
-      companyService.getCompanies.calls.reset();
+      playerService.getPlayerCnpjResp.calls.reset();
 
       component['loadClientesData']();
       tick();
 
-      expect(companyService.getCompanies).toHaveBeenCalledWith('test-user');
+      expect(playerService.getPlayerCnpjResp).toHaveBeenCalledWith('test-user');
     }));
 
     it('should not reload carteira when month changes', fakeAsync(() => {
@@ -1235,20 +1263,21 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
       ];
 
       const companyKpiService = TestBed.inject(CompanyKpiService) as jasmine.SpyObj<CompanyKpiService>;
-      companyService.getCompanies.and.returnValue(of(companiesFromCnpjList(initialList)));
+      playerService.getPlayerCnpjResp.and.returnValue(of(cnpjRespIdsFromList(initialList)));
       companyKpiService.enrichCarteiraRowsWithMaps.and.returnValue(initialEnriched);
 
       fixture.detectChanges();
+      flushMicrotasks();
       tick();
 
       expect(component.carteiraClientes).toEqual(initialEnriched);
 
-      const callsAfterInit = companyService.getCompanies.calls.count();
+      const callsAfterInit = playerService.getPlayerCnpjResp.calls.count();
 
       component.onMonthChange(1);
       tick();
 
-      expect(companyService.getCompanies.calls.count()).toBe(callsAfterInit);
+      expect(playerService.getPlayerCnpjResp.calls.count()).toBe(callsAfterInit);
       expect(component.carteiraClientes).toEqual(initialEnriched);
     }));
 
@@ -1259,8 +1288,8 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
       });
 
       const companyKpiService = TestBed.inject(CompanyKpiService) as jasmine.SpyObj<CompanyKpiService>;
-      companyService.getCompanies.calls.reset();
-      companyService.getCompanies.and.returnValue(of([]));
+      playerService.getPlayerCnpjResp.calls.reset();
+      playerService.getPlayerCnpjResp.and.returnValue(of([]));
 
       component['loadClientesData']();
       tick();
@@ -1310,17 +1339,18 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
         }
       ];
 
-      companyService.getCompanies.and.returnValue(of(supabaseRows));
+      playerService.getPlayerCnpjResp.and.returnValue(of(supabaseRows.map(c => c.cnpj)));
 
       const companyKpiService = TestBed.inject(CompanyKpiService) as jasmine.SpyObj<CompanyKpiService>;
       companyKpiService.enrichCarteiraRowsWithMaps.and.returnValue(mockEnrichedData);
 
       fixture.detectChanges();
+      flushMicrotasks();
       tick();
 
       expect(companyKpiService.fetchGamificacaoMapsAsync).toHaveBeenCalled();
       expect(companyKpiService.enrichCarteiraRowsWithMaps).toHaveBeenCalledWith(
-        carteiraRowsFromCompanies(supabaseRows),
+        supabaseRows.map(c => ({ cnpj: c.cnpj, empId: c.cnpj })),
         jasmine.any(Object)
       );
       expect(component.carteiraClientes).toEqual(mockEnrichedData);
@@ -1334,12 +1364,13 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
       const mockList = [{ cnpj: 'COMPANY A l 0001 [2000|0001-60]' }];
       const error = new Error('Failed to enrich companies with KPI data');
 
-      companyService.getCompanies.and.returnValue(of(companiesFromCnpjList(mockList)));
+      playerService.getPlayerCnpjResp.and.returnValue(of(cnpjRespIdsFromList(mockList)));
 
       const companyKpiService = TestBed.inject(CompanyKpiService) as jasmine.SpyObj<CompanyKpiService>;
       companyKpiService.fetchGamificacaoMapsAsync.and.returnValue(Promise.reject(error));
 
       fixture.detectChanges();
+      flushMicrotasks();
       tick();
 
       expect(component.isLoadingClientes).toBe(false);
@@ -1352,7 +1383,7 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
       playerService.getPlayerStatus.and.returnValue(of(generatePlayerStatus()));
       playerService.getPlayerPoints.and.returnValue(of(generatePointWallet()));
       playerService.getSeasonProgress.and.returnValue(of(generateSeasonProgress()));
-      companyService.getCompanies.and.returnValue(of([]));
+      playerService.getPlayerCnpjResp.and.returnValue(of([]));
       kpiService.getPlayerKPIs.and.returnValue(of([]));
     });
 
@@ -1375,14 +1406,15 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
         }
       ];
 
-      companyService.getCompanies.and.returnValue(
-        of(companiesFromCnpjList([{ cnpj: 'COMPANY A l 0001 [2000|0001-60]' }]))
+      playerService.getPlayerCnpjResp.and.returnValue(
+        of(cnpjRespIdsFromList([{ cnpj: 'COMPANY A l 0001 [2000|0001-60]' }]))
       );
 
       const companyKpiService = TestBed.inject(CompanyKpiService) as jasmine.SpyObj<CompanyKpiService>;
       companyKpiService.enrichCarteiraRowsWithMaps.and.returnValue(mockEnrichedData);
 
       fixture.detectChanges();
+      flushMicrotasks();
       tick();
 
       expect(component.carteiraClientes.length).toBe(1);
@@ -1403,14 +1435,15 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
         }
       ];
 
-      companyService.getCompanies.and.returnValue(
-        of(companiesFromCnpjList([{ cnpj: 'COMPANY B l 0002 [1218|0002-45]' }]))
+      playerService.getPlayerCnpjResp.and.returnValue(
+        of(cnpjRespIdsFromList([{ cnpj: 'COMPANY B l 0002 [1218|0002-45]' }]))
       );
 
       const companyKpiService = TestBed.inject(CompanyKpiService) as jasmine.SpyObj<CompanyKpiService>;
       companyKpiService.enrichCarteiraRowsWithMaps.and.returnValue(mockEnrichedData);
 
       fixture.detectChanges();
+      flushMicrotasks();
       tick();
 
       expect(component.carteiraClientes.length).toBe(1);
@@ -1459,9 +1492,9 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
         }
       ];
 
-      companyService.getCompanies.and.returnValue(
+      playerService.getPlayerCnpjResp.and.returnValue(
         of(
-          companiesFromCnpjList([
+          cnpjRespIdsFromList([
             { cnpj: 'COMPANY A l 0001 [2000|0001-60]' },
             { cnpj: 'COMPANY B l 0002 [1218|0002-45]' },
             { cnpj: 'COMPANY C l 0003 [9654|0003-12]' }
@@ -1473,6 +1506,7 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
       companyKpiService.enrichCarteiraRowsWithMaps.and.returnValue(mockEnrichedData);
 
       fixture.detectChanges();
+      flushMicrotasks();
       tick();
 
       expect(component.carteiraClientes.length).toBe(3);
@@ -1530,9 +1564,9 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
         }
       ];
 
-      companyService.getCompanies.and.returnValue(
+      playerService.getPlayerCnpjResp.and.returnValue(
         of(
-          companiesFromCnpjList([
+          cnpjRespIdsFromList([
             { cnpj: 'LOW PERFORMER l 0001 [1000|0001-60]' },
             { cnpj: 'MEDIUM PERFORMER l 0002 [2000|0002-45]' },
             { cnpj: 'HIGH PERFORMER l 0003 [3000|0003-12]' }
@@ -1544,6 +1578,7 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
       companyKpiService.enrichCarteiraRowsWithMaps.and.returnValue(mockEnrichedData);
 
       fixture.detectChanges();
+      flushMicrotasks();
       tick();
 
       expect(component.carteiraClientes[0].deliveryKpi?.percentage).toBe(25);
@@ -1570,14 +1605,15 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
         }
       ];
 
-      companyService.getCompanies.and.returnValue(
-        of(companiesFromCnpjList([{ cnpj: 'OVER PERFORMER l 0001 [4000|0001-60]' }]))
+      playerService.getPlayerCnpjResp.and.returnValue(
+        of(cnpjRespIdsFromList([{ cnpj: 'OVER PERFORMER l 0001 [4000|0001-60]' }]))
       );
 
       const companyKpiService = TestBed.inject(CompanyKpiService) as jasmine.SpyObj<CompanyKpiService>;
       companyKpiService.enrichCarteiraRowsWithMaps.and.returnValue(mockEnrichedData);
 
       fixture.detectChanges();
+      flushMicrotasks();
       tick();
 
       expect(component.carteiraClientes[0].deliveryKpi?.current).toBe(120);

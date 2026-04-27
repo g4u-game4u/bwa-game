@@ -187,7 +187,7 @@ describe('C4uProcessAccordionComponent - Property-Based Tests', () => {
             const originalId = process.id;
             const originalName = process.name;
             const originalStatus = process.status;
-            const originalTaskCount = process.tasks.length;
+            const originalTaskCount = process.tasks?.length ?? 0;
             
             // Toggle expansion
             component.toggleProcess(0);
@@ -196,7 +196,7 @@ describe('C4uProcessAccordionComponent - Property-Based Tests', () => {
             expect(component.processes[0].id).toBe(originalId);
             expect(component.processes[0].name).toBe(originalName);
             expect(component.processes[0].status).toBe(originalStatus);
-            expect(component.processes[0].tasks.length).toBe(originalTaskCount);
+            expect(component.processes[0].tasks?.length ?? 0).toBe(originalTaskCount);
           }
         ),
         { numRuns: 100 }

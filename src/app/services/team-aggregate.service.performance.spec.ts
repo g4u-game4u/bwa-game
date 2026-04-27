@@ -1,6 +1,6 @@
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { TeamAggregateService } from './team-aggregate.service';
-import { FunifierApiService } from './funifier-api.service';
+import { BackendApiService } from './backend-api.service';
 import { AggregateQueryBuilderService } from './aggregate-query-builder.service';
 import { PerformanceMonitorService } from './performance-monitor.service';
 import { of } from 'rxjs';
@@ -19,7 +19,7 @@ import { delay } from 'rxjs/operators';
  */
 describe('TeamAggregateService Performance Tests', () => {
   let service: TeamAggregateService;
-  let funifierApi: jasmine.SpyObj<FunifierApiService>;
+  let backendApi: jasmine.SpyObj<BackendApiService>;
   let queryBuilder: jasmine.SpyObj<AggregateQueryBuilderService>;
   let performanceMonitor: PerformanceMonitorService;
 
@@ -48,7 +48,7 @@ describe('TeamAggregateService Performance Tests', () => {
   };
 
   beforeEach(() => {
-    const funifierApiSpy = jasmine.createSpyObj('FunifierApiService', ['post']);
+    const backendApiSpy = jasmine.createSpyObj('BackendApiService', ['post']);
     const queryBuilderSpy = jasmine.createSpyObj('AggregateQueryBuilderService', [
       'buildPointsAggregateQuery',
       'buildProgressAggregateQuery',
@@ -58,14 +58,14 @@ describe('TeamAggregateService Performance Tests', () => {
     TestBed.configureTestingModule({
       providers: [
         TeamAggregateService,
-        { provide: FunifierApiService, useValue: funifierApiSpy },
+        { provide: BackendApiService, useValue: backendApiSpy },
         { provide: AggregateQueryBuilderService, useValue: queryBuilderSpy },
         PerformanceMonitorService
       ]
     });
 
     service = TestBed.inject(TeamAggregateService);
-    funifierApi = TestBed.inject(FunifierApiService) as jasmine.SpyObj<FunifierApiService>;
+    backendApi = TestBed.inject(BackendApiService) as jasmine.SpyObj<BackendApiService>;
     queryBuilder = TestBed.inject(AggregateQueryBuilderService) as jasmine.SpyObj<AggregateQueryBuilderService>;
     performanceMonitor = TestBed.inject(PerformanceMonitorService);
 
@@ -77,7 +77,7 @@ describe('TeamAggregateService Performance Tests', () => {
 
   describe('Caching Performance (Requirement 17.1)', () => {
     it('should cache team season points and reduce API calls', fakeAsync(() => {
-      funifierApi.post.and.returnValue(of(mockPointsResponse));
+      backendApi.post.and.returnValue(of(mockPointsResponse));
 
       const teamId = 'Team A';
       const startDate = new Date('2024-01-01');
@@ -87,24 +87,24 @@ describe('TeamAggregateService Performance Tests', () => {
       service.getTeamSeasonPoints(teamId, startDate, endDate).subscribe();
       tick();
 
-      expect(funifierApi.post).toHaveBeenCalledTimes(1);
+      expect(backendApi.post).toHaveBeenCalledTimes(1);
 
       // Second call - should use cache
       service.getTeamSeasonPoints(teamId, startDate, endDate).subscribe();
       tick();
 
       // API should not be called again
-      expect(funifierApi.post).toHaveBeenCalledTimes(1);
+      expect(backendApi.post).toHaveBeenCalledTimes(1);
 
       // Third call - should still use cache
       service.getTeamSeasonPoints(teamId, startDate, endDate).subscribe();
       tick();
 
-      expect(funifierApi.post).toHaveBeenCalledTimes(1);
+      expect(backendApi.post).toHaveBeenCalledTimes(1);
     }));
 
     it('should cache team progress metrics', fakeAsync(() => {
-      funifierApi.post.and.returnValue(of(mockProgressResponse));
+      backendApi.post.and.returnValue(of(mockProgressResponse));
 
       const teamId = 'Team A';
       const startDate = new Date('2024-01-01');
@@ -119,11 +119,11 @@ describe('TeamAggregateService Performance Tests', () => {
       tick();
 
       // Should only call API once
-      expect(funifierApi.post).toHaveBeenCalledTimes(1);
+      expect(backendApi.post).toHaveBeenCalledTimes(1);
     }));
 
     it('should cache team members list', fakeAsync(() => {
-      funifierApi.post.and.returnValue(of(mockMembersResponse));
+      backendApi.post.and.returnValue(of(mockMembersResponse));
 
       const teamId = 'Team A';
 
@@ -134,11 +134,11 @@ describe('TeamAggregateService Performance Tests', () => {
       tick();
 
       // Should only call API once
-      expect(funifierApi.post).toHaveBeenCalledTimes(1);
+      expect(backendApi.post).toHaveBeenCalledTimes(1);
     }));
 
     it('should use separate cache entries for different teams', fakeAsync(() => {
-      funifierApi.post.and.returnValue(of(mockPointsResponse));
+      backendApi.post.and.returnValue(of(mockPointsResponse));
 
       const startDate = new Date('2024-01-01');
       const endDate = new Date('2024-12-31');
@@ -152,18 +152,18 @@ describe('TeamAggregateService Performance Tests', () => {
       tick();
 
       // Should call API twice (once per team)
-      expect(funifierApi.post).toHaveBeenCalledTimes(2);
+      expect(backendApi.post).toHaveBeenCalledTimes(2);
 
       // Call for Team A again - should use cache
       service.getTeamSeasonPoints('Team A', startDate, endDate).subscribe();
       tick();
 
       // Should still be 2 calls
-      expect(funifierApi.post).toHaveBeenCalledTimes(2);
+      expect(backendApi.post).toHaveBeenCalledTimes(2);
     }));
 
     it('should use separate cache entries for different date ranges', fakeAsync(() => {
-      funifierApi.post.and.returnValue(of(mockPointsResponse));
+      backendApi.post.and.returnValue(of(mockPointsResponse));
 
       const teamId = 'Team A';
 
@@ -176,13 +176,13 @@ describe('TeamAggregateService Performance Tests', () => {
       tick();
 
       // Should call API twice (once per date range)
-      expect(funifierApi.post).toHaveBeenCalledTimes(2);
+      expect(backendApi.post).toHaveBeenCalledTimes(2);
     }));
   });
 
   describe('Cache TTL (Requirement 17.1)', () => {
     it('should respect 5-minute cache TTL', fakeAsync(() => {
-      funifierApi.post.and.returnValue(of(mockPointsResponse));
+      backendApi.post.and.returnValue(of(mockPointsResponse));
 
       const teamId = 'Team A';
       const startDate = new Date('2024-01-01');
@@ -192,14 +192,14 @@ describe('TeamAggregateService Performance Tests', () => {
       service.getTeamSeasonPoints(teamId, startDate, endDate).subscribe();
       tick();
 
-      expect(funifierApi.post).toHaveBeenCalledTimes(1);
+      expect(backendApi.post).toHaveBeenCalledTimes(1);
 
       // Wait 4 minutes - should still use cache
       tick(4 * 60 * 1000);
       service.getTeamSeasonPoints(teamId, startDate, endDate).subscribe();
       tick();
 
-      expect(funifierApi.post).toHaveBeenCalledTimes(1);
+      expect(backendApi.post).toHaveBeenCalledTimes(1);
 
       // Wait another 2 minutes (total 6 minutes) - cache should expire
       tick(2 * 60 * 1000);
@@ -207,13 +207,13 @@ describe('TeamAggregateService Performance Tests', () => {
       tick();
 
       // Should call API again
-      expect(funifierApi.post).toHaveBeenCalledTimes(2);
+      expect(backendApi.post).toHaveBeenCalledTimes(2);
     }));
   });
 
   describe('Cache Management', () => {
     it('should clear all cache on clearCache()', fakeAsync(() => {
-      funifierApi.post.and.returnValue(of(mockPointsResponse));
+      backendApi.post.and.returnValue(of(mockPointsResponse));
 
       const teamId = 'Team A';
       const startDate = new Date('2024-01-01');
@@ -223,7 +223,7 @@ describe('TeamAggregateService Performance Tests', () => {
       service.getTeamSeasonPoints(teamId, startDate, endDate).subscribe();
       tick();
 
-      expect(funifierApi.post).toHaveBeenCalledTimes(1);
+      expect(backendApi.post).toHaveBeenCalledTimes(1);
 
       // Clear cache
       service.clearCache();
@@ -232,11 +232,11 @@ describe('TeamAggregateService Performance Tests', () => {
       service.getTeamSeasonPoints(teamId, startDate, endDate).subscribe();
       tick();
 
-      expect(funifierApi.post).toHaveBeenCalledTimes(2);
+      expect(backendApi.post).toHaveBeenCalledTimes(2);
     }));
 
     it('should clear team-specific cache on clearTeamCache()', fakeAsync(() => {
-      funifierApi.post.and.returnValue(of(mockPointsResponse));
+      backendApi.post.and.returnValue(of(mockPointsResponse));
 
       const startDate = new Date('2024-01-01');
       const endDate = new Date('2024-12-31');
@@ -247,7 +247,7 @@ describe('TeamAggregateService Performance Tests', () => {
       service.getTeamSeasonPoints('Team B', startDate, endDate).subscribe();
       tick();
 
-      expect(funifierApi.post).toHaveBeenCalledTimes(2);
+      expect(backendApi.post).toHaveBeenCalledTimes(2);
 
       // Clear cache for Team A only
       service.clearTeamCache('Team A');
@@ -259,14 +259,14 @@ describe('TeamAggregateService Performance Tests', () => {
       tick();
 
       // Should have 3 total calls (2 initial + 1 for Team A)
-      expect(funifierApi.post).toHaveBeenCalledTimes(3);
+      expect(backendApi.post).toHaveBeenCalledTimes(3);
     }));
   });
 
   describe('Query Performance Monitoring (Requirement 17.4)', () => {
     it('should measure aggregate query execution time', fakeAsync(() => {
       // Simulate slow query (500ms)
-      funifierApi.post.and.returnValue(of(mockPointsResponse).pipe(delay(500)));
+      backendApi.post.and.returnValue(of(mockPointsResponse).pipe(delay(500)));
 
       const teamId = 'Team A';
       const startDate = new Date('2024-01-01');
@@ -288,7 +288,7 @@ describe('TeamAggregateService Performance Tests', () => {
       spyOn(console, 'warn');
 
       // Simulate very slow query (1500ms)
-      funifierApi.post.and.returnValue(of(mockPointsResponse).pipe(delay(1500)));
+      backendApi.post.and.returnValue(of(mockPointsResponse).pipe(delay(1500)));
 
       const teamId = 'Team A';
       const startDate = new Date('2024-01-01');
@@ -307,7 +307,7 @@ describe('TeamAggregateService Performance Tests', () => {
       spyOn(console, 'warn');
 
       // Simulate fast query (100ms)
-      funifierApi.post.and.returnValue(of(mockPointsResponse).pipe(delay(100)));
+      backendApi.post.and.returnValue(of(mockPointsResponse).pipe(delay(100)));
 
       const teamId = 'Team A';
       const startDate = new Date('2024-01-01');
@@ -324,7 +324,7 @@ describe('TeamAggregateService Performance Tests', () => {
   describe('Cached vs Uncached Performance', () => {
     it('should demonstrate performance improvement with caching', fakeAsync(() => {
       // Simulate API delay (200ms)
-      funifierApi.post.and.returnValue(of(mockPointsResponse).pipe(delay(200)));
+      backendApi.post.and.returnValue(of(mockPointsResponse).pipe(delay(200)));
 
       const teamId = 'Team A';
       const startDate = new Date('2024-01-01');
@@ -350,7 +350,7 @@ describe('TeamAggregateService Performance Tests', () => {
 
   describe('Concurrent Request Performance', () => {
     it('should handle multiple concurrent requests efficiently', fakeAsync(() => {
-      funifierApi.post.and.returnValue(of(mockPointsResponse).pipe(delay(100)));
+      backendApi.post.and.returnValue(of(mockPointsResponse).pipe(delay(100)));
 
       const teamId = 'Team A';
       const startDate = new Date('2024-01-01');
@@ -370,14 +370,14 @@ describe('TeamAggregateService Performance Tests', () => {
 
       // With caching, only first request should hit API
       // Total time should be close to single request time
-      expect(funifierApi.post).toHaveBeenCalledTimes(1);
+      expect(backendApi.post).toHaveBeenCalledTimes(1);
       expect(duration).toBeLessThan(200);
     }));
   });
 
   describe('Memory Efficiency', () => {
     it('should not grow cache indefinitely', fakeAsync(() => {
-      funifierApi.post.and.returnValue(of(mockPointsResponse));
+      backendApi.post.and.returnValue(of(mockPointsResponse));
 
       const startDate = new Date('2024-01-01');
       const endDate = new Date('2024-12-31');
@@ -389,7 +389,7 @@ describe('TeamAggregateService Performance Tests', () => {
       }
 
       // Cache should contain entries, but service should remain functional
-      expect(funifierApi.post).toHaveBeenCalledTimes(100);
+      expect(backendApi.post).toHaveBeenCalledTimes(100);
 
       // Verify cache can still be cleared
       service.clearCache();
@@ -398,7 +398,7 @@ describe('TeamAggregateService Performance Tests', () => {
       service.getTeamSeasonPoints('Team 0', startDate, endDate).subscribe();
       tick();
 
-      expect(funifierApi.post).toHaveBeenCalledTimes(101);
+      expect(backendApi.post).toHaveBeenCalledTimes(101);
     }));
   });
 });

@@ -13,39 +13,41 @@ describe('ModalCompanyDetailComponent', () => {
 
   const mockCompany: Company = generateCompany();
   
+  const mockCompanyDetailProcesses: Process[] = [
+    {
+      ...generateProcess(),
+      id: '1',
+      name: 'Process 1',
+      status: 'pending',
+      tasks: [
+        { ...generateTask(), id: 't1', name: 'Task 1', status: 'pending', responsible: 'John Doe' }
+      ]
+    },
+    {
+      ...generateProcess(),
+      id: '2',
+      name: 'Process 2',
+      status: 'in-progress',
+      tasks: [
+        { ...generateTask(), id: 't2', name: 'Task 2', status: 'in-progress', responsible: 'Jane Smith' }
+      ]
+    },
+    {
+      ...generateProcess(),
+      id: '3',
+      name: 'Process 3',
+      status: 'completed',
+      tasks: [
+        { ...generateTask(), id: 't3', name: 'Task 3', status: 'completed', responsible: 'Bob Johnson' }
+      ]
+    }
+  ];
+
   const mockCompanyDetails: CompanyDetails = {
     ...mockCompany,
-    processes: [
-      {
-        ...generateProcess(),
-        id: '1',
-        name: 'Process 1',
-        status: 'pending',
-        tasks: [
-          { ...generateTask(), id: 't1', name: 'Task 1', status: 'pending', responsible: 'John Doe' }
-        ]
-      },
-      {
-        ...generateProcess(),
-        id: '2',
-        name: 'Process 2',
-        status: 'in-progress',
-        tasks: [
-          { ...generateTask(), id: 't2', name: 'Task 2', status: 'in-progress', responsible: 'Jane Smith' }
-        ]
-      },
-      {
-        ...generateProcess(),
-        id: '3',
-        name: 'Process 3',
-        status: 'completed',
-        tasks: [
-          { ...generateTask(), id: 't3', name: 'Task 3', status: 'completed', responsible: 'Bob Johnson' }
-        ]
-      }
-    ],
+    processes: mockCompanyDetailProcesses,
     activities: [],
-    macros: []
+    processos: mockCompanyDetailProcesses
   };
 
   beforeEach(async () => {
@@ -154,7 +156,7 @@ describe('ModalCompanyDetailComponent', () => {
       // Assert
       expect(processes.length).toBeGreaterThan(0);
       processes.forEach(p => {
-        expect(p.tasks.every(t => t.status === 'completed')).toBe(true);
+        expect(p.tasks?.every(t => t.status === 'completed') ?? false).toBe(true);
       });
     });
 
