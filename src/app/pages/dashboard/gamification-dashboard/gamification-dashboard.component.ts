@@ -38,6 +38,7 @@ import {
 } from '@utils/game4u-user-id.util';
 import { usesMovimentacoesTerminology } from '@utils/team-terminology-movimentacoes.util';
 import { FUNIFIER_HTTP_DISABLED } from '@app/config/funifier-requests-disabled';
+import { isKpiVisibleForTeam } from '@app/constants/kpi-targets.constants';
 import { TemporadaService } from '@services/temporada.service';
 import { TIPO_CONSULTA_COLABORADOR } from '../dashboard.component';
 
@@ -798,6 +799,9 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
       if (goalsKpi != null) {
         safeCurrentBilling = goalsKpi.current;
         targetBilling = goalsKpi.target > 0 ? goalsKpi.target : paramTarget;
+        if (goalsKpi.target <= 0) {
+          console.warn('[GamificationDashboard] Goals backend returned zero/negative target; falling back to system param financeiro_monthly_billing_goal =', paramTarget);
+        }
         kpiPercent = Math.min(100, goalsKpi.percent);
         progressEvolutionLabel = goalsKpi.progressEvolutionLabel;
         if (
@@ -807,6 +811,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
           animateProgressFromPercent = goalsKpi.previousRingPercent;
         }
       } else {
+        console.warn('[GamificationDashboard] Goals backend returned null; falling back to system param financeiro_monthly_billing_goal =', paramTarget);
         const teamIdForOmie =
           pickTeamIdFromUserProfile(this.sessaoProvider.usuario) ||
           GamificationDashboardComponent.FINANCE_TEAM_ID;
@@ -1154,10 +1159,18 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
 
   /**
    * Get enabled KPIs (excluding commented/disabled ones)
-   * Currently excludes 'numero-empresas' (Clientes na Carteira)
+   * Filters out numero-empresas (defensive), valor-concedido for non-finance,
+   * and applies team-specific visibility via isKpiVisibleForTeam.
    */
   get enabledKPIs(): KPIData[] {
-    return this.playerKPIs;
+    return this.playerKPIs.filter(kpi => {
+      // numero-empresas removed at source, but defensive filter
+      if (kpi.id === 'numero-empresas') return false;
+      // valor-concedido only for finance team
+      if (kpi.id === 'valor-concedido' && !this.isFinanceTeamMember()) return false;
+      // Team-specific visibility
+      return isKpiVisibleForTeam(kpi.id);
+    });
   }
 
   /**

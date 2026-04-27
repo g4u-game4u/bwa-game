@@ -4,6 +4,7 @@ import { FunifierApiService } from './funifier-api.service';
 import { KPIMapper } from './kpi-mapper.service';
 import { PlayerService } from './player.service';
 import { UserActionDashboardService } from './user-action-dashboard.service';
+import { META_PROTOCOLO_TARGET, APOSENTADORIAS_TARGET } from '../constants/kpi-targets.constants';
 import * as fc from 'fast-check';
 import { of } from 'rxjs';
 
@@ -192,12 +193,16 @@ describe('KPIService', () => {
   });
 
   describe('New Metrics from Player Extra Info', () => {
-    it('should extract Número de Empresas from player extra.cnpj', (done) => {
+    afterEach(() => {
+      service.clearCache();
+    });
+
+    it('should NOT return numero-empresas even when player has cnpj data', (done) => {
       const mockPlayerStatus = {
         _id: 'test-player',
         name: 'Test Player',
         extra: {
-          cnpj: '10282,2368,10492,10004,330,1110', // 6 companies
+          cnpj: '10282,2368,10492',
           entrega: '85'
         }
       };
@@ -206,14 +211,7 @@ describe('KPIService', () => {
 
       service.getPlayerKPIs('test-player').subscribe(result => {
         const empresasKPI = result.find(kpi => kpi.id === 'numero-empresas');
-        
-        expect(empresasKPI).toBeDefined();
-        expect(empresasKPI!.label).toBe('Clientes atendidos');
-        expect(empresasKPI!.current).toBe(6);
-        expect(empresasKPI!.target).toBe(10);
-        expect(empresasKPI!.superTarget).toBe(15);
-        expect(empresasKPI!.unit).toBe('empresas');
-        expect(empresasKPI!.color).toBe('red'); // 6 < 10 (below goal)
+        expect(empresasKPI).toBeUndefined();
         done();
       });
     });
@@ -223,7 +221,6 @@ describe('KPIService', () => {
         _id: 'test-player',
         name: 'Test Player',
         extra: {
-          cnpj: '10282,2368,10492',
           entrega: '85' // 85%
         }
       };
@@ -232,19 +229,69 @@ describe('KPIService', () => {
 
       service.getPlayerKPIs('test-player').subscribe(result => {
         const entregasKPI = result.find(kpi => kpi.id === 'entregas-prazo');
-        
+
         expect(entregasKPI).toBeDefined();
         expect(entregasKPI!.label).toBe('Entregas no Prazo');
         expect(entregasKPI!.current).toBe(85);
-        expect(entregasKPI!.target).toBe(80);
-        expect(entregasKPI!.superTarget).toBe(90);
+        expect(entregasKPI!.target).toBe(90);
+        expect(entregasKPI!.superTarget).toBe(100);
         expect(entregasKPI!.unit).toBe('%');
-        expect(entregasKPI!.color).toBe('yellow'); // 80 <= 85 < 90 (above goal, below super goal)
+        expect(entregasKPI!.color).toBe('red'); // 85 < 90 (below goal)
         done();
       });
     });
 
-    it('should handle missing extra info gracefully', (done) => {
+    it('should return meta-protocolo with correct label, unit, target', (done) => {
+      const mockPlayerStatus = {
+        _id: 'test-player',
+        name: 'Test Player',
+        extra: {
+          meta_protocolo: '500000',
+          entrega: '85'
+        }
+      };
+
+      playerServiceSpy.getRawPlayerData.and.returnValue(of(mockPlayerStatus));
+
+      service.getPlayerKPIs('test-player').subscribe(result => {
+        const metaKPI = result.find(kpi => kpi.id === 'meta-protocolo');
+
+        expect(metaKPI).toBeDefined();
+        expect(metaKPI!.label).toBe('Meta de protocolo');
+        expect(metaKPI!.unit).toBe('R$');
+        expect(metaKPI!.target).toBe(META_PROTOCOLO_TARGET);
+        expect(metaKPI!.current).toBe(500000);
+        expect(metaKPI!.superTarget).toBe(Math.ceil(META_PROTOCOLO_TARGET * 1.5));
+        done();
+      });
+    });
+
+    it('should return aposentadorias-concedidas with correct label, unit, target', (done) => {
+      const mockPlayerStatus = {
+        _id: 'test-player',
+        name: 'Test Player',
+        extra: {
+          aposentadorias_concedidas: '150',
+          entrega: '85'
+        }
+      };
+
+      playerServiceSpy.getRawPlayerData.and.returnValue(of(mockPlayerStatus));
+
+      service.getPlayerKPIs('test-player').subscribe(result => {
+        const aposentKPI = result.find(kpi => kpi.id === 'aposentadorias-concedidas');
+
+        expect(aposentKPI).toBeDefined();
+        expect(aposentKPI!.label).toBe('Aposentadorias concedidas');
+        expect(aposentKPI!.unit).toBe('concedidos');
+        expect(aposentKPI!.target).toBe(APOSENTADORIAS_TARGET);
+        expect(aposentKPI!.current).toBe(150);
+        expect(aposentKPI!.superTarget).toBe(Math.ceil(APOSENTADORIAS_TARGET * 1.5));
+        done();
+      });
+    });
+
+    it('should handle missing extra info gracefully — still generates meta-protocolo and aposentadorias-concedidas with current=0', (done) => {
       const mockPlayerStatus = {
         _id: 'test-player',
         name: 'Test Player'
@@ -254,12 +301,22 @@ describe('KPIService', () => {
       playerServiceSpy.getRawPlayerData.and.returnValue(of(mockPlayerStatus));
 
       service.getPlayerKPIs('test-player').subscribe(result => {
-        expect(result).toEqual([]);
+        const metaKPI = result.find(kpi => kpi.id === 'meta-protocolo');
+        const aposentKPI = result.find(kpi => kpi.id === 'aposentadorias-concedidas');
+
+        expect(metaKPI).toBeDefined();
+        expect(metaKPI!.current).toBe(0);
+        expect(aposentKPI).toBeDefined();
+        expect(aposentKPI!.current).toBe(0);
+
+        // entregas-prazo should NOT be present (no entrega data)
+        const entregasKPI = result.find(kpi => kpi.id === 'entregas-prazo');
+        expect(entregasKPI).toBeUndefined();
         done();
       });
     });
 
-    it('should handle empty cnpj string', (done) => {
+    it('should never return numero-empresas regardless of cnpj content', (done) => {
       const mockPlayerStatus = {
         _id: 'test-player',
         name: 'Test Player',
@@ -273,43 +330,19 @@ describe('KPIService', () => {
 
       service.getPlayerKPIs('test-player').subscribe(result => {
         const empresasKPI = result.find(kpi => kpi.id === 'numero-empresas');
-        expect(empresasKPI).toBeUndefined(); // Should not create KPI for empty cnpj
-        
+        expect(empresasKPI).toBeUndefined();
+
         const entregasKPI = result.find(kpi => kpi.id === 'entregas-prazo');
         expect(entregasKPI).toBeDefined();
         done();
       });
     });
 
-    it('should calculate companies percentage from current over meta (target)', (done) => {
+    it('should calculate percentage based on target for deliveries', (done) => {
       const mockPlayerStatus = {
         _id: 'test-player',
         name: 'Test Player',
         extra: {
-          cnpj: '10282,2368,10492,10004,330,1110', // 6 companies
-          entrega: '85'
-        }
-      };
-
-      playerServiceSpy.getRawPlayerData.and.returnValue(of(mockPlayerStatus));
-
-      service.getPlayerKPIs('test-player').subscribe(result => {
-        const empresasKPI = result.find(kpi => kpi.id === 'numero-empresas');
-        
-        expect(empresasKPI).toBeDefined();
-        expect(empresasKPI!.current).toBe(6);
-        expect(empresasKPI!.superTarget).toBe(15);
-        expect(empresasKPI!.percentage).toBe(60); // default meta 10 → 6/10 * 100
-        done();
-      });
-    });
-
-    it('should calculate percentage based on super goal for deliveries', (done) => {
-      const mockPlayerStatus = {
-        _id: 'test-player',
-        name: 'Test Player',
-        extra: {
-          cnpj: '10282,2368,10492',
           entrega: '85' // 85%
         }
       };
@@ -318,33 +351,146 @@ describe('KPIService', () => {
 
       service.getPlayerKPIs('test-player').subscribe(result => {
         const entregasKPI = result.find(kpi => kpi.id === 'entregas-prazo');
-        
+
         expect(entregasKPI).toBeDefined();
         expect(entregasKPI!.current).toBe(85);
-        expect(entregasKPI!.superTarget).toBe(90);
-        expect(entregasKPI!.percentage).toBeCloseTo(94.4, 1); // 85/90 * 100 = 94.44%
+        expect(entregasKPI!.superTarget).toBe(100);
+        // percentage = Math.min(85/100 * 100, 100) = 85
+        expect(entregasKPI!.percentage).toBe(85);
         done();
       });
     });
 
-    it('should allow companies percentage above 100% when exceeding meta; cap entregas at 100%', (done) => {
+    it('should cap entregas percentage at 100% when exceeding target', (done) => {
       const mockPlayerStatus = {
         _id: 'test-player',
         name: 'Test Player',
         extra: {
-          cnpj: '1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20', // 20 companies
-          entrega: '95' // 95%
+          entrega: '105' // 105%
         }
       };
 
       playerServiceSpy.getRawPlayerData.and.returnValue(of(mockPlayerStatus));
 
       service.getPlayerKPIs('test-player').subscribe(result => {
-        const empresasKPI = result.find(kpi => kpi.id === 'numero-empresas');
         const entregasKPI = result.find(kpi => kpi.id === 'entregas-prazo');
-        
-        expect(empresasKPI!.percentage).toBe(200); // 20/10 * 100 (meta default 10)
-        expect(entregasKPI!.percentage).toBe(100); // Capped at 100% (95/90 = 105% -> 100%)
+
+        expect(entregasKPI).toBeDefined();
+        expect(entregasKPI!.percentage).toBe(100); // Capped at 100%
+        done();
+      });
+    });
+
+    it('should default current to 0 when player extra data is missing meta_protocolo and aposentadorias_concedidas', (done) => {
+      const mockPlayerStatus = {
+        _id: 'test-player',
+        name: 'Test Player',
+        extra: {} // No meta_protocolo or aposentadorias_concedidas
+      };
+
+      playerServiceSpy.getRawPlayerData.and.returnValue(of(mockPlayerStatus));
+
+      service.getPlayerKPIs('test-player').subscribe(result => {
+        const metaKPI = result.find(kpi => kpi.id === 'meta-protocolo');
+        const aposentKPI = result.find(kpi => kpi.id === 'aposentadorias-concedidas');
+
+        expect(metaKPI).toBeDefined();
+        expect(metaKPI!.current).toBe(0);
+        expect(aposentKPI).toBeDefined();
+        expect(aposentKPI!.current).toBe(0);
+        done();
+      });
+    });
+  });
+
+  describe('getPlayerKPIsForDateRange()', () => {
+    afterEach(() => {
+      service.clearCache();
+    });
+
+    it('should NOT return numero-empresas in date range results', (done) => {
+      const now = new Date();
+      const rangeStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      const rangeEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+
+      const mockPlayerStatus = {
+        _id: 'test-player',
+        name: 'Test Player',
+        extra: {
+          cnpj: '10282,2368,10492',
+          entrega: '85',
+          meta_protocolo: '500000',
+          aposentadorias_concedidas: '150'
+        }
+      };
+
+      playerServiceSpy.getRawPlayerData.and.returnValue(of(mockPlayerStatus));
+
+      service.getPlayerKPIsForDateRange('test-player', rangeStart, rangeEnd).subscribe(result => {
+        const empresasKPI = result.find(kpi => kpi.id === 'numero-empresas');
+        expect(empresasKPI).toBeUndefined();
+        done();
+      });
+    });
+
+    it('should return meta-protocolo and aposentadorias-concedidas with correct values in date range', (done) => {
+      const now = new Date();
+      const rangeStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      const rangeEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+
+      const mockPlayerStatus = {
+        _id: 'test-player',
+        name: 'Test Player',
+        extra: {
+          meta_protocolo: '500000',
+          aposentadorias_concedidas: '150',
+          entrega: '85'
+        }
+      };
+
+      playerServiceSpy.getRawPlayerData.and.returnValue(of(mockPlayerStatus));
+
+      service.getPlayerKPIsForDateRange('test-player', rangeStart, rangeEnd).subscribe(result => {
+        const metaKPI = result.find(kpi => kpi.id === 'meta-protocolo');
+        expect(metaKPI).toBeDefined();
+        expect(metaKPI!.label).toBe('Meta de protocolo');
+        expect(metaKPI!.unit).toBe('R$');
+        expect(metaKPI!.target).toBe(META_PROTOCOLO_TARGET);
+        expect(metaKPI!.current).toBe(500000);
+        expect(metaKPI!.superTarget).toBe(Math.ceil(META_PROTOCOLO_TARGET * 1.5));
+
+        const aposentKPI = result.find(kpi => kpi.id === 'aposentadorias-concedidas');
+        expect(aposentKPI).toBeDefined();
+        expect(aposentKPI!.label).toBe('Aposentadorias concedidas');
+        expect(aposentKPI!.unit).toBe('concedidos');
+        expect(aposentKPI!.target).toBe(APOSENTADORIAS_TARGET);
+        expect(aposentKPI!.current).toBe(150);
+        expect(aposentKPI!.superTarget).toBe(Math.ceil(APOSENTADORIAS_TARGET * 1.5));
+        done();
+      });
+    });
+
+    it('should default current to 0 in date range when extra data is missing', (done) => {
+      const now = new Date();
+      const rangeStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      const rangeEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+
+      const mockPlayerStatus = {
+        _id: 'test-player',
+        name: 'Test Player',
+        extra: {}
+      };
+
+      playerServiceSpy.getRawPlayerData.and.returnValue(of(mockPlayerStatus));
+
+      service.getPlayerKPIsForDateRange('test-player', rangeStart, rangeEnd).subscribe(result => {
+        const metaKPI = result.find(kpi => kpi.id === 'meta-protocolo');
+        const aposentKPI = result.find(kpi => kpi.id === 'aposentadorias-concedidas');
+
+        expect(metaKPI).toBeDefined();
+        expect(metaKPI!.current).toBe(0);
+        expect(aposentKPI).toBeDefined();
+        expect(aposentKPI!.current).toBe(0);
         done();
       });
     });
@@ -371,6 +517,203 @@ describe('KPIService', () => {
       expect(service.getKPIColorByGoals(90, 80, 90)).toBe('green'); // Exactly at super goal
       expect(service.getKPIColorByGoals(10, 10, 15)).toBe('yellow'); // Exactly at goal
       expect(service.getKPIColorByGoals(15, 10, 15)).toBe('green'); // Exactly at super goal
+    });
+  });
+
+  /**
+   * Feature: kpi-bars-revision, Property 1: numero-empresas exclusion invariant
+   * Validates: Requirements 1.1, 1.3
+   */
+  describe('Property 1: numero-empresas exclusion invariant', () => {
+    // Generator for random player extra data with optional fields that could
+    // historically trigger numero-empresas (e.g. cnpj with comma-separated numbers)
+    const playerExtraArb = fc.record({
+      cnpj: fc.option(
+        fc.array(fc.integer({ min: 1000, max: 99999 }), { minLength: 0, maxLength: 10 })
+          .map(nums => nums.join(',')),
+        { nil: undefined }
+      ),
+      entrega: fc.option(
+        fc.integer({ min: 0, max: 100 }).map(String),
+        { nil: undefined }
+      ),
+      meta_protocolo: fc.option(
+        fc.integer({ min: 0, max: 5000000 }).map(String),
+        { nil: undefined }
+      ),
+      aposentadorias_concedidas: fc.option(
+        fc.integer({ min: 0, max: 1000 }).map(String),
+        { nil: undefined }
+      ),
+      client_goals: fc.option(
+        fc.integer({ min: 0, max: 500 }),
+        { nil: undefined }
+      ),
+    });
+
+    afterEach(() => {
+      service.clearCache();
+    });
+
+    it('getPlayerKPIs() output never contains id === numero-empresas for any player extra data', (done) => {
+      fc.assert(
+        fc.asyncProperty(playerExtraArb, async (extra) => {
+          service.clearCache();
+
+          const cleanExtra: Record<string, any> = {};
+          if (extra.cnpj !== undefined) cleanExtra['cnpj'] = extra.cnpj;
+          if (extra.entrega !== undefined) cleanExtra['entrega'] = extra.entrega;
+          if (extra.meta_protocolo !== undefined) cleanExtra['meta_protocolo'] = extra.meta_protocolo;
+          if (extra.aposentadorias_concedidas !== undefined) cleanExtra['aposentadorias_concedidas'] = extra.aposentadorias_concedidas;
+          if (extra.client_goals !== undefined) cleanExtra['client_goals'] = extra.client_goals;
+
+          const mockPlayerStatus = {
+            _id: 'pbt-player',
+            name: 'PBT Player',
+            extra: cleanExtra
+          };
+
+          playerServiceSpy.getRawPlayerData.and.returnValue(of(mockPlayerStatus));
+
+          const result = await service.getPlayerKPIs('pbt-player').toPromise();
+          const hasNumeroEmpresas = result!.some(kpi => kpi.id === 'numero-empresas');
+          expect(hasNumeroEmpresas).toBe(false);
+        }),
+        { numRuns: 100 }
+      ).then(() => done(), (err) => done.fail(err));
+    });
+
+    it('getPlayerKPIsForDateRange() output never contains id === numero-empresas for any player extra data', (done) => {
+      const now = new Date();
+      const rangeStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      const rangeEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+
+      fc.assert(
+        fc.asyncProperty(playerExtraArb, async (extra) => {
+          service.clearCache();
+
+          const cleanExtra: Record<string, any> = {};
+          if (extra.cnpj !== undefined) cleanExtra['cnpj'] = extra.cnpj;
+          if (extra.entrega !== undefined) cleanExtra['entrega'] = extra.entrega;
+          if (extra.meta_protocolo !== undefined) cleanExtra['meta_protocolo'] = extra.meta_protocolo;
+          if (extra.aposentadorias_concedidas !== undefined) cleanExtra['aposentadorias_concedidas'] = extra.aposentadorias_concedidas;
+          if (extra.client_goals !== undefined) cleanExtra['client_goals'] = extra.client_goals;
+
+          const mockPlayerStatus = {
+            _id: 'pbt-player',
+            name: 'PBT Player',
+            extra: cleanExtra
+          };
+
+          playerServiceSpy.getRawPlayerData.and.returnValue(of(mockPlayerStatus));
+
+          const result = await service.getPlayerKPIsForDateRange('pbt-player', rangeStart, rangeEnd).toPromise();
+          const hasNumeroEmpresas = result!.some(kpi => kpi.id === 'numero-empresas');
+          expect(hasNumeroEmpresas).toBe(false);
+        }),
+        { numRuns: 100 }
+      ).then(() => done(), (err) => done.fail(err));
+    });
+  });
+
+  /**
+   * Feature: kpi-bars-revision, Property 2: New KPIs structural correctness
+   * Validates: Requirements 3.1, 3.2, 4.1, 4.2
+   */
+  describe('Property 2: New KPIs structural correctness', () => {
+    // Reuse the same playerExtraArb generator pattern from Property 1
+    const playerExtraArb = fc.record({
+      cnpj: fc.option(
+        fc.array(fc.integer({ min: 1000, max: 99999 }), { minLength: 0, maxLength: 10 })
+          .map(nums => nums.join(',')),
+        { nil: undefined }
+      ),
+      entrega: fc.option(
+        fc.integer({ min: 0, max: 100 }).map(String),
+        { nil: undefined }
+      ),
+      meta_protocolo: fc.option(
+        fc.integer({ min: 0, max: 5000000 }).map(String),
+        { nil: undefined }
+      ),
+      aposentadorias_concedidas: fc.option(
+        fc.integer({ min: 0, max: 1000 }).map(String),
+        { nil: undefined }
+      ),
+      client_goals: fc.option(
+        fc.integer({ min: 0, max: 500 }),
+        { nil: undefined }
+      ),
+    });
+
+    afterEach(() => {
+      service.clearCache();
+    });
+
+    it('getPlayerKPIs() always contains meta-protocolo with correct label, unit, target, and superTarget', (done) => {
+      fc.assert(
+        fc.asyncProperty(playerExtraArb, async (extra) => {
+          service.clearCache();
+
+          const cleanExtra: Record<string, any> = {};
+          if (extra.cnpj !== undefined) cleanExtra['cnpj'] = extra.cnpj;
+          if (extra.entrega !== undefined) cleanExtra['entrega'] = extra.entrega;
+          if (extra.meta_protocolo !== undefined) cleanExtra['meta_protocolo'] = extra.meta_protocolo;
+          if (extra.aposentadorias_concedidas !== undefined) cleanExtra['aposentadorias_concedidas'] = extra.aposentadorias_concedidas;
+          if (extra.client_goals !== undefined) cleanExtra['client_goals'] = extra.client_goals;
+
+          const mockPlayerStatus = {
+            _id: 'pbt-player',
+            name: 'PBT Player',
+            extra: cleanExtra
+          };
+
+          playerServiceSpy.getRawPlayerData.and.returnValue(of(mockPlayerStatus));
+
+          const result = await service.getPlayerKPIs('pbt-player').toPromise();
+          const metaKPI = result!.find(kpi => kpi.id === 'meta-protocolo');
+
+          expect(metaKPI).toBeDefined();
+          expect(metaKPI!.label).toBe('Meta de protocolo');
+          expect(metaKPI!.unit).toBe('R$');
+          expect(metaKPI!.target).toBe(META_PROTOCOLO_TARGET);
+          expect(metaKPI!.superTarget).toBe(Math.ceil(META_PROTOCOLO_TARGET * 1.5));
+        }),
+        { numRuns: 100 }
+      ).then(() => done(), (err) => done.fail(err));
+    });
+
+    it('getPlayerKPIs() always contains aposentadorias-concedidas with correct label, unit, target, and superTarget', (done) => {
+      fc.assert(
+        fc.asyncProperty(playerExtraArb, async (extra) => {
+          service.clearCache();
+
+          const cleanExtra: Record<string, any> = {};
+          if (extra.cnpj !== undefined) cleanExtra['cnpj'] = extra.cnpj;
+          if (extra.entrega !== undefined) cleanExtra['entrega'] = extra.entrega;
+          if (extra.meta_protocolo !== undefined) cleanExtra['meta_protocolo'] = extra.meta_protocolo;
+          if (extra.aposentadorias_concedidas !== undefined) cleanExtra['aposentadorias_concedidas'] = extra.aposentadorias_concedidas;
+          if (extra.client_goals !== undefined) cleanExtra['client_goals'] = extra.client_goals;
+
+          const mockPlayerStatus = {
+            _id: 'pbt-player',
+            name: 'PBT Player',
+            extra: cleanExtra
+          };
+
+          playerServiceSpy.getRawPlayerData.and.returnValue(of(mockPlayerStatus));
+
+          const result = await service.getPlayerKPIs('pbt-player').toPromise();
+          const aposentKPI = result!.find(kpi => kpi.id === 'aposentadorias-concedidas');
+
+          expect(aposentKPI).toBeDefined();
+          expect(aposentKPI!.label).toBe('Aposentadorias concedidas');
+          expect(aposentKPI!.unit).toBe('concedidos');
+          expect(aposentKPI!.target).toBe(APOSENTADORIAS_TARGET);
+          expect(aposentKPI!.superTarget).toBe(Math.ceil(APOSENTADORIAS_TARGET * 1.5));
+        }),
+        { numRuns: 100 }
+      ).then(() => done(), (err) => done.fail(err));
     });
   });
 });

@@ -9,6 +9,8 @@ import { SessaoProvider } from '@providers/sessao/sessao.provider';
 import { of } from 'rxjs';
 import { BrowserAnimationsModule } from '@angular/platform-browser/animations';
 import { NO_ERRORS_SCHEMA } from '@angular/core';
+import { HttpClientTestingModule } from '@angular/common/http/testing';
+import { TEAM_KPI_VISIBILITY, DEFAULT_VISIBLE_KPIS } from '@app/constants/kpi-targets.constants';
 
 /**
  * Property-Based Tests for Team Management Dashboard Component
@@ -90,7 +92,7 @@ describe('TeamManagementDashboardComponent - Property-Based Tests', () => {
 
     await TestBed.configureTestingModule({
       declarations: [TeamManagementDashboardComponent],
-      imports: [BrowserAnimationsModule],
+      imports: [BrowserAnimationsModule, HttpClientTestingModule],
       providers: [
         { provide: TeamAggregateService, useValue: mockTeamAggregateService },
         { provide: GraphDataProcessorService, useValue: mockGraphDataProcessor },
@@ -494,6 +496,345 @@ describe('TeamManagementDashboardComponent - Property-Based Tests', () => {
           }
         ),
         { numRuns: 30 }
+      );
+    });
+  });
+
+  /**
+   * Feature: kpi-bars-revision, Property 5: Valor-concedido finance-only visibility
+   *
+   * For any user profile, if the user belongs to Finance_Team (team_id '6' or
+   * team name containing "financeiro"), then enabledKPIs SHALL include an item
+   * with id === 'valor-concedido'. For any user profile where the user does NOT
+   * belong to Finance_Team, enabledKPIs SHALL contain zero items with
+   * id === 'valor-concedido'.
+   *
+   * **Validates: Requirements 2.1, 2.3, 2.4**
+   */
+  describe('Property 5: Valor-concedido finance-only visibility', () => {
+    // Generator: finance team configs (either by ID '6' or name containing 'financeiro')
+    const financeTeamArb: fc.Arbitrary<{ id: string; name: string }> = fc.oneof(
+      // Finance by ID
+      fc.record({
+        id: fc.constant('6'),
+        name: fc.string({ minLength: 1, maxLength: 30 })
+      }),
+      // Finance by name (contains 'financeiro' case-insensitive)
+      fc.record({
+        id: fc.string({ minLength: 1, maxLength: 10 }).filter(id => id !== '6'),
+        name: fc.string({ minLength: 0, maxLength: 10 }).map(
+          s => s.slice(0, 5) + 'financeiro' + s.slice(0, 3)
+        )
+      })
+    );
+
+    // Generator: non-finance team configs (id !== '6' and name does NOT contain 'financeiro')
+    const nonFinanceTeamArb: fc.Arbitrary<{ id: string; name: string }> = fc.record({
+      id: fc.string({ minLength: 1, maxLength: 10 }).filter(id => id !== '6'),
+      name: fc.string({ minLength: 1, maxLength: 30 }).filter(
+        n => !n.toLowerCase().includes('financeiro')
+      )
+    });
+
+    // Helper: build a KPIData array that includes valor-concedido
+    function buildKpisWithValorConcedido(): any[] {
+      return [
+        { id: 'entregas-prazo', label: 'Entregas no prazo', current: 80, target: 100, unit: '%', color: 'green', percentage: 80 },
+        { id: 'valor-concedido', label: 'Valor concedido', current: 50000, target: 100000, unit: 'R$', color: 'yellow', percentage: 50 },
+        { id: 'meta-protocolo', label: 'Meta de protocolo', current: 500000, target: 1000000, unit: 'R$', color: 'yellow', percentage: 50 },
+        { id: 'aposentadorias-concedidas', label: 'Aposentadorias concedidas', current: 100, target: 220, unit: 'concedidos', color: 'yellow', percentage: 45 }
+      ];
+    }
+
+    it('should include valor-concedido in enabledKPIs when team is finance', () => {
+      fc.assert(
+        fc.property(
+          financeTeamArb,
+          (teamConfig) => {
+            // Set up component with finance team
+            component.teamKPIs = buildKpisWithValorConcedido();
+            component.selectedTeamId = teamConfig.id;
+            component.teams = [{ id: teamConfig.id, name: teamConfig.name, memberCount: 5 }];
+            component.displayTeamName = teamConfig.name;
+
+            const enabled = component.enabledKPIs;
+            const hasValorConcedido = enabled.some((kpi: any) => kpi.id === 'valor-concedido');
+
+            // Property: finance team MUST see valor-concedido
+            expect(hasValorConcedido).toBe(true);
+          }
+        ),
+        { numRuns: 100 }
+      );
+    });
+
+    it('should exclude valor-concedido from enabledKPIs when team is NOT finance', () => {
+      fc.assert(
+        fc.property(
+          nonFinanceTeamArb,
+          (teamConfig) => {
+            // Set up component with non-finance team
+            component.teamKPIs = buildKpisWithValorConcedido();
+            component.selectedTeamId = teamConfig.id;
+            component.teams = [{ id: teamConfig.id, name: teamConfig.name, memberCount: 5 }];
+            component.displayTeamName = teamConfig.name;
+
+            const enabled = component.enabledKPIs;
+            const hasValorConcedido = enabled.some((kpi: any) => kpi.id === 'valor-concedido');
+
+            // Property: non-finance team MUST NOT see valor-concedido
+            expect(hasValorConcedido).toBe(false);
+          }
+        ),
+        { numRuns: 100 }
+      );
+    });
+
+    it('should include valor-concedido iff team is finance (bidirectional)', () => {
+      fc.assert(
+        fc.property(
+          fc.oneof(financeTeamArb, nonFinanceTeamArb) as fc.Arbitrary<{ id: string; name: string }>,
+          (teamConfig) => {
+            component.teamKPIs = buildKpisWithValorConcedido();
+            component.selectedTeamId = teamConfig.id;
+            component.teams = [{ id: teamConfig.id, name: teamConfig.name, memberCount: 5 }];
+            component.displayTeamName = teamConfig.name;
+
+            const isFinance =
+              teamConfig.id === '6' ||
+              teamConfig.name.toLowerCase().includes('financeiro');
+
+            const enabled = component.enabledKPIs;
+            const hasValorConcedido = enabled.some((kpi: any) => kpi.id === 'valor-concedido');
+
+            // Bidirectional property: valor-concedido present iff finance team
+            expect(hasValorConcedido).toBe(isFinance);
+          }
+        ),
+        { numRuns: 100 }
+      );
+    });
+  });
+
+  /**
+   * Feature: kpi-bars-revision, Property 7: Team-specific KPI visibility filtering
+   *
+   * For any team with a configured visibility list in TEAM_KPI_VISIBILITY,
+   * the enabledKPIs getter SHALL return only KPIs whose id appears in that
+   * team's visibility list (minus numero-empresas which is always excluded).
+   * For any team without a configured visibility list, the enabledKPIs getter
+   * SHALL return all KPIs in DEFAULT_VISIBLE_KPIS (plus valor-concedido if
+   * finance team).
+   *
+   * **Validates: Requirements 6.2, 6.4**
+   */
+  describe('Property 7: Team-specific KPI visibility filtering', () => {
+    const ALL_KPI_IDS = ['entregas-prazo', 'meta-protocolo', 'aposentadorias-concedidas', 'valor-concedido', 'numero-empresas'];
+
+    // Prototype property names that must be excluded from generated team IDs
+    // to avoid collisions with Object.prototype methods
+    const PROTO_KEYS = new Set([
+      '__proto__', 'constructor', 'toString', 'valueOf', 'hasOwnProperty',
+      'isPrototypeOf', 'propertyIsEnumerable', 'toLocaleString', '__defineGetter__',
+      '__defineSetter__', '__lookupGetter__', '__lookupSetter__'
+    ]);
+
+    // Generator: random team ID (non-finance, non-empty, safe from prototype collisions)
+    const teamIdArb = fc.array(
+      fc.constantFrom('a','b','c','d','e','f','g','0','1','2','3','4','5','7','8','9','-','_'),
+      { minLength: 1, maxLength: 15 }
+    ).map(chars => chars.join('')).filter(
+      id => id !== '6' && !PROTO_KEYS.has(id) && id.trim().length > 0
+    );
+
+    // Generator: random visibility list (subset of KPI IDs excluding numero-empresas)
+    const visibilityListArb = fc.subarray(
+      ['entregas-prazo', 'meta-protocolo', 'aposentadorias-concedidas', 'valor-concedido'],
+      { minLength: 0 }
+    );
+
+    // Generator: random KPIData array from ALL_KPI_IDS
+    const kpiDataArrayArb = fc.subarray(ALL_KPI_IDS, { minLength: 1 }).map(ids =>
+      ids.map(id => ({
+        id,
+        label: `Label for ${id}`,
+        current: 50,
+        target: 100,
+        unit: id === 'valor-concedido' || id === 'meta-protocolo' ? 'R$' : '%',
+        color: 'yellow' as const,
+        percentage: 50
+      }))
+    );
+
+    // Helper: build a non-finance team name
+    function nonFinanceName(): string {
+      return 'Departamento Pessoal';
+    }
+
+    afterEach(() => {
+      // Clean up any keys added to the shared mutable TEAM_KPI_VISIBILITY
+      for (const key of Object.keys(TEAM_KPI_VISIBILITY)) {
+        delete TEAM_KPI_VISIBILITY[key];
+      }
+    });
+
+    it('should return only KPIs in the team visibility list when config exists', () => {
+      fc.assert(
+        fc.property(
+          teamIdArb,
+          visibilityListArb,
+          kpiDataArrayArb,
+          (teamId, visibilityList, kpiData) => {
+            // Set up team-specific visibility config
+            TEAM_KPI_VISIBILITY[teamId] = visibilityList;
+
+            // Configure component with non-finance team
+            component.teamKPIs = kpiData;
+            component.selectedTeamId = teamId;
+            component.teams = [{ id: teamId, name: nonFinanceName(), memberCount: 5 }];
+            component.displayTeamName = nonFinanceName();
+
+            const enabled = component.enabledKPIs;
+
+            // Property: every enabled KPI must be in the visibility list
+            for (const kpi of enabled) {
+              expect(visibilityList).toContain(kpi.id);
+            }
+
+            // Property: numero-empresas is always excluded
+            expect(enabled.some((kpi: any) => kpi.id === 'numero-empresas')).toBe(false);
+
+            // Property: every KPI in the input that IS in the visibility list
+            // (and is not numero-empresas or valor-concedido for non-finance)
+            // should appear in enabled
+            for (const kpi of kpiData) {
+              if (kpi.id === 'numero-empresas') continue;
+              if (kpi.id === 'valor-concedido') continue; // non-finance team, always excluded
+              if (visibilityList.includes(kpi.id)) {
+                expect(enabled.some((e: any) => e.id === kpi.id)).toBe(true);
+              }
+            }
+          }
+        ),
+        { numRuns: 100 }
+      );
+    });
+
+    it('should return DEFAULT_VISIBLE_KPIS when no team-specific config exists', () => {
+      fc.assert(
+        fc.property(
+          teamIdArb,
+          kpiDataArrayArb,
+          (teamId, kpiData) => {
+            // Ensure no config exists for this team
+            delete TEAM_KPI_VISIBILITY[teamId];
+
+            // Configure component with non-finance team
+            component.teamKPIs = kpiData;
+            component.selectedTeamId = teamId;
+            component.teams = [{ id: teamId, name: nonFinanceName(), memberCount: 5 }];
+            component.displayTeamName = nonFinanceName();
+
+            const enabled = component.enabledKPIs;
+
+            // Property: every enabled KPI must be in DEFAULT_VISIBLE_KPIS
+            // (valor-concedido is excluded for non-finance teams by the
+            //  isSelectedFinanceTeam check, even though isKpiVisibleForTeam
+            //  allows it in the default path)
+            for (const kpi of enabled) {
+              expect(DEFAULT_VISIBLE_KPIS).toContain(kpi.id);
+            }
+
+            // Property: numero-empresas is always excluded
+            expect(enabled.some((kpi: any) => kpi.id === 'numero-empresas')).toBe(false);
+
+            // Property: valor-concedido excluded for non-finance
+            expect(enabled.some((kpi: any) => kpi.id === 'valor-concedido')).toBe(false);
+
+            // Property: KPIs in DEFAULT_VISIBLE_KPIS that are in the input should appear
+            for (const kpi of kpiData) {
+              if (DEFAULT_VISIBLE_KPIS.includes(kpi.id)) {
+                expect(enabled.some((e: any) => e.id === kpi.id)).toBe(true);
+              }
+            }
+          }
+        ),
+        { numRuns: 100 }
+      );
+    });
+
+    it('should include valor-concedido for finance team when in visibility list', () => {
+      fc.assert(
+        fc.property(
+          visibilityListArb.filter(list => list.includes('valor-concedido')),
+          kpiDataArrayArb.filter(kpis => kpis.some(k => k.id === 'valor-concedido')),
+          (visibilityList, kpiData) => {
+            const financeTeamId = '6';
+            TEAM_KPI_VISIBILITY[financeTeamId] = visibilityList;
+
+            // Configure component with finance team
+            component.teamKPIs = kpiData;
+            component.selectedTeamId = financeTeamId;
+            component.teams = [{ id: financeTeamId, name: 'Financeiro', memberCount: 5 }];
+            component.displayTeamName = 'Financeiro';
+
+            const enabled = component.enabledKPIs;
+
+            // Property: finance team with valor-concedido in visibility list should see it
+            expect(enabled.some((kpi: any) => kpi.id === 'valor-concedido')).toBe(true);
+          }
+        ),
+        { numRuns: 100 }
+      );
+    });
+
+    it('should exclude valor-concedido for non-finance team even when in visibility list', () => {
+      fc.assert(
+        fc.property(
+          teamIdArb,
+          kpiDataArrayArb.filter(kpis => kpis.some(k => k.id === 'valor-concedido')),
+          (teamId, kpiData) => {
+            // Put valor-concedido in the visibility list
+            TEAM_KPI_VISIBILITY[teamId] = ['entregas-prazo', 'valor-concedido', 'meta-protocolo'];
+
+            // Configure component with non-finance team
+            component.teamKPIs = kpiData;
+            component.selectedTeamId = teamId;
+            component.teams = [{ id: teamId, name: nonFinanceName(), memberCount: 5 }];
+            component.displayTeamName = nonFinanceName();
+
+            const enabled = component.enabledKPIs;
+
+            // Property: non-finance team MUST NOT see valor-concedido
+            // even if it's in the team visibility config
+            expect(enabled.some((kpi: any) => kpi.id === 'valor-concedido')).toBe(false);
+          }
+        ),
+        { numRuns: 100 }
+      );
+    });
+
+    it('should handle empty visibility list by showing no KPIs', () => {
+      fc.assert(
+        fc.property(
+          teamIdArb,
+          kpiDataArrayArb,
+          (teamId, kpiData) => {
+            // Set empty visibility list
+            TEAM_KPI_VISIBILITY[teamId] = [];
+
+            component.teamKPIs = kpiData;
+            component.selectedTeamId = teamId;
+            component.teams = [{ id: teamId, name: nonFinanceName(), memberCount: 5 }];
+            component.displayTeamName = nonFinanceName();
+
+            const enabled = component.enabledKPIs;
+
+            // Property: empty visibility list means no KPIs pass the filter
+            expect(enabled.length).toBe(0);
+          }
+        ),
+        { numRuns: 100 }
       );
     });
   });

@@ -39,6 +39,7 @@ import { SEASON_GAME_ACTION_RANGE } from '@app/constants/season-action-range';
 import { filterCompanyDisplaysByClienteSearch } from '@utils/cliente-carteira-search.util';
 import { looksLikeEmail } from '@utils/game4u-user-id.util';
 import { usesMovimentacoesTerminology } from '@utils/team-terminology-movimentacoes.util';
+import { isKpiVisibleForTeam } from '@app/constants/kpi-targets.constants';
 
 /** Listagem de times (Funifier ou Game4U): garante array — evita `.filter` em `{}` quando Funifier está desligado. */
 function normalizeTeamsListPayload(raw: unknown): any[] {
@@ -3378,6 +3379,9 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       if (goalsKpi != null) {
         safeCurrentBilling = goalsKpi.current;
         targetBilling = goalsKpi.target > 0 ? goalsKpi.target : paramTarget;
+        if (goalsKpi.target <= 0) {
+          console.warn('[TeamManagementDashboard] Goals backend returned zero/negative target; falling back to system param financeiro_monthly_billing_goal =', paramTarget);
+        }
         kpiPercent = Math.min(100, goalsKpi.percent);
         progressEvolutionLabel = goalsKpi.progressEvolutionLabel;
         if (
@@ -3387,6 +3391,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
           animateProgressFromPercent = goalsKpi.previousRingPercent;
         }
       } else {
+        console.warn('[TeamManagementDashboard] Goals backend returned null; falling back to system param financeiro_monthly_billing_goal =', paramTarget);
         const currentBilling = await firstValueFrom(
           this.financeiroOmieRecebiveisService
             .getValorConcedidoFinanceiro(this.selectedTeamId, this.selectedMonth)
@@ -3642,7 +3647,8 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
 
   /**
    * Get enabled KPIs (excluding commented/disabled ones)
-   * Currently excludes 'numero-empresas' (Clientes na Carteira)
+   * Excludes 'numero-empresas', restricts 'valor-concedido' to finance team,
+   * and applies team-specific visibility via isKpiVisibleForTeam.
    */
   get enabledKPIs(): KPIData[] {
     return this.teamKPIs.filter(kpi => {
@@ -3652,7 +3658,8 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       if (kpi.id === 'valor-concedido' && !this.isSelectedFinanceTeam()) {
         return false;
       }
-      return true;
+      // Team-specific visibility for new KPIs
+      return isKpiVisibleForTeam(kpi.id, this.selectedTeamId);
     });
   }
 

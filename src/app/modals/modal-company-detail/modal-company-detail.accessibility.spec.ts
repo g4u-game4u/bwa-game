@@ -46,7 +46,7 @@ describe('ModalCompanyDetailComponent - Accessibility', () => {
       ...component.company,
       processes: [],
       activities: [],
-      macros: []
+      processos: []
     }));
     
     fixture.detectChanges();
