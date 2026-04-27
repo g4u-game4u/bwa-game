@@ -3,6 +3,8 @@ import {
   filterGame4uActionsByCompetenceMonth,
   filterGame4uActionsByMonth,
   getGame4uMonthlyPointsCircularFromActionStats,
+  getGame4uParticipationRowKey,
+  isGame4uUserActionFinalizedStatus,
   readGame4uDeliveryStatsTotal,
   parseCompetenceYearMonthFromDeliveryId,
   mapGame4uActionsToProcessMetrics,
@@ -186,6 +188,48 @@ describe('game4u-game-mapper', () => {
     it('returns null when suffix is not a date', () => {
       expect(parseCompetenceYearMonthFromDeliveryId('1079-2025-13-01')).toBeNull();
       expect(parseCompetenceYearMonthFromDeliveryId('plain')).toBeNull();
+    });
+  });
+
+  describe('isGame4uUserActionFinalizedStatus / getGame4uParticipationRowKey', () => {
+    it('treats DONE, DELIVERED, PAID as finalized', () => {
+      expect(isGame4uUserActionFinalizedStatus('DONE')).toBe(true);
+      expect(isGame4uUserActionFinalizedStatus('done')).toBe(true);
+      expect(isGame4uUserActionFinalizedStatus('DELIVERED')).toBe(true);
+      expect(isGame4uUserActionFinalizedStatus('PENDING')).toBe(false);
+    });
+
+    it('prefers integration_id then client_id then delivery_id', () => {
+      expect(
+        getGame4uParticipationRowKey({
+          id: '1',
+          points: 0,
+          status: 'DONE',
+          created_at: '2024-01-01T00:00:00.000Z',
+          integration_id: '1586',
+          client_id: 'c99',
+          delivery_id: 'd-1'
+        })
+      ).toBe('1586');
+      expect(
+        getGame4uParticipationRowKey({
+          id: '2',
+          points: 0,
+          status: 'DONE',
+          created_at: '2024-01-01T00:00:00.000Z',
+          client_id: 'c99',
+          delivery_id: 'd-1'
+        })
+      ).toBe('c99');
+      expect(
+        getGame4uParticipationRowKey({
+          id: '3',
+          points: 0,
+          status: 'DONE',
+          created_at: '2024-01-01T00:00:00.000Z',
+          delivery_id: '1079-2025-12-31'
+        })
+      ).toBe('1079-2025-12-31');
     });
   });
 
