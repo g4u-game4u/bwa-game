@@ -158,6 +158,14 @@ export class ModalCarteiraComponent implements OnInit, OnDestroy {
     return displayName || cnpj;
   }
 
+  getClienteCarteiraDisplayName(cliente: CompanyDisplay): string {
+    const t = cliente.delivery_title?.trim();
+    if (t) {
+      return t;
+    }
+    return this.getCompanyDisplayName(cliente.cnpj);
+  }
+
   getCompanyStatus(cnpj: string): string {
     return this.cnpjStatusMap.get(cnpj) || '';
   }

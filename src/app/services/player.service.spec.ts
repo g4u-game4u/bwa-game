@@ -1,34 +1,58 @@
 import { TestBed } from '@angular/core/testing';
+import { HttpClientTestingModule } from '@angular/common/http/testing';
 import { PlayerService } from './player.service';
 import { FunifierApiService } from './funifier-api.service';
 import { PlayerMapper } from './player-mapper.service';
+import { Game4uApiService } from './game4u-api.service';
+import { SessaoProvider } from '@providers/sessao/sessao.provider';
 import { of, throwError } from 'rxjs';
 import { PlayerStatus, PointWallet, SeasonProgress } from '@model/gamification-dashboard.model';
+import { environment } from '../../environments/environment';
 
 describe('PlayerService', () => {
   let service: PlayerService;
   let funifierApiSpy: jasmine.SpyObj<FunifierApiService>;
   let mapperSpy: jasmine.SpyObj<PlayerMapper>;
+  let game4uSpy: jasmine.SpyObj<Game4uApiService>;
+  let savedUseGame4uApi: boolean | undefined;
 
   beforeEach(() => {
+    savedUseGame4uApi = environment.useGame4uApi;
+    environment.useGame4uApi = false;
+
     const apiSpy = jasmine.createSpyObj('FunifierApiService', ['get']);
     const playerMapperSpy = jasmine.createSpyObj('PlayerMapper', [
       'toPlayerStatus',
       'toPointWallet',
       'toSeasonProgress'
     ]);
+    game4uSpy = jasmine.createSpyObj('Game4uApiService', ['getGameStats', 'toQueryRange', 'isConfigured']);
+    game4uSpy.isConfigured.and.returnValue(true);
+    game4uSpy.toQueryRange.and.returnValue({
+      start: '2000-01-01T00:00:00.000Z',
+      end: '2099-12-31T23:59:59.999Z'
+    });
 
     TestBed.configureTestingModule({
+      imports: [HttpClientTestingModule],
       providers: [
         PlayerService,
         { provide: FunifierApiService, useValue: apiSpy },
-        { provide: PlayerMapper, useValue: playerMapperSpy }
+        { provide: PlayerMapper, useValue: playerMapperSpy },
+        { provide: Game4uApiService, useValue: game4uSpy },
+        { provide: SessaoProvider, useValue: { usuario: { email: 'john@example.com' } } }
       ]
     });
 
     service = TestBed.inject(PlayerService);
     funifierApiSpy = TestBed.inject(FunifierApiService) as jasmine.SpyObj<FunifierApiService>;
     mapperSpy = TestBed.inject(PlayerMapper) as jasmine.SpyObj<PlayerMapper>;
+  });
+
+  afterEach(() => {
+    if (savedUseGame4uApi !== undefined) {
+      environment.useGame4uApi = savedUseGame4uApi;
+    }
   });
 
   it('should be created', () => {
@@ -61,7 +85,7 @@ describe('PlayerService', () => {
 
       service.getPlayerStatus('player123').subscribe(result => {
         expect(result).toEqual(mockPlayerStatus);
-        expect(funifierApiSpy.get).toHaveBeenCalledWith('/v3/player/player123/status');
+        expect(funifierApiSpy.get).toHaveBeenCalledWith('/v3/player/player123');
         expect(mapperSpy.toPlayerStatus).toHaveBeenCalledWith(mockApiResponse);
         done();
       });
@@ -146,7 +170,7 @@ describe('PlayerService', () => {
 
       service.getPlayerPoints('player123').subscribe(result => {
         expect(result).toEqual(mockPointWallet);
-        expect(funifierApiSpy.get).toHaveBeenCalledWith('/v3/player/player123/status');
+        expect(funifierApiSpy.get).toHaveBeenCalledWith('/v3/player/player123');
         expect(mapperSpy.toPointWallet).toHaveBeenCalledWith(mockApiResponse);
         done();
       });
@@ -175,39 +199,76 @@ describe('PlayerService', () => {
         });
       });
     });
+
+    it('should map wallet from Game4U stats when enabled', done => {
+      environment.useGame4uApi = true;
+      game4uSpy.getGameStats.and.returnValue(
+        of({
+          stats: [],
+          total_actions: 0,
+          total_points: 42,
+          total_blocked_points: 5
+        })
+      );
+
+      service.getPlayerPoints('me').subscribe(result => {
+        expect(result).toEqual({ bloqueados: 5, desbloqueados: 42, moedas: 0 });
+        expect(game4uSpy.toQueryRange).toHaveBeenCalledWith(undefined);
+        expect(game4uSpy.getGameStats).toHaveBeenCalled();
+        expect(funifierApiSpy.get).not.toHaveBeenCalled();
+        done();
+      });
+    });
+
+    it('should pass selected month into toQueryRange for Game4U /game/stats', done => {
+      environment.useGame4uApi = true;
+      const month = new Date(2026, 2, 15);
+      game4uSpy.toQueryRange.calls.reset();
+      game4uSpy.toQueryRange.and.returnValue({
+        start: '2026-03-01T03:00:00.000Z',
+        end: '2026-03-31T02:59:59.999Z'
+      });
+      game4uSpy.getGameStats.and.returnValue(
+        of({
+          stats: [],
+          total_actions: 0,
+          total_points: 1,
+          total_blocked_points: 0
+        })
+      );
+
+      service.getPlayerPoints('me', month).subscribe(() => {
+        expect(game4uSpy.toQueryRange).toHaveBeenCalledWith(month);
+        expect(game4uSpy.getGameStats).toHaveBeenCalledWith({
+          user: 'john@example.com',
+          start: '2026-03-01T03:00:00.000Z',
+          end: '2026-03-31T02:59:59.999Z'
+        });
+        done();
+      });
+    });
   });
 
   describe('getSeasonProgress', () => {
-    it('should fetch and map season progress correctly', (done) => {
+    it('should map season shell without calling /status', (done) => {
       const seasonDates = {
         start: new Date('2023-01-01'),
         end: new Date('2023-12-31')
       };
 
-      const mockApiResponse = {
-        progress: {
-          metas: { current: 5, target: 10 },
-          clientes: 20,
-          tarefasFinalizadas: 50
-        }
-      };
-
       const mockProgress: SeasonProgress = {
-        metas: { current: 5, target: 10 },
-        clientes: 20,
-        tarefasFinalizadas: 50,
+        metas: { current: 0, target: 0 },
+        clientes: 0,
+        tarefasFinalizadas: 0,
         seasonDates
       };
 
-      funifierApiSpy.get.and.returnValue(of(mockApiResponse));
       mapperSpy.toSeasonProgress.and.returnValue(mockProgress);
 
       service.getSeasonProgress('player123', seasonDates).subscribe(result => {
         expect(result).toEqual(mockProgress);
-        expect(funifierApiSpy.get).toHaveBeenCalledWith('/v3/player/player123/progress', {
-          start_date: seasonDates.start.toISOString(),
-          end_date: seasonDates.end.toISOString()
-        });
+        expect(funifierApiSpy.get).not.toHaveBeenCalled();
+        expect(mapperSpy.toSeasonProgress).toHaveBeenCalledWith({}, seasonDates);
         done();
       });
     });

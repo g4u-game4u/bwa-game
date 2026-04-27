@@ -2,7 +2,6 @@ import { Injectable } from '@angular/core';
 import { Observable, BehaviorSubject } from 'rxjs';
 import { tap, map } from 'rxjs/operators';
 import { FunifierApiService, AuthCredentials, AuthToken } from './funifier-api.service';
-import { environment } from '../../environments/environment';
 
 @Injectable({
   providedIn: 'root'
@@ -24,8 +23,6 @@ export class AuthService {
    */
   login(username: string, password: string): Observable<AuthToken> {
     const credentials: AuthCredentials = {
-      apiKey: environment.funifier_api_key,
-      grant_type: 'password',
       username,
       password
     };

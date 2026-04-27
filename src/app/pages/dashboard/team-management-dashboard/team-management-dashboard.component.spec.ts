@@ -705,7 +705,7 @@ describe('TeamManagementDashboardComponent', () => {
         expect(component.isLoading).toBe(false);
       }));
 
-      it('should show error toast if refresh fails', fakeAsync(() => {
+      it('should not show error toast if refresh fails', fakeAsync(() => {
         mockTeamAggregateService.getTeamSeasonPoints.and.returnValue(
           throwError(() => new Error('API Error'))
         );
@@ -713,7 +713,7 @@ describe('TeamManagementDashboardComponent', () => {
         component.refreshData();
         tick();
 
-        expect(mockToastService.error).toHaveBeenCalled();
+        expect(mockToastService.error).not.toHaveBeenCalled();
       }));
 
       it('should allow retry after failed refresh', fakeAsync(() => {
@@ -925,7 +925,7 @@ describe('TeamManagementDashboardComponent', () => {
 
         expect(component.hasSidebarError).toBe(true);
         expect(component.sidebarErrorMessage).toBe('Erro ao carregar pontos da temporada');
-        expect(mockToastService.error).toHaveBeenCalledWith('Erro ao carregar pontos da temporada');
+        expect(mockToastService.error).not.toHaveBeenCalled();
       }));
 
       it('should display error message when goals query fails', fakeAsync(() => {
@@ -1075,7 +1075,7 @@ describe('TeamManagementDashboardComponent', () => {
     });
 
     describe('Toast Notifications', () => {
-      it('should show toast notification on sidebar error', fakeAsync(() => {
+      it('should not show toast on sidebar error (inline estado de erro)', fakeAsync(() => {
         mockTeamAggregateService.getTeamSeasonPoints.and.returnValue(
           throwError(() => new Error('API Error'))
         );
@@ -1085,10 +1085,10 @@ describe('TeamManagementDashboardComponent', () => {
 
         tick();
 
-        expect(mockToastService.error).toHaveBeenCalled();
+        expect(mockToastService.error).not.toHaveBeenCalled();
       }));
 
-      it('should show toast notification on productivity error', fakeAsync(() => {
+      it('should not show toast on productivity error', fakeAsync(() => {
         mockTeamAggregateService.getTeamProgressMetrics.and.returnValue(
           throwError(() => new Error('API Error'))
         );
@@ -1098,7 +1098,7 @@ describe('TeamManagementDashboardComponent', () => {
 
         tick();
 
-        expect(mockToastService.error).toHaveBeenCalled();
+        expect(mockToastService.error).not.toHaveBeenCalled();
       }));
     });
 

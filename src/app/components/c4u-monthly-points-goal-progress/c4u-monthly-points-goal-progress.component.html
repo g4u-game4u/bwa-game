@@ -1,0 +1,14 @@
+<div class="monthly-points-goal-root">
+  <c4u-shimmer *ngIf="isLoading" class="monthly-points-shimmer" aria-hidden="true"></c4u-shimmer>
+  <c4u-kpi-circular-progress
+    *ngIf="!isLoading"
+    [label]="label"
+    [current]="current"
+    [target]="target"
+    [superTarget]="superTarget"
+    [color]="color"
+    [unit]="unit"
+    [colorIndex]="0"
+    [helpDescription]="resolvedHelpDescription">
+  </c4u-kpi-circular-progress>
+</div>

@@ -17,7 +17,6 @@ try {
   console.log('   - buildGraphDataQuery method');
   console.log('   - buildCollaboratorListQuery method');
   console.log('   - Date formatting utilities');
-  console.log('   - Funifier relative date expressions\n');
   
   console.log('3. Tests created:');
   console.log('   - Unit tests: aggregate-query-builder.service.spec.ts');

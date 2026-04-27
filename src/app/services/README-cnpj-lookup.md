@@ -104,9 +104,9 @@ this.cnpjLookup.clearCache();
 
 ## Data Source
 
-**Endpoint:** `https://service2.funifier.com/v3/database/empid_cnpj__c`
+**Endpoint:** `{backend_url_base}/database/empid_cnpj__c` (mesma base que `G4U_API_BASE` / `BACKEND_URL_BASE`)
 
-**Authentication:** Basic token (from `environment.funifier_basic_token`)
+**Authentication:** sessão Game4U — o `AuthInterceptor` envia `Authorization: Bearer` e `client_id` para o mesmo host da API.
 
 **Response Format:**
 ```json
@@ -288,8 +288,8 @@ export class CnpjNamePipe implements PipeTransform {
 
 ### Issue: Names not showing
 **Check:**
-1. Is `funifier_basic_token` set in environment?
-2. Is API endpoint accessible?
+1. Estão `BACKEND_URL_BASE` ou `G4U_API_BASE` e `CLIENT_ID` definidos no build / `.env`?
+2. O utilizador tem sessão válida e o endpoint existe na API?
 3. Does `empid_cnpj__c` collection exist?
 4. Check browser console for errors
 

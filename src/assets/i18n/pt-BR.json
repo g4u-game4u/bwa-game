@@ -42,6 +42,7 @@
   "LABEL_SEASON_LEVEL": "",
   "LABEL_SEASON_POINTS": "{{pointAlias}} da Temporada",
   "LABEL_SEASON_PROGRESS": "Progresso na temporada",
+  "LABEL_SEASON_CLIENTES": "Clientes (incompletos + finalizados)",
   "LABEL_SELECTED_MONTH": "Mês de visualização",
   "LABEL_SHOW_LAST": "Mostrar os últimos",
   "LABEL_TOTAL": "Total",

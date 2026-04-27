@@ -8,7 +8,6 @@ import { UserProfileService } from '@services/user-profile.service';
 import { PlayerService } from '@services/player.service';
 import { KPIService } from '@services/kpi.service';
 import { FunifierApiService } from '@services/funifier-api.service';
-import { ToastService } from '@services/toast.service';
 import { CnpjLookupService } from '@services/cnpj-lookup.service';
 import { CompanyKpiService, CompanyDisplay } from '@services/company-kpi.service';
 import { SessaoProvider } from '@providers/sessao/sessao.provider';
@@ -112,7 +111,6 @@ export class DashboardSupervisorComponent implements OnInit, OnDestroy {
     private playerService: PlayerService,
     private kpiService: KPIService,
     private funifierApi: FunifierApiService,
-    private toastService: ToastService,
     private cnpjLookupService: CnpjLookupService,
     private companyKpiService: CompanyKpiService,
     private sessaoProvider: SessaoProvider,
@@ -177,7 +175,6 @@ export class DashboardSupervisorComponent implements OnInit, OnDestroy {
         },
         error: (error) => {
           console.error('Error loading supervisor info card:', error);
-          this.toastService.error('Erro ao carregar dados do supervisor');
           this.isLoadingInfoCard = false;
           this.isLoading = false;
           this.cdr.markForCheck();
@@ -236,7 +233,6 @@ export class DashboardSupervisorComponent implements OnInit, OnDestroy {
       },
       error: (error) => {
         console.error('Error loading team players:', error);
-        this.toastService.error('Erro ao carregar jogadores das equipes');
         this.playerCards = [];
         this.calculateAverages();
         this.isLoadingPlayers = false;

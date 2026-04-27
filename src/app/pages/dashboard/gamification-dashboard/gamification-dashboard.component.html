@@ -129,7 +129,8 @@
       <c4u-dashboard-navigation></c4u-dashboard-navigation>
       <div class="header-spacer"></div>
       <c4u-seletor-mes 
-        [playerId]="getPlayerId()" 
+        [playerId]="getPlayerId()"
+        [showTodaTemporadaButton]="false"
         (onSelectedMonth)="onMonthChange($event)">
       </c4u-seletor-mes>
       <button 
@@ -153,11 +154,35 @@
     
     <!-- KPI Section -->
     <section class="dashboard-section" aria-labelledby="kpi-section-title">
-      <h3 id="kpi-section-title" class="section-title">Minha Carteira</h3>
+      <h3 id="kpi-section-title" class="section-title">Minhas Metas</h3>
       
-      <div class="kpi-grid" *ngIf="!isLoadingKPIs && playerKPIs.length > 0" role="group" aria-labelledby="kpi-section-title">
+      <div class="kpi-grid" *ngIf="!isLoadingKPIs" role="group" aria-labelledby="kpi-section-title">
+        <c4u-monthly-points-goal-progress
+          [current]="monthlyPointsProgressData.current"
+          [target]="monthlyPointsProgressData.target"
+          [isLoading]="isLoadingProgress"
+          [color]="monthlyPointsGoalColor">
+        </c4u-monthly-points-goal-progress>
+        <!--
+          KPI circular "Clientes na Carteira" (id numero-empresas) — meta de empresas na carteira:
+          mantido comentado; a meta visível de pontos do mês é o c4u-monthly-points-goal-progress acima.
+          <ng-container *ngFor="let kpi of playerKPIs; let i = index; trackBy: trackByKpiId">
+            <c4u-kpi-circular-progress
+              *ngIf="kpi.id === 'numero-empresas'"
+              [label]="kpi.label"
+              [current]="roundValue(getKpiCurrentValue(kpi))"
+              [target]="roundValue(kpi.target)"
+              [superTarget]="kpi.superTarget ? roundValue(kpi.superTarget) : undefined"
+              [color]="kpi.color"
+              [unit]="kpi.unit"
+              [colorIndex]="i"
+              [isMissing]="!!kpi.isMissing">
+            </c4u-kpi-circular-progress>
+          </ng-container>
+        -->
         <ng-container *ngFor="let kpi of playerKPIs; let i = index; trackBy: trackByKpiId">
           <c4u-kpi-circular-progress
+            *ngIf="kpi.id !== 'numero-empresas'"
             [label]="kpi.label"
             [current]="kpi.id === 'entregas-prazo' ? getKpiCurrentValue(kpi) : roundValue(getKpiCurrentValue(kpi))"
             [target]="roundValue(kpi.target)"
@@ -191,20 +216,20 @@
       <c4u-shimmer *ngIf="isLoadingProgress"></c4u-shimmer>
     </section>
     
-    <!-- Company Portfolio Section -->
+    <!-- Clientes atendidos: apenas lista de participação (action_log no período); abas Carteira/Participação comentadas. -->
     <section class="dashboard-section carteira-section" aria-labelledby="company-section-title">
       <div class="section-header">
         <h3 id="company-section-title" class="section-title">
-          Clientes
+          Clientes atendidos
           <c4u-info-button 
             [infoKey]="''"
-            [customText]="'Esses dados são histórico completo, não limitados ao mês escolhido.'"
+            [customText]="'Empresas com pelo menos uma ação no mês ou período selecionado no painel (no Game4U, pela data de competência em delivery_id).'"
             position="bottom">
           </c4u-info-button>
         </h3>
       </div>
       
-      <!-- Tabs -->
+      <!-- Abas Carteira / Participação — comentadas; exibição única = participação abaixo.
       <div class="clientes-tabs">
         <button 
           class="clientes-tab" 
@@ -220,48 +245,16 @@
         </button>
       </div>
       
-      <!-- Carteira Tab Content -->
-      <c4u-card class="carteira-card" *ngIf="clientesActiveTab === 'carteira'">
-        <c4u-shimmer *ngIf="isLoadingClientes"></c4u-shimmer>
-
-        <div *ngIf="!isLoadingClientes && carteiraClientes.length > 0" class="carteira-list">
-          <div *ngFor="let cliente of carteiraClientes" class="carteira-item" role="article" (click)="openCompanyDetailModal(cliente)" style="cursor: pointer;" [title]="getCompanyTooltip(cliente.cnpj)">
-            <div class="carteira-item-info">
-              <i class="ri-building-line"></i>
-              <span class="carteira-cnpj">{{ getCompanyDisplayName(cliente.cnpj) || cliente.cnpj }}</span>
-              <span class="status-badge" *ngIf="getCompanyStatus(cliente.cnpj)" 
-                    [class.active]="isCompanyActive(cliente.cnpj)"
-                    [class.inactive]="!isCompanyActive(cliente.cnpj)">
-                {{ getCompanyStatus(cliente.cnpj) }}
-              </span>
-            </div>
-            <div class="carteira-item-meta">
-              <span
-                class="carteira-entrega"
-                [class.carteira-entrega--na]="getListaEntregaPercent(cliente) === null">
-                <ng-container *ngIf="getListaEntregaPercent(cliente) !== null; else entregaNaCarteira">
-                  {{ getListaEntregaPercent(cliente)! | number:'1.0-2':'pt-BR' }}%
-                </ng-container>
-                <ng-template #entregaNaCarteira>n/a</ng-template>
-              </span>
-            </div>
-          </div>
-        </div>
-        
-        <div *ngIf="!isLoadingClientes && carteiraClientes.length === 0" class="empty-state">
-          <p>Nenhum cliente na carteira</p>
-        </div>
-      </c4u-card>
+      -->
       
-      <!-- Participação Tab Content -->
-      <c4u-card class="carteira-card" *ngIf="clientesActiveTab === 'participacao'">
+      <c4u-card class="carteira-card">
         <c4u-shimmer *ngIf="isLoadingParticipacao"></c4u-shimmer>
 
         <div *ngIf="!isLoadingParticipacao && participacaoClientes.length > 0" class="carteira-list">
-          <div *ngFor="let cliente of participacaoClientes" class="carteira-item" role="article" (click)="openCompanyDetailModal(cliente)" style="cursor: pointer;" [title]="getCompanyTooltip(cliente.cnpj)">
+          <div *ngFor="let cliente of participacaoClientes" class="carteira-item" role="article" (click)="openCompanyDetailModal(cliente)" style="cursor: pointer;" [title]="getClienteAtendidoTooltip(cliente)">
             <div class="carteira-item-info">
               <i class="ri-building-line"></i>
-              <span class="carteira-cnpj">{{ getCompanyDisplayName(cliente.cnpj) || cliente.cnpj }}</span>
+              <span class="carteira-cnpj">{{ getClienteAtendidoDisplayName(cliente) }}</span>
               <span class="status-badge" *ngIf="getCompanyStatus(cliente.cnpj)" 
                     [class.active]="isCompanyActive(cliente.cnpj)"
                     [class.inactive]="!isCompanyActive(cliente.cnpj)">
@@ -282,7 +275,7 @@
         </div>
         
         <div *ngIf="!isLoadingParticipacao && participacaoClientes.length === 0" class="empty-state">
-          <p>Nenhuma participação encontrada</p>
+          <p>Nenhum cliente atendido neste período</p>
         </div>
       </c4u-card>
     </section>

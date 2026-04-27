@@ -23,6 +23,7 @@ import { C4uInfoButtonModule } from '@components/c4u-info-button/c4u-info-button
 import { C4uPointWalletModule } from '@components/c4u-point-wallet/c4u-point-wallet.module';
 import { C4uSeasonProgressModule } from '@components/c4u-season-progress/c4u-season-progress.module';
 import { C4uKpiCircularProgressModule } from '@components/c4u-kpi-circular-progress/c4u-kpi-circular-progress.module';
+import { C4uMonthlyPointsGoalProgressModule } from '@components/c4u-monthly-points-goal-progress/c4u-monthly-points-goal-progress.module';
 import { ModalProgressListModule } from '@modals/modal-progress-list/modal-progress-list.module';
 import { ModalCarteiraModule } from '@modals/modal-carteira/modal-carteira.module';
 import { ModalCompanyCarteiraDetailModule } from '@modals/modal-company-carteira-detail/modal-company-carteira-detail.module';
@@ -65,6 +66,7 @@ const routes: Routes = [
     C4uPointWalletModule,
     C4uSeasonProgressModule,
     C4uKpiCircularProgressModule,
+    C4uMonthlyPointsGoalProgressModule,
     ModalProgressListModule,
     ModalCarteiraModule,
     ModalCompanyCarteiraDetailModule

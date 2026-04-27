@@ -270,11 +270,9 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
         console.log('✅ Initial team selected:', teamToSelect);
       } else {
         console.error('❌ No teams available for user');
-        this.toastService.error('Usuário não tem acesso a nenhum time');
       }
     } catch (error) {
       console.error('❌ Error initializing dashboard:', error);
-      this.toastService.error('Erro ao carregar dashboard');
     } finally {
       this.isLoading = false;
       console.log('🏁 Dashboard initialization complete, isLoading:', this.isLoading);
@@ -471,7 +469,6 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       console.error('Error in loadAvailableTeams:', error);
       this.teams = [];
       this.isLoadingTeams = false;
-      this.toastService.error('Erro ao carregar equipes');
     }
   }
 
@@ -736,7 +733,6 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       this.lastRefresh = new Date();
     } catch (error) {
       console.error('Error loading team data:', error);
-      this.toastService.error('Erro ao carregar dados da equipe');
     } finally {
       this.isLoading = false;
       this.cdr.markForCheck();
@@ -780,7 +776,6 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       console.log('✅ Collaborator data loaded for:', collaboratorId);
     } catch (error) {
       console.error('Error loading collaborator data:', error);
-      this.toastService.error('Erro ao carregar dados do colaborador');
     }
   }
 
@@ -890,27 +885,8 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
         };
       });
       
-      // Get player status to get blocked points
-      const status = await firstValueFrom(
-        this.funifierApi.get<any>(`/v3/player/${collaboratorId}/status`).pipe(takeUntil(this.destroy$))
-      ).catch((error) => {
-        console.error('Error loading collaborator status:', error);
-        return null;
-      });
-      
-      // Calculate blocked points from status
-      let blockedPoints = 0;
-      if (status) {
-        if (status.point_categories?.locked_points) {
-          if (typeof status.point_categories.locked_points === 'object' && status.point_categories.locked_points.total) {
-            blockedPoints = status.point_categories.locked_points.total;
-          } else if (typeof status.point_categories.locked_points === 'number') {
-            blockedPoints = status.point_categories.locked_points;
-          }
-        } else if (status.point_wallet?.bloqueados) {
-          blockedPoints = status.point_wallet.bloqueados;
-        }
-      }
+      // Pontos bloqueados: não usar GET …/player/…/status no painel do gestor; métricas vêm do action_log.
+      const blockedPoints = 0;
       
       const totalPoints = metrics.activity.pontos;
       const unlockedPoints = Math.max(0, totalPoints - blockedPoints);
@@ -990,7 +966,6 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
           console.error('Error loading season points:', error);
           this.hasSidebarError = true;
           this.sidebarErrorMessage = 'Erro ao carregar pontos da temporada';
-          this.toastService.error('Erro ao carregar pontos da temporada');
           return { total: 0, bloqueados: 0, desbloqueados: 0 };
         }),
         firstValueFrom(
@@ -1001,7 +976,6 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
           console.error('Error loading progress metrics:', error);
           this.hasSidebarError = true;
           this.sidebarErrorMessage = 'Erro ao carregar métricas de progresso';
-          this.toastService.error('Erro ao carregar métricas de progresso');
           return {
             processosIncompletos: 0,
             atividadesFinalizadas: 0,
@@ -1183,7 +1157,6 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       this.isLoadingGoals = false;
       this.hasGoalsError = true;
       this.goalsErrorMessage = 'Erro ao carregar dados de metas';
-      this.toastService.error('Erro ao carregar dados de metas');
     }
   }
 
@@ -1222,7 +1195,6 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       this.isLoadingGoals = false;
       this.hasGoalsError = true;
       this.goalsErrorMessage = 'Erro ao carregar dados de metas';
-      this.toastService.error('Erro ao carregar dados de metas');
     }
   }
 
@@ -1659,7 +1631,6 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       this.pointsByCollaboratorDatasets = [];
       this.hasProductivityError = true;
       this.productivityErrorMessage = 'Erro ao carregar dados de produtividade';
-      this.toastService.error('Erro ao carregar dados de produtividade');
     } finally {
       this.isLoadingProductivity = false;
     }
@@ -2092,7 +2063,6 @@ private calculateCollaboratorTotals(memberData: Array<{
       this.cdr.markForCheck();
     } catch (error) {
       console.error('Error in onTeamChange:', error);
-      this.toastService.error('Erro ao carregar dados do time');
     }
   }
 
@@ -2558,6 +2528,14 @@ private calculateCollaboratorTotals(memberData: Array<{
     return displayName || cnpj;
   }
 
+  getClienteAtendidoDisplayName(cliente: CompanyDisplay): string {
+    const t = cliente.delivery_title?.trim();
+    if (t) {
+      return t;
+    }
+    return this.getCompanyDisplayName(cliente.cnpj) || cliente.cnpj;
+  }
+
   getCompanyStatus(cnpj: string): string {
     return this.cnpjStatusMap.get(cnpj) || '';
   }
@@ -2573,7 +2551,7 @@ private calculateCollaboratorTotals(memberData: Array<{
     this.selectedCarteiraCompany = company;
     this.isCompanyCarteiraDetailModalOpen = true;
     this.focusedElementBeforeModal = document.activeElement as HTMLElement;
-    const companyName = this.getCompanyDisplayName(company.cnpj);
+    const companyName = this.getClienteAtendidoDisplayName(company);
     this.announceToScreenReader(`Abrindo detalhes de ${companyName}`);
   }
 
@@ -2581,8 +2559,8 @@ private calculateCollaboratorTotals(memberData: Array<{
    * Handle company carteira detail modal close
    */
   onCompanyCarteiraDetailModalClosed(): void {
-    const companyName = this.selectedCarteiraCompany 
-      ? this.getCompanyDisplayName(this.selectedCarteiraCompany.cnpj) 
+    const companyName = this.selectedCarteiraCompany
+      ? this.getClienteAtendidoDisplayName(this.selectedCarteiraCompany)
       : 'empresa';
     this.isCompanyCarteiraDetailModalOpen = false;
     this.selectedCarteiraCompany = null;
@@ -2875,10 +2853,51 @@ private calculateCollaboratorTotals(memberData: Array<{
   }
 
   /**
-   * Get enabled KPIs (all KPIs)
+   * KPIs na barra lateral compacta (sem meta de empresas na carteira, alinhado ao painel principal).
    */
   get enabledKPIs(): KPIData[] {
-    return this.teamKPIs;
+    return this.teamKPIs.filter(k => k.id !== 'numero-empresas');
+  }
+
+  /**
+   * Circular “Pontos no mês”: atingido = pontos só em DONE; meta = soma em todos os status (Game4U). Sem Game4U: meta provisória action_log.
+   */
+  get monthlyPointsProgressData(): { current: number; target: number } {
+    const donePts = this.teamActivityMetrics?.pontosDone;
+    const allPts = this.teamActivityMetrics?.pontosTodosStatus;
+    if (donePts !== undefined && allPts !== undefined) {
+      const current = Math.floor(donePts);
+      const target = Math.max(Math.floor(allPts), 1);
+      return { current, target };
+    }
+    const current = Math.floor(this.teamActivityMetrics?.pontos ?? 0);
+    const pendingTasks =
+      (this.teamProcessMetrics?.pendentes ?? 0) + (this.teamProcessMetrics?.incompletas ?? 0);
+    const target =
+      pendingTasks > 0
+        ? pendingTasks * PONTOS_POR_ATIVIDADE_FINALIZADA_ACTION_LOG
+        : Math.max(current, 1);
+    return { current, target };
+  }
+
+  get monthlyPointsGoalColor(): 'red' | 'yellow' | 'green' | 'pink' {
+    const { current, target } = this.monthlyPointsProgressData;
+    const superGoal = Math.ceil(target * 1.5);
+    return this.kpiService.getKPIColorByGoals(current, target, superGoal);
+  }
+
+  get monthlyPointsProgressLabel(): string {
+    return this.selectedCollaborator ? 'Pontos no mês' : 'Pontos no mês (equipe)';
+  }
+
+  get teamMonthlyPointsHelpText(): string {
+    const scope = this.selectedCollaborator
+      ? 'Pontos deste colaborador no período selecionado (filtro do painel). '
+      : 'Pontos somados de todos os membros da equipe no período selecionado. ';
+    return (
+      scope +
+      'Com dados Game4U: a meta é a soma dos pontos das user-actions em qualquer status; o atingido é só os pontos em DONE. Sem Game4U, a meta provisória usa processos pendentes/incompletos do action_log × 3.'
+    );
   }
 
   /**
@@ -3020,7 +3039,6 @@ private calculateCollaboratorTotals(memberData: Array<{
       console.error('Error saving clientes meta:', error);
       this.metaSaveMessage = error?.message || 'Erro ao salvar meta. Tente novamente.';
       this.metaSaveSuccess = false;
-      this.toastService.error('Erro ao salvar meta de clientes');
     } finally {
       this.isSavingMeta = false;
       this.cdr.markForCheck();

@@ -8,7 +8,6 @@ import { ACLService, AclMetadata } from '@services/acl.service';
 import { PlayerService } from '@services/player.service';
 import { KPIService } from '@services/kpi.service';
 import { FunifierApiService } from '@services/funifier-api.service';
-import { ToastService } from '@services/toast.service';
 import { SessaoProvider } from '@providers/sessao/sessao.provider';
 import { TeamAggregateService } from '@services/team-aggregate.service';
 import { ActionLogService } from '@services/action-log.service';
@@ -153,7 +152,6 @@ export class DashboardSupervisorTecnicoComponent implements OnInit, OnDestroy {
     private playerService: PlayerService,
     private kpiService: KPIService,
     private funifierApi: FunifierApiService,
-    private toastService: ToastService,
     private sessaoProvider: SessaoProvider,
     private teamAggregateService: TeamAggregateService,
     private actionLogService: ActionLogService,
@@ -196,7 +194,6 @@ export class DashboardSupervisorTecnicoComponent implements OnInit, OnDestroy {
       this.cdr.markForCheck();
     } catch (error) {
       console.error('Error initializing dashboard:', error);
-      this.toastService.error('Erro ao inicializar o dashboard');
       this.isLoading = false;
       this.cdr.markForCheck();
     }
@@ -250,7 +247,6 @@ export class DashboardSupervisorTecnicoComponent implements OnInit, OnDestroy {
       this.cdr.markForCheck();
     } catch (error) {
       console.error('Error loading available teams:', error);
-      this.toastService.error('Erro ao carregar equipes acessíveis');
       this.teams = [];
       this.isLoadingTeams = false;
       this.isLoadingPlayers = false;
@@ -299,7 +295,6 @@ export class DashboardSupervisorTecnicoComponent implements OnInit, OnDestroy {
       this.cdr.markForCheck();
     } catch (error) {
       console.error('Error loading team data:', error);
-      this.toastService.error('Erro ao carregar dados da equipe');
       this.isLoading = false;
       this.isLoadingPlayers = false;
       this.cdr.markForCheck();

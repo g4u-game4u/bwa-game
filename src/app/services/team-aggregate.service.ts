@@ -5,6 +5,15 @@ import { map, catchError, tap, switchMap } from 'rxjs/operators';
 import { FunifierApiService } from './funifier-api.service';
 import { AggregateQueryBuilderService, AggregateQuery } from './aggregate-query-builder.service';
 import { PerformanceMonitorService } from './performance-monitor.service';
+import { isGame4uDataEnabled } from '@model/game4u-api.model';
+import { Game4uApiService } from './game4u-api.service';
+import {
+  mapGame4uStatsToActivityMetrics,
+  mapGame4uStatsToPointWallet,
+  mapGame4uStatsToTeamProgressMetrics,
+  mapGame4uStatsToTeamSeasonPoints,
+  mergeGame4uTeamDeliveryRows
+} from './game4u-game-mapper';
 
 /**
  * Team season points model
@@ -61,7 +70,8 @@ export class TeamAggregateService {
   constructor(
     private funifierApi: FunifierApiService,
     private queryBuilder: AggregateQueryBuilderService,
-    private performanceMonitor: PerformanceMonitorService
+    private performanceMonitor: PerformanceMonitorService,
+    private game4u: Game4uApiService
   ) { }
 
   /**
@@ -91,6 +101,15 @@ export class TeamAggregateService {
     const cached = this.getFromCache<TeamSeasonPoints>(cacheKey);
     if (cached) {
       return of(cached);
+    }
+
+    if (isGame4uDataEnabled() && this.game4u.isConfigured()) {
+      const range = this.game4u.toIsoRange(seasonStart, seasonEnd);
+      return this.game4u.getGameTeamStats({ team: teamId, ...range }).pipe(
+        map(mapGame4uStatsToTeamSeasonPoints),
+        tap(data => this.setCache(cacheKey, data)),
+        catchError(error => this.handleAggregateError('getTeamSeasonPoints', error))
+      );
     }
     
     // Build and execute query
@@ -130,6 +149,15 @@ export class TeamAggregateService {
     const cached = this.getFromCache<TeamProgressMetrics>(cacheKey);
     if (cached) {
       return of(cached);
+    }
+
+    if (isGame4uDataEnabled() && this.game4u.isConfigured()) {
+      const range = this.game4u.toIsoRange(seasonStart, seasonEnd);
+      return this.game4u.getGameTeamStats({ team: teamId, ...range }).pipe(
+        map(mapGame4uStatsToTeamProgressMetrics),
+        tap(data => this.setCache(cacheKey, data)),
+        catchError(error => this.handleAggregateError('getTeamProgressMetrics', error))
+      );
     }
     
     // Build and execute query
@@ -673,6 +701,27 @@ export class TeamAggregateService {
       return of(cached);
     }
 
+    if (isGame4uDataEnabled() && this.game4u.isConfigured()) {
+      const range = this.game4u.toIsoRange(startDate, endDate);
+      return this.game4u.getGameTeamStats({ team: teamId, ...range }).pipe(
+        map(stats => {
+          const prog = mapGame4uStatsToTeamProgressMetrics(stats);
+          const activity = mapGame4uStatsToActivityMetrics(stats);
+          return {
+            finalizadas: activity.finalizadas,
+            pontos: activity.pontos,
+            processosFinalizados: prog.processosFinalizados,
+            processosIncompletos: prog.processosIncompletos
+          };
+        }),
+        tap(data => this.setCache(cacheKey, data)),
+        catchError(error => {
+          console.error('Error in getTeamActivityMetrics:', error);
+          return of({ finalizadas: 0, pontos: 0, processosFinalizados: 0, processosIncompletos: 0 });
+        })
+      );
+    }
+
     // Single aggregate query with $lookup to get all action logs for team members
     const aggregateQuery = [
       {
@@ -751,6 +800,28 @@ export class TeamAggregateService {
       return of(cached);
     }
 
+    if (isGame4uDataEnabled() && this.game4u.isConfigured()) {
+      const range = this.game4u.toIsoRange(startDate, endDate);
+      return this.game4u.getGameTeamActions({ team: teamId, ...range }).pipe(
+        map(actions => {
+          const m = new Map<string, number>();
+          for (const a of actions) {
+            const uid = String(a.user_email ?? '').trim();
+            if (!uid) {
+              continue;
+            }
+            m.set(uid, (m.get(uid) || 0) + 1);
+          }
+          return m;
+        }),
+        tap(data => this.setCache(cacheKey, data)),
+        catchError(error => {
+          console.error('Error in getTeamMemberActionLogCounts:', error);
+          return of(new Map<string, number>());
+        })
+      );
+    }
+
     const aggregateQuery = [
       {
         $lookup: {
@@ -818,6 +889,25 @@ export class TeamAggregateService {
     const cached = this.getFromCache<any[]>(cacheKey);
     if (cached) {
       return of(cached);
+    }
+
+    if (isGame4uDataEnabled() && this.game4u.isConfigured()) {
+      const range = this.game4u.toIsoRange(startDate, endDate);
+      const base = { team: teamId, ...range };
+      return forkJoin({
+        delivered: this.game4u.getGameTeamDeliveries({ ...base, status: 'DELIVERED' }),
+        incomplete: this.game4u.getGameTeamDeliveries({ ...base, status: 'INCOMPLETE' }),
+        pending: this.game4u.getGameTeamDeliveries({ ...base, status: 'PENDING' })
+      }).pipe(
+        map(({ delivered, incomplete, pending }) =>
+          mergeGame4uTeamDeliveryRows(delivered, incomplete, pending)
+        ),
+        tap(data => this.setCache(cacheKey, data)),
+        catchError(error => {
+          console.error('Error in getTeamCnpjListWithCount:', error);
+          return of([]);
+        })
+      );
     }
 
     // Single aggregate query with $lookup to get all CNPJs for team members
@@ -907,6 +997,23 @@ export class TeamAggregateService {
 
     if (memberIds.length === 0 || !teamId) {
       return of({ bloqueados: 0, desbloqueados: 0 });
+    }
+
+    if (isGame4uDataEnabled() && this.game4u.isConfigured()) {
+      const range = this.game4u.toIsoRange(startDate, endDate);
+      return this.game4u.getGameTeamStats({ team: teamId, ...range }).pipe(
+        map(stats => {
+          const w = mapGame4uStatsToPointWallet(stats);
+          const result = { bloqueados: w.bloqueados, desbloqueados: w.desbloqueados };
+          console.log('✅ Team monthly points breakdown (Game4U):', result);
+          return result;
+        }),
+        tap(data => this.setCache(cacheKey, data)),
+        catchError(error => {
+          console.error('Error in getTeamMonthlyPointsBreakdown:', error);
+          return of({ bloqueados: 0, desbloqueados: 0 });
+        })
+      );
     }
 
     const achievementQuery = [

@@ -3,8 +3,6 @@ import { Observable, of } from 'rxjs';
 import { map, catchError, tap, shareReplay } from 'rxjs/operators';
 import { FunifierApiService } from './funifier-api.service';
 import { SessaoProvider } from '@providers/sessao/sessao.provider';
-import { ToastService } from './toast.service';
-
 /**
  * Catalog item entry from the Player Status API response.
  * Each entry represents a Virtual Good the player may possess.
@@ -66,8 +64,7 @@ export class ACLService {
 
   constructor(
     private funifierApi: FunifierApiService,
-    private sessao: SessaoProvider,
-    private toastService: ToastService
+    private sessao: SessaoProvider
   ) {}
 
   /**
@@ -95,7 +92,6 @@ export class ACLService {
       }),
       catchError(error => {
         console.error('[ACLService] Failed to fetch player status for ACL verification:', error);
-        this.toastService.error('Não foi possível carregar dados de permissão. Exibindo dashboard padrão.', false);
         return of({} as CatalogItems);
       })
     );
@@ -149,7 +145,6 @@ export class ACLService {
       }),
       catchError(error => {
         console.warn('[ACLService] Failed to fetch ACL metadata from acl__c, falling back to raw IDs:', error);
-        this.toastService.error('Não foi possível carregar dados de permissão. Exibindo dashboard padrão.', false);
         return of([] as AclMetadata[]);
       }),
       shareReplay({ bufferSize: 1, refCount: false })

@@ -3,13 +3,18 @@ import { of, throwError } from 'rxjs';
 import { TeamAggregateService, TeamSeasonPoints, TeamProgressMetrics, Collaborator } from './team-aggregate.service';
 import { FunifierApiService } from './funifier-api.service';
 import { AggregateQueryBuilderService } from './aggregate-query-builder.service';
+import { environment } from '../../environments/environment';
 
 describe('TeamAggregateService', () => {
   let service: TeamAggregateService;
   let funifierApiSpy: jasmine.SpyObj<FunifierApiService>;
   let queryBuilderSpy: jasmine.SpyObj<AggregateQueryBuilderService>;
+  let savedUseGame4uApi: boolean | undefined;
 
   beforeEach(() => {
+    savedUseGame4uApi = environment.useGame4uApi;
+    environment.useGame4uApi = false;
+
     const funifierSpy = jasmine.createSpyObj('FunifierApiService', ['post']);
     const builderSpy = jasmine.createSpyObj('AggregateQueryBuilderService', [
       'buildPointsAggregateQuery',
@@ -28,6 +33,12 @@ describe('TeamAggregateService', () => {
     service = TestBed.inject(TeamAggregateService);
     funifierApiSpy = TestBed.inject(FunifierApiService) as jasmine.SpyObj<FunifierApiService>;
     queryBuilderSpy = TestBed.inject(AggregateQueryBuilderService) as jasmine.SpyObj<AggregateQueryBuilderService>;
+  });
+
+  afterEach(() => {
+    if (savedUseGame4uApi !== undefined) {
+      environment.useGame4uApi = savedUseGame4uApi;
+    }
   });
 
   it('should be created', () => {

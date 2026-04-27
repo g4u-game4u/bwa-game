@@ -16,8 +16,6 @@ import { PerformanceMonitorService } from '@services/performance-monitor.service
 import { SessaoProvider } from '@providers/sessao/sessao.provider';
 import { CacheManagerService } from '@services/cache-manager.service';
 import { CnpjLookupService } from '@services/cnpj-lookup.service';
-import { SupabaseCompaniesService } from '@services/supabase-companies.service';
-import { SupabaseCompanyRow } from '@model/supabase-company.model';
 import { 
   generatePlayerStatus, 
   generatePointWallet, 
@@ -25,29 +23,25 @@ import {
   generateCompany,
   generateKPIData
 } from '@app/testing/mock-data-generators';
+import { Company } from '@model/gamification-dashboard.model';
 
-function rowsFromCnpjList(list: { cnpj: string }[]): SupabaseCompanyRow[] {
+function companiesFromCnpjList(list: { cnpj: string }[]): Company[] {
   return list.map((item, i) => {
     const name = item.cnpj.includes(' l ') ? item.cnpj.split(' l ')[0].trim() : `Empresa ${i}`;
     return {
-      id: i + 1,
+      id: String(i + 1),
+      name,
       cnpj: item.cnpj,
-      razao_social: name,
-      fantasia: name,
-      status: 'Ativa',
-      client_type_id: null,
-      synced_at: '',
-      created_at: '',
-      responsaveis: []
+      healthScore: 80,
+      kpis: []
     };
   });
 }
 
-function carteiraKpiPayloadFromRows(rows: SupabaseCompanyRow[]) {
-  return rows.map(r => ({
-    cnpj: r.cnpj,
-    supabaseId: r.id,
-    empId: r.emp_id
+function carteiraRowsFromCompanies(companies: Company[]) {
+  return companies.map(c => ({
+    cnpj: c.cnpj,
+    empId: c.id
   }));
 }
 
@@ -59,8 +53,6 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
   let kpiService: jasmine.SpyObj<KPIService>;
   let toastService: jasmine.SpyObj<ToastService>;
   let actionLogService: jasmine.SpyObj<ActionLogService>;
-  let supabaseCompaniesService: jasmine.SpyObj<SupabaseCompaniesService>;
-
   beforeEach(async () => {
     // Create spy objects for services
     const playerServiceSpy = jasmine.createSpyObj('PlayerService', [
@@ -74,6 +66,7 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
     const companyServiceSpy = jasmine.createSpyObj('CompanyService', [
       'getCompanies'
     ]);
+    companyServiceSpy.getCompanies.and.returnValue(of([]));
     
     const kpiServiceSpy = jasmine.createSpyObj('KPIService', [
       'getPlayerKPIs'
@@ -109,13 +102,11 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
       'enrichFromCnpjResp',
       'fetchGamificacaoMapsAsync',
       'enrichCarteiraRowsWithMaps',
-      'enrichCarteiraFromSupabase',
       'prefetchGamificacaoSnapshot',
       'clearCache'
     ]);
     companyKpiServiceSpy.enrichCompaniesWithKpis.and.returnValue(of([]));
     companyKpiServiceSpy.enrichFromCnpjResp.and.returnValue(of([]));
-    companyKpiServiceSpy.enrichCarteiraFromSupabase.and.returnValue(of([]));
     companyKpiServiceSpy.fetchGamificacaoMapsAsync.and.returnValue(
       Promise.resolve(emptyGamificacaoMaps)
     );
@@ -123,12 +114,6 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
 
     const cacheManagerSpy = jasmine.createSpyObj('CacheManagerService', ['clearAllCaches']);
     const cnpjLookupSpy = jasmine.createSpyObj('CnpjLookupService', ['enrichCnpjListFull']);
-    const supabaseCompaniesSpy = jasmine.createSpyObj('SupabaseCompaniesService', [
-      'getCompaniesForPlayer',
-      'applyRowsToCnpjMaps'
-    ]);
-    supabaseCompaniesSpy.getCompaniesForPlayer.and.returnValue(of([]));
-
     const ngbModalSpy = jasmine.createSpyObj('NgbModal', ['open']);
     const activatedRouteSpy = {
       snapshot: { queryParams: {} },
@@ -163,7 +148,6 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
         { provide: SessaoProvider, useValue: sessaoProviderSpy },
         { provide: CacheManagerService, useValue: cacheManagerSpy },
         { provide: CnpjLookupService, useValue: cnpjLookupSpy },
-        { provide: SupabaseCompaniesService, useValue: supabaseCompaniesSpy },
         { provide: NgbModal, useValue: ngbModalSpy },
         { provide: ActivatedRoute, useValue: activatedRouteSpy },
         { provide: Router, useValue: routerSpy }
@@ -176,8 +160,6 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
     kpiService = TestBed.inject(KPIService) as jasmine.SpyObj<KPIService>;
     toastService = TestBed.inject(ToastService) as jasmine.SpyObj<ToastService>;
     actionLogService = TestBed.inject(ActionLogService) as jasmine.SpyObj<ActionLogService>;
-    supabaseCompaniesService = TestBed.inject(SupabaseCompaniesService) as jasmine.SpyObj<SupabaseCompaniesService>;
-
     playerService.getPlayerCnpj.and.returnValue(of([]));
 
     fixture = TestBed.createComponent(GamificationDashboardComponent);
@@ -649,9 +631,9 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
       component.refreshData();
       tick();
 
-      // Assert - Context preserved despite error
+      // Assert - Context preserved despite error (sem toast de erro)
       expect(component.selectedMonth).toEqual(selectedMonth);
-      expect(toastService.error).toHaveBeenCalled();
+      expect(toastService.error).not.toHaveBeenCalled();
     }));
 
     /**
@@ -742,7 +724,7 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
       // Assert
       expect(component.playerStatus).toBeNull();
       expect(component.isLoadingPlayer).toBe(false);
-      expect(toastService.error).toHaveBeenCalledWith('Erro ao carregar dados do jogador');
+      expect(toastService.error).not.toHaveBeenCalled();
     }));
 
     it('should handle company data loading errors gracefully', fakeAsync(() => {
@@ -761,7 +743,7 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
       // Assert
       expect(component.companies).toEqual([]);
       expect(component.isLoadingCompanies).toBe(false);
-      expect(toastService.error).toHaveBeenCalledWith('Erro ao carregar carteira de empresas');
+      expect(toastService.error).not.toHaveBeenCalled();
     }));
 
     it('should handle KPI data loading errors gracefully', fakeAsync(() => {
@@ -780,7 +762,7 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
       // Assert
       expect(component.playerKPIs).toEqual([]);
       expect(component.isLoadingKPIs).toBe(false);
-      expect(toastService.error).toHaveBeenCalledWith('Erro ao carregar KPIs');
+      expect(toastService.error).not.toHaveBeenCalled();
     }));
 
     it('should continue loading other sections when one fails', fakeAsync(() => {
@@ -1114,15 +1096,15 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
     });
 
     /**
-     * Carteira: fetchGamificacaoMapsAsync → Supabase → enrichCarteiraRowsWithMaps.
+     * Carteira: fetchGamificacaoMapsAsync → getCompanies → enrichCarteiraRowsWithMaps.
      */
-    it('should load carteira rows from Supabase service and enrich with KPI data on initialization', fakeAsync(() => {
+    it('should load carteira rows from CompanyService and enrich with KPI data on initialization', fakeAsync(() => {
       const mockList = [
         { cnpj: 'COMPANY A l 0001 [2000|0001-60]' },
         { cnpj: 'COMPANY B l 0002 [1218|0002-45]' },
         { cnpj: 'COMPANY C l 0003 [9654|0003-12]' }
       ];
-      const supabaseRows = rowsFromCnpjList(mockList);
+      const supabaseRows = companiesFromCnpjList(mockList);
       const mockEnrichedData: CompanyDisplay[] = [
         {
           cnpj: 'COMPANY A l 0001 [2000|0001-60]',
@@ -1146,7 +1128,7 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
           deliveryKpi: { id: 'delivery', label: 'Entregas', current: 102, target: 100, unit: 'entregas', percentage: 100, color: 'green' }
         }
       ];
-      supabaseCompaniesService.getCompaniesForPlayer.and.returnValue(of(supabaseRows));
+      companyService.getCompanies.and.returnValue(of(supabaseRows));
 
       const companyKpiService = TestBed.inject(CompanyKpiService) as jasmine.SpyObj<CompanyKpiService>;
       companyKpiService.enrichCarteiraRowsWithMaps.and.returnValue(mockEnrichedData);
@@ -1154,10 +1136,10 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
       fixture.detectChanges();
       tick();
 
-      expect(supabaseCompaniesService.getCompaniesForPlayer).toHaveBeenCalled();
+      expect(companyService.getCompanies).toHaveBeenCalled();
       expect(companyKpiService.fetchGamificacaoMapsAsync).toHaveBeenCalled();
       expect(companyKpiService.enrichCarteiraRowsWithMaps).toHaveBeenCalledWith(
-        carteiraKpiPayloadFromRows(supabaseRows),
+        carteiraRowsFromCompanies(supabaseRows),
         jasmine.any(Object)
       );
       expect(component.carteiraClientes).toEqual(mockEnrichedData);
@@ -1166,7 +1148,7 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
     }));
 
     it('should handle empty carteira data', fakeAsync(() => {
-      supabaseCompaniesService.getCompaniesForPlayer.and.returnValue(of([]));
+      companyService.getCompanies.and.returnValue(of([]));
 
       const companyKpiService = TestBed.inject(CompanyKpiService) as jasmine.SpyObj<CompanyKpiService>;
       fixture.detectChanges();
@@ -1180,7 +1162,7 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
 
     it('should handle carteira data loading errors gracefully', fakeAsync(() => {
       const error = new Error('Failed to load carteira data');
-      supabaseCompaniesService.getCompaniesForPlayer.and.returnValue(throwError(() => error));
+      companyService.getCompanies.and.returnValue(throwError(() => error));
 
       fixture.detectChanges();
       tick();
@@ -1191,7 +1173,7 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
 
     it('should set loading state correctly during carteira data load', fakeAsync(() => {
       const mockList = [{ cnpj: 'COMPANY A l 0001 [2000|0001-60]' }];
-      const supabaseRows = rowsFromCnpjList(mockList);
+      const supabaseRows = companiesFromCnpjList(mockList);
       const mockEnrichedData: CompanyDisplay[] = [
         {
           cnpj: 'COMPANY A l 0001 [2000|0001-60]',
@@ -1201,7 +1183,7 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
           deliveryKpi: { id: 'delivery', label: 'Entregas', current: 89, target: 100, unit: 'entregas', percentage: 89, color: 'green' }
         }
       ];
-      supabaseCompaniesService.getCompaniesForPlayer.and.returnValue(of(supabaseRows).pipe(delay(100)));
+      companyService.getCompanies.and.returnValue(of(supabaseRows).pipe(delay(100)));
 
       const companyKpiService = TestBed.inject(CompanyKpiService) as jasmine.SpyObj<CompanyKpiService>;
       companyKpiService.enrichCarteiraRowsWithMaps.and.returnValue(mockEnrichedData);
@@ -1217,28 +1199,28 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
     }));
 
     it('should call getCompaniesForPlayer with session player id', fakeAsync(() => {
-      supabaseCompaniesService.getCompaniesForPlayer.and.returnValue(of([]));
+      companyService.getCompanies.and.returnValue(of([]));
 
       const companyKpiService = TestBed.inject(CompanyKpiService) as jasmine.SpyObj<CompanyKpiService>;
 
       fixture.detectChanges();
       tick();
 
-      expect(supabaseCompaniesService.getCompaniesForPlayer).toHaveBeenCalledWith('test-user', jasmine.anything());
+      expect(companyService.getCompanies).toHaveBeenCalledWith('test-user');
     }));
 
-    it('should not pass selected month to Supabase carteira load', fakeAsync(() => {
-      supabaseCompaniesService.getCompaniesForPlayer.and.returnValue(of([]));
+    it('should not pass selected month to carteira getCompanies load', fakeAsync(() => {
+      companyService.getCompanies.and.returnValue(of([]));
 
       const companyKpiService = TestBed.inject(CompanyKpiService) as jasmine.SpyObj<CompanyKpiService>;
 
       component.selectedMonth = new Date('2024-01-15');
-      supabaseCompaniesService.getCompaniesForPlayer.calls.reset();
+      companyService.getCompanies.calls.reset();
 
       component['loadClientesData']();
       tick();
 
-      expect(supabaseCompaniesService.getCompaniesForPlayer).toHaveBeenCalledWith('test-user', jasmine.anything());
+      expect(companyService.getCompanies).toHaveBeenCalledWith('test-user');
     }));
 
     it('should not reload carteira when month changes', fakeAsync(() => {
@@ -1253,7 +1235,7 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
       ];
 
       const companyKpiService = TestBed.inject(CompanyKpiService) as jasmine.SpyObj<CompanyKpiService>;
-      supabaseCompaniesService.getCompaniesForPlayer.and.returnValue(of(rowsFromCnpjList(initialList)));
+      companyService.getCompanies.and.returnValue(of(companiesFromCnpjList(initialList)));
       companyKpiService.enrichCarteiraRowsWithMaps.and.returnValue(initialEnriched);
 
       fixture.detectChanges();
@@ -1261,40 +1243,40 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
 
       expect(component.carteiraClientes).toEqual(initialEnriched);
 
-      const callsAfterInit = supabaseCompaniesService.getCompaniesForPlayer.calls.count();
+      const callsAfterInit = companyService.getCompanies.calls.count();
 
       component.onMonthChange(1);
       tick();
 
-      expect(supabaseCompaniesService.getCompaniesForPlayer.calls.count()).toBe(callsAfterInit);
+      expect(companyService.getCompanies.calls.count()).toBe(callsAfterInit);
       expect(component.carteiraClientes).toEqual(initialEnriched);
     }));
 
-    it('should clear carteira when session has no user for me→email resolution', fakeAsync(() => {
+    it('should clear carteira when portfolio is empty (session usuario null still uses player id me)', fakeAsync(() => {
       const sessaoProviderSpy = TestBed.inject(SessaoProvider) as jasmine.SpyObj<SessaoProvider>;
       Object.defineProperty(sessaoProviderSpy, 'usuario', {
         get: () => null
       });
 
       const companyKpiService = TestBed.inject(CompanyKpiService) as jasmine.SpyObj<CompanyKpiService>;
-      supabaseCompaniesService.getCompaniesForPlayer.calls.reset();
-      supabaseCompaniesService.getCompaniesForPlayer.and.returnValue(of([]));
+      companyService.getCompanies.calls.reset();
+      companyService.getCompanies.and.returnValue(of([]));
 
       component['loadClientesData']();
       tick();
 
       expect(component.isLoadingClientes).toBe(false);
       expect(component.carteiraClientes).toEqual([]);
-      expect(companyKpiService.fetchGamificacaoMapsAsync).not.toHaveBeenCalled();
+      expect(companyKpiService.fetchGamificacaoMapsAsync).toHaveBeenCalled();
       expect(companyKpiService.enrichCarteiraRowsWithMaps).not.toHaveBeenCalled();
     }));
 
-    it('should enrich companies with KPI data after Supabase rows', fakeAsync(() => {
+    it('should enrich companies with KPI data after portfolio companies', fakeAsync(() => {
       const mockList = [
         { cnpj: 'COMPANY A l 0001 [2000|0001-60]' },
         { cnpj: 'COMPANY B l 0002 [1218|0002-45]' }
       ];
-      const supabaseRows = rowsFromCnpjList(mockList);
+      const supabaseRows = companiesFromCnpjList(mockList);
       const mockEnrichedData: CompanyDisplay[] = [
         {
           cnpj: 'COMPANY A l 0001 [2000|0001-60]',
@@ -1328,7 +1310,7 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
         }
       ];
 
-      supabaseCompaniesService.getCompaniesForPlayer.and.returnValue(of(supabaseRows));
+      companyService.getCompanies.and.returnValue(of(supabaseRows));
 
       const companyKpiService = TestBed.inject(CompanyKpiService) as jasmine.SpyObj<CompanyKpiService>;
       companyKpiService.enrichCarteiraRowsWithMaps.and.returnValue(mockEnrichedData);
@@ -1338,7 +1320,7 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
 
       expect(companyKpiService.fetchGamificacaoMapsAsync).toHaveBeenCalled();
       expect(companyKpiService.enrichCarteiraRowsWithMaps).toHaveBeenCalledWith(
-        carteiraKpiPayloadFromRows(supabaseRows),
+        carteiraRowsFromCompanies(supabaseRows),
         jasmine.any(Object)
       );
       expect(component.carteiraClientes).toEqual(mockEnrichedData);
@@ -1352,7 +1334,7 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
       const mockList = [{ cnpj: 'COMPANY A l 0001 [2000|0001-60]' }];
       const error = new Error('Failed to enrich companies with KPI data');
 
-      supabaseCompaniesService.getCompaniesForPlayer.and.returnValue(of(rowsFromCnpjList(mockList)));
+      companyService.getCompanies.and.returnValue(of(companiesFromCnpjList(mockList)));
 
       const companyKpiService = TestBed.inject(CompanyKpiService) as jasmine.SpyObj<CompanyKpiService>;
       companyKpiService.fetchGamificacaoMapsAsync.and.returnValue(Promise.reject(error));
@@ -1393,8 +1375,8 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
         }
       ];
 
-      supabaseCompaniesService.getCompaniesForPlayer.and.returnValue(
-        of(rowsFromCnpjList([{ cnpj: 'COMPANY A l 0001 [2000|0001-60]' }]))
+      companyService.getCompanies.and.returnValue(
+        of(companiesFromCnpjList([{ cnpj: 'COMPANY A l 0001 [2000|0001-60]' }]))
       );
 
       const companyKpiService = TestBed.inject(CompanyKpiService) as jasmine.SpyObj<CompanyKpiService>;
@@ -1421,8 +1403,8 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
         }
       ];
 
-      supabaseCompaniesService.getCompaniesForPlayer.and.returnValue(
-        of(rowsFromCnpjList([{ cnpj: 'COMPANY B l 0002 [1218|0002-45]' }]))
+      companyService.getCompanies.and.returnValue(
+        of(companiesFromCnpjList([{ cnpj: 'COMPANY B l 0002 [1218|0002-45]' }]))
       );
 
       const companyKpiService = TestBed.inject(CompanyKpiService) as jasmine.SpyObj<CompanyKpiService>;
@@ -1477,9 +1459,9 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
         }
       ];
 
-      supabaseCompaniesService.getCompaniesForPlayer.and.returnValue(
+      companyService.getCompanies.and.returnValue(
         of(
-          rowsFromCnpjList([
+          companiesFromCnpjList([
             { cnpj: 'COMPANY A l 0001 [2000|0001-60]' },
             { cnpj: 'COMPANY B l 0002 [1218|0002-45]' },
             { cnpj: 'COMPANY C l 0003 [9654|0003-12]' }
@@ -1548,9 +1530,9 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
         }
       ];
 
-      supabaseCompaniesService.getCompaniesForPlayer.and.returnValue(
+      companyService.getCompanies.and.returnValue(
         of(
-          rowsFromCnpjList([
+          companiesFromCnpjList([
             { cnpj: 'LOW PERFORMER l 0001 [1000|0001-60]' },
             { cnpj: 'MEDIUM PERFORMER l 0002 [2000|0002-45]' },
             { cnpj: 'HIGH PERFORMER l 0003 [3000|0003-12]' }
@@ -1588,8 +1570,8 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
         }
       ];
 
-      supabaseCompaniesService.getCompaniesForPlayer.and.returnValue(
-        of(rowsFromCnpjList([{ cnpj: 'OVER PERFORMER l 0001 [4000|0001-60]' }]))
+      companyService.getCompanies.and.returnValue(
+        of(companiesFromCnpjList([{ cnpj: 'OVER PERFORMER l 0001 [4000|0001-60]' }]))
       );
 
       const companyKpiService = TestBed.inject(CompanyKpiService) as jasmine.SpyObj<CompanyKpiService>;

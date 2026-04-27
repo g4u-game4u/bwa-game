@@ -92,7 +92,7 @@ If 401 errors persist:
 
 1. **Verify Basic Token**
    ```typescript
-   console.log('Token:', environment.funifier_basic_token);
+   console.log('Token set:', !!environment.funifierBasicToken);
    // Should output: NjkwYTc4NWNlMTc5ZDQ2ZmNlNTllZDY1OjY3ZWM0ZTRhMjMyN2Y3NGYzYTJmOTZmNQ==
    ```
 
@@ -113,8 +113,7 @@ If 401 errors persist:
 
 4. **Verify Environment**
    ```typescript
-   // In src/environments/environment.ts
-   funifier_basic_token: 'NjkwYTc4NWNlMTc5ZDQ2ZmNlNTllZDY1OjY3ZWM0ZTRhMjMyN2Y3NGYzYTJmOTZmNQ=='
+   // Values come from FUNIFIER_BASIC_TOKEN / funifier_basic_token at build time → environment.funifierBasicToken
    ```
 
 ## Files Modified

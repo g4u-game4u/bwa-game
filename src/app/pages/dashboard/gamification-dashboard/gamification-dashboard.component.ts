@@ -12,7 +12,6 @@ import { PerformanceMonitorService } from '@services/performance-monitor.service
 import { ActionLogService } from '@services/action-log.service';
 import { CompanyKpiService } from '@services/company-kpi.service';
 import { CnpjLookupService } from '@services/cnpj-lookup.service';
-import { SupabaseCompaniesService } from '@services/supabase-companies.service';
 import { SessaoProvider } from '@providers/sessao/sessao.provider';
 import { CacheManagerService } from '@services/cache-manager.service';
 import { 
@@ -28,6 +27,7 @@ import { CompanyDisplay, CarteiraSupabaseKpiRow } from '@services/company-kpi.se
 import { ProgressCardType } from '@components/c4u-activity-progress/c4u-activity-progress.component';
 import { ProgressListType } from '@modals/modal-progress-list/modal-progress-list.component';
 import { ModalSeasonFaqComponent } from '@modals/modal-season-faq/modal-season-faq.component';
+import { PONTOS_POR_ATIVIDADE_FINALIZADA_ACTION_LOG } from '@app/constants/pontos-por-atividade-action-log';
 
 @Component({
   selector: 'app-gamification-dashboard',
@@ -78,7 +78,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   companies: Company[] = [];
   selectedCompany: Company | null = null;
   
-  // Carteira from Supabase companies (mock when configured) + Funifier cnpj__c KPI enrichment
+  // Carteira: empresas do jogador (player + cnpj_performance) + hook gamificação para KPIs
   carteiraClientes: CompanyDisplay[] = [];
   isLoadingCarteira = true;
   cnpjNameMap = new Map<string, string>(); // Map of empid → clean empresa name from empid_cnpj__c
@@ -96,8 +96,8 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   participacaoClientes: CompanyDisplay[] = [];
   isLoadingParticipacao = true;
   
-  // Active tab for Clientes section
-  clientesActiveTab: 'carteira' | 'participacao' = 'carteira';
+  /** Mantido para sync de KPI; UI sem abas — sempre visão participação. */
+  clientesActiveTab: 'carteira' | 'participacao' = 'participacao';
   
   // Month selection
   selectedMonth: Date | undefined = new Date();
@@ -139,7 +139,6 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     private actionLogService: ActionLogService,
     private companyKpiService: CompanyKpiService,
     private cnpjLookupService: CnpjLookupService,
-    private supabaseCompaniesService: SupabaseCompaniesService,
     private sessaoProvider: SessaoProvider,
     private cacheManagerService: CacheManagerService,
     private route: ActivatedRoute,
@@ -151,14 +150,8 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   }
   
   /**
-   * Get current player ID from query params or use 'me' for Funifier API
-   * 
-   * Priority:
-   * 1. Query parameter 'playerId' (when viewing another player's dashboard)
-   * 2. 'me' for current authenticated user (uses faster player/me endpoint)
-   * 
-   * NOTE: We always use 'me' for the current user to leverage the faster
-   * player/me endpoint instead of player/{id}/status
+   * Identificador do jogador para action_log, empresas e agregados Funifier (email / `_id` / query).
+   * Não usar para perfil lateral: isso dispara `GET /v3/player/{id}`; use {@link getFunifierProfilePlayerId}.
    */
   getPlayerId(): string {
     // Check for playerId in query params (when viewing another player's dashboard)
@@ -180,6 +173,18 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     
     // Fallback to 'me' (current authenticated user)
     console.log('📊 Using default player ID: me');
+    return 'me';
+  }
+
+  /**
+   * Perfil e carteira (pontos legado Funifier): `me` → `/auth/user`, sem `GET /v3/player/...`.
+   * Com `?playerId=` na URL, mantém o outro jogador via `/v3/player/{id}`.
+   */
+  private getFunifierProfilePlayerId(): string {
+    const q = this.route.snapshot.queryParams['playerId'];
+    if (typeof q === 'string' && q.trim().length > 0) {
+      return q.trim();
+    }
     return 'me';
   }
   
@@ -288,9 +293,10 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     this.cdr.markForCheck();
     
     const playerId = this.getPlayerId();
+    const profilePlayerId = this.getFunifierProfilePlayerId();
     
     // Load player status
-    console.log('📊 Loading player data for:', playerId);
+    console.log('📊 Loading player data for:', playerId, 'profile API id:', profilePlayerId);
     console.log('📊 Token available:', !!this.sessaoProvider.token);
     console.log('📊 Token value:', this.sessaoProvider.token?.substring(0, 20) + '...');
     
@@ -303,7 +309,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
       }
     }, 20000); // 20 second timeout
     
-    this.playerService.getPlayerStatus(playerId)
+    this.playerService.getPlayerStatus(profilePlayerId)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (status) => {
@@ -316,7 +322,6 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
         error: (error) => {
           console.error('📊 Failed to load player status:', error);
           clearTimeout(loadingTimeout);
-          this.toastService.error('Erro ao carregar dados do jogador');
           this.isLoadingPlayer = false;
           this.cdr.markForCheck();
         },
@@ -326,16 +331,16 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
         }
       });
     
-    // Carteira: bloqueados/moedas vêm do status Funifier; desbloqueados = todas as entradas do action_log × 3 (igual tarefas finalizadas da temporada; sem filtro de mês)
-    console.log('📊 Starting point wallet (status + action_log pontos)...');
+    // Game4U: pontos da carteira vêm de `/game/stats` (action_stats.done). Sem Game4U: action_log × constante.
+    console.log('📊 Starting point wallet...');
     forkJoin({
-      wallet: this.playerService.getPlayerPoints(playerId).pipe(
+      wallet: this.playerService.getPlayerPoints(profilePlayerId, this.selectedMonth).pipe(
         catchError(err => {
           console.error('📊 Point wallet status error:', err);
           return of({ moedas: 0, bloqueados: 0, desbloqueados: 0 } as PointWallet);
         })
       ),
-      pontosActionLog: this.actionLogService.getPontosForMonth(playerId).pipe(
+      pontosActionLog: this.actionLogService.getPontosForMonth(playerId, this.selectedMonth).pipe(
         catchError(err => {
           console.error('📊 Pontos action_log error:', err);
           return of(0);
@@ -345,12 +350,15 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: ({ wallet, pontosActionLog }) => {
-          const desbloqueados = Math.floor(Number(pontosActionLog) || 0);
+          const fromStats = this.playerService.usesGame4uWalletFromStats();
+          const desbloqueados = fromStats
+            ? wallet.desbloqueados
+            : Math.floor(Number(pontosActionLog) || 0);
           this.pointWallet = {
             ...wallet,
             desbloqueados
           };
-          console.log('📊 Point wallet merged:', { bloqueados: wallet.bloqueados, desbloqueados, moedas: wallet.moedas });
+          console.log('📊 Point wallet merged:', { bloqueados: wallet.bloqueados, desbloqueados, moedas: wallet.moedas, fromStats });
           this.cdr.markForCheck();
         },
         error: (error) => {
@@ -395,8 +403,9 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   
   /**
    * Load additional season progress details:
-   * - Tarefas finalizadas: total no action_log (sem filtro de mês — alinhado ao escopo da temporada no card)
-   * Note: Clientes count comes from player_company__c (cnpj_resp) via loadClientesData()
+   * - Tarefas finalizadas: Game4U = count `action_stats.done` (mesma chamada que `delivery_stats.total`);
+   *   Funifier = action_log.
+   * - `deliveryStatsTotal`: Game4U `/game/stats.delivery_stats.total` quando existir.
    */
   private loadSeasonProgressDetails(): void {
     const playerId = this.getPlayerId();
@@ -405,21 +414,24 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     }
 
     this.actionLogService
-      .getCompletedTasksCount(playerId)
+      .getSeasonProgressSidebarDetails(playerId, this.selectedMonth)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
-        next: (count: number) => {
-          console.log('📊 Tarefas finalizadas count:', count);
+        next: ({ tarefasFinalizadas, deliveryStatsTotal }) => {
+          console.log('📊 Season sidebar:', { tarefasFinalizadas, deliveryStatsTotal });
           if (this.seasonProgress) {
-            this.seasonProgress = {
-              ...this.seasonProgress,
-              tarefasFinalizadas: count
-            };
+            const base = { ...this.seasonProgress, tarefasFinalizadas };
+            if (deliveryStatsTotal !== undefined) {
+              (base as SeasonProgress).deliveryStatsTotal = deliveryStatsTotal;
+            } else {
+              delete (base as SeasonProgress & { deliveryStatsTotal?: number }).deliveryStatsTotal;
+            }
+            this.seasonProgress = base;
             this.cdr.markForCheck();
           }
         },
         error: (err: Error) => {
-          console.error('📊 Failed to load tarefas count:', err);
+          console.error('📊 Failed to load season sidebar details:', err);
         }
       });
   }
@@ -447,7 +459,6 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
         },
         error: (error) => {
           console.error('📊 Failed to load companies:', error);
-          this.toastService.error('Erro ao carregar carteira de empresas');
           this.isLoadingCompanies = false;
           this.cdr.markForCheck();
         }
@@ -455,8 +466,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   }
 
   /**
-   * Carteira: primeiro GET gamificação (`fetchGamificacaoMapsAsync`), depois Supabase;
-   * só então cruza % entregas com `id` / EmpID / CNPJ (`enrichCarteiraRowsWithMaps`).
+   * Carteira: empresas via `CompanyService` (sem Supabase), GET gamificação e cruzamento EmpID/CNPJ.
    */
   private loadClientesData(): void {
     this.isLoadingClientes = true;
@@ -475,13 +485,13 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     from(this.companyKpiService.fetchGamificacaoMapsAsync())
       .pipe(
         switchMap(maps =>
-          this.supabaseCompaniesService.getCompaniesForPlayer(playerId).pipe(
-            map(rows => ({ maps, rows }))
+          this.companyService.getCompanies(playerId).pipe(
+            map(companies => ({ maps, companies }))
           )
         ),
-        map(({ maps, rows }) => {
-          const cnpjs = rows.map(r => r.cnpj).filter(c => !!c && c.trim().length > 0);
-          console.log('📊 Carteira CNPJs (Supabase/mock):', cnpjs);
+        map(({ maps, companies }) => {
+          const cnpjs = companies.map(c => c.cnpj).filter(c => !!c && String(c).trim().length > 0);
+          console.log('📊 Carteira CNPJs (player companies):', cnpjs.length);
           this.cnpjRespIds = cnpjs;
 
           if (this.seasonProgress) {
@@ -491,23 +501,22 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
             };
           }
 
-          this.supabaseCompaniesService.applyRowsToCnpjMaps(
-            rows,
-            this.cnpjNameMap,
-            this.cnpjStatusMap,
-            this.cnpjNumberMap
-          );
+          companies.forEach((c: Company) => {
+            const key = (c.cnpj || '').trim();
+            if (!key) return;
+            this.cnpjNameMap.set(key, c.name || key);
+            this.cnpjNumberMap.set(key, key);
+          });
 
           if (cnpjs.length === 0) {
             return [] as CompanyDisplay[];
           }
 
-          const carteiraRows: CarteiraSupabaseKpiRow[] = rows
-            .filter(r => !!r.cnpj && String(r.cnpj).trim().length > 0)
-            .map(r => ({
-              cnpj: r.cnpj,
-              supabaseId: r.id,
-              empId: r.emp_id
+          const carteiraRows: CarteiraSupabaseKpiRow[] = companies
+            .filter(c => !!c.cnpj && String(c.cnpj).trim().length > 0)
+            .map(c => ({
+              cnpj: c.cnpj,
+              empId: c.id
             }));
 
           return this.companyKpiService.enrichCarteiraRowsWithMaps(carteiraRows, maps);
@@ -537,7 +546,8 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   }
 
   /**
-   * Participação: CNPJs únicos do action_log do usuário (Funifier), filtrados pelo mês selecionado.
+   * Clientes atendidos: CNPJs únicos com ações no mês do filtro (Funifier: action_log por data da ação;
+   * Game4U: user-actions cuja competência em `delivery_id` cai nesse mês).
    * Enriquecimento de nome/status (empid_cnpj__c) + KPIs (cnpj__c / gamificação).
    */
   private loadParticipacaoData(): void {
@@ -558,6 +568,18 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
           console.log('📊 Participação CNPJs (action_log):', items.length);
           const empids = items.map(i => i.cnpj).filter((c): c is string => !!c && String(c).trim().length > 0);
           const actionCountByCnpj = new Map(items.map(i => [i.cnpj, i.actionCount]));
+          const deliveryTitleByKey = new Map<string, string>();
+          const deliveryIdByCnpj = new Map<string, string>();
+          for (const i of items) {
+            const t = i.delivery_title?.trim();
+            if (t) {
+              deliveryTitleByKey.set(i.cnpj, t);
+            }
+            const d = i.deliveryId?.trim();
+            if (d) {
+              deliveryIdByCnpj.set(i.cnpj, d);
+            }
+          }
 
           if (empids.length === 0) {
             return of([] as CompanyDisplay[]);
@@ -578,7 +600,9 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
                 map(clientes =>
                   clientes.map(c => ({
                     ...c,
-                    actionCount: actionCountByCnpj.get(c.cnpj) ?? c.actionCount
+                    actionCount: actionCountByCnpj.get(c.cnpj) ?? c.actionCount,
+                    delivery_title: deliveryTitleByKey.get(c.cnpj) ?? c.delivery_title,
+                    deliveryId: deliveryIdByCnpj.get(c.cnpj) ?? c.deliveryId
                   }))
                 )
               );
@@ -716,7 +740,6 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
         },
         error: (error) => {
           console.error('📊 Failed to load KPIs:', error);
-          this.toastService.error('Erro ao carregar KPIs');
           this.isLoadingKPIs = false;
           // Don't update metas on error - preserve existing values
           this.cdr.markForCheck();
@@ -822,14 +845,14 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
       this.announceToScreenReader(`Mês alterado para ${monthName}`);
     }
 
-    // Reload month-scoped data: KPIs, progress metrics, participação (action_log).
-    // Carteira de empresas (Supabase) e lista de companies permanecem; pontos da carteira não dependem do mês.
+    // Reload month-scoped data: KPIs, progress metrics, participação, stats Game4U (`start`/`end` do mês).
+    // Carteira de empresas (lista `companies`) e clientes permanecem.
     this.loadMonthDependentData();
   }
 
   /**
    * Load only data that depends on the selected month (KPIs, progress, participação via action_log).
-   * Pontos desbloqueados na carteira vêm do total do action_log e não mudam com o mês.
+   * Com Game4U, pontos/tarefas do cartão de temporada seguem o mês; sem Game4U, action_log.
    */
   private loadMonthDependentData(): void {
     // Cancel any in-flight month-dependent requests
@@ -868,7 +891,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     this.selectedCarteiraCompany = company;
     this.isCompanyCarteiraDetailModalOpen = true;
     this.focusedElementBeforeModal = document.activeElement as HTMLElement;
-    const companyName = this.getCompanyDisplayName(company.cnpj);
+    const companyName = this.getClienteAtendidoDisplayName(company);
     this.announceToScreenReader(`Abrindo detalhes de ${companyName}`);
   }
 
@@ -876,8 +899,8 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
    * Handle company carteira detail modal close
    */
   onCompanyCarteiraDetailModalClosed(): void {
-    const companyName = this.selectedCarteiraCompany 
-      ? this.getCompanyDisplayName(this.selectedCarteiraCompany.cnpj) 
+    const companyName = this.selectedCarteiraCompany
+      ? this.getClienteAtendidoDisplayName(this.selectedCarteiraCompany)
       : 'empresa';
     this.isCompanyCarteiraDetailModalOpen = false;
     this.selectedCarteiraCompany = null;
@@ -1072,11 +1095,38 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   }
 
   /**
-   * Get enabled KPIs (excluding commented/disabled ones)
-   * Currently excludes 'numero-empresas' (Clientes na Carteira)
+   * KPIs exibidos na barra lateral recolhida (sem "Clientes na Carteira", alinhado ao painel principal).
    */
   get enabledKPIs(): KPIData[] {
-    return this.playerKPIs;
+    return this.playerKPIs.filter(k => k.id !== 'numero-empresas');
+  }
+
+  /**
+   * Circular “Pontos no mês”: com Game4U e `action_stats`, atingido = done.total_points;
+   * meta = pending.total_points + done.total_points. Sem esses campos: fallback em `activityMetrics`.
+   */
+  get monthlyPointsProgressData(): { current: number; target: number } {
+    const donePts = this.activityMetrics?.pontosDone;
+    const allPts = this.activityMetrics?.pontosTodosStatus;
+    if (donePts !== undefined && allPts !== undefined) {
+      const current = Math.floor(donePts);
+      const target = Math.max(Math.floor(allPts), 1);
+      return { current, target };
+    }
+    const current = Math.floor(this.activityMetrics?.pontos ?? 0);
+    const pendingTasks =
+      (this.processMetrics?.pendentes ?? 0) + (this.processMetrics?.incompletas ?? 0);
+    const target =
+      pendingTasks > 0
+        ? pendingTasks * PONTOS_POR_ATIVIDADE_FINALIZADA_ACTION_LOG
+        : Math.max(current, 1);
+    return { current, target };
+  }
+
+  get monthlyPointsGoalColor(): 'red' | 'yellow' | 'green' | 'pink' {
+    const { current, target } = this.monthlyPointsProgressData;
+    const superGoal = Math.ceil(target * 1.5);
+    return this.kpiService.getKPIColorByGoals(current, target, superGoal);
   }
 
   /**
@@ -1119,6 +1169,15 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     return displayName || cnpj;
   }
 
+  /** Linha “Clientes atendidos” (Game4U): preferir título da entrega ao id. */
+  getClienteAtendidoDisplayName(cliente: CompanyDisplay): string {
+    const t = cliente.delivery_title?.trim();
+    if (t) {
+      return t;
+    }
+    return this.getCompanyDisplayName(cliente.cnpj) || cliente.cnpj;
+  }
+
   /**
    * % entregas no prazo na lista (vem da API como `porcEntregas` → `entrega` / `deliveryKpi.current`).
    */
@@ -1151,6 +1210,15 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     if (cnpjNumber) parts.push(`CNPJ: ${cnpjNumber}`);
     if (status) parts.push(`Status: ${status}`);
     return parts.join(' | ');
+  }
+
+  getClienteAtendidoTooltip(cliente: CompanyDisplay): string {
+    const base = this.getCompanyTooltip(cliente.cnpj);
+    const t = cliente.delivery_title?.trim();
+    if (t) {
+      return `${t} | ${base}`;
+    }
+    return base;
   }
 
   /**

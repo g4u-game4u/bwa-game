@@ -11,6 +11,7 @@ import {Title} from "@angular/platform-browser";
 import {SystemInitService} from "@services/system-init.service";
 import { VercelAnalyticsService } from '@services/vercel-analytics.service';
 import { SessionTimeoutService } from '@services/session-timeout.service';
+import { environment } from '../../../environments/environment';
 
 @Component({
   selector: 'page-root',
@@ -20,6 +21,9 @@ import { SessionTimeoutService } from '@services/session-timeout.service';
 export class AppComponent implements OnInit {
   translateReady: boolean = false;
   paramReady: boolean = false;
+
+  /** Aviso persistente de manutenção (controlado em `environment.*`). */
+  readonly showMaintenanceBanner = !!environment.showMaintenanceBanner;
 
   constructor(
     translate: TranslateProvider,

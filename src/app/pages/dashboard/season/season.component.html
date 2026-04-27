@@ -83,6 +83,11 @@
             <span flexItem="auto"><small translate="LABEL_PROCESSES_QUESTS_FINISHED" [translateParams]="{deliveryAlias: deliveryAlias}"></small></span>
             <strong>{{ seasonInfo.completedDeliveries }}</strong>
         </div>
+        <div flex vAlign="center" [gap]="4" *enableShimmer="[!apiReady, {height: 19.8, borderRadius: 4}]">
+            <i class="icon-person"></i>
+            <span flexItem="auto"><small translate="LABEL_SEASON_CLIENTES"></small></span>
+            <strong>{{ seasonInfo.clientes }}</strong>
+        </div>
 
         <div [marginTop]="32" flex direction="column" hAlign="center" vAlign="center">
             <strong *enableShimmer="[!seasonDatesReady, {height: 16, width: 155, borderRadius: 4, marginBottom: 4}]">
