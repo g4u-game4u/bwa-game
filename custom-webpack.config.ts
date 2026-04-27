@@ -69,8 +69,6 @@ module.exports = {
                 // Uppercase (standard convention)
                 BACKEND_URL_BASE: backendUrlBase,
                 G4U_API_BASE: backendUrlBase,
-                BACKEND_URL_BASE: backendUrlBase,
-                G4U_API_BASE: backendUrlBase,
                 CLIENT_ID: getEnv('CLIENT_ID'),
                 LOGO_URL: getEnv('LOGO_URL'),
                 SUPERVISOR_TEAM_CODE: getEnv('SUPERVISOR_TEAM_CODE'),
@@ -85,8 +83,6 @@ module.exports = {
                 SUPABASE_USE_MOCK: getEnv('SUPABASE_USE_MOCK', ''),
                 SUPABASE_MOCK_FEED_ALL_USERS: getEnv('SUPABASE_MOCK_FEED_ALL_USERS', ''),
                 // Lowercase (Vercel compatibility)
-                backend_url_base: backendUrlBase,
-                g4u_api_base: backendUrlBase,
                 backend_url_base: backendUrlBase,
                 g4u_api_base: backendUrlBase,
                 client_id: getEnv('client_id'),
