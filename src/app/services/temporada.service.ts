@@ -42,7 +42,7 @@ export class TemporadaService {
   public async getDadosTemporadaDashboard(id: number, tipo: number): Promise<TemporadaDashboard> {
     // Check if backend_url_base is configured - if not, return empty data
     // This prevents calls to non-existent endpoints in production
-    if (!environment.backend_url_base || environment.backend_url_base === 'http://localhost') {
+    if ( environment.backend_url_base ) {
       console.warn('⚠️ TemporadaService: backend_url_base not configured, returning empty data');
       return this.getEmptyTemporadaDashboard();
     }

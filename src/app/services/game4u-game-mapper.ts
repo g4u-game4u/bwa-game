@@ -217,6 +217,28 @@ function asString(v: unknown): string {
   return String(v);
 }
 
+/** User-action finalizada (participação / “tarefas concluídas” ao nível de linha). */
+export function isGame4uUserActionFinalizedStatus(status: unknown): boolean {
+  const s = String(status ?? '').trim().toUpperCase();
+  return FINAL.includes(s as Game4uUserActionStatus);
+}
+
+/**
+ * Chave para “cliente atendido” a partir da user-action: `integration_id` (EmpID/CNPJ no CRM),
+ * senão `client_id`, senão `delivery_id` (evita lista vazia quando a API não envia `integration_id`).
+ */
+export function getGame4uParticipationRowKey(a: Game4uUserActionModel): string {
+  const integ = asString(a.integration_id).trim();
+  if (integ) {
+    return integ;
+  }
+  const cid = asString(a.client_id).trim();
+  if (cid) {
+    return cid;
+  }
+  return asString(a.delivery_id).trim();
+}
+
 export function filterGame4uActionsByMonth(
   actions: Game4uUserActionModel[],
   month?: Date

@@ -10,7 +10,7 @@ import { readBackendUrlBaseFromProcessEnv } from './backend-url';
 export const environment = {
   production: false,
   client_id: process.env['CLIENT_ID'] || process.env['client_id'] || 'bwa',
-  backend_url_base: readBackendUrlBaseFromProcessEnv(),
+  backend_url_base: readBackendUrlBaseFromProcessEnv(undefined, { rejectLoopback: true }),
   
 
   // Cache Configuration

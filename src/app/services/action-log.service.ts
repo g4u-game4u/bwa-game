@@ -17,6 +17,7 @@ import {
   computeMonthlyPointsFromGame4uActions,
   filterGame4uActionsByCompetenceMonth,
   filterGame4uActionsByMonth,
+  getGame4uParticipationRowKey,
   getGame4uActionStatsDone,
   getGame4uMonthlyPointsCircularFromActionStats,
   readGame4uDeliveryStatsTotal,
@@ -25,7 +26,8 @@ import {
   mapGame4uActionsToProcessMetrics,
   mapGame4uStatsToActivityMetrics,
   mapGame4uStatsToPointWallet,
-  mergeGame4uDeliveryParticipation
+  mergeGame4uDeliveryParticipation,
+  isGame4uUserActionFinalizedStatus
 } from './game4u-game-mapper';
 
 export interface ActionLogEntry {
@@ -354,23 +356,16 @@ export class ActionLogService {
   }
 
   /**
-   * Janela larga em `created_at` para `/game/actions` quando o dashboard filtra por mês:
-   * a competência vem de `delivery_id` e pode estar desalinhada do mês de criação da ação.
+   * Intervalo de `/game/actions` alinhado ao **mês do painel** (mesmo critério que {@link Game4uApiService.toQueryRange}
+   * e `/game/stats`). O filtro por competência em `delivery_id` continua em
+   * {@link filterGame4uActionsByCompetenceMonth} sobre a resposta.
    */
   private game4uUserQueryActionsForCompetenceMonth(playerId: string, month: Date): Game4uUserScopedQuery | null {
     const user = this.resolveGame4uUserEmail(playerId);
     if (!user) {
       return null;
     }
-    const y = month.getFullYear();
-    const m = month.getMonth();
-    const monthStart = new Date(y, m, 1, 0, 0, 0, 0);
-    const monthEnd = new Date(y, m + 1, 0, 23, 59, 59, 999);
-    const start = new Date(monthStart);
-    start.setMonth(start.getMonth() - 36);
-    const end = new Date(monthEnd);
-    end.setMonth(end.getMonth() + 36);
-    return { user, start: start.toISOString(), end: end.toISOString() };
+    return { user, ...this.game4u.toQueryRange(month) };
   }
 
   private getMonthCacheKey(month?: Date): string {
@@ -1260,7 +1255,9 @@ export class ActionLogService {
   /**
    * Lista de clientes (CNPJ) com contagem de ações no período.
    * Funifier: action_log filtrado por mês no cliente (`time`).
-   * Game4U com mês: user-actions filtradas por competência em `delivery_id`; temporada: entregas (`/game/deliveries`).
+   * Game4U com mês: user-actions na competência (`delivery_id` ou `created_at`), **só status final**
+   * (`DONE` / `DELIVERED` / `PAID`), agrupadas por `integration_id` ou, em falta, `client_id` ou `delivery_id`.
+   * Temporada: entregas (`/game/deliveries`).
    */
   getPlayerCnpjListWithCount(
     playerId: string,
@@ -1288,7 +1285,10 @@ export class ActionLogService {
                 { actionCount: number; delivery_title?: string; delivery_id?: string }
               >();
               for (const a of scoped) {
-                const cnpj = String(a.integration_id ?? '').trim();
+                if (!isGame4uUserActionFinalizedStatus(a.status)) {
+                  continue;
+                }
+                const cnpj = getGame4uParticipationRowKey(a);
                 if (!cnpj) {
                   continue;
                 }
