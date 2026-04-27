@@ -1,7 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import * as fc from 'fast-check';
 import { TeamAggregateService, TeamSeasonPoints } from './team-aggregate.service';
-import { FunifierApiService } from './funifier-api.service';
+import { BackendApiService } from './backend-api.service';
 import { AggregateQueryBuilderService } from './aggregate-query-builder.service';
 import { of } from 'rxjs';
 
@@ -13,11 +13,11 @@ import { of } from 'rxjs';
  */
 describe('TeamAggregateService Property-Based Tests', () => {
   let service: TeamAggregateService;
-  let funifierApiSpy: jasmine.SpyObj<FunifierApiService>;
+  let backendApiSpy: jasmine.SpyObj<BackendApiService>;
   let queryBuilderSpy: jasmine.SpyObj<AggregateQueryBuilderService>;
 
   beforeEach(() => {
-    const funifierSpy = jasmine.createSpyObj('FunifierApiService', ['post']);
+    const backendSpy = jasmine.createSpyObj('BackendApiService', ['post']);
     const builderSpy = jasmine.createSpyObj('AggregateQueryBuilderService', [
       'buildPointsAggregateQuery',
       'buildProgressAggregateQuery',
@@ -27,13 +27,13 @@ describe('TeamAggregateService Property-Based Tests', () => {
     TestBed.configureTestingModule({
       providers: [
         TeamAggregateService,
-        { provide: FunifierApiService, useValue: funifierSpy },
+        { provide: BackendApiService, useValue: backendSpy },
         { provide: AggregateQueryBuilderService, useValue: builderSpy }
       ]
     });
 
     service = TestBed.inject(TeamAggregateService);
-    funifierApiSpy = TestBed.inject(FunifierApiService) as jasmine.SpyObj<FunifierApiService>;
+    backendApiSpy = TestBed.inject(BackendApiService) as jasmine.SpyObj<BackendApiService>;
     queryBuilderSpy = TestBed.inject(AggregateQueryBuilderService) as jasmine.SpyObj<AggregateQueryBuilderService>;
   });
 
@@ -88,7 +88,7 @@ describe('TeamAggregateService Property-Based Tests', () => {
             };
 
             queryBuilderSpy.buildPointsAggregateQuery.and.returnValue({ aggregate: [] });
-            funifierApiSpy.post.and.returnValue(of(mockResponse));
+            backendApiSpy.post.and.returnValue(of(mockResponse));
 
             // Clear cache to ensure fresh data
             service.clearCache();
@@ -138,7 +138,7 @@ describe('TeamAggregateService Property-Based Tests', () => {
             };
 
             queryBuilderSpy.buildPointsAggregateQuery.and.returnValue({ aggregate: [] });
-            funifierApiSpy.post.and.returnValue(of(mockResponse));
+            backendApiSpy.post.and.returnValue(of(mockResponse));
 
             service.clearCache();
 
@@ -201,7 +201,7 @@ describe('TeamAggregateService Property-Based Tests', () => {
             };
 
             queryBuilderSpy.buildPointsAggregateQuery.and.returnValue({ aggregate: [] });
-            funifierApiSpy.post.and.returnValue(of(mockResponse));
+            backendApiSpy.post.and.returnValue(of(mockResponse));
 
             service.clearCache();
 
@@ -245,7 +245,7 @@ describe('TeamAggregateService Property-Based Tests', () => {
 
             queryBuilderSpy.buildPointsAggregateQuery.and.returnValue(mockQuery);
             queryBuilderSpy.buildProgressAggregateQuery.and.returnValue(mockQuery);
-            funifierApiSpy.post.and.returnValue(of(mockResponse));
+            backendApiSpy.post.and.returnValue(of(mockResponse));
 
             service.clearCache();
 
@@ -285,7 +285,7 @@ describe('TeamAggregateService Property-Based Tests', () => {
             const mockResponse = { result: [] };
 
             queryBuilderSpy.buildPointsAggregateQuery.and.returnValue(mockQuery);
-            funifierApiSpy.post.and.returnValue(of(mockResponse));
+            backendApiSpy.post.and.returnValue(of(mockResponse));
 
             service.clearCache();
 
@@ -343,7 +343,7 @@ describe('TeamAggregateService Property-Based Tests', () => {
             };
 
             queryBuilderSpy.buildPointsAggregateQuery.and.returnValue({ aggregate: [] });
-            funifierApiSpy.post.and.returnValue(of(mockResponse));
+            backendApiSpy.post.and.returnValue(of(mockResponse));
 
             service.clearCache();
 

@@ -1,13 +1,13 @@
 import { TestBed } from '@angular/core/testing';
 import { of, throwError } from 'rxjs';
 import { TeamAggregateService, TeamSeasonPoints, TeamProgressMetrics, Collaborator } from './team-aggregate.service';
-import { FunifierApiService } from './funifier-api.service';
+import { BackendApiService } from './backend-api.service';
 import { AggregateQueryBuilderService } from './aggregate-query-builder.service';
 import { environment } from '../../environments/environment';
 
 describe('TeamAggregateService', () => {
   let service: TeamAggregateService;
-  let funifierApiSpy: jasmine.SpyObj<FunifierApiService>;
+  let backendApiSpy: jasmine.SpyObj<BackendApiService>;
   let queryBuilderSpy: jasmine.SpyObj<AggregateQueryBuilderService>;
   let savedUseGame4uApi: boolean | undefined;
 
@@ -15,7 +15,7 @@ describe('TeamAggregateService', () => {
     savedUseGame4uApi = environment.useGame4uApi;
     environment.useGame4uApi = false;
 
-    const funifierSpy = jasmine.createSpyObj('FunifierApiService', ['post']);
+    const backendSpy = jasmine.createSpyObj('BackendApiService', ['post']);
     const builderSpy = jasmine.createSpyObj('AggregateQueryBuilderService', [
       'buildPointsAggregateQuery',
       'buildProgressAggregateQuery',
@@ -25,13 +25,13 @@ describe('TeamAggregateService', () => {
     TestBed.configureTestingModule({
       providers: [
         TeamAggregateService,
-        { provide: FunifierApiService, useValue: funifierSpy },
+        { provide: BackendApiService, useValue: backendSpy },
         { provide: AggregateQueryBuilderService, useValue: builderSpy }
       ]
     });
 
     service = TestBed.inject(TeamAggregateService);
-    funifierApiSpy = TestBed.inject(FunifierApiService) as jasmine.SpyObj<FunifierApiService>;
+    backendApiSpy = TestBed.inject(BackendApiService) as jasmine.SpyObj<BackendApiService>;
     queryBuilderSpy = TestBed.inject(AggregateQueryBuilderService) as jasmine.SpyObj<AggregateQueryBuilderService>;
   });
 
@@ -64,7 +64,7 @@ describe('TeamAggregateService', () => {
       };
 
       queryBuilderSpy.buildPointsAggregateQuery.and.returnValue(mockQuery);
-      funifierApiSpy.post.and.returnValue(of(mockResponse));
+      backendApiSpy.post.and.returnValue(of(mockResponse));
 
       service.getTeamSeasonPoints(teamId, startDate, endDate).subscribe(points => {
         expect(points.total).toBe(1000);
@@ -79,7 +79,7 @@ describe('TeamAggregateService', () => {
       const mockResponse = { result: [] };
 
       queryBuilderSpy.buildPointsAggregateQuery.and.returnValue(mockQuery);
-      funifierApiSpy.post.and.returnValue(of(mockResponse));
+      backendApiSpy.post.and.returnValue(of(mockResponse));
 
       service.getTeamSeasonPoints(teamId, startDate, endDate).subscribe(points => {
         expect(points.total).toBe(0);
@@ -101,7 +101,7 @@ describe('TeamAggregateService', () => {
       };
 
       queryBuilderSpy.buildPointsAggregateQuery.and.returnValue(mockQuery);
-      funifierApiSpy.post.and.returnValue(of(mockResponse));
+      backendApiSpy.post.and.returnValue(of(mockResponse));
 
       service.getTeamSeasonPoints(teamId, startDate, endDate).subscribe(points => {
         expect(points.total).toBe(500);
@@ -115,7 +115,7 @@ describe('TeamAggregateService', () => {
       const mockError = new Error('API Error');
 
       queryBuilderSpy.buildPointsAggregateQuery.and.returnValue(mockQuery);
-      funifierApiSpy.post.and.returnValue(throwError(() => mockError));
+      backendApiSpy.post.and.returnValue(throwError(() => mockError));
 
       service.getTeamSeasonPoints(teamId, startDate, endDate).subscribe({
         next: () => fail('Should have thrown error'),
@@ -143,7 +143,7 @@ describe('TeamAggregateService', () => {
       };
 
       queryBuilderSpy.buildProgressAggregateQuery.and.returnValue(mockQuery);
-      funifierApiSpy.post.and.returnValue(of(mockResponse));
+      backendApiSpy.post.and.returnValue(of(mockResponse));
 
       service.getTeamProgressMetrics(teamId, startDate, endDate).subscribe(metrics => {
         expect(metrics.processosIncompletos).toBe(5);
@@ -158,7 +158,7 @@ describe('TeamAggregateService', () => {
       const mockResponse = { result: [] };
 
       queryBuilderSpy.buildProgressAggregateQuery.and.returnValue(mockQuery);
-      funifierApiSpy.post.and.returnValue(of(mockResponse));
+      backendApiSpy.post.and.returnValue(of(mockResponse));
 
       service.getTeamProgressMetrics(teamId, startDate, endDate).subscribe(metrics => {
         expect(metrics.processosIncompletos).toBe(0);
@@ -177,7 +177,7 @@ describe('TeamAggregateService', () => {
       };
 
       queryBuilderSpy.buildProgressAggregateQuery.and.returnValue(mockQuery);
-      funifierApiSpy.post.and.returnValue(of(mockResponse));
+      backendApiSpy.post.and.returnValue(of(mockResponse));
 
       service.getTeamProgressMetrics(teamId, startDate, endDate).subscribe(metrics => {
         expect(metrics.atividadesFinalizadas).toBe(23); // 15 + 8
@@ -195,7 +195,7 @@ describe('TeamAggregateService', () => {
       };
 
       queryBuilderSpy.buildProgressAggregateQuery.and.returnValue(mockQuery);
-      funifierApiSpy.post.and.returnValue(of(mockResponse));
+      backendApiSpy.post.and.returnValue(of(mockResponse));
 
       service.getTeamProgressMetrics(teamId, startDate, endDate).subscribe(metrics => {
         expect(metrics.processosIncompletos).toBe(3);
@@ -220,7 +220,7 @@ describe('TeamAggregateService', () => {
       };
 
       queryBuilderSpy.buildCollaboratorListQuery.and.returnValue(mockQuery);
-      funifierApiSpy.post.and.returnValue(of(mockResponse));
+      backendApiSpy.post.and.returnValue(of(mockResponse));
 
       service.getTeamMembers(teamId).subscribe(members => {
         expect(members.length).toBe(3);
@@ -237,7 +237,7 @@ describe('TeamAggregateService', () => {
       const mockResponse = { result: [] };
 
       queryBuilderSpy.buildCollaboratorListQuery.and.returnValue(mockQuery);
-      funifierApiSpy.post.and.returnValue(of(mockResponse));
+      backendApiSpy.post.and.returnValue(of(mockResponse));
 
       service.getTeamMembers(teamId).subscribe(members => {
         expect(members.length).toBe(0);
@@ -259,7 +259,7 @@ describe('TeamAggregateService', () => {
         ]
       };
 
-      funifierApiSpy.post.and.returnValue(of(mockResponse));
+      backendApiSpy.post.and.returnValue(of(mockResponse));
 
       service.getCollaboratorData(userId, startDate, endDate).subscribe(data => {
         expect(data.length).toBe(2);
@@ -272,11 +272,11 @@ describe('TeamAggregateService', () => {
     it('should build query with userId filter', (done) => {
       const mockResponse = { result: [] };
 
-      funifierApiSpy.post.and.returnValue(of(mockResponse));
+      backendApiSpy.post.and.returnValue(of(mockResponse));
 
       service.getCollaboratorData(userId, startDate, endDate).subscribe(() => {
-        expect(funifierApiSpy.post).toHaveBeenCalled();
-        const callArgs = funifierApiSpy.post.calls.mostRecent().args;
+        expect(backendApiSpy.post).toHaveBeenCalled();
+        const callArgs = backendApiSpy.post.calls.mostRecent().args;
         const query = callArgs[1];
         expect(query.aggregate[0].$match.userId).toBe(userId);
         done();
@@ -303,17 +303,17 @@ describe('TeamAggregateService', () => {
       };
 
       queryBuilderSpy.buildPointsAggregateQuery.and.returnValue(mockQuery);
-      funifierApiSpy.post.and.returnValue(of(mockResponse));
+      backendApiSpy.post.and.returnValue(of(mockResponse));
 
       // First call - should hit API
       service.getTeamSeasonPoints(teamId, startDate, endDate).subscribe(points1 => {
         expect(points1.total).toBe(1000);
-        expect(funifierApiSpy.post).toHaveBeenCalledTimes(1);
+        expect(backendApiSpy.post).toHaveBeenCalledTimes(1);
 
         // Second call - should use cache
         service.getTeamSeasonPoints(teamId, startDate, endDate).subscribe(points2 => {
           expect(points2.total).toBe(1000);
-          expect(funifierApiSpy.post).toHaveBeenCalledTimes(1); // Still only 1 call
+          expect(backendApiSpy.post).toHaveBeenCalledTimes(1); // Still only 1 call
           done();
         });
       });
@@ -332,18 +332,18 @@ describe('TeamAggregateService', () => {
       };
 
       queryBuilderSpy.buildPointsAggregateQuery.and.returnValue(mockQuery);
-      funifierApiSpy.post.and.returnValue(of(mockResponse));
+      backendApiSpy.post.and.returnValue(of(mockResponse));
 
       // First call
       service.getTeamSeasonPoints(teamId, startDate, endDate).subscribe(() => {
-        expect(funifierApiSpy.post).toHaveBeenCalledTimes(1);
+        expect(backendApiSpy.post).toHaveBeenCalledTimes(1);
 
         // Clear cache
         service.clearCache();
 
         // Second call - should hit API again
         service.getTeamSeasonPoints(teamId, startDate, endDate).subscribe(() => {
-          expect(funifierApiSpy.post).toHaveBeenCalledTimes(2);
+          expect(backendApiSpy.post).toHaveBeenCalledTimes(2);
           done();
         });
       });
@@ -364,22 +364,22 @@ describe('TeamAggregateService', () => {
       };
 
       queryBuilderSpy.buildPointsAggregateQuery.and.returnValue(mockQuery);
-      funifierApiSpy.post.and.returnValue(of(mockResponse));
+      backendApiSpy.post.and.returnValue(of(mockResponse));
 
       // Cache data for both teams
       service.getTeamSeasonPoints(team1, startDate, endDate).subscribe(() => {
         service.getTeamSeasonPoints(team2, startDate, endDate).subscribe(() => {
-          expect(funifierApiSpy.post).toHaveBeenCalledTimes(2);
+          expect(backendApiSpy.post).toHaveBeenCalledTimes(2);
 
           // Clear only team1 cache
           service.clearTeamCache(team1);
 
           // Team1 should hit API, Team2 should use cache
           service.getTeamSeasonPoints(team1, startDate, endDate).subscribe(() => {
-            expect(funifierApiSpy.post).toHaveBeenCalledTimes(3);
+            expect(backendApiSpy.post).toHaveBeenCalledTimes(3);
 
             service.getTeamSeasonPoints(team2, startDate, endDate).subscribe(() => {
-              expect(funifierApiSpy.post).toHaveBeenCalledTimes(3); // Still 3, used cache
+              expect(backendApiSpy.post).toHaveBeenCalledTimes(3); // Still 3, used cache
               done();
             });
           });
@@ -398,7 +398,7 @@ describe('TeamAggregateService', () => {
       const mockError = new Error('Network error');
 
       queryBuilderSpy.buildPointsAggregateQuery.and.returnValue(mockQuery);
-      funifierApiSpy.post.and.returnValue(throwError(() => mockError));
+      backendApiSpy.post.and.returnValue(throwError(() => mockError));
 
       service.getTeamSeasonPoints(teamId, startDate, endDate).subscribe({
         next: () => fail('Should have thrown error'),
@@ -413,7 +413,7 @@ describe('TeamAggregateService', () => {
       const mockResponse = null; // Malformed response
 
       queryBuilderSpy.buildPointsAggregateQuery.and.returnValue(mockQuery);
-      funifierApiSpy.post.and.returnValue(of(mockResponse as any));
+      backendApiSpy.post.and.returnValue(of(mockResponse as any));
 
       service.getTeamSeasonPoints(teamId, startDate, endDate).subscribe(points => {
         // Should return default values
@@ -435,7 +435,7 @@ describe('TeamAggregateService', () => {
       ];
 
       queryBuilderSpy.buildPointsAggregateQuery.and.returnValue(mockQuery);
-      funifierApiSpy.post.and.returnValue(of(mockResponse as any));
+      backendApiSpy.post.and.returnValue(of(mockResponse as any));
 
       service.getTeamSeasonPoints(teamId, startDate, endDate).subscribe(points => {
         expect(points.total).toBe(500);

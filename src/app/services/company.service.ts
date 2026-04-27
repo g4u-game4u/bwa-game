@@ -1,10 +1,9 @@
 import { Injectable } from '@angular/core';
-import { Observable, of, throwError } from 'rxjs';
-import { map, catchError, shareReplay, switchMap } from 'rxjs/operators';
-import { FunifierApiService } from './funifier-api.service';
+import { Observable, throwError } from 'rxjs';
+import { map, catchError, shareReplay } from 'rxjs/operators';
+import { BackendApiService } from './backend-api.service';
 import { CompanyMapper } from './company-mapper.service';
-import { Company, CompanyDetails, Process } from '@model/gamification-dashboard.model';
-import { PlayerService } from './player.service';
+import { CompanyDetails, Process } from '@model/gamification-dashboard.model';
 
 interface CacheEntry<T> {
   data: Observable<T>;
@@ -16,99 +15,12 @@ interface CacheEntry<T> {
 })
 export class CompanyService {
   private readonly CACHE_DURATION = 10 * 60 * 1000; // 10 minutes
-  private companiesCache = new Map<string, CacheEntry<Company[]>>();
   private companyDetailsCache = new Map<string, CacheEntry<CompanyDetails>>();
 
   constructor(
-    private funifierApi: FunifierApiService,
-    private mapper: CompanyMapper,
-    private playerService: PlayerService
+    private backendApi: BackendApiService,
+    private mapper: CompanyMapper
   ) {}
-
-  /**
-   * Get companies with optional filtering
-   * First gets player's companies from extra.companies, then fetches from cnpj_performance__c
-   */
-  getCompanies(playerId: string, filter?: { search?: string; minHealth?: number }): Observable<Company[]> {
-    const cacheKey = `${playerId}_${JSON.stringify(filter || {})}`;
-    const cached = this.getCachedData(this.companiesCache, cacheKey);
-    if (cached) {
-      return cached;
-    }
-
-    // Use getCurrentPlayerData for 'me' (`/auth/user`); outros ids usam GET perfil sem `/status`.
-    const playerData$ = playerId === 'me' 
-      ? this.playerService.getCurrentPlayerData()
-      : this.playerService.getRawPlayerData(playerId);
-
-    const request$ = playerData$.pipe(
-      switchMap((playerResponse) => {
-        const companiesStr = playerResponse?.extra?.companies || '';
-        const companyIds = companiesStr.split(/[;,]/)
-          .map((id: string) => id.trim())
-          .filter((id: string) => id.length > 0)
-          .map((id: string) => String(id));
-        
-        console.log('📊 Player company IDs from extra.companies:', companyIds);
-        
-        if (companyIds.length === 0) {
-          return of([]);
-        }
-        
-        // Fetch company data from cnpj_performance__c using aggregate
-        // Query format: [{"$match":{"_id":{"$in":["1218","9654","1456"]}}}]
-        const aggregateBody = [
-          { $match: { _id: { $in: companyIds } } }
-        ];
-        
-        console.log('📊 Company aggregate query:', JSON.stringify(aggregateBody));
-        
-        return this.funifierApi.post<any[]>(
-          `/v3/database/cnpj_performance__c/aggregate?strict=true`,
-          aggregateBody
-        ).pipe(
-          map((response) => {
-            console.log('📊 Companies from cnpj_performance__c:', response);
-            
-            if (!response || !Array.isArray(response)) {
-              return [];
-            }
-            
-            let companies = response.map((companyData: any) => this.mapper.toCompany(companyData));
-            
-            // Apply filters
-            if (filter) {
-              if (filter.search) {
-                const searchLower = filter.search.toLowerCase();
-                companies = companies.filter(c => 
-                  c.name.toLowerCase().includes(searchLower) ||
-                  c.cnpj.includes(filter.search!)
-                );
-              }
-              
-              if (filter.minHealth !== undefined) {
-                companies = companies.filter(c => c.healthScore >= filter.minHealth!);
-              }
-            }
-            
-            return companies;
-          }),
-          catchError((error) => {
-            console.error('Error fetching companies from cnpj_performance__c:', error);
-            return throwError(() => error);
-          })
-        );
-      }),
-      catchError((error) => {
-        console.error('Error fetching player status:', error);
-        return throwError(() => error);
-      }),
-      shareReplay({ bufferSize: 1, refCount: true, windowTime: this.CACHE_DURATION })
-    );
-
-    this.setCachedData(this.companiesCache, cacheKey, request$);
-    return request$;
-  }
 
   /**
    * Get company details from cnpj_performance__c database
@@ -126,18 +38,18 @@ export class CompanyService {
       { $limit: 1 }
     ];
 
-    const request$ = this.funifierApi.post<any[]>(
+    const request$ = this.backendApi.post<any[]>(
       `/v3/database/cnpj_performance__c/aggregate?strict=true`,
       aggregateBody
     ).pipe(
       map(response => {
         // Response is an array, get first item
         const companyData = response && response.length > 0 ? response[0] : null;
-        
+
         if (!companyData) {
           throw new Error(`Company with CNPJ ${companyId} not found`);
         }
-        
+
         return this.mapper.toCompanyDetails(companyData);
       }),
       catchError(error => {
@@ -155,26 +67,26 @@ export class CompanyService {
    * Get company processes with tab filtering
    */
   getCompanyProcesses(
-    companyId: string, 
+    companyId: string,
     filter: 'macros-incompletas' | 'atividades-finalizadas' | 'macros-finalizadas'
   ): Observable<Process[]> {
     return this.getCompanyDetails(companyId).pipe(
       map(details => {
         switch (filter) {
           case 'macros-incompletas':
-            return details.processes.filter(p => 
+            return details.processes.filter(p =>
               p.status === 'pending' || p.status === 'in-progress'
             );
-          
+
           case 'atividades-finalizadas':
             // Return processes with completed tasks
-            return details.processes.filter(p => 
+            return details.processes.filter(p =>
               p.tasks?.some(t => t.status === 'completed') ?? false
             );
-          
+
           case 'macros-finalizadas':
             return details.processes.filter(p => p.status === 'completed');
-          
+
           default:
             return details.processes;
         }
@@ -190,7 +102,6 @@ export class CompanyService {
    * Clear all caches
    */
   clearCache(): void {
-    this.companiesCache.clear();
     this.companyDetailsCache.clear();
   }
 
@@ -199,9 +110,6 @@ export class CompanyService {
    */
   clearCompanyCache(companyId: string): void {
     this.companyDetailsCache.delete(companyId);
-    
-    // Clear companies cache entries that might include this company
-    this.companiesCache.clear();
   }
 
   /**

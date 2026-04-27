@@ -1,11 +1,11 @@
 import { Injectable } from '@angular/core';
 import { Observable, of, throwError } from 'rxjs';
 import { map, catchError, tap, timeout, shareReplay } from 'rxjs/operators';
-import { FunifierApiService } from './funifier-api.service';
 import { PlayerMapper } from './player-mapper.service';
 import { PlayerStatus, PointWallet, SeasonProgress } from '@model/gamification-dashboard.model';
 import { HttpClient } from '@angular/common/http';
 import { environment } from '../../environments/environment';
+import { joinApiPath } from '../../environments/backend-url';
 import { isGame4uDataEnabled } from '@model/game4u-api.model';
 import { Game4uApiService } from './game4u-api.service';
 import { mapGame4uStatsToPointWallet } from './game4u-game-mapper';
@@ -27,7 +27,6 @@ export class PlayerService {
   private cachedRawData: Map<string, CacheEntry> = new Map();
 
   constructor(
-    private funifierApi: FunifierApiService,
     private mapper: PlayerMapper,
     private http: HttpClient,
     private game4uApi: Game4uApiService,
@@ -50,7 +49,7 @@ export class PlayerService {
   /**
    * Perfil do jogador sem GET …/status:
    * - `me` (ou vazio): mesmo fluxo que {@link getCurrentPlayerData} (`/auth/user`).
-   * - outro id: `GET /v3/player/{id}` (documentação Funifier: perfil sem sufixo `/status`).
+   * - outro id: `GET …/player/{id}` na API base (perfil sem sufixo `/status`).
    */
   getRawPlayerData(playerId: string, forceRefresh: boolean = false): Observable<any> {
     const pid = (playerId || '').trim();
@@ -68,10 +67,11 @@ export class PlayerService {
     }
 
     const pathId = encodeURIComponent(pid);
-    const endpoint = `/v3/player/${pathId}`;
-    console.log('📊 Fetching fresh player profile (no /status):', endpoint);
+    const base = (environment.backend_url_base || '').trim().replace(/\/+$/, '');
+    const url = joinApiPath(base, `player/${pathId}`);
+    console.log('📊 Fetching fresh player profile (no /status):', url);
 
-    const request$ = this.funifierApi.get<any>(endpoint).pipe(
+    const request$ = this.http.get<any>(url).pipe(
       timeout(this.REQUEST_TIMEOUT),
       tap(response => {
         console.log('📊 Raw player profile received:', response);
@@ -204,52 +204,11 @@ export class PlayerService {
   }
 
   /**
-   * Fetch player company associations from player_company__c collection.
-   * Aggregates by type (cnpj_resp, cnpj) and returns arrays of CNPJ/empid strings.
-   * 
-   * @param playerId - Player email/ID
-   * @returns Observable of map: type → cnpj[] (e.g. { cnpj_resp: ["1586", "57.443.329/0001-44"], cnpj: ["1864"] })
+   * Associações jogador–empresa (`player_company__c`).
+   * O aggregate via API legada está desativado no cliente; devolve mapa vazio até haver endpoint substituto.
    */
-  private getPlayerCompanyData(playerId: string): Observable<Map<string, string[]>> {
-    const cacheKey = `player_company_${playerId}`;
-    const cached = this.cachedRawData.get(cacheKey);
-    const now = Date.now();
-
-    if (cached && (now - cached.timestamp) < this.CACHE_DURATION) {
-      return cached.data$;
-    }
-
-    const aggregateBody = [
-      { $match: { playerId } },
-      { $group: { _id: '$type', cnpjs: { $push: '$cnpj' } } }
-    ];
-
-    const request$: Observable<Map<string, string[]>> = this.funifierApi.post<any[]>(
-      '/v3/database/player_company__c/aggregate?strict=true',
-      aggregateBody
-    ).pipe(
-      timeout(this.REQUEST_TIMEOUT),
-      map(response => {
-        const result = new Map<string, string[]>();
-        if (Array.isArray(response)) {
-          response.forEach(item => {
-            if (item._id && Array.isArray(item.cnpjs)) {
-              result.set(item._id, item.cnpjs.filter((c: any) => typeof c === 'string' && c.trim().length > 0));
-            }
-          });
-        }
-        console.log('📊 Player company data from player_company__c:', Array.from(result.entries()));
-        return result;
-      }),
-      catchError(error => {
-        console.error('📊 Error fetching player_company__c:', error);
-        return of(new Map<string, string[]>());
-      }),
-      shareReplay({ bufferSize: 1, refCount: true, windowTime: this.CACHE_DURATION })
-    );
-
-    this.cachedRawData.set(cacheKey, { data$: request$, timestamp: now });
-    return request$;
+  private getPlayerCompanyData(_playerId: string): Observable<Map<string, string[]>> {
+    return of(new Map<string, string[]>());
   }
 
   /**

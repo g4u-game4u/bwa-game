@@ -781,6 +781,12 @@
               font-weight: 500;
               color: $text-secondary;
             }
+
+            &--pending {
+              font-weight: 500;
+              color: $text-secondary;
+              letter-spacing: 0.05em;
+            }
           }
 
           .carteira-item-meta {

@@ -1,7 +1,7 @@
 {
   "name": "bwa-migration-tools",
   "private": true,
-  "description": "Funifier+CSV user export, Supabase auth SQL, deliveries → Game4U /game/action/process, action templates → /action, organogram from companies JSON.",
+  "description": "Funifier+CSV user export, Supabase auth SQL, deliveries → Game4U /game/action/process, action templates → /action, organogram from companies JSON, portal BWA + gamificação → company-completo + delivery extra.",
   "scripts": {
     "users:export": "ts-node --transpile-only src/users-export.ts",
     "users:sql": "ts-node --transpile-only src/users-sql.ts",
@@ -11,7 +11,11 @@
     "action-templates:upload:dry": "ts-node --transpile-only src/action-templates-upload.ts --dry-run",
     "organogram:from-json": "ts-node --transpile-only src/organogram-from-companies-json.ts",
     "organogram:from-json:help": "ts-node --transpile-only src/organogram-from-companies-json.ts --help",
-    "organogram:csv-to-xlsx": "ts-node --transpile-only src/organogram-csv-to-xlsx.ts"
+    "organogram:csv-to-xlsx": "ts-node --transpile-only src/organogram-csv-to-xlsx.ts",
+    "company-levels:sync": "ts-node --transpile-only src/company-levels-delivery-extra.ts",
+    "company-levels:sync:deliveries:dry": "ts-node --transpile-only src/company-levels-delivery-extra.ts --reuse-json --apply-deliveries --dry-run --max-puts 1",
+    "company-levels:step4": "ts-node --transpile-only src/company-levels-step4.ts",
+    "company-levels:step4:all": "ts-node --transpile-only src/company-levels-step4.ts --all-puts"
   },
   "devDependencies": {
     "@types/node": "^22.10.7",

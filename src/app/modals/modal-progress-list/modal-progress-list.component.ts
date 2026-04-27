@@ -2,7 +2,7 @@ import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetect
 import { trigger, transition, style, animate } from '@angular/animations';
 import { Subject, forkJoin, of, firstValueFrom } from 'rxjs';
 import { takeUntil, map, catchError } from 'rxjs/operators';
-import { ActionLogService, ActivityListItem, ProcessListItem, ActionLogEntry } from '@services/action-log.service';
+import { ActionLogService, ActivityListItem, ProcessListItem } from '@services/action-log.service';
 import { ChartDataset } from '@model/gamification-dashboard.model';
 import { CnpjLookupService } from '@services/cnpj-lookup.service';
 
@@ -124,14 +124,22 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
       this.activityItems = [];
       this.processoItems = [];
       this.isLoading = false;
+      this.isLoadingChart = false;
+      this.chartLabels = [];
+      this.chartDatasets = [];
       this.cdr.markForCheck();
       return;
     }
 
     if (this.isActivityList) {
+      this.isLoadingChart = true;
       // Load activities for all player IDs in parallel
       const activityRequests = playerIds.map(playerId =>
-        this.actionLogService.getActivityList(playerId, this.month).pipe(
+        this.actionLogService.getActivityList(
+          playerId,
+          this.month,
+          this.listType === 'atividades' ? 'DONE' : undefined
+        ).pipe(
           catchError(error => {
             console.error(`Error loading activity list for player ${playerId}:`, error);
             return of([] as ActivityListItem[]);
@@ -148,23 +156,24 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
 
             // Sort by created date (newest first)
             this.activityItems.sort((a, b) => b.created - a.created);
-            
+
+            // Gráfico: mesma base da tabela (uma linha por user-action / action_log já mapeada em getActivityList)
+            this.applyChartFromActivityItems(this.activityItems);
+
             // Enrich CNPJ names
             await this.enrichCnpjNames(this.activityItems.map(item => item.cnpj).filter(cnpj => cnpj));
-            
+
             this.isLoading = false;
             this.cdr.markForCheck();
           },
           error: (err: Error) => {
             console.error('Error loading activity lists:', err);
             this.activityItems = [];
+            this.applyChartFromActivityItems([]);
             this.isLoading = false;
             this.cdr.markForCheck();
           }
         });
-      
-      // Load chart data for activities
-      this.loadChartData();
     } else if (this.isProcessList) {
       // Load processes for all player IDs in parallel
       const processRequests = playerIds.map(playerId =>
@@ -231,16 +240,10 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Load chart data with activities count by day
-   * Uses getPlayerActionLogForMonth to get raw action log data and processes it locally
+   * Conta tarefas por dia do mês usando os mesmos itens da tabela (origem: user-actions Game4U
+   * ou action_log Funifier, conforme getActivityList).
    */
-  private loadChartData(): void {
-    this.isLoadingChart = true;
-    // Clear previous data to ensure change detection
-    this.chartLabels = [];
-    this.chartDatasets = [];
-    this.cdr.markForCheck();
-    
+  private applyChartFromActivityItems(items: ActivityListItem[]): void {
     const targetMonth = this.month || new Date();
     const year = targetMonth.getFullYear();
     const month = targetMonth.getMonth();
@@ -249,128 +252,55 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
     const isCurrentMonth = year === today.getFullYear() && month === today.getMonth();
     const currentDay = isCurrentMonth ? today.getDate() : daysInMonth;
 
-    console.log('📊 Loading chart data for month:', year, month + 1, 'Days in month:', daysInMonth, 'Current day:', currentDay);
+    const newDailyCounts: number[] = Array.from({ length: daysInMonth }, () => 0);
 
-    // Initialize all days with 0 - create new array
-    const dailyCounts: number[] = Array.from({ length: daysInMonth }, () => 0);
-
-    // Get all player IDs
-    const playerIds = this.getPlayerIds();
-    
-    if (playerIds.length === 0) {
-      console.warn('No player IDs for chart data');
-      this.chartLabels = [];
-      this.chartDatasets = [];
-      this.isLoadingChart = false;
-      this.cdr.markForCheck();
-      return;
+    for (const item of items) {
+      if (!item.created) {
+        continue;
+      }
+      const entryDate = new Date(item.created);
+      const entryYear = entryDate.getFullYear();
+      const entryMonth = entryDate.getMonth();
+      const entryDay = entryDate.getDate();
+      if (entryYear === year && entryMonth === month && entryDay >= 1 && entryDay <= daysInMonth) {
+        newDailyCounts[entryDay - 1]++;
+      }
     }
 
-    // Load action log for all player IDs in parallel
-    const actionLogRequests = playerIds.map(playerId =>
-      this.actionLogService.getPlayerActionLogForMonth(playerId, targetMonth).pipe(
-        catchError(error => {
-          console.error(`Error loading action log for player ${playerId}:`, error);
-          return of([] as ActionLogEntry[]);
-        })
-      )
-    );
+    this.chartLabels = [...Array.from({ length: daysInMonth }, (_, i) => String(i + 1))];
 
-    forkJoin(actionLogRequests)
-      .pipe(takeUntil(this.destroy$))
-      .subscribe({
-        next: (results: ActionLogEntry[][]) => {
-          // Aggregate all action log entries from all players
-          const allActionLogEntries = results.flat();
-          
-          console.log('📊 Action log entries received:', allActionLogEntries);
-          console.log('📊 Total entries:', allActionLogEntries.length);
-          
-          // Process entries to count activities by day
-          const newDailyCounts = [...dailyCounts];
-          
-          allActionLogEntries.forEach(entry => {
-            // Extract timestamp from time field (can be number or { $date: "ISO string" })
-            let timestamp: number;
-            if (typeof entry.time === 'number') {
-              timestamp = entry.time;
-            } else if (entry.time && typeof entry.time === 'object' && '$date' in entry.time) {
-              const date = new Date(entry.time.$date);
-              timestamp = isNaN(date.getTime()) ? 0 : date.getTime();
-            } else {
-              return; // Skip entries with invalid time
-            }
+    const backgroundColorArray = newDailyCounts.map((count, index) => {
+      if (isCurrentMonth && index + 1 > currentDay) {
+        return 'rgba(255, 255, 255, 0.1)';
+      }
+      if (count > 0) {
+        return 'rgba(34, 197, 94, 0.6)';
+      }
+      return 'rgba(255, 255, 255, 0.05)';
+    });
 
-            // Convert timestamp to date
-            const entryDate = new Date(timestamp);
-            const entryYear = entryDate.getFullYear();
-            const entryMonth = entryDate.getMonth();
-            const entryDay = entryDate.getDate();
+    const borderColorArray = newDailyCounts.map((count, index) => {
+      if (isCurrentMonth && index + 1 > currentDay) {
+        return 'rgba(255, 255, 255, 0.1)';
+      }
+      if (count > 0) {
+        return 'rgba(34, 197, 94, 1)';
+      }
+      return 'rgba(255, 255, 255, 0.1)';
+    });
 
-            // Check if entry is in the target month
-            if (entryYear === year && entryMonth === month && entryDay >= 1 && entryDay <= daysInMonth) {
-              newDailyCounts[entryDay - 1]++;
-            }
-          });
+    this.chartDatasets = [
+      {
+        label: 'Tarefas',
+        data: [...newDailyCounts],
+        backgroundColor: backgroundColorArray,
+        borderColor: borderColorArray,
+        borderWidth: 1
+      }
+    ];
 
-          console.log('📊 Daily counts array:', newDailyCounts);
-          console.log('📊 Total activities:', newDailyCounts.reduce((sum, count) => sum + count, 0));
-
-          // Generate labels (day numbers) - create new array reference
-          this.chartLabels = [...Array.from({ length: daysInMonth }, (_, i) => String(i + 1))];
-
-          // Create dataset - create new array reference to ensure change detection
-          // Green color for finalized tasks
-          const backgroundColorArray = newDailyCounts.map((count, index) => {
-            // Future days should be empty/transparent
-            if (isCurrentMonth && index + 1 > currentDay) {
-              return 'rgba(255, 255, 255, 0.1)';
-            }
-            // Days with activities - green color for finalized tasks
-            if (count > 0) {
-              return 'rgba(34, 197, 94, 0.6)'; // Green with transparency
-            }
-            // Days without activities (past)
-            return 'rgba(255, 255, 255, 0.05)';
-          });
-
-          const borderColorArray = newDailyCounts.map((count, index) => {
-            if (isCurrentMonth && index + 1 > currentDay) {
-              return 'rgba(255, 255, 255, 0.1)';
-            }
-            if (count > 0) {
-              return 'rgba(34, 197, 94, 1)'; // Green for finalized tasks
-            }
-            return 'rgba(255, 255, 255, 0.1)';
-          });
-
-          // Create new array reference for datasets
-          this.chartDatasets = [{
-            label: 'Tarefas',
-            data: [...newDailyCounts], // Create new array reference with actual data
-            backgroundColor: backgroundColorArray,
-            borderColor: borderColorArray,
-            borderWidth: 1
-          }];
-
-          this.isLoadingChart = false;
-          this.cdr.markForCheck();
-        },
-        error: (err: Error) => {
-          console.error('Error loading chart data:', err);
-          // Initialize empty chart on error
-          this.chartLabels = Array.from({ length: daysInMonth }, (_, i) => String(i + 1));
-          this.chartDatasets = [{
-            label: 'Tarefas',
-            data: dailyCounts,
-            backgroundColor: 'rgba(255, 255, 255, 0.05)',
-            borderColor: 'rgba(255, 255, 255, 0.1)',
-            borderWidth: 1
-          }];
-          this.isLoadingChart = false;
-          this.cdr.markForCheck();
-        }
-      });
+    this.isLoadingChart = false;
+    this.cdr.markForCheck();
   }
 
   onClose(): void {

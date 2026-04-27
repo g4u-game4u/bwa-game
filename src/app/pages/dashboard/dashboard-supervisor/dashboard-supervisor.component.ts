@@ -7,7 +7,7 @@ import { ACLService, AclMetadata } from '@services/acl.service';
 import { UserProfileService } from '@services/user-profile.service';
 import { PlayerService } from '@services/player.service';
 import { KPIService } from '@services/kpi.service';
-import { FunifierApiService } from '@services/funifier-api.service';
+import { BackendApiService } from '@services/backend-api.service';
 import { CnpjLookupService } from '@services/cnpj-lookup.service';
 import { CompanyKpiService, CompanyDisplay } from '@services/company-kpi.service';
 import { SessaoProvider } from '@providers/sessao/sessao.provider';
@@ -110,7 +110,7 @@ export class DashboardSupervisorComponent implements OnInit, OnDestroy {
     private userProfileService: UserProfileService,
     private playerService: PlayerService,
     private kpiService: KPIService,
-    private funifierApi: FunifierApiService,
+    private backendApi: BackendApiService,
     private cnpjLookupService: CnpjLookupService,
     private companyKpiService: CompanyKpiService,
     private sessaoProvider: SessaoProvider,
@@ -302,7 +302,7 @@ export class DashboardSupervisorComponent implements OnInit, OnDestroy {
   private fetchTeamMembers(teamId: string) {
     const aggregatePayload = [{ $match: { teams: teamId } }];
 
-    return this.funifierApi.post<any[]>(
+    return this.backendApi.post<any[]>(
       '/database/player_status/aggregate?strict=true',
       aggregatePayload,
       { headers: { 'Range': 'items=0-200' } }
@@ -576,7 +576,7 @@ export class DashboardSupervisorComponent implements OnInit, OnDestroy {
     }
 
     const aggregatePayload = [{ $match: { _id: { $in: playerIds } } }];
-    this.funifierApi.post<any[]>(
+    this.backendApi.post<any[]>(
       '/database/player_status/aggregate?strict=true',
       aggregatePayload,
       { headers: { 'Range': 'items=0-200' } }

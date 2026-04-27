@@ -1,0 +1,1 @@
+1. Devemos passar pelos arquivos .json desta pasta e enviar para o game4u 

@@ -24,6 +24,7 @@ const WHITELISTED_URLS = [
     '/auth/refresh',
     '/client/system-params',
     '/campaign/current',
+    '/campaign',
     'integrador-n8n.grupo4u.com.br' // Whitelist help button webhook (external, no auth needed)
 ]
 

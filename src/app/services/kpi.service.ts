@@ -1,11 +1,10 @@
 import { Injectable } from '@angular/core';
-import { Observable, throwError, of, forkJoin } from 'rxjs';
-import { map, catchError, shareReplay, switchMap } from 'rxjs/operators';
-import { FunifierApiService } from './funifier-api.service';
+import { Observable, throwError, of } from 'rxjs';
+import { map, catchError, shareReplay } from 'rxjs/operators';
+import { BackendApiService } from './backend-api.service';
 import { KPIMapper } from './kpi-mapper.service';
 import { KPIData } from '@model/gamification-dashboard.model';
 import { PlayerService } from './player.service';
-import { CompanyService } from './company.service';
 
 interface CacheEntry<T> {
   data: Observable<T>;
@@ -31,10 +30,9 @@ export class KPIService {
   private metricTargetsCache: Observable<MetricTarget[]> | null = null;
 
   constructor(
-    private funifierApi: FunifierApiService,
+    private backendApi: BackendApiService,
     private mapper: KPIMapper,
-    private playerService: PlayerService,
-    private companyService: CompanyService
+    private playerService: PlayerService
   ) {}
 
   /**
@@ -51,7 +49,7 @@ export class KPIService {
       { $sort: { order: 1 } } // Sort by order field
     ];
 
-    this.metricTargetsCache = this.funifierApi.post<MetricTarget[]>(
+    this.metricTargetsCache = this.backendApi.post<MetricTarget[]>(
       '/v3/database/metric_targets__c/aggregate?strict=true',
       aggregateBody
     ).pipe(
@@ -94,17 +92,18 @@ export class KPIService {
       return cached;
     }
 
-    const request$: Observable<KPIData[]> = forkJoin({
-      playerStatus: this.playerService.getRawPlayerData(playerId),
-      carteiraCompanies: this.companyService.getCompanies(playerId)
-    }).pipe(
-      map(({ playerStatus, carteiraCompanies }) => {
+    const request$: Observable<KPIData[]> = this.playerService.getRawPlayerData(playerId).pipe(
+      map(playerStatus => {
         console.log('📊 Player status received:', playerStatus);
-        console.log('📊 Carteira companies count (player portfolio):', carteiraCompanies.length);
-        
-        const kpis: KPIData[] = [];
+        const companiesStr = playerStatus?.extra?.companies || '';
+        const companyIds = companiesStr
+          .split(/[;,]/)
+          .map((id: string) => id.trim())
+          .filter((id: string) => id.length > 0);
+        const companyCount = companyIds.length;
+        console.log('📊 Carteira client count (extra.companies):', companyCount);
 
-        const companyCount = carteiraCompanies.length;
+        const kpis: KPIData[] = [];
         
         // Get target from player's extra.client_goals (number), fallback to default 100
         const clientGoals = playerStatus.extra?.client_goals;
@@ -170,7 +169,6 @@ export class KPIService {
       }),
       catchError(error => {
         console.error('📊 Error fetching player KPIs:', error);
-        // Return empty array instead of throwing - don't block the UI
         return of([]);
       }),
       shareReplay({ bufferSize: 1, refCount: true, windowTime: this.CACHE_DURATION })
@@ -209,7 +207,7 @@ export class KPIService {
       { $limit: 1 }
     ];
 
-    const request$ = this.funifierApi.post<any[]>(
+    const request$ = this.backendApi.post<any[]>(
       `/v3/database/cnpj_performance__c/aggregate?strict=true`,
       aggregateBody
     ).pipe(

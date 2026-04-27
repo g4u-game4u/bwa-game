@@ -1,53 +1,35 @@
 import { TestBed } from '@angular/core/testing';
 import { KPIService } from './kpi.service';
-import { FunifierApiService } from './funifier-api.service';
+import { BackendApiService } from './backend-api.service';
 import { KPIMapper } from './kpi-mapper.service';
 import { PlayerService } from './player.service';
-import { CompanyService } from './company.service';
 import * as fc from 'fast-check';
 import { of } from 'rxjs';
-import { Company } from '@model/gamification-dashboard.model';
 
 describe('KPIService', () => {
   let service: KPIService;
-  let funifierApiSpy: jasmine.SpyObj<FunifierApiService>;
+  let backendApiSpy: jasmine.SpyObj<BackendApiService>;
   let mapperSpy: jasmine.SpyObj<KPIMapper>;
   let playerServiceSpy: jasmine.SpyObj<PlayerService>;
-  let companyServiceSpy: jasmine.SpyObj<CompanyService>;
-
-  function mockCompanies(n: number): Company[] {
-    return Array.from({ length: n }, (_, i) => ({
-      id: String(i + 1),
-      name: `Empresa ${i}`,
-      cnpj: `${i + 1}.000.000/0001-00`,
-      healthScore: 80,
-      kpis: []
-    }));
-  }
 
   beforeEach(() => {
-    const apiSpy = jasmine.createSpyObj('FunifierApiService', ['get', 'post']);
+    const apiSpy = jasmine.createSpyObj('BackendApiService', ['get', 'post']);
     const kpiMapperSpy = jasmine.createSpyObj('KPIMapper', ['toKPIDataArray']);
     const playerSpy = jasmine.createSpyObj('PlayerService', ['getRawPlayerData']);
-    const companySpy = jasmine.createSpyObj('CompanyService', ['getCompanies']);
-
-    companySpy.getCompanies.and.returnValue(of(mockCompanies(6)));
 
     TestBed.configureTestingModule({
       providers: [
         KPIService,
-        { provide: FunifierApiService, useValue: apiSpy },
+        { provide: BackendApiService, useValue: apiSpy },
         { provide: KPIMapper, useValue: kpiMapperSpy },
-        { provide: PlayerService, useValue: playerSpy },
-        { provide: CompanyService, useValue: companySpy }
+        { provide: PlayerService, useValue: playerSpy }
       ]
     });
 
     service = TestBed.inject(KPIService);
-    funifierApiSpy = TestBed.inject(FunifierApiService) as jasmine.SpyObj<FunifierApiService>;
+    backendApiSpy = TestBed.inject(BackendApiService) as jasmine.SpyObj<BackendApiService>;
     mapperSpy = TestBed.inject(KPIMapper) as jasmine.SpyObj<KPIMapper>;
     playerServiceSpy = TestBed.inject(PlayerService) as jasmine.SpyObj<PlayerService>;
-    companyServiceSpy = TestBed.inject(CompanyService) as jasmine.SpyObj<CompanyService>;
   });
 
   it('should be created', () => {
@@ -85,19 +67,18 @@ describe('KPIService', () => {
           extra: {
             client_goals: 100,
             entrega: '85',
-            entrega_goal: 90
+            entrega_goal: 90,
+            companies: 'a;b;c;d'
           }
         } as any)
       );
     });
 
-    it('should use CompanyService portfolio count for clientes na carteira', done => {
-      companyServiceSpy.getCompanies.and.returnValue(of(mockCompanies(4)));
-
+    it('should count clientes na carteira from player extra.companies', done => {
       service.getPlayerKPIs('player@x.com').subscribe(kpis => {
         const carteira = kpis.find(k => k.id === 'numero-empresas');
         expect(carteira?.current).toBe(4);
-        expect(companyServiceSpy.getCompanies).toHaveBeenCalledWith('player@x.com');
+        expect(playerServiceSpy.getRawPlayerData).toHaveBeenCalledWith('player@x.com');
         done();
       });
     });

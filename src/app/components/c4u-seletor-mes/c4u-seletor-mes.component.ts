@@ -14,7 +14,12 @@ import {firstValueFrom} from "rxjs";
 })
 export class C4uSeletorMesComponent implements OnInit, OnChanges {
   private PREV_MONTHS: number = 0;
-    private IS_TESTER = false;
+  private IS_TESTER = false;
+
+  /** Último mês da lista (mês “atual” do filtro), limitado à campanha. */
+  private monthAnchor = moment().startOf('month');
+  /** Primeiro mês permitido na campanha. */
+  private seasonStartMonth = moment().startOf('month');
 
     @Output()
     onSelectedMonth = new EventEmitter();
@@ -63,28 +68,46 @@ export class C4uSeletorMesComponent implements OnInit, OnChanges {
     private async initializeMonths() {
       try {
         this.isLoading = true; // Ativa loading
-        
-        // Verifica se o usuário é ADMIN
+
         if (this.sessao.isAdmin()) {
           this.PREV_MONTHS = 6;
+          this.monthAnchor = moment().startOf('month');
+          this.seasonStartMonth = moment().subtract(this.PREV_MONTHS - 1, 'months').startOf('month');
         } else {
-          // this.PREV_MONTHS = 10 - (moment().month()); //ENQUANTO ESTIVERMOS EM AUDITORIA, NÃO PERMITIR ACESSO A MESES ANTERIORES
-          const month = await this.seasonDatesService.getMonthsSinceSeasonStart();
-          if (month > 0) {
-            this.PREV_MONTHS = month;
-          } else {
-            // Se a temporada ainda não começou, mostra pelo menos 1 mês
-            this.PREV_MONTHS = 1;
+          const { start, end } = await this.seasonDatesService.getSeasonDates();
+          this.seasonStartMonth = moment(start).startOf('month');
+          const seasonEndMonth = moment(end).startOf('month');
+          const nowMonth = moment().startOf('month');
+          let anchor = nowMonth.clone();
+          if (anchor.isAfter(seasonEndMonth)) {
+            anchor = seasonEndMonth.clone();
           }
+          if (anchor.isBefore(this.seasonStartMonth)) {
+            anchor = this.seasonStartMonth.clone();
+          }
+          this.monthAnchor = anchor;
+          const span =
+            this.monthAnchor.clone().startOf('month').diff(this.seasonStartMonth.clone().startOf('month'), 'months') +
+            1;
+          const maxSpan =
+            seasonEndMonth.clone().startOf('month').diff(this.seasonStartMonth.clone().startOf('month'), 'months') + 1;
+          this.PREV_MONTHS = Math.max(1, Math.min(span, Math.max(1, maxSpan)));
         }
 
-        // Verifica se há dados de janeiro e inclui janeiro se necessário
         await this.checkAndIncludeJanuary();
+
+        if (!this.sessao.isAdmin()) {
+          const maxBack =
+            this.monthAnchor.clone().startOf('month').diff(this.seasonStartMonth.clone().startOf('month'), 'months') +
+            1;
+          this.PREV_MONTHS = Math.min(Math.max(this.PREV_MONTHS, 1), Math.max(1, maxBack));
+        }
 
         this.populateFields(this.PREV_MONTHS, true); // Suppress initial emit - dashboard already loads data
       } catch (error) {
-                // Fallback para valores padrão
         this.PREV_MONTHS = 1;
+        this.monthAnchor = moment().startOf('month');
+        this.seasonStartMonth = moment().subtract(11, 'months').startOf('month');
         this.populateFields(this.PREV_MONTHS, true);
       } finally {
         // Garante que loading seja desativado mesmo em caso de erro
@@ -148,16 +171,40 @@ export class C4uSeletorMesComponent implements OnInit, OnChanges {
 
     private populateFields(value: number, suppressEmit: boolean = false) {
         this.months = []; // Limpa meses anteriores
-        
+
         if (value && value > 0) {
-            Array(value).fill(0).forEach((_, i) => {
-                const month = moment().subtract(i, 'months');
-                this.months.push({id: i, name: month.format("MMM/YY").toUpperCase()});
-            });
+            if (this.sessao.isAdmin()) {
+                Array(value)
+                    .fill(0)
+                    .forEach((_, i) => {
+                        const month = moment().subtract(i, 'months');
+                        this.months.push({
+                            id: i,
+                            name: month.format('MMM/YY').toUpperCase(),
+                            monthsAgo: i
+                        });
+                    });
+            } else {
+                for (let i = 0; i < value; i++) {
+                    const m = this.monthAnchor.clone().subtract(i, 'months');
+                    if (m.isBefore(this.seasonStartMonth, 'month')) {
+                        break;
+                    }
+                    const monthsAgo = moment().startOf('month').diff(m.clone().startOf('month'), 'months');
+                    this.months.push({
+                        id: this.months.length,
+                        name: m.format('MMM/YY').toUpperCase(),
+                        monthsAgo
+                    });
+                }
+            }
         } else {
-            // Fallback: pelo menos um mês
-            const currentMonth = moment();
-            this.months.push({id: 0, name: currentMonth.format("MMM/YY").toUpperCase()});
+            const currentMonth = moment().startOf('month');
+            this.months.push({
+                id: 0,
+                name: currentMonth.format('MMM/YY').toUpperCase(),
+                monthsAgo: 0
+            });
         }
 
         setTimeout(() => {
@@ -200,7 +247,12 @@ export class C4uSeletorMesComponent implements OnInit, OnChanges {
         if (this.months.length > 0) {
             this.prevEnabled = (this.selected !== this.months.length - 1);
             this.nextEnabled = (this.selected !== 0);
-            this.onSelectedMonth.emit(this.selected);
+            const row = this.months[this.selected];
+            const monthsAgo =
+                row && typeof (row as { monthsAgo?: number }).monthsAgo === 'number'
+                    ? (row as { monthsAgo: number }).monthsAgo
+                    : this.selected;
+            this.onSelectedMonth.emit(monthsAgo);
         }
     }
 

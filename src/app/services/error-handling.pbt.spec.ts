@@ -4,7 +4,7 @@ import * as fc from 'fast-check';
 import { PlayerService } from './player.service';
 import { CompanyService } from './company.service';
 import { KPIService } from './kpi.service';
-import { FunifierApiService } from './funifier-api.service';
+import { BackendApiService } from './backend-api.service';
 import { PlayerMapper } from './player-mapper.service';
 import { CompanyMapper } from './company-mapper.service';
 import { KPIMapper } from './kpi-mapper.service';
@@ -25,7 +25,7 @@ describe('Property-Based Tests: Error Handling', () => {
         PlayerService,
         CompanyService,
         KPIService,
-        FunifierApiService,
+        BackendApiService,
         PlayerMapper,
         CompanyMapper,
         KPIMapper
@@ -122,43 +122,6 @@ describe('Property-Based Tests: Error Handling', () => {
             req.flush('Error', { status: errorStatus, statusText: 'Error' });
 
             expect(await outcome).toBe('err');
-          }
-        ),
-        { numRuns: 20, timeout: 10000 }
-      ).then(() => done()).catch((err) => done.fail(err));
-    });
-
-    it('should handle network errors gracefully for CompanyService', (done) => {
-      fc.assert(
-        fc.asyncProperty(
-          fc.string({ minLength: 1, maxLength: 50 }), // playerId
-          async (playerId) => {
-            const companyService = TestBed.inject(CompanyService);
-
-            const request = companyService.getCompanies(playerId);
-            
-            let errorCaught = false;
-            const promise = new Promise((resolve, reject) => {
-              request.subscribe({
-                next: (data) => resolve(data),
-                error: (err) => {
-                  errorCaught = true;
-                  reject(err);
-                }
-              });
-            });
-
-            const req = httpMock.expectOne((req) => req.url.includes(`/v3/player/${playerId}/companies`));
-            req.error(new ProgressEvent('Network error'));
-
-            try {
-              await promise;
-            } catch (error) {
-              // Error should be caught
-            }
-
-            // Should have caught the error
-            expect(errorCaught).toBe(true);
           }
         ),
         { numRuns: 20, timeout: 10000 }

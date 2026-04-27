@@ -4,7 +4,7 @@ import { of, throwError } from 'rxjs';
 import { PlayerService } from './player.service';
 import { CompanyService } from './company.service';
 import { KPIService } from './kpi.service';
-import { FunifierApiService } from './funifier-api.service';
+import { BackendApiService } from './backend-api.service';
 import { PlayerMapper } from './player-mapper.service';
 import { CompanyMapper } from './company-mapper.service';
 import { KPIMapper } from './kpi-mapper.service';
@@ -18,10 +18,10 @@ describe('Error Scenarios Unit Tests', () => {
   let playerService: PlayerService;
   let companyService: CompanyService;
   let kpiService: KPIService;
-  let funifierApiService: jasmine.SpyObj<FunifierApiService>;
+  let backendApiService: jasmine.SpyObj<BackendApiService>;
 
   beforeEach(() => {
-    const spy = jasmine.createSpyObj('FunifierApiService', ['get', 'post']);
+    const spy = jasmine.createSpyObj('BackendApiService', ['get', 'post']);
 
     TestBed.configureTestingModule({
       imports: [HttpClientTestingModule],
@@ -29,7 +29,7 @@ describe('Error Scenarios Unit Tests', () => {
         PlayerService,
         CompanyService,
         KPIService,
-        { provide: FunifierApiService, useValue: spy },
+        { provide: BackendApiService, useValue: spy },
         PlayerMapper,
         CompanyMapper,
         KPIMapper
@@ -39,7 +39,7 @@ describe('Error Scenarios Unit Tests', () => {
     playerService = TestBed.inject(PlayerService);
     companyService = TestBed.inject(CompanyService);
     kpiService = TestBed.inject(KPIService);
-    funifierApiService = TestBed.inject(FunifierApiService) as jasmine.SpyObj<FunifierApiService>;
+    backendApiService = TestBed.inject(BackendApiService) as jasmine.SpyObj<BackendApiService>;
   });
 
   describe('Network Error Handling', () => {
@@ -48,7 +48,7 @@ describe('Error Scenarios Unit Tests', () => {
       const networkError = new Error('Network timeout');
       networkError.name = 'TimeoutError';
 
-      funifierApiService.get.and.returnValue(throwError(() => networkError));
+      backendApiService.get.and.returnValue(throwError(() => networkError));
 
       playerService.getPlayerStatus(playerId).subscribe({
         next: () => {
@@ -63,13 +63,12 @@ describe('Error Scenarios Unit Tests', () => {
     });
 
     it('should handle connection refused errors in CompanyService', (done) => {
-      const playerId = 'test-player-1';
       const connectionError = new Error('Connection refused');
       connectionError.name = 'HttpErrorResponse';
 
-      funifierApiService.get.and.returnValue(throwError(() => connectionError));
+      backendApiService.post.and.returnValue(throwError(() => connectionError));
 
-      companyService.getCompanies(playerId).subscribe({
+      companyService.getCompanyDetails('99.999.999/0001-99').subscribe({
         next: () => {
           fail('Should have thrown an error');
         },
@@ -86,7 +85,7 @@ describe('Error Scenarios Unit Tests', () => {
       const dnsError = new Error('DNS resolution failed');
       dnsError.name = 'NetworkError';
 
-      funifierApiService.get.and.returnValue(throwError(() => dnsError));
+      backendApiService.get.and.returnValue(throwError(() => dnsError));
 
       kpiService.getPlayerKPIs(playerId).subscribe({
         next: () => {
@@ -108,7 +107,7 @@ describe('Error Scenarios Unit Tests', () => {
       authError.name = 'HttpErrorResponse';
       (authError as any).status = 401;
 
-      funifierApiService.get.and.returnValue(throwError(() => authError));
+      backendApiService.get.and.returnValue(throwError(() => authError));
 
       playerService.getPlayerStatus(playerId).subscribe({
         next: () => {
@@ -123,14 +122,13 @@ describe('Error Scenarios Unit Tests', () => {
     });
 
     it('should handle 403 Forbidden errors in CompanyService', (done) => {
-      const playerId = 'test-player-1';
       const forbiddenError = new Error('Forbidden');
       forbiddenError.name = 'HttpErrorResponse';
       (forbiddenError as any).status = 403;
 
-      funifierApiService.get.and.returnValue(throwError(() => forbiddenError));
+      backendApiService.post.and.returnValue(throwError(() => forbiddenError));
 
-      companyService.getCompanies(playerId).subscribe({
+      companyService.getCompanyDetails('99.999.999/0001-99').subscribe({
         next: () => {
           fail('Should have thrown an error');
         },
@@ -149,7 +147,7 @@ describe('Error Scenarios Unit Tests', () => {
       (tokenError as any).status = 401;
       (tokenError as any).error = { message: 'Token expired' };
 
-      funifierApiService.get.and.returnValue(throwError(() => tokenError));
+      backendApiService.get.and.returnValue(throwError(() => tokenError));
 
       kpiService.getPlayerKPIs(playerId).subscribe({
         next: () => {
@@ -172,7 +170,7 @@ describe('Error Scenarios Unit Tests', () => {
       serverError.name = 'HttpErrorResponse';
       (serverError as any).status = 500;
 
-      funifierApiService.get.and.returnValue(throwError(() => serverError));
+      backendApiService.get.and.returnValue(throwError(() => serverError));
 
       playerService.getPlayerStatus(playerId).subscribe({
         next: () => {
@@ -187,14 +185,13 @@ describe('Error Scenarios Unit Tests', () => {
     });
 
     it('should handle 502 Bad Gateway errors in CompanyService', (done) => {
-      const playerId = 'test-player-1';
       const gatewayError = new Error('Bad Gateway');
       gatewayError.name = 'HttpErrorResponse';
       (gatewayError as any).status = 502;
 
-      funifierApiService.get.and.returnValue(throwError(() => gatewayError));
+      backendApiService.post.and.returnValue(throwError(() => gatewayError));
 
-      companyService.getCompanies(playerId).subscribe({
+      companyService.getCompanyDetails('99.999.999/0001-99').subscribe({
         next: () => {
           fail('Should have thrown an error');
         },
@@ -212,7 +209,7 @@ describe('Error Scenarios Unit Tests', () => {
       serviceError.name = 'HttpErrorResponse';
       (serviceError as any).status = 503;
 
-      funifierApiService.get.and.returnValue(throwError(() => serviceError));
+      backendApiService.get.and.returnValue(throwError(() => serviceError));
 
       kpiService.getPlayerKPIs(playerId).subscribe({
         next: () => {
@@ -232,7 +229,7 @@ describe('Error Scenarios Unit Tests', () => {
       timeoutError.name = 'HttpErrorResponse';
       (timeoutError as any).status = 504;
 
-      funifierApiService.get.and.returnValue(throwError(() => timeoutError));
+      backendApiService.get.and.returnValue(throwError(() => timeoutError));
 
       playerService.getPlayerStatus(playerId).subscribe({
         next: () => {
@@ -254,7 +251,7 @@ describe('Error Scenarios Unit Tests', () => {
       badRequestError.name = 'HttpErrorResponse';
       (badRequestError as any).status = 400;
 
-      funifierApiService.get.and.returnValue(throwError(() => badRequestError));
+      backendApiService.get.and.returnValue(throwError(() => badRequestError));
 
       playerService.getPlayerStatus(playerId).subscribe({
         next: () => {
@@ -269,14 +266,13 @@ describe('Error Scenarios Unit Tests', () => {
     });
 
     it('should handle 404 Not Found errors in CompanyService', (done) => {
-      const playerId = 'nonexistent-player';
       const notFoundError = new Error('Not Found');
       notFoundError.name = 'HttpErrorResponse';
       (notFoundError as any).status = 404;
 
-      funifierApiService.get.and.returnValue(throwError(() => notFoundError));
+      backendApiService.post.and.returnValue(throwError(() => notFoundError));
 
-      companyService.getCompanies(playerId).subscribe({
+      companyService.getCompanyDetails('99.999.999/0001-99').subscribe({
         next: () => {
           fail('Should have thrown an error');
         },
@@ -295,7 +291,7 @@ describe('Error Scenarios Unit Tests', () => {
       (validationError as any).status = 422;
       (validationError as any).error = { message: 'Invalid data format' };
 
-      funifierApiService.get.and.returnValue(throwError(() => validationError));
+      backendApiService.get.and.returnValue(throwError(() => validationError));
 
       kpiService.getPlayerKPIs(playerId).subscribe({
         next: () => {
@@ -317,7 +313,7 @@ describe('Error Scenarios Unit Tests', () => {
       const mockPlayerStatus = createMockPlayerStatus();
 
       // First request succeeds
-      funifierApiService.get.and.returnValue(of(mockPlayerStatus));
+      backendApiService.get.and.returnValue(of(mockPlayerStatus));
       
       playerService.getPlayerStatus(playerId).subscribe({
         next: (data) => {
@@ -329,7 +325,7 @@ describe('Error Scenarios Unit Tests', () => {
 
           // Second request fails
           const error = new Error('Network error');
-          funifierApiService.get.and.returnValue(throwError(() => error));
+          backendApiService.get.and.returnValue(throwError(() => error));
 
           // Should fallback to cached data if implemented
           playerService.getPlayerStatus(playerId).subscribe({
@@ -349,15 +345,14 @@ describe('Error Scenarios Unit Tests', () => {
     });
 
     it('should throw error when no cached data is available in CompanyService', (done) => {
-      const playerId = 'test-player-1';
       const error = new Error('Network error');
 
       // Clear any existing cache
       companyService.clearCache();
 
-      funifierApiService.get.and.returnValue(throwError(() => error));
+      backendApiService.post.and.returnValue(throwError(() => error));
 
-      companyService.getCompanies(playerId).subscribe({
+      companyService.getCompanyDetails('99.999.999/0001-99').subscribe({
         next: () => {
           fail('Should have thrown an error when no cache available');
         },
@@ -377,7 +372,7 @@ describe('Error Scenarios Unit Tests', () => {
       const error = new Error('Temporary error');
 
       // First request fails
-      funifierApiService.get.and.returnValue(throwError(() => error));
+      backendApiService.get.and.returnValue(throwError(() => error));
 
       playerService.getPlayerStatus(playerId).subscribe({
         next: () => {
@@ -387,7 +382,7 @@ describe('Error Scenarios Unit Tests', () => {
           expect(err).toBeDefined();
 
           // Second request succeeds
-          funifierApiService.get.and.returnValue(of(mockPlayerStatus));
+          backendApiService.get.and.returnValue(of(mockPlayerStatus));
 
           playerService.getPlayerStatus(playerId).subscribe({
             next: (data) => {
@@ -409,7 +404,7 @@ describe('Error Scenarios Unit Tests', () => {
       const error = new Error('Temporary error');
 
       // First request fails
-      funifierApiService.get.and.returnValue(throwError(() => error));
+      backendApiService.get.and.returnValue(throwError(() => error));
 
       kpiService.getPlayerKPIs(playerId).subscribe({
         next: () => {
@@ -419,7 +414,7 @@ describe('Error Scenarios Unit Tests', () => {
           expect(err).toBeDefined();
 
           // Second request succeeds
-          funifierApiService.get.and.returnValue(of(mockKPIData));
+          backendApiService.get.and.returnValue(of(mockKPIData));
 
           kpiService.getPlayerKPIs(playerId).subscribe({
             next: (data) => {
@@ -441,14 +436,12 @@ describe('Error Scenarios Unit Tests', () => {
       const playerId = 'test-player-1';
       const error1 = new Error('Error 1');
       const error2 = new Error('Error 2');
-      const error3 = new Error('Error 3');
 
-      funifierApiService.get.and.returnValue(throwError(() => error1));
-      funifierApiService.get.and.returnValue(throwError(() => error2));
-      funifierApiService.get.and.returnValue(throwError(() => error3));
+      backendApiService.get.and.returnValue(throwError(() => error1));
+      backendApiService.post.and.returnValue(throwError(() => error2));
 
       let errorCount = 0;
-      const expectedErrors = 3;
+      const expectedErrors = 2;
 
       playerService.getPlayerStatus(playerId).subscribe({
         error: () => {
@@ -457,14 +450,7 @@ describe('Error Scenarios Unit Tests', () => {
         }
       });
 
-      companyService.getCompanies(playerId).subscribe({
-        error: () => {
-          errorCount++;
-          if (errorCount === expectedErrors) done();
-        }
-      });
-
-      kpiService.getPlayerKPIs(playerId).subscribe({
+      companyService.getCompanyDetails('99.999.999/0001-99').subscribe({
         error: () => {
           errorCount++;
           if (errorCount === expectedErrors) done();
@@ -477,7 +463,7 @@ describe('Error Scenarios Unit Tests', () => {
     it('should handle empty response from PlayerService', (done) => {
       const playerId = 'test-player-1';
 
-      funifierApiService.get.and.returnValue(of(null as any));
+      backendApiService.get.and.returnValue(of(null as any));
 
       playerService.getPlayerStatus(playerId).subscribe({
         next: (data) => {
@@ -493,15 +479,15 @@ describe('Error Scenarios Unit Tests', () => {
       });
     });
 
-    it('should handle empty array from CompanyService', (done) => {
-      const playerId = 'test-player-1';
+    it('should handle empty aggregate array from CompanyService getCompanyDetails', (done) => {
+      backendApiService.post.and.returnValue(of([]));
 
-      funifierApiService.get.and.returnValue(of([]));
-
-      companyService.getCompanies(playerId).subscribe({
-        next: (data) => {
-          expect(Array.isArray(data)).toBe(true);
-          expect(data.length).toBe(0);
+      companyService.getCompanyDetails('99.999.999/0001-99').subscribe({
+        next: () => {
+          fail('Should error when company row missing');
+        },
+        error: err => {
+          expect(err).toBeDefined();
           done();
         }
       });

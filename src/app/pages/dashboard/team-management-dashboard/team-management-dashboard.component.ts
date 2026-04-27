@@ -13,7 +13,7 @@ import { SeasonDatesService } from '@services/season-dates.service';
 import { ToastService } from '@services/toast.service';
 import { SessaoProvider } from '@providers/sessao/sessao.provider';
 import { CacheManagerService } from '@services/cache-manager.service';
-import { FunifierApiService } from '@services/funifier-api.service';
+import { BackendApiService } from '@services/backend-api.service';
 import { PlayerService } from '@services/player.service';
 import { ActionLogService } from '@services/action-log.service';
 import { UserProfileService } from '@services/user-profile.service';
@@ -204,7 +204,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
     private toastService: ToastService,
     private sessaoProvider: SessaoProvider,
     private cacheManagerService: CacheManagerService,
-    private funifierApi: FunifierApiService,
+    private backendApi: BackendApiService,
     private playerService: PlayerService,
     private actionLogService: ActionLogService,
     private userProfileService: UserProfileService,
@@ -354,7 +354,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       
       // Fetch all teams from Funifier
       const allTeams = await firstValueFrom(
-        this.funifierApi.get<any[]>(`/v3/team`).pipe(takeUntil(this.destroy$))
+        this.backendApi.get<any[]>(`/v3/team`).pipe(takeUntil(this.destroy$))
       ).catch((error) => {
         console.error('Error loading teams from Funifier:', error);
         return [];
@@ -440,7 +440,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
           ];
           
           const result = await firstValueFrom(
-            this.funifierApi.post<any[]>(
+            this.backendApi.post<any[]>(
               `/database/player/aggregate?strict=true`,
               aggregatePayload
             ).pipe(takeUntil(this.destroy$))
@@ -631,7 +631,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       
       try {
         const batchResults = await firstValueFrom(
-          this.funifierApi.post<T[]>(
+          this.backendApi.post<T[]>(
             endpoint,
             aggregatePayload,
             { headers: { 'Range': rangeHeader } }
@@ -1251,7 +1251,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       ];
       
       const dailyData = await firstValueFrom(
-        this.funifierApi.post<any[]>(
+        this.backendApi.post<any[]>(
           '/v3/database/action_log/aggregate?strict=true',
           aggregateBody
         ).pipe(takeUntil(this.destroy$))
@@ -2645,7 +2645,7 @@ private calculateCollaboratorTotals(memberData: Array<{
           ];
           
           const cnpjRespResult = await firstValueFrom(
-            this.funifierApi.post<any[]>(
+            this.backendApi.post<any[]>(
               '/v3/database/player_company__c/aggregate?strict=true',
               cnpjRespAggregate
             ).pipe(takeUntil(this.destroy$))
@@ -2678,7 +2678,7 @@ private calculateCollaboratorTotals(memberData: Array<{
           ];
           
           const playerClientGoals = await firstValueFrom(
-            this.funifierApi.post<{ _id: string; client_goals?: number | { goalValue?: number } }[]>(
+            this.backendApi.post<{ _id: string; client_goals?: number | { goalValue?: number } }[]>(
               '/database/player_status/aggregate?strict=true',
               aggregateQuery
             ).pipe(takeUntil(this.destroy$))
@@ -2750,7 +2750,7 @@ private calculateCollaboratorTotals(memberData: Array<{
           ];
           
           const playerEntregas = await firstValueFrom(
-            this.funifierApi.post<{ _id: string; entrega?: string }[]>(
+            this.backendApi.post<{ _id: string; entrega?: string }[]>(
               '/database/player_status/aggregate?strict=true',
               aggregateQuery
             ).pipe(takeUntil(this.destroy$))
@@ -3054,7 +3054,7 @@ private calculateCollaboratorTotals(memberData: Array<{
     try {
       // First, get current player data to preserve existing extra fields
       const currentPlayerData = await firstValueFrom(
-        this.funifierApi.get<any>(`player/${playerId}`)
+        this.backendApi.get<any>(`player/${playerId}`)
       );
 
       // Prepare update payload following Funifier API structure
@@ -3068,7 +3068,7 @@ private calculateCollaboratorTotals(memberData: Array<{
 
       // Update player using PUT endpoint
       await firstValueFrom(
-        this.funifierApi.put<any>(`player/${playerId}`, updatePayload)
+        this.backendApi.put<any>(`player/${playerId}`, updatePayload)
       );
 
       console.log(`✅ Updated client_goals for ${playerId}:`, targetValue);

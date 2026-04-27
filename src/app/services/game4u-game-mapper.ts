@@ -239,6 +239,40 @@ export function getGame4uParticipationRowKey(a: Game4uUserActionModel): string {
   return asString(a.delivery_id).trim();
 }
 
+function parseGame4uIsoMs(v: unknown): number | null {
+  if (v == null || v === '') {
+    return null;
+  }
+  if (typeof v === 'object' && v !== null && '$date' in (v as object)) {
+    return parseGame4uIsoMs((v as { $date: unknown }).$date);
+  }
+  const t = Date.parse(String(v));
+  return Number.isNaN(t) ? null : t;
+}
+
+/**
+ * Data exibida na lista/gráfico de atividades (modal): conclusão (`finished_at`), senão criação (`created_at`).
+ */
+function game4uUserActionListTimestampMs(a: Game4uUserActionModel): number {
+  return parseGame4uIsoMs(a.finished_at) ?? parseGame4uIsoMs(a.created_at) ?? 0;
+}
+
+/** Mantém ações cujo instantâneo de lista (finished_at ou created_at) cai no mês calendário. */
+function filterGame4uActionsByListTimestampMonth(
+  actions: Game4uUserActionModel[],
+  month?: Date
+): Game4uUserActionModel[] {
+  if (!month) {
+    return actions;
+  }
+  const start = new Date(month.getFullYear(), month.getMonth(), 1, 0, 0, 0, 0).getTime();
+  const end = new Date(month.getFullYear(), month.getMonth() + 1, 0, 23, 59, 59, 999).getTime();
+  return actions.filter(a => {
+    const t = game4uUserActionListTimestampMs(a);
+    return t > 0 && t >= start && t <= end;
+  });
+}
+
 export function filterGame4uActionsByMonth(
   actions: Game4uUserActionModel[],
   month?: Date
@@ -358,12 +392,12 @@ export function mapGame4uActionsToActivityList(
   actions: Game4uUserActionModel[],
   month?: Date
 ): ActivityListItem[] {
-  return filterGame4uActionsByMonth(actions, month).map(a => ({
+  return filterGame4uActionsByListTimestampMonth(actions, month).map(a => ({
     id: a.id,
     title: (a.action_title as string) || 'Ação',
     delivery_title: (a.delivery_title as string) || undefined,
     points: Math.floor(Number(a.points) || PONTOS_POR_ATIVIDADE_FINALIZADA_ACTION_LOG),
-    created: Date.parse(String(a.created_at)) || 0,
+    created: game4uUserActionListTimestampMs(a),
     player: asString(a.user_email),
     cnpj: asString(a.integration_id) || undefined
   }));

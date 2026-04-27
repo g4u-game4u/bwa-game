@@ -1,36 +1,10 @@
 /**
- * Base da API Game4U (ex.: https://g4u-api-bwa.onrender.com/api).
+ * Base da API Game4U (ex.: https://example.com/api).
  * Prioridade: G4U_API_BASE → BACKEND_URL_BASE (e variantes em minúsculas).
+ * Lê via `const env = process.env` para o DefinePlugin substituir `process.env` pelo objeto literal no bundle.
  */
-export const DEFAULT_BACKEND_URL_BASE = 'https://g4u-api-bwa.onrender.com/api';
-
-/** Evita embutir `.env` de desenvolvimento (`http://localhost`) em bundles prod/homol. */
-export function isLoopbackBackendUrl(url: string): boolean {
-  const s = (url || '').trim();
-  if (!s) {
-    return false;
-  }
-  try {
-    const withScheme = /^https?:\/\//i.test(s) ? s : `https://${s}`;
-    const u = new URL(withScheme);
-    return u.hostname === 'localhost' || u.hostname === '127.0.0.1' || u.hostname === '[::1]';
-  } catch {
-    return /^https?:\/\/(localhost|127\.0\.0\.1)\b/i.test(s);
-  }
-}
-
-export type ReadBackendUrlOptions = {
-  /**
-   * Em `environment.prod` / `homol`: se a URL resolvida for localhost/127.0.0.1
-   * (ex.: vinda de `.env` no PC do build), usa {@link DEFAULT_BACKEND_URL_BASE}.
-   */
-  rejectLoopback?: boolean;
-};
-
-export function readBackendUrlBaseFromProcessEnv(
-  env: Record<string, string | undefined> = process.env as Record<string, string | undefined>,
-  options?: ReadBackendUrlOptions
-): string {
+export function readBackendUrlBaseFromProcessEnv(): string {
+  const env = process.env as Record<string, string | undefined>;
   const raw = (
     env['G4U_API_BASE'] ??
     env['g4u_api_base'] ??
@@ -40,13 +14,10 @@ export function readBackendUrlBaseFromProcessEnv(
   )
     .toString()
     .trim();
-  let resolved =
-    raw.length > 0 ? raw.replace(/\/+$/, '') : DEFAULT_BACKEND_URL_BASE.replace(/\/+$/, '');
-
-  if (options?.rejectLoopback && isLoopbackBackendUrl(resolved)) {
-    return DEFAULT_BACKEND_URL_BASE.replace(/\/+$/, '');
+  if (raw.length === 0) {
+    return '';
   }
-  return resolved;
+  return raw.replace(/\/+$/, '');
 }
 
 export function joinApiPath(base: string, path: string): string {

@@ -4,6 +4,7 @@ import { Observable, of, firstValueFrom } from 'rxjs';
 import { map, catchError, shareReplay, take } from 'rxjs/operators';
 import { KPIData } from '@model/gamification-dashboard.model';
 import { environment } from '../../environments/environment';
+import { extractGamificacaoEmpIdFromDeliveryKey } from './gamificacao-delivery-empid.util';
 
 /**
  * Linha da API de gamificação (hook).
@@ -50,12 +51,16 @@ export interface CompanyDisplay {
   actionCount: number;
   processCount: number;
   entrega?: number;
+  /** Valor numérico vindo de `porcEntregas` / `percEntregas` na API gamificação (espelho de `entrega`). */
+  porcEntregas?: number;
   classificacao?: string;
   deliveryKpi?: KPIData;
   /** Game4U participação: título da entrega (exibir no lugar do id da entrega). */
   delivery_title?: string;
   /** Game4U: `delivery_id` da entrega representada na linha (detalhe = user-actions desta entrega). */
   deliveryId?: string;
+  /** EmpID usado no mapa `byEmpId` da gamificação (ex.: extraído de `delivery_id` antes da competência). */
+  gamificacaoEmpIdUsado?: string;
 }
 
 /** Linha da carteira vinda do Supabase para enriquecer com o GET da gamificação. */
@@ -130,6 +135,67 @@ export class CompanyKpiService {
    * Carteira Supabase costuma trazer CNPJ só com 14 dígitos; a API traz mascarado.
    * Participação / Funifier costuma trazer EmpID curto. Tentamos os dois.
    */
+  /** Só `byEmpId` (literal + zeros à esquerda) — usado na participação Game4U antes de tentar CNPJ. */
+  private resolveKpiByEmpIdOnly(key: string, byEmpId: Map<string, CnpjKpiData>): CnpjKpiData | undefined {
+    const t = String(key || '').trim();
+    if (!t) {
+      return undefined;
+    }
+    let h = byEmpId.get(t);
+    if (h) {
+      return h;
+    }
+    if (/^\d+$/.test(t)) {
+      const stripped = t.replace(/^0+/, '') || '0';
+      h = byEmpId.get(stripped);
+      if (h) {
+        return h;
+      }
+    }
+    return undefined;
+  }
+
+  /**
+   * Participação Game4U: prioriza EmpID (chave numérica ou extraída de `delivery_id` com competência),
+   * e só tenta CNPJ quando a chave tem pelo menos 11 dígitos (evita tratar `delivery_id` como CNPJ).
+   */
+  private resolveKpiForParticipacaoRowKey(
+    rowKey: string,
+    byEmpId: Map<string, CnpjKpiData>,
+    byCnpjNorm: Map<string, CnpjKpiData>
+  ): { kpi: CnpjKpiData | undefined; gamificacaoEmpIdUsado?: string } {
+    const trimmed = String(rowKey || '').trim();
+    if (!trimmed) {
+      return { kpi: undefined };
+    }
+
+    let kpi = this.resolveKpiByEmpIdOnly(trimmed, byEmpId);
+    if (kpi) {
+      const empLabel = /^\d+$/.test(trimmed) ? trimmed.replace(/^0+/, '') || trimmed : trimmed;
+      return { kpi, gamificacaoEmpIdUsado: empLabel };
+    }
+
+    const fromDelivery = extractGamificacaoEmpIdFromDeliveryKey(trimmed);
+    if (fromDelivery) {
+      kpi = this.resolveKpiByEmpIdOnly(fromDelivery, byEmpId);
+      if (kpi) {
+        return { kpi, gamificacaoEmpIdUsado: fromDelivery };
+      }
+    }
+
+    const norm = this.normalizeCnpjKey(trimmed);
+    if (norm.length >= 11) {
+      for (const cand of this.cnpjNormCandidates(trimmed)) {
+        const hit = byCnpjNorm.get(cand);
+        if (hit) {
+          return { kpi: hit };
+        }
+      }
+    }
+
+    return { kpi: undefined };
+  }
+
   private resolveKpiFromMaps(
     key: string,
     byEmpId: Map<string, CnpjKpiData>,
@@ -150,6 +216,13 @@ export class CompanyKpiService {
         if (h) {
           return h;
         }
+      }
+    }
+    const fromDelivery = extractGamificacaoEmpIdFromDeliveryKey(trimmed);
+    if (fromDelivery) {
+      const viaEmp = this.resolveKpiFromMaps(fromDelivery, byEmpId, byCnpjNorm);
+      if (viaEmp) {
+        return viaEmp;
       }
     }
     for (const cand of this.cnpjNormCandidates(trimmed)) {
@@ -482,6 +555,62 @@ export class CompanyKpiService {
     );
   }
 
+  /**
+   * Lista “Clientes atendidos” (participação Game4U): cruza com gamificação por **EmpID** primeiro
+   * (incl. extração a partir de `delivery_id`), e só usa CNPJ quando a chave tem ≥11 dígitos.
+   * O percentual vem do campo `porcEntregas` da API (normalizado em `entrega` / `porcEntregas` / `deliveryKpi`).
+   */
+  enrichFromParticipacaoRowKeys(rowKeys: string[]): Observable<CompanyDisplay[]> {
+    if (!rowKeys || rowKeys.length === 0) {
+      return of([]);
+    }
+
+    return this.getGamificacaoMaps$().pipe(
+      map(({ byEmpId, byCnpjNorm }) =>
+        rowKeys.map(rowKey => {
+          const key = String(rowKey).trim();
+          const { kpi: kpiData, gamificacaoEmpIdUsado } = this.resolveKpiForParticipacaoRowKey(
+            key,
+            byEmpId,
+            byCnpjNorm
+          );
+
+          if (!kpiData) {
+            console.warn('📊 enrichFromParticipacaoRowKeys: sem KPI para chave de participação', rowKey);
+          }
+
+          const procFin = kpiData?.procFinalizados ?? 0;
+          const procPen = kpiData?.procPendentes ?? 0;
+
+          const result: CompanyDisplay = {
+            cnpj: key,
+            cnpjId: key,
+            actionCount: 0,
+            processCount: procFin + procPen,
+            ...(gamificacaoEmpIdUsado ? { gamificacaoEmpIdUsado } : {})
+          };
+
+          this.applyKpiDataToCompanyDisplay(result, kpiData);
+          return result;
+        })
+      ),
+      catchError(error => {
+        console.error('📊 Erro enrichFromParticipacaoRowKeys:', error);
+        return of(
+          rowKeys.map(
+            k =>
+              ({
+                cnpj: String(k).trim(),
+                cnpjId: String(k).trim(),
+                actionCount: 0,
+                processCount: 0
+              }) as CompanyDisplay
+          )
+        );
+      })
+    );
+  }
+
   enrichCompaniesWithKpis(
     companies: {
       cnpj: string;
@@ -534,7 +663,7 @@ export class CompanyKpiService {
     );
   }
 
-  /** Preenche `classificacao` / `entrega` / `deliveryKpi` quando a linha da API existe e há `porcEntregas`. */
+  /** Preenche `classificacao` / `entrega` / `porcEntregas` / `deliveryKpi` quando a linha da API existe e há `porcEntregas`. */
   private applyKpiDataToCompanyDisplay(
     result: CompanyDisplay,
     kpiData: CnpjKpiData | undefined
@@ -547,6 +676,7 @@ export class CompanyKpiService {
     if (e !== undefined && e !== null && Number.isFinite(Number(e))) {
       const n = Number(e);
       result.entrega = n;
+      result.porcEntregas = n;
       result.deliveryKpi = this.mapToKpiData(n);
     }
   }

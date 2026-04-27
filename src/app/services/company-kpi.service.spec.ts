@@ -329,6 +329,93 @@ describe('CompanyKpiService', () => {
         }
       ]);
     });
+
+    it('should match Game4U delivery_id key to API EmpID (prefix before competence date)', done => {
+      service.enrichFromCnpjResp(['2944-2026-04-01']).subscribe(res => {
+        expect(res[0].cnpj).toBe('2944-2026-04-01');
+        expect(res[0].entrega).toBeCloseTo(88.5, 5);
+        expect(res[0].deliveryKpi?.current).toBeCloseTo(88.5, 5);
+        done();
+      });
+      httpMock.expectOne(TEST_GAMIFICACAO_URL).flush({
+        data: [
+          {
+            EmpID: 2944,
+            porcEntregas: '88,5',
+            procFinalizados: '0',
+            procPendentes: '0',
+            regime: 'Simples',
+            data_criacao: '',
+            data_processamento: ''
+          }
+        ]
+      });
+    });
+
+    it('should not treat partial date suffix as delivery_id for EmpID lookup', done => {
+      service.enrichFromCnpjResp(['2944-2026-04']).subscribe(res => {
+        expect(res[0].deliveryKpi).toBeUndefined();
+        expect(res[0].entrega).toBeUndefined();
+        done();
+      });
+      httpMock.expectOne(TEST_GAMIFICACAO_URL).flush({
+        data: [
+          {
+            EmpID: '2944',
+            porcEntregas: '88,5',
+            procFinalizados: '0',
+            procPendentes: '0',
+            regime: 'Simples',
+            data_criacao: '',
+            data_processamento: ''
+          }
+        ]
+      });
+    });
+
+    it('should take last numeric segment before competence date (e.g. 12-2944-2026-04-01)', done => {
+      service.enrichFromCnpjResp(['12-2944-2026-04-01']).subscribe(res => {
+        expect(res[0].entrega).toBeCloseTo(91, 5);
+        done();
+      });
+      httpMock.expectOne(TEST_GAMIFICACAO_URL).flush({
+        data: [{ EmpID: '2944', porcEntregas: '91,00', procFinalizados: '0', procPendentes: '0' }]
+      });
+    });
+  });
+
+  describe('enrichFromParticipacaoRowKeys', () => {
+    it('should resolve delivery_id via EmpID and set porcEntregas + gamificacaoEmpIdUsado', done => {
+      service.enrichFromParticipacaoRowKeys(['2944-2026-04-01']).subscribe(res => {
+        expect(res[0].gamificacaoEmpIdUsado).toBe('2944');
+        expect(res[0].porcEntregas).toBeCloseTo(88.5, 5);
+        expect(res[0].entrega).toBeCloseTo(88.5, 5);
+        done();
+      });
+      httpMock.expectOne(TEST_GAMIFICACAO_URL).flush({
+        data: [{ EmpID: 2944, porcEntregas: '88,5', procFinalizados: '0', procPendentes: '0' }]
+      });
+    });
+
+    it('should not use CNPJ map for short digit keys (EmpID only)', done => {
+      service.enrichFromParticipacaoRowKeys(['999']).subscribe(res => {
+        expect(res[0].gamificacaoEmpIdUsado).toBe('999');
+        expect(res[0].porcEntregas).toBeCloseTo(77.25, 5);
+        done();
+      });
+      httpMock.expectOne(TEST_GAMIFICACAO_URL).flush([
+        {
+          cnpj: '11.222.333/0001-44',
+          empId: 999,
+          porcEntregas: '77,25',
+          procFinalizados: '0',
+          procPendentes: '0',
+          regime: 'Simples',
+          data_criacao: '',
+          data_processamento: ''
+        }
+      ]);
+    });
   });
 
   describe('mapToKpiData / colors (target 90)', () => {

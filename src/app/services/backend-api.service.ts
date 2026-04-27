@@ -24,7 +24,7 @@ export interface AuthToken {
 @Injectable({
   providedIn: 'root'
 })
-export class FunifierApiService {
+export class BackendApiService {
   private readonly baseUrl: string;
   private authToken: string | null = null;
   private tokenExpiry: number | null = null;
@@ -50,7 +50,7 @@ export class FunifierApiService {
   }
 
   /**
-   * Autenticação Game4U: POST /auth/login
+   * Autenticação: POST /auth/login
    */
   authenticate(credentials: AuthCredentials): Observable<AuthToken> {
     const authUrl = joinApiPath(this.baseUrl, '/auth/login');
@@ -86,7 +86,7 @@ export class FunifierApiService {
 
   get<T>(endpoint: string, params?: any): Observable<T> {
     if (endpoint.toLowerCase().includes('aggregate')) {
-      console.warn('[Game4U API] GET aggregate desativado:', endpoint);
+      console.warn('[Backend API] GET aggregate desativado:', endpoint);
       return of([] as unknown as T);
     }
     const headers = this.getHeaders();
@@ -102,7 +102,7 @@ export class FunifierApiService {
 
   post<T>(endpoint: string, body: any, options?: { headers?: { [key: string]: string } }): Observable<T> {
     if (endpoint.toLowerCase().includes('aggregate')) {
-      console.warn('[Game4U API] POST aggregate desativado:', endpoint);
+      console.warn('[Backend API] POST aggregate desativado:', endpoint);
       return of([] as unknown as T);
     }
     let headers = this.getHeaders();
@@ -196,7 +196,7 @@ export class FunifierApiService {
       }
     }
 
-    console.error('Game4U API Error:', errorMessage, error);
+    console.error('Backend API Error:', errorMessage, error);
     return throwError(() => new Error(errorMessage));
   }
 

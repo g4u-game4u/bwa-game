@@ -12,6 +12,7 @@ import {SystemInitService} from "@services/system-init.service";
 import { VercelAnalyticsService } from '@services/vercel-analytics.service';
 import { SessionTimeoutService } from '@services/session-timeout.service';
 import { environment } from '../../../environments/environment';
+import { CampaignService } from '@services/campaign.service';
 
 @Component({
   selector: 'page-root',
@@ -34,7 +35,8 @@ export class AppComponent implements OnInit {
     private titleService: Title,
     private systemInitService: SystemInitService,
     private vercelAnalytics: VercelAnalyticsService,
-    private sessionTimeoutService: SessionTimeoutService
+    private sessionTimeoutService: SessionTimeoutService,
+    private campaignService: CampaignService
   ) {
     this.configChartJS();
     this.configMoment();
@@ -50,6 +52,8 @@ export class AppComponent implements OnInit {
 
 
   ngOnInit() {
+    this.campaignService.prefetchCampaign();
+
     // Initialize Vercel Analytics
     this.vercelAnalytics.initialize();
     

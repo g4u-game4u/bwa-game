@@ -7,6 +7,7 @@ import {
   isGame4uUserActionFinalizedStatus,
   readGame4uDeliveryStatsTotal,
   parseCompetenceYearMonthFromDeliveryId,
+  mapGame4uActionsToActivityList,
   mapGame4uActionsToProcessMetrics,
   mapGame4uStatsToActivityMetrics,
   mapGame4uStatsToPointWallet,
@@ -279,6 +280,48 @@ describe('game4u-game-mapper', () => {
         }
       ];
       expect(filterGame4uActionsByCompetenceMonth(outOfMonth, month).length).toBe(0);
+    });
+  });
+
+  describe('mapGame4uActionsToActivityList', () => {
+    it('uses finished_at for display timestamp and month filter when present', () => {
+      const month = new Date(2024, 5, 1);
+      const actions: Game4uUserActionModel[] = [
+        {
+          id: '1',
+          points: 1,
+          status: 'DONE',
+          created_at: '2024-05-01T10:00:00.000Z',
+          finished_at: '2024-06-15T12:00:00.000Z'
+        }
+      ];
+      const list = mapGame4uActionsToActivityList(actions, month);
+      expect(list.length).toBe(1);
+      expect(list[0].created).toBe(Date.parse('2024-06-15T12:00:00.000Z'));
+    });
+
+    it('excludes action when finished_at is outside month even if created_at is inside', () => {
+      const month = new Date(2024, 5, 1);
+      const actions: Game4uUserActionModel[] = [
+        {
+          id: '1',
+          points: 1,
+          status: 'DONE',
+          created_at: '2024-06-10T10:00:00.000Z',
+          finished_at: '2024-07-01T12:00:00.000Z'
+        }
+      ];
+      expect(mapGame4uActionsToActivityList(actions, month).length).toBe(0);
+    });
+
+    it('falls back to created_at when finished_at is absent', () => {
+      const month = new Date(2024, 5, 1);
+      const actions: Game4uUserActionModel[] = [
+        { id: '1', points: 1, status: 'DONE', created_at: '2024-06-10T10:00:00.000Z' }
+      ];
+      const list = mapGame4uActionsToActivityList(actions, month);
+      expect(list.length).toBe(1);
+      expect(list[0].created).toBe(Date.parse('2024-06-10T10:00:00.000Z'));
     });
   });
 

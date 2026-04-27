@@ -263,6 +263,12 @@
             </div>
             <div class="carteira-item-meta">
               <span
+                *ngIf="isLoadingParticipacaoKpi"
+                class="carteira-entrega carteira-entrega--pending"
+                aria-busy="true"
+                title="A carregar percentual de entregas no prazo (gamificação)…">…</span>
+              <span
+                *ngIf="!isLoadingParticipacaoKpi"
                 class="carteira-entrega"
                 [class.carteira-entrega--na]="getListaEntregaPercent(cliente) === null">
                 <ng-container *ngIf="getListaEntregaPercent(cliente) !== null; else entregaNaParticipacao">

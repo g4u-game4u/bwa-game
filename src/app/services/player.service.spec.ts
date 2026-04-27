@@ -1,26 +1,33 @@
 import { TestBed } from '@angular/core/testing';
-import { HttpClientTestingModule } from '@angular/common/http/testing';
+import { HttpClientTestingModule, HttpTestingController } from '@angular/common/http/testing';
 import { PlayerService } from './player.service';
-import { FunifierApiService } from './funifier-api.service';
 import { PlayerMapper } from './player-mapper.service';
 import { Game4uApiService } from './game4u-api.service';
 import { SessaoProvider } from '@providers/sessao/sessao.provider';
-import { of, throwError } from 'rxjs';
+import { of } from 'rxjs';
 import { PlayerStatus, PointWallet, SeasonProgress } from '@model/gamification-dashboard.model';
 import { environment } from '../../environments/environment';
+import { joinApiPath } from '../../environments/backend-url';
 
 describe('PlayerService', () => {
   let service: PlayerService;
-  let funifierApiSpy: jasmine.SpyObj<FunifierApiService>;
+  let httpMock: HttpTestingController;
   let mapperSpy: jasmine.SpyObj<PlayerMapper>;
   let game4uSpy: jasmine.SpyObj<Game4uApiService>;
   let savedUseGame4uApi: boolean | undefined;
+  let savedBackendUrl: string;
+
+  function profileUrl(playerId: string): string {
+    const base = (environment.backend_url_base || '').trim().replace(/\/+$/, '');
+    return joinApiPath(base, `player/${encodeURIComponent(playerId)}`);
+  }
 
   beforeEach(() => {
     savedUseGame4uApi = environment.useGame4uApi;
+    savedBackendUrl = environment.backend_url_base;
     environment.useGame4uApi = false;
+    environment.backend_url_base = 'https://api.test';
 
-    const apiSpy = jasmine.createSpyObj('FunifierApiService', ['get']);
     const playerMapperSpy = jasmine.createSpyObj('PlayerMapper', [
       'toPlayerStatus',
       'toPointWallet',
@@ -37,7 +44,6 @@ describe('PlayerService', () => {
       imports: [HttpClientTestingModule],
       providers: [
         PlayerService,
-        { provide: FunifierApiService, useValue: apiSpy },
         { provide: PlayerMapper, useValue: playerMapperSpy },
         { provide: Game4uApiService, useValue: game4uSpy },
         { provide: SessaoProvider, useValue: { usuario: { email: 'john@example.com' } } }
@@ -45,14 +51,16 @@ describe('PlayerService', () => {
     });
 
     service = TestBed.inject(PlayerService);
-    funifierApiSpy = TestBed.inject(FunifierApiService) as jasmine.SpyObj<FunifierApiService>;
+    httpMock = TestBed.inject(HttpTestingController);
     mapperSpy = TestBed.inject(PlayerMapper) as jasmine.SpyObj<PlayerMapper>;
   });
 
   afterEach(() => {
+    httpMock.verify();
     if (savedUseGame4uApi !== undefined) {
       environment.useGame4uApi = savedUseGame4uApi;
     }
+    environment.backend_url_base = savedBackendUrl;
   });
 
   it('should be created', () => {
@@ -80,15 +88,16 @@ describe('PlayerService', () => {
         updated: Date.now()
       };
 
-      funifierApiSpy.get.and.returnValue(of(mockApiResponse));
       mapperSpy.toPlayerStatus.and.returnValue(mockPlayerStatus);
 
       service.getPlayerStatus('player123').subscribe(result => {
         expect(result).toEqual(mockPlayerStatus);
-        expect(funifierApiSpy.get).toHaveBeenCalledWith('/v3/player/player123');
         expect(mapperSpy.toPlayerStatus).toHaveBeenCalledWith(mockApiResponse);
         done();
       });
+
+      const req = httpMock.expectOne(r => r.url === profileUrl('player123') && r.method === 'GET');
+      req.flush(mockApiResponse);
     });
 
     it('should use cached data on subsequent calls', (done) => {
@@ -104,21 +113,20 @@ describe('PlayerService', () => {
         updated: Date.now()
       };
 
-      funifierApiSpy.get.and.returnValue(of(mockApiResponse));
       mapperSpy.toPlayerStatus.and.returnValue(mockPlayerStatus);
 
-      // First call
       service.getPlayerStatus('player123').subscribe(() => {
-        // Second call should use cache
         service.getPlayerStatus('player123').subscribe(result => {
           expect(result).toEqual(mockPlayerStatus);
-          expect(funifierApiSpy.get).toHaveBeenCalledTimes(1);
           done();
         });
       });
+
+      const req = httpMock.expectOne(r => r.url === profileUrl('player123'));
+      req.flush(mockApiResponse);
     });
 
-    it('should fallback to cached data on error', (done) => {
+    it('should propagate error after cache clear and failed request', (done) => {
       const mockPlayerStatus: PlayerStatus = {
         _id: 'player123',
         name: 'John Doe',
@@ -130,22 +138,21 @@ describe('PlayerService', () => {
         updated: Date.now()
       };
 
-      // First successful call
-      funifierApiSpy.get.and.returnValue(of({ _id: 'player123' }));
       mapperSpy.toPlayerStatus.and.returnValue(mockPlayerStatus);
 
       service.getPlayerStatus('player123').subscribe(() => {
-        // Clear cache to force new request
         service.clearCache();
-
-        // Second call fails
-        funifierApiSpy.get.and.returnValue(throwError(() => new Error('Network error')));
-
-        service.getPlayerStatus('player123').subscribe(result => {
-          expect(result).toEqual(mockPlayerStatus);
-          done();
+        service.getPlayerStatus('player123').subscribe({
+          error: () => {
+            done();
+          }
         });
+        const req2 = httpMock.expectOne(r => r.url === profileUrl('player123'));
+        req2.flush('Network error', { status: 500, statusText: 'Server Error' });
       });
+
+      const req1 = httpMock.expectOne(r => r.url === profileUrl('player123'));
+      req1.flush({ _id: 'player123' });
     });
   });
 
@@ -165,39 +172,40 @@ describe('PlayerService', () => {
         moedas: 500
       };
 
-      funifierApiSpy.get.and.returnValue(of(mockApiResponse));
       mapperSpy.toPointWallet.and.returnValue(mockPointWallet);
 
       service.getPlayerPoints('player123').subscribe(result => {
         expect(result).toEqual(mockPointWallet);
-        expect(funifierApiSpy.get).toHaveBeenCalledWith('/v3/player/player123');
         expect(mapperSpy.toPointWallet).toHaveBeenCalledWith(mockApiResponse);
         done();
       });
+
+      const req = httpMock.expectOne(r => r.url === profileUrl('player123'));
+      req.flush(mockApiResponse);
     });
 
-    it('should handle error with fallback', (done) => {
+    it('should propagate error after cache clear and failed request', (done) => {
       const mockPointWallet: PointWallet = {
         bloqueados: 1000,
         desbloqueados: 2000,
         moedas: 500
       };
 
-      // First successful call
-      funifierApiSpy.get.and.returnValue(of({ point_categories: {} }));
       mapperSpy.toPointWallet.and.returnValue(mockPointWallet);
 
       service.getPlayerPoints('player123').subscribe(() => {
         service.clearCache();
-
-        // Second call fails
-        funifierApiSpy.get.and.returnValue(throwError(() => new Error('API error')));
-
-        service.getPlayerPoints('player123').subscribe(result => {
-          expect(result).toEqual(mockPointWallet);
-          done();
+        service.getPlayerPoints('player123').subscribe({
+          error: () => {
+            done();
+          }
         });
+        const req2 = httpMock.expectOne(r => r.url === profileUrl('player123'));
+        req2.flush('API error', { status: 500, statusText: 'Server Error' });
       });
+
+      const req1 = httpMock.expectOne(r => r.url === profileUrl('player123'));
+      req1.flush({ point_categories: {} });
     });
 
     it('should map wallet from Game4U stats when enabled', done => {
@@ -215,7 +223,6 @@ describe('PlayerService', () => {
         expect(result).toEqual({ bloqueados: 5, desbloqueados: 42, moedas: 0 });
         expect(game4uSpy.toQueryRange).toHaveBeenCalledWith(undefined);
         expect(game4uSpy.getGameStats).toHaveBeenCalled();
-        expect(funifierApiSpy.get).not.toHaveBeenCalled();
         done();
       });
     });
@@ -267,7 +274,6 @@ describe('PlayerService', () => {
 
       service.getSeasonProgress('player123', seasonDates).subscribe(result => {
         expect(result).toEqual(mockProgress);
-        expect(funifierApiSpy.get).not.toHaveBeenCalled();
         expect(mapperSpy.toSeasonProgress).toHaveBeenCalledWith({}, seasonDates);
         done();
       });
@@ -277,7 +283,6 @@ describe('PlayerService', () => {
   describe('Cache Management', () => {
     it('should clear all caches', () => {
       service.clearCache();
-      // Cache should be empty, so next call should hit API
       expect(service).toBeTruthy();
     });
 
@@ -294,18 +299,20 @@ describe('PlayerService', () => {
         updated: Date.now()
       };
 
-      funifierApiSpy.get.and.returnValue(of(mockApiResponse));
       mapperSpy.toPlayerStatus.and.returnValue(mockPlayerStatus);
 
       service.getPlayerStatus('player123').subscribe(() => {
         service.clearPlayerCache('player123');
 
-        // Next call should hit API again
         service.getPlayerStatus('player123').subscribe(() => {
-          expect(funifierApiSpy.get).toHaveBeenCalledTimes(2);
           done();
         });
+        const req2 = httpMock.expectOne(r => r.url === profileUrl('player123'));
+        req2.flush(mockApiResponse);
       });
+
+      const req1 = httpMock.expectOne(r => r.url === profileUrl('player123'));
+      req1.flush(mockApiResponse);
     });
   });
 });

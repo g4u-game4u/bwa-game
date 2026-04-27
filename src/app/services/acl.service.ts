@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { Observable, of } from 'rxjs';
 import { map, catchError, tap, shareReplay } from 'rxjs/operators';
-import { FunifierApiService } from './funifier-api.service';
+import { BackendApiService } from './backend-api.service';
 import { SessaoProvider } from '@providers/sessao/sessao.provider';
 /**
  * Catalog item entry from the Player Status API response.
@@ -63,7 +63,7 @@ export class ACLService {
   private metadataCache$: Observable<AclMetadata[]> | null = null;
 
   constructor(
-    private funifierApi: FunifierApiService,
+    private backendApi: BackendApiService,
     private sessao: SessaoProvider
   ) {}
 
@@ -84,7 +84,7 @@ export class ACLService {
       return of(cached.catalogItems);
     }
 
-    return this.funifierApi.get<any>(`/v3/player/${playerId}/status`).pipe(
+    return this.backendApi.get<any>(`/v3/player/${playerId}/status`).pipe(
       map(response => {
         const items = this.extractCatalogItems(response);
         this.cache.set(playerId, { catalogItems: items, timestamp: Date.now() });
@@ -132,7 +132,7 @@ export class ACLService {
       return this.metadataCache$;
     }
 
-    this.metadataCache$ = this.funifierApi.post<AclMetadata[]>(
+    this.metadataCache$ = this.backendApi.post<AclMetadata[]>(
       '/v3/database/acl__c/aggregate?strict=true',
       [{ $sort: { team_name: 1 } }]
     ).pipe(
