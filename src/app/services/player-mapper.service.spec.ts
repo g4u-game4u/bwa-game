@@ -39,14 +39,19 @@ describe('PlayerMapper', () => {
           }),
           (apiResponse) => {
             const playerStatus = mapper.toPlayerStatus(apiResponse);
-            
-            // The displayed season level should match the seasonLevel field from extra
-            // or fall back to the level field if extra.seasonLevel is not present
-            const expectedSeasonLevel = apiResponse.extra?.seasonLevel || apiResponse.level || 0;
-            
+
+            // `extra.seasonLevel` pode ser 0 — não usar `||` (0 é válido).
+            const esc = apiResponse.extra?.seasonLevel;
+            const hasEsc =
+              esc !== undefined &&
+              esc !== null &&
+              `${esc}`.trim() !== '' &&
+              Number.isFinite(Number(esc));
+            const expectedSeasonLevel = hasEsc ? Number(esc) : Number(apiResponse.level) || 0;
+
             expect(playerStatus.seasonLevel).toBe(expectedSeasonLevel);
             expect(playerStatus._id).toBe(apiResponse._id);
-            expect(playerStatus.name).toBe(apiResponse.name);
+            expect(playerStatus.name).toBe(String(apiResponse.name).trim());
             expect(playerStatus.email).toBe(apiResponse.email);
           }
         ),
@@ -158,6 +163,26 @@ describe('PlayerMapper', () => {
       expect(result.metadata.area).toBe('');
       expect(result.metadata.time).toBe('');
       expect(result.metadata.squad).toBe('');
+    });
+
+    it('should use full_name when name is absent (/auth/user style)', () => {
+      const apiResponse = {
+        _id: '507f1f77bcf86cd799439011',
+        full_name: 'João da Silva',
+        email: 'joao@example.com'
+      };
+      const result = mapper.toPlayerStatus(apiResponse);
+      expect(result.name).toBe('João da Silva');
+      expect(result.email).toBe('joao@example.com');
+    });
+
+    it('should derive a short label from email when no name fields exist', () => {
+      const apiResponse = {
+        _id: 'maria.santos@empresa.com'
+      };
+      const result = mapper.toPlayerStatus(apiResponse);
+      expect(result.name).toBe('maria.santos');
+      expect(result.email).toBe('maria.santos@empresa.com');
     });
   });
 });

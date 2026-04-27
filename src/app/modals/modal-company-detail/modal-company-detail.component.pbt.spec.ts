@@ -59,7 +59,7 @@ describe('ModalCompanyDetailComponent - Property-Based Tests', () => {
             ...company,
             processes: processesWithStatus,
             activities: [],
-            macros: []
+            processos: processesWithStatus
           };
 
           // Setup component
@@ -79,8 +79,8 @@ describe('ModalCompanyDetailComponent - Property-Based Tests', () => {
           // Test Tab 1: Atividades finalizadas (processes with completed tasks)
           component.selectedTab = 1;
           const tab1Processes = component.currentTabProcesses;
-          const allTab1HaveCompletedTasks = tab1Processes.every(
-            p => p.tasks.every(t => t.status === 'completed')
+          const allTab1HaveCompletedTasks = tab1Processes.every(p =>
+            (p.tasks ?? []).every(t => t.status === 'completed')
           );
           expect(allTab1HaveCompletedTasks).toBe(true, 'Tab 1 should only show processes with completed tasks');
 
@@ -115,11 +115,12 @@ describe('ModalCompanyDetailComponent - Property-Based Tests', () => {
         fc.array(fc.constant(generateProcess()), { minLength: 3, maxLength: 10 }),
         (processes) => {
           const company = generateCompany();
+          const mappedProcesses = processes.map(p => ({ ...p, status: 'pending' as ProcessStatus }));
           const companyDetails: CompanyDetails = {
             ...company,
-            processes: processes.map(p => ({ ...p, status: 'pending' as ProcessStatus })),
+            processes: mappedProcesses,
             activities: [],
-            macros: []
+            processos: mappedProcesses
           };
 
           component.company = company;

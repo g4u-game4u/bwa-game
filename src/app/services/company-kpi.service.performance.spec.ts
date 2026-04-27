@@ -7,11 +7,11 @@ import { delay } from 'rxjs/operators';
 
 const PERF_TEST_GAMIFICACAO_URL = 'http://localhost/perf-test-gamificacao';
 
-function mockRowsFromKpiData(data: { _id: string; entrega: number }[]): GamificacaoEmpresaRow[] {
+function mockRowsFromKpiData(data: CnpjKpiData[]): GamificacaoEmpresaRow[] {
   return data.map(k => ({
     CNPJ: '11.111.111/1111-11',
     EmpID: k._id,
-    porcEntregas: `${k.entrega},00`,
+    porcEntregas: `${k.entrega ?? 0},00`,
     procFinalizados: '0',
     procPendentes: '0',
     regime: '',

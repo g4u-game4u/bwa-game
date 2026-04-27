@@ -79,6 +79,7 @@ function parseArgs(argv: string[]): {
   maxPuts: number;
   allPuts: boolean;
   maxDeliveryPages: number;
+  resumeSkipPuts: number;
   dryRun: boolean;
   reuseJson: boolean;
   outDir: string;
@@ -91,6 +92,7 @@ function parseArgs(argv: string[]): {
   let maxPuts = 1;
   let allPuts = false;
   let maxDeliveryPages = 0;
+  let resumeSkipPuts = 0;
   let dryRun = false;
   let reuseJson = false;
   let outDir = defaultOutDir();
@@ -114,6 +116,8 @@ function parseArgs(argv: string[]): {
       maxPuts = Math.max(0, parseInt(argv[++i], 10));
     } else if (a === '--max-delivery-pages' && argv[i + 1]) {
       maxDeliveryPages = Math.max(0, parseInt(argv[++i], 10));
+    } else if (a === '--resume-skip-puts' && argv[i + 1]) {
+      resumeSkipPuts = Math.max(0, parseInt(argv[++i], 10));
     } else if (a === '--progress-every' && argv[i + 1]) {
       progressEvery = Math.max(1, parseInt(argv[++i], 10));
     } else if (a === '--put-delay-ms' && argv[i + 1]) {
@@ -132,6 +136,7 @@ function parseArgs(argv: string[]): {
     maxPuts,
     allPuts,
     maxDeliveryPages,
+    resumeSkipPuts,
     dryRun,
     reuseJson,
     outDir,
@@ -603,6 +608,30 @@ async function game4uLogin(
   return token;
 }
 
+/** Bearer mutável + refresh em corridas longas (JWT expira → 401 em GET/PUT). */
+type Game4uBearerAuth = {
+  getToken(): string;
+  refresh(): Promise<void>;
+};
+
+function createGame4uBearerAuth(
+  base: string,
+  clientId: string,
+  email: string,
+  password: string,
+  initialToken: string
+): Game4uBearerAuth {
+  let token = initialToken;
+  return {
+    getToken: () => token,
+    refresh: async () => {
+      console.log('[Game4U] Token JWT expirado ou rejeitado (401); novo POST /auth/login…');
+      token = await game4uLogin(base, clientId, email, password);
+      console.log('[Game4U] Novo Bearer obtido:', token.length, 'caracteres');
+    }
+  };
+}
+
 type ParsedDeliveryList = {
   items: UnknownRecord[];
   total?: number;
@@ -636,30 +665,42 @@ function normalizeDeliveryListJson(json: unknown): ParsedDeliveryList {
 async function game4uFetchDeliveryList(
   url: string,
   clientId: string,
-  bearer: string,
+  auth: Game4uBearerAuth,
   labelForErrors: string
 ): Promise<ParsedDeliveryList> {
-  if (!bearer || !bearer.trim()) {
-    throw new Error('Game4U: token vazio após login; não é possível chamar a API.');
-  }
-  const res = await fetch(url, {
-    headers: {
-      Accept: 'application/json',
-      client_id: clientId,
-      Authorization: `Bearer ${bearer.trim()}`
+  const max401Refresh = Math.max(
+    1,
+    parseInt(envStr('GAME4U_AUTH_401_MAX_REFRESH', 'game4u_auth_401_max_refresh') || '5', 10)
+  );
+  for (let refreshRound = 0; ; refreshRound++) {
+    const bearer = auth.getToken();
+    if (!bearer || !bearer.trim()) {
+      throw new Error('Game4U: token vazio após login; não é possível chamar a API.');
     }
-  });
-  const text = await res.text();
-  let json: unknown;
-  try {
-    json = JSON.parse(text);
-  } catch {
-    throw new Error(`Game4U GET ${labelForErrors} non-JSON ${res.status}: ${text.slice(0, 400)}`);
-  }
-  if (!res.ok) {
+    const res = await fetch(url, {
+      headers: {
+        Accept: 'application/json',
+        client_id: clientId,
+        Authorization: `Bearer ${bearer.trim()}`
+      }
+    });
+    const text = await res.text();
+    let json: unknown;
+    try {
+      json = JSON.parse(text);
+    } catch {
+      throw new Error(`Game4U GET ${labelForErrors} non-JSON ${res.status}: ${text.slice(0, 400)}`);
+    }
+    if (res.ok) {
+      return normalizeDeliveryListJson(json);
+    }
+    if (res.status === 401 && refreshRound < max401Refresh) {
+      console.warn(`[Game4U] GET ${labelForErrors} 401 — renovando token (${refreshRound + 1}/${max401Refresh})…`);
+      await auth.refresh();
+      continue;
+    }
     throw new Error(`Game4U GET ${labelForErrors} ${res.status}: ${text.slice(0, 600)}`);
   }
-  return normalizeDeliveryListJson(json);
 }
 
 function deliveriesPageSizeFromEnv(): number {
@@ -677,7 +718,7 @@ function deliveriesPageSizeFromEnv(): number {
 async function* game4uIterateDeliveryPages(
   base: string,
   clientId: string,
-  bearer: string
+  auth: Game4uBearerAuth
 ): AsyncGenerator<UnknownRecord[], void, unknown> {
   const listPath =
     envStr('GAME4U_DELIVERIES_LIST_PATH', 'game4u_deliveries_list_path') || '/delivery';
@@ -685,7 +726,7 @@ async function* game4uIterateDeliveryPages(
   if (!pageSize) {
     const urlStr = joinUrl(base, listPath);
     console.log('[Game4U] GET', urlStr, '(sem query; Bearer)');
-    const parsed = await game4uFetchDeliveryList(urlStr, clientId, bearer, 'delivery');
+    const parsed = await game4uFetchDeliveryList(urlStr, clientId, auth, 'delivery');
     console.log(
       '[Game4U]   →',
       parsed.items.length,
@@ -716,7 +757,7 @@ async function* game4uIterateDeliveryPages(
       u.searchParams.set(limitParam, String(limit));
       const urlStr = u.toString();
       console.log('[Game4U] GET', urlStr);
-      const parsed = await game4uFetchDeliveryList(urlStr, clientId, bearer, 'delivery');
+      const parsed = await game4uFetchDeliveryList(urlStr, clientId, auth, 'delivery');
       console.log('[Game4U]   → offset', offset, '→', parsed.items.length, 'linhas');
       yield parsed.items;
       if (parsed.items.length === 0 || parsed.items.length < limit) {
@@ -733,7 +774,7 @@ async function* game4uIterateDeliveryPages(
     u.searchParams.set(limitQuery, String(limit));
     const urlStr = u.toString();
     console.log('[Game4U] GET', urlStr);
-    const parsed = await game4uFetchDeliveryList(urlStr, clientId, bearer, 'delivery');
+    const parsed = await game4uFetchDeliveryList(urlStr, clientId, auth, 'delivery');
     const tp = parsed.totalPages;
     console.log(
       '[Game4U]   →',
@@ -756,10 +797,31 @@ async function* game4uIterateDeliveryPages(
   }
 }
 
+function putFailureRetriable(status: number, bodyText: string): boolean {
+  const t = bodyText.toLowerCase();
+  if (status >= 500) {
+    return true;
+  }
+  if (status === 429 || status === 408) {
+    return true;
+  }
+  if (
+    status === 400 &&
+    (t.includes('fetch failed') ||
+      t.includes('econnreset') ||
+      t.includes('etimedout') ||
+      t.includes('socket') ||
+      t.includes('network'))
+  ) {
+    return true;
+  }
+  return false;
+}
+
 async function game4uPutDelivery(
   base: string,
   clientId: string,
-  bearer: string,
+  auth: Game4uBearerAuth,
   id: string,
   body: unknown,
   opts: { quiet: boolean }
@@ -770,26 +832,92 @@ async function game4uPutDelivery(
   if (!opts.quiet) {
     console.log('[Game4U] PUT', url);
   }
-  if (!bearer || !bearer.trim()) {
-    throw new Error('Game4U: token vazio; não é possível PUT delivery.');
+
+  const maxAttempts = Math.max(
+    1,
+    parseInt(envStr('GAME4U_PUT_MAX_ATTEMPTS', 'game4u_put_max_attempts') || '5', 10)
+  );
+  const baseRetryMs = Math.max(
+    500,
+    parseInt(envStr('GAME4U_PUT_RETRY_BASE_MS', 'game4u_put_retry_base_ms') || '2500', 10)
+  );
+  const max401RefreshPerPut = Math.max(
+    1,
+    parseInt(envStr('GAME4U_AUTH_401_MAX_REFRESH', 'game4u_auth_401_max_refresh') || '5', 10)
+  );
+
+  let lastErr: Error | null = null;
+  let auth401RefreshCount = 0;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const bearer = auth.getToken();
+      if (!bearer || !bearer.trim()) {
+        throw new Error('Game4U: token vazio; não é possível PUT delivery.');
+      }
+      const res = await fetch(url, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          client_id: clientId,
+          Authorization: `Bearer ${bearer.trim()}`
+        },
+        body: JSON.stringify(body)
+      });
+      const text = await res.text();
+      if (res.ok) {
+        const preview = text.length ? text.slice(0, 200) : '(empty body)';
+        if (!opts.quiet) {
+          console.log(`[Game4U]   ← ${res.status} ${preview}`);
+        }
+        return;
+      }
+      if (res.status === 401) {
+        auth401RefreshCount += 1;
+        if (auth401RefreshCount > max401RefreshPerPut) {
+          throw new Error(
+            `Game4U PUT ${itemBase}/${id} 401: ainda Unauthorized após ${max401RefreshPerPut} novo(s) login(s). Credenciais ou client_id?`
+          );
+        }
+        if (!opts.quiet) {
+          console.warn(
+            `[Game4U] PUT 401 Unauthorized — token provavelmente expirado; novo login (${auth401RefreshCount}/${max401RefreshPerPut})…`
+          );
+        }
+        await auth.refresh();
+        attempt -= 1;
+        continue;
+      }
+      lastErr = new Error(`Game4U PUT ${itemBase}/${id} ${res.status}: ${text.slice(0, 800)}`);
+      if (!putFailureRetriable(res.status, text) || attempt >= maxAttempts) {
+        throw lastErr;
+      }
+      const wait = baseRetryMs * attempt;
+      if (!opts.quiet) {
+        console.warn(
+          `[Game4U] PUT tentativa ${attempt}/${maxAttempts} falhou (${res.status}); nova tentativa em ${wait}ms…`
+        );
+      }
+      await sleepMs(wait);
+    } catch (e) {
+      if (e instanceof Error && e.message.startsWith('Game4U PUT')) {
+        throw e;
+      }
+      lastErr = e instanceof Error ? e : new Error(String(e));
+      if (attempt >= maxAttempts) {
+        throw lastErr;
+      }
+      const wait = baseRetryMs * attempt;
+      if (!opts.quiet) {
+        console.warn(
+          `[Game4U] PUT tentativa ${attempt}/${maxAttempts} rede/erro:`,
+          lastErr.message,
+          `→ retry em ${wait}ms`
+        );
+      }
+      await sleepMs(wait);
+    }
   }
-  const res = await fetch(url, {
-    method: 'PUT',
-    headers: {
-      'Content-Type': 'application/json',
-      client_id: clientId,
-      Authorization: `Bearer ${bearer.trim()}`
-    },
-    body: JSON.stringify(body)
-  });
-  const text = await res.text();
-  if (!res.ok) {
-    throw new Error(`Game4U PUT ${itemBase}/${id} ${res.status}: ${text.slice(0, 800)}`);
-  }
-  const preview = text.length ? text.slice(0, 200) : '(empty body)';
-  if (!opts.quiet) {
-    console.log(`[Game4U]   ← ${res.status} ${preview}`);
-  }
+  throw lastErr ?? new Error('Game4U PUT: falha desconhecida');
 }
 
 /**
@@ -826,6 +954,7 @@ async function main(): Promise<void> {
   --max-puts <n>     Max PUTs (default 1; 0 = sem limite de PUTs)
   --all-puts         Sem limite de PUTs (equiv. max muito alto)
   --max-delivery-pages <n> Parar após n páginas de GET /delivery (teste de paginação)
+  --resume-skip-puts <n> Ignorar os primeiros n PUTs elegíveis (matches) — retomar corrida (ou env GAME4U_RESUME_SKIP_PUTS)
   --progress-every <n> Log a cada N PUTs com sucesso (default: 200 se env GAME4U_DELIVERIES_PAGE_SIZE>0, senão 1)
   --put-delay-ms <n> Pausa em ms entre PUTs (alivia API/BD em corridas longas)
   --dry-run          Step 4: log planned PUT body, no PUT
@@ -850,7 +979,11 @@ Env — Game4U (step 4):
     Por defeito GET ?page=&limit= e resposta { items, total, page, limit, totalPages }
   GAME4U_DELIVERIES_PAGINATION (opcional): page (default) | offset — em offset usa OFFSET_PARAM/LIMIT_PARAM
   GAME4U_DELIVERIES_PAGE_QUERY_PARAM (default page), GAME4U_DELIVERIES_LIMIT_QUERY_PARAM (default limit)
-  GAME4U_DELIVERY_ITEM_PATH (opcional): prefixo PUT por id (default /delivery)`);
+  GAME4U_DELIVERY_ITEM_PATH (opcional): prefixo PUT por id (default /delivery)
+  GAME4U_RESUME_SKIP_PUTS (opcional): igual a --resume-skip-puts
+  GAME4U_PUT_MAX_ATTEMPTS (opcional): tentativas por PUT em falhas retentáveis (default 5)
+  GAME4U_PUT_RETRY_BASE_MS (opcional): espera base entre tentativas em ms (default 2500)
+  GAME4U_AUTH_401_MAX_REFRESH (opcional): máx. renovações de token em 401 no mesmo PUT/GET (default 5)`);
     process.exit(0);
   }
 
@@ -929,11 +1062,12 @@ Env — Game4U (step 4):
   }
 
   console.log('[Game4U] POST', joinUrl(g4uBase, '/auth/login'), '| client_id:', clientId, '| admin:', email);
-  const bearer = await game4uLogin(g4uBase, clientId, email, password);
+  const initialBearer = await game4uLogin(g4uBase, clientId, email, password);
+  const auth = createGame4uBearerAuth(g4uBase, clientId, email, password, initialBearer);
   console.log(
     '[Game4U] Login admin OK; Bearer token:',
-    bearer.length,
-    'caracteres (Authorization em GET /delivery e PUT /delivery/{id})'
+    initialBearer.length,
+    'caracteres (401 em corridas longas → novo login automático)'
   );
 
   const byEmp = indexCompletoByEmpId(completo);
@@ -952,13 +1086,28 @@ Env — Game4U (step 4):
       ? args.putDelayMs
       : parseInt(envStr('GAME4U_PUT_DELAY_MS', 'game4u_put_delay_ms') || '0', 10) || 0;
 
+  let resumeSkipsRemaining = args.resumeSkipPuts;
+  if (resumeSkipsRemaining <= 0) {
+    const fromEnv = parseInt(envStr('GAME4U_RESUME_SKIP_PUTS', 'game4u_resume_skip_puts') || '', 10);
+    if (Number.isFinite(fromEnv) && fromEnv > 0) {
+      resumeSkipsRemaining = fromEnv;
+    }
+  }
+  if (resumeSkipsRemaining > 0) {
+    console.log(
+      '[Game4U] Retomada: ignorando os primeiros',
+      resumeSkipsRemaining,
+      'PUTs elegíveis (delivery com match em company-completo)'
+    );
+  }
+
   let puts = 0;
   let scanned = 0;
   let skippedNoEmpId = 0;
   let skippedNoMatch = 0;
   let deliveryPagesDone = 0;
 
-  for await (const deliveries of game4uIterateDeliveryPages(g4uBase, clientId, bearer)) {
+  for await (const deliveries of game4uIterateDeliveryPages(g4uBase, clientId, auth)) {
     deliveryPagesDone += 1;
     if (deliveries.length === 0 && scanned === 0) {
       console.warn(
@@ -985,6 +1134,10 @@ Env — Game4U (step 4):
         skippedNoMatch += 1;
         continue;
       }
+      if (resumeSkipsRemaining > 0) {
+        resumeSkipsRemaining -= 1;
+        continue;
+      }
       const payload = buildDeliveryPutBody(d, row);
       const loudPut =
         progressEvery <= 1 ||
@@ -1002,7 +1155,7 @@ Env — Game4U (step 4):
         puts += 1;
         continue;
       }
-      await game4uPutDelivery(g4uBase, clientId, bearer, id, payload, { quiet: quietPuts });
+      await game4uPutDelivery(g4uBase, clientId, auth, id, payload, { quiet: quietPuts });
       if (loudPut) {
         console.log('[Game4U] PUT ok', id, 'empId', row.empId, '| total PUTs:', puts + 1);
       }

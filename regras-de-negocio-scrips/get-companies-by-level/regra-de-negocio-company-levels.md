@@ -23,6 +23,9 @@ Defina as variáveis no `.env` na **raiz do repositório** (ou em `regras-de-neg
 | `GAME4U_DELIVERIES_OFFSET_PARAM` / `GAME4U_DELIVERIES_LIMIT_PARAM` | Só com `PAGINATION=offset` — ex. `skip` / `take` |
 | `GAME4U_PUT_PROGRESS_EVERY` | (Opcional) Log resumido a cada N PUTs (com `--progress-every` no CLI) |
 | `GAME4U_PUT_DELAY_MS` | (Opcional) Pausa entre PUTs em ms (ou `--put-delay-ms`) |
+| `GAME4U_RESUME_SKIP_PUTS` | (Opcional) Ignorar os primeiros N matches (PUTs elegíveis) para retomar uma corrida; ou `--resume-skip-puts N` |
+| `GAME4U_PUT_MAX_ATTEMPTS` / `GAME4U_PUT_RETRY_BASE_MS` | (Opcional) Retries com backoff em falhas transitórias do PUT (5xx, 429, corpo com `fetch failed`, etc.) |
+| `GAME4U_AUTH_401_MAX_REFRESH` | (Opcional) Em corridas longas o JWT expira; o script faz novo login em **401** e repete GET/PUT (default 5 renovações por pedido) |
 | `GAME4U_DELIVERY_ITEM_PATH` | (Opcional) Prefixo do PUT por `id`; default `/delivery` |
 
 ## Automação
@@ -41,7 +44,7 @@ Passo 4 (PUT em deliveries) é **opcional**: por padrão roda só os passos 1–
 npm run company-levels:step4
 ```
 
-Opções extra vão depois do `--`, por exemplo `npm run company-levels:step4 -- --max-puts 50 --dry-run`.
+Opções extra vão depois do `--`, por exemplo `npm run company-levels:step4 -- --max-puts 50 --dry-run`. Para retomar após N PUTs já aplicados: `--resume-skip-puts N` (conta só deliveries com match em `company-completo`).
 
 Para testar um único PUT no fluxo completo (passos 1–3 + 4):
 
@@ -69,6 +72,6 @@ npm run company-levels:sync:deliveries:dry
 
 4. `POST {BASE}/auth/login` com credenciais **admin** e `client_id`; usar o token `Bearer` nas chamadas seguintes. Listagem: `GET {BASE}/delivery` sem query, ou com **`page` e `limit`** (1–500; resposta `{ items, total, page, limit, totalPages }`). O script percorre `page=1..totalPages`. Alternativa legada: `GAME4U_DELIVERIES_PAGINATION=offset`. O `id` de cada delivery segue `empId`-competência; extrair EmpID como em `gamificacao-delivery-empid.util.ts`. Se coincidir com `empId` em `company-completo.json`, `PUT {BASE}/delivery/{id}` com corpo `{ extra: { ... } }`.
 
-**Correr em massa:** ex. `GAME4U_DELIVERIES_PAGE_SIZE=500` e `npm run company-levels:step4:all -- --put-delay-ms 10 --progress-every 500`.
+**Correr em massa:** ex. `GAME4U_DELIVERIES_PAGE_SIZE=500` e `npm run company-levels:step4:all -- --put-delay-ms 10 --progress-every 500`. **Retomar:** se a corrida parar no PUT 7001, use `--resume-skip-puts 7000` (ou `GAME4U_RESUME_SKIP_PUTS=7000`) com `--reuse-json` para não refazer portal/gamificação.
 
 **Observação:** validar o passo 4 com `--max-puts 1` (ou `--dry-run`) antes de subir o limite.

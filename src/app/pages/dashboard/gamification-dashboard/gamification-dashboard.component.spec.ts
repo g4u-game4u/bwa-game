@@ -1119,7 +1119,7 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
     });
 
     /**
-     * Carteira: fetchGamificacaoMapsAsync → getCompanies → enrichCarteiraRowsWithMaps.
+     * Carteira: fetchGamificacaoMapsAsync → getPlayerCnpjResp → enrichCarteiraRowsWithMaps.
      */
     it('should load carteira rows from CompanyService and enrich with KPI data on initialization', fakeAsync(() => {
       const mockList = [

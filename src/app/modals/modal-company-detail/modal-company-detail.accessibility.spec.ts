@@ -42,12 +42,14 @@ describe('ModalCompanyDetailComponent - Accessibility', () => {
       kpi3
     };
 
-    mockCompanyService.getCompanyDetails.and.returnValue(of({
-      ...component.company,
-      processes: [],
-      activities: [],
-      macros: []
-    }));
+    mockCompanyService.getCompanyDetails.and.returnValue(
+      of({
+        ...component.company,
+        processes: [],
+        activities: [],
+        processos: []
+      })
+    );
     
     fixture.detectChanges();
   });

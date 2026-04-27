@@ -216,14 +216,15 @@
       <c4u-shimmer *ngIf="isLoadingProgress"></c4u-shimmer>
     </section>
     
-    <!-- Clientes atendidos: apenas lista de participação (action_log no período); abas Carteira/Participação comentadas. -->
+    <!-- Clientes atendidos este mês: lista de participação (período do filtro); abas Carteira/Participação comentadas. -->
     <section class="dashboard-section carteira-section" aria-labelledby="company-section-title">
       <div class="section-header">
         <h3 id="company-section-title" class="section-title">
-          Clientes atendidos
+          Clientes atendidos este mês
+          <span *ngIf="!isLoadingParticipacao" class="section-title-count" aria-hidden="true">({{ participacaoClientes.length }})</span>
           <c4u-info-button 
             [infoKey]="''"
-            [customText]="'Empresas com pelo menos uma ação no mês ou período selecionado no painel (no Game4U, pela data de competência em delivery_id).'"
+            [customText]="'São os clientes para os quais você realizou alguma entrega ou obrigação neste mês na plataforma Acessórias. A lista segue o mês (ou período) selecionado no filtro do painel e as atividades contabilizadas pela competência das entregas no Game4U'"
             position="bottom">
           </c4u-info-button>
         </h3>
@@ -261,6 +262,7 @@
                 {{ getCompanyStatus(cliente.cnpj) }}
               </span>
             </div>
+            <!-- KPIs (% entregas no prazo / gamificação) na lista — comentado até finalizar a feature
             <div class="carteira-item-meta">
               <span
                 *ngIf="isLoadingParticipacaoKpi"
@@ -277,11 +279,12 @@
                 <ng-template #entregaNaParticipacao>n/a</ng-template>
               </span>
             </div>
+            -->
           </div>
         </div>
         
         <div *ngIf="!isLoadingParticipacao && participacaoClientes.length === 0" class="empty-state">
-          <p>Nenhum cliente atendido neste período</p>
+          <p>Nenhum cliente atendido neste mês</p>
         </div>
       </c4u-card>
     </section>
