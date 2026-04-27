@@ -38,8 +38,8 @@ export const environment = {
   diretorTeamCode: 'FkmdhZ9',
   logo_url: 'https://i.ibb.co/Fk92q8hv/Logo-Revisa-Prev-removebg-preview.png',
 
-  // Supabase — filled from .env via custom-webpack DefinePlugin when running ng serve / build
-  supabaseUrl: process.env['SUPABASE_URL'] || process.env['supabase_url'] || '',
+  // Supabase: URL não vem de variável de ambiente (evita chamadas PostgREST acidentais no bundle).
+  supabaseUrl: '',
   supabaseAnonKey: process.env['SUPABASE_ANON_KEY'] || process.env['supabase_anon_key'] || '',
   /**
    * Opcional. Preferir RLS + anon no browser; service role no bundle = risco (ignora RLS).
@@ -107,8 +107,8 @@ export const environment = {
     'false',
 
   /**
-   * Só com `true` explícito: fallback HTTP `/game/*` → leitura Supabase (SUPABASE_URL).
-   * Painéis jogador/gestor não devem depender disto.
+   * Só com `true` explícito: leitura Supabase **apenas quando não há** `backend_url_base`
+   * (sem API `/game/*`). Com API definida, o `Game4uApiService` não usa PostgREST para `/game/*`.
    */
   useGame4uSupabaseFallback:
     String(

@@ -37,6 +37,8 @@ export interface SeasonProgress {
   metas: ProgressMetric;
   clientes: number;
   tarefasFinalizadas: number;
+  /** Game4U: `delivery_stats.total` de `/game/stats` (card progresso da temporada). */
+  deliveryStatsTotal?: number;
   seasonDates: {
     start: Date;
     end: Date;
@@ -114,6 +116,10 @@ export interface ActivityMetrics {
   emExecucao: number;
   finalizadas: number;
   pontos: number;
+  /** Game4U: pontos de user-actions só em DONE (atingido no circular de meta do mês). */
+  pontosDone?: number;
+  /** Game4U: soma de pontos de user-actions em todos os status (meta no circular de meta do mês). */
+  pontosTodosStatus?: number;
 }
 
 export interface ProcessMetrics {
@@ -126,6 +132,8 @@ export interface ProcessMetrics {
 export interface ActivityListItem {
   id: string;
   title: string;
+  /** Título do processo/entrega (user action), quando disponível. */
+  delivery_title?: string;
   points: number;
   created: number;
   player?: string;

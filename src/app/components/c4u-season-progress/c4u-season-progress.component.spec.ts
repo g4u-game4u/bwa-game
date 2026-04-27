@@ -23,26 +23,6 @@ describe('C4uSeasonProgressComponent', () => {
     expect(component).toBeTruthy();
   });
 
-  it('should display metas progress correctly', () => {
-    component.progress = {
-      metas: { current: 5, target: 10 },
-      clientes: 0,
-      tarefasFinalizadas: 0,
-      seasonDates: {
-        start: new Date('2023-04-11'),
-        end: new Date('2023-09-30')
-      }
-    };
-    fixture.detectChanges();
-
-    const compiled = fixture.nativeElement as HTMLElement;
-    const metricValues = compiled.querySelectorAll('.metric-value');
-    const metasValue = metricValues[0]?.textContent?.trim();
-    
-    expect(metasValue).toContain('5');
-    expect(metasValue).toContain('10');
-  });
-
   it('should display clientes count correctly', () => {
     component.progress = {
       metas: { current: 0, target: 0 },
@@ -56,9 +36,9 @@ describe('C4uSeasonProgressComponent', () => {
     fixture.detectChanges();
 
     const compiled = fixture.nativeElement as HTMLElement;
-    const metricValues = compiled.querySelectorAll('.metric-value');
-    const clientesValue = metricValues[1]?.textContent?.trim();
-    
+    const metricValues = compiled.querySelectorAll('.value');
+    const clientesValue = metricValues[0]?.textContent?.trim();
+
     expect(clientesValue).toBe('25');
   });
 
@@ -75,9 +55,9 @@ describe('C4uSeasonProgressComponent', () => {
     fixture.detectChanges();
 
     const compiled = fixture.nativeElement as HTMLElement;
-    const metricValues = compiled.querySelectorAll('.metric-value');
-    const tarefasValue = metricValues[2]?.textContent?.trim();
-    
+    const metricValues = compiled.querySelectorAll('.value');
+    const tarefasValue = metricValues[1]?.textContent?.trim();
+
     expect(tarefasValue).toBe('150');
   });
 
@@ -102,24 +82,23 @@ describe('C4uSeasonProgressComponent', () => {
     expect(seasonDates?.textContent?.trim()).toBe('11/4/23 a 30/9/23');
   });
 
-  it('should display all three metric items', () => {
+  it('should display metric rows (sem linha Metas)', () => {
     fixture.detectChanges();
 
     const compiled = fixture.nativeElement as HTMLElement;
-    const metricItems = compiled.querySelectorAll('.metric-item');
-    
-    expect(metricItems.length).toBe(3);
+    const rows = compiled.querySelectorAll('.progress-row');
+
+    expect(rows.length).toBe(2);
   });
 
   it('should display correct metric labels', () => {
     fixture.detectChanges();
 
     const compiled = fixture.nativeElement as HTMLElement;
-    const metricLabels = compiled.querySelectorAll('.metric-label');
-    
-    expect(metricLabels[0]?.textContent?.trim()).toBe('Metas');
-    expect(metricLabels[1]?.textContent?.trim()).toBe('Clientes');
-    expect(metricLabels[2]?.textContent?.trim()).toBe('Tarefas Finalizadas');
+    const metricLabels = compiled.querySelectorAll('.label');
+
+    expect(metricLabels[0]?.textContent?.trim()).toBe('Clientes');
+    expect(metricLabels[1]?.textContent?.trim()).toBe('Tarefas Finalizadas');
   });
 
   it('should display progress title', () => {
@@ -144,11 +123,10 @@ describe('C4uSeasonProgressComponent', () => {
     fixture.detectChanges();
 
     const compiled = fixture.nativeElement as HTMLElement;
-    const metricValues = compiled.querySelectorAll('.metric-value');
-    
-    expect(metricValues[0]?.textContent).toContain('0');
+    const metricValues = compiled.querySelectorAll('.value');
+
+    expect(metricValues[0]?.textContent?.trim()).toBe('0');
     expect(metricValues[1]?.textContent?.trim()).toBe('0');
-    expect(metricValues[2]?.textContent?.trim()).toBe('0');
   });
 
   it('should format dates with single digit day and month correctly', () => {
@@ -182,11 +160,9 @@ describe('C4uSeasonProgressComponent', () => {
     fixture.detectChanges();
 
     const compiled = fixture.nativeElement as HTMLElement;
-    const metricValues = compiled.querySelectorAll('.metric-value');
-    
-    // Check that values are rendered
+    const metricValues = compiled.querySelectorAll('.value');
+
     expect(metricValues[0]?.textContent).toBeTruthy();
     expect(metricValues[1]?.textContent).toBeTruthy();
-    expect(metricValues[2]?.textContent).toBeTruthy();
   });
 });

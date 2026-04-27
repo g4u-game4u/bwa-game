@@ -119,7 +119,7 @@ export class Game4uSupabaseFallbackService {
   ): Promise<Game4uUserActionModel[]> {
     const client = this.getOrCreateClient();
     if (!client) {
-      throw new Error('Supabase fallback: cliente indisponível');
+      return [];
     }
     const col = this.userEmailColumn();
     let query = client
@@ -143,7 +143,7 @@ export class Game4uSupabaseFallbackService {
   ): Promise<Game4uUserActionModel[]> {
     const client = this.getOrCreateClient();
     if (!client) {
-      throw new Error('Supabase fallback: cliente indisponível');
+      return [];
     }
     const teamCol = this.teamFilterColumn();
     let query = client
@@ -167,7 +167,7 @@ export class Game4uSupabaseFallbackService {
   ): Promise<Game4uDeliveryModel[]> {
     const client = this.getOrCreateClient();
     if (!client) {
-      throw new Error('Supabase fallback: cliente indisponível');
+      return [];
     }
     const col = this.userEmailColumn();
     const { data, error } = await client
@@ -188,7 +188,7 @@ export class Game4uSupabaseFallbackService {
   ): Promise<Game4uDeliveryModel[]> {
     const client = this.getOrCreateClient();
     if (!client) {
-      throw new Error('Supabase fallback: cliente indisponível');
+      return [];
     }
     const teamCol = this.teamFilterColumn();
     const { data, error } = await client

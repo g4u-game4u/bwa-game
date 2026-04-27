@@ -209,10 +209,15 @@
     z-index: 10;
     border-radius: 8px 8px 0 0;
     margin-bottom: $spacing-xs;
-    
-    // Adjust grid for pontos type
-    &.with-points {
-      grid-template-columns: 2fr 1.5fr 1.5fr 1fr 1fr;
+
+    // Pontos: Tarefa, Executor, Data, Pontos
+    &.with-points:not(.with-delivery) {
+      grid-template-columns: 2fr 1.5fr 1.5fr 1fr;
+    }
+
+    // Tarefas finalizadas: Tarefa, Processo (delivery_title), Executor, Data
+    &.with-delivery:not(.with-points) {
+      grid-template-columns: 2fr 1.5fr 1.5fr 1.5fr;
     }
     
     // Adjust grid for processes
@@ -243,10 +248,13 @@
     &:last-child {
       border-bottom: none;
     }
-    
-    // Adjust grid for pontos type
-    &.with-points {
-      grid-template-columns: 2fr 1.5fr 1.5fr 1fr 1fr;
+
+    &.with-points:not(.with-delivery) {
+      grid-template-columns: 2fr 1.5fr 1.5fr 1fr;
+    }
+
+    &.with-delivery:not(.with-points) {
+      grid-template-columns: 2fr 1.5fr 1.5fr 1.5fr;
     }
     
     // Adjust grid for processes
@@ -258,6 +266,13 @@
       .task-title {
         color: $text-primary;
         font-weight: 500;
+      }
+    }
+
+    .task-col-delivery {
+      .task-delivery {
+        color: $text-secondary;
+        font-size: 0.875rem;
       }
     }
 
@@ -656,6 +671,12 @@
 
       .task-col-title::before {
         content: 'Tarefa: ';
+        font-weight: 600;
+        color: $text-secondary;
+      }
+
+      &.with-delivery .task-col-delivery::before {
+        content: 'Processo: ';
         font-weight: 600;
         color: $text-secondary;
       }

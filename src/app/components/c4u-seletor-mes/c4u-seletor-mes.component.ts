@@ -1,4 +1,4 @@
-import {Component, EventEmitter, Input, OnChanges, OnInit, Output} from '@angular/core';
+import { Component, EventEmitter, Input, OnChanges, OnInit, Output, SimpleChanges } from '@angular/core';
 import {SessaoProvider} from '@providers/sessao/sessao.provider';
 import * as moment from "moment";
 
@@ -25,6 +25,10 @@ export class C4uSeletorMesComponent implements OnInit, OnChanges {
     @Input()
     playerId: string | null = null;
 
+    /** Painel individual: ocultar filtro "Toda temporada" e forçar sempre um mês. */
+    @Input()
+    showTodaTemporadaButton = true;
+
     static readonly TODA_TEMPORADA_ID = -1;
 
     months: Array<any> = []
@@ -44,7 +48,10 @@ export class C4uSeletorMesComponent implements OnInit, OnChanges {
       await this.initializeMonths();
     }
 
-    ngOnChanges(): void {
+    ngOnChanges(changes: SimpleChanges): void {
+        if (changes['showTodaTemporadaButton']?.currentValue === false && this.isTodaTemporada) {
+            this.isTodaTemporada = false;
+        }
         // const slaDate =
         //   moment(moment().diff(this.seasonData?.datas.dataInicio)).month() + 1;
         // const slaDate = this.PREV_MONTHS;

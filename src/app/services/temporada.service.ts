@@ -2,8 +2,10 @@ import {Injectable} from '@angular/core';
 import {TemporadaDashboard} from '../model/temporadaDashboard.model';
 import {ApiProvider} from "../providers/api.provider";
 import {TIPO_CONSULTA_TIME} from "@app/pages/dashboard/dashboard.component";
-import {SeasonDatesService} from "./season-dates.service";
 import {environment} from '../../environments/environment';
+
+/** Início do período do season component para `/game/stats` (fixo). */
+const SEASON_STATS_RANGE_START_ISO = '2026-04-01T00:00:00.000Z';
 
 @Injectable({
   providedIn: 'root'
@@ -13,9 +15,28 @@ export class TemporadaService {
   basePath = '/game/stats';
 
   constructor(
-    private api: ApiProvider,
-    private seasonDatesService: SeasonDatesService
+    private api: ApiProvider
   ) {
+  }
+
+  /** Intervalo exclusivo do card de temporada: 2026-04-01 UTC → agora. */
+  private getSeasonStatsRangeISO(): { start: string; end: string } {
+    return {
+      start: SEASON_STATS_RANGE_START_ISO,
+      end: new Date().toISOString()
+    };
+  }
+
+  private countClientesFromDeliveryStats(deliveryStats: unknown): number {
+    if (!deliveryStats || typeof deliveryStats !== 'object') {
+      return 0;
+    }
+    const d = deliveryStats as Record<string, unknown>;
+    const incomplete =
+      Number(d['incomplete'] ?? d['INCOMPLETE'] ?? d['Incomplete']) || 0;
+    const delivered =
+      Number(d['delivered'] ?? d['DELIVERED'] ?? d['Delivered']) || 0;
+    return Math.floor(incomplete + delivered);
   }
 
   public async getDadosTemporadaDashboard(id: number, tipo: number): Promise<TemporadaDashboard> {
@@ -28,18 +49,15 @@ export class TemporadaService {
 
     try {
       let url = this.basePath;
-      
-      // Obter datas da temporada (campanha) no formato ISO
-      const startDateISO = await this.seasonDatesService.getSeasonStartDateISO();
-      const endDateISO = await this.seasonDatesService.getSeasonEndDateISO();
-      
-      let queryParams = '?start=' + startDateISO + '&end=' + endDateISO;
+      const { start: startDateISO, end: endDateISO } = this.getSeasonStatsRangeISO();
+      let queryParams =
+        '?start=' + encodeURIComponent(startDateISO) + '&end=' + encodeURIComponent(endDateISO);
 
       if (tipo === TIPO_CONSULTA_TIME) {
         url = '/game/team-stats';
-        queryParams += '&team=' + id;
+        queryParams += '&team=' + encodeURIComponent(String(id));
       } else {
-        queryParams += '&user=' + id;
+        queryParams += '&user=' + encodeURIComponent(String(id));
       }
 
       const response = await this.api.get<any>(url + queryParams);
@@ -52,6 +70,7 @@ export class TemporadaService {
       const aggTbp = Math.floor(Number(response?.action_stats?.total_blocked_points) || 0);
       const unblockedPoints = rootTp || aggTp;
       const blockedPoints = rootTbp || aggTbp;
+      const clientes = this.countClientesFromDeliveryStats(response?.delivery_stats);
 
       return <TemporadaDashboard>{
         blocked_points: blockedPoints,
@@ -61,6 +80,7 @@ export class TemporadaService {
         pendingDeliveries: response?.delivery_stats?.PENDING || 0,
         incompleteDeliveries: response?.delivery_stats?.INCOMPLETE || 0,
         completedDeliveries: response?.delivery_stats?.DELIVERED || 0,
+        clientes,
         total_points: unblockedPoints + blockedPoints,
         total_blocked_points: blockedPoints,
         total_actions: completedTasks,
@@ -80,6 +100,7 @@ export class TemporadaService {
       pendingDeliveries: 0,
       incompleteDeliveries: 0,
       completedDeliveries: 0,
+      clientes: 0,
       total_points: 0,
       total_blocked_points: 0,
       total_actions: 0,

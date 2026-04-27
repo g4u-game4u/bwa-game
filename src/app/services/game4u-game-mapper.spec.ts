@@ -1,5 +1,10 @@
 import {
+  computeMonthlyPointsFromGame4uActions,
+  filterGame4uActionsByCompetenceMonth,
   filterGame4uActionsByMonth,
+  getGame4uMonthlyPointsCircularFromActionStats,
+  readGame4uDeliveryStatsTotal,
+  parseCompetenceYearMonthFromDeliveryId,
   mapGame4uActionsToProcessMetrics,
   mapGame4uStatsToActivityMetrics,
   mapGame4uStatsToPointWallet,
@@ -48,6 +53,106 @@ describe('game4u-game-mapper', () => {
       });
       expect(m.finalizadas).toBe(3);
       expect(m.pontos).toBe(100);
+      expect(m.pontosDone).toBe(100);
+      expect(m.pontosTodosStatus).toBe(100);
+    });
+
+    it('sums pontosTodosStatus across action_stats buckets', () => {
+      const m = mapGame4uStatsToActivityMetrics({
+        stats: [],
+        total_actions: 0,
+        total_points: 0,
+        total_blocked_points: 0,
+        action_stats: {
+          DOING: { count: 1, total_points: 25 },
+          DONE: { count: 2, total_points: 40 },
+          PENDING: { count: 1, total_points: 15 }
+        }
+      });
+      expect(m.pontosDone).toBe(40);
+      expect(m.pontosTodosStatus).toBe(80);
+    });
+  });
+
+  describe('readGame4uDeliveryStatsTotal', () => {
+    it('reads total from delivery_stats', () => {
+      expect(
+        readGame4uDeliveryStatsTotal({
+          stats: [],
+          total_actions: 0,
+          total_points: 0,
+          total_blocked_points: 0,
+          delivery_stats: { total: 12 }
+        })
+      ).toBe(12);
+    });
+
+    it('accepts TOTAL alias', () => {
+      expect(
+        readGame4uDeliveryStatsTotal({
+          stats: [],
+          total_actions: 0,
+          total_points: 0,
+          total_blocked_points: 0,
+          delivery_stats: { TOTAL: 7 }
+        })
+      ).toBe(7);
+    });
+
+    it('returns null when missing', () => {
+      expect(
+        readGame4uDeliveryStatsTotal({
+          stats: [],
+          total_actions: 0,
+          total_points: 0,
+          total_blocked_points: 0
+        })
+      ).toBeNull();
+    });
+  });
+
+  describe('getGame4uMonthlyPointsCircularFromActionStats', () => {
+    it('uses pending + done total_points as meta and done as current', () => {
+      const c = getGame4uMonthlyPointsCircularFromActionStats({
+        stats: [],
+        total_actions: 0,
+        total_points: 0,
+        total_blocked_points: 0,
+        action_stats: {
+          PENDING: { count: 3, total_points: 30 },
+          DONE: { count: 2, total_points: 20 }
+        }
+      });
+      expect(c).not.toBeNull();
+      expect(c!.pontosDone).toBe(20);
+      expect(c!.pontosTodosStatus).toBe(50);
+      expect(c!.finalizadas).toBe(2);
+    });
+
+    it('accepts lowercase done and pending buckets', () => {
+      const c = getGame4uMonthlyPointsCircularFromActionStats({
+        stats: [],
+        total_actions: 0,
+        total_points: 0,
+        total_blocked_points: 0,
+        action_stats: {
+          pending: { count: 1, total_points: 10 },
+          done: { count: 1, total_points: 5 }
+        }
+      });
+      expect(c!.pontosDone).toBe(5);
+      expect(c!.pontosTodosStatus).toBe(15);
+    });
+
+    it('returns null when action_stats is absent', () => {
+      expect(
+        getGame4uMonthlyPointsCircularFromActionStats({
+          stats: [],
+          total_actions: 0,
+          total_points: 1,
+          total_blocked_points: 0
+        })
+      ).toBeNull();
     });
   });
 
@@ -70,6 +175,80 @@ describe('game4u-game-mapper', () => {
       ];
       const out = filterGame4uActionsByMonth(actions, month);
       expect(out.map(a => a.id)).toEqual(['1']);
+    });
+  });
+
+  describe('parseCompetenceYearMonthFromDeliveryId', () => {
+    it('parses trailing YYYY-MM-DD as competence', () => {
+      expect(parseCompetenceYearMonthFromDeliveryId('1079-2025-12-31')).toEqual({ y: 2025, m: 11 });
+    });
+
+    it('returns null when suffix is not a date', () => {
+      expect(parseCompetenceYearMonthFromDeliveryId('1079-2025-13-01')).toBeNull();
+      expect(parseCompetenceYearMonthFromDeliveryId('plain')).toBeNull();
+    });
+  });
+
+  describe('filterGame4uActionsByCompetenceMonth', () => {
+    it('includes action by competence month even if created_at is outside', () => {
+      const month = new Date(2025, 11, 1);
+      const actions: Game4uUserActionModel[] = [
+        {
+          id: '1',
+          points: 10,
+          status: 'DOING',
+          created_at: '2024-01-01T00:00:00.000Z',
+          delivery_id: '1079-2025-12-31'
+        },
+        {
+          id: '2',
+          points: 5,
+          status: 'DONE',
+          created_at: '2025-12-15T00:00:00.000Z',
+          delivery_id: '1080-2025-11-30'
+        }
+      ];
+      const out = filterGame4uActionsByCompetenceMonth(actions, month);
+      expect(out.map(a => a.id)).toEqual(['1']);
+    });
+
+    it('falls back to created_at month when delivery_id has no competence suffix', () => {
+      const month = new Date(2024, 5, 1);
+      const inMonth: Game4uUserActionModel[] = [
+        {
+          id: '1',
+          points: 1,
+          status: 'DONE',
+          created_at: '2024-06-10T12:00:00.000Z',
+          delivery_id: '999'
+        }
+      ];
+      expect(filterGame4uActionsByCompetenceMonth(inMonth, month).map(a => a.id)).toEqual(['1']);
+
+      const outOfMonth: Game4uUserActionModel[] = [
+        {
+          id: '2',
+          points: 1,
+          status: 'DONE',
+          created_at: '2024-07-10T12:00:00.000Z',
+          delivery_id: '999'
+        }
+      ];
+      expect(filterGame4uActionsByCompetenceMonth(outOfMonth, month).length).toBe(0);
+    });
+  });
+
+  describe('computeMonthlyPointsFromGame4uActions', () => {
+    it('sums all points as target and DONE only as current', () => {
+      const actions: Game4uUserActionModel[] = [
+        { id: 'a', points: 10, status: 'DONE', created_at: '2024-01-01T00:00:00.000Z' },
+        { id: 'b', points: 20, status: 'PENDING', created_at: '2024-01-02T00:00:00.000Z' }
+      ];
+      const r = computeMonthlyPointsFromGame4uActions(actions);
+      expect(r.pontosTodosStatus).toBe(30);
+      expect(r.pontosDone).toBe(10);
+      expect(r.pontos).toBe(10);
+      expect(r.finalizadas).toBe(1);
     });
   });
 
@@ -104,6 +283,19 @@ describe('game4u-game-mapper', () => {
       const d: Game4uDeliveryModel[] = [{ id: 'x', status: 'DELIVERED' }];
       const merged = mergeGame4uDeliveryParticipation(d, [{ id: 'x', status: 'PENDING' }]);
       expect(merged).toEqual([{ cnpj: 'x', actionCount: 2 }]);
+    });
+
+    it('includes delivery_title when present on delivery', () => {
+      const merged = mergeGame4uDeliveryParticipation(
+        [{ id: 'a', status: 'DELIVERED', delivery_title: 'Processo Alpha' }],
+        [{ id: 'a', status: 'PENDING' }]
+      );
+      expect(merged).toEqual([{ cnpj: 'a', actionCount: 2, delivery_title: 'Processo Alpha' }]);
+    });
+
+    it('falls back to title when delivery_title is absent', () => {
+      const merged = mergeGame4uDeliveryParticipation([{ id: 'b', status: 'DELIVERED', title: 'Fallback title' }]);
+      expect(merged).toEqual([{ cnpj: 'b', actionCount: 1, delivery_title: 'Fallback title' }]);
     });
   });
 

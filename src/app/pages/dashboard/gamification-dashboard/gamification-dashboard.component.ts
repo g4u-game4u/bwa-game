@@ -397,8 +397,9 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   
   /**
    * Load additional season progress details:
-   * - Tarefas finalizadas: com Game4U, count de `action_stats.done` no intervalo do mês selecionado; senão action_log.
-   * Note: Clientes count comes from player_company__c (cnpj_resp) via loadClientesData()
+   * - Tarefas finalizadas: Game4U = count `action_stats.done` (mesma chamada que `delivery_stats.total`);
+   *   Funifier = action_log.
+   * - `deliveryStatsTotal`: Game4U `/game/stats.delivery_stats.total` quando existir.
    */
   private loadSeasonProgressDetails(): void {
     const playerId = this.getPlayerId();
@@ -407,21 +408,24 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     }
 
     this.actionLogService
-      .getCompletedTasksCount(playerId, this.selectedMonth)
+      .getSeasonProgressSidebarDetails(playerId, this.selectedMonth)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
-        next: (count: number) => {
-          console.log('📊 Tarefas finalizadas count:', count);
+        next: ({ tarefasFinalizadas, deliveryStatsTotal }) => {
+          console.log('📊 Season sidebar:', { tarefasFinalizadas, deliveryStatsTotal });
           if (this.seasonProgress) {
-            this.seasonProgress = {
-              ...this.seasonProgress,
-              tarefasFinalizadas: count
-            };
+            const base = { ...this.seasonProgress, tarefasFinalizadas };
+            if (deliveryStatsTotal !== undefined) {
+              (base as SeasonProgress).deliveryStatsTotal = deliveryStatsTotal;
+            } else {
+              delete (base as SeasonProgress & { deliveryStatsTotal?: number }).deliveryStatsTotal;
+            }
+            this.seasonProgress = base;
             this.cdr.markForCheck();
           }
         },
         error: (err: Error) => {
-          console.error('📊 Failed to load tarefas count:', err);
+          console.error('📊 Failed to load season sidebar details:', err);
         }
       });
   }
@@ -537,7 +541,8 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   }
 
   /**
-   * Participação: CNPJs únicos do action_log do usuário (Funifier), filtrados pelo mês selecionado.
+   * Clientes atendidos: CNPJs únicos com ações no mês do filtro (Funifier: action_log por data da ação;
+   * Game4U: user-actions cuja competência em `delivery_id` cai nesse mês).
    * Enriquecimento de nome/status (empid_cnpj__c) + KPIs (cnpj__c / gamificação).
    */
   private loadParticipacaoData(): void {
@@ -558,6 +563,13 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
           console.log('📊 Participação CNPJs (action_log):', items.length);
           const empids = items.map(i => i.cnpj).filter((c): c is string => !!c && String(c).trim().length > 0);
           const actionCountByCnpj = new Map(items.map(i => [i.cnpj, i.actionCount]));
+          const deliveryTitleByKey = new Map<string, string>();
+          for (const i of items) {
+            const t = i.delivery_title?.trim();
+            if (t) {
+              deliveryTitleByKey.set(i.cnpj, t);
+            }
+          }
 
           if (empids.length === 0) {
             return of([] as CompanyDisplay[]);
@@ -578,7 +590,8 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
                 map(clientes =>
                   clientes.map(c => ({
                     ...c,
-                    actionCount: actionCountByCnpj.get(c.cnpj) ?? c.actionCount
+                    actionCount: actionCountByCnpj.get(c.cnpj) ?? c.actionCount,
+                    delivery_title: deliveryTitleByKey.get(c.cnpj) ?? c.delivery_title
                   }))
                 )
               );
@@ -868,7 +881,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     this.selectedCarteiraCompany = company;
     this.isCompanyCarteiraDetailModalOpen = true;
     this.focusedElementBeforeModal = document.activeElement as HTMLElement;
-    const companyName = this.getCompanyDisplayName(company.cnpj);
+    const companyName = this.getClienteAtendidoDisplayName(company);
     this.announceToScreenReader(`Abrindo detalhes de ${companyName}`);
   }
 
@@ -876,8 +889,8 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
    * Handle company carteira detail modal close
    */
   onCompanyCarteiraDetailModalClosed(): void {
-    const companyName = this.selectedCarteiraCompany 
-      ? this.getCompanyDisplayName(this.selectedCarteiraCompany.cnpj) 
+    const companyName = this.selectedCarteiraCompany
+      ? this.getClienteAtendidoDisplayName(this.selectedCarteiraCompany)
       : 'empresa';
     this.isCompanyCarteiraDetailModalOpen = false;
     this.selectedCarteiraCompany = null;
@@ -1079,9 +1092,17 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   }
 
   /**
-   * Pontos do mês (action_log) vs meta provisória: (processos pendentes + incompletos) × pts/atividade.
+   * Circular “Pontos no mês”: com Game4U e `action_stats`, atingido = done.total_points;
+   * meta = pending.total_points + done.total_points. Sem esses campos: fallback em `activityMetrics`.
    */
   get monthlyPointsProgressData(): { current: number; target: number } {
+    const donePts = this.activityMetrics?.pontosDone;
+    const allPts = this.activityMetrics?.pontosTodosStatus;
+    if (donePts !== undefined && allPts !== undefined) {
+      const current = Math.floor(donePts);
+      const target = Math.max(Math.floor(allPts), 1);
+      return { current, target };
+    }
     const current = Math.floor(this.activityMetrics?.pontos ?? 0);
     const pendingTasks =
       (this.processMetrics?.pendentes ?? 0) + (this.processMetrics?.incompletas ?? 0);
@@ -1138,6 +1159,15 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     return displayName || cnpj;
   }
 
+  /** Linha “Clientes atendidos” (Game4U): preferir título da entrega ao id. */
+  getClienteAtendidoDisplayName(cliente: CompanyDisplay): string {
+    const t = cliente.delivery_title?.trim();
+    if (t) {
+      return t;
+    }
+    return this.getCompanyDisplayName(cliente.cnpj) || cliente.cnpj;
+  }
+
   /**
    * % entregas no prazo na lista (vem da API como `porcEntregas` → `entrega` / `deliveryKpi.current`).
    */
@@ -1170,6 +1200,15 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     if (cnpjNumber) parts.push(`CNPJ: ${cnpjNumber}`);
     if (status) parts.push(`Status: ${status}`);
     return parts.join(' | ');
+  }
+
+  getClienteAtendidoTooltip(cliente: CompanyDisplay): string {
+    const base = this.getCompanyTooltip(cliente.cnpj);
+    const t = cliente.delivery_title?.trim();
+    if (t) {
+      return `${t} | ${base}`;
+    }
+    return base;
   }
 
   /**

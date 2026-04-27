@@ -19,7 +19,7 @@ export class C4uMonthlyPointsGoalProgressComponent {
   readonly unit = 'pts';
 
   private readonly fallbackHelp =
-    'Pontos conquistados no mês selecionado no painel. A meta provisória soma processos pendentes e incompletos do action_log e multiplica por 3 (mesma regra das atividades); em seguida será calculada a partir das tarefas pendentes no Supabase.';
+    'Atingido: pontos de user-actions em status DONE no período do filtro. Meta: soma dos pontos de user-actions em todos os status no mesmo período (dados Game4U). Sem integração Game4U, a meta provisória usa processos pendentes/incompletos do action_log × 3.';
 
   get resolvedHelpDescription(): string {
     const t = this.helpDescription?.trim();

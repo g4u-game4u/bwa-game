@@ -26,8 +26,8 @@ export const environment = {
   gestorTeamCode: process.env['GESTOR_TEAM_CODE'] || process.env['gestor_team_code'] || 'FkmdnFU',
   diretorTeamCode: process.env['DIRETOR_TEAM_CODE'] || process.env['diretor_team_code'] || 'FkmdhZ9',
 
-  // Supabase (companies / Carteira)
-  supabaseUrl: process.env['SUPABASE_URL'] || process.env['supabase_url'] || '',
+  // Supabase (companies / Carteira) — URL vazia no bundle (sem projeto remoto injetado aqui).
+  supabaseUrl: '',
   supabaseAnonKey: process.env['SUPABASE_ANON_KEY'] || process.env['supabase_anon_key'] || '',
   supabaseServiceRoleKey: (
     process.env['SUPABASE_SERVICE_ROLE_KEY'] ||
@@ -46,10 +46,7 @@ export const environment = {
   supabaseUseMock:
     process.env['SUPABASE_USE_MOCK'] === 'true' ||
     process.env['supabase_use_mock'] === 'true' ||
-    !(
-      (process.env['SUPABASE_URL'] || process.env['supabase_url'] || '').trim() &&
-      (process.env['SUPABASE_ANON_KEY'] || process.env['supabase_anon_key'] || '').trim()
-    ),
+    !(process.env['SUPABASE_ANON_KEY'] || process.env['supabase_anon_key'] || '').trim(),
 
   supabaseMockFeedAllUsers:
     process.env['SUPABASE_MOCK_FEED_ALL_USERS'] !== 'false' &&

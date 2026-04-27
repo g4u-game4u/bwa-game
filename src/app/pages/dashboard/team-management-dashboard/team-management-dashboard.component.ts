@@ -2539,6 +2539,14 @@ private calculateCollaboratorTotals(memberData: Array<{
     return displayName || cnpj;
   }
 
+  getClienteAtendidoDisplayName(cliente: CompanyDisplay): string {
+    const t = cliente.delivery_title?.trim();
+    if (t) {
+      return t;
+    }
+    return this.getCompanyDisplayName(cliente.cnpj) || cliente.cnpj;
+  }
+
   getCompanyStatus(cnpj: string): string {
     return this.cnpjStatusMap.get(cnpj) || '';
   }
@@ -2554,7 +2562,7 @@ private calculateCollaboratorTotals(memberData: Array<{
     this.selectedCarteiraCompany = company;
     this.isCompanyCarteiraDetailModalOpen = true;
     this.focusedElementBeforeModal = document.activeElement as HTMLElement;
-    const companyName = this.getCompanyDisplayName(company.cnpj);
+    const companyName = this.getClienteAtendidoDisplayName(company);
     this.announceToScreenReader(`Abrindo detalhes de ${companyName}`);
   }
 
@@ -2562,8 +2570,8 @@ private calculateCollaboratorTotals(memberData: Array<{
    * Handle company carteira detail modal close
    */
   onCompanyCarteiraDetailModalClosed(): void {
-    const companyName = this.selectedCarteiraCompany 
-      ? this.getCompanyDisplayName(this.selectedCarteiraCompany.cnpj) 
+    const companyName = this.selectedCarteiraCompany
+      ? this.getClienteAtendidoDisplayName(this.selectedCarteiraCompany)
       : 'empresa';
     this.isCompanyCarteiraDetailModalOpen = false;
     this.selectedCarteiraCompany = null;
@@ -2863,9 +2871,16 @@ private calculateCollaboratorTotals(memberData: Array<{
   }
 
   /**
-   * Pontos do período (soma da equipe ou do colaborador) vs meta provisória a partir de processos pendentes/incompletos × pts/atividade.
+   * Circular “Pontos no mês”: atingido = pontos só em DONE; meta = soma em todos os status (Game4U). Sem Game4U: meta provisória action_log.
    */
   get monthlyPointsProgressData(): { current: number; target: number } {
+    const donePts = this.teamActivityMetrics?.pontosDone;
+    const allPts = this.teamActivityMetrics?.pontosTodosStatus;
+    if (donePts !== undefined && allPts !== undefined) {
+      const current = Math.floor(donePts);
+      const target = Math.max(Math.floor(allPts), 1);
+      return { current, target };
+    }
     const current = Math.floor(this.teamActivityMetrics?.pontos ?? 0);
     const pendingTasks =
       (this.teamProcessMetrics?.pendentes ?? 0) + (this.teamProcessMetrics?.incompletas ?? 0);
@@ -2892,7 +2907,7 @@ private calculateCollaboratorTotals(memberData: Array<{
       : 'Pontos somados de todos os membros da equipe no período selecionado. ';
     return (
       scope +
-      'A meta provisória soma processos pendentes e incompletos do action_log e multiplica por 3 (mesma regra das atividades).'
+      'Com dados Game4U: a meta é a soma dos pontos das user-actions em qualquer status; o atingido é só os pontos em DONE. Sem Game4U, a meta provisória usa processos pendentes/incompletos do action_log × 3.'
     );
   }
 

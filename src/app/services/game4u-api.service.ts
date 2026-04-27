@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpHeaders, HttpParams } from '@angular/common/http';
 import { Observable, throwError } from 'rxjs';
-import { catchError } from 'rxjs/operators';
+import { shareReplay } from 'rxjs/operators';
 import { environment } from '../../environments/environment';
 import {
   Game4uDeliveryModel,
@@ -33,26 +33,26 @@ export class Game4uApiService {
     return this.baseUrl.length > 0;
   }
 
-  private useSupabaseOnHttpFailure(): boolean {
+  /**
+   * Supabase só quando **não** há `backend_url_base` (API `/game/*` indisponível).
+   * Com API configurada, nunca encaminhar falhas HTTP para o PostgREST — evita tráfego duplicado
+   * e 406 acidentais quando o bundle tem `SUPABASE_URL` mas o fallback de jogo não é o desejado.
+   */
+  private useSupabaseStandalone(): boolean {
     return (
-      environment.useGame4uSupabaseFallback === true && this.supabaseFallback.isAvailable()
+      !this.isConfigured() &&
+      environment.useGame4uSupabaseFallback === true &&
+      this.supabaseFallback.isAvailable()
     );
   }
 
-  private httpOrSupabase<T>(
-    http$: Observable<T>,
-    supabase$: Observable<T>,
-    label: string
-  ): Observable<T> {
-    return http$.pipe(
-      catchError(err => {
-        if (this.useSupabaseOnHttpFailure()) {
-          console.warn(`[Game4U] ${label}: HTTP falhou, usando Supabase.`, err);
-          return supabase$;
-        }
-        return throwError(() => err);
-      })
-    );
+  private shareGame4u<T>(source: Observable<T>): Observable<T> {
+    return source.pipe(shareReplay({ bufferSize: 1, refCount: true }));
+  }
+
+  /** GET `/game/*` com partilha entre várias subscrições (evita N× a mesma chamada). */
+  private httpOrSupabase<T>(http$: Observable<T>, _supabase$: Observable<T>, _label: string): Observable<T> {
+    return this.shareGame4u(http$);
   }
 
   /** Intervalo ISO para o mês calendário ou temporada ampla quando `month` é undefined. */
@@ -92,8 +92,8 @@ export class Game4uApiService {
 
   getGameStats(q: Game4uUserScopedQuery): Observable<Game4uUserActionStatsResponse> {
     if (!this.isConfigured()) {
-      if (this.useSupabaseOnHttpFailure()) {
-        return this.supabaseFallback.getGameStats(q);
+      if (this.useSupabaseStandalone()) {
+        return this.shareGame4u(this.supabaseFallback.getGameStats(q));
       }
       return throwError(
         () => new Error('[Game4U] stats: defina backend_url_base (ou GAME4U_SUPABASE_FALLBACK=true + Supabase).')
@@ -114,8 +114,8 @@ export class Game4uApiService {
     q: Game4uUserScopedQuery & { status?: Game4uUserActionStatus }
   ): Observable<Game4uUserActionModel[]> {
     if (!this.isConfigured()) {
-      if (this.useSupabaseOnHttpFailure()) {
-        return this.supabaseFallback.getGameActions(q);
+      if (this.useSupabaseStandalone()) {
+        return this.shareGame4u(this.supabaseFallback.getGameActions(q));
       }
       return throwError(
         () => new Error('[Game4U] actions: defina backend_url_base (ou GAME4U_SUPABASE_FALLBACK=true + Supabase).')
@@ -136,8 +136,8 @@ export class Game4uApiService {
     q: Game4uUserScopedQuery & { status: Game4uDeliveryStatus }
   ): Observable<Game4uDeliveryModel[]> {
     if (!this.isConfigured()) {
-      if (this.useSupabaseOnHttpFailure()) {
-        return this.supabaseFallback.getGameDeliveries(q);
+      if (this.useSupabaseStandalone()) {
+        return this.shareGame4u(this.supabaseFallback.getGameDeliveries(q));
       }
       return throwError(
         () => new Error('[Game4U] deliveries: defina backend_url_base (ou GAME4U_SUPABASE_FALLBACK=true + Supabase).')
@@ -157,8 +157,8 @@ export class Game4uApiService {
 
   getGameTeamStats(q: Game4uTeamScopedQuery): Observable<Game4uUserActionStatsResponse> {
     if (!this.isConfigured()) {
-      if (this.useSupabaseOnHttpFailure()) {
-        return this.supabaseFallback.getGameTeamStats(q);
+      if (this.useSupabaseStandalone()) {
+        return this.shareGame4u(this.supabaseFallback.getGameTeamStats(q));
       }
       return throwError(
         () => new Error('[Game4U] team-stats: defina backend_url_base (ou GAME4U_SUPABASE_FALLBACK=true + Supabase).')
@@ -176,8 +176,8 @@ export class Game4uApiService {
     q: Game4uTeamScopedQuery & { status?: Game4uUserActionStatus }
   ): Observable<Game4uUserActionModel[]> {
     if (!this.isConfigured()) {
-      if (this.useSupabaseOnHttpFailure()) {
-        return this.supabaseFallback.getGameTeamActions(q);
+      if (this.useSupabaseStandalone()) {
+        return this.shareGame4u(this.supabaseFallback.getGameTeamActions(q));
       }
       return throwError(
         () => new Error('[Game4U] team-actions: defina backend_url_base (ou GAME4U_SUPABASE_FALLBACK=true + Supabase).')
@@ -199,8 +199,8 @@ export class Game4uApiService {
     q: Game4uTeamScopedQuery & { status: Game4uDeliveryStatus }
   ): Observable<Game4uDeliveryModel[]> {
     if (!this.isConfigured()) {
-      if (this.useSupabaseOnHttpFailure()) {
-        return this.supabaseFallback.getGameTeamDeliveries(q);
+      if (this.useSupabaseStandalone()) {
+        return this.shareGame4u(this.supabaseFallback.getGameTeamDeliveries(q));
       }
       return throwError(
         () =>

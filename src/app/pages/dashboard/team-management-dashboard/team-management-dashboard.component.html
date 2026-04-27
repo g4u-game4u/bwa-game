@@ -348,12 +348,12 @@
                        (click)="openCompanyDetailModal(cliente)"
                        role="button"
                        tabindex="0"
-                       [attr.aria-label]="'Ver detalhes de ' + getCompanyDisplayName(cliente.cnpj)"
+                       [attr.aria-label]="'Ver detalhes de ' + getClienteAtendidoDisplayName(cliente)"
                        (keydown.enter)="openCompanyDetailModal(cliente)"
                        (keydown.space)="openCompanyDetailModal(cliente); $event.preventDefault()">
                     <div class="carteira-item-info">
                       <i class="ri-building-line"></i>
-                      <span class="carteira-cnpj">{{ getCompanyDisplayName(cliente.cnpj) }}</span>
+                      <span class="carteira-cnpj">{{ getClienteAtendidoDisplayName(cliente) }}</span>
                       <span class="status-badge" *ngIf="getCompanyStatus(cliente.cnpj)" 
                             [class.active]="isCompanyActive(cliente.cnpj)"
                             [class.inactive]="!isCompanyActive(cliente.cnpj)">

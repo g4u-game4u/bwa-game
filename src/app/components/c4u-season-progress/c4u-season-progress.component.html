@@ -5,6 +5,7 @@
   </div>
 
   <div class="progress-rows">
+    <!-- Indicador Metas (progresso da temporada) — oculto por solicitação
     <div class="progress-row">
       <div class="row-left">
         <i class="ri-focus-3-line icon metas"></i>
@@ -13,7 +14,9 @@
       </div>
       <span class="value">{{ progress.metas.current }} / {{ progress.metas.target }}</span>
     </div>
+    -->
 
+    <!-- Indicador "Clientes" (carteira) — oculto; no lugar, "Clientes atendidos" usa delivery_stats.total.
     <div class="progress-row">
       <div class="row-left">
         <i class="ri-building-line icon clientes"></i>
@@ -21,6 +24,19 @@
         <c4u-info-button infoKey="clientes" position="top"></c4u-info-button>
       </div>
       <span class="value">{{ progress.clientes | number:'1.0-0':'pt-BR' }}</span>
+    </div>
+    -->
+
+    <div class="progress-row" *ngIf="progress.deliveryStatsTotal !== undefined">
+      <div class="row-left">
+        <i class="ri-building-line icon clientes"></i>
+        <span class="label">Clientes atendidos</span>
+        <c4u-info-button
+          [infoKey]="''"
+          [customText]="'Valor vindo de delivery_stats.total na resposta /game/stats (período do filtro).'"
+          position="top"></c4u-info-button>
+      </div>
+      <span class="value">{{ progress.deliveryStatsTotal | number:'1.0-0':'pt-BR' }}</span>
     </div>
 
     <div class="progress-row">

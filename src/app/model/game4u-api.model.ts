@@ -44,9 +44,20 @@ export interface Game4uActionStatsNested {
   DONE?: Game4uActionStatBucket;
   done?: Game4uActionStatBucket;
   PENDING?: Game4uActionStatBucket;
+  pending?: Game4uActionStatBucket;
   DOING?: Game4uActionStatBucket;
   DELIVERED?: Game4uActionStatBucket;
   PAID?: Game4uActionStatBucket;
+}
+
+/** Agregados de entregas em `/game/stats` (ex.: `delivery_stats.total`). */
+export interface Game4uDeliveryStatsNested {
+  total?: number;
+  TOTAL?: number;
+  PENDING?: number;
+  INCOMPLETE?: number;
+  DELIVERED?: number;
+  [key: string]: unknown;
 }
 
 export interface Game4uUserActionStatsResponse {
@@ -56,6 +67,7 @@ export interface Game4uUserActionStatsResponse {
   total_blocked_points: number;
   /** Quando presente, o painel usa `DONE`/`done` para tarefas e pontos “finalizados”. */
   action_stats?: Game4uActionStatsNested;
+  delivery_stats?: Game4uDeliveryStatsNested;
   total_cancelled_points?: number;
   cancelled_actions_count?: number;
 }
@@ -87,6 +99,8 @@ export interface Game4uDeliveryModel {
   created_at?: string;
   status?: Game4uDeliveryStatus;
   finished_at?: string;
+  /** Título humano do processo/entrega (preferir em UI em vez de `id`). */
+  delivery_title?: string;
   title?: string;
   [key: string]: unknown;
 }
@@ -100,7 +114,7 @@ function supabaseGameFallbackCredentials(): boolean {
   return url.length > 0 && key.length > 0;
 }
 
-/** True quando dá para ler `/game/*` via HTTP (`backend_url_base`), ou Supabase só se o fallback estiver explícito. */
+/** True quando dá para ler `/game/*` via HTTP (`backend_url_base`), ou só Supabase se não houver base e `GAME4U_SUPABASE_FALLBACK=true`. */
 export function isGame4uDataEnabled(): boolean {
   if (environment.useGame4uApi === false) {
     return false;

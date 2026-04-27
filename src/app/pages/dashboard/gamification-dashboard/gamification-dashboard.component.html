@@ -129,7 +129,8 @@
       <c4u-dashboard-navigation></c4u-dashboard-navigation>
       <div class="header-spacer"></div>
       <c4u-seletor-mes 
-        [playerId]="getPlayerId()" 
+        [playerId]="getPlayerId()"
+        [showTodaTemporadaButton]="false"
         (onSelectedMonth)="onMonthChange($event)">
       </c4u-seletor-mes>
       <button 
@@ -222,7 +223,7 @@
           Clientes atendidos
           <c4u-info-button 
             [infoKey]="''"
-            [customText]="'Empresas em que houve participação (registros no action_log) no mês ou período selecionado no painel.'"
+            [customText]="'Empresas com pelo menos uma ação no mês ou período selecionado no painel (no Game4U, pela data de competência em delivery_id).'"
             position="bottom">
           </c4u-info-button>
         </h3>
@@ -250,10 +251,10 @@
         <c4u-shimmer *ngIf="isLoadingParticipacao"></c4u-shimmer>
 
         <div *ngIf="!isLoadingParticipacao && participacaoClientes.length > 0" class="carteira-list">
-          <div *ngFor="let cliente of participacaoClientes" class="carteira-item" role="article" (click)="openCompanyDetailModal(cliente)" style="cursor: pointer;" [title]="getCompanyTooltip(cliente.cnpj)">
+          <div *ngFor="let cliente of participacaoClientes" class="carteira-item" role="article" (click)="openCompanyDetailModal(cliente)" style="cursor: pointer;" [title]="getClienteAtendidoTooltip(cliente)">
             <div class="carteira-item-info">
               <i class="ri-building-line"></i>
-              <span class="carteira-cnpj">{{ getCompanyDisplayName(cliente.cnpj) || cliente.cnpj }}</span>
+              <span class="carteira-cnpj">{{ getClienteAtendidoDisplayName(cliente) }}</span>
               <span class="status-badge" *ngIf="getCompanyStatus(cliente.cnpj)" 
                     [class.active]="isCompanyActive(cliente.cnpj)"
                     [class.inactive]="!isCompanyActive(cliente.cnpj)">

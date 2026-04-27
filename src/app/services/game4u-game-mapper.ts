@@ -19,6 +19,13 @@ import { PONTOS_POR_ATIVIDADE_FINALIZADA_ACTION_LOG } from '@app/constants/ponto
 const FINAL: Game4uUserActionStatus[] = ['DONE', 'DELIVERED', 'PAID'];
 const OPEN: Game4uUserActionStatus[] = ['PENDING', 'DOING'];
 
+function readDeliveryTitle(d: Game4uDeliveryModel): string | undefined {
+  const dt = d.delivery_title != null ? String(d.delivery_title).trim() : '';
+  if (dt) return dt;
+  const t = d.title != null ? String(d.title).trim() : '';
+  return t || undefined;
+}
+
 /** Bucket `DONE` / `done` em `action_stats` (resposta `/game/stats`). */
 export function getGame4uActionStatsDone(stats: Game4uUserActionStatsResponse): {
   count: number;
@@ -30,6 +37,85 @@ export function getGame4uActionStatsDone(stats: Game4uUserActionStatsResponse): 
     count: Math.floor(Number(bucket?.count) || 0),
     totalPoints: Math.floor(Number(bucket?.total_points) || 0)
   };
+}
+
+/** `delivery_stats.total` na resposta `/game/stats`; `null` se ausente. */
+export function readGame4uDeliveryStatsTotal(stats: Game4uUserActionStatsResponse): number | null {
+  const ds = stats.delivery_stats;
+  if (ds == null || typeof ds !== 'object') {
+    return null;
+  }
+  const o = ds as Record<string, unknown>;
+  const v = o['total'] ?? o['TOTAL'];
+  if (v === undefined || v === null) {
+    return null;
+  }
+  const n = Math.floor(Number(v) || 0);
+  return Number.isFinite(n) ? n : null;
+}
+
+/** Pontos do bucket `PENDING` / `pending` em `action_stats` (`/game/stats`). */
+export function getGame4uActionStatsPendingTotalPoints(stats: Game4uUserActionStatsResponse): number {
+  const a = stats.action_stats;
+  if (!a) {
+    return 0;
+  }
+  const bucket = a.PENDING ?? a.pending;
+  return Math.floor(Number(bucket?.total_points) || 0);
+}
+
+/**
+ * Circular “pontos no mês” a partir de `action_stats`: atingido = done.total_points;
+ * meta = pending.total_points + done.total_points.
+ */
+export function getGame4uMonthlyPointsCircularFromActionStats(
+  stats: Game4uUserActionStatsResponse
+): { pontosDone: number; pontosTodosStatus: number; finalizadas: number } | null {
+  if (stats.action_stats == null) {
+    return null;
+  }
+  const done = getGame4uActionStatsDone(stats);
+  const pendingPts = getGame4uActionStatsPendingTotalPoints(stats);
+  return {
+    pontosDone: done.totalPoints,
+    pontosTodosStatus: pendingPts + done.totalPoints,
+    finalizadas: done.count
+  };
+}
+
+function sumActionStatBucketPoints(actionStats: Record<string, unknown>): number {
+  let s = 0;
+  for (const [key, v] of Object.entries(actionStats)) {
+    if (key === 'total_points' || key === 'total_blocked_points') continue;
+    if (v && typeof v === 'object' && v !== null && 'total_points' in v) {
+      s += Number((v as { total_points?: number }).total_points) || 0;
+    }
+  }
+  return Math.floor(s);
+}
+
+/** Soma pontos de user-actions em todos os status: buckets em `action_stats`, filas `stats`, ou totais na raiz. */
+export function getGame4uStatsTotalPointsAllStatuses(stats: Game4uUserActionStatsResponse): number {
+  const a = stats.action_stats;
+  if (a) {
+    const fromBuckets = sumActionStatBucketPoints(a as Record<string, unknown>);
+    if (fromBuckets > 0) {
+      return fromBuckets;
+    }
+    const tp = Number(a.total_points) || 0;
+    const tbp = Number(a.total_blocked_points) || 0;
+    if (tp || tbp) {
+      return Math.floor(tp + tbp);
+    }
+  }
+  const rows = stats.stats || [];
+  const sumRows = rows.reduce((acc, r) => acc + (Number(r.total_points) || 0), 0);
+  if (rows.length > 0) {
+    return Math.floor(sumRows);
+  }
+  return Math.floor(
+    (Number(stats.total_points) || 0) + (Number(stats.total_blocked_points) || 0)
+  );
 }
 
 function aggregateBlockedPoints(stats: Game4uUserActionStatsResponse): number {
@@ -69,18 +155,25 @@ export function mapGame4uStatsToTeamSeasonPoints(stats: Game4uUserActionStatsRes
 
 export function mapGame4uStatsToActivityMetrics(stats: Game4uUserActionStatsResponse): ActivityMetrics {
   const done = getGame4uActionStatsDone(stats);
+  const pontosTodosStatus = getGame4uStatsTotalPointsAllStatuses(stats);
   if (stats.action_stats != null) {
     return {
       pendentes: 0,
       emExecucao: 0,
       finalizadas: done.count,
-      pontos: done.totalPoints
+      pontos: done.totalPoints,
+      pontosDone: done.totalPoints,
+      pontosTodosStatus
     };
   }
   let finalizadas = 0;
+  let pontosDone = 0;
   for (const row of stats.stats || []) {
     if (FINAL.includes(row.status)) {
       finalizadas += Math.floor(Number(row.count) || 0);
+    }
+    if (row.status === 'DONE') {
+      pontosDone += Math.floor(Number(row.total_points) || 0);
     }
   }
   const pontos = Math.floor(Number(stats.total_points) || 0);
@@ -88,7 +181,9 @@ export function mapGame4uStatsToActivityMetrics(stats: Game4uUserActionStatsResp
     pendentes: 0,
     emExecucao: 0,
     finalizadas,
-    pontos
+    pontos,
+    pontosDone: pontosDone || done.totalPoints,
+    pontosTodosStatus: pontosTodosStatus > 0 ? pontosTodosStatus : pontos + Math.floor(Number(stats.total_blocked_points) || 0)
   };
 }
 
@@ -137,6 +232,77 @@ export function filterGame4uActionsByMonth(
   });
 }
 
+/**
+ * `delivery_id` no formato `{empresa}-{YYYY-MM-DD}` (ex.: `1079-2025-12-31`): data final é a competência.
+ * Retorna ano e mês (0–11) da competência, ou null se o sufixo não for parseável.
+ */
+export function parseCompetenceYearMonthFromDeliveryId(deliveryId: unknown): { y: number; m: number } | null {
+  const s = asString(deliveryId).trim();
+  const match = s.match(/^.*-(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) {
+    return null;
+  }
+  const y = Number(match[1]);
+  const mo = Number(match[2]);
+  const d = Number(match[3]);
+  if (!Number.isFinite(y) || mo < 1 || mo > 12 || d < 1 || d > 31) {
+    return null;
+  }
+  return { y, m: mo - 1 };
+}
+
+/**
+ * Filtra user-actions cuja competência (em `delivery_id`) cai no mês do dashboard.
+ * Sem sufixo `...-YYYY-MM-DD`, mantém o mesmo critério de `filterGame4uActionsByMonth` (`created_at`).
+ */
+export function filterGame4uActionsByCompetenceMonth(
+  actions: Game4uUserActionModel[],
+  month?: Date
+): Game4uUserActionModel[] {
+  if (!month) {
+    return actions;
+  }
+  const ty = month.getFullYear();
+  const tm = month.getMonth();
+  return actions.filter(a => {
+    const ym = parseCompetenceYearMonthFromDeliveryId(a.delivery_id);
+    if (ym) {
+      return ym.y === ty && ym.m === tm;
+    }
+    const start = new Date(ty, tm, 1, 0, 0, 0, 0).getTime();
+    const end = new Date(ty, tm + 1, 0, 23, 59, 59, 999).getTime();
+    const t = Date.parse(String(a.created_at));
+    return !Number.isNaN(t) && t >= start && t <= end;
+  });
+}
+
+/** Pontos do circular do mês a partir de user-actions já filtradas (ex.: por competência). Alinhado a `getGame4uActionStatsDone`: só DONE conta como atingido. */
+export function computeMonthlyPointsFromGame4uActions(actions: Game4uUserActionModel[]): {
+  finalizadas: number;
+  pontos: number;
+  pontosDone: number;
+  pontosTodosStatus: number;
+} {
+  let pontosDone = 0;
+  let pontosTodosStatus = 0;
+  let finalizadas = 0;
+  for (const a of actions) {
+    const pts = Math.floor(Number(a.points) || 0);
+    pontosTodosStatus += pts;
+    const st = String(a.status ?? '').toUpperCase();
+    if (st === 'DONE') {
+      pontosDone += pts;
+      finalizadas += 1;
+    }
+  }
+  return {
+    finalizadas,
+    pontos: pontosDone,
+    pontosDone,
+    pontosTodosStatus
+  };
+}
+
 export function mapGame4uActionsToProcessMetrics(actions: Game4uUserActionModel[]): ProcessMetrics {
   const byDelivery = new Map<string, Set<Game4uUserActionStatus>>();
 
@@ -173,6 +339,7 @@ export function mapGame4uActionsToActivityList(
   return filterGame4uActionsByMonth(actions, month).map(a => ({
     id: a.id,
     title: (a.action_title as string) || 'Ação',
+    delivery_title: (a.delivery_title as string) || undefined,
     points: Math.floor(Number(a.points) || PONTOS_POR_ATIVIDADE_FINALIZADA_ACTION_LOG),
     created: Date.parse(String(a.created_at)) || 0,
     player: asString(a.user_email),
@@ -228,15 +395,30 @@ export function mapGame4uDeliveriesToCompanyDisplay(deliveries: Game4uDeliveryMo
 /** Une listas por status (mesmo delivery pode aparecer em mais de uma consulta). */
 export function mergeGame4uDeliveryParticipation(
   ...lists: Game4uDeliveryModel[][]
-): { cnpj: string; actionCount: number }[] {
-  const byId = new Map<string, number>();
+): { cnpj: string; actionCount: number; delivery_title?: string }[] {
+  const byId = new Map<string, { actionCount: number; delivery_title?: string }>();
   for (const list of lists) {
     for (const d of list) {
       const id = String(d.id);
-      byId.set(id, (byId.get(id) || 0) + 1);
+      const cur = byId.get(id) || { actionCount: 0 };
+      cur.actionCount += 1;
+      const label = readDeliveryTitle(d);
+      if (label) {
+        cur.delivery_title = label;
+      }
+      byId.set(id, cur);
     }
   }
-  return [...byId.entries()].map(([cnpj, actionCount]) => ({ cnpj, actionCount }));
+  return [...byId.entries()].map(([cnpj, v]) => {
+    const row: { cnpj: string; actionCount: number; delivery_title?: string } = {
+      cnpj,
+      actionCount: v.actionCount
+    };
+    if (v.delivery_title) {
+      row.delivery_title = v.delivery_title;
+    }
+    return row;
+  });
 }
 
 export function mergeGame4uTeamDeliveryRows(
