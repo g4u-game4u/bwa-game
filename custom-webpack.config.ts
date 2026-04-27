@@ -19,12 +19,17 @@ const gamificacaoApiToken =
     getEnv('gamificacao_api_token') ||
     '';
 
-const backendUrlBase =
+const defaultBackendBase = 'https://g4u-api-bwa.onrender.com/api';
+
+const rawBackendFromEnv =
     getEnv('G4U_API_BASE') ||
     getEnv('g4u_api_base') ||
     getEnv('BACKEND_URL_BASE') ||
     getEnv('backend_url_base') ||
     '';
+
+/** API base injetada no bundle (DefinePlugin); fallback alinhado a `defaultBackendBase`. */
+const backendUrlBase = (rawBackendFromEnv.trim() || defaultBackendBase).replace(/\/+$/, '');
 
 if (!gamificacaoApiToken && process.env['NODE_ENV'] !== 'production') {
     console.warn(
