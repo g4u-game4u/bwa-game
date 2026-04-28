@@ -909,7 +909,13 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
         pendentes: metrics.activity.pendentes,
         emExecucao: metrics.activity.emExecucao,
         finalizadas: metrics.activity.finalizadas,
-        pontos: Math.floor(metrics.activity.pontos)
+        pontos: Math.floor(metrics.activity.pontos),
+        ...('pontosDone' in metrics.activity &&
+        'pontosTodosStatus' in metrics.activity &&
+        metrics.activity.pontosDone !== undefined &&
+        metrics.activity.pontosTodosStatus !== undefined
+          ? { pontosDone: metrics.activity.pontosDone, pontosTodosStatus: metrics.activity.pontosTodosStatus }
+          : {})
       };
       
       this.teamProcessMetrics = {
@@ -1792,7 +1798,13 @@ private calculateCollaboratorTotals(memberData: Array<{
         pendentes: 0,
         emExecucao: 0,
         finalizadas: metrics.finalizadas,
-        pontos: Math.floor(metrics.pontos)
+        pontos: Math.floor(metrics.pontos),
+        ...('pontosDone' in metrics &&
+        'pontosTodosStatus' in metrics &&
+        metrics.pontosDone !== undefined &&
+        metrics.pontosTodosStatus !== undefined
+          ? { pontosDone: metrics.pontosDone, pontosTodosStatus: metrics.pontosTodosStatus }
+          : {})
       };
 
       this.teamProcessMetrics = {
@@ -2781,7 +2793,7 @@ private calculateCollaboratorTotals(memberData: Array<{
               percentage: Math.min((mediaEntregas / superTargetEntregas) * 100, 100)
             });
           } else {
-            // No entrega data available - show as missing with pink
+            // No entrega data available - show as missing with gray
             teamKPIs.push({
               id: 'entregas-prazo',
               label: 'Entregas no Prazo',
@@ -2789,7 +2801,7 @@ private calculateCollaboratorTotals(memberData: Array<{
               target: 90,
               superTarget: 100,
               unit: '%',
-              color: 'pink',
+              color: 'gray',
               percentage: 0,
               isMissing: true
             });
@@ -2798,7 +2810,7 @@ private calculateCollaboratorTotals(memberData: Array<{
           console.log('✅ Team KPIs loaded (OPTIMIZED - 2 API calls instead of', this.teamMemberIds.length, ')');
         } catch (error) {
           console.error('Error loading team entrega KPI:', error);
-          // API error - show as missing with pink
+          // API error - show as missing with gray
           teamKPIs.push({
             id: 'entregas-prazo',
             label: 'Entregas no Prazo',
@@ -2806,7 +2818,7 @@ private calculateCollaboratorTotals(memberData: Array<{
             target: 90,
             superTarget: 100,
             unit: '%',
-            color: 'pink',
+            color: 'gray',
             percentage: 0,
             isMissing: true
           });
@@ -2880,7 +2892,7 @@ private calculateCollaboratorTotals(memberData: Array<{
     return { current, target };
   }
 
-  get monthlyPointsGoalColor(): 'red' | 'yellow' | 'green' | 'pink' {
+  get monthlyPointsGoalColor(): 'red' | 'yellow' | 'green' | 'gray' {
     const { current, target } = this.monthlyPointsProgressData;
     const superGoal = Math.ceil(target * 1.5);
     return this.kpiService.getKPIColorByGoals(current, target, superGoal);
@@ -2896,7 +2908,7 @@ private calculateCollaboratorTotals(memberData: Array<{
       : 'Mostra a soma dos pontos de toda a equipe no período do filtro. ';
     return (
       scope +
-      'O que sobe no indicador são só as atividades já concluídas; a meta é o total planejado para o período (incluindo o que ainda falta fechar). Se a gamificação não estiver conectada ao painel, a meta é uma estimativa a partir do que ainda está pendente.'
+      'O que sobe no indicador são só as atividades já concluídas; a meta é o total planejado para o período (incluindo o que ainda falta fechar)'
     );
   }
 

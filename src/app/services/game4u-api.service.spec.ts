@@ -2,6 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { HttpClientTestingModule, HttpTestingController } from '@angular/common/http/testing';
 import { Game4uApiService } from './game4u-api.service';
 import { Game4uSupabaseFallbackService } from './game4u-supabase-fallback.service';
+import { SeasonDatesService } from './season-dates.service';
 import { environment } from '../../environments/environment';
 
 describe('Game4uApiService', () => {
@@ -13,11 +14,21 @@ describe('Game4uApiService', () => {
     const fb = jasmine.createSpyObj('Game4uSupabaseFallbackService', ['isAvailable', 'getGameStats']);
     fb.isAvailable.and.returnValue(false);
 
+    const seasonDates = jasmine.createSpyObj('SeasonDatesService', ['getSeasonDates', 'getCachedSeasonBounds']);
+    seasonDates.getSeasonDates.and.returnValue(
+      Promise.resolve({
+        start: new Date('2024-03-01T03:00:00.000Z'),
+        end: new Date('2024-06-30T03:00:00.000Z')
+      })
+    );
+    seasonDates.getCachedSeasonBounds.and.returnValue(null);
+
     TestBed.configureTestingModule({
       imports: [HttpClientTestingModule],
       providers: [
         Game4uApiService,
-        { provide: Game4uSupabaseFallbackService, useValue: fb }
+        { provide: Game4uSupabaseFallbackService, useValue: fb },
+        { provide: SeasonDatesService, useValue: seasonDates }
       ]
     });
     service = TestBed.inject(Game4uApiService);

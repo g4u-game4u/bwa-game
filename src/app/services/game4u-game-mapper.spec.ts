@@ -1,4 +1,5 @@
 import {
+  computeGame4uDrPrazoMetaBoost,
   computeMonthlyPointsFromGame4uActions,
   filterGame4uActionsByCompetenceMonth,
   filterGame4uActionsByMonth,
@@ -7,6 +8,7 @@ import {
   isGame4uUserActionFinalizedStatus,
   readGame4uDeliveryStatsTotal,
   parseCompetenceYearMonthFromDeliveryId,
+  parseExtraDrPrazoToUtcMs,
   mapGame4uActionsToActivityList,
   mapGame4uActionsToProcessMetrics,
   mapGame4uStatsToActivityMetrics,
@@ -167,17 +169,17 @@ describe('game4u-game-mapper', () => {
           id: '1',
           points: 1,
           status: 'DONE',
-          created_at: '2024-05-10T12:00:00.000Z'
+          created_at: '2024-05-15T12:00:00.000Z'
         },
         {
           id: '2',
           points: 1,
           status: 'DONE',
-          created_at: '2024-06-01T12:00:00.000Z'
+          created_at: '2024-06-15T12:00:00.000Z'
         }
       ];
       const out = filterGame4uActionsByMonth(actions, month);
-      expect(out.map(a => a.id)).toEqual(['1']);
+      expect(out.map(a => a.id)).toEqual(['2']);
     });
   });
 
@@ -189,6 +191,46 @@ describe('game4u-game-mapper', () => {
     it('returns null when suffix is not a date', () => {
       expect(parseCompetenceYearMonthFromDeliveryId('1079-2025-13-01')).toBeNull();
       expect(parseCompetenceYearMonthFromDeliveryId('plain')).toBeNull();
+    });
+  });
+
+  describe('parseExtraDrPrazoToUtcMs / computeGame4uDrPrazoMetaBoost', () => {
+    it('parses ISO and Mongo $date for dr_prazo', () => {
+      const iso = parseExtraDrPrazoToUtcMs('2024-03-15T12:00:00.000Z');
+      expect(iso).toBe(Date.parse('2024-03-15T12:00:00.000Z'));
+      const mongo = parseExtraDrPrazoToUtcMs({ $date: '2024-03-20T00:00:00.000Z' });
+      expect(mongo).toBe(Date.parse('2024-03-20T00:00:00.000Z'));
+    });
+
+    it('adds meta boost only for dr_prazo in filter month outside competence', () => {
+      const month = new Date(2024, 2, 1);
+      const actions: Game4uUserActionModel[] = [
+        {
+          id: 'in-comp',
+          points: 5,
+          status: 'DONE',
+          created_at: '2024-03-01T00:00:00.000Z',
+          delivery_id: '1079-2024-03-31',
+          extra: { dr_prazo: '2024-03-10T00:00:00.000Z' }
+        },
+        {
+          id: 'extra-only',
+          points: 12,
+          status: 'PENDING',
+          created_at: '2024-02-01T00:00:00.000Z',
+          delivery_id: 'no-date-suffix',
+          extra: { dr_prazo: '2024-03-15T00:00:00.000Z' }
+        },
+        {
+          id: 'wrong-month',
+          points: 99,
+          status: 'PENDING',
+          created_at: '2024-02-01T00:00:00.000Z',
+          delivery_id: 'no-date-suffix',
+          extra: { dr_prazo: '2024-07-15T15:00:00.000Z' }
+        }
+      ];
+      expect(computeGame4uDrPrazoMetaBoost(actions, month)).toBe(12);
     });
   });
 

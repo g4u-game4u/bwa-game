@@ -270,8 +270,7 @@
                 title="A carregar percentual de entregas no prazo (gamificação)…">…</span>
               <span
                 *ngIf="!isLoadingParticipacaoKpi"
-                class="carteira-entrega"
-                [class.carteira-entrega--na]="getListaEntregaPercent(cliente) === null">
+                [ngClass]="listaEntregaPrazoClasses(cliente)">
                 <ng-container *ngIf="getListaEntregaPercent(cliente) !== null; else entregaNaParticipacao">
                   {{ getListaEntregaPercent(cliente)! | number:'1.0-2':'pt-BR' }}%
                 </ng-container>

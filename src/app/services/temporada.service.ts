@@ -3,9 +3,7 @@ import {TemporadaDashboard} from '../model/temporadaDashboard.model';
 import {ApiProvider} from "../providers/api.provider";
 import {TIPO_CONSULTA_TIME} from "@app/pages/dashboard/dashboard.component";
 import {environment} from '../../environments/environment';
-
-/** Início do período do season component para `/game/stats` (fixo). */
-const SEASON_STATS_RANGE_START_ISO = '2026-04-01T00:00:00.000Z';
+import { SeasonDatesService } from './season-dates.service';
 
 @Injectable({
   providedIn: 'root'
@@ -15,16 +13,18 @@ export class TemporadaService {
   basePath = '/game/stats';
 
   constructor(
-    private api: ApiProvider
+    private api: ApiProvider,
+    private seasonDatesService: SeasonDatesService
   ) {
   }
 
-  /** Intervalo exclusivo do card de temporada: 2026-04-01 UTC → agora. */
-  private getSeasonStatsRangeISO(): { start: string; end: string } {
-    return {
-      start: SEASON_STATS_RANGE_START_ISO,
-      end: new Date().toISOString()
-    };
+  /** Intervalo do card de temporada: datas da campanha ativa (GET `/campaign`). */
+  private async getSeasonStatsRangeISO(): Promise<{ start: string; end: string }> {
+    const [start, end] = await Promise.all([
+      this.seasonDatesService.getSeasonStartDateISO(),
+      this.seasonDatesService.getSeasonEndDateISO()
+    ]);
+    return { start, end };
   }
 
   private countClientesFromDeliveryStats(deliveryStats: unknown): number {
@@ -42,14 +42,14 @@ export class TemporadaService {
   public async getDadosTemporadaDashboard(id: number, tipo: number): Promise<TemporadaDashboard> {
     // Check if backend_url_base is configured - if not, return empty data
     // This prevents calls to non-existent endpoints in production
-    if ( environment.backend_url_base ) {
+    if (!environment.backend_url_base) {
       console.warn('⚠️ TemporadaService: backend_url_base not configured, returning empty data');
       return this.getEmptyTemporadaDashboard();
     }
 
     try {
       let url = this.basePath;
-      const { start: startDateISO, end: endDateISO } = this.getSeasonStatsRangeISO();
+      const { start: startDateISO, end: endDateISO } = await this.getSeasonStatsRangeISO();
       let queryParams =
         '?start=' + encodeURIComponent(startDateISO) + '&end=' + encodeURIComponent(endDateISO);
 

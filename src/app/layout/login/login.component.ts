@@ -14,6 +14,7 @@ import { LogoService } from '@services/logo.service';
 import { SessionTimeoutService } from '@services/session-timeout.service';
 import { CampaignService } from '@services/campaign.service';
 import { Subscription } from 'rxjs';
+import { parseFragmentParams } from '../../utils/url-fragment-params';
 
 @Component({
   selector: 'app-login',
@@ -63,7 +64,10 @@ export class LoginComponent implements OnInit, OnDestroy {
   resetFlow: 'login' | 'reset-request' | 'reset-confirm' | 'reset-from-email' = 'login';
   resetEmail: string = '';
   resetToken: string = '';
+  /** Fluxo legado (query): par `user`. */
   resetUserId: string = '';
+  /** Link do e-mail (query): `client_id`. */
+  resetClientId: string = '';
 
   form: FormGroup = new FormGroup({
     username: new FormControl('', Validators.required),
@@ -129,14 +133,32 @@ export class LoginComponent implements OnInit, OnDestroy {
         this.toastService.warning(this.sessionExpiredMessage);
       }
       
-      // Check for password reset token from email link
-      const token = this.route.snapshot.queryParamMap.get('token');
-      const userId = this.route.snapshot.queryParamMap.get('user');
-      
-      if (token && userId) {
-        console.log('🔐 Password reset link detected:', { token, userId });
-        this.resetToken = token;
-        this.resetUserId = userId;
+      // Link do e-mail: ?client_id=...#access_token=... (ou legado ?token=&user=)
+      const clientIdFromQuery = this.route.snapshot.queryParamMap.get('client_id');
+      const fragment =
+        this.route.snapshot.fragment ??
+        (typeof window !== 'undefined' ? window.location.hash.replace(/^#/, '') : '');
+      const hashParams = parseFragmentParams(fragment);
+      const accessToken = hashParams['access_token']?.trim();
+
+      const legacyToken = this.route.snapshot.queryParamMap.get('token');
+      const legacyUserId = this.route.snapshot.queryParamMap.get('user');
+
+      if (accessToken) {
+        console.log('🔐 Password reset link (access_token no fragmento)', {
+          client_id: clientIdFromQuery,
+          has_access_token: true,
+        });
+        this.resetToken = accessToken;
+        this.resetClientId = clientIdFromQuery ?? '';
+        this.resetUserId = '';
+        this.resetFlow = 'reset-from-email';
+        this.resetFromEmailForm.reset();
+      } else if (legacyToken && legacyUserId) {
+        console.log('🔐 Password reset link (legado token/user)', { legacyUserId });
+        this.resetToken = legacyToken;
+        this.resetUserId = legacyUserId;
+        this.resetClientId = '';
         this.resetFlow = 'reset-from-email';
         this.resetFromEmailForm.reset();
       }
@@ -295,6 +317,7 @@ export class LoginComponent implements OnInit, OnDestroy {
     this.resetEmail = '';
     this.resetToken = '';
     this.resetUserId = '';
+    this.resetClientId = '';
   }
 
   async requestResetCode() {
@@ -352,12 +375,18 @@ export class LoginComponent implements OnInit, OnDestroy {
       
       try {
         const newPassword = this.resetFromEmailForm.get('newPassword')?.value;
-        
-        await this.authProvider.resetPassword(
-          this.resetUserId,
-          this.resetToken,
-          newPassword
-        );
+
+        if (this.resetUserId) {
+          await this.authProvider.resetPassword(newPassword, {
+            userId: this.resetUserId,
+            token: this.resetToken,
+          });
+        } else {
+          await this.authProvider.resetPassword(newPassword, {
+            accessToken: this.resetToken,
+            ...(this.resetClientId ? { clientId: this.resetClientId } : {}),
+          });
+        }
         
         this.toastService.success(this.translate.instant('MESSAGE_PASSWORD_RESET_SUCCESS'));
         

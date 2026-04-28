@@ -9,6 +9,7 @@ import { NgbModal } from '@ng-bootstrap/ng-bootstrap';
 import { ConvertPointsModalComponent } from './components/convert-points-modal/convert-points-modal.component';
 import { Router } from '@angular/router';
 import { FeaturesService } from '../../services/features.service';
+import { SeasonDatesService } from '../../services/season-dates.service';
 import { NotificationService } from '../../services/notification.service';
 import { PlayerRedeemLog } from './components/rewards-store/rewards-store.component';
 
@@ -51,6 +52,8 @@ export class RewardsComponent implements AfterViewInit, OnInit {
   nomeConsulta: string = '';
   tipoConsulta: number = TIPO_CONSULTA_COLABORADOR;
   seasonData: TemporadaDashboard | null = null;
+  /** Monta `<page-season>` só após GET `/campaign` e cache de datas. */
+  seasonShellReady = false;
 
   categories: string[] = [];
   rewards: Reward[] = [];
@@ -64,6 +67,7 @@ export class RewardsComponent implements AfterViewInit, OnInit {
     private modalService: NgbModal,
     public router: Router,
     private featuresService: FeaturesService,
+    private seasonDatesService: SeasonDatesService,
     private notificationService: NotificationService
   ) { }
 
@@ -72,6 +76,13 @@ export class RewardsComponent implements AfterViewInit, OnInit {
     this.initializeLocalStorageData();
     this.loadMetricsFromStorage();
     this.listAchievements();
+
+    try {
+      await this.seasonDatesService.ensureCampaignDatesLoaded();
+    } catch (e) {
+      console.error('Recompensas: campanha/datas antes do season shell:', e);
+    }
+    this.seasonShellReady = true;
 
     // Garante que o usuário está carregado da API
     await this.sessao.init(true);

@@ -788,6 +788,14 @@
               color: $text-secondary;
             }
 
+            &--good {
+              color: #059669;
+            }
+
+            &--below {
+              color: #c56685;
+            }
+
             &--pending {
               font-weight: 500;
               color: $text-secondary;

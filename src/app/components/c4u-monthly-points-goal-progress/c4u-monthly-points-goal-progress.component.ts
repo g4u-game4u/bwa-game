@@ -10,7 +10,7 @@ export class C4uMonthlyPointsGoalProgressComponent {
   @Input() current = 0;
   @Input() target = 1;
   @Input() isLoading = false;
-  @Input() color: 'red' | 'yellow' | 'green' | 'pink' = 'red';
+  @Input() color: 'red' | 'yellow' | 'green' | 'gray' = 'red';
   /** Rótulo do cartão (ex.: visão equipe vs colaborador). */
   @Input() label = 'Pontos no mês';
   /** Texto do botão de ajuda; se vazio, usa o texto padrão abaixo. */
@@ -19,7 +19,7 @@ export class C4uMonthlyPointsGoalProgressComponent {
   readonly unit = 'pts';
 
   private readonly fallbackHelp =
-    'Aqui você vê quantos pontos você já fez no período do filtro, comparado à meta daquele período. Só entram pontos “feitos” as atividades já concluídas; a meta é o total que estava previsto (incluindo o que ainda não foi fechado). Se a gamificação ainda não estiver ligada ao painel, a meta aparece como uma estimativa com base no que ainda está pendente.';
+    'Aqui você vê quantos pontos você já fez no período do filtro, comparado à meta daquele período. Só entram pontos “feitos” as atividades já concluídas; a meta é o total que estava previsto (incluindo o que ainda não foi fechado)';
 
   get resolvedHelpDescription(): string {
     const t = this.helpDescription?.trim();

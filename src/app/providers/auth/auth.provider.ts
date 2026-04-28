@@ -63,13 +63,34 @@ export class AuthProvider {
     return firstValueFrom(this.http.post(url, { email }));
   }
 
-  async resetPassword(userId: string, token: string, newPassword: string) {
+  /**
+   * Confirma nova senha após link do e-mail.
+   * - Formato atual: `access_token` (fragmento) + opcional `client_id` (query).
+   * - Legado: `user` + `token` (query).
+   */
+  async resetPassword(
+    newPassword: string,
+    recovery:
+      | { accessToken: string; clientId?: string }
+      | { userId: string; token: string }
+  ): Promise<unknown> {
     const url = joinApiPath(this.apiBase(), '/auth/change-password');
-    return firstValueFrom(this.http.post(url, {
-      user: userId,
-      token,
-      password: newPassword
-    }));
+    if ('accessToken' in recovery) {
+      return firstValueFrom(
+        this.http.post(url, {
+          password: newPassword,
+          access_token: recovery.accessToken,
+          ...(recovery.clientId ? { client_id: recovery.clientId } : {}),
+        })
+      );
+    }
+    return firstValueFrom(
+      this.http.post(url, {
+        user: recovery.userId,
+        token: recovery.token,
+        password: newPassword,
+      })
+    );
   }
 }
 

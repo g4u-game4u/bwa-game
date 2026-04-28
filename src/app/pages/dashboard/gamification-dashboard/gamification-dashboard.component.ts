@@ -853,7 +853,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
         ...base,
         current: 0,
         percentage: 0,
-        color: 'pink',
+        color: 'gray',
         isMissing: true
       };
       this.playerKPIs = this.playerKPIs.map((k, i) => (i === idx ? updated : k));
@@ -1290,7 +1290,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     return { current, target };
   }
 
-  get monthlyPointsGoalColor(): 'red' | 'yellow' | 'green' | 'pink' {
+  get monthlyPointsGoalColor(): 'red' | 'yellow' | 'green' | 'gray' {
     const { current, target } = this.monthlyPointsProgressData;
     const superGoal = Math.ceil(target * 1.5);
     return this.kpiService.getKPIColorByGoals(current, target, superGoal);
@@ -1361,6 +1361,20 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
       return Number(k);
     }
     return null;
+  }
+
+  /** Classes para o % de entregas no prazo na lista «Clientes atendidos»: verde >90%, vermelho caso contrário; n/a permanece neutro. */
+  listaEntregaPrazoClasses(cliente: CompanyDisplay): Record<string, boolean> {
+    const v = this.getListaEntregaPercent(cliente);
+    const na = v === null;
+    const good = !na && v > 90;
+    const below = !na && !good;
+    return {
+      'carteira-entrega': true,
+      'carteira-entrega--na': na,
+      'carteira-entrega--good': good,
+      'carteira-entrega--below': below
+    };
   }
 
   /**

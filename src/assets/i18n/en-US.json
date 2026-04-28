@@ -163,6 +163,7 @@
   "LABEL_BACK_TO_LOGIN": "Back to login",
   "LABEL_PASSWORD_RESET_EMAIL_INSTRUCTIONS": "Enter the email registered in the game to receive a password reset link",
   "LABEL_SEND_RESET_EMAIL": "Send Reset Email",
+  "MESSAGE_RESET_EMAIL_SENT": "Password reset email sent successfully!",
   "LABEL_SET_NEW_PASSWORD": "Set New Password",
   "LABEL_ENTER_NEW_PASSWORD": "Enter your new password below",
   "LABEL_PASSWORDS_DONT_MATCH": "Passwords do not match",

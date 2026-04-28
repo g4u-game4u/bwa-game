@@ -2,6 +2,7 @@ import { Injectable } from '@angular/core';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
 import { environment } from '../../environments/environment';
+import { joinApiPath } from 'src/environments/backend-url';
 
 export interface Campaign {
   id: number;
@@ -55,16 +56,20 @@ export class CampaignService {
   }
 
   private async fetchCurrentCampaign(): Promise<Campaign> {
-    const base = (environment.backend_url_base || '').trim().replace(/\/$/, '');
-    if (!base) {
+    const rawBase = (environment.backend_url_base || '').trim().replace(/\/$/, '');
+    if (!rawBase) {
       return this.getDefaultCampaign();
     }
+    // HttpClient requires absolute URLs with protocol when calling external origins.
+    // Keep compatibility with envs that provide only host[:port][/path].
+    const base = /^https?:\/\//i.test(rawBase) ? rawBase : `https://${rawBase}`;
     try {
       const headers = new HttpHeaders({
         'Content-Type': 'application/json',
         ...(environment.client_id ? { client_id: environment.client_id } : {})
       });
-      const url = `${base}/campaign`;
+      // Use joinApiPath to avoid malformed URLs when base has no trailing slash.
+      const url = joinApiPath(base, '/campaign');
       const raw = await firstValueFrom(
         this.http.get<Campaign[] | { data?: Campaign[] }>(url, { headers })
       );

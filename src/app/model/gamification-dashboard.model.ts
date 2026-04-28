@@ -58,8 +58,8 @@ export interface KPIData {
   target: number;
   superTarget?: number;
   unit?: string;
-  color?: 'red' | 'yellow' | 'green' | 'pink';
-  percentage?: number;
+  color?: 'red' | 'yellow' | 'green' | 'gray';
+    percentage?: number;
   isMissing?: boolean; // When true, display "?" instead of the value
 }
 

@@ -6,6 +6,7 @@ import { AcessoService } from 'src/app/services/acesso.service';
 import { TemporadaDashboard } from 'src/app/model/temporadaDashboard.model';
 import { FeaturesService } from 'src/app/services/features.service';
 import { CampaignService } from 'src/app/services/campaign.service';
+import { SeasonDatesService } from 'src/app/services/season-dates.service';
 import { SystemParamsService } from 'src/app/services/system-params.service';
 import { DashboardColaboradorComponent } from './dashboard-colaborador/dashboard-colaborador.component';
 import { BreakpointProvider } from '@providers/breakpoint-provider';
@@ -55,6 +56,8 @@ export class DashboardComponent implements AfterViewInit, OnInit {
     seasonData: TemporadaDashboard | null = null;
     hasActiveCampaign = true;
     isLoadingCampaign = true;
+    /** Só monta `<page-season>` depois de `/campaign` + cache de datas da temporada. */
+    seasonShellReady = false;
 
     getSeasonData(data: TemporadaDashboard) {
         this.seasonData = data;
@@ -131,6 +134,7 @@ export class DashboardComponent implements AfterViewInit, OnInit {
         private acessoService: AcessoService,
         private featuresService: FeaturesService,
         private campaignService: CampaignService,
+        private seasonDatesService: SeasonDatesService,
         private systemParamsService: SystemParamsService
     ) {
     }
@@ -139,6 +143,12 @@ export class DashboardComponent implements AfterViewInit, OnInit {
 
     async ngOnInit() {
         await this.checkActiveCampaign();
+        try {
+            await this.seasonDatesService.ensureCampaignDatesLoaded();
+        } catch (e) {
+            console.error('Erro ao sincronizar datas da campanha antes do season shell:', e);
+        }
+        this.seasonShellReady = true;
         this.clientLogoUrl = await this.systemParamsService.getParam<string>('client_dark_logo_url') || '/assets/images/game4u_logo.png';
     }
 

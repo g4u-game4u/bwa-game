@@ -150,7 +150,7 @@ export class KPIService {
             percentage: Math.min(deliveryPercentage / 100 * 100, 100)
           });
         } else {
-          // Data missing - show KPI with "?" and pink color
+          // Data missing - show KPI with "?" and gray color
           kpis.push({
             id: 'entregas-prazo',
             label: 'Entregas no Prazo',
@@ -158,7 +158,7 @@ export class KPIService {
             target: entregaTarget,
             superTarget: entregaSuperTarget,
             unit: '%',
-            color: 'pink',
+            color: 'gray',
             percentage: 0,
             isMissing: true
           });

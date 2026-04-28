@@ -11,10 +11,12 @@ export class C4uKpiCircularProgressComponent {
   @Input() target: number = 0;
   @Input() superTarget?: number;
   @Input() colorIndex: number = 0;
-  @Input() color?: 'red' | 'yellow' | 'green' | 'pink';
+  @Input() color?: 'red' | 'yellow' | 'green' | 'pink' | 'gray';
   @Input() unit?: string = '';
   @Input() size: 'small' | 'medium' | 'large' = 'medium';
   @Input() isMissing: boolean = false;
+  /** Carregamento em curso: mesmo padrão visual da lista (anel neutro + «…»). */
+  @Input() isPending = false;
   /** Só o valor percentual visível (sem rótulo, meta nem status) — ex.: entregas no prazo. */
   @Input() compactPercentOnly = false;
   /** Quando preenchido, substitui o texto de ajuda do botão de informação. */
@@ -32,8 +34,7 @@ export class C4uKpiCircularProgressComponent {
   ];
 
   get percentage(): number {
-    // When data is missing, show a small slice to indicate "unknown"
-    if (this.isMissing) {
+    if (this.isMissing || this.isPending) {
       return 0;
     }
     
@@ -50,10 +51,9 @@ export class C4uKpiCircularProgressComponent {
     return Math.round((this.current / this.target) * 100);
   }
 
-  get progressColor(): 'green' | 'blue' | 'purple' | 'gold' | 'red' | 'pink' {
-    // If data is missing, always show pink
-    if (this.isMissing) {
-      return 'pink';
+  get progressColor(): 'green' | 'blue' | 'purple' | 'gold' | 'red' | 'gray' {
+    if (this.isMissing || this.isPending) {
+      return 'gray';
     }
     
     // If current is below target, always show red
@@ -73,7 +73,8 @@ export class C4uKpiCircularProgressComponent {
         case 'green': return 'green';
         case 'yellow': return 'gold';
         case 'red': return 'red';
-        case 'pink': return 'pink';
+        case 'pink': return 'red'; // KPIData usa pink; anel usa tema red (#C56685 no centro)
+        case 'gray': return 'gray';
         default: return 'blue';
       }
     }
@@ -88,7 +89,9 @@ export class C4uKpiCircularProgressComponent {
    * For count-based KPIs, show the raw count (not percentage)
    */
   get displayValue(): string {
-    // When data is missing, show "?"
+    if (this.isPending) {
+      return '…';
+    }
     if (this.isMissing) {
       return '?';
     }
@@ -145,7 +148,19 @@ export class C4uKpiCircularProgressComponent {
     return 'ri-bar-chart-line';
   }
 
+  /** Classe do badge inferior (neutro durante carregamento ou dado em falta). */
+  get statusBadgeClass(): string {
+    if (this.isPending || this.isMissing) {
+      return 'status-gray';
+    }
+    const c = this.color ?? 'green';
+    return `status-${c}`;
+  }
+
   get goalStatus(): string {
+    if (this.isPending) {
+      return 'A carregar…';
+    }
     if (this.isMissing) {
       return 'Dado indisponível';
     }
@@ -167,6 +182,9 @@ export class C4uKpiCircularProgressComponent {
    * Check if goal is achieved (current >= target)
    */
   get isGoalAchieved(): boolean {
+    if (this.isPending || this.isMissing) {
+      return false;
+    }
     return this.current >= this.target;
   }
 
@@ -203,6 +221,9 @@ export class C4uKpiCircularProgressComponent {
     
     // Only add custom text for these specific KPIs
     if (key === 'clientes-na-carteira' || key === 'entregas-no-prazo' || key === 'pontos-no-mes') {
+      if (this.isPending) {
+        return 'A carregar dados…';
+      }
       if (this.isMissing) {
         return 'Dado não disponível';
       }
@@ -221,6 +242,9 @@ export class C4uKpiCircularProgressComponent {
    * Generate accessible ARIA label for screen readers
    */
   get ariaLabel(): string {
+    if (this.isPending) {
+      return `${this.label}: a carregar`;
+    }
     if (this.isMissing) {
       return `${this.label}: dado indisponível`;
     }
@@ -235,6 +259,9 @@ export class C4uKpiCircularProgressComponent {
    * Generate ARIA value text for screen readers
    */
   get ariaValueText(): string {
+    if (this.isPending) {
+      return 'a carregar';
+    }
     return `${this.percentage}% da meta`;
   }
 }

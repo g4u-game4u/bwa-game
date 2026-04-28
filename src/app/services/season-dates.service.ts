@@ -6,6 +6,9 @@ import { CampaignService } from './campaign.service';
 })
 export class SeasonDatesService {
 
+  /** Cache alinhado a {@link CampaignService} para poder limitar `/game/*` síncronos. */
+  private seasonBoundsCache: { start: Date; end: Date } | null = null;
+
   constructor(private campaignService: CampaignService) {}
 
   /**
@@ -49,15 +52,41 @@ export class SeasonDatesService {
   }
 
   /**
+   * Garante que a resposta de GET `/campaign` foi aplicada e o cache de datas está disponível
+   * (para montar UI / chamadas `/game/*` com intervalo correto).
+   */
+  public ensureCampaignDatesLoaded(): Promise<{ start: Date; end: Date }> {
+    return this.getSeasonDates();
+  }
+
+  /**
    * Obtém objeto com as datas da temporada
    */
   public async getSeasonDates(): Promise<{ start: Date; end: Date }> {
+    if (this.seasonBoundsCache) {
+      return {
+        start: new Date(this.seasonBoundsCache.start),
+        end: new Date(this.seasonBoundsCache.end)
+      };
+    }
     const [start, end] = await Promise.all([
       this.getSeasonStartDate(),
       this.getSeasonEndDate()
     ]);
 
+    this.seasonBoundsCache = { start, end };
     return { start, end };
+  }
+
+  /** Intervalo da campanha já em memória (após primeiro `getSeasonDates` ou prefetch). */
+  public getCachedSeasonBounds(): { start: Date; end: Date } | null {
+    if (!this.seasonBoundsCache) {
+      return null;
+    }
+    return {
+      start: new Date(this.seasonBoundsCache.start),
+      end: new Date(this.seasonBoundsCache.end)
+    };
   }
 
   /**
@@ -236,6 +265,7 @@ export class SeasonDatesService {
    * Limpa o cache das datas
    */
   public clearCache(): void {
+    this.seasonBoundsCache = null;
     this.campaignService.clearCache();
   }
 
@@ -243,6 +273,7 @@ export class SeasonDatesService {
    * Recarrega os dados da campanha
    */
   public async reload(): Promise<void> {
+    this.seasonBoundsCache = null;
     await this.campaignService.reloadCampaign();
   }
 } 
