@@ -5,9 +5,13 @@ import { map, catchError, tap, switchMap } from 'rxjs/operators';
 import { BackendApiService } from './backend-api.service';
 import { AggregateQueryBuilderService, AggregateQuery } from './aggregate-query-builder.service';
 import { PerformanceMonitorService } from './performance-monitor.service';
-import { isGame4uDataEnabled } from '@model/game4u-api.model';
+import { isGame4uDataEnabled, Game4uUserActionModel } from '@model/game4u-api.model';
 import { Game4uApiService } from './game4u-api.service';
 import {
+  computeGame4uDrPrazoMetaBoost,
+  computeMonthlyPointsFromGame4uActions,
+  filterGame4uActionsByCompetenceMonth,
+  getGame4uMonthlyPointsCircularFromActionStats,
   mapGame4uStatsToActivityMetrics,
   mapGame4uStatsToPointWallet,
   mapGame4uStatsToTeamProgressMetrics,
@@ -693,7 +697,14 @@ export class TeamAggregateService {
     teamId: string,
     startDate: Date,
     endDate: Date
-  ): Observable<{ finalizadas: number; pontos: number; processosFinalizados: number; processosIncompletos: number }> {
+  ): Observable<{
+    finalizadas: number;
+    pontos: number;
+    processosFinalizados: number;
+    processosIncompletos: number;
+    pontosDone?: number;
+    pontosTodosStatus?: number;
+  }> {
     const cacheKey = `team_activity_${teamId}_${startDate.getTime()}_${endDate.getTime()}`;
     
     const cached = this.getFromCache<any>(cacheKey);
@@ -703,15 +714,76 @@ export class TeamAggregateService {
 
     if (isGame4uDataEnabled() && this.game4u.isConfigured()) {
       const range = this.game4u.toIsoRange(startDate, endDate);
-      return this.game4u.getGameTeamStats({ team: teamId, ...range }).pipe(
-        map(stats => {
+      const sameCalendarMonth =
+        startDate.getFullYear() === endDate.getFullYear() &&
+        startDate.getMonth() === endDate.getMonth();
+      const monthAnchor = sameCalendarMonth
+        ? new Date(startDate.getFullYear(), startDate.getMonth(), 1)
+        : null;
+
+      if (!monthAnchor) {
+        return this.game4u.getGameTeamStats({ team: teamId, ...range }).pipe(
+          map(stats => {
+            const prog = mapGame4uStatsToTeamProgressMetrics(stats);
+            const activity = mapGame4uStatsToActivityMetrics(stats);
+            return {
+              finalizadas: activity.finalizadas,
+              pontos: activity.pontos,
+              processosFinalizados: prog.processosFinalizados,
+              processosIncompletos: prog.processosIncompletos,
+              pontosDone: activity.pontosDone,
+              pontosTodosStatus: activity.pontosTodosStatus
+            };
+          }),
+          tap(data => this.setCache(cacheKey, data)),
+          catchError(error => {
+            console.error('Error in getTeamActivityMetrics:', error);
+            return of({ finalizadas: 0, pontos: 0, processosFinalizados: 0, processosIncompletos: 0 });
+          })
+        );
+      }
+
+      const y = monthAnchor.getFullYear();
+      const actionsRangeStart = new Date(y, 0, 1, 0, 0, 0, 0);
+      const actionsRange = this.game4u.toIsoRange(actionsRangeStart, endDate);
+
+      return forkJoin({
+        stats: this.game4u.getGameTeamStats({ team: teamId, ...range }),
+        actions: this.game4u.getGameTeamActions({ team: teamId, ...actionsRange }).pipe(
+          catchError(() => of([] as Game4uUserActionModel[]))
+        )
+      }).pipe(
+        map(({ stats, actions }) => {
           const prog = mapGame4uStatsToTeamProgressMetrics(stats);
-          const activity = mapGame4uStatsToActivityMetrics(stats);
+          const drPrazoMetaBoost = computeGame4uDrPrazoMetaBoost(actions, monthAnchor);
+          const circular = getGame4uMonthlyPointsCircularFromActionStats(stats);
+          const byCompetence = filterGame4uActionsByCompetenceMonth(actions, monthAnchor);
+
+          let finalizadas: number;
+          let pontos: number;
+          let pontosDone: number;
+          let pontosTodosStatus: number;
+
+          if (circular) {
+            finalizadas = circular.finalizadas;
+            pontosDone = circular.pontosDone;
+            pontosTodosStatus = circular.pontosTodosStatus + drPrazoMetaBoost;
+            pontos = pontosDone;
+          } else {
+            const pts = computeMonthlyPointsFromGame4uActions(byCompetence);
+            finalizadas = pts.finalizadas;
+            pontosDone = pts.pontosDone;
+            pontosTodosStatus = pts.pontosTodosStatus + drPrazoMetaBoost;
+            pontos = pts.pontos;
+          }
+
           return {
-            finalizadas: activity.finalizadas,
-            pontos: activity.pontos,
+            finalizadas,
+            pontos,
             processosFinalizados: prog.processosFinalizados,
-            processosIncompletos: prog.processosIncompletos
+            processosIncompletos: prog.processosIncompletos,
+            pontosDone,
+            pontosTodosStatus
           };
         }),
         tap(data => this.setCache(cacheKey, data)),

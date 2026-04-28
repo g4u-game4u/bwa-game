@@ -1,6 +1,7 @@
 <div class="thermometer-container" scroll>
   <aside #menu>
     <page-season
+      *ngIf="seasonShellReady"
       (seasonData)="getSeasonData($event)"
       [collapse]="!menuOpen"
       [idConsulta]="idConsulta"

@@ -416,6 +416,38 @@ describe('CompanyKpiService', () => {
         }
       ]);
     });
+
+    it('should use delivery_id for EmpID when participation key does not match API', done => {
+      service
+        .enrichFromParticipacaoRowKeys([
+          { participationKey: 'integration-wrong-id', deliveryId: '2944-2026-04-01' }
+        ])
+        .subscribe(res => {
+          expect(res[0].cnpj).toBe('integration-wrong-id');
+          expect(res[0].gamificacaoEmpIdUsado).toBe('2944');
+          expect(res[0].porcEntregas).toBeCloseTo(88.5, 5);
+          done();
+        });
+      httpMock.expectOne(TEST_GAMIFICACAO_URL).flush({
+        data: [{ EmpID: 2944, porcEntregas: '88,5', procFinalizados: '0', procPendentes: '0' }]
+      });
+    });
+
+    it('should use first numeric segment of delivery_id when there is no YYYY-MM-DD competence suffix', done => {
+      service
+        .enrichFromParticipacaoRowKeys([
+          { participationKey: 'other-key', deliveryId: '2944-sprint-1' }
+        ])
+        .subscribe(res => {
+          expect(res[0].cnpj).toBe('other-key');
+          expect(res[0].gamificacaoEmpIdUsado).toBe('2944');
+          expect(res[0].porcEntregas).toBeCloseTo(55, 5);
+          done();
+        });
+      httpMock.expectOne(TEST_GAMIFICACAO_URL).flush({
+        data: [{ EmpID: '2944', porcEntregas: '55,00', procFinalizados: '0', procPendentes: '0' }]
+      });
+    });
   });
 
   describe('mapToKpiData / colors (target 90)', () => {

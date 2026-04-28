@@ -5,6 +5,7 @@ import { FeaturesService } from 'src/app/services/features.service';
 import { TemporadaDashboard } from '@model/temporadaDashboard.model';
 import { SessaoProvider } from '@providers/sessao/sessao.provider';
 import { AcessoService } from 'src/app/services/acesso.service';
+import { SeasonDatesService } from 'src/app/services/season-dates.service';
 
 interface StageMarker {
   percentage: number;
@@ -56,6 +57,7 @@ export const TIPO_CONSULTA_TIME = 1;
   individualReward: number = 0;
   stageMarkers: StageMarker[] = [];
   seasonData: TemporadaDashboard | null = null;
+  seasonShellReady = false;
   menuOpen = true;
   idConsulta: number | any;
   tipoConsulta: number = TIPO_CONSULTA_COLABORADOR;
@@ -69,6 +71,7 @@ export const TIPO_CONSULTA_TIME = 1;
       public router: Router,
       private sessao: SessaoProvider,
     private acessoService: AcessoService,
+    private seasonDatesService: SeasonDatesService,
     ) {
       this.currentProgress = this.mockData.currentProgress;
       this.goalAmount = this.mockData.goalAmount;
@@ -86,6 +89,12 @@ export const TIPO_CONSULTA_TIME = 1;
     }
   
     async ngOnInit(): Promise<void> {
+      try {
+        await this.seasonDatesService.ensureCampaignDatesLoaded();
+      } catch (e) {
+        console.error('Termómetro: campanha/datas antes do season shell:', e);
+      }
+      this.seasonShellReady = true;
     }
     
     // Calcula o tier de recompensa baseado no progresso

@@ -14,6 +14,7 @@ import { Game4uApiService } from './game4u-api.service';
 import type { Game4uUserActionStatus, Game4uUserScopedQuery } from '@model/game4u-api.model';
 import { SessaoProvider } from '@providers/sessao/sessao.provider';
 import {
+  computeGame4uDrPrazoMetaBoost,
   computeMonthlyPointsFromGame4uActions,
   filterGame4uActionsByCompetenceMonth,
   filterGame4uActionsByMonth,
@@ -366,6 +367,18 @@ export class ActionLogService {
       return null;
     }
     return { user, ...this.game4u.toQueryRange(month) };
+  }
+
+  /**
+   * Intervalo amplo (início da **campanha** até fim do mês do painel) para `/game/actions`, capturando linhas com
+   * `extra.dr_prazo` na competência mesmo quando `created_at` está fora do mês.
+   */
+  private game4uUserQueryYearThroughMonthEnd(playerId: string, month: Date): Game4uUserScopedQuery | null {
+    const user = this.resolveGame4uUserEmail(playerId);
+    if (!user) {
+      return null;
+    }
+    return { user, ...this.game4u.toCampaignStartThroughMonthEnd(month) };
   }
 
   private getMonthCacheKey(month?: Date): string {
@@ -973,7 +986,7 @@ export class ActionLogService {
     if (isGame4uDataEnabled() && this.game4u.isConfigured()) {
       const qStats = this.game4uUserQuery(playerId, month);
       const qActions =
-        month != null ? this.game4uUserQueryActionsForCompetenceMonth(playerId, month) : qStats;
+        month != null ? this.game4uUserQueryYearThroughMonthEnd(playerId, month) : qStats;
       if (!qStats || !qActions) {
         return of({
           activity: { pendentes: 0, emExecucao: 0, finalizadas: 0, pontos: 0 },
@@ -988,6 +1001,7 @@ export class ActionLogService {
           if (month != null) {
             const byCompetence = filterGame4uActionsByCompetenceMonth(actions, month);
             const processo = mapGame4uActionsToProcessMetrics(byCompetence);
+            const drPrazoMetaBoost = computeGame4uDrPrazoMetaBoost(actions, month);
             const circular = getGame4uMonthlyPointsCircularFromActionStats(stats);
             if (circular) {
               return {
@@ -997,7 +1011,7 @@ export class ActionLogService {
                   finalizadas: circular.finalizadas,
                   pontos: circular.pontosDone,
                   pontosDone: circular.pontosDone,
-                  pontosTodosStatus: circular.pontosTodosStatus
+                  pontosTodosStatus: circular.pontosTodosStatus + drPrazoMetaBoost
                 },
                 processo
               };
@@ -1010,7 +1024,7 @@ export class ActionLogService {
                 finalizadas: pts.finalizadas,
                 pontos: pts.pontos,
                 pontosDone: pts.pontosDone,
-                pontosTodosStatus: pts.pontosTodosStatus
+                pontosTodosStatus: pts.pontosTodosStatus + drPrazoMetaBoost
               },
               processo
             };

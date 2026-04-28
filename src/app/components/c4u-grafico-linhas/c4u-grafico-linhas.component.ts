@@ -61,7 +61,7 @@ export class C4uGraficoLinhasComponent implements AfterViewInit, OnChanges, OnDe
   @Input()
   showAccessibleTable = false;
 
-  private colors = ["white", "red", "blue", "yellow", "pink", "purple", "green"];
+  private colors = ["white", "red", "blue", "yellow", "gray", "purple", "green"];
   private pointStyle = ["circle", "rect", "rectRot", "star", "triangle", "rectRounded", "cross", "crossRot", "dash", "line"];
   
   private isInitialized = false;

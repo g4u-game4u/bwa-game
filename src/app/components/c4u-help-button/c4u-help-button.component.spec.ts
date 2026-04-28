@@ -99,7 +99,7 @@ describe('HelpButtonComponent', () => {
 
       expect(labelTexts).toContain('Nome');
       expect(labelTexts).toContain('E-mail');
-      expect(labelTexts).toContain('Descrição do Problema');
+      expect(labelTexts).toContain('Descrição do Incidente');
 
       expect(fixture.nativeElement.querySelector('#help-nome')).toBeTruthy();
       expect(fixture.nativeElement.querySelector('#help-email')).toBeTruthy();
@@ -228,7 +228,7 @@ describe('HelpButtonComponent', () => {
 
       const title = fixture.nativeElement.querySelector('#help-form-title');
       expect(title).toBeTruthy();
-      expect(title.textContent).toContain('Reportar Problema');
+      expect(title.textContent).toContain('Reportar Incidente');
     });
 
     it('should move focus to the first field (nome) when the form opens', fakeAsync(() => {

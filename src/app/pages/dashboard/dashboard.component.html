@@ -1,7 +1,7 @@
 <div full flexItem="1">
   <aside #menu class="md:block menu-closed">
     <div class="h-full w-full flex md:block">
-      <page-season class="flex-auto" (seasonData)="getSeasonData($event)" [collapse]="!menuOpen" [idConsulta]="idConsulta"
+      <page-season *ngIf="seasonShellReady" class="flex-auto" (seasonData)="getSeasonData($event)" [collapse]="!menuOpen" [idConsulta]="idConsulta"
                    [tipoConsulta]="tipoConsulta" [nomeConsulta]="nomeConsulta" [time]="time"
                    [showTeamGoal]="showDashColaborador"
                    [isCSLayout]="false"></page-season>

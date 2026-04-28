@@ -332,6 +332,65 @@ export function filterGame4uActionsByCompetenceMonth(
   });
 }
 
+function readGame4uExtraRecord(a: Game4uUserActionModel): Record<string, unknown> | null {
+  const ex = a['extra'];
+  if (ex && typeof ex === 'object' && !Array.isArray(ex)) {
+    return ex as Record<string, unknown>;
+  }
+  return null;
+}
+
+/**
+ * Parseia `extra.dr_prazo` (ISO, `$date`, epoch ms ou s) para instante UTC em ms.
+ */
+export function parseExtraDrPrazoToUtcMs(dr: unknown): number | null {
+  if (dr == null || dr === '') {
+    return null;
+  }
+  if (typeof dr === 'number' && Number.isFinite(dr)) {
+    const ms = dr < 1e12 ? dr * 1000 : dr;
+    return Number.isFinite(ms) ? ms : null;
+  }
+  if (typeof dr === 'object' && dr !== null && '$date' in (dr as object)) {
+    return parseGame4uIsoMs((dr as { $date: unknown }).$date);
+  }
+  return parseGame4uIsoMs(dr);
+}
+
+/** True se `extra.dr_prazo` cai no mesmo mês calendário que `month`. */
+export function isGame4uActionExtraDrPrazoInCalendarMonth(a: Game4uUserActionModel, month: Date): boolean {
+  const ex = readGame4uExtraRecord(a);
+  if (!ex) {
+    return false;
+  }
+  const ms = parseExtraDrPrazoToUtcMs(ex['dr_prazo']);
+  if (ms == null) {
+    return false;
+  }
+  const d = new Date(ms);
+  return d.getFullYear() === month.getFullYear() && d.getMonth() === month.getMonth();
+}
+
+/**
+ * Pontos a somar à **meta** do circular do mês: user-actions com `extra.dr_prazo` no mês do filtro
+ * que ainda não entram na competência usual (`delivery_id` / `created_at`), para não duplicar.
+ */
+export function computeGame4uDrPrazoMetaBoost(actions: Game4uUserActionModel[], month: Date): number {
+  const inCompetence = filterGame4uActionsByCompetenceMonth(actions, month);
+  const competenceIds = new Set(inCompetence.map(a => String(a.id)));
+  let sum = 0;
+  for (const a of actions) {
+    if (!isGame4uActionExtraDrPrazoInCalendarMonth(a, month)) {
+      continue;
+    }
+    if (competenceIds.has(String(a.id))) {
+      continue;
+    }
+    sum += Math.floor(Number(a.points) || 0);
+  }
+  return sum;
+}
+
 /** Pontos do circular do mês a partir de user-actions já filtradas (ex.: por competência). Alinhado a `getGame4uActionStatsDone`: só DONE conta como atingido. */
 export function computeMonthlyPointsFromGame4uActions(actions: Game4uUserActionModel[]): {
   finalizadas: number;

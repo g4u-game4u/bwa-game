@@ -12,7 +12,7 @@
      role="dialog"
      aria-labelledby="help-form-title">
   <div class="help-form-container" (click)="$event.stopPropagation()">
-    <h2 id="help-form-title">Reportar Problema</h2>
+    <h2 id="help-form-title">Reportar Incidente</h2>
     <button class="help-close-btn" (click)="close()" aria-label="Fechar">&times;</button>
 
     <form [formGroup]="helpForm" (ngSubmit)="onSubmit()">
@@ -38,7 +38,7 @@
 
       <!-- Campo Descrição -->
       <div class="help-field">
-        <label for="help-descricao">Descrição do Problema</label>
+        <label for="help-descricao">Descrição do Incidente</label>
         <textarea id="help-descricao" formControlName="descricao"></textarea>
         <div class="help-validation" *ngIf="helpForm.get('descricao')?.invalid && helpForm.get('descricao')?.touched">
           <span *ngIf="helpForm.get('descricao')?.hasError('required')">Descrição é obrigatória</span>

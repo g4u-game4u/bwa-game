@@ -8,8 +8,9 @@ import {BreveComponent} from "@layout/breve/breve.component";
 const routes: Routes = [
   {
     path: '',
-    redirectTo: 'dashboard',
     pathMatch: 'full',
+    loadComponent: () =>
+      import('./layout/root-redirect/root-redirect.component').then((m) => m.RootRedirectComponent),
   },
   {
     path: 'login',

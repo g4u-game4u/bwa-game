@@ -671,13 +671,11 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
           this.cdr.markForCheck();
 
           if (empids.length > 0) {
-            void this.applyParticipacaoPorcEntregasKpiAfterGamificacaoAsync(
-              empids,
-              baseClientes,
-              loadGen
-            ).catch((err: unknown) => {
-              console.error('📊 Falha ao aplicar KPI de entregas (gamificação):', err);
-            });
+            void this.applyParticipacaoPorcEntregasKpiAfterGamificacaoAsync(baseClientes, loadGen).catch(
+              (err: unknown) => {
+                console.error('📊 Falha ao aplicar KPI de entregas (gamificação):', err);
+              }
+            );
           }
         },
         error: (err: Error) => {
@@ -723,21 +721,26 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
    * na lista já montada.
    */
   private async applyParticipacaoPorcEntregasKpiAfterGamificacaoAsync(
-    empids: string[],
     baseClientes: CompanyDisplay[],
     loadGen: number
   ): Promise<void> {
-    if (empids.length === 0) {
+    if (baseClientes.length === 0) {
       if (loadGen === this.participacaoKpiLoadGen) {
         this.isLoadingParticipacaoKpi = false;
+        this.syncClientesKpiWithTabs();
         this.cdr.markForCheck();
       }
       return;
     }
 
+    const participacaoGamificacaoRows = baseClientes.map(b => ({
+      participationKey: b.cnpj,
+      deliveryId: b.deliveryId
+    }));
+
     try {
       const kpiRows = await firstValueFrom(
-        this.companyKpiService.enrichFromParticipacaoRowKeys(empids).pipe(take(1))
+        this.companyKpiService.enrichFromParticipacaoRowKeys(participacaoGamificacaoRows).pipe(take(1))
       );
       if (loadGen !== this.participacaoKpiLoadGen) {
         return;
@@ -777,12 +780,17 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
           porcEntrega_valorUsadoNaLista: this.getListaEntregaPercent(c)
         }))
       );
+      /** Antes do sync: `syncEntregasPrazoKpiFromParticipacao` ignora enquanto `isLoadingParticipacaoKpi` é true. */
+      this.isLoadingParticipacaoKpi = false;
       this.syncClientesKpiWithTabs();
+      this.cdr.markForCheck();
     } catch (err: unknown) {
       console.error('📊 Erro ao enriquecer participação com gamificação:', err);
       if (loadGen === this.participacaoKpiLoadGen) {
         this.participacaoClientes = baseClientes.map(b => ({ ...b }));
+        this.isLoadingParticipacaoKpi = false;
         this.syncClientesKpiWithTabs();
+        this.cdr.markForCheck();
       }
     } finally {
       if (loadGen === this.participacaoKpiLoadGen) {
@@ -821,21 +829,22 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
       }
     }
 
-    // Média da carteira: não depende da aba ativa, só do fim do load da carteira.
-    this.syncEntregasPrazoKpiFromCarteira();
+    // Média de % entregas no prazo: mesma base da lista «Clientes atendidos este mês» (participação + gamificação).
+    this.syncEntregasPrazoKpiFromParticipacao();
   }
 
   /**
-   * KPI "entregas-prazo": média da % de entregas no prazo só das empresas da carteira (com dado válido).
+   * KPI "entregas-prazo": média das % (`porcEntregas`) dos clientes atendidos no mês/período do filtro,
+   * alinhada à lista de participação (só após gamificação quando aplicável).
    */
-  private syncEntregasPrazoKpiFromCarteira(): void {
+  private syncEntregasPrazoKpiFromParticipacao(): void {
     const idx = this.playerKPIs.findIndex(k => k.id === 'entregas-prazo');
-    if (idx === -1 || this.isLoadingClientes) {
+    if (idx === -1 || this.isLoadingParticipacao || this.isLoadingParticipacaoKpi) {
       return;
     }
 
     const base = this.playerKPIs[idx];
-    const values = this.carteiraClientes
+    const values = this.participacaoClientes
       .map(c => this.getListaEntregaPercent(c))
       .filter((v): v is number => v !== null && Number.isFinite(v));
 
@@ -844,7 +853,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
         ...base,
         current: 0,
         percentage: 0,
-        color: 'pink',
+        color: 'gray',
         isMissing: true
       };
       this.playerKPIs = this.playerKPIs.map((k, i) => (i === idx ? updated : k));
@@ -1224,7 +1233,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     return Math.round(value);
   }
 
-  /** Sidebar recolhida: entregas no prazo só como % (média carteira). */
+  /** Sidebar recolhida: entregas no prazo como % (média dos clientes atendidos no mês). */
   kpiSidebarValue(kpi: KPIData): string {
     if (kpi.id === 'entregas-prazo' && kpi.unit === '%') {
       const n = Math.round(kpi.current * 100) / 100;
@@ -1281,7 +1290,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     return { current, target };
   }
 
-  get monthlyPointsGoalColor(): 'red' | 'yellow' | 'green' | 'pink' {
+  get monthlyPointsGoalColor(): 'red' | 'yellow' | 'green' | 'gray' {
     const { current, target } = this.monthlyPointsProgressData;
     const superGoal = Math.ceil(target * 1.5);
     return this.kpiService.getKPIColorByGoals(current, target, superGoal);
@@ -1352,6 +1361,20 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
       return Number(k);
     }
     return null;
+  }
+
+  /** Classes para o % de entregas no prazo na lista «Clientes atendidos»: verde >90%, vermelho caso contrário; n/a permanece neutro. */
+  listaEntregaPrazoClasses(cliente: CompanyDisplay): Record<string, boolean> {
+    const v = this.getListaEntregaPercent(cliente);
+    const na = v === null;
+    const good = !na && v > 90;
+    const below = !na && !good;
+    return {
+      'carteira-entrega': true,
+      'carteira-entrega--na': na,
+      'carteira-entrega--good': good,
+      'carteira-entrega--below': below
+    };
   }
 
   /**

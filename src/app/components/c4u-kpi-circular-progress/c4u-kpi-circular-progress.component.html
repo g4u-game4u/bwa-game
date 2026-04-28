@@ -1,5 +1,6 @@
 <div class="kpi-circular-progress"
      role="progressbar"
+     [attr.aria-busy]="isPending"
      [attr.aria-label]="ariaLabel"
      [attr.aria-valuenow]="current"
      [attr.aria-valuemin]="0"
@@ -24,5 +25,5 @@
   </div>
   <div class="kpi-value" aria-hidden="true">{{ displayValue }}</div>
   <div class="kpi-target" *ngIf="!compactPercentOnly" aria-hidden="true">{{ targetDisplayValue }}</div>
-  <div class="kpi-status" *ngIf="!compactPercentOnly" [class]="'status-' + color" [class.status-goal-achieved]="isGoalAchieved" aria-hidden="true">{{ goalStatus }}</div>
+  <div class="kpi-status" *ngIf="!compactPercentOnly" [class]="statusBadgeClass" [class.status-goal-achieved]="isGoalAchieved" aria-hidden="true">{{ goalStatus }}</div>
 </div>

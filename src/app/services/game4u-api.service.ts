@@ -13,6 +13,7 @@ import {
   Game4uUserScopedQuery
 } from '@model/game4u-api.model';
 import { Game4uSupabaseFallbackService } from './game4u-supabase-fallback.service';
+import { SeasonDatesService } from './season-dates.service';
 
 export type { Game4uDateRangeQuery, Game4uTeamScopedQuery, Game4uUserScopedQuery } from '@model/game4u-api.model';
 
@@ -24,9 +25,11 @@ export class Game4uApiService {
 
   constructor(
     private http: HttpClient,
-    private supabaseFallback: Game4uSupabaseFallbackService
+    private supabaseFallback: Game4uSupabaseFallbackService,
+    private seasonDates: SeasonDatesService
   ) {
     this.baseUrl = (environment.backend_url_base || '').trim().replace(/\/$/, '');
+    void this.seasonDates.getSeasonDates().catch(() => undefined);
   }
 
   isConfigured(): boolean {
@@ -57,7 +60,14 @@ export class Game4uApiService {
 
   /** Intervalo ISO para o mês calendário ou temporada ampla quando `month` é undefined. */
   toQueryRange(month?: Date): { start: string; end: string } {
+    const campaign = this.seasonDates.getCachedSeasonBounds();
     if (!month) {
+      if (campaign) {
+        return {
+          start: campaign.start.toISOString(),
+          end: campaign.end.toISOString()
+        };
+      }
       return {
         start: new Date('2000-01-01T00:00:00.000Z').toISOString(),
         end: new Date('2099-12-31T23:59:59.999Z').toISOString()
@@ -65,9 +75,35 @@ export class Game4uApiService {
     }
     const y = month.getFullYear();
     const m = month.getMonth();
-    const start = new Date(y, m, 1, 0, 0, 0, 0);
-    const end = new Date(y, m + 1, 0, 23, 59, 59, 999);
+    const monthStart = new Date(y, m, 1, 0, 0, 0, 0);
+    const monthEnd = new Date(y, m + 1, 0, 23, 59, 59, 999);
+    if (!campaign) {
+      return { start: monthStart.toISOString(), end: monthEnd.toISOString() };
+    }
+    const startMs = Math.max(monthStart.getTime(), campaign.start.getTime());
+    const endMs = Math.min(monthEnd.getTime(), campaign.end.getTime());
+    const start = new Date(startMs);
+    const end = new Date(endMs);
+    if (start.getTime() > end.getTime()) {
+      return { start: end.toISOString(), end: end.toISOString() };
+    }
     return { start: start.toISOString(), end: end.toISOString() };
+  }
+
+  /**
+   * Intervalo «amplo» para `/game/actions` com competência em `delivery_id`: do **início da campanha**
+   * até o **fim do mês do painel** (cortado pelo fim da campanha). Substitui 1/jan … fim do mês.
+   */
+  toCampaignStartThroughMonthEnd(month: Date): { start: string; end: string } {
+    const campaign = this.seasonDates.getCachedSeasonBounds();
+    const monthEnd = new Date(month.getFullYear(), month.getMonth() + 1, 0, 23, 59, 59, 999);
+    if (!campaign) {
+      const y = month.getFullYear();
+      const jan1 = new Date(y, 0, 1, 0, 0, 0, 0);
+      return this.toIsoRange(jan1, monthEnd);
+    }
+    const end = new Date(Math.min(monthEnd.getTime(), campaign.end.getTime()));
+    return this.toIsoRange(campaign.start, end);
   }
 
   toIsoRange(start: Date, end: Date): { start: string; end: string } {

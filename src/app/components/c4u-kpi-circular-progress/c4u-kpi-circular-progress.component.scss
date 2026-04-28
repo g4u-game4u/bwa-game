@@ -210,13 +210,18 @@
   }
   
   &.status-red {
-    color: #f44336; // $error-red from design system
+    color: #C56685; 
     background-color: rgba(244, 67, 54, 0.1);
   }
 
+  &.status-gray {
+    color: #9CA3AF;
+    background-color: rgba(156, 163, 175, 0.1);
+  }
+
   &.status-pink {
-    color: #EC4899;
-    background-color: rgba(236, 72, 153, 0.1);
+    color: #c56685;
+    background-color: rgba(197, 102, 133, 0.12);
   }
 
   // Golden color for achieved goals (especially in modals)
