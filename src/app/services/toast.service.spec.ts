@@ -134,6 +134,22 @@ describe('ToastService', () => {
     });
   });
 
+  describe('action', () => {
+    it('should display action toast with label', () => {
+      const message = 'Need action';
+      const actionLabel = 'Do it';
+      service.action(message, actionLabel);
+
+      expect(snackBarSpy.open).toHaveBeenCalledWith(
+        message,
+        actionLabel,
+        jasmine.objectContaining({
+          duration: 8000,
+        })
+      );
+    });
+  });
+
   describe('configuration', () => {
     it('should use correct horizontal position', () => {
       service.success('test');
