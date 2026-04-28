@@ -54,7 +54,6 @@ export class KPIService {
       aggregateBody
     ).pipe(
       map(response => {
-        console.log('📊 Metric targets loaded from database:', response);
         if (Array.isArray(response) && response.length > 0) {
           return response;
         }

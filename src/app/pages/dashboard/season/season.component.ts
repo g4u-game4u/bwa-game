@@ -1,4 +1,4 @@
-import { Component, EventEmitter, Input, OnChanges, OnInit, Output } from '@angular/core';
+import { Component, EventEmitter, Input, OnChanges, OnInit, Output, SimpleChanges } from '@angular/core';
 import { Router } from '@angular/router';
 import { NgbModal } from "@ng-bootstrap/ng-bootstrap";
 import { FeaturesService } from '@services/features.service';
@@ -48,9 +48,33 @@ export class SeasonComponent implements OnInit, OnChanges {
   @Output()
   seasonData = new EventEmitter<TemporadaDashboard>();
 
-  seasonInfo: TemporadaDashboard | any;
+  /**
+   * Estado inicial seguro para o template (evita erro antes do primeiro `/game/stats` e impede o card em branco).
+   */
+  seasonInfo: TemporadaDashboard | any = {
+    blocked_points: 0,
+    unblocked_points: 0,
+    pendingTasks: 0,
+    completedTasks: 0,
+    pendingDeliveries: 0,
+    incompleteDeliveries: 0,
+    completedDeliveries: 0,
+    clientes: 0,
+    total_points: 0,
+    total_blocked_points: 0,
+    total_actions: 0
+  };
 
   teamSeasonLevel: number | any;
+
+  /**
+   * Incrementado a cada novo pedido a {@link TemporadaService.getDadosTemporadaDashboard};
+   * só o resultado com o mesmo valor que no momento da conclusão permanece — evita respostas antigas sobrescreverem dados mais recentes.
+   */
+  private seasonDashboardRequestGeneration = 0;
+
+  /** Evita `init` duplicado no primeiro ciclo (OnChanges antes de {@link ngOnInit}). */
+  private seasonUiBootstrapped = false;
 
   apiReady = false;
   apiTeamReady = false;
@@ -94,18 +118,29 @@ export class SeasonComponent implements OnInit, OnChanges {
   }
 
   async ngOnInit() {
+    // Campanha/datas no cache antes do `/game/stats` — alinha UI e intervalo usado em {@link TemporadaService.getDadosTemporadaDashboard}.
+    await this.loadSeasonDates();
     this.init();
-    this.loadAliases();
-    this.loadSeasonDates();
-    this.loadClientInfo();
-    this.loadClientId();
-    this.loadFreeChallengesAllowedTeams();
-    this.loadFreeChallengesRoles();
+    this.seasonUiBootstrapped = true;
+    void this.loadAliases();
+    void this.loadClientInfo();
+    void this.loadClientId();
+    void this.loadFreeChallengesAllowedTeams();
+    void this.loadFreeChallengesRoles();
   }
 
-  ngOnChanges() {
+  ngOnChanges(_changes: SimpleChanges) {
     this.apiReady = false;
     this.apiTeamReady = false;
+    if (!this.seasonUiBootstrapped) {
+      return;
+    }
+    void this.reloadSeasonDashboardAfterInputsChange();
+  }
+
+  /** Após primeira montagem: refrescar datas da campanha e métricas quando `idConsulta` / contexto mudam. */
+  private async reloadSeasonDashboardAfterInputsChange(): Promise<void> {
+    await this.loadSeasonDates();
     this.init();
   }
 
@@ -117,12 +152,24 @@ export class SeasonComponent implements OnInit, OnChanges {
   }
 
   getDadosTemporada() {
-    this.temporadaService.getDadosTemporadaDashboard(this.idConsulta, this.tipoConsulta).then(data => {
-      const normalized = this.normalizeSeasonPointsFromCompletedTasks(data);
-      this.seasonData.emit(normalized);
-      this.seasonInfo = normalized;
-      this.apiReady = true;
-    });
+    const requestGen = ++this.seasonDashboardRequestGeneration;
+    this.temporadaService.getDadosTemporadaDashboard(this.idConsulta, this.tipoConsulta).then(
+      data => {
+        if (requestGen !== this.seasonDashboardRequestGeneration) {
+          return;
+        }
+        const normalized = this.normalizeSeasonPointsFromCompletedTasks(data);
+        this.seasonData.emit(normalized);
+        this.seasonInfo = normalized;
+        this.apiReady = true;
+      },
+      () => {
+        if (requestGen !== this.seasonDashboardRequestGeneration) {
+          return;
+        }
+        this.apiReady = true;
+      }
+    );
   }
 
   /**
@@ -147,9 +194,12 @@ export class SeasonComponent implements OnInit, OnChanges {
   }
 
   getPercentPontosBloqueados() {
-    // return Math.floor((this.seasonInfo.pontos.bloqueados / this.seasonInfo.pontos.total) * 100);
-    const totalPontos = this.seasonInfo.blocked_points + this.seasonInfo.unblocked_points;
-    return Math.floor((this.seasonInfo.blocked_points / Number(totalPontos)) * 100);
+    const totalPontos =
+      Number(this.seasonInfo?.blocked_points ?? 0) + Number(this.seasonInfo?.unblocked_points ?? 0);
+    if (!totalPontos) {
+      return 0;
+    }
+    return Math.floor((Number(this.seasonInfo.blocked_points) / totalPontos) * 100);
   }
 
   extratoTemporadaBeta() {

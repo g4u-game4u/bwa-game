@@ -1,5 +1,6 @@
-import { Injectable } from '@angular/core';
+import { Injectable, Injector } from '@angular/core';
 import { CampaignService } from './campaign.service';
+import { Game4uApiService } from './game4u-api.service';
 
 @Injectable({
   providedIn: 'root'
@@ -9,7 +10,10 @@ export class SeasonDatesService {
   /** Cache alinhado a {@link CampaignService} para poder limitar `/game/*` síncronos. */
   private seasonBoundsCache: { start: Date; end: Date } | null = null;
 
-  constructor(private campaignService: CampaignService) {}
+  constructor(
+    private campaignService: CampaignService,
+    private injector: Injector
+  ) {}
 
   /**
    * Obtém a data de início da temporada (campanha)
@@ -267,6 +271,7 @@ export class SeasonDatesService {
   public clearCache(): void {
     this.seasonBoundsCache = null;
     this.campaignService.clearCache();
+    this.injector.get(Game4uApiService).clearStatsActionsDedupeCache();
   }
 
   /**

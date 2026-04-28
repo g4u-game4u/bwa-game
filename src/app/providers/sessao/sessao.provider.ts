@@ -54,7 +54,6 @@ export class SessaoProvider {
     public async init(canActivate: boolean): Promise<boolean> {
         // If already initializing, return the existing promise to prevent concurrent calls
         if (this.initPromise) {
-            console.log('🔐 Init already in progress, waiting for existing call...');
             return this.initPromise;
         }
 
@@ -64,7 +63,6 @@ export class SessaoProvider {
                 try {
                     // Add timeout to prevent infinite loading (15 seconds)
                     const REQUEST_TIMEOUT = 15000;
-                    console.log('🔐 Starting session initialization...');
                     let info = await firstValueFrom(
                         this.auth.userInfo().pipe(
                             timeout(REQUEST_TIMEOUT),
@@ -136,10 +134,6 @@ export class SessaoProvider {
             return;
         }
         
-        console.log('👤 Raw user data from API:', user);
-        console.log('👤 User teams from API:', user.teams);
-        console.log('👤 User extra from API:', user.extra);
-        
         // Handle Funifier response format - map _id to email if email is not set
         // Funifier uses _id as the email/player identifier
         if (!user.email && user._id) {
@@ -185,12 +179,7 @@ export class SessaoProvider {
             user.teams = [];
         }
         
-        console.log('👤 User data after validation:', user);
-        console.log('👤 User teams:', user.teams);
         this._usuario = user;
-        console.log('👤 _usuario set to:', this._usuario);
-        console.log('👤 usuario getter returns:', this.usuario);
-        console.log('👤 usuario.teams:', this.usuario?.teams);
     }
 
     async logout() {

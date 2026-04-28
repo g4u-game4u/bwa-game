@@ -50,7 +50,8 @@ describe('GamificationDashboardComponent - Property 11: Responsive Layout Adapta
     })),
     getPlayerCnpj: jasmine.createSpy('getPlayerCnpj').and.returnValue(of([])),
     getPlayerCnpjResp: jasmine.createSpy('getPlayerCnpjResp').and.returnValue(of([])),
-    clearCache: jasmine.createSpy('clearCache')
+    clearCache: jasmine.createSpy('clearCache'),
+    usesGame4uWalletFromStats: jasmine.createSpy('usesGame4uWalletFromStats').and.returnValue(false)
   };
 
   const mockKPIService = {
@@ -72,7 +73,8 @@ describe('GamificationDashboardComponent - Property 11: Responsive Layout Adapta
       'getPlayerCnpjListWithCount',
       'getUniqueClientesCount',
       'getCompletedTasksCount',
-      'getPontosForMonth'
+      'getPontosForMonth',
+      'getMonthlyGame4uPlayerDashboardData'
     ]);
     actionLogServiceSpy.getProgressMetrics.and.returnValue(
       of({
@@ -84,6 +86,13 @@ describe('GamificationDashboardComponent - Property 11: Responsive Layout Adapta
     actionLogServiceSpy.getUniqueClientesCount.and.returnValue(of(0));
     actionLogServiceSpy.getCompletedTasksCount.and.returnValue(of(0));
     actionLogServiceSpy.getPontosForMonth.and.returnValue(of(500));
+    actionLogServiceSpy.getMonthlyGame4uPlayerDashboardData.and.returnValue(
+      of({
+        wallet: { moedas: 500, bloqueados: 1000, desbloqueados: 2000 },
+        pontosActionLog: 500,
+        sidebar: { tarefasFinalizadas: 0 }
+      })
+    );
 
     const emptyGamificacaoMaps = { byEmpId: new Map(), byCnpjNorm: new Map() };
     const companyKpiServiceSpy = jasmine.createSpyObj('CompanyKpiService', [

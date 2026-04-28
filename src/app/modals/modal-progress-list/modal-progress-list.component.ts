@@ -484,7 +484,6 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
         this.cnpjLookupService.enrichCnpjList(validCnpjs)
       );
       this.cnpjNameMap = cnpjNames;
-      console.log('📊 Modal progress list: CNPJ name map loaded with', this.cnpjNameMap.size, 'entries');
     } catch (error) {
       console.error('Error enriching CNPJ names:', error);
     }

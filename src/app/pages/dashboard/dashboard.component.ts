@@ -148,6 +148,17 @@ export class DashboardComponent implements AfterViewInit, OnInit {
         } catch (e) {
             console.error('Erro ao sincronizar datas da campanha antes do season shell:', e);
         }
+        /**
+         * Colaborador (sem seletores de gestor): definir consulta **antes** de `seasonShellReady`,
+         * para `[idConsulta]` já existir quando `<page-season>` faz o primeiro `init()` / `/game/stats`.
+         * Antes isto só corria em `ngAfterViewInit` (depois do child `ngOnInit`) e o card ficava sempre vazio.
+         */
+        if (!this.showDashGestor) {
+            this.idConsulta = this.sessao.usuario?.email;
+            this.nomeConsulta = this.sessao.usuario?.full_name || this.sessao.usuario?.name || '';
+            this.tipoConsulta = TIPO_CONSULTA_COLABORADOR;
+            this.time = this.sessao.usuario?.team_id;
+        }
         this.seasonShellReady = true;
         this.clientLogoUrl = await this.systemParamsService.getParam<string>('client_dark_logo_url') || '/assets/images/game4u_logo.png';
     }
@@ -167,10 +178,6 @@ export class DashboardComponent implements AfterViewInit, OnInit {
             this.getTimesGestor();
             this.getColaboradoresGestor();
         } else {
-            this.idConsulta = this.sessao.usuario?.email;
-            this.nomeConsulta = this.sessao.usuario?.full_name || this.sessao.usuario?.name || '';
-            this.tipoConsulta = TIPO_CONSULTA_COLABORADOR;
-            this.time = this.sessao.usuario?.team_id;
             this.toggleMenu();
         }
 

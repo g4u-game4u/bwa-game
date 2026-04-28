@@ -16,7 +16,11 @@ import { CacheManagerService } from '@services/cache-manager.service';
 import { SeasonDatesService } from '@services/season-dates.service';
 import { CnpjLookupService } from '@services/cnpj-lookup.service';
 import { SessaoProvider } from '@providers/sessao/sessao.provider';
-import { generateMockPlayerStatus, generateMockCompanies } from '@app/testing/mock-data-generators';
+import {
+  generateMockPlayerStatus,
+  generateMockCompanies,
+  generatePointWallet
+} from '@app/testing/mock-data-generators';
 
 describe('GamificationDashboardComponent - Performance Tests', () => {
   let component: GamificationDashboardComponent;
@@ -41,8 +45,10 @@ describe('GamificationDashboardComponent - Performance Tests', () => {
       'getSeasonProgress',
       'getPlayerCnpj',
       'getPlayerCnpjResp',
-      'clearCache'
+      'clearCache',
+      'usesGame4uWalletFromStats'
     ]);
+    playerServiceSpy.usesGame4uWalletFromStats.and.returnValue(false);
     playerServiceSpy.getPlayerStatus.and.returnValue(of(generateMockPlayerStatus()));
     playerServiceSpy.getPlayerPoints.and.returnValue(
       of({
@@ -73,7 +79,8 @@ describe('GamificationDashboardComponent - Performance Tests', () => {
       'getPlayerCnpjListWithCount',
       'getUniqueClientesCount',
       'getCompletedTasksCount',
-      'getPontosForMonth'
+      'getPontosForMonth',
+      'getMonthlyGame4uPlayerDashboardData'
     ]);
     actionLogServiceSpy.getProgressMetrics.and.returnValue(
       of({
@@ -85,6 +92,13 @@ describe('GamificationDashboardComponent - Performance Tests', () => {
     actionLogServiceSpy.getUniqueClientesCount.and.returnValue(of(0));
     actionLogServiceSpy.getCompletedTasksCount.and.returnValue(of(0));
     actionLogServiceSpy.getPontosForMonth.and.returnValue(of(500));
+    actionLogServiceSpy.getMonthlyGame4uPlayerDashboardData.and.returnValue(
+      of({
+        wallet: generatePointWallet(),
+        pontosActionLog: 500,
+        sidebar: { tarefasFinalizadas: 0 }
+      })
+    );
 
     const emptyGamificacaoMaps = { byEmpId: new Map(), byCnpjNorm: new Map() };
     const companyKpiServiceSpy = jasmine.createSpyObj('CompanyKpiService', [

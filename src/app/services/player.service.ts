@@ -62,19 +62,16 @@ export class PlayerService {
     const now = Date.now();
 
     if (!forceRefresh && cached && (now - cached.timestamp) < this.CACHE_DURATION) {
-      console.log('📊 Using cached Observable for profile:', pid);
       return cached.data$;
     }
 
     const pathId = encodeURIComponent(pid);
     const base = (environment.backend_url_base || '').trim().replace(/\/+$/, '');
     const url = joinApiPath(base, `player/${pathId}`);
-    console.log('📊 Fetching fresh player profile (no /status):', url);
 
     const request$ = this.http.get<any>(url).pipe(
       timeout(this.REQUEST_TIMEOUT),
       tap(response => {
-        console.log('📊 Raw player profile received:', response);
       }),
       shareReplay({ bufferSize: 1, refCount: true, windowTime: this.CACHE_DURATION }),
       catchError(error => {
@@ -111,7 +108,6 @@ export class PlayerService {
     const request$ = this.http.get<any>(`${environment.backend_url_base}/auth/user`).pipe(
       timeout(this.REQUEST_TIMEOUT),
       tap(response => {
-        console.log('📊 Player/me response:', response);
       }),
       shareReplay({ bufferSize: 1, refCount: true, windowTime: this.CACHE_DURATION }),
       catchError(error => {
@@ -146,7 +142,6 @@ export class PlayerService {
     return this.fetchPlayerData(playerId).pipe(
       map(response => {
         const status = this.mapper.toPlayerStatus(response);
-        console.log('📊 Mapped player status:', status);
         return status;
       }),
       catchError(error => {
@@ -170,7 +165,6 @@ export class PlayerService {
       return this.game4uApi.getGameStats({ user: email, ...range }).pipe(
         map(stats => {
           const points = mapGame4uStatsToPointWallet(stats);
-          console.log('📊 Mapped point wallet (Game4U):', points);
           return points;
         }),
         catchError(error => {
@@ -183,7 +177,6 @@ export class PlayerService {
     return this.fetchPlayerData(playerId).pipe(
       map(response => {
         const points = this.mapper.toPointWallet(response);
-        console.log('📊 Mapped point wallet:', points);
         return points;
       }),
       catchError(error => {
@@ -199,7 +192,6 @@ export class PlayerService {
    */
   getSeasonProgress(_playerId: string, seasonDates: { start: Date; end: Date }): Observable<SeasonProgress> {
     const progress = this.mapper.toSeasonProgress({}, seasonDates);
-    console.log('📊 Season progress shell (no status request):', progress);
     return of(progress);
   }
 
@@ -217,7 +209,6 @@ export class PlayerService {
   getPlayerCnpj(playerId: string): Observable<string[]> {
     return this.getPlayerCompanyData(playerId).pipe(
       map(data => data.get('cnpj') || []),
-      tap(cnpjs => console.log('📊 Player cnpj (participação):', cnpjs))
     );
   }
 

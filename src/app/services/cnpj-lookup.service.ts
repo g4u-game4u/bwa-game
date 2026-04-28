@@ -39,11 +39,9 @@ export class CnpjLookupService {
    */
   private fetchCnpjByEmpids(empids: number[]): Observable<Map<number, CnpjEntry>> {
     if (empids.length === 0) {
-      console.log('📊 fetchCnpjByEmpids: empty empid list');
       return of(new Map<number, CnpjEntry>());
     }
 
-    console.log('📊 Fetching CNPJ entries for empids:', empids.length, 'empids');
 
     const headers = new HttpHeaders({
       'Content-Type': 'application/json'
@@ -61,13 +59,10 @@ export class CnpjLookupService {
     ];
 
     const aggregateUrl = `${this.apiUrl}/aggregate?strict=true`;
-    console.log('📊 Aggregate URL:', aggregateUrl);
-    console.log('📊 Aggregate body with', empids.length, 'empids');
 
     // Use pagination for large requests (batch size of 100)
     return this.fetchAllPaginatedCnpj(aggregateUrl, aggregateBody, headers, 100).pipe(
       tap(entries => {
-        console.log('📊 CNPJ entries fetched (paginated):', entries.length);
       }),
       map(entries => {
         // Create a map for fast lookup by _id (empid)
@@ -77,7 +72,6 @@ export class CnpjLookupService {
           const numericId = typeof entry._id === 'string' ? parseInt(entry._id, 10) : entry._id;
           cnpjMap.set(numericId, { ...entry, _id: numericId });
         });
-        console.log('📊 Created map with', cnpjMap.size, 'entries');
         return cnpjMap;
       }),
       catchError(error => {
@@ -105,8 +99,6 @@ export class CnpjLookupService {
     const rangeHeader = `items=${startIndex}-${batchSize}`;
     const headersWithRange = headers.set('Range', rangeHeader);
 
-    console.log(`📊 Fetching CNPJ batch: ${rangeHeader} (accumulated: ${accumulatedResults.length})`);
-
     if (url.toLowerCase().includes('/aggregate')) {
       console.warn('[CnpjLookup] POST aggregate Funifier desativado; sem enriquecimento empid→CNPJ.');
       return of(accumulatedResults.length ? accumulatedResults : []);
@@ -125,13 +117,11 @@ export class CnpjLookupService {
 
         // If we got a full batch, there might be more data - recursively fetch
         if (batchResults.length === batchSize) {
-          console.log(`📊 CNPJ batch complete (${batchResults.length} items), fetching next batch...`);
           const nextIndex = startIndex + batchSize;
           // Recursively fetch next batch
           return this.fetchAllPaginatedCnpj(url, aggregateBody, headers, batchSize, nextIndex, allResults);
         } else {
           // Last batch (partial or empty), return all accumulated results
-          console.log(`📊 CNPJ final batch (${batchResults.length} items), total: ${allResults.length}`);
           return of(allResults);
         }
       }),
@@ -161,8 +151,6 @@ export class CnpjLookupService {
       return of(new Map<string, CnpjEntry>());
     }
 
-    console.log('📊 Fetching CNPJ entries by full CNPJ:', fullCnpjs.length, 'items');
-
     const headers = new HttpHeaders({
       'Content-Type': 'application/json'
     });
@@ -181,7 +169,6 @@ export class CnpjLookupService {
             cnpjMap.set(entry.cnpj, entry);
           }
         });
-        console.log('📊 Full CNPJ map created with', cnpjMap.size, 'entries');
         return cnpjMap;
       }),
       catchError(error => {
@@ -207,17 +194,14 @@ export class CnpjLookupService {
    */
   extractEmpid(cnpj: string): number | null {
     if (!cnpj) {
-      console.log('📊 extractEmpid: empty CNPJ');
       return null;
     }
 
     const trimmed = cnpj.trim();
-    console.log('📊 extractEmpid: processing CNPJ:', trimmed);
 
     // Check if it's a simple number (≤ 8 digits)
     if (/^\d{1,8}$/.test(trimmed)) {
       const empid = parseInt(trimmed, 10);
-      console.log('📊 extractEmpid: simple number detected, empid =', empid);
       return empid;
     }
 
@@ -226,12 +210,10 @@ export class CnpjLookupService {
     const match = trimmed.match(/\[(\d+)\|/);
     if (match && match[1]) {
       const empid = parseInt(match[1], 10);
-      console.log('📊 extractEmpid: pattern match, empid =', empid);
       return empid;
     }
 
     // If no pattern found, return null
-    console.warn('📊 extractEmpid: Could not extract empid from CNPJ:', cnpj);
     return null;
   }
 
@@ -240,24 +222,19 @@ export class CnpjLookupService {
    * Returns the empresa field from the database, or the original CNPJ if not found
    */
   getCompanyName(cnpj: string): Observable<string> {
-    console.log('📊 getCompanyName called with:', cnpj);
     const empid = this.extractEmpid(cnpj);
     
     if (empid === null) {
       // Could not extract empid, return original
-      console.log('📊 getCompanyName: no empid extracted, returning original');
       return of(cnpj);
     }
 
-    console.log('📊 getCompanyName: fetching database for empid:', empid);
     return this.fetchCnpjByEmpids([empid]).pipe(
       map(cnpjMap => {
         const entry = cnpjMap.get(empid);
         if (entry) {
-          console.log('📊 getCompanyName: FOUND -', empid, '→', entry.empresa);
           return entry.empresa;
         }
-        console.warn('📊 getCompanyName: NOT FOUND - empid:', empid, '- returning original');
         return cnpj;
       })
     );
@@ -285,11 +262,8 @@ export class CnpjLookupService {
    */
   enrichCnpjListFull(cnpjList: string[]): Observable<Map<string, CnpjEnrichedInfo>> {
     if (cnpjList.length === 0) {
-      console.log('📊 enrichCnpjListFull: empty list provided');
       return of(new Map<string, CnpjEnrichedInfo>());
     }
-
-    console.log('📊 enrichCnpjListFull: processing', cnpjList.length, 'CNPJs:', cnpjList);
 
     // Separate into empid-based and full CNPJ-based
     const empidMap = new Map<number, string[]>(); // empid → original CNPJs
@@ -299,10 +273,8 @@ export class CnpjLookupService {
     cnpjList.forEach(cnpj => {
       if (this.isFullCnpj(cnpj)) {
         fullCnpjList.push(cnpj);
-        console.log('📊 enrichCnpjListFull: full CNPJ detected:', cnpj);
       } else {
         const empid = this.extractEmpid(cnpj);
-        console.log('📊 enrichCnpjListFull: processing CNPJ:', cnpj, '→ empid:', empid);
         if (empid !== null) {
           cnpjToEmpid.set(cnpj, empid);
           if (!empidMap.has(empid)) {
@@ -314,7 +286,6 @@ export class CnpjLookupService {
     });
 
     const uniqueEmpids = Array.from(empidMap.keys());
-    console.log('📊 enrichCnpjListFull: empids to fetch:', uniqueEmpids.length, ', full CNPJs to fetch:', fullCnpjList.length);
 
     // Fetch both in parallel
     const empidFetch$ = uniqueEmpids.length > 0
@@ -329,7 +300,6 @@ export class CnpjLookupService {
       map(({ empidResults, fullCnpjResults }) => {
         const result = new Map<string, CnpjEnrichedInfo>();
 
-        console.log('📊 enrichCnpjListFull: empid results:', empidResults.size, ', full CNPJ results:', fullCnpjResults.size);
 
         // Process empid-based lookups
         cnpjList.forEach(cnpj => {
@@ -337,10 +307,8 @@ export class CnpjLookupService {
             // Full CNPJ lookup
             const entry = fullCnpjResults.get(cnpj);
             if (entry) {
-              console.log('📊 enrichCnpjListFull: FULL CNPJ MATCH -', cnpj, '→', entry.empresa, 'status:', entry.status);
               result.set(cnpj, { empresa: entry.empresa, status: entry.status, cnpj: entry.cnpj });
             } else {
-              console.log('📊 enrichCnpjListFull: FULL CNPJ NO MATCH -', cnpj);
               result.set(cnpj, { empresa: cnpj });
             }
           } else {
@@ -348,7 +316,6 @@ export class CnpjLookupService {
             if (empid !== undefined) {
               const entry = empidResults.get(empid);
               if (entry) {
-                console.log('📊 enrichCnpjListFull: EMPID MATCH -', cnpj, '→', entry.empresa, 'status:', entry.status);
                 result.set(cnpj, { empresa: entry.empresa, status: entry.status, cnpj: entry.cnpj });
               } else {
                 result.set(cnpj, { empresa: cnpj });
@@ -359,7 +326,6 @@ export class CnpjLookupService {
           }
         });
 
-        console.log('📊 enrichCnpjListFull: final result map:', Array.from(result.entries()));
         return result;
       })
     );
@@ -408,6 +374,5 @@ export class CnpjLookupService {
 
   clearCache(): void {
     // No cache to clear in this implementation
-    console.log('📊 clearCache: no cache to clear (using direct aggregate queries)');
   }
 }

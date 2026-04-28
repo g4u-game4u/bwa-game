@@ -46,15 +46,12 @@ private loadClientes(): void {
   this.actionLogService.getPlayerCnpjListWithCount(this.playerId, this.month)
     .pipe(
       switchMap(clientes => {
-        console.log('📊 Modal carteira clientes loaded, enriching with KPI data:', clientes);
-        // Enrich companies with KPI data from cnpj__c collection
         return this.companyKpiService.enrichCompaniesWithKpis(clientes);
       }),
       takeUntil(this.destroy$)
     )
     .subscribe({
       next: (enrichedClientes) => {
-        console.log('📊 Modal carteira clientes enriched with KPI data:', enrichedClientes);
         this.clientes = enrichedClientes;
         this.isLoading = false;
         this.cdr.markForCheck();
