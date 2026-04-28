@@ -73,15 +73,15 @@ export class KPIService {
   }
 
   /**
-   * Get player KPIs from player's extra info:
-   * 1. Clientes na Carteira - count from action_log filtered by selected month
-   * 2. Porcentagem de Entregas no Prazo - value from extra.entrega (only for current month)
-   * 
-   * Uses the faster player/me endpoint when playerId is 'me' or matches current user
-   * 
-   * @param playerId - Player ID or 'me' for current player
-   * @param selectedMonth - Selected month for filtering (optional, defaults to current month)
-   * @param actionLogService - ActionLogService instance (passed to avoid circular dependency)
+   * Get player KPIs from `extra` no perfil retornado por **`GET /auth/user`**
+   * (via {@link PlayerService.getCurrentPlayerData}) — não usa `GET …/player/{id}`.
+   *
+   * 1. Clientes na Carteira — contagem a partir de `extra.companies`
+   * 2. Entregas no Prazo — `extra.entrega` / metas em `extra`
+   *
+   * @param playerId — usado só na chave de cache e na API dos callers; os valores vêm sempre do utilizador autenticado
+   * @param selectedMonth — mês selecionado (entra na chave de cache)
+   * @param actionLogService — reservado (evitar dependência circular); não usado neste fluxo
    */
   getPlayerKPIs(playerId: string, selectedMonth?: Date, actionLogService?: any): Observable<KPIData[]> {
     // Create cache key that includes month to avoid cache conflicts
@@ -92,7 +92,7 @@ export class KPIService {
       return cached;
     }
 
-    const request$: Observable<KPIData[]> = this.playerService.getRawPlayerData(playerId).pipe(
+    const request$: Observable<KPIData[]> = this.playerService.getCurrentPlayerData().pipe(
       map(playerStatus => {
         console.log('📊 Player status received:', playerStatus);
         const companiesStr = playerStatus?.extra?.companies || '';

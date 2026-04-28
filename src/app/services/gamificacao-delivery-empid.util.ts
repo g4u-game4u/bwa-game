@@ -34,3 +34,44 @@ export function extractGamificacaoEmpIdFromDeliveryKey(key: string): string | nu
   }
   return null;
 }
+
+/**
+ * Primeiro segmento de `delivery_id` antes do primeiro hífen, se for só dígitos (EmpID quando não há sufixo `YYYY-MM-DD`).
+ * Formatos com data de competência no fim devem usar antes `extractGamificacaoEmpIdFromDeliveryKey`.
+ */
+export function extractEmpIdPrefixFromDeliveryIdFirstSegment(deliveryId: string): string | null {
+  const s = String(deliveryId || '').trim();
+  if (!s) {
+    return null;
+  }
+  const idx = s.indexOf('-');
+  const head = (idx === -1 ? s : s.slice(0, idx)).trim();
+  if (!head || !/^\d+$/.test(head)) {
+    return null;
+  }
+  const stripped = head.replace(/^0+/, '') || '0';
+  return stripped;
+}
+
+/**
+ * Chave usada no mapa `byEmpId` da gamificação: prioriza EmpID extraído de `delivery_id` (competência ou primeiro segmento numérico);
+ * senão usa a chave de participação (integration_id / client_id / etc.).
+ */
+export function buildGamificacaoLookupKeyForParticipacaoRow(
+  participationKey: string,
+  deliveryId?: string
+): string {
+  const pk = String(participationKey || '').trim();
+  const did = String(deliveryId || '').trim();
+  if (did) {
+    const fromCompetence = extractGamificacaoEmpIdFromDeliveryKey(did);
+    if (fromCompetence) {
+      return fromCompetence;
+    }
+    const firstSeg = extractEmpIdPrefixFromDeliveryIdFirstSegment(did);
+    if (firstSeg) {
+      return firstSeg;
+    }
+  }
+  return pk;
+}

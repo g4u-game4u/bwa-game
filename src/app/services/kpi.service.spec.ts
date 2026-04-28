@@ -15,7 +15,7 @@ describe('KPIService', () => {
   beforeEach(() => {
     const apiSpy = jasmine.createSpyObj('BackendApiService', ['get', 'post']);
     const kpiMapperSpy = jasmine.createSpyObj('KPIMapper', ['toKPIDataArray']);
-    const playerSpy = jasmine.createSpyObj('PlayerService', ['getRawPlayerData']);
+    const playerSpy = jasmine.createSpyObj('PlayerService', ['getCurrentPlayerData']);
 
     TestBed.configureTestingModule({
       providers: [
@@ -62,7 +62,7 @@ describe('KPIService', () => {
 
   describe('getPlayerKPIs', () => {
     beforeEach(() => {
-      playerServiceSpy.getRawPlayerData.and.returnValue(
+      playerServiceSpy.getCurrentPlayerData.and.returnValue(
         of({
           extra: {
             client_goals: 100,
@@ -78,7 +78,7 @@ describe('KPIService', () => {
       service.getPlayerKPIs('player@x.com').subscribe(kpis => {
         const carteira = kpis.find(k => k.id === 'numero-empresas');
         expect(carteira?.current).toBe(4);
-        expect(playerServiceSpy.getRawPlayerData).toHaveBeenCalledWith('player@x.com');
+        expect(playerServiceSpy.getCurrentPlayerData).toHaveBeenCalled();
         done();
       });
     });

@@ -2892,11 +2892,11 @@ private calculateCollaboratorTotals(memberData: Array<{
 
   get teamMonthlyPointsHelpText(): string {
     const scope = this.selectedCollaborator
-      ? 'Pontos deste colaborador no período selecionado (filtro do painel). '
-      : 'Pontos somados de todos os membros da equipe no período selecionado. ';
+      ? 'Mostra os pontos deste colaborador no período que você escolheu no filtro. '
+      : 'Mostra a soma dos pontos de toda a equipe no período do filtro. ';
     return (
       scope +
-      'Com dados Game4U: a meta é a soma dos pontos das user-actions em qualquer status; o atingido é só os pontos em DONE. Sem Game4U, a meta provisória usa processos pendentes/incompletos do action_log × 3.'
+      'O que sobe no indicador são só as atividades já concluídas; a meta é o total planejado para o período (incluindo o que ainda falta fechar). Se a gamificação não estiver conectada ao painel, a meta é uma estimativa a partir do que ainda está pendente.'
     );
   }
 

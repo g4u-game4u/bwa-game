@@ -12,6 +12,7 @@ import {TranslateService} from "@ngx-translate/core";
 import { LoginLogService } from '@services/login-log.service';
 import { LogoService } from '@services/logo.service';
 import { SessionTimeoutService } from '@services/session-timeout.service';
+import { CampaignService } from '@services/campaign.service';
 import { Subscription } from 'rxjs';
 
 @Component({
@@ -52,7 +53,8 @@ export class LoginComponent implements OnInit, OnDestroy {
     private translate: TranslateService,
     private loginLogService: LoginLogService,
     private logoService: LogoService,
-    private sessionTimeoutService: SessionTimeoutService
+    private sessionTimeoutService: SessionTimeoutService,
+    private campaignService: CampaignService
   ) {
     this.bwaLogoUrl = this.logoService.getLogoUrl();
   }
@@ -224,6 +226,9 @@ export class LoginComponent implements OnInit, OnDestroy {
             // Silently fail - don't block login if tracking fails
             console.warn('⚠️ Failed to track login event:', error);
           });
+
+          // Campanha exige sessão: só busca após login (GET /campaign)
+          this.campaignService.prefetchCampaign();
           
           // Wait a bit to ensure state is fully updated
           await new Promise(resolve => setTimeout(resolve, 100));

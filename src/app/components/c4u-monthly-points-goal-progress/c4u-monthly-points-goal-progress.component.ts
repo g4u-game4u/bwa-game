@@ -19,7 +19,7 @@ export class C4uMonthlyPointsGoalProgressComponent {
   readonly unit = 'pts';
 
   private readonly fallbackHelp =
-    'Atingido: pontos de user-actions em status DONE no período do filtro. Meta: soma dos pontos de user-actions em todos os status no mesmo período (dados Game4U). Sem integração Game4U, a meta provisória usa processos pendentes/incompletos do action_log × 3.';
+    'Aqui você vê quantos pontos você já fez no período do filtro, comparado à meta daquele período. Só entram pontos “feitos” as atividades já concluídas; a meta é o total que estava previsto (incluindo o que ainda não foi fechado). Se a gamificação ainda não estiver ligada ao painel, a meta aparece como uma estimativa com base no que ainda está pendente.';
 
   get resolvedHelpDescription(): string {
     const t = this.helpDescription?.trim();

@@ -4,7 +4,16 @@ import { Observable, of, firstValueFrom } from 'rxjs';
 import { map, catchError, shareReplay, take } from 'rxjs/operators';
 import { KPIData } from '@model/gamification-dashboard.model';
 import { environment } from '../../environments/environment';
-import { extractGamificacaoEmpIdFromDeliveryKey } from './gamificacao-delivery-empid.util';
+import {
+  buildGamificacaoLookupKeyForParticipacaoRow,
+  extractGamificacaoEmpIdFromDeliveryKey
+} from './gamificacao-delivery-empid.util';
+
+/** Linha de participação Game4U para cruzar com a API gamificação (EmpID via `delivery_id` quando existir). */
+export interface ParticipacaoRowGamificacaoInput {
+  participationKey: string;
+  deliveryId?: string;
+}
 
 /**
  * Linha da API de gamificação (hook).
@@ -556,35 +565,54 @@ export class CompanyKpiService {
   }
 
   /**
-   * Lista “Clientes atendidos” (participação Game4U): cruza com gamificação por **EmpID** primeiro
-   * (incl. extração a partir de `delivery_id`), e só usa CNPJ quando a chave tem ≥11 dígitos.
+   * Lista “Clientes atendidos” (participação Game4U): cruza com gamificação por **EmpID** extraído de
+   * `delivery_id` quando existir (competência `…-YYYY-MM-DD` ou primeiro segmento numérico antes do hífen);
+   * senão usa a chave de participação. CNPJ só se a chave de lookup tiver ≥11 dígitos.
    * O percentual vem do campo `porcEntregas` da API (normalizado em `entrega` / `porcEntregas` / `deliveryKpi`).
    */
-  enrichFromParticipacaoRowKeys(rowKeys: string[]): Observable<CompanyDisplay[]> {
-    if (!rowKeys || rowKeys.length === 0) {
+  enrichFromParticipacaoRowKeys(
+    rows: readonly (ParticipacaoRowGamificacaoInput | string)[]
+  ): Observable<CompanyDisplay[]> {
+    if (!rows || rows.length === 0) {
       return of([]);
     }
 
+    const normalized: ParticipacaoRowGamificacaoInput[] = rows.map(r =>
+      typeof r === 'string'
+        ? { participationKey: String(r).trim(), deliveryId: undefined }
+        : {
+            participationKey: String(r.participationKey || '').trim(),
+            deliveryId: r.deliveryId?.trim()
+          }
+    );
+
     return this.getGamificacaoMaps$().pipe(
       map(({ byEmpId, byCnpjNorm }) =>
-        rowKeys.map(rowKey => {
-          const key = String(rowKey).trim();
+        normalized.map(({ participationKey, deliveryId }) => {
+          const lookupKey = buildGamificacaoLookupKeyForParticipacaoRow(
+            participationKey,
+            deliveryId
+          );
           const { kpi: kpiData, gamificacaoEmpIdUsado } = this.resolveKpiForParticipacaoRowKey(
-            key,
+            lookupKey,
             byEmpId,
             byCnpjNorm
           );
 
           if (!kpiData) {
-            console.warn('📊 enrichFromParticipacaoRowKeys: sem KPI para chave de participação', rowKey);
+            console.warn('📊 enrichFromParticipacaoRowKeys: sem KPI', {
+              participationKey,
+              deliveryId: deliveryId || null,
+              lookupKeyGamificacao: lookupKey
+            });
           }
 
           const procFin = kpiData?.procFinalizados ?? 0;
           const procPen = kpiData?.procPendentes ?? 0;
 
           const result: CompanyDisplay = {
-            cnpj: key,
-            cnpjId: key,
+            cnpj: participationKey,
+            cnpjId: participationKey,
             actionCount: 0,
             processCount: procFin + procPen,
             ...(gamificacaoEmpIdUsado ? { gamificacaoEmpIdUsado } : {})
@@ -597,11 +625,11 @@ export class CompanyKpiService {
       catchError(error => {
         console.error('📊 Erro enrichFromParticipacaoRowKeys:', error);
         return of(
-          rowKeys.map(
-            k =>
+          normalized.map(
+            ({ participationKey }) =>
               ({
-                cnpj: String(k).trim(),
-                cnpjId: String(k).trim(),
+                cnpj: participationKey,
+                cnpjId: participationKey,
                 actionCount: 0,
                 processCount: 0
               }) as CompanyDisplay

@@ -7,7 +7,7 @@
 
   <div class="flex flex-col items-center md:!items-start">
     <div class="logo">
-      <img *ngIf="clientLogoUrl" [src]="clientLogoUrl" [alt]="clientName" class="client-logo" draggable="false">
+      <img *ngIf="!clientLogoUrl" [src]="clientLogoUrl" [alt]="clientName" class="client-logo" draggable="false">
       <div *ngIf="!clientLogoUrl" class="default-logo"></div>
     </div>
 

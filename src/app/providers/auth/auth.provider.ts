@@ -59,12 +59,12 @@ export class AuthProvider {
    * Pedido de redefinição de senha (o backend deve expor a rota correspondente).
    */
   async requestPasswordReset(email: string) {
-    const url = joinApiPath(this.apiBase(), '/auth/password-reset-request');
-    return firstValueFrom(this.http.post(url, {email}));
+    const url = joinApiPath(this.apiBase(), '/auth/change-password-request');
+    return firstValueFrom(this.http.post(url, { email }));
   }
 
   async resetPassword(userId: string, token: string, newPassword: string) {
-    const url = joinApiPath(this.apiBase(), '/auth/password-reset-confirm');
+    const url = joinApiPath(this.apiBase(), '/auth/change-password');
     return firstValueFrom(this.http.post(url, {
       user: userId,
       token,
