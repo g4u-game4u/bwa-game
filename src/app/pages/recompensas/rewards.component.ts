@@ -82,7 +82,6 @@ export class RewardsComponent implements AfterViewInit, OnInit {
     } catch (e) {
       console.error('Recompensas: campanha/datas antes do season shell:', e);
     }
-
     await this.sessao.init(true);
     const usuario = this.sessao.usuario;
     if (usuario) {
