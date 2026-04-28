@@ -19,6 +19,7 @@ import {
   computeMonthlyPointsFromGame4uActions,
   filterGame4uActionsByCompetenceMonth,
   filterGame4uActionsByMonth,
+  parseExtraDrPrazoToUtcMs,
   getGame4uParticipationRowKey,
   getGame4uActionStatsDone,
   getGame4uMonthlyPointsCircularFromActionStats,
@@ -1374,22 +1375,32 @@ export class ActionLogService {
 
       if (isGame4uDataEnabled() && this.game4u.isConfigured()) {
         if (month != null) {
-          const qActions = this.game4uUserQueryActionsForCompetenceMonth(playerId, month);
+          // Precisa ser intervalo amplo (campanha→fim do mês) para capturar linhas cuja competência é o mês
+          // mas `created_at` caiu fora (ex.: prazos e correções retroativas).
+          const qActions = this.game4uUserQueryYearThroughMonthEnd(playerId, month);
           if (!qActions) {
             return of([]);
           }
           const request$ = this.game4u.getGameActions(qActions).pipe(
             map(actions => {
-              const scoped = filterGame4uActionsByCompetenceMonth(actions, month);
+              // Clientes atendidos este mês: SOMENTE ações finalizadas com `finished_at` dentro do mês selecionado.
+              // Não usar dt_prazo nesta seção.
+              const start = new Date(month.getFullYear(), month.getMonth(), 1, 0, 0, 0, 0).getTime();
+              const end = new Date(month.getFullYear(), month.getMonth() + 1, 0, 23, 59, 59, 999).getTime();
+              const scoped = actions.filter(a => {
+                if (!isGame4uUserActionFinalizedStatus(a.status)) {
+                  return false;
+                }
+                const t = parseExtraDrPrazoToUtcMs((a as any).finished_at);
+                return t != null && t >= start && t <= end;
+              });
+
               const byCnpj = new Map<
                 string,
                 { actionCount: number; delivery_title?: string; delivery_id?: string }
               >();
               for (const a of scoped) {
-                if (!isGame4uUserActionFinalizedStatus(a.status)) {
-                  continue;
-                }
-                const cnpj = getGame4uParticipationRowKey(a);
+                const cnpj = getGame4uParticipationRowKey(a) || (a.delivery_id != null ? String(a.delivery_id).trim() : '');
                 if (!cnpj) {
                   continue;
                 }

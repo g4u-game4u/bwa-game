@@ -373,13 +373,13 @@ export function parseExtraDrPrazoToUtcMs(dr: unknown): number | null {
   return parseGame4uIsoMs(dr);
 }
 
-/** True se `extra.dr_prazo` cai no mesmo mês calendário que `month`. */
+/** `extra.dt_prazo` (ou legado `extra.dr_prazo`) no mesmo mês calendário que `month`. */
 export function isGame4uActionExtraDrPrazoInCalendarMonth(a: Game4uUserActionModel, month: Date): boolean {
   const ex = readGame4uExtraRecord(a);
   if (!ex) {
     return false;
   }
-  const ms = parseExtraDrPrazoToUtcMs(ex['dr_prazo']);
+  const ms = parseExtraDrPrazoToUtcMs(ex['dt_prazo'] ?? ex['dr_prazo']);
   if (ms == null) {
     return false;
   }
@@ -388,14 +388,18 @@ export function isGame4uActionExtraDrPrazoInCalendarMonth(a: Game4uUserActionMod
 }
 
 /**
- * Pontos a somar à **meta** do circular do mês: user-actions com `extra.dr_prazo` no mês do filtro
- * que ainda não entram na competência usual (`delivery_id` / `created_at`), para não duplicar.
+ * Pontos a somar à **meta** do circular do mês: user-actions **PENDING** com `extra.dt_prazo` no mês do filtro
+ * (fallback: `extra.dr_prazo`) que ainda não entram na competência usual (`delivery_id` / `created_at`), para não duplicar.
  */
 export function computeGame4uDrPrazoMetaBoost(actions: Game4uUserActionModel[], month: Date): number {
   const inCompetence = filterGame4uActionsByCompetenceMonth(actions, month);
   const competenceIds = new Set(inCompetence.map(a => String(a.id)));
   let sum = 0;
   for (const a of actions) {
+    const st = String(a.status ?? '').toUpperCase();
+    if (st !== 'PENDING') {
+      continue;
+    }
     if (!isGame4uActionExtraDrPrazoInCalendarMonth(a, month)) {
       continue;
     }

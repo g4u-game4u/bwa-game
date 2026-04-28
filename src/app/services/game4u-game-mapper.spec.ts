@@ -195,14 +195,14 @@ describe('game4u-game-mapper', () => {
   });
 
   describe('parseExtraDrPrazoToUtcMs / computeGame4uDrPrazoMetaBoost', () => {
-    it('parses ISO and Mongo $date for dr_prazo', () => {
+    it('parses ISO and Mongo $date for prazo', () => {
       const iso = parseExtraDrPrazoToUtcMs('2024-03-15T12:00:00.000Z');
       expect(iso).toBe(Date.parse('2024-03-15T12:00:00.000Z'));
       const mongo = parseExtraDrPrazoToUtcMs({ $date: '2024-03-20T00:00:00.000Z' });
       expect(mongo).toBe(Date.parse('2024-03-20T00:00:00.000Z'));
     });
 
-    it('adds meta boost only for dr_prazo in filter month outside competence', () => {
+    it('adds meta boost only for dt_prazo in filter month outside competence (PENDING only)', () => {
       const month = new Date(2024, 2, 1);
       const actions: Game4uUserActionModel[] = [
         {
@@ -211,7 +211,7 @@ describe('game4u-game-mapper', () => {
           status: 'DONE',
           created_at: '2024-03-01T00:00:00.000Z',
           delivery_id: '1079-2024-03-31',
-          extra: { dr_prazo: '2024-03-10T00:00:00.000Z' }
+          extra: { dt_prazo: '2024-03-10T00:00:00.000Z' }
         },
         {
           id: 'extra-only',
@@ -219,7 +219,7 @@ describe('game4u-game-mapper', () => {
           status: 'PENDING',
           created_at: '2024-02-01T00:00:00.000Z',
           delivery_id: 'no-date-suffix',
-          extra: { dr_prazo: '2024-03-15T00:00:00.000Z' }
+          extra: { dt_prazo: '2024-03-15T00:00:00.000Z' }
         },
         {
           id: 'wrong-month',
@@ -227,7 +227,15 @@ describe('game4u-game-mapper', () => {
           status: 'PENDING',
           created_at: '2024-02-01T00:00:00.000Z',
           delivery_id: 'no-date-suffix',
-          extra: { dr_prazo: '2024-07-15T15:00:00.000Z' }
+          extra: { dt_prazo: '2024-07-15T15:00:00.000Z' }
+        },
+        {
+          id: 'non-pending',
+          points: 777,
+          status: 'DONE',
+          created_at: '2024-02-01T00:00:00.000Z',
+          delivery_id: 'no-date-suffix',
+          extra: { dt_prazo: '2024-03-15T00:00:00.000Z' }
         }
       ];
       expect(computeGame4uDrPrazoMetaBoost(actions, month)).toBe(12);
