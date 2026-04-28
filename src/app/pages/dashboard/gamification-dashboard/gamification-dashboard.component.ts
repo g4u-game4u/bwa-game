@@ -65,6 +65,20 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   playerStatus: PlayerStatus | null = null;
   pointWallet: PointWallet | null = null;
   seasonProgress: SeasonProgress | null = null;
+
+  get sessionPlayerName(): string {
+    const u = this.sessaoProvider.usuario as
+      | { full_name?: string; name?: string; email?: string }
+      | null
+      | undefined;
+    const fullName = (u?.full_name || '').trim();
+    if (fullName) return fullName;
+    const name = (u?.name || '').trim();
+    if (name) return name;
+    const email = (u?.email || '').trim();
+    if (email) return email;
+    return '';
+  }
   
   // KPI data
   playerKPIs: KPIData[] = [];
@@ -367,7 +381,9 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     const usesGame4uWallet = this.playerService.usesGame4uWalletFromStats();
     if (usesGame4uWallet) {
       this.actionLogService
-        .getMonthlyGame4uPlayerDashboardData(playerId, this.selectedMonth)
+        // Carteira/season sidebar devem refletir a campanha inteira (start/end de /campaign),
+        // não o mês do filtro do painel.
+        .getMonthlyGame4uPlayerDashboardData(playerId, undefined)
         .pipe(takeUntil(this.destroy$))
         .subscribe({
           next: ({ wallet, sidebar }) => {

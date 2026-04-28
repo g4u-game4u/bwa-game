@@ -1,21 +1,35 @@
 import { Injectable } from '@angular/core';
-import { firstValueFrom } from 'rxjs';
+import { firstValueFrom, forkJoin, of } from 'rxjs';
+import { catchError } from 'rxjs/operators';
 import { TemporadaDashboard } from '../model/temporadaDashboard.model';
 import { TIPO_CONSULTA_TIME } from '@app/pages/dashboard/dashboard.component';
 import { environment } from '../../environments/environment';
 import { SeasonDatesService } from './season-dates.service';
 import { Game4uApiService } from './game4u-api.service';
-import type { Game4uUserActionStatsResponse } from '@model/game4u-api.model';
+import type { Game4uUserActionModel, Game4uUserActionStatsResponse } from '@model/game4u-api.model';
+import {
+  getGame4uParticipationRowKey,
+  isGame4uUserActionFinalizedStatus,
+  mapGame4uActionsToProcessMetrics,
+  sumGame4uActionPointsByStatus
+} from './game4u-game-mapper';
+
+const OPEN_ACTION_STATUSES = new Set(['PENDING', 'DOING']);
 
 /**
- * Card de temporada (`page-season`): um snapshot de `/game/stats` ou `/game/team-stats` em **todo o intervalo da campanha**
- * (`start`/`end` = início e fim da temporada via {@link SeasonDatesService}).
+ * Card de temporada (`page-season`): snapshot no **intervalo completo da campanha**
+ * (`start`/`end` via {@link SeasonDatesService} → GET `/campaign`).
  *
- * Usa {@link Game4uApiService} — mesmo cliente HTTP, `client_id` e dedupe por `(start,end,user|team)` que o painel de gamificação.
+ * Usa {@link Game4uApiService} em paralelo:
+ * - `/game/stats` ou `/game/team-stats` (agregados)
+ * - `/game/actions` ou `/game/team-actions` (user-actions no mesmo intervalo)
  *
- * **Contrato de rede** (shell + área principal Game4U, sem contar outros ecrãs como listas paginadas):
- * - até **2×** agregados tipo stats (`/game/stats` ou `/game/team-stats`): **(1)** temporada completa — este serviço; **(2)** mês do painel — gamificação (`ActionLogService` / `getProgressMetrics`).
- * - até **2×** `/game/actions` com **critérios diferentes** (ex.: intervalo «campanha→fim do mês» para progresso + outro intervalo/status). O card de temporada **não** pede `/game/actions`.
+ * Os campos do card são calculados **primariamente** a partir das user-actions; `/stats` serve de
+ * fallback quando a lista de actions está vazia ou os pontos por action não batem com os totais da API.
+ *
+ * **Contrato de rede** (shell + área principal Game4U, sem contar listas paginadas):
+ * - até **2×** stats (`/game/stats` ou `/game/team-stats`): **(1)** temporada — este serviço; **(2)** mês — gamificação.
+ * - até **2×** `/game/actions` com critérios diferentes possíveis; aqui **(1)** intervalo campanha inteira para o card.
  */
 @Injectable({
   providedIn: 'root'
@@ -49,6 +63,7 @@ export class TemporadaService {
     return Math.floor(incomplete + delivered);
   }
 
+  /** Fallback só a partir de `/game/stats` (ou team-stats). */
   private mapStatsToDashboard(response: Game4uUserActionStatsResponse): TemporadaDashboard {
     const doneBucket = response?.action_stats?.DONE ?? response?.action_stats?.done;
     const completedTasks = Math.floor(Number(doneBucket?.count) || 0);
@@ -76,7 +91,63 @@ export class TemporadaService {
   }
 
   /**
-   * Mesma semântica que antes: GET stats de temporada completa via {@link Game4uApiService} (dedupe partilhado com o resto da app).
+   * Combina stats + user-actions: prioridade às actions; stats quando lista vazia ou pontos inconsistentes.
+   */
+  private mapToSeasonDashboard(
+    stats: Game4uUserActionStatsResponse,
+    actions: Game4uUserActionModel[]
+  ): TemporadaDashboard {
+    const fromStats = this.mapStatsToDashboard(stats);
+    if (!actions?.length) {
+      return fromStats;
+    }
+
+    const unblockedFromActions = sumGame4uActionPointsByStatus(actions, ['DELIVERED', 'PAID']);
+    const blockedFromActions = sumGame4uActionPointsByStatus(actions, ['DONE']);
+    const sumActionsPoints = unblockedFromActions + blockedFromActions;
+    const sumStatsPoints = fromStats.unblocked_points + fromStats.blocked_points;
+    const useStatsPoints = sumActionsPoints === 0 && sumStatsPoints > 0;
+    const unblocked = useStatsPoints ? fromStats.unblocked_points : unblockedFromActions;
+    const blocked = useStatsPoints ? fromStats.blocked_points : blockedFromActions;
+
+    const completedTasks = actions.filter(a => isGame4uUserActionFinalizedStatus(a.status)).length;
+    const pendingTasks = actions.filter(a =>
+      OPEN_ACTION_STATUSES.has(String(a.status ?? '').trim().toUpperCase())
+    ).length;
+
+    const proc = mapGame4uActionsToProcessMetrics(actions);
+
+    const clientKeys = new Set<string>();
+    for (const a of actions) {
+      if (isGame4uUserActionFinalizedStatus(a.status)) {
+        const k = getGame4uParticipationRowKey(a);
+        if (k) {
+          clientKeys.add(k);
+        }
+      }
+    }
+    let clientes = clientKeys.size;
+    if (clientes === 0 && fromStats.clientes > 0) {
+      clientes = fromStats.clientes;
+    }
+
+    return {
+      blocked_points: blocked,
+      unblocked_points: unblocked,
+      pendingTasks,
+      completedTasks,
+      pendingDeliveries: proc.pendentes,
+      incompleteDeliveries: proc.incompletas,
+      completedDeliveries: proc.finalizadas,
+      clientes,
+      total_points: unblocked + blocked,
+      total_blocked_points: blocked,
+      total_actions: completedTasks
+    };
+  }
+
+  /**
+   * Stats de temporada completa + user-actions no mesmo intervalo (dedupe partilhado em {@link Game4uApiService}).
    */
   public async getDadosTemporadaDashboard(id: number, tipo: number): Promise<TemporadaDashboard> {
     if (!environment.backend_url_base || !this.game4u.isConfigured()) {
@@ -87,27 +158,52 @@ export class TemporadaService {
     try {
       const { start: startDateISO, end: endDateISO } = await this.getSeasonStatsRangeISO();
 
-      let response: Game4uUserActionStatsResponse;
+      const actionsCatch = catchError((err: unknown) => {
+        console.warn('⚠️ TemporadaService: falha ao obter actions da temporada, fallback só stats:', err);
+        return of([] as Game4uUserActionModel[]);
+      });
+
+      type SeasonPack = { stats: Game4uUserActionStatsResponse; actions: Game4uUserActionModel[] };
 
       if (Number(tipo) === TIPO_CONSULTA_TIME) {
-        response = await firstValueFrom(
-          this.game4u.getGameTeamStats({
-            team: String(id),
-            start: startDateISO,
-            end: endDateISO
+        const team = String(id);
+        const { stats, actions } = (await firstValueFrom(
+          forkJoin({
+            stats: this.game4u.getGameTeamStats({
+              team,
+              start: startDateISO,
+              end: endDateISO
+            }),
+            actions: this.game4u
+              .getGameTeamActions({
+                team,
+                start: startDateISO,
+                end: endDateISO
+              })
+              .pipe(actionsCatch)
           })
-        );
-      } else {
-        response = await firstValueFrom(
-          this.game4u.getGameStats({
-            user: String(id),
-            start: startDateISO,
-            end: endDateISO
-          })
-        );
+        )) as SeasonPack;
+        return this.mapToSeasonDashboard(stats, actions);
       }
 
-      return this.mapStatsToDashboard(response);
+      const user = String(id);
+      const { stats, actions } = (await firstValueFrom(
+        forkJoin({
+          stats: this.game4u.getGameStats({
+            user,
+            start: startDateISO,
+            end: endDateISO
+          }),
+          actions: this.game4u
+            .getGameActions({
+              user,
+              start: startDateISO,
+              end: endDateISO
+            })
+            .pipe(actionsCatch)
+        })
+      )) as SeasonPack;
+      return this.mapToSeasonDashboard(stats, actions);
     } catch (error) {
       console.error('❌ TemporadaService: erro ao obter dados da temporada:', error);
       return this.getEmptyTemporadaDashboard();

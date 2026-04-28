@@ -49,7 +49,7 @@ export class SeasonComponent implements OnInit, OnChanges {
   seasonData = new EventEmitter<TemporadaDashboard>();
 
   /**
-   * Estado inicial seguro para o template (evita erro antes do primeiro `/game/stats` e impede o card em branco).
+   * Estado inicial seguro para o template (evita erro antes do primeiro pedido Game4U e impede o card em branco).
    */
   seasonInfo: TemporadaDashboard | any = {
     blocked_points: 0,
@@ -118,7 +118,7 @@ export class SeasonComponent implements OnInit, OnChanges {
   }
 
   async ngOnInit() {
-    // Campanha/datas no cache antes do `/game/stats` — alinha UI e intervalo usado em {@link TemporadaService.getDadosTemporadaDashboard}.
+    // Campanha/datas no cache antes de stats/actions — alinha UI e intervalo usado em {@link TemporadaService.getDadosTemporadaDashboard}.
     await this.loadSeasonDates();
     this.init();
     this.seasonUiBootstrapped = true;
@@ -173,18 +173,18 @@ export class SeasonComponent implements OnInit, OnChanges {
   }
 
   /**
-   * Alinha totais ao `/game/stats`: total exibido = pontos desbloqueados + bloqueados da API
-   * (`total_points` + `total_blocked_points` na resposta, já refletidos em `unblocked_points` / `blocked_points`).
+   * Defesa no UI: normaliza números e garante `total_points` = desbloqueados + bloqueados
+   * (o {@link TemporadaService} já devolve totais coerentes a partir de stats/actions).
    */
   private normalizeSeasonPointsFromCompletedTasks(data: TemporadaDashboard): TemporadaDashboard {
     const blocked = Number(data.blocked_points) || 0;
     const unblocked = Number(data.unblocked_points) || 0;
-    const sum = Number(data.total_points) || blocked + unblocked;
+    const total = Number(data.total_points) || blocked + unblocked;
     return {
       ...data,
       blocked_points: blocked,
       unblocked_points: unblocked,
-      total_points: sum,
+      total_points: total,
       total_blocked_points: data.total_blocked_points ?? blocked
     };
   }

@@ -576,8 +576,12 @@ export class ActionLogService {
   }
 
   /**
-   * Uma única resposta `GET /game/stats` (mês) para carteira, merge de pontos e card de progresso da temporada.
-   * Só com Game4U ativo; o painel evita múltiplas stats com o mesmo query.
+   * Snapshot Game4U (mês) para carteira + sidebar:
+   * - `/game/stats` (agregados)
+   * - `/game/actions` (user-actions no mesmo intervalo)
+   *
+   * A carteira é calculada **primariamente** a partir das actions (para alinhar bloqueado/desbloqueado),
+   * com fallback para stats quando a lista vem vazia/indisponível.
    */
   getMonthlyGame4uPlayerDashboardData(
     playerId: string,
@@ -600,21 +604,73 @@ export class ActionLogService {
         sidebar: { tarefasFinalizadas: 0 }
       });
     }
-    return this.game4u.getGameStats(q).pipe(
-      map(s => {
-        const wallet = mapGame4uStatsToPointWallet(s);
-        const pontosActionLog =
-          s.action_stats != null
-            ? getGame4uActionStatsDone(s).totalPoints
-            : mapGame4uStatsToActivityMetrics(s).pontos;
-        const tarefasFinalizadas =
-          s.action_stats != null
-            ? getGame4uActionStatsDone(s).count
-            : Math.floor(Number(s.total_actions) || 0);
-        const dt = readGame4uDeliveryStatsTotal(s);
+    return forkJoin({
+      stats: this.game4u.getGameStats(q),
+      actions: this.game4u.getGameActions(q).pipe(
+        catchError(error => {
+          console.warn('Error fetching Game4U actions for wallet snapshot:', error);
+          return of([]);
+        })
+      )
+    }).pipe(
+      map(({ stats, actions }) => {
+        // Fallback a partir de stats (comportamento anterior)
+        const walletFromStats = mapGame4uStatsToPointWallet(stats);
+        const tarefasFinalizadasFromStats =
+          stats.action_stats != null
+            ? getGame4uActionStatsDone(stats).count
+            : Math.floor(Number(stats.total_actions) || 0);
+
+        if (!actions?.length) {
+          const dt = readGame4uDeliveryStatsTotal(stats);
+          const pontosActionLog =
+            stats.action_stats != null
+              ? getGame4uActionStatsDone(stats).totalPoints
+              : mapGame4uStatsToActivityMetrics(stats).pontos;
+          return {
+            wallet: walletFromStats,
+            pontosActionLog,
+            sidebar:
+              dt === null
+                ? { tarefasFinalizadas: tarefasFinalizadasFromStats }
+                : { tarefasFinalizadas: tarefasFinalizadasFromStats, deliveryStatsTotal: dt }
+          };
+        }
+
+        // Carteira a partir de user-actions (semântica alinhada ao card da temporada)
+        let bloqueados = 0; // DONE (finalizado, ainda não pago)
+        let desbloqueados = 0; // DELIVERED + PAID
+        let tarefasFinalizadas = 0; // DONE + DELIVERED + PAID
+        for (const a of actions) {
+          const st = String((a as any)?.status ?? '').trim().toUpperCase();
+          const pts = Math.floor(Number((a as any)?.points) || 0);
+          if (st === 'DONE') {
+            bloqueados += pts;
+            tarefasFinalizadas++;
+          } else if (st === 'DELIVERED' || st === 'PAID') {
+            desbloqueados += pts;
+            tarefasFinalizadas++;
+          } else if (st === 'PENDING' || st === 'DOING') {
+            // ignorar para wallet; não contam como finalizadas
+          }
+        }
+        bloqueados = Math.floor(bloqueados);
+        desbloqueados = Math.floor(desbloqueados);
+
+        // Se pontos vierem 0 mas stats tem valores, manter stats para evitar regressão.
+        const sumActions = bloqueados + desbloqueados;
+        const sumStats = (walletFromStats.bloqueados || 0) + (walletFromStats.desbloqueados || 0);
+        const wallet =
+          sumActions === 0 && sumStats > 0
+            ? walletFromStats
+            : { ...walletFromStats, bloqueados, desbloqueados };
+
+        const dt = readGame4uDeliveryStatsTotal(stats);
         return {
           wallet,
-          pontosActionLog,
+          // Mantemos pontosActionLog como “atingido no mês” = desbloqueados (DELIVERED+PAID) a partir das actions,
+          // com fallback via stats no ramo acima.
+          pontosActionLog: wallet.desbloqueados,
           sidebar:
             dt === null
               ? { tarefasFinalizadas }

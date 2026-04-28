@@ -223,6 +223,22 @@ export function isGame4uUserActionFinalizedStatus(status: unknown): boolean {
   return FINAL.includes(s as Game4uUserActionStatus);
 }
 
+/** Soma `points` das user-actions cujo `status` está em `statuses` (comparação case-insensitive). */
+export function sumGame4uActionPointsByStatus(
+  actions: Game4uUserActionModel[],
+  statuses: Game4uUserActionStatus[]
+): number {
+  const set = new Set(statuses.map(s => String(s).trim().toUpperCase()));
+  let sum = 0;
+  for (const a of actions) {
+    const st = String(a.status ?? '').trim().toUpperCase();
+    if (set.has(st)) {
+      sum += Math.floor(Number(a.points) || 0);
+    }
+  }
+  return Math.floor(sum);
+}
+
 /**
  * Chave para “cliente atendido” a partir da user-action: `integration_id` (EmpID/CNPJ no CRM),
  * senão `client_id`, senão `delivery_id` (evita lista vazia quando a API não envia `integration_id`).
