@@ -1,10 +1,11 @@
 import { Injectable } from '@angular/core';
-import { Observable, of, forkJoin } from 'rxjs';
+import { Observable, of, forkJoin, throwError } from 'rxjs';
 import { map, catchError, shareReplay, switchMap } from 'rxjs/operators';
 import { BackendApiService } from './backend-api.service';
 import {
   ActivityListItem,
   ActivityMetrics,
+  PointWallet,
   ProcessListItem,
   ProcessMetrics
 } from '@model/gamification-dashboard.model';
@@ -18,6 +19,7 @@ import {
   computeMonthlyPointsFromGame4uActions,
   filterGame4uActionsByCompetenceMonth,
   filterGame4uActionsByMonth,
+  parseExtraDrPrazoToUtcMs,
   getGame4uParticipationRowKey,
   getGame4uActionStatsDone,
   getGame4uMonthlyPointsCircularFromActionStats,
@@ -410,7 +412,6 @@ export class ActionLogService {
     // Fetch all action logs using pagination
     const request$ = this.fetchAllActionLogsPaginated(playerId).pipe(
       map(response => {
-        console.log('📊 Action log loaded (ALL):', response?.length || 0, 'entries');
         return Array.isArray(response) ? response : [];
       }),
       catchError(error => {
@@ -435,7 +436,6 @@ export class ActionLogService {
       switchMap(firstPage => {
         // If first page has less than PAGE_SIZE, we have all data
         if (firstPage.length < this.PAGE_SIZE) {
-          console.log('📊 All action logs fetched in single page:', firstPage.length);
           return of(firstPage);
         }
 
@@ -459,7 +459,6 @@ export class ActionLogService {
         
         // If this page has less than PAGE_SIZE, we're done
         if (page.length < this.PAGE_SIZE) {
-          console.log('📊 All action logs fetched:', allLogs.length, 'total entries');
           // Sort by time descending
           allLogs.sort((a, b) => extractTimestamp(b.time) - extractTimestamp(a.time));
           return of(allLogs);
@@ -483,15 +482,12 @@ export class ActionLogService {
       { $sort: { time: -1 } }
     ];
 
-    console.log(`📊 Fetching action log page ${pageIndex} (Range: items=${offset}-${this.PAGE_SIZE})`);
-
     return this.backendApi.post<ActionLogEntry[]>(
       '/v3/database/action_log/aggregate?strict=true',
       aggregateBody,
       { headers: { 'Range': `items=${offset}-${this.PAGE_SIZE}` } }
     ).pipe(
       map(response => {
-        console.log(`📊 Page ${pageIndex} loaded:`, response?.length || 0, 'entries');
         return Array.isArray(response) ? response : [];
       }),
       catchError(error => {
@@ -529,7 +525,6 @@ export class ActionLogService {
     return this.getPlayerActionLogForMonth(playerId, month).pipe(
       map(actions => {
         const filtered = filterByMonth(actions, month);
-        console.log('📊 Activity count (filtered on frontend):', filtered.length);
         return filtered.length;
       }),
       catchError(error => {
@@ -578,6 +573,119 @@ export class ActionLogService {
     }
     return this.getCompletedTasksCount(playerId, month).pipe(
       map(tarefasFinalizadas => ({ tarefasFinalizadas }))
+    );
+  }
+
+  /**
+   * Snapshot Game4U (mês) para carteira + sidebar:
+   * - `/game/stats` (agregados)
+   * - `/game/actions` (user-actions no mesmo intervalo)
+   *
+   * A carteira é calculada **primariamente** a partir das actions (para alinhar bloqueado/desbloqueado),
+   * com fallback para stats quando a lista vem vazia/indisponível.
+   */
+  getMonthlyGame4uPlayerDashboardData(
+    playerId: string,
+    month?: Date
+  ): Observable<{
+    wallet: PointWallet;
+    pontosActionLog: number;
+    sidebar: { tarefasFinalizadas: number; deliveryStatsTotal?: number };
+  }> {
+    if (!(isGame4uDataEnabled() && this.game4u.isConfigured())) {
+      return throwError(
+        () => new Error('[ActionLog] getMonthlyGame4uPlayerDashboardData: Game4U indisponível')
+      );
+    }
+    const q = this.game4uUserQuery(playerId, month);
+    if (!q) {
+      return of({
+        wallet: { moedas: 0, bloqueados: 0, desbloqueados: 0 },
+        pontosActionLog: 0,
+        sidebar: { tarefasFinalizadas: 0 }
+      });
+    }
+    return forkJoin({
+      stats: this.game4u.getGameStats(q),
+      actions: this.game4u.getGameActions(q).pipe(
+        catchError(error => {
+          console.warn('Error fetching Game4U actions for wallet snapshot:', error);
+          return of([]);
+        })
+      )
+    }).pipe(
+      map(({ stats, actions }) => {
+        // Fallback a partir de stats (comportamento anterior)
+        const walletFromStats = mapGame4uStatsToPointWallet(stats);
+        const tarefasFinalizadasFromStats =
+          stats.action_stats != null
+            ? getGame4uActionStatsDone(stats).count
+            : Math.floor(Number(stats.total_actions) || 0);
+
+        if (!actions?.length) {
+          const dt = readGame4uDeliveryStatsTotal(stats);
+          const pontosActionLog =
+            stats.action_stats != null
+              ? getGame4uActionStatsDone(stats).totalPoints
+              : mapGame4uStatsToActivityMetrics(stats).pontos;
+          return {
+            wallet: walletFromStats,
+            pontosActionLog,
+            sidebar:
+              dt === null
+                ? { tarefasFinalizadas: tarefasFinalizadasFromStats }
+                : { tarefasFinalizadas: tarefasFinalizadasFromStats, deliveryStatsTotal: dt }
+          };
+        }
+
+        // Carteira a partir de user-actions (semântica alinhada ao card da temporada)
+        let bloqueados = 0; // DONE (finalizado, ainda não pago)
+        let desbloqueados = 0; // DELIVERED + PAID
+        let tarefasFinalizadas = 0; // DONE + DELIVERED + PAID
+        for (const a of actions) {
+          const st = String((a as any)?.status ?? '').trim().toUpperCase();
+          const pts = Math.floor(Number((a as any)?.points) || 0);
+          if (st === 'DONE') {
+            bloqueados += pts;
+            tarefasFinalizadas++;
+          } else if (st === 'DELIVERED' || st === 'PAID') {
+            desbloqueados += pts;
+            tarefasFinalizadas++;
+          } else if (st === 'PENDING' || st === 'DOING') {
+            // ignorar para wallet; não contam como finalizadas
+          }
+        }
+        bloqueados = Math.floor(bloqueados);
+        desbloqueados = Math.floor(desbloqueados);
+
+        // Se pontos vierem 0 mas stats tem valores, manter stats para evitar regressão.
+        const sumActions = bloqueados + desbloqueados;
+        const sumStats = (walletFromStats.bloqueados || 0) + (walletFromStats.desbloqueados || 0);
+        const wallet =
+          sumActions === 0 && sumStats > 0
+            ? walletFromStats
+            : { ...walletFromStats, bloqueados, desbloqueados };
+
+        const dt = readGame4uDeliveryStatsTotal(stats);
+        return {
+          wallet,
+          // Mantemos pontosActionLog como “atingido no mês” = desbloqueados (DELIVERED+PAID) a partir das actions,
+          // com fallback via stats no ramo acima.
+          pontosActionLog: wallet.desbloqueados,
+          sidebar:
+            dt === null
+              ? { tarefasFinalizadas }
+              : { tarefasFinalizadas, deliveryStatsTotal: dt }
+        };
+      }),
+      catchError(error => {
+        console.error('Error in getMonthlyGame4uPlayerDashboardData (Game4U):', error);
+        return of({
+          wallet: { moedas: 0, bloqueados: 0, desbloqueados: 0 },
+          pontosActionLog: 0,
+          sidebar: { tarefasFinalizadas: 0 }
+        });
+      })
     );
   }
 
@@ -659,7 +767,6 @@ export class ActionLogService {
     return this.fetchAchievementPage(playerId, 0).pipe(
       switchMap(firstPage => {
         if (firstPage.length < this.PAGE_SIZE) {
-          console.log('📊 All achievements fetched in single page:', firstPage.length);
           return of(firstPage);
         }
         return this.fetchRemainingAchievementPages(playerId, firstPage);
@@ -684,7 +791,6 @@ export class ActionLogService {
         const allAchievements = [...accumulatedAchievements, ...page];
         
         if (page.length < this.PAGE_SIZE) {
-          console.log('📊 All achievements fetched:', allAchievements.length, 'total entries');
           return of(allAchievements);
         }
 
@@ -715,15 +821,12 @@ export class ActionLogService {
       }
     ];
 
-    console.log(`📊 Fetching achievement page ${pageIndex} (Range: items=${offset}-${this.PAGE_SIZE})`);
-
     return this.backendApi.post<{ _id: string; item: string; total: number; time?: number | { $date: string } }[]>(
       '/v3/database/achievement/aggregate?strict=true',
       aggregateBody,
       { headers: { 'Range': `items=${offset}-${this.PAGE_SIZE}` } }
     ).pipe(
       map(response => {
-        console.log(`📊 Achievement page ${pageIndex} loaded:`, response?.length || 0, 'entries');
         return Array.isArray(response) ? response : [];
       }),
       catchError(error => {
@@ -772,7 +875,6 @@ export class ActionLogService {
           }
         });
 
-        console.log('📊 Monthly points breakdown (filtered on frontend):', { bloqueados, desbloqueados });
         return { bloqueados, desbloqueados };
       }),
       catchError(error => {
@@ -810,14 +912,6 @@ export class ActionLogService {
       map(actions => {
         const filtered = filterByMonth(actions, month);
         const total = filtered.length * PONTOS_POR_ATIVIDADE_FINALIZADA_ACTION_LOG;
-        console.log(
-          '📊 Pontos (frontend):',
-          filtered.length,
-          'tarefas ×',
-          PONTOS_POR_ATIVIDADE_FINALIZADA_ACTION_LOG,
-          '=',
-          total
-        );
         return total;
       }),
       catchError(error => {
@@ -855,7 +949,6 @@ export class ActionLogService {
             .filter((cnpj): cnpj is string => cnpj != null)
         );
         
-        console.log('📊 Unique CNPJs count (filtered on frontend):', uniqueCnpjs.size);
         return uniqueCnpjs.size;
       }),
       catchError(error => {
@@ -911,8 +1004,6 @@ export class ActionLogService {
             .filter((id): id is number => id != null)
         )];
 
-        console.log('📊 Unique delivery_ids found (filtered on frontend):', deliveryIds);
-
         if (deliveryIds.length === 0) {
           return of({ pendentes: 0, incompletas: 0, finalizadas: 0 });
         }
@@ -934,8 +1025,6 @@ export class ActionLogService {
           }
         ];
 
-        console.log('📊 Desbloquear query (no time filter):', JSON.stringify(aggregateBody));
-
         return this.backendApi.post<{ _id: number }[]>(
           '/v3/database/action_log/aggregate?strict=true',
           aggregateBody
@@ -943,8 +1032,6 @@ export class ActionLogService {
           map(desbloqueados => {
             const desbloqueadosIds = new Set(desbloqueados.map(d => d._id));
             
-            console.log('📊 Desbloqueados delivery_ids:', [...desbloqueadosIds]);
-
             // Count finalizadas (have desbloquear action)
             const finalizadas = deliveryIds.filter(id => desbloqueadosIds.has(id)).length;
             
@@ -1203,7 +1290,6 @@ export class ActionLogService {
 
         const deliveryIds = [...deliveryMap.keys()];
         
-        console.log('📊 Process list - unique delivery_ids (filtered on frontend):', deliveryIds);
 
         if (deliveryIds.length === 0) {
           return of([]);
@@ -1225,16 +1311,12 @@ export class ActionLogService {
           }
         ];
 
-        console.log('📊 Process finalization query (no time filter):', JSON.stringify(aggregateBody));
-
         return this.backendApi.post<{ _id: number }[]>(
           '/v3/database/action_log/aggregate?strict=true',
           aggregateBody
         ).pipe(
           map(desbloqueados => {
             const finalizedIds = new Set(desbloqueados.map(d => d._id));
-            console.log('📊 Finalized delivery_ids:', [...finalizedIds]);
-            
             return deliveryIds.map(deliveryId => {
               const info = deliveryMap.get(deliveryId)!;
               return {
@@ -1293,22 +1375,32 @@ export class ActionLogService {
 
       if (isGame4uDataEnabled() && this.game4u.isConfigured()) {
         if (month != null) {
-          const qActions = this.game4uUserQueryActionsForCompetenceMonth(playerId, month);
+          // Precisa ser intervalo amplo (campanha→fim do mês) para capturar linhas cuja competência é o mês
+          // mas `created_at` caiu fora (ex.: prazos e correções retroativas).
+          const qActions = this.game4uUserQueryYearThroughMonthEnd(playerId, month);
           if (!qActions) {
             return of([]);
           }
           const request$ = this.game4u.getGameActions(qActions).pipe(
             map(actions => {
-              const scoped = filterGame4uActionsByCompetenceMonth(actions, month);
+              // Clientes atendidos este mês: SOMENTE ações finalizadas com `finished_at` dentro do mês selecionado.
+              // Não usar dt_prazo nesta seção.
+              const start = new Date(month.getFullYear(), month.getMonth(), 1, 0, 0, 0, 0).getTime();
+              const end = new Date(month.getFullYear(), month.getMonth() + 1, 0, 23, 59, 59, 999).getTime();
+              const scoped = actions.filter(a => {
+                if (!isGame4uUserActionFinalizedStatus(a.status)) {
+                  return false;
+                }
+                const t = parseExtraDrPrazoToUtcMs((a as any).finished_at);
+                return t != null && t >= start && t <= end;
+              });
+
               const byCnpj = new Map<
                 string,
                 { actionCount: number; delivery_title?: string; delivery_id?: string }
               >();
               for (const a of scoped) {
-                if (!isGame4uUserActionFinalizedStatus(a.status)) {
-                  continue;
-                }
-                const cnpj = getGame4uParticipationRowKey(a);
+                const cnpj = getGame4uParticipationRowKey(a) || (a.delivery_id != null ? String(a.delivery_id).trim() : '');
                 if (!cnpj) {
                   continue;
                 }
@@ -1399,7 +1491,6 @@ export class ActionLogService {
             actionCount: count
           }));
           
-          console.log('📊 Player CNPJs with count (filtered on frontend):', result.length, 'unique CNPJs');
           return result;
         }),
         catchError(error => {
@@ -1560,15 +1651,12 @@ export class ActionLogService {
       aggregateBody = [{ $match: companyOr }, { $sort: { time: -1 } }, { $limit: 1000 }];
     }
 
-    console.log('📊 Actions by company key (action_log aggregate):', JSON.stringify(aggregateBody));
 
     const request$ = this.backendApi.post<ActionLogEntry[]>(
       '/v3/database/action_log/aggregate?strict=true',
       aggregateBody
     ).pipe(
       map(actions => {
-        console.log('📊 Actions by company key response:', actions?.length || 0, 'entries');
-
         const filtered = filterByMonth(actions, month);
 
         return filtered.map(a => ({
@@ -1676,14 +1764,11 @@ export class ActionLogService {
       { $sort: { time: -1 } }
     ];
 
-    console.log('📊 Activities by process query (ALL data, no time filter):', JSON.stringify(aggregateBody));
-
     const request$ = this.backendApi.post<ActionLogEntry[]>(
       '/v3/database/action_log/aggregate?strict=true',
       aggregateBody
     ).pipe(
       map(actions => {
-        console.log('📊 Activities by process response (ALL):', actions?.length || 0, 'entries');
         
         // Filter by month on frontend
         const filtered = filterByMonth(actions, month);
@@ -1769,7 +1854,6 @@ export class ActionLogService {
           .map(([day, count]) => ({ day, count }))
           .sort((a, b) => a.day - b.day);
         
-        console.log('📊 Activities by day (filtered on frontend):', result);
         return result;
       }),
       catchError(error => {
@@ -1807,7 +1891,6 @@ export class ActionLogService {
             });
           }
         });
-        console.log('📊 Unique deals (filtered on frontend):', dealsSet.size);
         return Array.from(dealsSet);
       }),
       catchError(error => {
@@ -1934,13 +2017,6 @@ export class ActionLogService {
             const processosFinalizados = deliveryIds.filter(id => desbloqueadosIds.has(id)).length;
             const processosIncompletos = deliveryIds.length - processosFinalizados;
 
-            console.log('✅ Team progress metrics loaded (filtered on frontend):', {
-              finalizadas,
-              processosFinalizados,
-              totalProcessos: deliveryIds.length,
-              processosIncompletos
-            });
-
             return {
               activity: {
                 pendentes: 0,
@@ -2044,7 +2120,6 @@ export class ActionLogService {
           processCount: 0
         }));
 
-        console.log('✅ Team CNPJ list loaded (filtered on frontend):', result.length, 'unique CNPJs');
         return result;
       }),
       catchError(error => {

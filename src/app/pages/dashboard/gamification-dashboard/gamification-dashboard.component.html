@@ -15,13 +15,24 @@
       <div class="sidebar-content">
         <!-- Season Level -->
         <div class="sidebar-section">
-          <c4u-season-level
-            *ngIf="playerStatus"
-            [level]="playerStatus.seasonLevel"
-            [playerName]="playerStatus.name"
-            [metadata]="playerStatus.metadata"
-            [kpiAveragePercent]="kpiAveragePercent">
-          </c4u-season-level>
+          <ng-container *ngIf="playerStatus; else seasonLevelFallback">
+            <c4u-season-level
+              [level]="playerStatus.seasonLevel"
+              [playerName]="playerStatus.name"
+              [metadata]="playerStatus.metadata"
+              [kpiAveragePercent]="kpiAveragePercent">
+            </c4u-season-level>
+          </ng-container>
+
+          <ng-template #seasonLevelFallback>
+            <c4u-season-level
+              *ngIf="sessionPlayerName"
+              [level]="0"
+              [playerName]="sessionPlayerName"
+              [metadata]="{ area: '', time: '', squad: '' }"
+              [kpiAveragePercent]="0">
+            </c4u-season-level>
+          </ng-template>
           
           <c4u-shimmer *ngIf="isLoadingPlayer && !playerStatus"></c4u-shimmer>
         </div>

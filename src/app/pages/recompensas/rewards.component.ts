@@ -82,19 +82,15 @@ export class RewardsComponent implements AfterViewInit, OnInit {
     } catch (e) {
       console.error('Recompensas: campanha/datas antes do season shell:', e);
     }
-    this.seasonShellReady = true;
-
-    // Garante que o usuário está carregado da API
     await this.sessao.init(true);
     const usuario = this.sessao.usuario;
     if (usuario) {
       this.idConsulta = usuario.email;
       this.nomeConsulta = usuario.full_name || usuario.name || '';
       this.tipoConsulta = TIPO_CONSULTA_COLABORADOR;
-      // Note: Removed call to temporadaService.getDadosTemporadaDashboard as it uses
-      // the old /game/stats endpoint which is no longer available.
-      // Season data will be loaded from Funifier API via the sidenav component if needed.
     }
+    /** Depois de `idConsulta` — o `<page-season>` precisa do email na 1ª deteção de alterações. */
+    this.seasonShellReady = true;
 
     // Carrega categorias e recompensas da API
     this.loadRewardsData();

@@ -94,6 +94,10 @@ export const TIPO_CONSULTA_TIME = 1;
       } catch (e) {
         console.error('Termómetro: campanha/datas antes do season shell:', e);
       }
+      this.idConsulta = this.sessao.usuario?.email;
+      this.nomeConsulta = this.sessao.usuario?.full_name || this.sessao.usuario?.name || '';
+      this.tipoConsulta = TIPO_CONSULTA_COLABORADOR;
+      this.time = this.sessao.usuario?.team_id;
       this.seasonShellReady = true;
     }
     

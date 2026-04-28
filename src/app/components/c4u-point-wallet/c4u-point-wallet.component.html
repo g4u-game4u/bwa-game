@@ -8,7 +8,7 @@
         <span class="label">Pontos</span>
         <c4u-info-button infoKey="pontos" position="top"></c4u-info-button>
       </div>
-      <span class="value">{{ points.desbloqueados | number:'1.0-0':'pt-BR' }}</span>
+      <span class="value">{{ totalPontos | number:'1.0-0':'pt-BR' }}</span>
     </div>
 
     <div class="point-row">
@@ -18,15 +18,6 @@
         <c4u-info-button infoKey="moedas" position="top"></c4u-info-button>
       </div>
       <span class="value">{{ points.moedas | number:'1.0-0':'pt-BR' }}</span>
-    </div>
-
-    <div class="point-row" *ngIf="mediaPontos !== undefined">
-      <div class="row-left">
-        <i class="ri-star-fill icon media"></i>
-        <span class="label">Média de Pontos</span>
-        <c4u-info-button infoKey="media-pontos" position="top"></c4u-info-button>
-      </div>
-      <span class="value">{{ mediaPontos | number:'1.0-0':'pt-BR' }}</span>
     </div>
   </div>
 </div>

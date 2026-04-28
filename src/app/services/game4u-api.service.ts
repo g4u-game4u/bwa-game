@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpHeaders, HttpParams } from '@angular/common/http';
 import { Observable, throwError } from 'rxjs';
-import { shareReplay } from 'rxjs/operators';
+import { shareReplay, tap } from 'rxjs/operators';
 import { environment } from '../../environments/environment';
 import {
   Game4uDeliveryModel,
@@ -22,6 +22,10 @@ export type { Game4uDateRangeQuery, Game4uTeamScopedQuery, Game4uUserScopedQuery
 })
 export class Game4uApiService {
   private readonly baseUrl: string;
+  private readonly statsDedupCache = new Map<string, Observable<Game4uUserActionStatsResponse>>();
+  private readonly actionsDedupCache = new Map<string, Observable<Game4uUserActionModel[]>>();
+  private readonly teamStatsDedupCache = new Map<string, Observable<Game4uUserActionStatsResponse>>();
+  private readonly teamActionsDedupCache = new Map<string, Observable<Game4uUserActionModel[]>>();
 
   constructor(
     private http: HttpClient,
@@ -51,6 +55,50 @@ export class Game4uApiService {
 
   private shareGame4u<T>(source: Observable<T>): Observable<T> {
     return source.pipe(shareReplay({ bufferSize: 1, refCount: true }));
+  }
+
+  /** Uma instância HTTP partilhada por `(user, start, end[, status])` — vários invocadores em paralelo → 1× rede. */
+  private shareGame4uDedupe<T>(
+    key: string,
+    cache: Map<string, Observable<T>>,
+    factory: () => Observable<T>
+  ): Observable<T> {
+    const existing = cache.get(key);
+    if (existing) {
+      return existing;
+    }
+    const shared = factory().pipe(
+      tap({
+        error: () => cache.delete(key)
+      }),
+      shareReplay({ bufferSize: 1, refCount: false })
+    );
+    cache.set(key, shared);
+    return shared;
+  }
+
+  private statsRequestKey(q: Game4uUserScopedQuery): string {
+    return `stats|${q.user}|${q.start}|${q.end}`;
+  }
+
+  private actionsRequestKey(q: Game4uUserScopedQuery & { status?: Game4uUserActionStatus }): string {
+    return `actions|${q.user}|${q.start}|${q.end}|${q.status ?? ''}`;
+  }
+
+  private teamStatsRequestKey(q: Game4uTeamScopedQuery): string {
+    return `team-stats|${q.team}|${q.start}|${q.end}`;
+  }
+
+  private teamActionsRequestKey(q: Game4uTeamScopedQuery & { status?: Game4uUserActionStatus }): string {
+    return `team-actions|${q.team}|${q.start}|${q.end}|${q.status ?? ''}`;
+  }
+
+  /** Limpa dedupe de stats/actions (user e team) — ex.: troca de mês / campanha. */
+  clearStatsActionsDedupeCache(): void {
+    this.statsDedupCache.clear();
+    this.actionsDedupCache.clear();
+    this.teamStatsDedupCache.clear();
+    this.teamActionsDedupCache.clear();
   }
 
   /** GET `/game/*` com partilha entre várias subscrições (evita N× a mesma chamada). */
@@ -127,45 +175,49 @@ export class Game4uApiService {
   }
 
   getGameStats(q: Game4uUserScopedQuery): Observable<Game4uUserActionStatsResponse> {
+    const key = this.statsRequestKey(q);
     if (!this.isConfigured()) {
       if (this.useSupabaseStandalone()) {
-        return this.shareGame4u(this.supabaseFallback.getGameStats(q));
+        return this.shareGame4uDedupe(key, this.statsDedupCache, () => this.supabaseFallback.getGameStats(q));
       }
       return throwError(
         () => new Error('[Game4U] stats: defina backend_url_base (ou GAME4U_SUPABASE_FALLBACK=true + Supabase).')
       );
     }
-    const params = new HttpParams()
-      .set('start', q.start)
-      .set('end', q.end)
-      .set('user', q.user);
-    const http$ = this.http.get<Game4uUserActionStatsResponse>(`${this.baseUrl}/game/stats`, {
-      headers: this.headers(),
-      params
+    return this.shareGame4uDedupe(key, this.statsDedupCache, () => {
+      const params = new HttpParams()
+        .set('start', q.start)
+        .set('end', q.end)
+        .set('user', q.user);
+      return this.http.get<Game4uUserActionStatsResponse>(`${this.baseUrl}/game/stats`, {
+        headers: this.headers(),
+        params
+      });
     });
-    return this.httpOrSupabase(http$, this.supabaseFallback.getGameStats(q), 'stats');
   }
 
   getGameActions(
     q: Game4uUserScopedQuery & { status?: Game4uUserActionStatus }
   ): Observable<Game4uUserActionModel[]> {
+    const key = this.actionsRequestKey(q);
     if (!this.isConfigured()) {
       if (this.useSupabaseStandalone()) {
-        return this.shareGame4u(this.supabaseFallback.getGameActions(q));
+        return this.shareGame4uDedupe(key, this.actionsDedupCache, () => this.supabaseFallback.getGameActions(q));
       }
       return throwError(
         () => new Error('[Game4U] actions: defina backend_url_base (ou GAME4U_SUPABASE_FALLBACK=true + Supabase).')
       );
     }
-    let params = new HttpParams().set('start', q.start).set('end', q.end).set('user', q.user);
-    if (q.status) {
-      params = params.set('status', q.status);
-    }
-    const http$ = this.http.get<Game4uUserActionModel[]>(`${this.baseUrl}/game/actions`, {
-      headers: this.headers(),
-      params
+    return this.shareGame4uDedupe(key, this.actionsDedupCache, () => {
+      let params = new HttpParams().set('start', q.start).set('end', q.end).set('user', q.user);
+      if (q.status) {
+        params = params.set('status', q.status);
+      }
+      return this.http.get<Game4uUserActionModel[]>(`${this.baseUrl}/game/actions`, {
+        headers: this.headers(),
+        params
+      });
     });
-    return this.httpOrSupabase(http$, this.supabaseFallback.getGameActions(q), 'actions');
   }
 
   getGameDeliveries(
@@ -192,43 +244,51 @@ export class Game4uApiService {
   }
 
   getGameTeamStats(q: Game4uTeamScopedQuery): Observable<Game4uUserActionStatsResponse> {
+    const key = this.teamStatsRequestKey(q);
     if (!this.isConfigured()) {
       if (this.useSupabaseStandalone()) {
-        return this.shareGame4u(this.supabaseFallback.getGameTeamStats(q));
+        return this.shareGame4uDedupe(key, this.teamStatsDedupCache, () =>
+          this.supabaseFallback.getGameTeamStats(q)
+        );
       }
       return throwError(
         () => new Error('[Game4U] team-stats: defina backend_url_base (ou GAME4U_SUPABASE_FALLBACK=true + Supabase).')
       );
     }
-    const params = new HttpParams().set('start', q.start).set('end', q.end).set('team', q.team);
-    const http$ = this.http.get<Game4uUserActionStatsResponse>(`${this.baseUrl}/game/team-stats`, {
-      headers: this.headers(),
-      params
+    return this.shareGame4uDedupe(key, this.teamStatsDedupCache, () => {
+      const params = new HttpParams().set('start', q.start).set('end', q.end).set('team', q.team);
+      return this.http.get<Game4uUserActionStatsResponse>(`${this.baseUrl}/game/team-stats`, {
+        headers: this.headers(),
+        params
+      });
     });
-    return this.httpOrSupabase(http$, this.supabaseFallback.getGameTeamStats(q), 'team-stats');
   }
 
   getGameTeamActions(
     q: Game4uTeamScopedQuery & { status?: Game4uUserActionStatus }
   ): Observable<Game4uUserActionModel[]> {
+    const key = this.teamActionsRequestKey(q);
     if (!this.isConfigured()) {
       if (this.useSupabaseStandalone()) {
-        return this.shareGame4u(this.supabaseFallback.getGameTeamActions(q));
+        return this.shareGame4uDedupe(key, this.teamActionsDedupCache, () =>
+          this.supabaseFallback.getGameTeamActions(q)
+        );
       }
       return throwError(
         () => new Error('[Game4U] team-actions: defina backend_url_base (ou GAME4U_SUPABASE_FALLBACK=true + Supabase).')
       );
     }
-    let params = new HttpParams().set('start', q.start).set('end', q.end);
-    params = params.set('team', q.team);
-    if (q.status) {
-      params = params.set('status', q.status);
-    }
-    const http$ = this.http.get<Game4uUserActionModel[]>(`${this.baseUrl}/game/team-actions`, {
-      headers: this.headers(),
-      params
+    return this.shareGame4uDedupe(key, this.teamActionsDedupCache, () => {
+      let params = new HttpParams().set('start', q.start).set('end', q.end);
+      params = params.set('team', q.team);
+      if (q.status) {
+        params = params.set('status', q.status);
+      }
+      return this.http.get<Game4uUserActionModel[]>(`${this.baseUrl}/game/team-actions`, {
+        headers: this.headers(),
+        params
+      });
     });
-    return this.httpOrSupabase(http$, this.supabaseFallback.getGameTeamActions(q), 'team-actions');
   }
 
   getGameTeamDeliveries(

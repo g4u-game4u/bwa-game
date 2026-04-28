@@ -74,16 +74,16 @@ export class AuthProvider {
       | { accessToken: string; clientId?: string }
       | { userId: string; token: string }
   ): Promise<unknown> {
-    const url = joinApiPath(this.apiBase(), '/auth/change-password');
     if ('accessToken' in recovery) {
+      const url = joinApiPath(this.apiBase(), '/auth/change-password-recovery');
       return firstValueFrom(
         this.http.post(url, {
           password: newPassword,
           access_token: recovery.accessToken,
-          ...(recovery.clientId ? { client_id: recovery.clientId } : {}),
         })
       );
     }
+    const url = joinApiPath(this.apiBase(), '/auth/change-password');
     return firstValueFrom(
       this.http.post(url, {
         user: recovery.userId,

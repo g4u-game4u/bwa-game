@@ -14,4 +14,8 @@ export class C4uPointWalletComponent {
   };
   
   @Input() mediaPontos?: number;
+
+  get totalPontos(): number {
+    return Math.floor(Number(this.points?.bloqueados || 0) + Number(this.points?.desbloqueados || 0));
+  }
 }

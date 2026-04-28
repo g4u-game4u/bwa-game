@@ -68,7 +68,8 @@ describe('GamificationDashboard - Company KPI Integration Tests', () => {
       'getSeasonProgress',
       'getPlayerCnpj',
       'getPlayerCnpjResp',
-      'clearCache'
+      'clearCache',
+      'usesGame4uWalletFromStats'
     ]);
 
     const kpiServiceSpy = jasmine.createSpyObj('KPIService', ['getPlayerKPIs']);
@@ -84,7 +85,8 @@ describe('GamificationDashboard - Company KPI Integration Tests', () => {
       'getPlayerCnpjListWithCount',
       'getUniqueClientesCount',
       'getCompletedTasksCount',
-      'getPontosForMonth'
+      'getPontosForMonth',
+      'getMonthlyGame4uPlayerDashboardData'
     ]);
 
     const emptyGamificacaoMaps = { byEmpId: new Map(), byCnpjNorm: new Map() };
@@ -164,6 +166,7 @@ describe('GamificationDashboard - Company KPI Integration Tests', () => {
     playerService.getSeasonProgress.and.returnValue(of(generateSeasonProgress()));
     playerService.getPlayerCnpj.and.returnValue(of([]));
     playerService.getPlayerCnpjResp.and.returnValue(of([]));
+    playerService.usesGame4uWalletFromStats.and.returnValue(false);
     kpiService.getPlayerKPIs.and.returnValue(of([]));
     actionLogService.getProgressMetrics.and.returnValue(of({
       activity: { pendentes: 0, emExecucao: 0, finalizadas: 0, pontos: 0 },
@@ -172,6 +175,13 @@ describe('GamificationDashboard - Company KPI Integration Tests', () => {
     actionLogService.getUniqueClientesCount.and.returnValue(of(0));
     actionLogService.getCompletedTasksCount.and.returnValue(of(0));
     actionLogService.getPontosForMonth.and.returnValue(of(500));
+    actionLogService.getMonthlyGame4uPlayerDashboardData.and.returnValue(
+      of({
+        wallet: generatePointWallet(),
+        pontosActionLog: 500,
+        sidebar: { tarefasFinalizadas: 0 }
+      })
+    );
     companyKpiService.enrichCompaniesWithKpis.and.returnValue(of([]));
     companyKpiService.fetchGamificacaoMapsAsync.and.returnValue(Promise.resolve(emptyGamificacaoMaps));
     companyKpiService.enrichCarteiraRowsWithMaps.and.returnValue([]);

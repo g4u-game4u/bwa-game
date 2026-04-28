@@ -16,6 +16,7 @@ import { SeasonDatesService } from '@services/season-dates.service';
 import { ActivatedRoute, Router } from '@angular/router';
 import { NgbModal } from '@ng-bootstrap/ng-bootstrap';
 import { of } from 'rxjs';
+import { generatePointWallet } from '@app/testing/mock-data-generators';
 
 describe('GamificationDashboardComponent - Accessibility', () => {
   let component: GamificationDashboardComponent;
@@ -31,8 +32,10 @@ describe('GamificationDashboardComponent - Accessibility', () => {
       'getSeasonProgress',
       'getPlayerCnpj',
       'getPlayerCnpjResp',
-      'clearCache'
+      'clearCache',
+      'usesGame4uWalletFromStats'
     ]);
+    playerServiceSpy.usesGame4uWalletFromStats.and.returnValue(false);
     const kpiServiceSpy = jasmine.createSpyObj('KPIService', ['getPlayerKPIs']);
     const toastServiceSpy = jasmine.createSpyObj('ToastService', ['error', 'alert']);
 
@@ -41,7 +44,8 @@ describe('GamificationDashboardComponent - Accessibility', () => {
       'getPlayerCnpjListWithCount',
       'getUniqueClientesCount',
       'getCompletedTasksCount',
-      'getPontosForMonth'
+      'getPontosForMonth',
+      'getMonthlyGame4uPlayerDashboardData'
     ]);
     actionLogServiceSpy.getProgressMetrics.and.returnValue(
       of({
@@ -53,6 +57,13 @@ describe('GamificationDashboardComponent - Accessibility', () => {
     actionLogServiceSpy.getUniqueClientesCount.and.returnValue(of(0));
     actionLogServiceSpy.getCompletedTasksCount.and.returnValue(of(0));
     actionLogServiceSpy.getPontosForMonth.and.returnValue(of(500));
+    actionLogServiceSpy.getMonthlyGame4uPlayerDashboardData.and.returnValue(
+      of({
+        wallet: generatePointWallet(),
+        pontosActionLog: 500,
+        sidebar: { tarefasFinalizadas: 0 }
+      })
+    );
 
     const emptyGamificacaoMaps = { byEmpId: new Map(), byCnpjNorm: new Map() };
     const companyKpiServiceSpy = jasmine.createSpyObj('CompanyKpiService', [

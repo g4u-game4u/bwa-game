@@ -625,9 +625,7 @@ function createGame4uBearerAuth(
   return {
     getToken: () => token,
     refresh: async () => {
-      console.log('[Game4U] Token JWT expirado ou rejeitado (401); novo POST /auth/login…');
       token = await game4uLogin(base, clientId, email, password);
-      console.log('[Game4U] Novo Bearer obtido:', token.length, 'caracteres');
     }
   };
 }
@@ -725,14 +723,7 @@ async function* game4uIterateDeliveryPages(
   const pageSize = deliveriesPageSizeFromEnv();
   if (!pageSize) {
     const urlStr = joinUrl(base, listPath);
-    console.log('[Game4U] GET', urlStr, '(sem query; Bearer)');
     const parsed = await game4uFetchDeliveryList(urlStr, clientId, auth, 'delivery');
-    console.log(
-      '[Game4U]   →',
-      parsed.items.length,
-      'delivery(ies)',
-      parsed.total != null ? `total=${parsed.total}` : ''
-    );
     yield parsed.items;
     return;
   }
@@ -756,9 +747,7 @@ async function* game4uIterateDeliveryPages(
       u.searchParams.set(offsetParam, String(offset));
       u.searchParams.set(limitParam, String(limit));
       const urlStr = u.toString();
-      console.log('[Game4U] GET', urlStr);
       const parsed = await game4uFetchDeliveryList(urlStr, clientId, auth, 'delivery');
-      console.log('[Game4U]   → offset', offset, '→', parsed.items.length, 'linhas');
       yield parsed.items;
       if (parsed.items.length === 0 || parsed.items.length < limit) {
         break;
@@ -773,16 +762,8 @@ async function* game4uIterateDeliveryPages(
     u.searchParams.set(pageQuery, String(pageNum));
     u.searchParams.set(limitQuery, String(limit));
     const urlStr = u.toString();
-    console.log('[Game4U] GET', urlStr);
     const parsed = await game4uFetchDeliveryList(urlStr, clientId, auth, 'delivery');
     const tp = parsed.totalPages;
-    console.log(
-      '[Game4U]   →',
-      parsed.items.length,
-      'items',
-      parsed.total != null ? `total=${parsed.total}` : '',
-      tp != null ? `page=${pageNum}/${tp}` : `page=${pageNum}`
-    );
     yield parsed.items;
     if (parsed.items.length === 0) {
       break;
@@ -830,7 +811,6 @@ async function game4uPutDelivery(
     (envStr('GAME4U_DELIVERY_ITEM_PATH', 'game4u_delivery_item_path') || '/delivery').replace(/\/+$/, '');
   const url = joinUrl(base, `${itemBase}/${encodeURIComponent(id)}`);
   if (!opts.quiet) {
-    console.log('[Game4U] PUT', url);
   }
 
   const maxAttempts = Math.max(
@@ -867,7 +847,6 @@ async function game4uPutDelivery(
       if (res.ok) {
         const preview = text.length ? text.slice(0, 200) : '(empty body)';
         if (!opts.quiet) {
-          console.log(`[Game4U]   ← ${res.status} ${preview}`);
         }
         return;
       }

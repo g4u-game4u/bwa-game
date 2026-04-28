@@ -1,5 +1,6 @@
 import { Component, OnInit } from '@angular/core';
 import { Router } from '@angular/router';
+import { SessaoProvider } from '@providers/sessao/sessao.provider';
 import { parseFragmentParams } from '../../utils/url-fragment-params';
 
 /**
@@ -11,7 +12,7 @@ import { parseFragmentParams } from '../../utils/url-fragment-params';
   template: '',
 })
 export class RootRedirectComponent implements OnInit {
-  constructor(private router: Router) {}
+  constructor(private router: Router, private sessao: SessaoProvider) {}
 
   ngOnInit(): void {
     const tree = this.router.parseUrl(this.router.url);
@@ -47,6 +48,12 @@ export class RootRedirectComponent implements OnInit {
       return;
     }
 
-    void this.router.navigate(['/dashboard'], { replaceUrl: true });
+    // Evita ir para /dashboard quando não há sessão — isso dispararia o guard e um GET /auth/user,
+    // para então voltar ao /login. Em vez disso, vai direto ao login.
+    if (this.sessao.usuario || this.sessao.token) {
+      void this.router.navigate(['/dashboard'], { replaceUrl: true });
+    } else {
+      void this.router.navigate(['/login'], { replaceUrl: true });
+    }
   }
 }

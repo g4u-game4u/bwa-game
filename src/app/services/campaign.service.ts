@@ -36,23 +36,26 @@ export class CampaignService {
    * Campanha atual: GET `/campaign`, escolhe a ativa pelo intervalo; fallback para temporada do ano.
    */
   async getCurrentCampaign(): Promise<Campaign> {
-    if (this.loadPromise) {
-      return this.loadPromise;
-    }
     if (this.currentCampaign) {
       return this.currentCampaign;
     }
+    if (this.loadPromise) {
+      return this.loadPromise;
+    }
 
     this.isLoading = true;
-    this.loadPromise = this.fetchCurrentCampaign();
+    this.loadPromise = (async () => {
+      try {
+        const c = await this.fetchCurrentCampaign();
+        this.currentCampaign = c;
+        return c;
+      } finally {
+        this.isLoading = false;
+        this.loadPromise = null;
+      }
+    })();
 
-    try {
-      this.currentCampaign = await this.loadPromise;
-      return this.currentCampaign;
-    } finally {
-      this.isLoading = false;
-      this.loadPromise = null;
-    }
+    return this.loadPromise;
   }
 
   private async fetchCurrentCampaign(): Promise<Campaign> {

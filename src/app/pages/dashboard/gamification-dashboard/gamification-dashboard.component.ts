@@ -65,6 +65,20 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   playerStatus: PlayerStatus | null = null;
   pointWallet: PointWallet | null = null;
   seasonProgress: SeasonProgress | null = null;
+
+  get sessionPlayerName(): string {
+    const u = this.sessaoProvider.usuario as
+      | { full_name?: string; name?: string; email?: string }
+      | null
+      | undefined;
+    const fullName = (u?.full_name || '').trim();
+    if (fullName) return fullName;
+    const name = (u?.name || '').trim();
+    if (name) return name;
+    const email = (u?.email || '').trim();
+    if (email) return email;
+    return '';
+  }
   
   // KPI data
   playerKPIs: KPIData[] = [];
@@ -161,13 +175,11 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   
   /**
    * Identificador do jogador para action_log, empresas e agregados Funifier (email / `_id` / query).
-   * Não usar para perfil lateral: isso dispara `GET /v3/player/{id}`; use {@link getFunifierProfilePlayerId}.
    */
   getPlayerId(): string {
     // Check for playerId in query params (when viewing another player's dashboard)
     const playerIdParam = this.route.snapshot.queryParams['playerId'];
     if (playerIdParam && typeof playerIdParam === 'string') {
-      console.log('📊 Using player ID from query params:', playerIdParam);
       return playerIdParam;
     }
     
@@ -176,30 +188,15 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     if (usuario) {
       const sessionPlayerId = usuario._id || usuario.email;
       if (sessionPlayerId && typeof sessionPlayerId === 'string') {
-        console.log('📊 Using player ID from session:', sessionPlayerId);
         return sessionPlayerId;
       }
     }
     
-    // Fallback to 'me' (current authenticated user)
-    console.log('📊 Using default player ID: me');
+    
     return 'me';
   }
 
-  /**
-   * Perfil e carteira (pontos legado Funifier): `me` → `/auth/user`, sem `GET /v3/player/...`.
-   * Com `?playerId=` na URL, mantém o outro jogador via `/v3/player/{id}`.
-   */
-  private getFunifierProfilePlayerId(): string {
-    const q = this.route.snapshot.queryParams['playerId'];
-    if (typeof q === 'string' && q.trim().length > 0) {
-      return q.trim();
-    }
-    return 'me';
-  }
-  
   ngOnInit(): void {
-    console.log('🎮 GamificationDashboardComponent ngOnInit STARTED');
     this.checkResponsiveBreakpoints();
     
     // Track if initial load has been done
@@ -213,11 +210,9 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
         const playerId = params['playerId'];
         if (initialLoadDone) {
           // Only reload if params changed after initial load
-          console.log('📊 Player ID changed via query params:', playerId);
           this.loadDashboardData();
         } else {
           // First emission - do initial load
-          console.log('🎮 Initial load with playerId:', playerId || '(none)');
           initialLoadDone = true;
           this.loadDashboardData();
         }
@@ -275,8 +270,9 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   }
   
   /**
-   * Load all dashboard data asynchronously
-   * All data loads in parallel to avoid blocking the UI
+   * Load all dashboard data asynchronously.
+   * Game4U: esperam-se até 2× `/game/stats` (mês do painel aqui vs temporada completa no `page-season`) e até 2× `/game/actions`
+   * com intervalos/critérios distintos; dedupe em {@link Game4uApiService} evita duplicar a mesma query string.
    */
   loadDashboardData(): void {
     // Force fresh data on every dashboard load
@@ -351,14 +347,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     this.cdr.markForCheck();
     
     const playerId = this.getPlayerId();
-    const profilePlayerId = this.getFunifierProfilePlayerId();
     
-    // Load player status
-    console.log('📊 Loading player data for:', playerId, 'profile API id:', profilePlayerId);
-    console.log('📊 Token available:', !!this.sessaoProvider.token);
-    console.log('📊 Token value:', this.sessaoProvider.token?.substring(0, 20) + '...');
-    
-    // Safety timeout to prevent infinite loading state
     const loadingTimeout = setTimeout(() => {
       if (this.isLoadingPlayer) {
         console.warn('📊 Loading timeout reached, forcing loading state to false');
@@ -367,11 +356,10 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
       }
     }, 20000); // 20 second timeout
     
-    this.playerService.getPlayerStatus(profilePlayerId)
+    this.playerService.getPlayerStatus(playerId)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (status) => {
-          console.log('📊 Player status loaded:', status);
           clearTimeout(loadingTimeout);
           this.playerStatus = status;
           this.isLoadingPlayer = false;
@@ -389,58 +377,85 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
         }
       });
     
-    // Game4U: pontos da carteira vêm de `/game/stats` (action_stats.done). Sem Game4U: action_log × constante.
-    console.log('📊 Starting point wallet...');
-    forkJoin({
-      wallet: this.playerService.getPlayerPoints(profilePlayerId, this.selectedMonth).pipe(
-        catchError(err => {
-          console.error('📊 Point wallet status error:', err);
-          return of({ moedas: 0, bloqueados: 0, desbloqueados: 0 } as PointWallet);
-        })
-      ),
-      pontosActionLog: this.actionLogService.getPontosForMonth(playerId, this.selectedMonth).pipe(
-        catchError(err => {
-          console.error('📊 Pontos action_log error:', err);
-          return of(0);
-        })
-      )
-    })
-      .pipe(takeUntil(this.destroy$))
-      .subscribe({
-        next: ({ wallet, pontosActionLog }) => {
-          const fromStats = this.playerService.usesGame4uWalletFromStats();
-          const desbloqueados = fromStats
-            ? wallet.desbloqueados
-            : Math.floor(Number(pontosActionLog) || 0);
-          this.pointWallet = {
-            ...wallet,
-            desbloqueados
-          };
-          console.log('📊 Point wallet merged:', { bloqueados: wallet.bloqueados, desbloqueados, moedas: wallet.moedas, fromStats });
-          this.cdr.markForCheck();
-        },
-        error: (error) => {
-          console.error('📊 Failed to load point wallet:', error);
-          this.pointWallet = { moedas: 0, bloqueados: 0, desbloqueados: 0 };
-          this.cdr.markForCheck();
-        },
-        complete: () => {
-          console.log('📊 Point wallet request completed');
-        }
-      });
+    // Game4U: uma única `GET /game/stats` alimenta carteira, pontos e sidebar da temporada (evita N× o mesmo snapshot).
+    const usesGame4uWallet = this.playerService.usesGame4uWalletFromStats();
+    if (usesGame4uWallet) {
+      this.actionLogService
+        // Carteira/season sidebar devem refletir a campanha inteira (start/end de /campaign),
+        // não o mês do filtro do painel.
+        .getMonthlyGame4uPlayerDashboardData(playerId, undefined)
+        .pipe(takeUntil(this.destroy$))
+        .subscribe({
+          next: ({ wallet, sidebar }) => {
+            this.pointWallet = {
+              ...wallet,
+              desbloqueados: wallet.desbloqueados
+            };
+            if (this.seasonProgress) {
+              const base = { ...this.seasonProgress, tarefasFinalizadas: sidebar.tarefasFinalizadas };
+              if (sidebar.deliveryStatsTotal !== undefined) {
+                (base as SeasonProgress).deliveryStatsTotal = sidebar.deliveryStatsTotal;
+              } else {
+                delete (base as SeasonProgress & { deliveryStatsTotal?: number }).deliveryStatsTotal;
+              }
+              this.seasonProgress = base;
+            }
+            this.cdr.markForCheck();
+          },
+          error: (error: unknown) => {
+            console.error('📊 Failed to load Game4U dashboard snapshot:', error);
+            this.pointWallet = { moedas: 0, bloqueados: 0, desbloqueados: 0 };
+            this.cdr.markForCheck();
+          },
+          complete: () => {
+          }
+        });
+    } else {
+      forkJoin({
+        wallet: this.playerService.getPlayerPoints(playerId, this.selectedMonth).pipe(
+          catchError(err => {
+            console.error('📊 Point wallet status error:', err);
+            return of({ moedas: 0, bloqueados: 0, desbloqueados: 0 } as PointWallet);
+          })
+        ),
+        pontosActionLog: this.actionLogService.getPontosForMonth(playerId, this.selectedMonth).pipe(
+          catchError(err => {
+            console.error('📊 Pontos action_log error:', err);
+            return of(0);
+          })
+        )
+      })
+        .pipe(takeUntil(this.destroy$))
+        .subscribe({
+          next: ({ wallet, pontosActionLog }) => {
+            const desbloqueados = Math.floor(Number(pontosActionLog) || 0);
+            this.pointWallet = {
+              ...wallet,
+              desbloqueados
+            };
+            this.cdr.markForCheck();
+          },
+          error: (error) => {
+            console.error('📊 Failed to load point wallet:', error);
+            this.pointWallet = { moedas: 0, bloqueados: 0, desbloqueados: 0 };
+            this.cdr.markForCheck();
+          },
+          complete: () => {
+            console.log('📊 Point wallet request completed');
+          }
+        });
+    }
     
     // Load season progress (basic data from player status)
-    console.log('📊 Starting season progress request...');
     this.playerService.getSeasonProgress(playerId, this.seasonDates)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (progress) => {
-          console.log('📊 Season progress loaded:', progress);
           this.seasonProgress = progress;
           this.cdr.markForCheck();
-          
-          // Load additional data for season progress
-          this.loadSeasonProgressDetails();
+          if (!this.playerService.usesGame4uWalletFromStats()) {
+            this.loadSeasonProgressDetails();
+          }
         },
         error: (error) => {
           console.error('📊 Failed to load season progress:', error);
@@ -476,7 +491,6 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: ({ tarefasFinalizadas, deliveryStatsTotal }) => {
-          console.log('📊 Season sidebar:', { tarefasFinalizadas, deliveryStatsTotal });
           if (this.seasonProgress) {
             const base = { ...this.seasonProgress, tarefasFinalizadas };
             if (deliveryStatsTotal !== undefined) {
@@ -566,7 +580,6 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
       )
       .subscribe({
         next: (enrichedClientes: CompanyDisplay[]) => {
-          console.log('📊 Clientes enriched:', enrichedClientes);
           enrichedClientes.forEach(c => {
             const status = this.cnpjStatusMap.get(c.cnpj);
             if (status) {
@@ -612,7 +625,6 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
       .getPlayerCnpjListWithCount(playerId, this.selectedMonth)
       .pipe(
         switchMap(items => {
-          console.log('📊 Participação CNPJs (action_log):', items.length);
           const empids = items.map(i => i.cnpj).filter((c): c is string => !!c && String(c).trim().length > 0);
           const actionCountByCnpj = new Map(items.map(i => [i.cnpj, i.actionCount]));
           const deliveryTitleByKey = new Map<string, string>();
@@ -768,18 +780,6 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
         }
       });
       this.participacaoClientes = merged;
-      console.log(
-        '📊 [debug Clientes atendidos] chave participação → EmpID gamificação + porcEntregas (API)',
-        merged.map(c => ({
-          chaveParticipacaoGame4U: c.cnpj,
-          empIdUsadoNaGamificacao: c.gamificacaoEmpIdUsado ?? null,
-          deliveryId: c.deliveryId ?? null,
-          nomeExibicao: this.getClienteAtendidoDisplayName(c),
-          porcEntregas: c.porcEntregas ?? null,
-          porcEntrega_deliveryKpiCurrent: c.deliveryKpi?.current ?? null,
-          porcEntrega_valorUsadoNaLista: this.getListaEntregaPercent(c)
-        }))
-      );
       /** Antes do sync: `syncEntregasPrazoKpiFromParticipacao` ignora enquanto `isLoadingParticipacaoKpi` é true. */
       this.isLoadingParticipacaoKpi = false;
       this.syncClientesKpiWithTabs();
@@ -969,7 +969,6 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
       .pipe(takeUntil(this.destroy$), takeUntil(this.monthChange$))
       .subscribe({
         next: (metrics) => {
-          console.log('📊 Progress metrics loaded:', metrics);
           this.activityMetrics = metrics.activity;
 
           this.processMetrics = metrics.processo;
@@ -994,7 +993,6 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
    * @param monthsAgo - Number of months ago (0 = current month)
    */
   onMonthChange(monthsAgo: number): void {
-    console.log('📊 onMonthChange called with monthsAgo:', monthsAgo);
     console.warn('⚠️ MONTH CHANGE:', monthsAgo); // Use warn so it's visible even with filters
     // Handle "Toda temporada" (-1) — undefined means no month filtering (season-wide)
     if (monthsAgo === -1) {

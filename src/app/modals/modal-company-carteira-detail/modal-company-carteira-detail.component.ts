@@ -70,7 +70,6 @@ export class ModalCompanyCarteiraDetailComponent implements OnInit, OnDestroy {
         }
       });
       this.cnpjNameMap = nameMap;
-      console.log('📊 Modal detail: CNPJ name map loaded with', this.cnpjNameMap.size, 'entries, status:', this.companyStatus);
       this.cdr.markForCheck();
     } catch (error) {
       console.error('Error enriching company name:', error);

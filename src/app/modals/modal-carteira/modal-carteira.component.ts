@@ -71,15 +71,12 @@ export class ModalCarteiraComponent implements OnInit, OnDestroy {
             }
           });
           this.cnpjNameMap = nameMap;
-          console.log('📊 Modal: Stored cnpjNameMap:', this.cnpjNameMap.size, 'entries, statusMap:', this.cnpjStatusMap.size, 'entries');
           return enrichedClientes;
         }),
         takeUntil(this.destroy$)
       )
       .subscribe({
         next: (enrichedClientes) => {
-          console.log('📊 Modal carteira clientes enriched with KPI data:', enrichedClientes);
-          console.log('📊 CNPJ name map:', this.cnpjNameMap);
           this.clientes = enrichedClientes;
           this.isLoading = false;
           this.cdr.markForCheck();
@@ -112,7 +109,6 @@ export class ModalCarteiraComponent implements OnInit, OnDestroy {
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (actions) => {
-          console.log('📊 Actions for CNPJ loaded:', actions);
           this.selectedClienteActions = actions;
           this.isLoadingActions = false;
           this.cdr.markForCheck();
