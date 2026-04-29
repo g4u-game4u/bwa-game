@@ -243,7 +243,7 @@ export class LoginComponent implements OnInit, OnDestroy {
           await new Promise(resolve => setTimeout(resolve, 100));
           const navigationResult = await this.router.navigate(['/']);
         } else {
-          this.toastService.error("Usuário ou senha incorretos");
+          this.handleInvalidCredentials();
         }
       } catch (error: any) {
         console.error('🔐 Login error:', error);
@@ -252,7 +252,7 @@ export class LoginComponent implements OnInit, OnDestroy {
         if (error?.name === 'TimeoutError' || error?.message?.includes('timeout')) {
           this.toastService.error("Tempo de conexão esgotado. Verifique sua conexão e tente novamente.");
         } else if (error?.status === 401 || error?.status === 403) {
-          this.toastService.error("Usuário ou senha incorretos");
+          this.handleInvalidCredentials();
         } else if (error?.status === 0 || error?.message?.includes('Network')) {
           this.toastService.error("Erro de conexão. Verifique sua internet e tente novamente.");
         } else {
@@ -266,6 +266,26 @@ export class LoginComponent implements OnInit, OnDestroy {
     } else {
       console.warn('🔐 Form invalid or missing credentials');
     }
+  }
+
+  private handleInvalidCredentials() {
+    // Mensagem curta + CTA não invasivo (snackbar com ação)
+    const message =
+      'Não conseguimos validar essa senha. Atualizamos nossa base para um ecossistema mais potente. Para acessar sua conta, redefina sua senha.';
+
+    const ref = this.toastService.action(message, 'Redefinir senha agora', {
+      panelClass: ['snackbar-clean-action'],
+      duration: 12000,
+    });
+
+    ref.onAction().subscribe(() => {
+      // Se o usuário estiver usando e-mail como login, pré-preenche no reset
+      const candidate = (this.username || '').trim();
+      if (candidate.includes('@')) {
+        this.resetRequestForm.patchValue({ email: candidate });
+      }
+      this.startPasswordReset();
+    });
   }
 
   private startLoadingTextAnimation() {

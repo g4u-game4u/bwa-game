@@ -85,6 +85,45 @@ h1 {
   }
 }
 
+// Snackbar "clean" com ação evidente (ex.: redefinir senha)
+.snackbar-clean-action {
+  @include snackbarStyles();
+
+  .mdc-snackbar__surface {
+    background: rgba(0, 9, 20, 0.92) !important;
+    border: 1px solid rgba($text-light-blue, 0.35) !important;
+    border-radius: 12px !important;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55) !important;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    font-weight: 500;
+    min-width: 520px !important;
+    max-width: min(720px, calc(100vw - 2rem)) !important;
+    padding: 12px 14px !important;
+  }
+
+  .mdc-snackbar__label {
+    color: rgba(255, 255, 255, 0.92) !important;
+    letter-spacing: 0.01em;
+    font-weight: 500;
+  }
+
+  .mdc-snackbar__actions .mdc-button {
+    border-radius: 999px !important;
+    padding: 0 14px !important;
+    min-width: auto !important;
+    height: 34px !important;
+    border: 1px solid rgba($text-light-blue, 0.9) !important;
+    background: $text-light-blue !important;
+  }
+
+  .mdc-snackbar__actions .mdc-button .mdc-button__label {
+    color: $bg-color !important;
+    font-weight: 800 !important;
+    letter-spacing: 0.02em;
+  }
+}
+
 small {
   font-size: 14px;
   line-height: 16.8px;
