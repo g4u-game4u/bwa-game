@@ -334,6 +334,8 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
       .subscribe({
         next: (points) => {
           this.pointWallet = points;
+          // Load canceled points separately
+          this.loadCanceledPoints(playerId);
           this.cdr.markForCheck();
         },
         error: (error) => {
@@ -369,6 +371,36 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
           this.cdr.markForCheck();
         },
         complete: () => {
+        }
+      });
+  }
+
+  /**
+   * Load canceled points for the player
+   */
+  private loadCanceledPoints(playerId: string): void {
+    const email = pickSessionEmailForGameApi(this.sessaoProvider.usuario, this.sessaoProvider.token ?? null);
+    const userKey = looksLikeEmail(playerId) ? playerId : email;
+    
+    if (!userKey) {
+      console.warn('📊 No valid email for canceled points lookup');
+      return;
+    }
+
+    this.userActionDashboard.getCanceledPoints(userKey)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (cancelados) => {
+          if (this.pointWallet) {
+            this.pointWallet = {
+              ...this.pointWallet,
+              cancelados
+            };
+            this.cdr.markForCheck();
+          }
+        },
+        error: (error) => {
+          console.error('📊 Failed to load canceled points:', error);
         }
       });
   }
@@ -424,6 +456,11 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
         range.end
       );
       this.pointWallet = { bloqueados: wallet.bloqueados, desbloqueados: wallet.desbloqueados, moedas: 0 };
+
+      // Load canceled points
+      if (statsUser) {
+        this.loadCanceledPoints(statsUser);
+      }
 
       const teamFromActions = this.userActionDashboard.pickPrimaryTeamNameFromActions(
         items,

@@ -24,6 +24,7 @@ export interface PointWallet {
   bloqueados: number;
   desbloqueados: number;
   moedas: number;
+  cancelados?: number;
 }
 
 export interface PointCategory {
