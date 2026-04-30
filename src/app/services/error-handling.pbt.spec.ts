@@ -8,6 +8,7 @@ import { BackendApiService } from './backend-api.service';
 import { PlayerMapper } from './player-mapper.service';
 import { CompanyMapper } from './company-mapper.service';
 import { KPIMapper } from './kpi-mapper.service';
+import { SessaoProvider } from '@providers/sessao/sessao.provider';
 import { createMockPlayerStatus, generateCompany, generateKPIData } from '@app/testing/mock-data-generators';
 
 function expectPlayerProfileUrl(req: { url: string }, playerId: string): boolean {
@@ -28,7 +29,8 @@ describe('Property-Based Tests: Error Handling', () => {
         BackendApiService,
         PlayerMapper,
         CompanyMapper,
-        KPIMapper
+        KPIMapper,
+        { provide: SessaoProvider, useValue: { usuario: null } }
       ]
     });
 

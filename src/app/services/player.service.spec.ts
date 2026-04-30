@@ -67,6 +67,34 @@ describe('PlayerService', () => {
     expect(service).toBeTruthy();
   });
 
+  it('getPlayerStatus should use /auth/user when playerId is the session email', done => {
+    const mockApiResponse = {
+      _id: 'john@example.com',
+      name: 'John Doe',
+      email: 'john@example.com',
+      extra: { seasonLevel: 3 }
+    };
+    const mockPlayerStatus: PlayerStatus = {
+      _id: 'john@example.com',
+      name: 'John Doe',
+      email: 'john@example.com',
+      level: 0,
+      seasonLevel: 3,
+      metadata: { area: '', time: '', squad: '' },
+      created: Date.now(),
+      updated: Date.now()
+    };
+    mapperSpy.toPlayerStatus.and.returnValue(mockPlayerStatus);
+
+    service.getPlayerStatus('john@example.com').subscribe(result => {
+      expect(result).toEqual(mockPlayerStatus);
+      done();
+    });
+
+    const req = httpMock.expectOne(r => r.url === 'https://api.test/auth/user' && r.method === 'GET');
+    req.flush(mockApiResponse);
+  });
+
   describe('getPlayerStatus', () => {
     it('should fetch and map player status correctly', (done) => {
       const mockApiResponse = {

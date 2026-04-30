@@ -28,6 +28,68 @@
   }
 }
 
+@keyframes kpi-loading-dot {
+  0%,
+  20% {
+    opacity: 0.12;
+  }
+  45% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0.12;
+  }
+}
+
+.loading-dots {
+  display: inline-flex;
+  align-items: baseline;
+
+  span {
+    display: inline-block;
+    min-width: 0.28em;
+    text-align: center;
+    animation: kpi-loading-dot 1.25s ease-in-out infinite;
+  }
+
+  span:nth-child(1) {
+    animation-delay: 0s;
+  }
+
+  span:nth-child(2) {
+    animation-delay: 0.18s;
+  }
+
+  span:nth-child(3) {
+    animation-delay: 0.36s;
+  }
+
+  &--lg span {
+    font-size: 1.35em;
+    font-weight: 600;
+    line-height: 1;
+  }
+
+  &--muted span {
+    font-size: 0.92em;
+    color: #9ca3af;
+  }
+
+  &--inline span {
+    font-size: 1em;
+  }
+}
+
+.kpi-target-loading-prefix {
+  margin-right: 4px;
+  color: #9ca3af;
+  font-weight: 400;
+}
+
+.kpi-status-loading-text {
+  margin-right: 2px;
+}
+
 .kpi-circular-progress {
   display: flex;
   flex-direction: column;
@@ -52,6 +114,11 @@
     outline-offset: 4px;
     border-radius: 8px;
   }
+}
+
+.kpi-circular-progress--pending .kpi-progress-wrapper {
+  opacity: 0.72;
+  transition: opacity 0.25s ease;
 }
 
 .kpi-label-wrapper {

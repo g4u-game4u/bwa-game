@@ -48,6 +48,8 @@ export interface SupervisorTecnicoPlayerRow {
   cnpjMetric: number;
   entregaMetric: number;
   kpis: KPIData[];
+  /** `extra.cnpj_resp` do estado do jogador (evita GET perfil no modal). */
+  cnpjRespRaw: string;
 }
 
 @Component({
@@ -406,6 +408,7 @@ export class DashboardSupervisorTecnicoComponent implements OnInit, OnDestroy {
       .map(playerData => {
         const playerId = String(playerData._id);
         const extra = playerData.extra || {};
+        const cnpjRespStr: string = extra.cnpj_resp || '';
         const points = pointsMap.get(playerId) || 0;
         const cnpjMetric = this.getCnpjRespCount(extra);
         const entregaMetric = extra.entrega ? parseFloat(extra.entrega) : 0;
@@ -445,7 +448,8 @@ export class DashboardSupervisorTecnicoComponent implements OnInit, OnDestroy {
           points,
           cnpjMetric,
           entregaMetric,
-          kpis
+          kpis,
+          cnpjRespRaw: cnpjRespStr
         };
       })
       .sort((a, b) => a.playerName.localeCompare(b.playerName, 'pt-BR'));
@@ -790,6 +794,7 @@ export class DashboardSupervisorTecnicoComponent implements OnInit, OnDestroy {
         const cnpjGoal = extra.cnpj_goal != null ? Number(extra.cnpj_goal) : 100;
         const entregaGoal = extra.entrega_goal != null ? Number(extra.entrega_goal) : 90;
         const cnpjSuperTarget = Math.ceil(cnpjGoal * 1.5);
+        const cnpjRespRaw: string = extra.cnpj_resp || '';
 
         this.playerRows = [{
           playerId: collaboratorId,
@@ -799,6 +804,7 @@ export class DashboardSupervisorTecnicoComponent implements OnInit, OnDestroy {
           points,
           cnpjMetric,
           entregaMetric,
+          cnpjRespRaw,
           kpis: [
             {
               id: 'numero-empresas',

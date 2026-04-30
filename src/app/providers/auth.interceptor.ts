@@ -104,10 +104,27 @@ export class AuthInterceptor implements HttpInterceptor {
         const isWhitelistedBackend = WHITELISTED_URLS.some(item => requestUrl.includes(item));
         const isGame4uBackend = this.isGame4uBackendRequestUrl(requestUrl);
 
-        // Game4U ou URLs explicitamente isentas: não forçar o ramo genérico (clone completo do header set)
-        if (isWhitelistedBackend || isGame4uBackend) {
+        /** Mesmo contrato do ramo autenticado: `client_id` em pedidos à API base (não enviar a webhooks externos). */
+        const clientIdForWhitelist: Record<string, string> = {};
+        if (
+            environment.client_id &&
+            (isGame4uBackend ||
+                /\/auth\/(login|refresh|token)(\/|$|\?)/.test(requestUrl))
+        ) {
+            clientIdForWhitelist['client_id'] = environment.client_id;
+        }
+
+        // URLs explicitamente isentas (login/refresh/campaign/etc.): não exigir sessão
+        if (isWhitelistedBackend) {
             if (request.headers.has('Authorization')) {
-                return next.handle(request);
+                return next.handle(
+                    request.clone({
+                        setHeaders: {
+                            ...this.headersToObject(request.headers),
+                            ...clientIdForWhitelist
+                        }
+                    })
+                );
             }
 
             const token = this.sessao.token;
@@ -117,31 +134,40 @@ export class AuthInterceptor implements HttpInterceptor {
                 requestUrl.includes('/auth/token');
 
             const extra: { [k: string]: string } = {};
-            if (isGame4uBackend && environment.client_id) {
-                extra['client_id'] = environment.client_id;
-            }
             if (token && !isAuthAnonymous) {
                 extra['Authorization'] = `Bearer ${token}`;
             }
-            if (Object.keys(extra).length > 0) {
+            if (Object.keys(extra).length > 0 || Object.keys(clientIdForWhitelist).length > 0) {
                 return next.handle(
                     request.clone({
                         setHeaders: {
                             ...this.headersToObject(request.headers),
+                            ...clientIdForWhitelist,
                             ...extra
                         }
                     })
                 );
             }
-            return next.handle(request);
+            return next.handle(
+                Object.keys(clientIdForWhitelist).length
+                    ? request.clone({
+                          setHeaders: {
+                              ...this.headersToObject(request.headers),
+                              ...clientIdForWhitelist
+                          }
+                      })
+                    : request
+            );
         }
 
-        let modifiedRequest = request.clone({
-            setHeaders: {
-                ...this.headersToObject(request.headers),
-                client_id: environment.client_id!
-            }
-        })
+        // Game4U endpoints (/game/*) também precisam de sessão e refresh quando expira.
+        // Antes, eles passavam por um ramo "especial" sem refresh e acabavam em 403 intermitente.
+        const baseHeaders: { [name: string]: string } = {
+            ...this.headersToObject(request.headers),
+            ...(environment.client_id ? { client_id: environment.client_id } : {})
+        };
+
+        let modifiedRequest = request.clone({ setHeaders: baseHeaders });
 
         const token = this.sessao.token;
         if (!token) {

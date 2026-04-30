@@ -50,6 +50,9 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
   copiedDeliveryId: string | null = null;
   cnpjNameMap = new Map<string, string>(); // Map of original CNPJ → clean empresa name
 
+  /** Filtro local do modal «Tarefas finalizadas» (título, cliente, data). */
+  activitySearchQuery = '';
+
   constructor(
     private actionLogService: ActionLogService,
     private cnpjLookupService: CnpjLookupService,
@@ -101,6 +104,89 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
 
   get isProcessList(): boolean {
     return this.listType === 'processos-pendentes' || this.listType === 'processos-finalizados';
+  }
+
+  /**
+   * Linhas exibidas na tabela: com filtro em «Tarefas finalizadas», lista completa nos demais tipos.
+   */
+  get displayedActivityItems(): ActivityListItem[] {
+    if (this.listType !== 'atividades') {
+      return this.activityItems;
+    }
+    const q = this.activitySearchQuery.trim().toLowerCase();
+    if (!q) {
+      return this.activityItems;
+    }
+    return this.activityItems.filter(item => this.activityMatchesSearch(item, q));
+  }
+
+  onActivitySearchInput(event: Event): void {
+    this.activitySearchQuery = (event.target as HTMLInputElement).value;
+    this.cdr.markForCheck();
+  }
+
+  clearActivitySearch(): void {
+    this.activitySearchQuery = '';
+    this.cdr.markForCheck();
+  }
+
+  /**
+   * Nome do cliente: razão social (lookup CNPJ), senão título do processo, senão CNPJ.
+   */
+  getActivityClientDisplay(item: ActivityListItem): string {
+    if (item.cnpj) {
+      const mapped = this.cnpjNameMap.get(item.cnpj);
+      if (mapped?.trim()) {
+        return mapped.trim();
+      }
+    }
+    if (item.delivery_title?.trim()) {
+      return item.delivery_title.trim();
+    }
+    if (item.cnpj) {
+      return item.cnpj;
+    }
+    return '—';
+  }
+
+  private activityMatchesSearch(item: ActivityListItem, qLower: string): boolean {
+    if ((item.title || '').toLowerCase().includes(qLower)) {
+      return true;
+    }
+    const client = this.getActivityClientDisplay(item).toLowerCase();
+    if (client.includes(qLower)) {
+      return true;
+    }
+    if (item.cnpj?.toLowerCase().includes(qLower)) {
+      return true;
+    }
+    if (item.delivery_title?.toLowerCase().includes(qLower)) {
+      return true;
+    }
+    const formatted = this.formatDate(item.created).toLowerCase();
+    if (formatted.includes(qLower)) {
+      return true;
+    }
+    const dateOnly = new Date(item.created).toLocaleDateString('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric'
+    }).toLowerCase();
+    if (dateOnly.includes(qLower)) {
+      return true;
+    }
+    const digits = qLower.replace(/\D/g, '');
+    if (digits.length >= 2) {
+      const dateDigits = dateOnly.replace(/\D/g, '');
+      if (dateDigits.includes(digits)) {
+        return true;
+      }
+      const fullDigits = formatted.replace(/\D/g, '');
+      if (fullDigits.includes(digits)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /**

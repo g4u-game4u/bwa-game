@@ -27,16 +27,23 @@
     </div>
     -->
 
-    <div class="progress-row" *ngIf="progress.deliveryStatsTotal !== undefined">
+    <div class="progress-row" *ngIf="progress.deliveryStatsTotal !== undefined || isPending">
       <div class="row-left">
         <i class="ri-building-line icon clientes"></i>
         <span class="label">Clientes atendidos</span>
         <c4u-info-button
           [infoKey]="''"
-          [customText]="'Valor vindo de delivery_stats.total na resposta /game/stats (período do filtro).'"
+          [customText]="'Número alinhado à lista «Clientes atendidos» do painel (agregação de user-actions / participação).'"
           position="top"></c4u-info-button>
       </div>
-      <span class="value">{{ progress.deliveryStatsTotal | number:'1.0-0':'pt-BR' }}</span>
+      <span class="value" [attr.aria-busy]="isPending">
+        <span *ngIf="isPending" class="app-loading-dots app-loading-dots--sidebar" aria-hidden="true">
+          <span>.</span><span>.</span><span>.</span>
+        </span>
+        <ng-container *ngIf="!isPending && progress.deliveryStatsTotal !== undefined">
+          {{ progress.deliveryStatsTotal | number:'1.0-0':'pt-BR' }}
+        </ng-container>
+      </span>
     </div>
 
     <div class="progress-row">
@@ -45,7 +52,12 @@
         <span class="label">Tarefas Finalizadas</span>
         <c4u-info-button infoKey="tarefas-finalizadas" position="top"></c4u-info-button>
       </div>
-      <span class="value">{{ progress.tarefasFinalizadas | number:'1.0-0':'pt-BR' }}</span>
+      <span class="value" [attr.aria-busy]="isPending">
+        <span *ngIf="isPending" class="app-loading-dots app-loading-dots--sidebar" aria-hidden="true">
+          <span>.</span><span>.</span><span>.</span>
+        </span>
+        <ng-container *ngIf="!isPending">{{ progress.tarefasFinalizadas | number:'1.0-0':'pt-BR' }}</ng-container>
+      </span>
     </div>
 
     <div class="progress-row" *ngIf="processosFinalizados !== undefined">
@@ -54,7 +66,12 @@
         <span class="label">Processos Finalizados</span>
         <c4u-info-button infoKey="processos-finalizados" position="top"></c4u-info-button>
       </div>
-      <span class="value">{{ processosFinalizados | number:'1.0-0':'pt-BR' }}</span>
+      <span class="value" [attr.aria-busy]="isPending">
+        <span *ngIf="isPending" class="app-loading-dots app-loading-dots--sidebar" aria-hidden="true">
+          <span>.</span><span>.</span><span>.</span>
+        </span>
+        <ng-container *ngIf="!isPending">{{ processosFinalizados | number:'1.0-0':'pt-BR' }}</ng-container>
+      </span>
     </div>
   </div>
 </div>

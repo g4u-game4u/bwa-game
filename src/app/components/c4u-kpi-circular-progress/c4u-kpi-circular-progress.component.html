@@ -1,4 +1,5 @@
 <div class="kpi-circular-progress"
+     [class.kpi-circular-progress--pending]="isPending"
      role="progressbar"
      [attr.aria-busy]="isPending"
      [attr.aria-label]="ariaLabel"
@@ -23,7 +24,28 @@
       [theme]="progressColor">
     </c4u-porcentagem-circular>
   </div>
-  <div class="kpi-value" aria-hidden="true">{{ displayValue }}</div>
-  <div class="kpi-target" *ngIf="!compactPercentOnly" aria-hidden="true">{{ targetDisplayValue }}</div>
-  <div class="kpi-status" *ngIf="!compactPercentOnly" [class]="statusBadgeClass" [class.status-goal-achieved]="isGoalAchieved" aria-hidden="true">{{ goalStatus }}</div>
+  <div class="kpi-value" aria-hidden="true">
+    <span *ngIf="isPending" class="loading-dots loading-dots--lg" aria-hidden="true">
+      <span>.</span><span>.</span><span>.</span>
+    </span>
+    <ng-container *ngIf="!isPending">{{ displayValue }}</ng-container>
+  </div>
+  <div class="kpi-target" *ngIf="!compactPercentOnly" aria-hidden="true">
+    <ng-container *ngIf="isPending">
+      <span class="kpi-target-loading-prefix">Meta:</span>
+      <span class="loading-dots loading-dots--muted" aria-hidden="true">
+        <span>.</span><span>.</span><span>.</span>
+      </span>
+    </ng-container>
+    <ng-container *ngIf="!isPending">{{ targetDisplayValue }}</ng-container>
+  </div>
+  <div class="kpi-status" *ngIf="!compactPercentOnly" [class]="statusBadgeClass" [class.status-goal-achieved]="isGoalAchieved" aria-hidden="true">
+    <ng-container *ngIf="isPending">
+      <span class="kpi-status-loading-text">A carregar</span>
+      <span class="loading-dots loading-dots--inline" aria-hidden="true">
+        <span>.</span><span>.</span><span>.</span>
+      </span>
+    </ng-container>
+    <ng-container *ngIf="!isPending">{{ goalStatus }}</ng-container>
+  </div>
 </div>

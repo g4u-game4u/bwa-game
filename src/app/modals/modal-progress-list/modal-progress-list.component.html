@@ -44,21 +44,47 @@
             <span>Nenhuma tarefa encontrada</span>
           </div>
           
-          <div *ngIf="activityItems.length > 0" class="tasks-table">
+          <ng-container *ngIf="activityItems.length > 0">
+            <div *ngIf="listType === 'atividades'" class="activity-search-bar">
+              <i class="ri-search-line search-icon" aria-hidden="true"></i>
+              <input
+                type="search"
+                class="activity-search-input"
+                [value]="activitySearchQuery"
+                (input)="onActivitySearchInput($event)"
+                placeholder="Buscar por tarefa, cliente ou data…"
+                aria-label="Buscar tarefas por título, cliente ou data"
+              />
+              <button
+                *ngIf="activitySearchQuery.trim()"
+                type="button"
+                class="activity-search-clear"
+                (click)="clearActivitySearch()"
+                aria-label="Limpar busca">
+                <i class="ri-close-line" aria-hidden="true"></i>
+              </button>
+            </div>
+
+            <div *ngIf="listType === 'atividades' && displayedActivityItems.length === 0" class="empty-state empty-search">
+              <i class="ri-search-line empty-icon"></i>
+              <span>Nenhuma tarefa corresponde à busca</span>
+            </div>
+
+            <div *ngIf="displayedActivityItems.length > 0" class="tasks-table">
             <div class="task-header" [class.with-delivery]="listType === 'atividades'" [class.with-points]="listType === 'pontos'">
               <div class="task-col-title">Tarefa</div>
-              <div class="task-col-delivery" *ngIf="listType === 'atividades'">Processo</div>
+              <div class="task-col-delivery" *ngIf="listType === 'atividades'">Cliente</div>
               <div class="task-col-executor">Executor</div>
               <div class="task-col-date">Data</div>
               <div class="task-col-points" *ngIf="listType === 'pontos'">Pontos</div>
             </div>
             <div class="tasks-list">
-              <div *ngFor="let item of activityItems" class="task-row" [class.with-delivery]="listType === 'atividades'" [class.with-points]="listType === 'pontos'">
+              <div *ngFor="let item of displayedActivityItems" class="task-row" [class.with-delivery]="listType === 'atividades'" [class.with-points]="listType === 'pontos'">
                 <div class="task-col-title">
                   <span class="task-title">{{ item.title }}</span>
                 </div>
                 <div class="task-col-delivery" *ngIf="listType === 'atividades'">
-                  <span class="task-delivery">{{ item.delivery_title || '—' }}</span>
+                  <span class="task-delivery">{{ getActivityClientDisplay(item) }}</span>
                 </div>
                 <div class="task-col-executor">
                   <span class="task-executor">{{ formatEmailToName(item.player) }}</span>
@@ -71,7 +97,8 @@
                 </div>
               </div>
             </div>
-          </div>
+            </div>
+          </ng-container>
         </div>
       </ng-container>
 

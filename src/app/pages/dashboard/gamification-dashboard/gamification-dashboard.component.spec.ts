@@ -76,6 +76,7 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
 
     const actionLogServiceSpy = jasmine.createSpyObj('ActionLogService', [
       'getProgressMetrics',
+      'getMonthlyPointsGoalTarget',
       'getPlayerCnpjListWithCount',
       'getUniqueClientesCount',
       'getCompletedTasksCount',
@@ -86,6 +87,7 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
       activity: { pendentes: 0, emExecucao: 0, finalizadas: 0, pontos: 0 },
       processo: { pendentes: 0, incompletas: 0, finalizadas: 0 }
     }));
+    actionLogServiceSpy.getMonthlyPointsGoalTarget.and.returnValue(of(0));
     actionLogServiceSpy.getPlayerCnpjListWithCount.and.returnValue(of([]));
     actionLogServiceSpy.getUniqueClientesCount.and.returnValue(of(0));
     actionLogServiceSpy.getCompletedTasksCount.and.returnValue(of(0));

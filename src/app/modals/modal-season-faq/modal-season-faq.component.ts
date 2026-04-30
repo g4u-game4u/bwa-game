@@ -13,62 +13,51 @@ export interface SeasonFaqItem {
 export class ModalSeasonFaqComponent {
   faqItems: SeasonFaqItem[] = [
     {
-      title: 'O que são os pontos desta gamificação?',
+      title: 'O que o painel destaca nesta temporada?',
       body:
-        'Nesta gamificação, os pontos representam o volume de entregas realizadas por você na plataforma acessória.\n' +
-        'Diferente de outros programas, aqui só existem pontos desbloqueados: toda pontuação exibida já foi efetivamente conquistada ' +
-        'com base em entregas concluídas no período filtrado.',
+        'O painel concentra três frentes da sua performance: a meta de pontos do período, ' +
+        'o quanto você entrega no prazo e quantos clientes você atende.\n' +
+        'Esses indicadores ajudam a ver de um relance se você está caminhando em direção às metas da operação.',
     },
     {
-      title: 'Por que não existem pontos bloqueados ou a desbloquear?',
+      title: 'O que são os pontos e por que cada entrega vale diferente?',
       body:
-        'Porque os pontos são calculados exclusivamente a partir de entregas já realizadas e registradas na plataforma acessória.\n' +
-        'Não há “promessas” de pontos futuros: se aparece no painel, significa que a entrega correspondente já foi concluída e contabilizada.',
+        'Os pontos refletem entregas registradas na plataforma acessória, mas não são todos iguais: eles são pesados.\n' +
+        'Na pontuação entram, entre outros fatores, o tempo médio de execução da entrega, a complexidade da demanda ' +
+        'e o nível mínimo de senioridade exigido para aquela entrega.\n' +
+        'Assim, entregas mais exigentes ou que pedem mais experiência tendem a contar de forma diferente na soma.',
     },
     {
-      title: 'O que a lista de clientes representa?',
+      title: 'Como a empresa do cliente influencia os pontos?',
       body:
-        'A lista de clientes mostra todas as entregas realizadas para cada cliente dentro do mês selecionado no painel.\n' +
-        'Para cada cliente, você enxerga o conjunto de atividades concluídas naquele período, o que ajuda a entender como está ' +
-        'a sua atuação e a concentração de entregas na carteira.',
+        'A classificação da empresa — Pedra, Bronze, Prata, Ouro ou Diamante — também entra no peso dos pontos.\n' +
+        'Além disso, o painel considera contextos especiais: empresas em período de onboarding valem o dobro de pontos. ' +
+        'Já empresas em risco de churn também são levadas em conta no modelo, reforçando o foco em retenção e qualidade do relacionamento.',
     },
     {
-      title: 'Como as entregas se conectam com os pontos no painel?',
+      title: 'O que é a meta de pontos?',
       body:
-        'Cada entrega registrada na plataforma acessória gera pontos de acordo com as regras de negócio da operação.\n' +
-        'O painel consolida essas entregas por cliente e por período filtrado, somando os pontos correspondentes ' +
-        'e exibindo o total de pontos desbloqueados para você.',
+        'A meta de pontos é a referência de volume de pontuação que a operação espera para o período que você está visualizando.\n' +
+        'Ela conversa diretamente com as entregas que você concluiu e com o peso de cada uma delas, conforme as regras descritas aqui.',
     },
     {
-      title: 'Para que servem os KPIs em formato de círculo (circular progress)?',
+      title: 'O que significam “entregas no prazo”?',
       body:
-        'Os KPIs em formato de círculo mostram a “saúde” da sua carteira de clientes, isto é, se você está atingindo ' +
-        'os níveis esperados de qualidade, volume ou equilíbrio das entregas.\n' +
-        'Eles não são apenas indicadores visuais: esses percentuais serão considerados quando os pontos forem convertidos em moedas, ' +
-        'podendo gerar bonificação ou penalização.',
+        'Esse indicador mostra o quanto das suas entregas foi concluído dentro do prazo acordado ou esperado para o fluxo.\n' +
+        'Manter esse número alto costuma ir de mãos dadas com uma boa pontuação e com uma carteira mais previsível.',
     },
     {
-      title: 'Como os KPIs influenciam a conversão de pontos em moedas?',
+      title: 'O que são “clientes atendidos”?',
       body:
-        'Na conversão de pontos em moedas, os KPIs funcionam como multiplicadores ou redutores.\n' +
-        'Uma carteira saudável (KPIs altos) pode gerar um bônus: a mesma quantidade de pontos resulta em mais moedas.\n' +
-        'Por outro lado, se os KPIs indicarem problemas na carteira, pode haver uma penalização, reduzindo a quantidade de moedas ' +
-        'geradas a partir dos mesmos pontos.',
-    },
-    {
-      title: 'O que significa ter uma “carteira saudável”?',
-      body:
-        'Uma carteira saudável é aquela em que os KPIs se mantêm próximos ou acima das metas definidas pela operação.\n' +
-        'Na prática, isso costuma significar boa distribuição de entregas entre clientes, níveis adequados de volume, ' +
-        'qualidade e aderência aos prazos definidos para o seu papel.',
+        'É a quantidade de clientes com os quais você teve entregas válidas no período filtrado no painel.\n' +
+        'Ajuda a enxergar abrangência: além do volume de pontos, você vê quantas contas diferentes foram efetivamente cobertas.',
     },
     {
       title: 'Como posso usar o painel para melhorar meus resultados?',
       body:
-        'Use os pontos para acompanhar o volume total de entregas realizadas e comparar sua performance entre períodos.\n' +
-        'Analise a lista de clientes para identificar onde você mais entrega e onde ainda há espaço para atuar.\n' +
-        'Monitore os KPIs circulares para ajustar seu foco: melhorar esses indicadores aumenta a saúde da carteira e pode ' +
-        'elevar o valor final convertido em moedas.',
+        'Compare meta de pontos com o que você já acumulou e ajuste prioridades (complexidade, prazo, carteira).\n' +
+        'Acompanhe entregas no prazo e clientes atendidos para equilibrar volume, pontualidade e cobertura.\n' +
+        'Lembre-se do peso por classificação da empresa, onboarding e churn para priorizar onde cada ponto pesa mais na temporada.',
     },
   ];
 }

@@ -66,8 +66,12 @@ export interface CompanyDisplay {
   deliveryKpi?: KPIData;
   /** Game4U participação: título da entrega (exibir no lugar do id da entrega). */
   delivery_title?: string;
+  /** `extra.cnpj` na entrega / user-action — exibir ao lado do título quando há ambiguidade. */
+  delivery_extra_cnpj?: string;
   /** Game4U: `delivery_id` da entrega representada na linha (detalhe = user-actions desta entrega). */
   deliveryId?: string;
+  /** Lista via `GET /game/reports/finished/deliveries`: tarefas no modal vêm de `actions-by-delivery`. */
+  loadTasksViaGameReports?: boolean;
   /** EmpID usado no mapa `byEmpId` da gamificação (ex.: extraído de `delivery_id` antes da competência). */
   gamificacaoEmpIdUsado?: string;
 }

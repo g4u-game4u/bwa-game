@@ -371,6 +371,7 @@
     *ngIf="isPlayerDetailModalOpen && selectedPlayerForDetail"
     [playerId]="selectedPlayerForDetail.playerId"
     [playerName]="selectedPlayerForDetail.playerName"
+    [cnpjRespFromAggregate]="selectedPlayerForDetail.cnpjRespRaw"
     [monthsAgo]="selectedMonthsAgo"
     (closed)="onPlayerDetailClosed()"
     (cnpjSelected)="onCnpjSelectedFromPlayerDetail($event)">

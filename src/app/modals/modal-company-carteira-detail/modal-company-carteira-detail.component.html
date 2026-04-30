@@ -1,5 +1,5 @@
 <c4u-modal 
-  [modalTitle]="company ? getCompanyDisplayName(company.cnpj) : 'Detalhes da Empresa'" 
+  [modalTitle]="getModalTitle()" 
   (closed)="onClose()">
   <div class="company-detail-content">
     <!-- Company Status Badge -->

@@ -10,7 +10,12 @@ import {
   Game4uUserActionStatus,
   Game4uDeliveryStatus,
   Game4uTeamScopedQuery,
-  Game4uUserScopedQuery
+  Game4uUserScopedQuery,
+  Game4uReportsFinishedSummary,
+  Game4uGoalMonthSummaryResponse,
+  Game4uReportsFinishedQuery,
+  Game4uReportsActionsByDeliveryQuery,
+  Game4uReportsGoalMonthQuery
 } from '@model/game4u-api.model';
 import { Game4uSupabaseFallbackService } from './game4u-supabase-fallback.service';
 import { SeasonDatesService } from './season-dates.service';
@@ -26,6 +31,10 @@ export class Game4uApiService {
   private readonly actionsDedupCache = new Map<string, Observable<Game4uUserActionModel[]>>();
   private readonly teamStatsDedupCache = new Map<string, Observable<Game4uUserActionStatsResponse>>();
   private readonly teamActionsDedupCache = new Map<string, Observable<Game4uUserActionModel[]>>();
+  private readonly reportsFinishedSummaryCache = new Map<string, Observable<Game4uReportsFinishedSummary>>();
+  private readonly reportsFinishedDeliveriesCache = new Map<string, Observable<string[]>>();
+  private readonly reportsActionsByDeliveryCache = new Map<string, Observable<Game4uUserActionModel[]>>();
+  private readonly reportsGoalMonthCache = new Map<string, Observable<Game4uGoalMonthSummaryResponse>>();
 
   constructor(
     private http: HttpClient,
@@ -99,6 +108,10 @@ export class Game4uApiService {
     this.actionsDedupCache.clear();
     this.teamStatsDedupCache.clear();
     this.teamActionsDedupCache.clear();
+    this.reportsFinishedSummaryCache.clear();
+    this.reportsFinishedDeliveriesCache.clear();
+    this.reportsActionsByDeliveryCache.clear();
+    this.reportsGoalMonthCache.clear();
   }
 
   /** GET `/game/*` com partilha entre várias subscrições (evita N× a mesma chamada). */
@@ -158,10 +171,145 @@ export class Game4uApiService {
     return { start: start.toISOString(), end: end.toISOString() };
   }
 
-  private headers(): HttpHeaders {
-    return new HttpHeaders({
-      client_id: environment.client_id || ''
+  /**
+   * Intervalo `dt_prazo_*` para `/game/reports/goal/month/summary` (fim = primeiro dia do mês seguinte, como no doc).
+   */
+  toDtPrazoMonthRange(month: Date): { start: string; end: string } {
+    const y = month.getFullYear();
+    const m = month.getMonth();
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const start = `${y}-${pad(m + 1)}-01`;
+    const next = new Date(y, m + 1, 1);
+    const end = `${next.getFullYear()}-${pad(next.getMonth() + 1)}-01`;
+    return { start, end };
+  }
+
+  private reportsFinishedSummaryKey(q: Game4uReportsFinishedQuery): string {
+    const st = (q.status ?? []).join(',');
+    return `rpt-sum|${q.email}|${q.finished_at_start}|${q.finished_at_end}|${st}`;
+  }
+
+  private reportsFinishedDeliveriesKey(q: Game4uReportsFinishedQuery): string {
+    const st = (q.status ?? []).join(',');
+    return `rpt-del|${q.email}|${q.finished_at_start}|${q.finished_at_end}|${st}`;
+  }
+
+  private reportsActionsByDeliveryKey(q: Game4uReportsActionsByDeliveryQuery): string {
+    const st = (q.status ?? []).join(',');
+    return `rpt-act|${q.email}|${q.finished_at_start}|${q.finished_at_end}|${q.delivery_title}|${q.offset ?? 0}|${q.limit ?? 500}|${st}`;
+  }
+
+  private reportsGoalMonthKey(q: Game4uReportsGoalMonthQuery): string {
+    return `rpt-goal|${q.email}|${q.dt_prazo_start}|${q.dt_prazo_end}`;
+  }
+
+  private appendReportParams(
+    base: HttpParams,
+    q: Game4uReportsFinishedQuery
+  ): HttpParams {
+    let p = base
+      .set('email', q.email)
+      .set('finished_at_start', q.finished_at_start)
+      .set('finished_at_end', q.finished_at_end);
+    for (const s of q.status ?? []) {
+      p = p.append('status', s);
+    }
+    return p;
+  }
+
+  /**
+   * `GET /game/reports/finished/summary`
+   */
+  getGameReportsFinishedSummary(q: Game4uReportsFinishedQuery): Observable<Game4uReportsFinishedSummary> {
+    if (!this.isConfigured()) {
+      return throwError(
+        () => new Error('[Game4U] reports/finished/summary: defina backend_url_base.')
+      );
+    }
+    const key = this.reportsFinishedSummaryKey(q);
+    return this.shareGame4uDedupe(key, this.reportsFinishedSummaryCache, () => {
+      const params = this.appendReportParams(new HttpParams(), q);
+      return this.http.get<Game4uReportsFinishedSummary>(`${this.baseUrl}/game/reports/finished/summary`, {
+        headers: this.headers(),
+        params
+      });
     });
+  }
+
+  /**
+   * `GET /game/reports/finished/deliveries` — lista ordenada de `delivery_title`.
+   */
+  getGameReportsFinishedDeliveries(q: Game4uReportsFinishedQuery): Observable<string[]> {
+    if (!this.isConfigured()) {
+      return throwError(
+        () => new Error('[Game4U] reports/finished/deliveries: defina backend_url_base.')
+      );
+    }
+    const key = this.reportsFinishedDeliveriesKey(q);
+    return this.shareGame4uDedupe(key, this.reportsFinishedDeliveriesCache, () => {
+      const params = this.appendReportParams(new HttpParams(), q);
+      return this.http.get<string[]>(`${this.baseUrl}/game/reports/finished/deliveries`, {
+        headers: this.headers(),
+        params
+      });
+    });
+  }
+
+  /**
+   * `GET /game/reports/finished/actions-by-delivery` (paginado).
+   */
+  getGameReportsFinishedActionsByDelivery(
+    q: Game4uReportsActionsByDeliveryQuery
+  ): Observable<Game4uUserActionModel[]> {
+    if (!this.isConfigured()) {
+      return throwError(
+        () => new Error('[Game4U] reports/finished/actions-by-delivery: defina backend_url_base.')
+      );
+    }
+    const key = this.reportsActionsByDeliveryKey(q);
+    return this.shareGame4uDedupe(key, this.reportsActionsByDeliveryCache, () => {
+      let params = this.appendReportParams(new HttpParams(), q).set('delivery_title', q.delivery_title);
+      const off = q.offset ?? 0;
+      const lim = Math.min(q.limit ?? 500, 500);
+      params = params.set('offset', String(off)).set('limit', String(lim));
+      return this.http.get<Game4uUserActionModel[]>(
+        `${this.baseUrl}/game/reports/finished/actions-by-delivery`,
+        {
+          headers: this.headers(),
+          params
+        }
+      );
+    });
+  }
+
+  /**
+   * `GET /game/reports/goal/month/summary`
+   */
+  getGameReportsGoalMonthSummary(q: Game4uReportsGoalMonthQuery): Observable<Game4uGoalMonthSummaryResponse> {
+    if (!this.isConfigured()) {
+      return throwError(
+        () => new Error('[Game4U] reports/goal/month/summary: defina backend_url_base.')
+      );
+    }
+    const key = this.reportsGoalMonthKey(q);
+    return this.shareGame4uDedupe(key, this.reportsGoalMonthCache, () => {
+      const params = new HttpParams()
+        .set('email', q.email)
+        .set('dt_prazo_start', q.dt_prazo_start)
+        .set('dt_prazo_end', q.dt_prazo_end);
+      return this.http.get<Game4uGoalMonthSummaryResponse>(
+        `${this.baseUrl}/game/reports/goal/month/summary`,
+        {
+          headers: this.headers(),
+          params
+        }
+      );
+    });
+  }
+
+  private headers(): HttpHeaders {
+    const cid = (environment.client_id || '').trim();
+    return cid ? new HttpHeaders({ client_id: cid }) : new HttpHeaders();
   }
 
   getHealth(): Observable<unknown> {

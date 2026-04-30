@@ -5,6 +5,10 @@ import {
   filterGame4uActionsByMonth,
   getGame4uMonthlyPointsCircularFromActionStats,
   getGame4uParticipationRowKey,
+  getGame4uAtendidosGroupKey,
+  pickGame4uAtendidosRepresentativeKey,
+  getGame4uUserActionFinishedOrFallbackMs,
+  game4uActionMatchesParticipacaoModalRow,
   isGame4uUserActionFinalizedStatus,
   readGame4uDeliveryStatsTotal,
   parseCompetenceYearMonthFromDeliveryId,
@@ -412,6 +416,115 @@ describe('game4u-game-mapper', () => {
         incompletas: 0,
         finalizadas: 1
       });
+    });
+  });
+
+  describe('getGame4uAtendidosGroupKey', () => {
+    it('prefers delivery_id over integration_id', () => {
+      const a = {
+        id: '1',
+        points: 0,
+        status: 'DONE' as const,
+        created_at: '2026-01-01T00:00:00.000Z',
+        delivery_id: 'del-99',
+        integration_id: 'emp-a'
+      } as Game4uUserActionModel;
+      expect(getGame4uAtendidosGroupKey(a)).toBe('d:del-99');
+    });
+
+    it('uses normalized extra.cnpj when delivery_id is absent', () => {
+      const a = {
+        id: '1',
+        points: 0,
+        status: 'DONE' as const,
+        created_at: '2026-01-01T00:00:00.000Z',
+        integration_id: 'emp-b',
+        extra: { cnpj: '508.275.706-78' }
+      } as Game4uUserActionModel;
+      expect(getGame4uAtendidosGroupKey(a)).toBe('c:50827570678');
+    });
+  });
+
+  describe('pickGame4uAtendidosRepresentativeKey', () => {
+    it('keeps previous integration_id when set', () => {
+      const a = {
+        id: '1',
+        points: 0,
+        status: 'DONE' as const,
+        created_at: '2026-01-01T00:00:00.000Z',
+        integration_id: 'emp-z'
+      } as Game4uUserActionModel;
+      expect(pickGame4uAtendidosRepresentativeKey('emp-first', a)).toBe('emp-first');
+    });
+
+    it('falls back to integration_id then extra.cnpj digits', () => {
+      const a = {
+        id: '1',
+        points: 0,
+        status: 'DONE' as const,
+        created_at: '2026-01-01T00:00:00.000Z',
+        extra: { cnpj: '41.192.340/0001-49' }
+      } as Game4uUserActionModel;
+      expect(pickGame4uAtendidosRepresentativeKey(undefined, a)).toBe('41192340000149');
+    });
+  });
+
+  describe('getGame4uUserActionFinishedOrFallbackMs', () => {
+    it('uses finished_at first', () => {
+      const a = {
+        id: '1',
+        points: 0,
+        status: 'DONE' as const,
+        created_at: '2025-06-01T00:00:00.000Z',
+        finished_at: '2026-03-15T12:00:00.000Z',
+        updated_at: '2026-04-01T00:00:00.000Z'
+      } as Game4uUserActionModel;
+      const ms = getGame4uUserActionFinishedOrFallbackMs(a);
+      expect(ms).toBe(Date.parse('2026-03-15T12:00:00.000Z'));
+    });
+
+    it('falls back to updated_at when finished_at is absent', () => {
+      const a = {
+        id: '1',
+        points: 0,
+        status: 'DONE' as const,
+        created_at: '2025-06-01T00:00:00.000Z',
+        updated_at: '2026-03-10T08:00:00.000Z'
+      } as Game4uUserActionModel;
+      const ms = getGame4uUserActionFinishedOrFallbackMs(a);
+      expect(ms).toBe(Date.parse('2026-03-10T08:00:00.000Z'));
+    });
+  });
+
+  describe('game4uActionMatchesParticipacaoModalRow', () => {
+    it('matches by delivery_id', () => {
+      const a = {
+        id: '1',
+        points: 0,
+        status: 'DONE' as const,
+        created_at: '2026-01-01T00:00:00.000Z',
+        delivery_id: 'del-42'
+      } as Game4uUserActionModel;
+      expect(
+        game4uActionMatchesParticipacaoModalRow(a, { cnpj: 'x', deliveryId: 'del-42' })
+      ).toBe(true);
+    });
+
+    it('matches row CNPJ digits to action extra.cnpj', () => {
+      const a = {
+        id: '1',
+        points: 0,
+        status: 'DONE' as const,
+        created_at: '2026-01-01T00:00:00.000Z',
+        integration_id: 'other',
+        extra: { cnpj: '41.192.340/0001-49' }
+      } as Game4uUserActionModel;
+      expect(
+        game4uActionMatchesParticipacaoModalRow(a, {
+          cnpj: '41192340000149',
+          delivery_extra_cnpj: '41.192.340/0001-49'
+        })
+      ).toBe(true);
     });
   });
 

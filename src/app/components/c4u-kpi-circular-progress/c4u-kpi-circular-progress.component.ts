@@ -15,7 +15,7 @@ export class C4uKpiCircularProgressComponent {
   @Input() unit?: string = '';
   @Input() size: 'small' | 'medium' | 'large' = 'medium';
   @Input() isMissing: boolean = false;
-  /** Carregamento em curso: mesmo padrão visual da lista (anel neutro + «…»). */
+  /** Carregamento em curso: anel neutro + reticências animadas no valor/meta/status. */
   @Input() isPending = false;
   /** Só o valor percentual visível (sem rótulo, meta nem status) — ex.: entregas no prazo. */
   @Input() compactPercentOnly = false;
@@ -90,7 +90,7 @@ export class C4uKpiCircularProgressComponent {
    */
   get displayValue(): string {
     if (this.isPending) {
-      return '…';
+      return '';
     }
     if (this.isMissing) {
       return '?';
@@ -159,7 +159,7 @@ export class C4uKpiCircularProgressComponent {
 
   get goalStatus(): string {
     if (this.isPending) {
-      return 'A carregar…';
+      return '';
     }
     if (this.isMissing) {
       return 'Dado indisponível';

@@ -40,6 +40,8 @@ export interface SupervisorPlayerCard {
   cnpjGoal: number;
   entregaGoal: number;
   kpis: KPIData[];
+  /** `extra.cnpj_resp` do aggregate `player_status` (evita GET …/player/{id} no modal). */
+  cnpjRespRaw: string;
 }
 
 @Component({
@@ -409,7 +411,8 @@ export class DashboardSupervisorComponent implements OnInit, OnDestroy {
       entregaMetric,
       cnpjGoal,
       entregaGoal,
-      kpis
+      kpis,
+      cnpjRespRaw: cnpjRespStr
     };
   }
 

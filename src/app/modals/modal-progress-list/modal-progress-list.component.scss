@@ -186,6 +186,69 @@
   min-height: 0;
 }
 
+.activity-search-bar {
+  display: flex;
+  align-items: center;
+  gap: $spacing-sm;
+  margin-bottom: $spacing-md;
+  padding: $spacing-sm $spacing-md;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+
+  .search-icon {
+    font-size: 1.25rem;
+    color: $text-secondary;
+    flex-shrink: 0;
+  }
+
+  .activity-search-input {
+    flex: 1;
+    min-width: 0;
+    border: none;
+    background: transparent;
+    color: $text-primary;
+    font-size: 0.9375rem;
+    outline: none;
+
+    &::placeholder {
+      color: $text-secondary;
+      opacity: 0.8;
+    }
+  }
+
+  .activity-search-clear {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border: none;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.06);
+    color: $text-secondary;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: background 0.2s ease, color 0.2s ease;
+
+    &:hover {
+      background: rgba(255, 255, 255, 0.1);
+      color: $text-primary;
+    }
+
+    &:focus-visible {
+      outline: 2px solid $primary-electric-blue;
+      outline-offset: 2px;
+    }
+  }
+}
+
+.empty-search {
+  padding-top: $spacing-md;
+  padding-bottom: $spacing-md;
+}
+
 .tasks-table {
   display: flex;
   flex-direction: column;
@@ -676,7 +739,7 @@
       }
 
       &.with-delivery .task-col-delivery::before {
-        content: 'Processo: ';
+        content: 'Cliente: ';
         font-weight: 600;
         color: $text-secondary;
       }

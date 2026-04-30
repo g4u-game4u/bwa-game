@@ -82,6 +82,7 @@ describe('GamificationDashboard - Company KPI Integration Tests', () => {
 
     const actionLogServiceSpy = jasmine.createSpyObj('ActionLogService', [
       'getProgressMetrics',
+      'getMonthlyPointsGoalTarget',
       'getPlayerCnpjListWithCount',
       'getUniqueClientesCount',
       'getCompletedTasksCount',
@@ -172,6 +173,8 @@ describe('GamificationDashboard - Company KPI Integration Tests', () => {
       activity: { pendentes: 0, emExecucao: 0, finalizadas: 0, pontos: 0 },
       processo: { pendentes: 0, incompletas: 0, finalizadas: 0 }
     }));
+    actionLogService.getMonthlyPointsGoalTarget.and.returnValue(of(0));
+    actionLogService.getPlayerCnpjListWithCount.and.returnValue(of([]));
     actionLogService.getUniqueClientesCount.and.returnValue(of(0));
     actionLogService.getCompletedTasksCount.and.returnValue(of(0));
     actionLogService.getPontosForMonth.and.returnValue(of(500));

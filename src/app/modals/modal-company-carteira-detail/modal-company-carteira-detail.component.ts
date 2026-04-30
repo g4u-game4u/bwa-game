@@ -56,7 +56,10 @@ export class ModalCompanyCarteiraDetailComponent implements OnInit, OnDestroy {
 
   private async enrichCompanyName(): Promise<void> {
     if (!this.company) return;
-    
+    if (this.company.loadTasksViaGameReports || this.company.cnpj.startsWith('g4u-rpt:')) {
+      return;
+    }
+
     try {
       const cnpjInfo = await firstValueFrom(
         this.cnpjLookupService.enrichCnpjListFull([this.company.cnpj])
@@ -83,7 +86,11 @@ export class ModalCompanyCarteiraDetailComponent implements OnInit, OnDestroy {
     this.cdr.markForCheck();
 
     // Load company KPIs - try to get all KPIs from company service
-    if (this.company.cnpjId) {
+    if (this.company.loadTasksViaGameReports || this.company.cnpj.startsWith('g4u-rpt:')) {
+      this.companyKPIs = [];
+      this.isLoading = false;
+      this.cdr.markForCheck();
+    } else if (this.company.cnpjId) {
       this.kpiService.getCompanyKPIs(this.company.cnpjId)
         .pipe(takeUntil(this.destroy$))
         .subscribe({
@@ -131,13 +138,22 @@ export class ModalCompanyCarteiraDetailComponent implements OnInit, OnDestroy {
 
     const uid = this.actionLogUserId?.trim() || undefined;
     const tid = !uid && this.actionLogTeamId?.trim() ? this.actionLogTeamId.trim() : undefined;
-    const deliveryId = this.company.deliveryId?.trim();
 
-    // Colaborador + Game4U + linha com `deliveryId`: todas as user-actions da mesma entrega.
-    // Senão: action_log por CNPJ (individual) ou aggregate por time.
+    // Colaborador + Game4U: mesma semântica da lista «Clientes atendidos» (delivery_id, extra.cnpj ou chave CRM).
+    // Sem Game4U: action_log por CNPJ (individual) ou aggregate por time.
     const tasks$ =
-      uid && !tid && deliveryId && isGame4uDataEnabled()
-        ? this.actionLogService.getGame4uUserActionsForDeliveryId(uid, deliveryId, this.month)
+      uid && !tid && isGame4uDataEnabled()
+        ? this.actionLogService.getGame4uUserActionsForParticipationModal(
+            uid,
+            {
+              cnpj: this.company.cnpj,
+              deliveryId: this.company.deliveryId,
+              delivery_extra_cnpj: this.company.delivery_extra_cnpj,
+              delivery_title: this.company.delivery_title,
+              loadTasksViaGameReports: this.company.loadTasksViaGameReports
+            },
+            this.month
+          )
         : uid && !tid
           ? this.actionLogService.getUserActionsForCompanyUsingPlayerActionLog(uid, this.company.cnpj, this.month)
           : this.actionLogService.getActionsByCnpj(this.company.cnpj, this.month, {
@@ -167,6 +183,23 @@ export class ModalCompanyCarteiraDetailComponent implements OnInit, OnDestroy {
     }
     const displayName = this.cnpjNameMap.get(cnpj);
     return displayName || cnpj;
+  }
+
+  /** Título do modal: delivery_title (+ extra.cnpj) como na lista; senão nome CRM / chave. */
+  getModalTitle(): string {
+    if (!this.company) {
+      return 'Detalhes da Empresa';
+    }
+    const t = this.company.delivery_title?.trim();
+    const ec = this.company.delivery_extra_cnpj?.trim();
+    if (t && ec) {
+      return `${t} · ${ec}`;
+    }
+    if (t) {
+      return t;
+    }
+    const name = this.getCompanyDisplayName(this.company.cnpj);
+    return name || this.company.cnpj || 'Detalhes da Empresa';
   }
 
   get isCompanyActive(): boolean {

@@ -40,18 +40,20 @@
         <!-- Point Wallet -->
         <div class="sidebar-section">
           <c4u-point-wallet
-            *ngIf="pointWallet"
-            [points]="pointWallet">
+            *ngIf="pointWallet || sidebarWalletPending"
+            [points]="pointWallet || emptyPointWallet"
+            [isPending]="sidebarWalletPending">
           </c4u-point-wallet>
           
-          <c4u-shimmer *ngIf="isLoadingPlayer && !pointWallet"></c4u-shimmer>
+          <c4u-shimmer *ngIf="isLoadingPlayer && !pointWallet && !sidebarWalletPending"></c4u-shimmer>
         </div>
         
         <!-- Season Progress -->
         <div class="sidebar-section">
           <c4u-season-progress
             *ngIf="seasonProgress"
-            [progress]="seasonProgress">
+            [progress]="seasonProgress"
+            [isPending]="sidebarSeasonStatsPending">
           </c4u-season-progress>
           
           <c4u-shimmer *ngIf="isLoadingPlayer && !seasonProgress"></c4u-shimmer>
@@ -80,13 +82,23 @@
       <!-- Collapsed Sidebar - Compact View -->
       <div class="sidebar-compact" *ngIf="sidebarCollapsed">
         <!-- Point Wallet Compact -->
-        <div class="compact-item" *ngIf="pointWallet">
+        <div class="compact-item" *ngIf="pointWallet || sidebarWalletPending">
           <i class="ri-trophy-fill compact-icon pontos"></i>
-          <span class="compact-value">{{ pointWallet.desbloqueados | number:'1.0-0':'pt-BR' }}</span>
+          <span class="compact-value" [attr.aria-busy]="sidebarWalletPending">
+            <span *ngIf="sidebarWalletPending" class="app-loading-dots app-loading-dots--compact" aria-hidden="true">
+              <span>.</span><span>.</span><span>.</span>
+            </span>
+            <ng-container *ngIf="!sidebarWalletPending && pointWallet">{{ pointWallet.desbloqueados | number:'1.0-0':'pt-BR' }}</ng-container>
+          </span>
         </div>
-        <div class="compact-item" *ngIf="pointWallet">
+        <div class="compact-item" *ngIf="pointWallet || sidebarWalletPending">
           <i class="ri-coin-fill compact-icon moedas"></i>
-          <span class="compact-value">{{ pointWallet.moedas | number:'1.0-0':'pt-BR' }}</span>
+          <span class="compact-value" [attr.aria-busy]="sidebarWalletPending">
+            <span *ngIf="sidebarWalletPending" class="app-loading-dots app-loading-dots--compact" aria-hidden="true">
+              <span>.</span><span>.</span><span>.</span>
+            </span>
+            <ng-container *ngIf="!sidebarWalletPending && pointWallet">{{ pointWallet.moedas | number:'1.0-0':'pt-BR' }}</ng-container>
+          </span>
         </div>
         
         <!-- Circular KPIs Compact - Show only enabled KPIs -->
@@ -101,16 +113,34 @@
         <!-- Season Progress Compact -->
         <div class="compact-item" *ngIf="seasonProgress">
           <i class="ri-focus-3-line compact-icon metas"></i>
-          <span class="compact-value">{{ seasonProgress.metas.current }}/{{ seasonProgress.metas.target }}</span>
+          <span class="compact-value" [attr.aria-busy]="isLoadingKPIs">
+            <span *ngIf="isLoadingKPIs" class="app-loading-dots app-loading-dots--compact" aria-hidden="true">
+              <span>.</span><span>.</span><span>.</span>
+            </span>
+            <ng-container *ngIf="!isLoadingKPIs">{{ seasonProgress.metas.current }}/{{ seasonProgress.metas.target }}</ng-container>
+          </span>
         </div>
-        <!-- Barra de metas de Clientes na carteira - Comentada temporariamente -->
-        <!-- <div class="compact-item" *ngIf="seasonProgress">
+        <div
+          class="compact-item"
+          *ngIf="seasonProgress && (seasonProgress.deliveryStatsTotal !== undefined || sidebarSeasonStatsPending)">
           <i class="ri-building-line compact-icon clientes"></i>
-          <span class="compact-value">{{ seasonProgress.clientes | number:'1.0-0':'pt-BR' }}</span>
-        </div> -->
+          <span class="compact-value" [attr.aria-busy]="sidebarSeasonStatsPending">
+            <span *ngIf="sidebarSeasonStatsPending" class="app-loading-dots app-loading-dots--compact" aria-hidden="true">
+              <span>.</span><span>.</span><span>.</span>
+            </span>
+            <ng-container *ngIf="!sidebarSeasonStatsPending && seasonProgress.deliveryStatsTotal !== undefined">
+              {{ seasonProgress.deliveryStatsTotal | number:'1.0-0':'pt-BR' }}
+            </ng-container>
+          </span>
+        </div>
         <div class="compact-item" *ngIf="seasonProgress">
           <i class="ri-checkbox-circle-line compact-icon tarefas"></i>
-          <span class="compact-value">{{ seasonProgress.tarefasFinalizadas | number:'1.0-0':'pt-BR' }}</span>
+          <span class="compact-value" [attr.aria-busy]="sidebarSeasonStatsPending">
+            <span *ngIf="sidebarSeasonStatsPending" class="app-loading-dots app-loading-dots--compact" aria-hidden="true">
+              <span>.</span><span>.</span><span>.</span>
+            </span>
+            <ng-container *ngIf="!sidebarSeasonStatsPending">{{ seasonProgress.tarefasFinalizadas | number:'1.0-0':'pt-BR' }}</ng-container>
+          </span>
         </div>
 
         <div
@@ -167,11 +197,15 @@
     <section class="dashboard-section" aria-labelledby="kpi-section-title">
       <h3 id="kpi-section-title" class="section-title">Minhas Metas</h3>
       
-      <div class="kpi-grid" *ngIf="!isLoadingKPIs" role="group" aria-labelledby="kpi-section-title">
+      <div
+        class="kpi-grid"
+        role="group"
+        aria-labelledby="kpi-section-title"
+        [attr.aria-busy]="isLoadingKPIs">
         <c4u-monthly-points-goal-progress
           [current]="monthlyPointsProgressData.current"
           [target]="monthlyPointsProgressData.target"
-          [isLoading]="isLoadingProgress"
+          [isLoading]="isLoadingKPIs || isLoadingProgress || isLoadingMonthlyGoal"
           [color]="monthlyPointsGoalColor">
         </c4u-monthly-points-goal-progress>
         <!--
@@ -191,25 +225,33 @@
             </c4u-kpi-circular-progress>
           </ng-container>
         -->
-        <ng-container *ngFor="let kpi of playerKPIs; let i = index; trackBy: trackByKpiId">
+        <ng-container *ngIf="!isLoadingKPIs">
+          <ng-container *ngFor="let kpi of playerKPIs; let i = index; trackBy: trackByKpiId">
+            <c4u-kpi-circular-progress
+              *ngIf="kpi.id !== 'numero-empresas'"
+              [label]="kpi.label"
+              [current]="kpi.id === 'entregas-prazo' ? getKpiCurrentValue(kpi) : roundValue(getKpiCurrentValue(kpi))"
+              [target]="roundValue(kpi.target)"
+              [superTarget]="kpi.superTarget ? roundValue(kpi.superTarget) : undefined"
+              [color]="kpi.color"
+              [unit]="kpi.unit"
+              [colorIndex]="i"
+              [isMissing]="!!kpi.isMissing">
+            </c4u-kpi-circular-progress>
+          </ng-container>
+        </ng-container>
+
+        <ng-container *ngIf="isLoadingKPIs">
           <c4u-kpi-circular-progress
-            *ngIf="kpi.id !== 'numero-empresas'"
-            [label]="kpi.label"
-            [current]="kpi.id === 'entregas-prazo' ? getKpiCurrentValue(kpi) : roundValue(getKpiCurrentValue(kpi))"
-            [target]="roundValue(kpi.target)"
-            [superTarget]="kpi.superTarget ? roundValue(kpi.superTarget) : undefined"
-            [color]="kpi.color"
-            [unit]="kpi.unit"
+            *ngFor="let slot of kpiLoadingSlots; let i = index"
+            [label]="'Carregando metas'"
+            [current]="0"
+            [target]="1"
+            [color]="'gray'"
             [colorIndex]="i"
-            [isMissing]="!!kpi.isMissing">
+            [isPending]="true">
           </c4u-kpi-circular-progress>
         </ng-container>
-      </div>
-      
-      <div class="kpi-grid" *ngIf="isLoadingKPIs">
-        <c4u-shimmer></c4u-shimmer>
-        <c4u-shimmer></c4u-shimmer>
-        <c4u-shimmer></c4u-shimmer>
       </div>
     </section>
     
