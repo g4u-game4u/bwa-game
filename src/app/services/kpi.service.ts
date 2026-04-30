@@ -109,8 +109,16 @@ export class KPIService {
           (selectedMonth.getFullYear() === now.getFullYear() && 
            selectedMonth.getMonth() === now.getMonth());
 
-        // Get team name from player metadata
-        const teamName = String(playerStatus.metadata?.time || playerStatus.extra?.time || '').toLowerCase().trim();
+        // Get team name from player metadata - check multiple sources
+        const teamName = String(
+          playerStatus.metadata?.time || 
+          playerStatus.extra?.time || 
+          playerStatus.extra?.team_name ||
+          playerStatus.extra?.teamName ||
+          ''
+        ).toLowerCase().trim();
+
+        console.log('📊 [KPI Service] Player team name:', teamName, 'Full metadata:', playerStatus.metadata, 'Extra:', playerStatus.extra);
 
         // Porcentagem de Entregas no Prazo - only for current month
         if (isCurrentMonth && playerStatus.extra?.entrega) {
@@ -129,8 +137,60 @@ export class KPIService {
         }
 
         // Fetch KPIs from goals API based on team
+        console.log('📊 [KPI Service] Fetching KPIs for team:', teamName);
         return this.goalsApi.getAllKpisForTeam(teamName).pipe(
           map(goalKpis => {
+            console.log('📊 [KPI Service] Received', goalKpis.length, 'KPIs from Goals API');
+            
+            // If no KPIs returned from Goals API, use fallback
+            if (goalKpis.length === 0) {
+              console.warn('📊 [KPI Service] No KPIs from Goals API, using fallback');
+              // Return the fallback observable's value synchronously
+              const fallbackKpis: KPIData[] = [];
+              
+              // Add fallback KPIs based on team
+              if (teamName.includes('juridico') || teamName.includes('jurídico') || teamName.includes('cs')) {
+                // Meta de protocolo
+                fallbackKpis.push({
+                  id: 'meta-protocolo',
+                  label: 'Meta de protocolo',
+                  current: 0,
+                  target: 1000000,
+                  superTarget: 1500000,
+                  unit: 'R$',
+                  color: 'red',
+                  percentage: 0
+                });
+                
+                // Aposentadorias concedidas
+                fallbackKpis.push({
+                  id: 'aposentadorias-concedidas',
+                  label: 'Aposentadorias concedidas',
+                  current: 0,
+                  target: 50,
+                  superTarget: 75,
+                  unit: 'concedidos',
+                  color: 'red',
+                  percentage: 0
+                });
+              } else if (teamName.includes('financeiro')) {
+                // Receita concedida
+                fallbackKpis.push({
+                  id: 'receita-concedida',
+                  label: 'Receita concedida',
+                  current: 0,
+                  target: 775000,
+                  superTarget: 1162500,
+                  unit: 'R$',
+                  color: 'red',
+                  percentage: 0
+                });
+              }
+              
+              console.log('📊 [KPI Service] Using', fallbackKpis.length, 'fallback KPIs');
+              return [...kpis, ...fallbackKpis];
+            }
+            
             // Convert goal KPIs to KPIData format
             for (const goalKpi of goalKpis) {
               const superTarget = Math.ceil(goalKpi.target * 1.5);
@@ -170,13 +230,51 @@ export class KPIService {
               });
             }
 
-            console.log('📊 Generated KPIs from goals API:', kpis, `(${kpis.length} KPIs)`, isCurrentMonth ? '(current month)' : '(previous month)');
+            console.log('📊 [KPI Service] Generated', kpis.length, 'KPIs from goals API');
             return kpis;
           }),
           catchError(error => {
-            console.error('📊 Error fetching KPIs from goals API, falling back to hardcoded values:', error);
-            // Fallback to hardcoded values if goals API fails
-            return this.getFallbackKPIs(playerStatus, teamName);
+            console.error('📊 [KPI Service] Error fetching KPIs from goals API:', error);
+            // Return fallback KPIs
+            const fallbackKpis: KPIData[] = [];
+            
+            if (teamName.includes('juridico') || teamName.includes('jurídico') || teamName.includes('cs')) {
+              fallbackKpis.push({
+                id: 'meta-protocolo',
+                label: 'Meta de protocolo',
+                current: 0,
+                target: 1000000,
+                superTarget: 1500000,
+                unit: 'R$',
+                color: 'red',
+                percentage: 0
+              });
+              
+              fallbackKpis.push({
+                id: 'aposentadorias-concedidas',
+                label: 'Aposentadorias concedidas',
+                current: 0,
+                target: 50,
+                superTarget: 75,
+                unit: 'concedidos',
+                color: 'red',
+                percentage: 0
+              });
+            } else if (teamName.includes('financeiro')) {
+              fallbackKpis.push({
+                id: 'receita-concedida',
+                label: 'Receita concedida',
+                current: 0,
+                target: 775000,
+                superTarget: 1162500,
+                unit: 'R$',
+                color: 'red',
+                percentage: 0
+              });
+            }
+            
+            console.log('📊 [KPI Service] Using', fallbackKpis.length, 'fallback KPIs after error');
+            return of([...kpis, ...fallbackKpis]);
           })
         );
       }),

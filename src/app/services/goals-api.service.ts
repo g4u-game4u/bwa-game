@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
-import { Observable, from } from 'rxjs';
-import { map } from 'rxjs/operators';
+import { Observable, from, of } from 'rxjs';
+import { map, catchError } from 'rxjs/operators';
 import { ApiProvider } from '@providers/api.provider';
 
 /**
@@ -57,7 +57,17 @@ export class GoalsApiService {
    */
   private fetchGoalLogs(): Observable<GoalLogRow[]> {
     return from(this.api.get<unknown>('/goals/logs')).pipe(
-      map(response => this.unwrapGoalLogs(response))
+      map(response => {
+        const logs = this.unwrapGoalLogs(response);
+        console.log('📊 [Goals API] Successfully fetched', logs.length, 'goal logs');
+        return logs;
+      }),
+      catchError(error => {
+        console.error('📊 [Goals API] Error fetching goal logs:', error);
+        console.warn('📊 [Goals API] Returning empty array, will use default values');
+        // Return empty array so getAllKpisForTeam can provide defaults
+        return of([]);
+      })
     );
   }
 
@@ -243,8 +253,11 @@ export class GoalsApiService {
   getAllKpisForTeam(teamName: string): Observable<GoalKpiData[]> {
     const normalizedTeam = teamName.toLowerCase().trim();
     
+    console.log('📊 [Goals API] Fetching KPIs for team:', normalizedTeam);
+    
     return this.fetchGoalLogs().pipe(
       map(logs => {
+        console.log('📊 [Goals API] Received', logs.length, 'goal logs');
         const kpis: GoalKpiData[] = [];
         
         if (normalizedTeam.includes('financeiro')) {
@@ -263,31 +276,90 @@ export class GoalsApiService {
           
           if (mostRecent) {
             kpis.push(this.parseGoalLog(mostRecent));
+            console.log('📊 [Goals API] Found Receita Concedida from API');
+          } else {
+            // No data found - return with 0 current and hardcoded target
+            console.warn('📊 [Goals API] No Receita Concedida data found, using defaults');
+            kpis.push({
+              id: this.GOAL_TEMPLATE_IDS.RECEITA_1,
+              title: 'Receita concedida',
+              current: 0,
+              target: 775000, // Hardcoded default target
+              percentage: 0,
+              updated_at: new Date().toISOString()
+            });
           }
         } else if (normalizedTeam.includes('juridico') || normalizedTeam.includes('jurídico')) {
           // Jurídico: Meta de Protocolo + Aposentadorias Concedidas
           const protocoloLog = this.getMostRecentLog(logs, this.GOAL_TEMPLATE_IDS.META_PROTOCOLO);
           if (protocoloLog) {
             kpis.push(this.parseGoalLog(protocoloLog));
+            console.log('📊 [Goals API] Found Meta de Protocolo from API');
+          } else {
+            console.warn('📊 [Goals API] No Meta de Protocolo data found, using defaults');
+            kpis.push({
+              id: this.GOAL_TEMPLATE_IDS.META_PROTOCOLO,
+              title: 'Meta de protocolo',
+              current: 0,
+              target: 1000000, // Hardcoded default target
+              percentage: 0,
+              updated_at: new Date().toISOString()
+            });
           }
           
           const aposentadoriasLog = this.getMostRecentLog(logs, this.GOAL_TEMPLATE_IDS.APOSENTADORIAS);
           if (aposentadoriasLog) {
             kpis.push(this.parseGoalLog(aposentadoriasLog));
+            console.log('📊 [Goals API] Found Aposentadorias Concedidas from API');
+          } else {
+            console.warn('📊 [Goals API] No Aposentadorias Concedidas data found, using defaults');
+            kpis.push({
+              id: this.GOAL_TEMPLATE_IDS.APOSENTADORIAS,
+              title: 'Aposentadorias concedidas',
+              current: 0,
+              target: 50, // Hardcoded default target
+              percentage: 0,
+              updated_at: new Date().toISOString()
+            });
           }
         } else if (normalizedTeam.includes('cs') || normalizedTeam === 'cs') {
           // CS: Meta de Protocolo + Aposentadorias Concedidas
           const protocoloLog = this.getMostRecentLog(logs, this.GOAL_TEMPLATE_IDS.META_PROTOCOLO);
           if (protocoloLog) {
             kpis.push(this.parseGoalLog(protocoloLog));
+            console.log('📊 [Goals API] Found Meta de Protocolo from API');
+          } else {
+            console.warn('📊 [Goals API] No Meta de Protocolo data found, using defaults');
+            kpis.push({
+              id: this.GOAL_TEMPLATE_IDS.META_PROTOCOLO,
+              title: 'Meta de protocolo',
+              current: 0,
+              target: 1000000, // Hardcoded default target
+              percentage: 0,
+              updated_at: new Date().toISOString()
+            });
           }
           
           const aposentadoriasLog = this.getMostRecentLog(logs, this.GOAL_TEMPLATE_IDS.APOSENTADORIAS);
           if (aposentadoriasLog) {
             kpis.push(this.parseGoalLog(aposentadoriasLog));
+            console.log('📊 [Goals API] Found Aposentadorias Concedidas from API');
+          } else {
+            console.warn('📊 [Goals API] No Aposentadorias Concedidas data found, using defaults');
+            kpis.push({
+              id: this.GOAL_TEMPLATE_IDS.APOSENTADORIAS,
+              title: 'Aposentadorias concedidas',
+              current: 0,
+              target: 50, // Hardcoded default target
+              percentage: 0,
+              updated_at: new Date().toISOString()
+            });
           }
+        } else {
+          console.warn('📊 [Goals API] Unknown team:', normalizedTeam, '- no KPIs returned');
         }
         
+        console.log('📊 [Goals API] Returning', kpis.length, 'KPIs for team', normalizedTeam);
         return kpis;
       })
     );
