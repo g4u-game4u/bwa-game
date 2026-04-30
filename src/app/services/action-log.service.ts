@@ -422,9 +422,7 @@ export class ActionLogService {
     const { start, end } = this.game4u.toDtPrazoMonthRange(month);
     return this.game4u.getGameReportsGoalMonthSummary({ email, dt_prazo_start: start, dt_prazo_end: end }).pipe(
       map((res: Game4uGoalMonthSummaryResponse) => {
-        const n = Number(
-          res.points_sum ?? res.total_points ?? res.goal_points ?? res.tasks_count ?? 0
-        );
+        const n = Number(res.points_sum ?? res.total_points ?? res.goal_points ?? 0);
         return Number.isFinite(n) ? Math.floor(n) : 0;
       }),
       catchError(err => {
