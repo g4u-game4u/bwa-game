@@ -1223,4 +1223,32 @@ export class UserActionDashboardService {
     );
   }
 
+  /**
+   * Get total canceled points for a user by fetching all CANCELLED actions
+   * and summing their points
+   */
+  getCanceledPoints(userId: string): Observable<number> {
+    const user = (userId || '').trim();
+    if (!user || !looksLikeEmail(user)) {
+      return of(0);
+    }
+
+    // Fetch all cancelled actions for this user
+    const params: Record<string, string> = {
+      user_email: user,
+      status: 'CANCELLED',
+      limit: '500' // Get a large batch
+    };
+
+    return from(this.fetchUserActionSearchAllPages(params)).pipe(
+      map(items => {
+        // Sum all points from cancelled actions
+        return items.reduce((sum, item) => {
+          const points = this.rowPoints(item);
+          return sum + points;
+        }, 0);
+      })
+    );
+  }
+
 }

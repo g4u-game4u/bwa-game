@@ -54,9 +54,9 @@
   @include mobile-only {
     grid-template-columns: 1fr;
     padding: $spacing-md;
-    height: auto;
+    height: auto; // Allow natural height on mobile
     min-height: 100vh;
-    overflow: visible;
+    overflow: visible; // Allow scrolling on mobile
     
     &.sidebar-collapsed {
       grid-template-columns: 1fr;

@@ -54,8 +54,8 @@ describe('ModalCarteiraComponent', () => {
       ];
 
       const mockEnrichedClientes = [
-        { cnpj: '1748', actionCount: 5, processCount: 2, deliveryKpi: null },
-        { cnpj: 'INCENSE [10010|0001-76]', actionCount: 3, processCount: 1, deliveryKpi: null }
+        { cnpj: '1748', actionCount: 5, processCount: 2, deliveryKpi: undefined },
+        { cnpj: 'INCENSE [10010|0001-76]', actionCount: 3, processCount: 1, deliveryKpi: undefined }
       ];
 
       const mockCnpjNames = new Map([

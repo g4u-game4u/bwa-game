@@ -8,6 +8,9 @@ import { SessaoProvider } from '@providers/sessao/sessao.provider';
 import { of, throwError } from 'rxjs';
 import { BrowserAnimationsModule } from '@angular/platform-browser/animations';
 import { NO_ERRORS_SCHEMA } from '@angular/core';
+import { HttpClientTestingModule } from '@angular/common/http/testing';
+import { TEAM_KPI_VISIBILITY } from '@app/constants/kpi-targets.constants';
+import { KPIData } from '@app/model/gamification-dashboard.model';
 
 describe('TeamManagementDashboardComponent', () => {
   let component: TeamManagementDashboardComponent;
@@ -78,7 +81,7 @@ describe('TeamManagementDashboardComponent', () => {
 
     await TestBed.configureTestingModule({
       declarations: [TeamManagementDashboardComponent],
-      imports: [BrowserAnimationsModule],
+      imports: [BrowserAnimationsModule, HttpClientTestingModule],
       providers: [
         { provide: TeamAggregateService, useValue: mockTeamAggregateService },
         { provide: GraphDataProcessorService, useValue: mockGraphDataProcessor },
@@ -1154,6 +1157,175 @@ describe('TeamManagementDashboardComponent', () => {
         // Error state should be reset during loading
         expect(component.hasProductivityError).toBe(false);
       }));
+    });
+  });
+
+  /**
+   * enabledKPIs getter Tests
+   * Task 5.2: Write unit tests for Team Management Dashboard enabledKPIs
+   * Requirements: 1.6, 2.3, 2.4, 3.6, 4.6, 6.4
+   */
+  describe('enabledKPIs getter', () => {
+    const sampleKPIs: KPIData[] = [
+      { id: 'entregas-prazo', label: 'Entregas no prazo', current: 80, target: 100, unit: '%', color: 'green', percentage: 80 },
+      { id: 'numero-empresas', label: 'Clientes atendidos', current: 50, target: 100, unit: 'clientes', color: 'yellow', percentage: 50 },
+      { id: 'meta-protocolo', label: 'Meta de protocolo', current: 500000, target: 1000000, unit: 'R$', color: 'yellow', percentage: 50 },
+      { id: 'aposentadorias-concedidas', label: 'Aposentadorias concedidas', current: 100, target: 220, unit: 'concedidos', color: 'yellow', percentage: 45 },
+      { id: 'valor-concedido', label: 'Valor concedido', current: 200000, target: 500000, unit: 'R$', color: 'green', percentage: 40 },
+    ];
+
+    // Store original TEAM_KPI_VISIBILITY state for cleanup
+    let originalVisibilityKeys: string[];
+
+    beforeEach(() => {
+      originalVisibilityKeys = Object.keys(TEAM_KPI_VISIBILITY);
+      component.teamKPIs = [...sampleKPIs];
+    });
+
+    afterEach(() => {
+      // Clean up any team-specific visibility config added during tests
+      for (const key of Object.keys(TEAM_KPI_VISIBILITY)) {
+        if (!originalVisibilityKeys.includes(key)) {
+          delete TEAM_KPI_VISIBILITY[key];
+        }
+      }
+    });
+
+    /**
+     * Test: enabledKPIs excludes numero-empresas
+     * Validates: Requirement 1.6
+     */
+    it('should exclude numero-empresas from enabledKPIs', () => {
+      component.selectedTeamId = '1';
+      component.teams = [{ id: '1', name: 'Departamento Pessoal', memberCount: 5 }];
+
+      const result = component.enabledKPIs;
+
+      expect(result.find(kpi => kpi.id === 'numero-empresas')).toBeUndefined();
+    });
+
+    /**
+     * Test: enabledKPIs includes valor-concedido only for finance team (by team ID '6')
+     * Validates: Requirements 2.3, 2.4
+     */
+    it('should include valor-concedido when selected team is finance (id 6)', () => {
+      component.selectedTeamId = '6';
+      component.teams = [{ id: '6', name: 'Financeiro', memberCount: 3 }];
+
+      const result = component.enabledKPIs;
+
+      expect(result.find(kpi => kpi.id === 'valor-concedido')).toBeDefined();
+    });
+
+    /**
+     * Test: enabledKPIs includes valor-concedido for finance team detected by name
+     * Validates: Requirements 2.3
+     */
+    it('should include valor-concedido when selected team name contains financeiro', () => {
+      component.selectedTeamId = '99';
+      component.teams = [{ id: '99', name: 'Time Financeiro', memberCount: 3 }];
+
+      const result = component.enabledKPIs;
+
+      expect(result.find(kpi => kpi.id === 'valor-concedido')).toBeDefined();
+    });
+
+    /**
+     * Test: enabledKPIs excludes valor-concedido for non-finance teams
+     * Validates: Requirement 2.4
+     */
+    it('should exclude valor-concedido when selected team is not finance', () => {
+      component.selectedTeamId = '1';
+      component.teams = [{ id: '1', name: 'Departamento Pessoal', memberCount: 5 }];
+
+      const result = component.enabledKPIs;
+
+      expect(result.find(kpi => kpi.id === 'valor-concedido')).toBeUndefined();
+    });
+
+    /**
+     * Test: enabledKPIs includes meta-protocolo for non-finance teams (default visibility)
+     * Validates: Requirement 3.6
+     */
+    it('should include meta-protocolo for non-finance teams', () => {
+      component.selectedTeamId = '1';
+      component.teams = [{ id: '1', name: 'Departamento Pessoal', memberCount: 5 }];
+
+      const result = component.enabledKPIs;
+
+      expect(result.find(kpi => kpi.id === 'meta-protocolo')).toBeDefined();
+    });
+
+    /**
+     * Test: enabledKPIs includes aposentadorias-concedidas for non-finance teams (default visibility)
+     * Validates: Requirement 4.6
+     */
+    it('should include aposentadorias-concedidas for non-finance teams', () => {
+      component.selectedTeamId = '1';
+      component.teams = [{ id: '1', name: 'Departamento Pessoal', memberCount: 5 }];
+
+      const result = component.enabledKPIs;
+
+      expect(result.find(kpi => kpi.id === 'aposentadorias-concedidas')).toBeDefined();
+    });
+
+    /**
+     * Test: team-specific visibility filtering with custom TEAM_KPI_VISIBILITY config
+     * Validates: Requirement 6.4
+     */
+    it('should filter KPIs based on custom TEAM_KPI_VISIBILITY config for a team', () => {
+      // Configure team '10' to only see meta-protocolo
+      TEAM_KPI_VISIBILITY['10'] = ['meta-protocolo'];
+
+      component.selectedTeamId = '10';
+      component.teams = [{ id: '10', name: 'Custom Team', memberCount: 4 }];
+
+      const result = component.enabledKPIs;
+
+      expect(result.find(kpi => kpi.id === 'meta-protocolo')).toBeDefined();
+      expect(result.find(kpi => kpi.id === 'aposentadorias-concedidas')).toBeUndefined();
+      expect(result.find(kpi => kpi.id === 'entregas-prazo')).toBeUndefined();
+      expect(result.find(kpi => kpi.id === 'numero-empresas')).toBeUndefined();
+      expect(result.find(kpi => kpi.id === 'valor-concedido')).toBeUndefined();
+    });
+
+    /**
+     * Test: team-specific visibility config allowing valor-concedido for a non-finance team
+     * Validates: Requirement 6.4
+     */
+    it('should respect TEAM_KPI_VISIBILITY even for valor-concedido on non-finance teams', () => {
+      // Configure team '10' to see valor-concedido explicitly
+      TEAM_KPI_VISIBILITY['10'] = ['entregas-prazo', 'valor-concedido'];
+
+      component.selectedTeamId = '10';
+      component.teams = [{ id: '10', name: 'Custom Team', memberCount: 4 }];
+
+      // Note: valor-concedido is still blocked by the isSelectedFinanceTeam() check
+      // which runs before the team visibility check
+      const result = component.enabledKPIs;
+
+      expect(result.find(kpi => kpi.id === 'valor-concedido')).toBeUndefined();
+      expect(result.find(kpi => kpi.id === 'entregas-prazo')).toBeDefined();
+    });
+
+    /**
+     * Test: default visibility when no team-specific config exists
+     * Validates: Requirement 6.4
+     */
+    it('should use default visibility when no team-specific config exists', () => {
+      component.selectedTeamId = '1';
+      component.teams = [{ id: '1', name: 'Departamento Pessoal', memberCount: 5 }];
+
+      const result = component.enabledKPIs;
+
+      // Default visible KPIs: entregas-prazo, meta-protocolo, aposentadorias-concedidas
+      expect(result.find(kpi => kpi.id === 'entregas-prazo')).toBeDefined();
+      expect(result.find(kpi => kpi.id === 'meta-protocolo')).toBeDefined();
+      expect(result.find(kpi => kpi.id === 'aposentadorias-concedidas')).toBeDefined();
+      // numero-empresas always excluded
+      expect(result.find(kpi => kpi.id === 'numero-empresas')).toBeUndefined();
+      // valor-concedido excluded for non-finance
+      expect(result.find(kpi => kpi.id === 'valor-concedido')).toBeUndefined();
     });
   });
 });

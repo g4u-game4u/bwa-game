@@ -1849,4 +1849,127 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
       expect(result).toBe('COMPANY WITH UPPERCASE L 0001 [2000|0001-60]');
     });
   });
+
+  describe('enabledKPIs getter - KPI Bars Revision', () => {
+    /**
+     * Helper to set up the component without triggering ngOnInit data loading.
+     * We set playerKPIs directly and check enabledKPIs.
+     */
+    function setupComponentWithKPIs(kpis: any[]): void {
+      component.playerKPIs = kpis;
+    }
+
+    /**
+     * Test that enabledKPIs excludes KPIs with id 'numero-empresas'
+     * Validates: Requirements 1.5, 2.2
+     */
+    it('should exclude numero-empresas from enabledKPIs', () => {
+      // Arrange
+      setupComponentWithKPIs([
+        { id: 'entregas-prazo', label: 'Entregas no prazo', current: 10, target: 20, unit: '%' },
+        { id: 'numero-empresas', label: 'Clientes atendidos', current: 5, target: 10, unit: 'clientes' },
+        { id: 'meta-protocolo', label: 'Meta de protocolo', current: 500000, target: 1000000, unit: 'R$' },
+      ]);
+
+      // Act
+      const result = component.enabledKPIs;
+
+      // Assert
+      expect(result.length).toBe(2);
+      expect(result.find(k => k.id === 'numero-empresas')).toBeUndefined();
+      expect(result.find(k => k.id === 'entregas-prazo')).toBeDefined();
+      expect(result.find(k => k.id === 'meta-protocolo')).toBeDefined();
+    });
+
+    /**
+     * Test that enabledKPIs includes valor-concedido for finance team members
+     * Validates: Requirements 2.1
+     */
+    it('should include valor-concedido for finance team members', () => {
+      // Arrange - Override sessaoProvider.usuario to be a finance team member (team_id '6')
+      const sessaoProvider = TestBed.inject(SessaoProvider) as any;
+      Object.defineProperty(sessaoProvider, 'usuario', {
+        get: () => ({ _id: 'finance-user', email: 'finance@example.com', roles: [], team_id: '6' }),
+        configurable: true
+      });
+
+      setupComponentWithKPIs([
+        { id: 'entregas-prazo', label: 'Entregas no prazo', current: 10, target: 20, unit: '%' },
+        { id: 'valor-concedido', label: 'Valor concedido', current: 100000, target: 500000, unit: 'R$' },
+        { id: 'meta-protocolo', label: 'Meta de protocolo', current: 500000, target: 1000000, unit: 'R$' },
+      ]);
+
+      // Act
+      const result = component.enabledKPIs;
+
+      // Assert
+      expect(result.find(k => k.id === 'valor-concedido')).toBeDefined();
+    });
+
+    /**
+     * Test that enabledKPIs excludes valor-concedido for non-finance team members
+     * Validates: Requirements 2.2
+     */
+    it('should exclude valor-concedido for non-finance team members', () => {
+      // Arrange - Default sessaoProvider.usuario has no team_id '6'
+      const sessaoProvider = TestBed.inject(SessaoProvider) as any;
+      Object.defineProperty(sessaoProvider, 'usuario', {
+        get: () => ({ _id: 'regular-user', email: 'regular@example.com', roles: [], team_id: '99' }),
+        configurable: true
+      });
+
+      setupComponentWithKPIs([
+        { id: 'entregas-prazo', label: 'Entregas no prazo', current: 10, target: 20, unit: '%' },
+        { id: 'valor-concedido', label: 'Valor concedido', current: 100000, target: 500000, unit: 'R$' },
+        { id: 'meta-protocolo', label: 'Meta de protocolo', current: 500000, target: 1000000, unit: 'R$' },
+      ]);
+
+      // Act
+      const result = component.enabledKPIs;
+
+      // Assert
+      expect(result.find(k => k.id === 'valor-concedido')).toBeUndefined();
+    });
+
+    /**
+     * Test that enabledKPIs includes meta-protocolo and aposentadorias-concedidas
+     * Validates: Requirements 3.5, 4.5
+     */
+    it('should include meta-protocolo and aposentadorias-concedidas', () => {
+      // Arrange
+      setupComponentWithKPIs([
+        { id: 'entregas-prazo', label: 'Entregas no prazo', current: 10, target: 20, unit: '%' },
+        { id: 'meta-protocolo', label: 'Meta de protocolo', current: 500000, target: 1000000, unit: 'R$' },
+        { id: 'aposentadorias-concedidas', label: 'Aposentadorias concedidas', current: 150, target: 220, unit: 'concedidos' },
+      ]);
+
+      // Act
+      const result = component.enabledKPIs;
+
+      // Assert
+      expect(result.length).toBe(3);
+      expect(result.find(k => k.id === 'meta-protocolo')).toBeDefined();
+      expect(result.find(k => k.id === 'aposentadorias-concedidas')).toBeDefined();
+    });
+
+    /**
+     * Test that enabledKPIs applies team-specific visibility via isKpiVisibleForTeam
+     * Validates: Requirements 6.2
+     */
+    it('should filter out KPIs not in the default visible list', () => {
+      // Arrange - 'unknown-kpi' is not in DEFAULT_VISIBLE_KPIS and not valor-concedido
+      setupComponentWithKPIs([
+        { id: 'entregas-prazo', label: 'Entregas no prazo', current: 10, target: 20, unit: '%' },
+        { id: 'unknown-kpi', label: 'Unknown KPI', current: 5, target: 10, unit: 'items' },
+        { id: 'meta-protocolo', label: 'Meta de protocolo', current: 500000, target: 1000000, unit: 'R$' },
+      ]);
+
+      // Act
+      const result = component.enabledKPIs;
+
+      // Assert
+      expect(result.find(k => k.id === 'unknown-kpi')).toBeUndefined();
+      expect(result.length).toBe(2);
+    });
+  });
 });

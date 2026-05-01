@@ -44,6 +44,12 @@ export class GoalsReceitaBackendService {
       const body = await this.api.get<unknown>('/goals/logs');
       const candidates = this.unwrapLogRows(body).filter(r => this.looksLikeGoalLogRow(r));
       const rows = this.pickReceitaLogRowsForKpi(candidates, templateId);
+      if (rows.length === 0 && candidates.length > 0) {
+        console.warn(
+          '[GoalsReceitaBackend] Resolved template ID does not match any log entries. Possible misconfiguration.',
+          { templateId, candidateCount: candidates.length }
+        );
+      }
       return this.parseLogRows(rows, month);
     } catch (e) {
       console.warn('[GoalsReceitaBackend] indisponível:', e);

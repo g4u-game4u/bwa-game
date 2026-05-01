@@ -1,5 +1,7 @@
+const _proc = typeof process !== 'undefined' ? process : { env: {} as Record<string, string | undefined> };
+
 const useApiProxyFlag = (() => {
-  const v = String(process.env.USE_API_PROXY ?? '').trim().toLowerCase();
+  const v = String(_proc.env.USE_API_PROXY ?? '').trim().toLowerCase();
   return v === 'true' || v === '1';
 })();
 
@@ -14,8 +16,8 @@ export const environment = {
    */
   backend_url_base: useApiProxyFlag
     ? ''
-    : process.env['BACKEND_URL_BASE'] ||
-      process.env['backend_url_base'] ||
+    : _proc.env['BACKEND_URL_BASE'] ||
+      _proc.env['backend_url_base'] ||
       'http://localhost:3001',
 
   /**
@@ -23,10 +25,10 @@ export const environment = {
    */
   g4u_api_base: useApiProxyFlag
     ? ''
-    : process.env.G4U_API_BASE ||
-      process.env.g4u_api_base ||
-      process.env['BACKEND_URL_BASE'] ||
-      process.env['backend_url_base'] ||
+    : _proc.env.G4U_API_BASE ||
+      _proc.env.g4u_api_base ||
+      _proc.env['BACKEND_URL_BASE'] ||
+      _proc.env['backend_url_base'] ||
       'http://localhost:3001',
   
   // Funifier API Configuration
@@ -68,21 +70,21 @@ export const environment = {
    * Variáveis: RECEITA_CONCEDIDA_GOAL_TEMPLATE_ID ou receita_concedida_goal_template_id no `.env` (build).
    */
   receitaConcedidaGoalTemplateId:
-    process.env['RECEITA_CONCEDIDA_GOAL_TEMPLATE_ID'] ||
-    process.env['receita_concedida_goal_template_id'] ||
+    _proc.env['RECEITA_CONCEDIDA_GOAL_TEMPLATE_ID'] ||
+    _proc.env['receita_concedida_goal_template_id'] ||
     '',
 
   /**
-   * Supabase (projeto RevisaPrev). Com `ng serve`, o webpack injeta `process.env` a partir do `.env`.
+   * Supabase (projeto RevisaPrev). Com `ng serve`, o webpack injeta `_proc.env` a partir do `.env`.
    * Variáveis: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_SECRET.
    * Documentação relacionada ao produto: https://g4u-mvp-api.onrender.com/api#/
    */
   supabaseRevisaprev: {
-    url: process.env['SUPABASE_URL'] || process.env['supabase_url'] || '',
-    anonKey: process.env['SUPABASE_ANON_KEY'] || process.env['supabase_anon_key'] || '',
+    url: _proc.env['SUPABASE_URL'] || _proc.env['supabase_url'] || '',
+    anonKey: _proc.env['SUPABASE_ANON_KEY'] || _proc.env['supabase_anon_key'] || '',
     serviceRoleSecret:
-      process.env['SUPABASE_SERVICE_ROLE_SECRET'] ||
-      process.env['supabase_service_role_secret'] ||
+      _proc.env['SUPABASE_SERVICE_ROLE_SECRET'] ||
+      _proc.env['supabase_service_role_secret'] ||
       ''
   }
 };

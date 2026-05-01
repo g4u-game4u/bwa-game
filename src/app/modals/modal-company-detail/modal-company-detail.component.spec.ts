@@ -45,7 +45,7 @@ describe('ModalCompanyDetailComponent', () => {
       }
     ],
     activities: [],
-    macros: []
+    processos: []
   };
 
   beforeEach(async () => {
@@ -154,7 +154,7 @@ describe('ModalCompanyDetailComponent', () => {
       // Assert
       expect(processes.length).toBeGreaterThan(0);
       processes.forEach(p => {
-        expect(p.tasks.every(t => t.status === 'completed')).toBe(true);
+        expect((p.tasks ?? []).every(t => t.status === 'completed')).toBe(true);
       });
     });
 

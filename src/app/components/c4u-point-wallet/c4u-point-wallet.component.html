@@ -29,6 +29,15 @@
       <span class="value">{{ points.moedas | number:'1.0-0':'pt-BR' }}</span>
     </div>
 
+    <div class="point-row" *ngIf="points.cancelados !== undefined && points.cancelados > 0">
+      <div class="row-left">
+        <i class="ri-close-circle-fill icon cancelados"></i>
+        <span class="label">Cancelados</span>
+        <c4u-info-button infoKey="cancelados" position="top"></c4u-info-button>
+      </div>
+      <span class="value">{{ points.cancelados | number:'1.0-0':'pt-BR' }}</span>
+    </div>
+
     <div class="point-row" *ngIf="mediaPontos !== undefined">
       <div class="row-left">
         <i class="ri-star-fill icon media"></i>
