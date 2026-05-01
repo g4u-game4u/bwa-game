@@ -96,10 +96,16 @@ export class KPIService {
    * @param selectedMonth — mês selecionado (entra na chave de cache)
    * @param actionLogService — reservado (evitar dependência circular); não usado neste fluxo
    */
-  getPlayerKPIs(playerId: string, selectedMonth?: Date, actionLogService?: any): Observable<KPIData[]> {
+  getPlayerKPIs(
+    playerId: string,
+    selectedMonth?: Date,
+    actionLogService?: any,
+    scopeKey?: string
+  ): Observable<KPIData[]> {
     // Create cache key that includes month to avoid cache conflicts
     const monthKey = selectedMonth ? `_${selectedMonth.getFullYear()}-${selectedMonth.getMonth()}` : '_current';
-    const cacheKey = `${playerId}${monthKey}`;
+    const scope = scopeKey != null && String(scopeKey).trim() !== '' ? `_${String(scopeKey).trim()}` : '';
+    const cacheKey = `${playerId}${monthKey}${scope}`;
     const cached = this.getCachedData(this.playerKPICache, cacheKey);
     if (cached) {
       return cached;

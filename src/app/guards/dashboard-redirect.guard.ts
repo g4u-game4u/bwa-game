@@ -8,8 +8,9 @@ import { UserProfile } from '@utils/user-profile';
  * Guard service to redirect users to the appropriate dashboard based on their profile
  * 
  * Redirects:
- * - JOGADOR → /dashboard (gamification dashboard)
- * - SUPERVISOR, GESTOR, DIRETOR → /dashboard/team-management (team management dashboard)
+ * - JOGADOR → /dashboard (gamification dashboard), except session roles ADMIN / GESTOR → team management
+ * - SUPERVISOR → /dashboard/supervisor
+ * - GESTOR, DIRETOR → /dashboard/team-management (team management dashboard)
  */
 @Injectable({
   providedIn: 'root'
@@ -64,9 +65,13 @@ export class DashboardRedirectGuardService {
     // Redirect based on profile
     switch (profile) {
       case UserProfile.JOGADOR:
-        // JOGADOR goes to their own dashboard — block management URLs
-        if (isManagementUrl) {
+        // Role ADMIN / GESTOR without gestor team codes: allow team-management (same as TeamRoleGuard)
+        if (isManagementUrl && !this.userProfileService.canAccessTeamManagement()) {
           await this.router.navigate(['/dashboard']);
+          return false;
+        }
+        if (!isManagementUrl && this.userProfileService.canAccessTeamManagement()) {
+          await this.router.navigate(['/dashboard/team-management']);
           return false;
         }
         return true;

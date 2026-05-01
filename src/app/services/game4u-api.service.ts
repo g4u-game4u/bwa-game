@@ -102,20 +102,40 @@ export class Game4uApiService {
     return shared;
   }
 
+  private withOptionalTeamId(params: HttpParams, teamId?: string): HttpParams {
+    const t = (teamId ?? '').trim();
+    return t ? params.set('team_id', t) : params;
+  }
+
+  /** Com `team_id`, o backend escopa por equipa (utilizador via JWT) — não enviar `email`/`user` na query. */
+  private teamScopedOmitUserEmail(teamId?: string): boolean {
+    return (teamId ?? '').trim() !== '';
+  }
+
+  private reportIdentitySegment(q: { email: string; team_id?: string }): string {
+    const tid = (q.team_id ?? '').trim();
+    return tid ? `team:${tid}` : `email:${q.email}`;
+  }
+
+  private userScopedCacheSegment(q: Game4uUserScopedQuery): string {
+    const tid = (q.team_id ?? '').trim();
+    return tid ? `team:${tid}` : `user:${q.user}`;
+  }
+
   private statsRequestKey(q: Game4uUserScopedQuery): string {
-    return `stats|${q.user}|${q.start}|${q.end}`;
+    return `stats|${this.userScopedCacheSegment(q)}|${q.start}|${q.end}|${q.team_id ?? ''}`;
   }
 
   private actionsRequestKey(q: Game4uUserScopedQuery & { status?: Game4uUserActionStatus }): string {
-    return `actions|${q.user}|${q.start}|${q.end}|${q.status ?? ''}`;
+    return `actions|${this.userScopedCacheSegment(q)}|${q.start}|${q.end}|${q.status ?? ''}|${q.team_id ?? ''}`;
   }
 
   private teamStatsRequestKey(q: Game4uTeamScopedQuery): string {
-    return `team-stats|${q.team}|${q.start}|${q.end}`;
+    return `team-stats|${q.team}|${q.start}|${q.end}|${q.team_id ?? ''}`;
   }
 
   private teamActionsRequestKey(q: Game4uTeamScopedQuery & { status?: Game4uUserActionStatus }): string {
-    return `team-actions|${q.team}|${q.start}|${q.end}|${q.status ?? ''}`;
+    return `team-actions|${q.team}|${q.start}|${q.end}|${q.status ?? ''}|${q.team_id ?? ''}`;
   }
 
   /** Limpa dedupe de stats/actions (user e team) — ex.: troca de mês / campanha. */
@@ -203,32 +223,33 @@ export class Game4uApiService {
 
   private reportsFinishedSummaryKey(q: Game4uReportsFinishedQuery): string {
     const st = (q.status ?? []).join(',');
-    return `rpt-sum|${q.email}|${q.finished_at_start}|${q.finished_at_end}|${st}`;
+    return `rpt-sum|${this.reportIdentitySegment(q)}|${q.finished_at_start}|${q.finished_at_end}|${st}|${q.team_id ?? ''}`;
   }
 
   private reportsFinishedDeliveriesKey(q: Game4uReportsFinishedQuery): string {
     const st = (q.status ?? []).join(',');
-    return `rpt-del|${q.email}|${q.finished_at_start}|${q.finished_at_end}|${st}`;
+    return `rpt-del|${this.reportIdentitySegment(q)}|${q.finished_at_start}|${q.finished_at_end}|${st}|${q.team_id ?? ''}`;
   }
 
   private reportsActionsByDeliveryKey(q: Game4uReportsActionsByDeliveryQuery): string {
     const st = (q.status ?? []).join(',');
-    return `rpt-act|${q.email}|${q.finished_at_start}|${q.finished_at_end}|${q.delivery_title}|${q.offset ?? 0}|${q.limit ?? 500}|${st}`;
+    return `rpt-act|${this.reportIdentitySegment(q)}|${q.finished_at_start}|${q.finished_at_end}|${q.delivery_title}|${q.offset ?? 0}|${q.limit ?? 500}|${st}|${q.team_id ?? ''}`;
   }
 
   private reportsGoalMonthKey(q: Game4uReportsGoalMonthQuery): string {
-    return `rpt-goal|${q.email}|${q.dt_prazo_start}|${q.dt_prazo_end}`;
+    return `rpt-goal|${this.reportIdentitySegment(q)}|${q.dt_prazo_start}|${q.dt_prazo_end}|${q.team_id ?? ''}`;
   }
 
   private reportsOpenSummaryKey(q: Game4uReportsOpenSummaryQuery): string {
-    return `rpt-open-sum|${q.email}|${q.dt_prazo_start}|${q.dt_prazo_end}`;
+    return `rpt-open-sum|${this.reportIdentitySegment(q)}|${q.dt_prazo_start}|${q.dt_prazo_end}|${q.team_id ?? ''}`;
   }
 
   private appendOpenSummaryParams(base: HttpParams, q: Game4uReportsOpenSummaryQuery): HttpParams {
-    return base
-      .set('email', q.email)
-      .set('dt_prazo_start', q.dt_prazo_start)
-      .set('dt_prazo_end', q.dt_prazo_end);
+    let p = base.set('dt_prazo_start', q.dt_prazo_start).set('dt_prazo_end', q.dt_prazo_end);
+    if (!this.teamScopedOmitUserEmail(q.team_id)) {
+      p = p.set('email', q.email);
+    }
+    return this.withOptionalTeamId(p, q.team_id);
   }
 
   private appendReportParams(
@@ -236,13 +257,15 @@ export class Game4uApiService {
     q: Game4uReportsFinishedQuery
   ): HttpParams {
     let p = base
-      .set('email', q.email)
       .set('finished_at_start', q.finished_at_start)
       .set('finished_at_end', q.finished_at_end);
+    if (!this.teamScopedOmitUserEmail(q.team_id)) {
+      p = p.set('email', q.email);
+    }
     for (const s of q.status ?? []) {
       p = p.append('status', s);
     }
-    return p;
+    return this.withOptionalTeamId(p, q.team_id);
   }
 
   /**
@@ -340,7 +363,10 @@ export class Game4uApiService {
         () => new Error('[Game4U] reports/user-actions: defina backend_url_base.')
       );
     }
-    let params = new HttpParams().set('email', q.email);
+    let params = new HttpParams();
+    if (!this.teamScopedOmitUserEmail(q.team_id)) {
+      params = params.set('email', q.email);
+    }
     for (const s of q.status ?? []) {
       params = params.append('status', s);
     }
@@ -391,6 +417,7 @@ export class Game4uApiService {
     const off = q.offset ?? 0;
     const lim = Math.min(q.limit ?? 500, 500);
     params = params.set('offset', String(off)).set('limit', String(lim));
+    params = this.withOptionalTeamId(params, q.team_id);
     return this.http
       .get<unknown>(`${this.baseUrl}/game/reports/user-actions`, {
         headers: this.headers(),
@@ -410,10 +437,13 @@ export class Game4uApiService {
     }
     const key = this.reportsGoalMonthKey(q);
     return this.shareGame4uDedupe(key, this.reportsGoalMonthCache, () => {
-      const params = new HttpParams()
-        .set('email', q.email)
+      let inner = new HttpParams()
         .set('dt_prazo_start', q.dt_prazo_start)
         .set('dt_prazo_end', q.dt_prazo_end);
+      if (!this.teamScopedOmitUserEmail(q.team_id)) {
+        inner = inner.set('email', q.email);
+      }
+      const params = this.withOptionalTeamId(inner, q.team_id);
       return this.http.get<Game4uGoalMonthSummaryResponse>(
         `${this.baseUrl}/game/reports/goal/month/summary`,
         {
@@ -450,10 +480,11 @@ export class Game4uApiService {
       );
     }
     return this.shareGame4uDedupe(key, this.statsDedupCache, () => {
-      const params = new HttpParams()
-        .set('start', q.start)
-        .set('end', q.end)
-        .set('user', q.user);
+      let params = new HttpParams().set('start', q.start).set('end', q.end);
+      if (!this.teamScopedOmitUserEmail(q.team_id)) {
+        params = params.set('user', q.user);
+      }
+      params = this.withOptionalTeamId(params, q.team_id);
       return this.http.get<Game4uUserActionStatsResponse>(`${this.baseUrl}/game/stats`, {
         headers: this.headers(),
         params
@@ -474,10 +505,14 @@ export class Game4uApiService {
       );
     }
     return this.shareGame4uDedupe(key, this.actionsDedupCache, () => {
-      let params = new HttpParams().set('start', q.start).set('end', q.end).set('user', q.user);
+      let params = new HttpParams().set('start', q.start).set('end', q.end);
+      if (!this.teamScopedOmitUserEmail(q.team_id)) {
+        params = params.set('user', q.user);
+      }
       if (q.status) {
         params = params.set('status', q.status);
       }
+      params = this.withOptionalTeamId(params, q.team_id);
       return this.http.get<Game4uUserActionModel[]>(`${this.baseUrl}/game/actions`, {
         headers: this.headers(),
         params
@@ -496,11 +531,14 @@ export class Game4uApiService {
         () => new Error('[Game4U] deliveries: defina backend_url_base (ou GAME4U_SUPABASE_FALLBACK=true + Supabase).')
       );
     }
-    const params = new HttpParams()
+    let delParams = new HttpParams()
       .set('start', q.start.slice(0, 10))
       .set('end', q.end.slice(0, 10))
-      .set('user', q.user)
       .set('status', q.status);
+    if (!this.teamScopedOmitUserEmail(q.team_id)) {
+      delParams = delParams.set('user', q.user);
+    }
+    const params = this.withOptionalTeamId(delParams, q.team_id);
     const http$ = this.http.get<Game4uDeliveryModel[]>(`${this.baseUrl}/game/deliveries`, {
       headers: this.headers(),
       params
@@ -521,7 +559,10 @@ export class Game4uApiService {
       );
     }
     return this.shareGame4uDedupe(key, this.teamStatsDedupCache, () => {
-      const params = new HttpParams().set('start', q.start).set('end', q.end).set('team', q.team);
+      const params = this.withOptionalTeamId(
+        new HttpParams().set('start', q.start).set('end', q.end).set('team', q.team),
+        q.team_id
+      );
       return this.http.get<Game4uUserActionStatsResponse>(`${this.baseUrl}/game/team-stats`, {
         headers: this.headers(),
         params
@@ -549,6 +590,7 @@ export class Game4uApiService {
       if (q.status) {
         params = params.set('status', q.status);
       }
+      params = this.withOptionalTeamId(params, q.team_id);
       return this.http.get<Game4uUserActionModel[]>(`${this.baseUrl}/game/team-actions`, {
         headers: this.headers(),
         params
@@ -568,11 +610,14 @@ export class Game4uApiService {
           new Error('[Game4U] team-deliveries: defina backend_url_base (ou GAME4U_SUPABASE_FALLBACK=true + Supabase).')
       );
     }
-    const params = new HttpParams()
-      .set('start', q.start.slice(0, 10))
-      .set('end', q.end.slice(0, 10))
-      .set('status', q.status)
-      .set('team', q.team);
+    const params = this.withOptionalTeamId(
+      new HttpParams()
+        .set('start', q.start.slice(0, 10))
+        .set('end', q.end.slice(0, 10))
+        .set('status', q.status)
+        .set('team', q.team),
+      q.team_id
+    );
     const http$ = this.http.get<Game4uDeliveryModel[]>(`${this.baseUrl}/game/team-deliveries`, {
       headers: this.headers(),
       params

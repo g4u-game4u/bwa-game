@@ -17,9 +17,11 @@ describe('UserProfileService', () => {
   };
 
   beforeEach(() => {
-    mockSessaoProvider = jasmine.createSpyObj('SessaoProvider', [], {
+    mockSessaoProvider = jasmine.createSpyObj('SessaoProvider', ['isAdmin', 'isGerente'], {
       usuario: null
     });
+    mockSessaoProvider.isAdmin.and.returnValue(false);
+    mockSessaoProvider.isGerente.and.returnValue(false);
 
     mockTeamCodeService = jasmine.createSpyObj('TeamCodeService', [
       'getTeamCodes',
@@ -214,6 +216,20 @@ describe('UserProfileService', () => {
     it('canAccessTeamManagement should return false for JOGADOR', () => {
       Object.defineProperty(mockSessaoProvider, 'usuario', { value: { teams: [] } });
       expect(service.canAccessTeamManagement()).toBe(false);
+    });
+
+    it('canAccessTeamManagement should return true for session role ADMIN', () => {
+      Object.defineProperty(mockSessaoProvider, 'usuario', { value: { teams: [] } });
+      mockSessaoProvider.isAdmin.and.returnValue(true);
+      expect(service.canAccessTeamManagement()).toBe(true);
+      mockSessaoProvider.isAdmin.and.returnValue(false);
+    });
+
+    it('canAccessTeamManagement should return true for session role GESTOR', () => {
+      Object.defineProperty(mockSessaoProvider, 'usuario', { value: { teams: [] } });
+      mockSessaoProvider.isGerente.and.returnValue(true);
+      expect(service.canAccessTeamManagement()).toBe(true);
+      mockSessaoProvider.isGerente.and.returnValue(false);
     });
 
     it('canAccessTeamManagement should return true for management profiles', () => {

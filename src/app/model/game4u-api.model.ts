@@ -20,10 +20,13 @@ export interface Game4uDateRangeQuery {
 
 export interface Game4uUserScopedQuery extends Game4uDateRangeQuery {
   user: string;
+  /** Escopo BWA / gestão de equipa: repete-se em todas as chamadas `GET /game/*` quando definido. */
+  team_id?: string;
 }
 
 export interface Game4uTeamScopedQuery extends Game4uDateRangeQuery {
   team: string;
+  team_id?: string;
 }
 
 export interface Game4uUserActionStatsModel {
@@ -129,6 +132,7 @@ export interface Game4uReportsOpenSummaryQuery {
   email: string;
   dt_prazo_start: string;
   dt_prazo_end: string;
+  team_id?: string;
 }
 
 /**
@@ -203,6 +207,7 @@ export interface Game4uReportsFinishedQuery {
   finished_at_end: string;
   /** Opcional: repete `status` na query string se necessário. */
   status?: string[];
+  team_id?: string;
 }
 
 export interface Game4uReportsActionsByDeliveryQuery extends Game4uReportsFinishedQuery {
@@ -248,6 +253,7 @@ export interface Game4uReportsUserActionsQuery {
   created_at_end?: string;
   offset?: number;
   limit?: number;
+  team_id?: string;
 }
 
 /** Resposta paginada de `GET /game/reports/user-actions`. */
@@ -298,6 +304,7 @@ export interface Game4uReportsGoalMonthQuery {
   dt_prazo_start: string;
   /** `YYYY-MM-DD` (exclusivo: primeiro dia do mês seguinte, como no curl do doc). */
   dt_prazo_end: string;
+  team_id?: string;
 }
 
 function supabaseGameFallbackCredentials(): boolean {

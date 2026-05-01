@@ -11,6 +11,7 @@ import { GraphDataProcessorService } from '@services/graph-data-processor.servic
 import { SeasonDatesService } from '@services/season-dates.service';
 import { ToastService } from '@services/toast.service';
 import { SessaoProvider } from '@providers/sessao/sessao.provider';
+import { BwaTeamApiService } from '@services/bwa-team-api.service';
 
 /**
  * Accessibility Tests for Team Management Dashboard Component
@@ -32,6 +33,7 @@ describe('TeamManagementDashboardComponent - Accessibility', () => {
   let mockSeasonDatesService: jasmine.SpyObj<SeasonDatesService>;
   let mockToastService: jasmine.SpyObj<ToastService>;
   let mockSessaoProvider: jasmine.SpyObj<SessaoProvider>;
+  let mockBwaTeamApi: jasmine.SpyObj<BwaTeamApiService>;
 
   beforeEach(async () => {
     // Create mock services
@@ -51,6 +53,10 @@ describe('TeamManagementDashboardComponent - Accessibility', () => {
     mockSessaoProvider = jasmine.createSpyObj('SessaoProvider', [], {
       usuario: { extra: { teams: ['Departamento Pessoal'] } }
     });
+
+    mockBwaTeamApi = jasmine.createSpyObj('BwaTeamApiService', ['fetchTeamList', 'fetchTeamDetail']);
+    mockBwaTeamApi.fetchTeamList.and.returnValue(Promise.resolve([]));
+    mockBwaTeamApi.fetchTeamDetail.and.returnValue(Promise.resolve(null));
 
     // Set up default mock returns
     mockTeamAggregateService.getTeamSeasonPoints.and.returnValue(
@@ -72,7 +78,8 @@ describe('TeamManagementDashboardComponent - Accessibility', () => {
         { provide: GraphDataProcessorService, useValue: mockGraphDataProcessor },
         { provide: SeasonDatesService, useValue: mockSeasonDatesService },
         { provide: ToastService, useValue: mockToastService },
-        { provide: SessaoProvider, useValue: mockSessaoProvider }
+        { provide: SessaoProvider, useValue: mockSessaoProvider },
+        { provide: BwaTeamApiService, useValue: mockBwaTeamApi }
       ],
       schemas: [NO_ERRORS_SCHEMA] // Ignore child component templates
     }).compileComponents();

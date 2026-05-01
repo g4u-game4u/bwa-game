@@ -85,6 +85,8 @@ export interface GetProgressMetricsOptions {
    * em {@link ActionLogService.getProgressMetrics} — apenas `finished/summary` (e season summary se aplicável).
    */
   gamificationDashboardReportsOnly?: boolean;
+  /** Repete-se como `team_id` em todos os GET `/game/*` deste método. */
+  teamId?: string | number | null;
 }
 
 export interface ClienteListItem {
@@ -385,6 +387,14 @@ export class ActionLogService {
     return out.includes('@') ? out.toLowerCase() : out;
   }
 
+  private normalizeGame4uTeamId(teamId?: string | number | null): string | undefined {
+    if (teamId == null) {
+      return undefined;
+    }
+    const t = String(teamId).trim();
+    return t !== '' ? t : undefined;
+  }
+
   private game4uUserQuery(playerId: string, month?: Date): Game4uUserScopedQuery | null {
     const user = this.resolveGame4uUserEmail(playerId);
     if (!user) {
@@ -489,13 +499,25 @@ export class ActionLogService {
   /**
    * Meta de pontos do mês (`GET /game/reports/goal/month/summary`) para o circular de metas.
    */
-  getMonthlyPointsGoalTarget(playerId: string, month: Date): Observable<number> {
+  getMonthlyPointsGoalTarget(
+    playerId: string,
+    month: Date,
+    teamId?: string | number | null
+  ): Observable<number> {
     const email = this.resolveGame4uUserEmail(playerId);
     if (!email || !(isGame4uDataEnabled() && this.game4u.isConfigured())) {
       return of(0);
     }
+    const tid = this.normalizeGame4uTeamId(teamId);
     const { start, end } = this.game4u.toDtPrazoMonthRange(month);
-    return this.game4u.getGameReportsGoalMonthSummary({ email, dt_prazo_start: start, dt_prazo_end: end }).pipe(
+    return this.game4u
+      .getGameReportsGoalMonthSummary({
+        email,
+        dt_prazo_start: start,
+        dt_prazo_end: end,
+        ...(tid ? { team_id: tid } : {})
+      })
+      .pipe(
       map((res: Game4uGoalMonthSummaryResponse) => {
         const n = Number(res.points_sum ?? res.total_points ?? res.goal_points ?? 0);
         return Number.isFinite(n) ? Math.floor(n) : 0;
@@ -671,7 +693,8 @@ export class ActionLogService {
    */
   getSeasonProgressSidebarDetails(
     playerId: string,
-    month?: Date
+    month?: Date,
+    teamId?: string | number | null
   ): Observable<{ tarefasFinalizadas: number; deliveryStatsTotal?: number }> {
     if (isGame4uDataEnabled() && this.game4u.isConfigured()) {
       const q = this.game4uUserQuery(playerId, month);
@@ -682,12 +705,14 @@ export class ActionLogService {
       if (!email) {
         return of({ tarefasFinalizadas: 0 });
       }
+      const tid = this.normalizeGame4uTeamId(teamId);
       // Painel gamificação: só `GET /game/reports/finished/summary` (sem `GET /game/stats`).
       return this.game4u
         .getGameReportsFinishedSummary({
           email,
           finished_at_start: q.start,
-          finished_at_end: q.end
+          finished_at_end: q.end,
+          ...(tid ? { team_id: tid } : {})
         })
         .pipe(
           map(summary => {
@@ -715,7 +740,8 @@ export class ActionLogService {
    */
   getMonthlyGame4uPlayerDashboardData(
     playerId: string,
-    month?: Date
+    month?: Date,
+    teamId?: string | number | null
   ): Observable<{
     wallet: PointWallet;
     pontosActionLog: number;
@@ -734,12 +760,14 @@ export class ActionLogService {
         sidebar: { tarefasFinalizadas: 0 }
       });
     }
+    const tid = this.normalizeGame4uTeamId(teamId);
     const seasonRange = this.game4u.toQueryRange(undefined);
     return this.game4u
       .getGameReportsFinishedSummary({
         email: q.user,
         finished_at_start: seasonRange.start,
-        finished_at_end: seasonRange.end
+        finished_at_end: seasonRange.end,
+        ...(tid ? { team_id: tid } : {})
       })
       .pipe(
         map(seasonSummary => {
@@ -774,16 +802,20 @@ export class ActionLogService {
   getGame4uUserActionsForDeliveryId(
     playerId: string,
     deliveryId: string,
-    month?: Date
+    month?: Date,
+    teamId?: string | number | null
   ): Observable<ClienteActionItem[]> {
     const id = (deliveryId || '').trim();
     if (!id || !(isGame4uDataEnabled() && this.game4u.isConfigured())) {
       return of([]);
     }
-    const qActions =
+    const tid = this.normalizeGame4uTeamId(teamId);
+    const qBase =
       month != null
         ? this.game4uUserQueryActionsForCompetenceMonth(playerId, month)
         : this.game4uUserQuery(playerId, month);
+    const qActions =
+      qBase != null ? ({ ...qBase, ...(tid ? { team_id: tid } : {}) } as Game4uUserScopedQuery) : null;
     if (!qActions) {
       return of([]);
     }
@@ -832,11 +864,14 @@ export class ActionLogService {
       loadTasksViaGameReports?: boolean;
     },
     month?: Date,
-    page?: { offset: number; limit: number }
+    page?: { offset: number; limit: number },
+    teamId?: string | number | null
   ): Observable<ClienteActionItemsPage> {
     if (!isGame4uDataEnabled() || !this.game4u.isConfigured()) {
       return of({ items: [], total: 0 });
     }
+    const tid = this.normalizeGame4uTeamId(teamId);
+    const teamExtras = tid ? { team_id: tid } : {};
     const title = row.delivery_title?.trim();
     if (row.loadTasksViaGameReports && title && month != null) {
       const email = this.resolveGame4uUserEmail(playerId);
@@ -853,7 +888,8 @@ export class ActionLogService {
           finished_at_end: rng.end,
           delivery_title: title,
           offset,
-          limit
+          limit,
+          ...teamExtras
         })
         .pipe(
           map(p => ({
@@ -866,10 +902,12 @@ export class ActionLogService {
           })
         );
     }
-    const qActions =
+    const qBase =
       month != null
         ? this.game4uUserQueryYearThroughMonthEnd(playerId, month)
         : this.game4uUserQuery(playerId, month);
+    const qActions =
+      qBase != null ? ({ ...qBase, ...teamExtras } as Game4uUserScopedQuery) : null;
     if (!qActions) {
       return of({ items: [], total: 0 });
     }
@@ -1003,13 +1041,18 @@ export class ActionLogService {
    * Fetches ALL achievements and filters by month on frontend
    * Cached with shareReplay to avoid duplicate requests
    */
-  getMonthlyPointsBreakdown(playerId: string, month?: Date): Observable<{ bloqueados: number; desbloqueados: number }> {
+  getMonthlyPointsBreakdown(
+    playerId: string,
+    month?: Date,
+    teamId?: string | number | null
+  ): Observable<{ bloqueados: number; desbloqueados: number }> {
     if (isGame4uDataEnabled() && this.game4u.isConfigured()) {
       const q = this.game4uUserQuery(playerId, month);
       if (!q) {
         return of({ bloqueados: 0, desbloqueados: 0 });
       }
-      return this.game4u.getGameStats(q).pipe(
+      const tid = this.normalizeGame4uTeamId(teamId);
+      return this.game4u.getGameStats(tid ? { ...q, team_id: tid } : q).pipe(
         map(stats => {
           const w = mapGame4uStatsToPointWallet(stats);
           return { bloqueados: w.bloqueados, desbloqueados: w.desbloqueados };
@@ -1241,9 +1284,15 @@ export class ActionLogService {
   ): Observable<{ activity: ActivityMetrics; processo: ProcessMetrics }> {
     if (isGame4uDataEnabled() && this.game4u.isConfigured()) {
       const reportsOnly = !!opts?.gamificationDashboardReportsOnly;
-      const qStats = this.game4uUserQuery(playerId, month);
+      const tid = this.normalizeGame4uTeamId(opts?.teamId);
+      const teamExtras = tid ? { team_id: tid } : {};
+      const qStatsBase = this.game4uUserQuery(playerId, month);
+      const qActionsBase =
+        month != null ? this.game4uUserQueryYearThroughMonthEnd(playerId, month) : qStatsBase;
+      const qStats =
+        qStatsBase != null ? ({ ...qStatsBase, ...teamExtras } as Game4uUserScopedQuery) : null;
       const qActions =
-        month != null ? this.game4uUserQueryYearThroughMonthEnd(playerId, month) : qStats;
+        qActionsBase != null ? ({ ...qActionsBase, ...teamExtras } as Game4uUserScopedQuery) : null;
       if (!qStats || !qActions) {
         return of({
           activity: { pendentes: 0, emExecucao: 0, finalizadas: 0, pontos: 0 },
@@ -1258,12 +1307,13 @@ export class ActionLogService {
       let dtPrazoOpenSummary: Game4uReportsOpenSummaryQuery | null = null;
       if (email && month != null) {
         const dp = this.game4u.toDtPrazoMonthRange(month);
-        dtPrazoOpenSummary = { email, dt_prazo_start: dp.start, dt_prazo_end: dp.end };
+        dtPrazoOpenSummary = { email, dt_prazo_start: dp.start, dt_prazo_end: dp.end, ...teamExtras };
       } else if (email && summaryRangeForPending) {
         dtPrazoOpenSummary = {
           email,
           dt_prazo_start: summaryRangeForPending.start,
-          dt_prazo_end: summaryRangeForPending.end
+          dt_prazo_end: summaryRangeForPending.end,
+          ...teamExtras
         };
       }
 
@@ -1277,7 +1327,8 @@ export class ActionLogService {
               .getGameReportsFinishedSummary({
                 email,
                 finished_at_start: qStats.start,
-                finished_at_end: qStats.end
+                finished_at_end: qStats.end,
+                ...teamExtras
               })
               .pipe(
                 catchError(err => {
@@ -1294,7 +1345,8 @@ export class ActionLogService {
                 .getGameReportsFinishedSummary({
                   email,
                   finished_at_start: finishedMonthRange.start,
-                  finished_at_end: finishedMonthRange.end
+                  finished_at_end: finishedMonthRange.end,
+                  ...teamExtras
                 })
                 .pipe(
                   catchError(err => {
@@ -1731,7 +1783,8 @@ export class ActionLogService {
    */
   getPlayerCnpjListWithCount(
     playerId: string,
-    month?: Date
+    month?: Date,
+    teamId?: string | number | null
   ): Observable<
     {
       cnpj: string;
@@ -1747,7 +1800,8 @@ export class ActionLogService {
   > {
       // Month must be part of the key: the inner map closes over `month` when the cached observable is built.
       const monthKey = this.getMonthCacheKey(month);
-      const cacheKey = `${playerId}_cnpj_list_count_${monthKey}`;
+      const tidKey = this.normalizeGame4uTeamId(teamId) ?? '';
+      const cacheKey = `${playerId}_cnpj_list_count_${monthKey}_${tidKey}`;
       const cached = this.getCachedData(this.cnpjListWithCountCache, cacheKey);
       if (cached) {
         return cached;
@@ -1760,11 +1814,13 @@ export class ActionLogService {
             return of([]);
           }
           const range = this.game4u.toQueryRange(month);
+          const tid = this.normalizeGame4uTeamId(teamId);
           const request$ = this.game4u
             .getGameReportsFinishedDeliveries({
               email: user,
               finished_at_start: range.start,
-              finished_at_end: range.end
+              finished_at_end: range.end,
+              ...(tid ? { team_id: tid } : {})
             })
             .pipe(
               map(finishedRows => {
@@ -1810,10 +1866,12 @@ export class ActionLogService {
         if (!q) {
           return of([]);
         }
+        const tid = this.normalizeGame4uTeamId(teamId);
+        const qDel = tid ? ({ ...q, team_id: tid } as Game4uUserScopedQuery) : q;
         const request$ = forkJoin({
-          delivered: this.game4u.getGameDeliveries({ ...q, status: 'DELIVERED' }),
-          incomplete: this.game4u.getGameDeliveries({ ...q, status: 'INCOMPLETE' }),
-          pending: this.game4u.getGameDeliveries({ ...q, status: 'PENDING' })
+          delivered: this.game4u.getGameDeliveries({ ...qDel, status: 'DELIVERED' }),
+          incomplete: this.game4u.getGameDeliveries({ ...qDel, status: 'INCOMPLETE' }),
+          pending: this.game4u.getGameDeliveries({ ...qDel, status: 'PENDING' })
         }).pipe(
           map(({ delivered, incomplete, pending }) =>
             mergeGame4uDeliveryParticipation(delivered, incomplete, pending)

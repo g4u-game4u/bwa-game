@@ -192,14 +192,25 @@ export class PlayerService {
    * Get player points (Game4U: `/game/stats` com `start`/`end` alinhados ao mês do painel).
    * @param month Primeiro dia do mês visível no seletor (ou `undefined` = toda a temporada).
    */
-  getPlayerPoints(playerId: string, month?: Date): Observable<PointWallet> {
+  getPlayerPoints(
+    playerId: string,
+    month?: Date,
+    teamId?: string | number | null
+  ): Observable<PointWallet> {
     if (isGame4uDataEnabled() && this.game4uApi.isConfigured()) {
       const email = this.resolvePlayerEmail(playerId);
       if (!email) {
         return throwError(() => new Error('No user email for Game4U wallet'));
       }
       const range = this.game4uApi.toQueryRange(month);
-      return this.game4uApi.getGameStats({ user: email, ...range }).pipe(
+      const tid =
+        teamId == null
+          ? undefined
+          : String(teamId).trim() !== ''
+            ? String(teamId).trim()
+            : undefined;
+      const q = tid ? { user: email, ...range, team_id: tid } : { user: email, ...range };
+      return this.game4uApi.getGameStats(q).pipe(
         map(stats => {
           const points = mapGame4uStatsToPointWallet(stats);
           return points;

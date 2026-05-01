@@ -75,7 +75,8 @@
           </div>
         </ng-template>
         
-        <!-- Meta Configuration Section -->
+        <!-- Meta Configuration Section — comentado (pedido produto) -->
+        <!--
         <div class="sidebar-section meta-config-section" role="region" aria-labelledby="meta-config-section-title">
           <h4 id="meta-config-section-title" class="selector-label">Configurar Meta de Clientes</h4>
           
@@ -133,6 +134,7 @@
             </div>
           </form>
         </div>
+        -->
         
         <!-- Sidebar Toggle Button - At the end of sidebar content -->
         <div class="sidebar-section sidebar-toggle-section">
@@ -201,7 +203,8 @@
       <c4u-dashboard-navigation></c4u-dashboard-navigation>
       <div class="header-spacer"></div>
       <c4u-seletor-mes 
-        [playerId]="getTeamPlayerIdForMonthSelector()" 
+        [playerId]="getTeamPlayerIdForMonthSelector()"
+        [showTodaTemporadaButton]="false"
         (onSelectedMonth)="onMonthChange($event)">
       </c4u-seletor-mes>
       <button 

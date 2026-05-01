@@ -5,7 +5,7 @@ import { UserProfileService } from '@services/user-profile.service';
 
 /**
  * Guard service to restrict access to team management dashboard
- * Only users with management profiles can access:
+ * Users can access when they have session roles ADMIN or GESTOR (ROLES_LIST), or management profiles:
  * - SUPERVISOR (Fkmdmko - SUPERVISÃO)
  * - GESTOR (FkmdnFU - GESTAO)
  * - DIRETOR (FkmdhZ9 - DIREÇÃO)
@@ -24,7 +24,7 @@ export class TeamRoleGuardService {
 
   /**
    * Check if the current user has access to team management dashboard
-   * @returns true if user is SUPERVISOR, GESTOR, or DIRETOR, false otherwise
+   * @returns true if user may access team management (see UserProfileService.canAccessTeamManagement)
    */
   hasGestaoRole(): boolean {
     return this.userProfileService.canAccessTeamManagement();
