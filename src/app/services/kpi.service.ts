@@ -4,6 +4,7 @@ import { map, catchError, shareReplay } from 'rxjs/operators';
 import { BackendApiService } from './backend-api.service';
 import { KPIMapper } from './kpi-mapper.service';
 import { KPIData } from '@model/gamification-dashboard.model';
+import { SessaoProvider } from '@providers/sessao/sessao.provider';
 import { PlayerService } from './player.service';
 
 interface CacheEntry<T> {
@@ -32,7 +33,8 @@ export class KPIService {
   constructor(
     private backendApi: BackendApiService,
     private mapper: KPIMapper,
-    private playerService: PlayerService
+    private playerService: PlayerService,
+    private sessao: SessaoProvider
   ) {}
 
   /**
@@ -72,8 +74,20 @@ export class KPIService {
   }
 
   /**
+   * Perfil para KPIs: reutiliza o mesmo payload do **`GET /auth/user`** já guardado em {@link SessaoProvider.usuario}
+   * após o login/init; só chama {@link PlayerService.getCurrentPlayerData} se o extra ainda não estiver disponível.
+   */
+  private profileForKpiFromSessionOrApi(): Observable<any> {
+    const u = this.sessao.usuario;
+    if (u != null && u.extra != null) {
+      return of(u);
+    }
+    return this.playerService.getCurrentPlayerData();
+  }
+
+  /**
    * Get player KPIs from `extra` no perfil retornado por **`GET /auth/user`**
-   * (via {@link PlayerService.getCurrentPlayerData}) — não usa `GET …/player/{id}`.
+   * (sessão ou {@link PlayerService.getCurrentPlayerData}) — não usa `GET …/player/{id}`.
    *
    * 1. Clientes na Carteira — contagem a partir de `extra.companies`
    * 2. Entregas no Prazo — `extra.entrega` / metas em `extra`
@@ -82,16 +96,22 @@ export class KPIService {
    * @param selectedMonth — mês selecionado (entra na chave de cache)
    * @param actionLogService — reservado (evitar dependência circular); não usado neste fluxo
    */
-  getPlayerKPIs(playerId: string, selectedMonth?: Date, actionLogService?: any): Observable<KPIData[]> {
+  getPlayerKPIs(
+    playerId: string,
+    selectedMonth?: Date,
+    actionLogService?: any,
+    scopeKey?: string
+  ): Observable<KPIData[]> {
     // Create cache key that includes month to avoid cache conflicts
     const monthKey = selectedMonth ? `_${selectedMonth.getFullYear()}-${selectedMonth.getMonth()}` : '_current';
-    const cacheKey = `${playerId}${monthKey}`;
+    const scope = scopeKey != null && String(scopeKey).trim() !== '' ? `_${String(scopeKey).trim()}` : '';
+    const cacheKey = `${playerId}${monthKey}${scope}`;
     const cached = this.getCachedData(this.playerKPICache, cacheKey);
     if (cached) {
       return cached;
     }
 
-    const request$: Observable<KPIData[]> = this.playerService.getCurrentPlayerData().pipe(
+    const request$: Observable<KPIData[]> = this.profileForKpiFromSessionOrApi().pipe(
       map(playerStatus => {
         console.log('📊 Player status received:', playerStatus);
         const companiesStr = playerStatus?.extra?.companies || '';

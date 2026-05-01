@@ -70,6 +70,7 @@ describe('GamificationDashboardComponent - Property 11: Responsive Layout Adapta
   beforeEach(async () => {
     const actionLogServiceSpy = jasmine.createSpyObj('ActionLogService', [
       'getProgressMetrics',
+      'getMonthlyPointsGoalTarget',
       'getPlayerCnpjListWithCount',
       'getUniqueClientesCount',
       'getCompletedTasksCount',
@@ -82,6 +83,7 @@ describe('GamificationDashboardComponent - Property 11: Responsive Layout Adapta
         processo: { pendentes: 0, incompletas: 0, finalizadas: 0 }
       })
     );
+    actionLogServiceSpy.getMonthlyPointsGoalTarget.and.returnValue(of(0));
     actionLogServiceSpy.getPlayerCnpjListWithCount.and.returnValue(of([]));
     actionLogServiceSpy.getUniqueClientesCount.and.returnValue(of(0));
     actionLogServiceSpy.getCompletedTasksCount.and.returnValue(of(0));
@@ -94,7 +96,7 @@ describe('GamificationDashboardComponent - Property 11: Responsive Layout Adapta
       })
     );
 
-    const emptyGamificacaoMaps = { byEmpId: new Map(), byCnpjNorm: new Map() };
+    const emptyGamificacaoMaps = { byEmpId: new Map(), byCnpjNorm: new Map(), byTitleNorm: new Map() };
     const companyKpiServiceSpy = jasmine.createSpyObj('CompanyKpiService', [
       'extractCnpjId',
       'getKpiData',

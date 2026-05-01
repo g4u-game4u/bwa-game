@@ -2,7 +2,7 @@ import { Component, OnInit, OnDestroy, HostListener, ChangeDetectionStrategy, Ch
 import { ActivatedRoute, Router } from '@angular/router';
 import { NgbModal } from '@ng-bootstrap/ng-bootstrap';
 import { Subject, of, forkJoin, from, firstValueFrom } from 'rxjs';
-import { takeUntil, switchMap, map, catchError, take, tap } from 'rxjs/operators';
+import { takeUntil, switchMap, map, catchError, take, tap, finalize } from 'rxjs/operators';
 
 import { PlayerService } from '@services/player.service';
 import { KPIService } from '@services/kpi.service';
@@ -28,6 +28,10 @@ import { ProgressCardType } from '@components/c4u-activity-progress/c4u-activity
 import { ProgressListType } from '@modals/modal-progress-list/modal-progress-list.component';
 import { ModalSeasonFaqComponent } from '@modals/modal-season-faq/modal-season-faq.component';
 import { PONTOS_POR_ATIVIDADE_FINALIZADA_ACTION_LOG } from '@app/constants/pontos-por-atividade-action-log';
+import {
+  extractGamificacaoEmpIdFromDeliveryKey,
+  extractEmpIdPrefixFromDeliveryIdFirstSegment
+} from '@services/gamificacao-delivery-empid.util';
 
 @Component({
   selector: 'app-gamification-dashboard',
@@ -60,11 +64,41 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   isLoadingCompanies = true;
   isLoadingKPIs = true;
   isLoadingProgress = true;
+
+  /** Menu lateral: snapshot Game4U (carteira + totais temporada) ainda em curso. */
+  sidebarGame4uSnapshotPending = false;
+  /** Menu lateral Funifier: carteira de pontos a carregar. */
+  sidebarWalletLoadPending = false;
+  /** Menu lateral Funifier: `getSeasonProgressSidebarDetails` em curso. */
+  sidebarSeasonDetailsPending = false;
   
   // Player data
   playerStatus: PlayerStatus | null = null;
   pointWallet: PointWallet | null = null;
   seasonProgress: SeasonProgress | null = null;
+
+  /**
+   * Reticências nos valores da carteira (pontos / moedas).
+   * Funifier: alinhar ao «Progresso da temporada» — enquanto `getSeasonProgressSidebarDetails` corre,
+   * a carteira também fica em pending (evita números “prontos” com temporada ainda a carregar).
+   */
+  get sidebarWalletPending(): boolean {
+    if (this.playerService.usesGame4uWalletFromStats()) {
+      return this.sidebarGame4uSnapshotPending;
+    }
+    return this.sidebarWalletLoadPending || this.sidebarSeasonDetailsPending;
+  }
+
+  /** Placeholder para exibir a carteira com reticências antes do primeiro snapshot da API. */
+  readonly emptyPointWallet: PointWallet = { moedas: 0, bloqueados: 0, desbloqueados: 0 };
+
+  /** Reticências em «Clientes atendidos» e «Tarefas finalizadas» (e processos, se existir). */
+  get sidebarSeasonStatsPending(): boolean {
+    if (this.playerService.usesGame4uWalletFromStats()) {
+      return this.sidebarGame4uSnapshotPending;
+    }
+    return this.sidebarSeasonDetailsPending;
+  }
 
   get sessionPlayerName(): string {
     const u = this.sessaoProvider.usuario as
@@ -82,11 +116,16 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   
   // KPI data
   playerKPIs: KPIData[] = [];
+  /** Placeholders visuais enquanto `getPlayerKPIs` não retorna (cartões com reticências animadas). */
+  readonly kpiLoadingSlots: readonly number[] = [0, 1];
   
   // Activity and Process data
   activityMetrics: ActivityMetrics | null = null;
   processMetrics: ProcessMetrics | null = null;
   monthlyPointsBreakdown: { bloqueados: number; desbloqueados: number } | null = null;
+  /** Meta do circular de pontos (`GET /game/reports/goal/month/summary`). */
+  monthlyPointsGoalTarget: number | null = null;
+  isLoadingMonthlyGoal = false;
   
   // Company data
   companies: Company[] = [];
@@ -271,8 +310,8 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   
   /**
    * Load all dashboard data asynchronously.
-   * Game4U: esperam-se até 2× `/game/stats` (mês do painel aqui vs temporada completa no `page-season`) e até 2× `/game/actions`
-   * com intervalos/critérios distintos; dedupe em {@link Game4uApiService} evita duplicar a mesma query string.
+   * Game4U: dados agregados vêm de `GET /game/reports/*` (ex.: `finished/summary`, `goal/month/summary`, `user-actions`);
+   * não se usa `GET /game/stats` nem `GET /game/actions` neste painel.
    */
   loadDashboardData(): void {
     // Force fresh data on every dashboard load
@@ -280,6 +319,8 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
 
     // Set refresh time immediately
     this.lastRefreshTime = new Date();
+    // GET `/gamificacao` em paralelo (não esperar datas da temporada); enrich reutiliza o snapshot.
+    this.companyKpiService.prefetchGamificacaoSnapshot();
 
     from(this.seasonDatesService.getSeasonDates()).pipe(
       take(1),
@@ -377,9 +418,11 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
         }
       });
     
-    // Game4U: uma única `GET /game/stats` alimenta carteira, pontos e sidebar da temporada (evita N× o mesmo snapshot).
+    // Game4U: `GET /game/reports/finished/summary` (temporada) alimenta carteira + sidebar (sem `/game/stats`/`/game/actions`).
     const usesGame4uWallet = this.playerService.usesGame4uWalletFromStats();
     if (usesGame4uWallet) {
+      this.sidebarGame4uSnapshotPending = true;
+      this.cdr.markForCheck();
       this.actionLogService
         // Carteira/season sidebar devem refletir a campanha inteira (start/end de /campaign),
         // não o mês do filtro do painel.
@@ -387,6 +430,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
         .pipe(takeUntil(this.destroy$))
         .subscribe({
           next: ({ wallet, sidebar }) => {
+            this.sidebarGame4uSnapshotPending = false;
             this.pointWallet = {
               ...wallet,
               desbloqueados: wallet.desbloqueados
@@ -404,6 +448,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
           },
           error: (error: unknown) => {
             console.error('📊 Failed to load Game4U dashboard snapshot:', error);
+            this.sidebarGame4uSnapshotPending = false;
             this.pointWallet = { moedas: 0, bloqueados: 0, desbloqueados: 0 };
             this.cdr.markForCheck();
           },
@@ -411,6 +456,8 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
           }
         });
     } else {
+      this.sidebarWalletLoadPending = true;
+      this.cdr.markForCheck();
       forkJoin({
         wallet: this.playerService.getPlayerPoints(playerId, this.selectedMonth).pipe(
           catchError(err => {
@@ -428,6 +475,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
         .pipe(takeUntil(this.destroy$))
         .subscribe({
           next: ({ wallet, pontosActionLog }) => {
+            this.sidebarWalletLoadPending = false;
             const desbloqueados = Math.floor(Number(pontosActionLog) || 0);
             this.pointWallet = {
               ...wallet,
@@ -437,6 +485,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
           },
           error: (error) => {
             console.error('📊 Failed to load point wallet:', error);
+            this.sidebarWalletLoadPending = false;
             this.pointWallet = { moedas: 0, bloqueados: 0, desbloqueados: 0 };
             this.cdr.markForCheck();
           },
@@ -478,7 +527,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
    * Load additional season progress details:
    * - Tarefas finalizadas: Game4U = count `action_stats.done` (mesma chamada que `delivery_stats.total`);
    *   Funifier = action_log.
-   * - `deliveryStatsTotal`: Game4U `/game/stats.delivery_stats.total` quando existir.
+   * - `deliveryStatsTotal`: Game4U `deliveries_count` no relatório `finished/summary` quando existir.
    */
   private loadSeasonProgressDetails(): void {
     const playerId = this.getPlayerId();
@@ -486,9 +535,17 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
       return;
     }
 
+    this.sidebarSeasonDetailsPending = true;
+    this.cdr.markForCheck();
     this.actionLogService
       .getSeasonProgressSidebarDetails(playerId, this.selectedMonth)
-      .pipe(takeUntil(this.destroy$))
+      .pipe(
+        takeUntil(this.destroy$),
+        finalize(() => {
+          this.sidebarSeasonDetailsPending = false;
+          this.cdr.markForCheck();
+        })
+      )
       .subscribe({
         next: ({ tarefasFinalizadas, deliveryStatsTotal }) => {
           if (this.seasonProgress) {
@@ -625,10 +682,28 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
       .getPlayerCnpjListWithCount(playerId, this.selectedMonth)
       .pipe(
         switchMap(items => {
+          if (items.length > 0 && items.every(i => i.fromGameReportsDeliveries)) {
+            const baseClientes: CompanyDisplay[] = items.map(i => ({
+              cnpj: i.cnpj,
+              cnpjId: i.cnpj,
+              actionCount: i.actionCount ?? 0,
+              processCount: 0,
+              delivery_title: i.delivery_title,
+              ...(i.deliveryId?.trim() ? { deliveryId: i.deliveryId.trim() } : {}),
+              loadTasksViaGameReports: true
+            }));
+            return of({
+              empids: [] as string[],
+              baseClientes,
+              skipKpi: false as const
+            });
+          }
+
           const empids = items.map(i => i.cnpj).filter((c): c is string => !!c && String(c).trim().length > 0);
           const actionCountByCnpj = new Map(items.map(i => [i.cnpj, i.actionCount]));
           const deliveryTitleByKey = new Map<string, string>();
           const deliveryIdByCnpj = new Map<string, string>();
+          const deliveryExtraCnpjByKey = new Map<string, string>();
           for (const i of items) {
             const t = i.delivery_title?.trim();
             if (t) {
@@ -638,10 +713,18 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
             if (d) {
               deliveryIdByCnpj.set(i.cnpj, d);
             }
+            const ec = i.delivery_extra_cnpj?.trim();
+            if (ec) {
+              deliveryExtraCnpjByKey.set(i.cnpj, ec);
+            }
           }
 
           if (empids.length === 0) {
-            return of({ empids: [] as string[], baseClientes: [] as CompanyDisplay[] });
+            return of({
+              empids: [] as string[],
+              baseClientes: [] as CompanyDisplay[],
+              skipKpi: true as const
+            });
           }
 
           return this.cnpjLookupService.enrichCnpjListFull(empids).pipe(
@@ -659,9 +742,10 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
                 empids,
                 actionCountByCnpj,
                 deliveryTitleByKey,
-                deliveryIdByCnpj
+                deliveryIdByCnpj,
+                deliveryExtraCnpjByKey
               );
-              return { empids, baseClientes };
+              return { empids, baseClientes, skipKpi: false as const };
             })
           );
         }),
@@ -669,21 +753,22 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
         takeUntil(this.monthChange$)
       )
       .subscribe({
-        next: ({ empids, baseClientes }) => {
-          baseClientes.forEach(c => {
+        next: ({ empids, baseClientes, skipKpi }) => {
+          const uniqueBase = this.dedupeParticipacaoClientes(baseClientes);
+          uniqueBase.forEach(c => {
             const status = this.cnpjStatusMap.get(c.cnpj);
             if (status) {
               c.status = status;
             }
           });
-          this.participacaoClientes = baseClientes;
+          this.participacaoClientes = uniqueBase;
           this.isLoadingParticipacao = false;
-          this.isLoadingParticipacaoKpi = empids.length > 0;
+          this.isLoadingParticipacaoKpi = !skipKpi && uniqueBase.length > 0;
           this.syncClientesKpiWithTabs();
           this.cdr.markForCheck();
 
-          if (empids.length > 0) {
-            void this.applyParticipacaoPorcEntregasKpiAfterGamificacaoAsync(baseClientes, loadGen).catch(
+          if (!skipKpi && uniqueBase.length > 0) {
+            void this.applyParticipacaoPorcEntregasKpiAfterGamificacaoAsync(uniqueBase, loadGen).catch(
               (err: unknown) => {
                 console.error('📊 Falha ao aplicar KPI de entregas (gamificação):', err);
               }
@@ -705,7 +790,8 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     empids: string[],
     actionCountByCnpj: Map<string, number>,
     deliveryTitleByKey: Map<string, string>,
-    deliveryIdByCnpj: Map<string, string>
+    deliveryIdByCnpj: Map<string, string>,
+    deliveryExtraCnpjByKey: Map<string, string>
   ): CompanyDisplay[] {
     return empids.map(key => {
       const k = String(key).trim();
@@ -723,8 +809,77 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
       if (d) {
         row.deliveryId = d;
       }
+      const ec = deliveryExtraCnpjByKey.get(k)?.trim();
+      if (ec) {
+        row.delivery_extra_cnpj = ec;
+      }
       return row;
     });
+  }
+
+  /**
+   * Um cliente distinto: EmpID (prefixo de `delivery_id`), senão CNPJ 14 dígitos, senão chave da linha.
+   * Evita repetir a mesma empresa quando o back devolve várias entregas/competências do mesmo EmpID.
+   */
+  private participacaoClienteDistinctKey(c: CompanyDisplay): string {
+    const did = c.deliveryId?.trim();
+    if (did) {
+      const emp =
+        extractGamificacaoEmpIdFromDeliveryKey(did) ?? extractEmpIdPrefixFromDeliveryIdFirstSegment(did);
+      if (emp) {
+        return `emp:${emp}`;
+      }
+    }
+    const digits =
+      String(c.cnpjNumber ?? '')
+        .replace(/\D/g, '')
+        .trim() ||
+      String(c.delivery_extra_cnpj ?? '')
+        .replace(/\D/g, '')
+        .trim() ||
+      String(this.cnpjNumberMap.get(c.cnpj) ?? '')
+        .replace(/\D/g, '')
+        .trim();
+    if (digits.length === 14) {
+      return `cnpj:${digits}`;
+    }
+    return `row:${String(c.cnpj || '').trim()}`;
+  }
+
+  private mergeParticipacaoClienteRows(keep: CompanyDisplay, add: CompanyDisplay): CompanyDisplay {
+    return {
+      ...keep,
+      actionCount: (keep.actionCount ?? 0) + (add.actionCount ?? 0),
+      processCount: Math.max(keep.processCount ?? 0, add.processCount ?? 0),
+      delivery_title: keep.delivery_title?.trim() || add.delivery_title?.trim() || keep.delivery_title,
+      deliveryId: keep.deliveryId?.trim() || add.deliveryId?.trim() || keep.deliveryId,
+      delivery_extra_cnpj: keep.delivery_extra_cnpj?.trim() || add.delivery_extra_cnpj?.trim() || keep.delivery_extra_cnpj,
+      cnpjNumber: keep.cnpjNumber || add.cnpjNumber,
+      loadTasksViaGameReports: keep.loadTasksViaGameReports ?? add.loadTasksViaGameReports,
+      porcEntregas: keep.porcEntregas ?? add.porcEntregas,
+      entrega: keep.entrega ?? add.entrega,
+      deliveryKpi: keep.deliveryKpi ?? add.deliveryKpi,
+      classificacao: keep.classificacao ?? add.classificacao,
+      gamificacaoEmpIdUsado: keep.gamificacaoEmpIdUsado ?? add.gamificacaoEmpIdUsado
+    };
+  }
+
+  /** Lista «Clientes atendidos»: uma linha por empresa (EmpID/CNPJ), somando contagens. */
+  private dedupeParticipacaoClientes(rows: CompanyDisplay[]): CompanyDisplay[] {
+    if (rows.length <= 1) {
+      return rows;
+    }
+    const byKey = new Map<string, CompanyDisplay>();
+    for (const c of rows) {
+      const key = this.participacaoClienteDistinctKey(c);
+      const prev = byKey.get(key);
+      if (!prev) {
+        byKey.set(key, { ...c });
+      } else {
+        byKey.set(key, this.mergeParticipacaoClienteRows(prev, c));
+      }
+    }
+    return Array.from(byKey.values());
   }
 
   /**
@@ -747,7 +902,8 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
 
     const participacaoGamificacaoRows = baseClientes.map(b => ({
       participationKey: b.cnpj,
-      deliveryId: b.deliveryId
+      deliveryId: b.deliveryId,
+      deliveryTitle: b.delivery_title
     }));
 
     try {
@@ -763,6 +919,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
         if (!k) {
           return { ...base };
         }
+        const cnpjNum = k.cnpjNumber ?? base.cnpjNumber;
         return {
           ...base,
           processCount: k.processCount,
@@ -770,6 +927,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
           entrega: k.entrega,
           porcEntregas: k.porcEntregas,
           deliveryKpi: k.deliveryKpi,
+          ...(cnpjNum ? { cnpjNumber: cnpjNum } : {}),
           ...(k.gamificacaoEmpIdUsado ? { gamificacaoEmpIdUsado: k.gamificacaoEmpIdUsado } : {})
         };
       });
@@ -779,7 +937,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
           c.status = status;
         }
       });
-      this.participacaoClientes = merged;
+      this.participacaoClientes = this.dedupeParticipacaoClientes(merged);
       /** Antes do sync: `syncEntregasPrazoKpiFromParticipacao` ignora enquanto `isLoadingParticipacaoKpi` é true. */
       this.isLoadingParticipacaoKpi = false;
       this.syncClientesKpiWithTabs();
@@ -844,11 +1002,9 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     }
 
     const base = this.playerKPIs[idx];
-    const values = this.participacaoClientes
-      .map(c => this.getListaEntregaPercent(c))
-      .filter((v): v is number => v !== null && Number.isFinite(v));
+    const avg = this.getEntregasPrazoPercentFromParticipacao();
 
-    if (values.length === 0) {
+    if (avg === null) {
       const updated: KPIData = {
         ...base,
         current: 0,
@@ -863,12 +1019,11 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
       return;
     }
 
-    const avg = values.reduce((a, b) => a + b, 0) / values.length;
     const target = base.target;
     const superTarget = base.superTarget ?? 100;
     const updated: KPIData = {
       ...base,
-      current: Math.round(avg * 100) / 100,
+      current: avg,
       isMissing: false,
       percentage: Math.min(avg, 100),
       color: this.kpiService.getKPIColorByGoals(avg, target, superTarget)
@@ -896,8 +1051,9 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
           
           // Always update metas if we have KPIs (even if empty, to show 0/0)
           // But preserve existing values if KPIs array is null/undefined (error case)
+          // Usar `playerKPIs` após sync (média «entregas no prazo» vem da participação + `/gamificacao`).
           if (kpis !== null && kpis !== undefined) {
-            this.updateMetasFromKPIs(kpis);
+            this.updateMetasFromKPIs(this.playerKPIs);
           } else {
             console.log('📊 KPIs is null/undefined, skipping metas update to preserve existing values');
           }
@@ -927,7 +1083,9 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     
     // Allow empty array - this means 0/0 (no KPIs available)
     const totalKPIs = kpis ? kpis.length : 0;
-    const metasAchieved = kpis ? kpis.filter(kpi => kpi.current >= kpi.target).length : 0;
+    const metasAchieved = kpis
+      ? kpis.filter(kpi => this.getKpiCurrentValue(kpi) >= kpi.target).length
+      : 0;
     
     // Update with KPI-based values
     // Note: metasAchieved can be 0 if no KPIs meet their target
@@ -948,6 +1106,8 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
    */
   private loadProgressData(): void {
     this.isLoadingProgress = true;
+    this.isLoadingMonthlyGoal = true;
+    this.monthlyPointsGoalTarget = null;
     console.log('📊 loadProgressData called with selectedMonth:', this.selectedMonth?.toISOString() || 'undefined (toda temporada)');
     
     // Get player email/id for action log query
@@ -961,18 +1121,32 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
       this.activityMetrics = { pendentes: 0, emExecucao: 0, finalizadas: 0, pontos: 0 };
       this.processMetrics = { pendentes: 0, incompletas: 0, finalizadas: 0 };
       this.isLoadingProgress = false;
+      this.isLoadingMonthlyGoal = false;
       this.cdr.markForCheck();
       return;
     }
 
-    this.actionLogService.getProgressMetrics(playerId, this.selectedMonth)
+    const month = this.selectedMonth;
+    const goal$ =
+      month != null && this.playerService.usesGame4uWalletFromStats()
+        ? this.actionLogService.getMonthlyPointsGoalTarget(playerId, month)
+        : of(null);
+
+    forkJoin({
+      metrics: this.actionLogService.getProgressMetrics(playerId, month, {
+        gamificationDashboardReportsOnly: true
+      }),
+      goalPoints: goal$
+    })
       .pipe(takeUntil(this.destroy$), takeUntil(this.monthChange$))
       .subscribe({
-        next: (metrics) => {
+        next: ({ metrics, goalPoints }) => {
           this.activityMetrics = metrics.activity;
-
           this.processMetrics = metrics.processo;
+          const g = goalPoints != null ? Math.floor(Number(goalPoints) || 0) : 0;
+          this.monthlyPointsGoalTarget = g > 0 ? g : null;
           this.isLoadingProgress = false;
+          this.isLoadingMonthlyGoal = false;
           this.cdr.markForCheck();
         },
         error: (error) => {
@@ -980,12 +1154,12 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
           // Use default values on error
           this.activityMetrics = { pendentes: 0, emExecucao: 0, finalizadas: 0, pontos: 0 };
           this.processMetrics = { pendentes: 0, incompletas: 0, finalizadas: 0 };
+          this.monthlyPointsGoalTarget = null;
           this.isLoadingProgress = false;
+          this.isLoadingMonthlyGoal = false;
           this.cdr.markForCheck();
         }
       });
-
-    // Monthly points breakdown removed - bloqueados/desbloqueados no longer used
   }
   
   /**
@@ -1025,15 +1199,18 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     // Clear stale data immediately to prevent mismatched display
     this.activityMetrics = null;
     this.processMetrics = null;
+    this.monthlyPointsGoalTarget = null;
     this.playerKPIs = [];
 
     // Show loading states immediately
     this.isLoadingKPIs = true;
     this.isLoadingProgress = true;
+    this.isLoadingMonthlyGoal = true;
     this.isLoadingParticipacao = true;
     this.isLoadingParticipacaoKpi = false;
     this.cdr.markForCheck();
 
+    this.companyKpiService.prefetchGamificacaoSnapshot();
     this.loadKPIData();
     this.loadProgressData();
     this.loadParticipacaoData();
@@ -1056,7 +1233,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     this.selectedCarteiraCompany = company;
     this.isCompanyCarteiraDetailModalOpen = true;
     this.focusedElementBeforeModal = document.activeElement as HTMLElement;
-    const companyName = this.getClienteAtendidoDisplayName(company);
+    const companyName = this.getClienteAtendidoListTitle(company);
     this.announceToScreenReader(`Abrindo detalhes de ${companyName}`);
   }
 
@@ -1110,6 +1287,11 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
         this.progressModalType = 'atividades';
         this.isProgressModalOpen = true;
         this.announceToScreenReader('Abrindo lista de atividades finalizadas');
+        break;
+      case 'atividades-pendentes':
+        this.progressModalType = 'atividades-pendentes';
+        this.isProgressModalOpen = true;
+        this.announceToScreenReader('Abrindo lista de tarefas pendentes');
         break;
       case 'atividades-pontos':
         this.progressModalType = 'pontos';
@@ -1234,7 +1416,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   /** Sidebar recolhida: entregas no prazo como % (média dos clientes atendidos no mês). */
   kpiSidebarValue(kpi: KPIData): string {
     if (kpi.id === 'entregas-prazo' && kpi.unit === '%') {
-      const n = Math.round(kpi.current * 100) / 100;
+      const n = Math.round(this.getKpiCurrentValue(kpi) * 100) / 100;
       const text = Number.isInteger(n) ? String(n) : n.toFixed(2).replace(/\.?0+$/, '');
       return `${text}%`;
     }
@@ -1251,12 +1433,66 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   /**
    * For "Clientes na Carteira", use seasonProgress.clientes (action_log count)
    * to compare against KPI target in circular progress.
+   * For "Entregas no Prazo", use média de `porcEntregas` na lista «Clientes atendidos» quando disponível
+   * (GET `/gamificacao` + cruzamento); senão perfil (`extra.entrega`).
    */
   getKpiCurrentValue(kpi: KPIData): number {
     if (kpi.id === 'numero-empresas') {
       return this.seasonProgress?.clientes ?? kpi.current;
     }
+    if (kpi.id === 'entregas-prazo') {
+      const fromParticipacao = this.getEntregasPrazoPercentFromParticipacao();
+      if (fromParticipacao !== null) {
+        return fromParticipacao;
+      }
+    }
     return kpi.current;
+  }
+
+  /**
+   * Média dos percentuais (`porcEntregas` / espelhos) na lista de participação do mês,
+   * após o enriquecimento com gamificação. `null` quando não há clientes ou nenhum valor válido.
+   */
+  getEntregasPrazoPercentFromParticipacao(): number | null {
+    if (this.isLoadingParticipacao || this.participacaoClientes.length === 0) {
+      return null;
+    }
+    if (this.isLoadingParticipacaoKpi) {
+      return null;
+    }
+    const values = this.participacaoClientes
+      .map(c => this.getListaEntregaPercent(c))
+      .filter((v): v is number => v !== null && Number.isFinite(v));
+    if (values.length === 0) {
+      return null;
+    }
+    return Math.round((values.reduce((a, b) => a + b, 0) / values.length) * 100) / 100;
+  }
+
+  /** Circular «Entregas no Prazo»: aguarda cruzamento gamificação quando há clientes no mês. */
+  isEntregasPrazoCircularPending(kpi: KPIData): boolean {
+    return (
+      kpi.id === 'entregas-prazo' &&
+      !this.isLoadingParticipacao &&
+      this.participacaoClientes.length > 0 &&
+      this.isLoadingParticipacaoKpi
+    );
+  }
+
+  /**
+   * `isMissing` do anel: para entregas, deriva da lista (porcEntregas) em vez de só do perfil.
+   */
+  getKpiCircularIsMissing(kpi: KPIData): boolean {
+    if (kpi.id !== 'entregas-prazo') {
+      return !!kpi.isMissing;
+    }
+    if (this.isLoadingParticipacao || this.participacaoClientes.length === 0) {
+      return !!kpi.isMissing;
+    }
+    if (this.isLoadingParticipacaoKpi) {
+      return false;
+    }
+    return this.getEntregasPrazoPercentFromParticipacao() === null;
   }
 
   /**
@@ -1273,12 +1509,17 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   get monthlyPointsProgressData(): { current: number; target: number } {
     const donePts = this.activityMetrics?.pontosDone;
     const allPts = this.activityMetrics?.pontosTodosStatus;
+    const current =
+      donePts !== undefined ? Math.floor(donePts) : Math.floor(this.activityMetrics?.pontos ?? 0);
+
+    if (this.monthlyPointsGoalTarget != null && this.monthlyPointsGoalTarget > 0) {
+      return { current, target: Math.max(this.monthlyPointsGoalTarget, 1) };
+    }
+
     if (donePts !== undefined && allPts !== undefined) {
-      const current = Math.floor(donePts);
       const target = Math.max(Math.floor(allPts), 1);
       return { current, target };
     }
-    const current = Math.floor(this.activityMetrics?.pontos ?? 0);
     const pendingTasks =
       (this.processMetrics?.pendentes ?? 0) + (this.processMetrics?.incompletas ?? 0);
     const target =
@@ -1334,17 +1575,49 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     return displayName || cnpj;
   }
 
-  /** Linha “Clientes atendidos” (Game4U): preferir título da entrega ao id. */
+  /** Linha “Clientes atendidos” (Game4U): preferir título da entrega ao id; anexar `extra.cnpj` se existir. */
   getClienteAtendidoDisplayName(cliente: CompanyDisplay): string {
     const t = cliente.delivery_title?.trim();
-    if (t) {
-      return t;
+    const ec = cliente.delivery_extra_cnpj?.trim();
+    const base = t || this.getCompanyDisplayName(cliente.cnpj) || cliente.cnpj;
+    if (ec) {
+      return t ? `${t} · ${ec}` : `${base} · ${ec}`;
     }
-    return this.getCompanyDisplayName(cliente.cnpj) || cliente.cnpj;
+    return base;
+  }
+
+  /** Lista: mesmo texto que {@link getClienteAtendidoDisplayName} + CNPJ da empresa (lookup) ao lado, se ainda não estiver visível. */
+  getClienteAtendidoListTitle(cliente: CompanyDisplay): string {
+    const base = this.getClienteAtendidoDisplayName(cliente);
+    const digits =
+      String(cliente.cnpjNumber ?? '')
+        .replace(/\D/g, '')
+        .trim() ||
+      String(this.cnpjNumberMap.get(cliente.cnpj) ?? '')
+        .replace(/\D/g, '')
+        .trim();
+    if (digits.length !== 14) {
+      return base;
+    }
+    const formatted = this.formatCnpjBr14(digits);
+    const baseDigits = base.replace(/\D/g, '');
+    if (baseDigits.includes(digits)) {
+      return base;
+    }
+    return `${base} · ${formatted}`;
+  }
+
+  /** Máscara brasileira para CNPJ (14 dígitos). */
+  private formatCnpjBr14(digits14: string): string {
+    const d = digits14.replace(/\D/g, '');
+    if (d.length !== 14) {
+      return digits14;
+    }
+    return d.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5');
   }
 
   /**
-   * % entregas no prazo na lista (campo API `porcEntregas` → `porcEntregas` / `entrega` / `deliveryKpi.current`).
+   * % entregas no prazo na lista — prioriza `porcEntregas` do GET `/gamificacao`; fallback `entrega` / `deliveryKpi`.
    */
   getListaEntregaPercent(cliente: CompanyDisplay): number | null {
     const p = cliente.porcEntregas;
@@ -1398,8 +1671,10 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   getClienteAtendidoTooltip(cliente: CompanyDisplay): string {
     const base = this.getCompanyTooltip(cliente.cnpj);
     const t = cliente.delivery_title?.trim();
-    if (t) {
-      return `${t} | ${base}`;
+    const ec = cliente.delivery_extra_cnpj?.trim();
+    const titleParts = [t, ec].filter(Boolean).join(' · ');
+    if (titleParts) {
+      return `${titleParts} | ${base}`;
     }
     return base;
   }
@@ -1424,7 +1699,8 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     const totalPercent = this.playerKPIs.reduce((sum, kpi) => {
       // Calculate percentage based on super goal (super goal = 100%)
       const superGoal = kpi.superTarget || kpi.target;
-      const percent = superGoal > 0 ? (kpi.current / superGoal) * 100 : 0;
+      const current = this.getKpiCurrentValue(kpi);
+      const percent = superGoal > 0 ? (current / superGoal) * 100 : 0;
       return sum + Math.min(100, percent); // Cap at 100%
     }, 0);
     

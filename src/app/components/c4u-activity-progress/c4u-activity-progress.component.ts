@@ -1,7 +1,12 @@
 import { Component, Input, Output, EventEmitter } from '@angular/core';
 import { ActivityMetrics, ProcessMetrics } from '@model/gamification-dashboard.model';
 
-export type ProgressCardType = 'atividades-finalizadas' | 'atividades-pontos' | 'processos-pendentes' | 'processos-finalizados';
+export type ProgressCardType =
+  | 'atividades-finalizadas'
+  | 'atividades-pendentes'
+  | 'atividades-pontos'
+  | 'processos-pendentes'
+  | 'processos-finalizados';
 
 export interface MonthlyPointsBreakdown {
   bloqueados: number;

@@ -5,6 +5,7 @@ import { GraphDataProcessorService } from '@services/graph-data-processor.servic
 import { SeasonDatesService } from '@services/season-dates.service';
 import { ToastService } from '@services/toast.service';
 import { SessaoProvider } from '@providers/sessao/sessao.provider';
+import { BwaTeamApiService } from '@services/bwa-team-api.service';
 import { PerformanceMonitorService } from '@services/performance-monitor.service';
 import { of } from 'rxjs';
 import { delay } from 'rxjs/operators';
@@ -60,6 +61,9 @@ describe('TeamManagementDashboardComponent Performance Tests', () => {
     const sessaoProviderSpy = jasmine.createSpyObj('SessaoProvider', [], {
       usuario: { extra: { teams: ['Team A', 'Team B'] } }
     });
+    const bwaTeamApiSpy = jasmine.createSpyObj('BwaTeamApiService', ['fetchTeamList', 'fetchTeamDetail']);
+    bwaTeamApiSpy.fetchTeamList.and.returnValue(Promise.resolve([]));
+    bwaTeamApiSpy.fetchTeamDetail.and.returnValue(Promise.resolve(null));
 
     await TestBed.configureTestingModule({
       declarations: [TeamManagementDashboardComponent],
@@ -69,6 +73,7 @@ describe('TeamManagementDashboardComponent Performance Tests', () => {
         { provide: SeasonDatesService, useValue: seasonDatesServiceSpy },
         { provide: ToastService, useValue: toastServiceSpy },
         { provide: SessaoProvider, useValue: sessaoProviderSpy },
+        { provide: BwaTeamApiService, useValue: bwaTeamApiSpy },
         PerformanceMonitorService
       ]
     }).compileComponents();

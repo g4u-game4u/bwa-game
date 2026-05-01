@@ -38,10 +38,13 @@ export class UserProfileService {
 
   /**
    * Check if current user can access team management dashboard
-   * 
-   * @returns true if user is SUPERVISOR, GESTOR, or DIRETOR
+   *
+   * @returns true if user has session role ADMIN or GESTOR (see ROLES_LIST), or profile is SUPERVISOR, GESTOR, or DIRETOR (team-based)
    */
   canAccessTeamManagement(): boolean {
+    if (this.sessao.isAdmin() || this.sessao.isGerente()) {
+      return true;
+    }
     const profile = this.getCurrentUserProfile();
     return profile !== UserProfile.JOGADOR;
   }
@@ -137,10 +140,9 @@ export class UserProfileService {
   }
 
   /**
-   * Check if current user has a management profile
-   * (SUPERVISOR, GESTOR, or DIRETOR)
-   * 
-   * @returns true if user is SUPERVISOR, GESTOR, or DIRETOR
+   * Check if current user has management access (same as canAccessTeamManagement)
+   *
+   * @returns true for session roles ADMIN / GESTOR or profiles SUPERVISOR, GESTOR, DIRETOR
    */
   isManagementUser(): boolean {
     return this.canAccessTeamManagement();

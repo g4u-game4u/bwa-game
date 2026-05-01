@@ -255,6 +255,139 @@ export function getGame4uParticipationRowKey(a: Game4uUserActionModel): string {
   return asString(a.delivery_id).trim();
 }
 
+/** Apenas dígitos — para agrupar linhas pelo mesmo CPF/CNPJ em `extra.cnpj`. */
+export function normalizeGame4uCpfCnpjDigits(value: string): string {
+  return String(value || '').replace(/\D/g, '');
+}
+
+/**
+ * Agrupa linhas «clientes atendidos no mês» sem duplicar a mesma entrega/cliente:
+ * 1) `delivery_id` (uma linha por entrega); 2) senão CPF/CNPJ em `extra.cnpj`; 3) senão chave de participação.
+ */
+export function getGame4uAtendidosGroupKey(a: Game4uUserActionModel): string | null {
+  const did =
+    a.delivery_id != null && String(a.delivery_id).trim() !== '' ? String(a.delivery_id).trim() : '';
+  if (did) {
+    return `d:${did}`;
+  }
+  const ec = readGame4uExtraCnpj(a);
+  if (ec) {
+    const digits = normalizeGame4uCpfCnpjDigits(ec);
+    if (digits.length >= 11) {
+      return `c:${digits}`;
+    }
+    if (ec.trim()) {
+      return `c:${ec.trim()}`;
+    }
+  }
+  const pk = getGame4uParticipationRowKey(a);
+  return pk ? `p:${pk}` : null;
+}
+
+/**
+ * Chave estável para CRM/enriquecimento (`enrichCnpjListFull`): mantém o primeiro
+ * `integration_id` / `client_id` / CNPJ em extra / `delivery_id` encontrado no grupo.
+ */
+export function pickGame4uAtendidosRepresentativeKey(
+  previous: string | undefined,
+  a: Game4uUserActionModel
+): string {
+  const prev = (previous || '').trim();
+  if (prev) {
+    return prev;
+  }
+  const integ = asString(a.integration_id).trim();
+  if (integ) {
+    return integ;
+  }
+  const cid = asString(a.client_id).trim();
+  if (cid) {
+    return cid;
+  }
+  const ec = readGame4uExtraCnpj(a);
+  if (ec) {
+    const d = normalizeGame4uCpfCnpjDigits(ec);
+    return d || ec.trim();
+  }
+  const dlv = a.delivery_id != null ? String(a.delivery_id).trim() : '';
+  if (dlv) {
+    return dlv;
+  }
+  return '';
+}
+
+/**
+ * Competência «concluído no mês» para lista de clientes: `finished_at`, senão `updated_at`, senão `created_at`.
+ * Evita excluir ações que a API marca como finalizadas mas sem `finished_at`.
+ */
+export function getGame4uUserActionFinishedOrFallbackMs(a: Game4uUserActionModel): number | null {
+  const f = parseExtraDrPrazoToUtcMs((a as Record<string, unknown>)['finished_at']);
+  if (f != null) {
+    return f;
+  }
+  const u = parseExtraDrPrazoToUtcMs(a.updated_at);
+  if (u != null) {
+    return u;
+  }
+  return parseExtraDrPrazoToUtcMs(a.created_at);
+}
+
+/**
+ * User-action pertence à mesma linha «clientes atendidos» aberta no modal de detalhe
+ * (critérios alinhados ao agrupamento da lista + chave representativa).
+ */
+export function game4uActionMatchesParticipacaoModalRow(
+  a: Game4uUserActionModel,
+  row: { cnpj: string; deliveryId?: string; delivery_extra_cnpj?: string }
+): boolean {
+  const did = row.deliveryId?.trim();
+  if (did && String(a.delivery_id ?? '').trim() === did) {
+    return true;
+  }
+  const rowEc = row.delivery_extra_cnpj?.trim();
+  const aEc = readGame4uExtraCnpj(a);
+  if (rowEc && aEc && normalizeGame4uCpfCnpjDigits(rowEc) === normalizeGame4uCpfCnpjDigits(aEc)) {
+    return true;
+  }
+  const rep = row.cnpj?.trim();
+  if (!rep) {
+    return false;
+  }
+  if (getGame4uParticipationRowKey(a) === rep) {
+    return true;
+  }
+  if (pickGame4uAtendidosRepresentativeKey('', a) === rep) {
+    return true;
+  }
+  if (rep.length >= 11 && aEc && normalizeGame4uCpfCnpjDigits(rep) === normalizeGame4uCpfCnpjDigits(aEc)) {
+    return true;
+  }
+  return false;
+}
+
+/**
+ * CNPJ em `extra.cnpj` em documentos Game4U (user-action ou delivery).
+ */
+export function readGame4uExtraCnpjFromRecord(rec: Record<string, unknown>): string | null {
+  const ex = rec['extra'];
+  if (!ex || typeof ex !== 'object') {
+    return null;
+  }
+  const v = (ex as Record<string, unknown>)['cnpj'];
+  if (v == null || v === '') {
+    return null;
+  }
+  const s = String(v).trim();
+  return s || null;
+}
+
+/**
+ * CNPJ em `extra.cnpj` na user-action (entrega), útil para distinguir linhas quando `delivery_title` se repete.
+ */
+export function readGame4uExtraCnpj(a: Game4uUserActionModel): string | null {
+  return readGame4uExtraCnpjFromRecord(a as Record<string, unknown>);
+}
+
 function parseGame4uIsoMs(v: unknown): number | null {
   if (v == null || v === '') {
     return null;
@@ -288,6 +421,49 @@ function filterGame4uActionsByListTimestampMonth(
     return t > 0 && t >= start && t <= end;
   });
 }
+
+/**
+ * Modal «tarefas pendentes»: alinhado a `GET /game/reports/user-actions?dt_prazo_*`.
+ * Filtra pelo **mês de calendário do prazo** (`dt_prazo` na raiz ou `extra.dt_prazo` / `extra.dr_prazo`),
+ * não por `created_at` (senão linhas com prazo no mês mas criação antiga sumiam).
+ * Sem prazo parseável: mantém a linha (resposta já veio filtrada pelo backend).
+ */
+function filterGame4uActionsByDtPrazoCalendarMonth(
+  actions: Game4uUserActionModel[],
+  month: Date
+): Game4uUserActionModel[] {
+  const ty = month.getFullYear();
+  const tm = month.getMonth();
+  return actions.filter(a => {
+    const top = typeof a.dt_prazo === 'string' ? a.dt_prazo.trim() : '';
+    if (top) {
+      const ymd = /^(\d{4})-(\d{2})-(\d{2})/.exec(top);
+      if (ymd) {
+        const d = new Date(Number(ymd[1]), Number(ymd[2]) - 1, Number(ymd[3]));
+        if (!Number.isNaN(d.getTime())) {
+          return d.getFullYear() === ty && d.getMonth() === tm;
+        }
+      }
+      const t = Date.parse(top);
+      if (!Number.isNaN(t)) {
+        const d = new Date(t);
+        return d.getFullYear() === ty && d.getMonth() === tm;
+      }
+    }
+    const ex = readGame4uExtraRecord(a);
+    if (ex) {
+      const ms = parseExtraDrPrazoToUtcMs(ex['dt_prazo'] ?? ex['dr_prazo']);
+      if (ms != null) {
+        const d = new Date(ms);
+        return d.getFullYear() === ty && d.getMonth() === tm;
+      }
+    }
+    return true;
+  });
+}
+
+/** Modo de filtro por mês na lista de atividades do modal (Game4U). */
+export type ActivityListMonthFilterMode = 'listTimestamp' | 'dtPrazo';
 
 export function filterGame4uActionsByMonth(
   actions: Game4uUserActionModel[],
@@ -469,17 +645,30 @@ export function mapGame4uActionsToProcessMetrics(actions: Game4uUserActionModel[
 
 export function mapGame4uActionsToActivityList(
   actions: Game4uUserActionModel[],
-  month?: Date
+  month?: Date,
+  opts?: { monthFilter?: ActivityListMonthFilterMode }
 ): ActivityListItem[] {
-  return filterGame4uActionsByListTimestampMonth(actions, month).map(a => ({
-    id: a.id,
-    title: (a.action_title as string) || 'Ação',
-    delivery_title: (a.delivery_title as string) || undefined,
-    points: Math.floor(Number(a.points) || PONTOS_POR_ATIVIDADE_FINALIZADA_ACTION_LOG),
-    created: game4uUserActionListTimestampMs(a),
-    player: asString(a.user_email),
-    cnpj: asString(a.integration_id) || undefined
-  }));
+  const mode = opts?.monthFilter ?? 'listTimestamp';
+  const scoped =
+    !month
+      ? actions
+      : mode === 'dtPrazo'
+        ? filterGame4uActionsByDtPrazoCalendarMonth(actions, month)
+        : filterGame4uActionsByListTimestampMonth(actions, month);
+  return scoped.map(a => {
+    const dp =
+      typeof a.dt_prazo === 'string' && a.dt_prazo.trim() ? a.dt_prazo.trim() : undefined;
+    return {
+      id: a.id,
+      title: (a.action_title as string) || 'Ação',
+      delivery_title: (a.delivery_title as string) || undefined,
+      ...(dp ? { dt_prazo: dp } : {}),
+      points: Math.floor(Number(a.points) || PONTOS_POR_ATIVIDADE_FINALIZADA_ACTION_LOG),
+      created: game4uUserActionListTimestampMs(a),
+      player: asString(a.user_email),
+      cnpj: asString(a.integration_id) || undefined
+    };
+  });
 }
 
 export function mapGame4uActionsToProcessList(actions: Game4uUserActionModel[], month?: Date): ProcessListItem[] {
@@ -530,8 +719,16 @@ export function mapGame4uDeliveriesToCompanyDisplay(deliveries: Game4uDeliveryMo
 /** Une listas por status (mesmo delivery pode aparecer em mais de uma consulta). */
 export function mergeGame4uDeliveryParticipation(
   ...lists: Game4uDeliveryModel[][]
-): { cnpj: string; actionCount: number; delivery_title?: string }[] {
-  const byId = new Map<string, { actionCount: number; delivery_title?: string }>();
+): {
+  cnpj: string;
+  actionCount: number;
+  delivery_title?: string;
+  delivery_extra_cnpj?: string;
+}[] {
+  const byId = new Map<
+    string,
+    { actionCount: number; delivery_title?: string; delivery_extra_cnpj?: string }
+  >();
   for (const list of lists) {
     for (const d of list) {
       const id = String(d.id);
@@ -541,16 +738,28 @@ export function mergeGame4uDeliveryParticipation(
       if (label) {
         cur.delivery_title = label;
       }
+      const ec = readGame4uExtraCnpjFromRecord(d as Record<string, unknown>);
+      if (ec && !cur.delivery_extra_cnpj) {
+        cur.delivery_extra_cnpj = ec;
+      }
       byId.set(id, cur);
     }
   }
   return [...byId.entries()].map(([cnpj, v]) => {
-    const row: { cnpj: string; actionCount: number; delivery_title?: string } = {
+    const row: {
+      cnpj: string;
+      actionCount: number;
+      delivery_title?: string;
+      delivery_extra_cnpj?: string;
+    } = {
       cnpj,
       actionCount: v.actionCount
     };
     if (v.delivery_title) {
       row.delivery_title = v.delivery_title;
+    }
+    if (v.delivery_extra_cnpj) {
+      row.delivery_extra_cnpj = v.delivery_extra_cnpj;
     }
     return row;
   });

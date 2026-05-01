@@ -8,6 +8,7 @@ import { GraphDataProcessorService } from '@services/graph-data-processor.servic
 import { SeasonDatesService } from '@services/season-dates.service';
 import { ToastService } from '@services/toast.service';
 import { SessaoProvider } from '@providers/sessao/sessao.provider';
+import { BwaTeamApiService } from '@services/bwa-team-api.service';
 import { of } from 'rxjs';
 
 /**
@@ -31,6 +32,7 @@ describe('TeamManagementDashboardComponent - Responsive Behavior', () => {
   let mockSeasonDatesService: jasmine.SpyObj<SeasonDatesService>;
   let mockToastService: jasmine.SpyObj<ToastService>;
   let mockSessaoProvider: jasmine.SpyObj<SessaoProvider>;
+  let mockBwaTeamApi: jasmine.SpyObj<BwaTeamApiService>;
 
   // Breakpoint constants matching the design requirements
   const BREAKPOINTS = {
@@ -72,6 +74,10 @@ describe('TeamManagementDashboardComponent - Responsive Behavior', () => {
       }
     });
 
+    mockBwaTeamApi = jasmine.createSpyObj('BwaTeamApiService', ['fetchTeamList', 'fetchTeamDetail']);
+    mockBwaTeamApi.fetchTeamList.and.returnValue(Promise.resolve([]));
+    mockBwaTeamApi.fetchTeamDetail.and.returnValue(Promise.resolve(null));
+
     // Setup default mock returns
     mockTeamAggregateService.getTeamSeasonPoints.and.returnValue(
       of({ total: 100, bloqueados: 50, desbloqueados: 50 })
@@ -104,7 +110,8 @@ describe('TeamManagementDashboardComponent - Responsive Behavior', () => {
         { provide: GraphDataProcessorService, useValue: mockGraphDataProcessor },
         { provide: SeasonDatesService, useValue: mockSeasonDatesService },
         { provide: ToastService, useValue: mockToastService },
-        { provide: SessaoProvider, useValue: mockSessaoProvider }
+        { provide: SessaoProvider, useValue: mockSessaoProvider },
+        { provide: BwaTeamApiService, useValue: mockBwaTeamApi }
       ],
       schemas: [NO_ERRORS_SCHEMA]
     }).compileComponents();

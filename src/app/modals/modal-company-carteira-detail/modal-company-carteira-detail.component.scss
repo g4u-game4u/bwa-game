@@ -134,7 +134,7 @@
 
       .task-header {
         display: grid;
-        grid-template-columns: 1.4fr 2fr 1.25fr 1fr;
+        grid-template-columns: 1.25fr 2fr 1.1fr 0.55fr 1fr;
         gap: $spacing-md;
         padding: $spacing-md $spacing-lg;
         background: #323339;
@@ -152,7 +152,7 @@
 
       .task-row {
         display: grid;
-        grid-template-columns: 1.4fr 2fr 1.25fr 1fr;
+        grid-template-columns: 1.25fr 2fr 1.1fr 0.55fr 1fr;
         gap: $spacing-md;
         padding: $spacing-md $spacing-lg;
         background: rgba(255, 255, 255, 0.02);
@@ -181,46 +181,61 @@
           }
         }
 
+        .task-col-points {
+          .task-points {
+            color: $text-secondary;
+            font-size: 0.875rem;
+            text-align: right;
+            display: block;
+          }
+        }
+
         .task-col-date {
           .task-date {
             color: $text-secondary;
             font-size: 0.875rem;
           }
         }
+      }
+    }
 
-        .task-col-status {
-          .task-status {
-            display: inline-block;
-            padding: 4px 12px;
-            border-radius: 12px;
-            font-size: 0.75rem;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
+    .tasks-pagination {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: $spacing-md;
+      margin-top: $spacing-md;
+      padding-top: $spacing-md;
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
 
-            &.status-finalizado {
-              background: rgba(34, 197, 94, 0.2);
-              color: #22c55e;
-              border: 1px solid rgba(34, 197, 94, 0.3);
-            }
+      .tasks-pagination-info {
+        font-size: 0.875rem;
+        color: $text-secondary;
+      }
 
-            &.status-pendente {
-              background: rgba(234, 179, 8, 0.2);
-              color: #eab308;
-              border: 1px solid rgba(234, 179, 8, 0.3);
-            }
+      .tasks-pagination-buttons {
+        display: flex;
+        gap: $spacing-sm;
+      }
 
-            &.status-dispensado {
-              background: rgba(239, 68, 68, 0.2);
-              color: #ef4444;
-              border: 1px solid rgba(239, 68, 68, 0.3);
-            }
+      .tasks-pagination-btn {
+        padding: 6px 14px;
+        font-size: 0.8125rem;
+        font-weight: 600;
+        border-radius: 6px;
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        background: rgba(255, 255, 255, 0.06);
+        color: $text-primary;
+        cursor: pointer;
 
-            &.status-unknown {
-              background: rgba(255, 255, 255, 0.1);
-              color: $text-secondary;
-            }
-          }
+        &:disabled {
+          opacity: 0.4;
+          cursor: not-allowed;
+        }
+
+        &:not(:disabled):hover {
+          background: rgba(255, 255, 255, 0.1);
         }
       }
     }
@@ -263,14 +278,14 @@
           color: $text-secondary;
         }
 
-        .task-col-date::before {
-          content: 'Data: ';
+        .task-col-points::before {
+          content: 'Pontos: ';
           font-weight: 600;
           color: $text-secondary;
         }
 
-        .task-col-status::before {
-          content: 'Status: ';
+        .task-col-date::before {
+          content: 'Data: ';
           font-weight: 600;
           color: $text-secondary;
         }

@@ -13,6 +13,7 @@ import { SeasonDatesService } from '@services/season-dates.service';
 import { ToastService } from '@services/toast.service';
 import { SessaoProvider } from '@providers/sessao/sessao.provider';
 import { CacheManagerService } from '@services/cache-manager.service';
+import { BwaTeamApiService } from '@services/bwa-team-api.service';
 import { BackendApiService } from '@services/backend-api.service';
 import { PlayerService } from '@services/player.service';
 import { ActionLogService } from '@services/action-log.service';
@@ -34,7 +35,7 @@ import { ProgressListType } from '@modals/modal-progress-list/modal-progress-lis
 /**
  * Team Management Dashboard Component
  * Main container for the management dashboard view
- * Accessible only to users with management teams (GESTAO, SUPERVISÃO, or DIREÇÃO)
+ * Accessible to users with session roles ADMIN or GESTOR, or management profiles (GESTAO, SUPERVISÃO, or DIREÇÃO via teams)
  * 
  * This component orchestrates all child components and manages the data flow
  * between team selection, collaborator filtering, month selection, and data display.
@@ -181,6 +182,9 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
   
   // Sidebar collapse state
   sidebarCollapsed: boolean = false;
+
+  /** Resposta de GET /team/:team_id (ApiProvider / BWA). */
+  teamDetailApiResponse: any | null = null;
   
   // Meta configuration state
   metaConfig: {
@@ -203,6 +207,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
     private seasonDatesService: SeasonDatesService,
     private toastService: ToastService,
     private sessaoProvider: SessaoProvider,
+    private bwaTeamApi: BwaTeamApiService,
     private cacheManagerService: CacheManagerService,
     private backendApi: BackendApiService,
     private playerService: PlayerService,
@@ -216,10 +221,35 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
   ) {}
 
   ngOnInit(): void {
-    // Force fresh data on every dashboard load
     this.cacheManagerService.clearAllCaches();
-    
-    this.initializeDashboard();
+    void this.bootstrapDashboard();
+  }
+
+  /** Garante sessão restaurada e arranca carregamento (evita HTTP sem token/interceptor). */
+  private async bootstrapDashboard(): Promise<void> {
+    try {
+      await this.initializeDashboard();
+    } catch (error) {
+      console.error('❌ bootstrapDashboard:', error);
+      this.isLoading = false;
+      this.cdr.markForCheck();
+    }
+  }
+
+  /** Se há token mas ainda não há `usuario` (ex.: refresh), aguarda `sessao.init`. */
+  private async ensureSessionReady(): Promise<void> {
+    if (this.sessaoProvider.usuario) {
+      return;
+    }
+    const token = this.sessaoProvider.token;
+    if (!token) {
+      console.warn('[TeamManagement] Sem token — pedidos à API BWA podem ser bloqueados pelo interceptor.');
+      return;
+    }
+    const ok = await this.sessaoProvider.init(true);
+    if (!ok) {
+      console.warn('[TeamManagement] sessao.init falhou — utilizador pode ficar indefinido.');
+    }
   }
 
   ngOnDestroy(): void {
@@ -248,16 +278,12 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
     try {
       this.isLoading = true;
       console.log('🚀 Initializing team management dashboard...');
-      
-      // Load season dates first
-      console.log('📅 Loading season dates...');
-      await this.loadSeasonDates();
-      console.log('✅ Season dates loaded');
-      
-      // Load available teams that the user has access to
-      console.log('👥 Loading available teams...');
-      await this.loadAvailableTeams();
-      console.log('✅ Available teams loaded:', this.teams.length);
+
+      await this.ensureSessionReady();
+
+      console.log('📅 Season + 👥 teams em paralelo…');
+      await Promise.all([this.loadSeasonDates(), this.loadAvailableTeams()]);
+      console.log('✅ Season dates + teams:', this.teams.length);
       
       // Select the first available team or previously selected team
       if (this.teams.length > 0) {
@@ -328,6 +354,159 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
     return this.userProfileService.getCurrentUserOwnTeamId();
   }
 
+  /** Lista de referências de times na sessão (`teams` ou legado `extra.teams`). */
+  private getUserTeamsRaw(): unknown[] {
+    const u = this.sessaoProvider.usuario;
+    if (!u) {
+      return [];
+    }
+    const top = u.teams;
+    if (Array.isArray(top) && top.length > 0) {
+      return top;
+    }
+    const extraTeams = u.extra?.['teams'];
+    if (Array.isArray(extraTeams) && extraTeams.length > 0) {
+      return extraTeams;
+    }
+    return [];
+  }
+
+  /**
+   * `team_id` numérico/string da API BWA (`GET /user`), usado em `GET /team/:team_id`.
+   */
+  private getBwaSessionTeamId(): string | null {
+    const u = this.sessaoProvider.usuario as { team_id?: number | string } | null;
+    if (!u || u.team_id == null) {
+      return null;
+    }
+    const s = String(u.team_id).trim();
+    return s !== '' ? s : null;
+  }
+
+  /** Utilizador autenticado (mesmo critério que o painel de gamificação individual). */
+  private getPanelPlayerId(): string {
+    const u = this.sessaoProvider.usuario as { _id?: string; email?: string } | null;
+    return String(u?._id || u?.email || '').trim();
+  }
+
+  /** `team_id` nas queries Game4U do painel (= time selecionado, id da API BWA). */
+  private getGame4uTeamScopeId(): string | undefined {
+    const t = (this.selectedTeamId || '').trim();
+    return t !== '' ? t : undefined;
+  }
+
+  /**
+   * Team id para GET /team/:team_id.
+   * Prioriza `team_id` de `/user` (BWA); depois perfil Funifier; depois `teams` / `extra.teams`.
+   */
+  private getTeamIdForDetailEndpoint(): string | null {
+    const bwaTeamId = this.getBwaSessionTeamId();
+    if (bwaTeamId) {
+      return bwaTeamId;
+    }
+    const own = this.userProfileService.getCurrentUserOwnTeamId();
+    if (own) {
+      return own;
+    }
+    const raw = this.getUserTeamsRaw();
+    const ids = raw
+      .map((team: unknown) => {
+        if (typeof team === 'string') {
+          return team;
+        }
+        if (team && typeof team === 'object' && '_id' in team && (team as { _id?: string })._id) {
+          return (team as { _id: string })._id;
+        }
+        return null;
+      })
+      .filter((id): id is string => !!id);
+    return ids.length > 0 ? ids[0] : null;
+  }
+
+  private pickTeamIdFromApiTeam(team: any): string | null {
+    if (!team) {
+      return null;
+    }
+    const id = team._id ?? team.id;
+    return id != null && String(id).trim() !== '' ? String(id) : null;
+  }
+
+  /**
+   * IDs de times derivados do perfil + sessão (para filtrar GET /team ou selector mínimo).
+   */
+  private computeAccessibleTeamIdsFromSession(profile: UserProfile, userTeams: unknown[]): string[] {
+    let accessibleTeamIds = [...this.userProfileService.getAccessibleTeamIds()];
+
+    if (accessibleTeamIds.length === 0 && userTeams.length > 0) {
+      const userTeamIds = userTeams
+        .map((team: unknown) => {
+          if (typeof team === 'string') {
+            return team;
+          }
+          if (team && typeof team === 'object' && team !== null && '_id' in team) {
+            const id = (team as { _id?: string })._id;
+            return id ?? null;
+          }
+          return null;
+        })
+        .filter((id): id is string => !!id);
+
+      if (profile === UserProfile.GESTOR) {
+        accessibleTeamIds = userTeamIds.filter((id) => id !== 'FkmdnFU');
+      } else if (profile === UserProfile.SUPERVISOR) {
+        accessibleTeamIds = userTeamIds.filter((id) => id !== 'Fkmdmko');
+      } else {
+        accessibleTeamIds = userTeamIds;
+      }
+    }
+
+    if (accessibleTeamIds.length === 0) {
+      const bwaTid = this.getBwaSessionTeamId();
+      if (bwaTid) {
+        accessibleTeamIds = [bwaTid];
+      }
+    }
+
+    if (accessibleTeamIds.length === 0) {
+      const ownTeamId = this.userProfileService.getCurrentUserOwnTeamId();
+      if (ownTeamId) {
+        accessibleTeamIds = [ownTeamId];
+      }
+    }
+
+    return [...new Set(accessibleTeamIds.map((id) => String(id)))];
+  }
+
+  /** ADMIN na sessão (ROLES_LIST ou texto com "admin", case-insensitive). */
+  private hasAdminSessionRole(): boolean {
+    if (this.sessaoProvider.isAdmin()) {
+      return true;
+    }
+    const roles = this.sessaoProvider.usuario?.roles;
+    if (!Array.isArray(roles)) {
+      return false;
+    }
+    return roles.some((r) => typeof r === 'string' && r.toLowerCase().includes('admin'));
+  }
+
+  /**
+   * GESTOR: role na sessão, perfil por equipas, ou texto com "gestor" (case-insensitive).
+   * Não usar quando {@link hasAdminSessionRole} já for true (prioridade ADMIN).
+   */
+  private hasGestorSessionOrProfile(): boolean {
+    if (this.sessaoProvider.isGerente()) {
+      return true;
+    }
+    if (this.userProfileService.getCurrentUserProfile() === UserProfile.GESTOR) {
+      return true;
+    }
+    const roles = this.sessaoProvider.usuario?.roles;
+    if (!Array.isArray(roles)) {
+      return false;
+    }
+    return roles.some((r) => typeof r === 'string' && r.toLowerCase().includes('gestor'));
+  }
+
   /**
    * Load all available teams from Funifier and filter by user profile.
    * 
@@ -336,6 +515,11 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
    * - SUPERVISOR: Only their own SUPERVISÃO team
    * - GESTOR: Their GESTAO team and potentially other teams they manage
    * - DIRETOR: All teams (no filtering)
+   *
+   * API BWA via {@link BwaTeamApiService} (`backend_url_base` + `/team`):
+   * - ADMIN: apenas GET /team (lista)
+   * - GESTOR: apenas GET /team/{team_id} (detalhe; `allTeams` deriva da resposta)
+   * - Demais: lista + detalhe quando houver `team_id` (perfil, sessão ou 1.º da lista)
    * 
    * @private
    * @async
@@ -349,18 +533,66 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       console.log('👤 User profile:', profile);
       
       // Debug: Log user's teams from session
-      const userTeams = this.sessaoProvider.usuario?.teams;
+      const userTeams = this.getUserTeamsRaw();
       console.log('👤 User teams from session:', userTeams);
-      
-      // Fetch all teams from Funifier
-      const allTeams = await firstValueFrom(
-        this.backendApi.get<any[]>(`/v3/team`).pipe(takeUntil(this.destroy$))
-      ).catch((error) => {
-        console.error('Error loading teams from Funifier:', error);
-        return [];
-      });
-      
-      console.log('📊 All teams from Funifier:', allTeams.length, 'teams');
+
+      const isAdminRole = this.hasAdminSessionRole();
+      const isGestorRole = this.hasGestorSessionOrProfile() && !isAdminRole;
+
+      let allTeams: any[] = [];
+      let teamDetailPayload: any | null = null;
+
+      if (isAdminRole) {
+        allTeams = await this.bwaTeamApi.fetchTeamList();
+        this.teamDetailApiResponse = null;
+        console.log('📊 ADMIN: apenas GET /team →', allTeams.length, 'times');
+      } else if (isGestorRole) {
+        const fromSessionOrProfile = this.getTeamIdForDetailEndpoint();
+        const detailTeamId =
+          fromSessionOrProfile != null && String(fromSessionOrProfile).trim() !== ''
+            ? String(fromSessionOrProfile).trim()
+            : null;
+
+        if (detailTeamId) {
+          console.log('🔗 GESTOR: apenas GET /team/:team_id →', detailTeamId);
+          teamDetailPayload = await this.bwaTeamApi.fetchTeamDetail(detailTeamId);
+        } else {
+          console.warn('⚠️ GESTOR: sem team_id na sessão/perfil — não é possível GET /team/:team_id.');
+        }
+
+        this.teamDetailApiResponse = teamDetailPayload;
+        if (teamDetailPayload != null) {
+          console.log('📊 GESTOR: resposta /team/:team_id:', teamDetailPayload);
+          allTeams = Array.isArray(teamDetailPayload) ? teamDetailPayload : [teamDetailPayload];
+        } else {
+          allTeams = [];
+        }
+      } else {
+        allTeams = await this.bwaTeamApi.fetchTeamList();
+
+        const fromSessionOrProfile = this.getTeamIdForDetailEndpoint();
+        const normalizedFromProfile =
+          fromSessionOrProfile != null && String(fromSessionOrProfile).trim() !== ''
+            ? String(fromSessionOrProfile).trim()
+            : null;
+        const detailTeamId =
+          normalizedFromProfile ??
+          (allTeams.length > 0 ? this.pickTeamIdFromApiTeam(allTeams[0]) : null);
+
+        if (detailTeamId) {
+          console.log('🔗 GET /team/:team_id →', detailTeamId);
+          teamDetailPayload = await this.bwaTeamApi.fetchTeamDetail(detailTeamId);
+        } else {
+          console.warn('⚠️ Skipping GET /team/:team_id — no team_id (lista vazia e sem time na sessão).');
+        }
+
+        this.teamDetailApiResponse = teamDetailPayload;
+        if (teamDetailPayload != null) {
+          console.log('📊 GET /team/:team_id response:', detailTeamId, teamDetailPayload);
+        }
+      }
+
+      console.log('📊 All teams (raw) para filtro:', allTeams.length, 'teams');
       
       let availableTeams: any[] = [];
       
@@ -373,58 +605,56 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
         }));
         console.log('✅ DIRETOR: Showing all teams:', availableTeams.length);
       } else {
-        // Get accessible team IDs based on profile
-        let accessibleTeamIds = this.userProfileService.getAccessibleTeamIds();
-        console.log('👤 Accessible team IDs from service:', accessibleTeamIds);
-        
-        // If no accessible teams found, use ALL user's teams (except management team)
-        if (accessibleTeamIds.length === 0 && userTeams && Array.isArray(userTeams)) {
-          // Extract team IDs from user's teams
-          const userTeamIds = userTeams.map((team: any) => {
-            if (typeof team === 'string') return team;
-            if (team && typeof team === 'object' && team._id) return team._id;
-            return null;
-          }).filter(Boolean) as string[];
-          
-          console.log('👤 User team IDs extracted:', userTeamIds);
-          
-          // For GESTOR, filter out the GESTAO team
-          if (profile === UserProfile.GESTOR) {
-            accessibleTeamIds = userTeamIds.filter(id => id !== 'FkmdnFU');
-          } else if (profile === UserProfile.SUPERVISOR) {
-            accessibleTeamIds = userTeamIds.filter(id => id !== 'Fkmdmko');
-          } else {
-            accessibleTeamIds = userTeamIds;
-          }
-          
-          console.log('👤 Accessible team IDs after filtering:', accessibleTeamIds);
-        }
-        
-        // If still no accessible teams, try to get their own team
-        if (accessibleTeamIds.length === 0) {
-          const ownTeamId = this.userProfileService.getCurrentUserOwnTeamId();
-          if (ownTeamId) {
-            accessibleTeamIds.push(ownTeamId);
-            console.log('👤 Using own team ID as fallback:', ownTeamId);
-          }
-        }
-        
-        // Filter teams to show only those the user has access to
+        const accessibleTeamIds = this.computeAccessibleTeamIdsFromSession(profile, userTeams);
+        console.log('👤 Accessible team IDs (perfil + sessão):', accessibleTeamIds);
+
         availableTeams = allTeams
           .filter((team: any) => {
             const teamId = team._id || team.id;
-            return accessibleTeamIds.includes(teamId);
+            return teamId != null && accessibleTeamIds.includes(String(teamId));
           })
           .map((team: any) => ({
-            id: team._id || team.id,
+            id: String(team._id || team.id),
             name: team.name || team._id || team.id,
-            memberCount: 0 // Will be updated below
+            memberCount: 0
           }));
-        
-        console.log('✅ Available teams for profile:', profile, availableTeams.length, 'teams');
-        console.log('✅ Available team IDs:', availableTeams.map(t => t.id));
+
+        console.log('✅ Available teams for profile (intersect API):', profile, availableTeams.length);
       }
-      
+
+      // API devolveu times mas os ids da sessão não batem com _id (ex.: nomes legíveis vs Funifier)
+      if (availableTeams.length === 0 && allTeams.length > 0) {
+        console.warn(
+          '[TeamManagement] Intersect vazio — a usar todos os times devolvidos pela API (acesso já validado no guard).'
+        );
+        availableTeams = allTeams
+          .map((team: any) => {
+            const rawId = team._id ?? team.id;
+            if (rawId == null || String(rawId).trim() === '') {
+              return null;
+            }
+            return {
+              id: String(rawId),
+              name: String(team.name ?? team.nome ?? team.descricao ?? rawId),
+              memberCount: 0
+            };
+          })
+          .filter((t): t is { id: string; name: string; memberCount: number } => t !== null);
+      }
+
+      // API vazia ou GESTOR sem detalhe: selector mínimo só com ids da sessão/perfil
+      if (availableTeams.length === 0) {
+        const fallbackIds = this.computeAccessibleTeamIdsFromSession(profile, userTeams);
+        if (fallbackIds.length > 0) {
+          console.warn('[TeamManagement] A construir times só a partir da sessão/perfil:', fallbackIds);
+          availableTeams = fallbackIds.map((id) => ({
+            id,
+            name: id,
+            memberCount: 0
+          }));
+        }
+      }
+
       // Load member count for each team using aggregate queries
       const memberCountPromises = availableTeams.map(async (team) => {
         try {
@@ -692,7 +922,8 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
     
     try {
       this.isLoading = true;
-      
+      this.companyKpiService.prefetchGamificacaoSnapshot();
+
       // Calculate date range based on selected month
       const dateRange = this.calculateDateRange();
       
@@ -873,7 +1104,10 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       
       // Get progress metrics and points for the collaborator
       const metrics = await firstValueFrom(
-        this.actionLogService.getProgressMetrics(collaboratorId, this.selectedMonth)
+        this.actionLogService
+          .getProgressMetrics(collaboratorId, this.selectedMonth, {
+            teamId: this.getGame4uTeamScopeId()
+          })
           .pipe(takeUntil(this.destroy$))
       ).catch((error) => {
         console.error('Error loading collaborator progress metrics:', error);
@@ -959,73 +1193,97 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       this.isLoadingSidebar = true;
       this.hasSidebarError = false;
       this.sidebarErrorMessage = '';
-      
+
       console.log('📊 Loading sidebar data for team:', this.selectedTeam);
-      
-      // Load season points and progress metrics in parallel
-      const [points, metrics] = await Promise.all([
-        firstValueFrom(
-          this.teamAggregateService
-            .getTeamSeasonPoints(this.selectedTeam, dateRange.start, dateRange.end)
+
+      if (this.playerService.usesGame4uWalletFromStats()) {
+        const panelId = this.getPanelPlayerId();
+        if (!panelId) {
+          this.hasSidebarError = true;
+          this.sidebarErrorMessage = 'Sessão sem utilizador para dados Game4U';
+          this.isLoadingSidebar = false;
+          this.cdr.markForCheck();
+          return;
+        }
+        const snap = await firstValueFrom(
+          this.actionLogService
+            .getMonthlyGame4uPlayerDashboardData(panelId, undefined, this.getGame4uTeamScopeId())
             .pipe(takeUntil(this.destroy$))
         ).catch((error) => {
-          console.error('Error loading season points:', error);
+          console.error('Error loading Game4U team sidebar snapshot:', error);
           this.hasSidebarError = true;
           this.sidebarErrorMessage = 'Erro ao carregar pontos da temporada';
-          return { total: 0, bloqueados: 0, desbloqueados: 0 };
-        }),
-        firstValueFrom(
-          this.teamAggregateService
-            .getTeamProgressMetrics(this.selectedTeam, dateRange.start, dateRange.end)
-            .pipe(takeUntil(this.destroy$))
-        ).catch((error) => {
-          console.error('Error loading progress metrics:', error);
-          this.hasSidebarError = true;
-          this.sidebarErrorMessage = 'Erro ao carregar métricas de progresso';
           return {
-            processosIncompletos: 0,
-            atividadesFinalizadas: 0,
-            processosFinalizados: 0
+            wallet: { moedas: 0, bloqueados: 0, desbloqueados: 0 },
+            pontosActionLog: 0,
+            sidebar: { tarefasFinalizadas: 0 }
           };
-        })
-      ]);
-      
-      // Use aggregated data from team members (from loadTeamMembersData and loadTeamActivityAndMacroData)
-      // All data should be aggregated directly from team members, not from aggregate queries
-      // Points: Sum from all team members' points for the selected month
-      // Blocked points: Sum from all team members' locked_points
-      // Unlocked points: Total points minus blocked points
-      // Round down all values to remove decimals
-      const unlockedPoints = Math.max(0, this.teamTotalPoints - this.teamTotalBlockedPoints);
-      
-      this.seasonPoints = {
-        total: Math.floor(this.teamTotalPoints), // Always use aggregated points from members (for selected month)
-        bloqueados: Math.floor(this.teamTotalBlockedPoints > 0 ? this.teamTotalBlockedPoints : points.bloqueados), // Use aggregated blocked points or fallback
-        desbloqueados: Math.floor(unlockedPoints > 0 ? unlockedPoints : this.teamTotalPoints) // Unlocked = total - blocked
-      };
-      
-      // Progress metrics: Use aggregated data from team members
-      // Atividades finalizadas: Sum from teamActivityMetrics.finalizadas (from loadTeamActivityAndMacroData)
-      // Processos: Use aggregated from teamProcessMetrics (from loadTeamActivityAndMacroData)
-      // Round down all values to remove decimals
-      this.progressMetrics = {
-        processosIncompletos: Math.floor(this.teamProcessMetrics.incompletas || metrics.processosIncompletos),
-        atividadesFinalizadas: Math.floor(this.teamActivityMetrics.finalizadas || this.teamTotalTasks || metrics.atividadesFinalizadas),
-        processosFinalizados: Math.floor(this.teamProcessMetrics.finalizadas || metrics.processosFinalizados)
-      };
-      
-      // Update formatted data for gamification dashboard components
+        });
+        const w = snap.wallet;
+        this.seasonPoints = {
+          total: Math.floor(w.desbloqueados + w.bloqueados),
+          bloqueados: Math.floor(w.bloqueados),
+          desbloqueados: Math.floor(w.desbloqueados)
+        };
+        this.progressMetrics = {
+          processosIncompletos: Math.floor(this.teamProcessMetrics.incompletas),
+          atividadesFinalizadas: Math.floor(this.teamActivityMetrics.finalizadas),
+          processosFinalizados: Math.floor(this.teamProcessMetrics.finalizadas)
+        };
+      } else {
+        const [points, metrics] = await Promise.all([
+          firstValueFrom(
+            this.teamAggregateService
+              .getTeamSeasonPoints(this.selectedTeam, dateRange.start, dateRange.end)
+              .pipe(takeUntil(this.destroy$))
+          ).catch((error) => {
+            console.error('Error loading season points:', error);
+            this.hasSidebarError = true;
+            this.sidebarErrorMessage = 'Erro ao carregar pontos da temporada';
+            return { total: 0, bloqueados: 0, desbloqueados: 0 };
+          }),
+          firstValueFrom(
+            this.teamAggregateService
+              .getTeamProgressMetrics(this.selectedTeam, dateRange.start, dateRange.end)
+              .pipe(takeUntil(this.destroy$))
+          ).catch((error) => {
+            console.error('Error loading progress metrics:', error);
+            this.hasSidebarError = true;
+            this.sidebarErrorMessage = 'Erro ao carregar métricas de progresso';
+            return {
+              processosIncompletos: 0,
+              atividadesFinalizadas: 0,
+              processosFinalizados: 0
+            };
+          })
+        ]);
+
+        const unlockedPoints = Math.max(0, this.teamTotalPoints - this.teamTotalBlockedPoints);
+
+        this.seasonPoints = {
+          total: Math.floor(this.teamTotalPoints),
+          bloqueados: Math.floor(
+            this.teamTotalBlockedPoints > 0 ? this.teamTotalBlockedPoints : points.bloqueados
+          ),
+          desbloqueados: Math.floor(unlockedPoints > 0 ? unlockedPoints : this.teamTotalPoints)
+        };
+
+        this.progressMetrics = {
+          processosIncompletos: Math.floor(this.teamProcessMetrics.incompletas || metrics.processosIncompletos),
+          atividadesFinalizadas: Math.floor(
+            this.teamActivityMetrics.finalizadas || this.teamTotalTasks || metrics.atividadesFinalizadas
+          ),
+          processosFinalizados: Math.floor(this.teamProcessMetrics.finalizadas || metrics.processosFinalizados)
+        };
+      }
+
       this.updateFormattedSidebarData();
-      
+
       this.isLoadingSidebar = false;
-      
-      console.log('✅ Sidebar data loaded (aggregated from team members):', { 
-        points: this.seasonPoints, 
+
+      console.log('✅ Sidebar data loaded:', {
+        points: this.seasonPoints,
         metrics: this.progressMetrics,
-        teamTotalPoints: this.teamTotalPoints,
-        teamTotalBlockedPoints: this.teamTotalBlockedPoints,
-        teamAveragePoints: this.teamAveragePoints,
-        teamTotalTasks: this.teamTotalTasks,
         teamActivityMetrics: this.teamActivityMetrics,
         teamProcessMetrics: this.teamProcessMetrics
       });
@@ -1126,7 +1384,10 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       
       // Get progress metrics for the collaborator
       const metrics = await firstValueFrom(
-        this.actionLogService.getProgressMetrics(collaboratorId, this.selectedMonth)
+        this.actionLogService
+          .getProgressMetrics(collaboratorId, this.selectedMonth, {
+            teamId: this.getGame4uTeamScopeId()
+          })
           .pipe(takeUntil(this.destroy$))
       ).catch((error) => {
         console.error('Error loading collaborator progress metrics for goals:', error);
@@ -1773,52 +2034,58 @@ private calculateCollaboratorTotals(memberData: Array<{
    * Load team activity and process metrics aggregated from all team members
    * OPTIMIZED: Uses single aggregate query instead of N individual requests
    */
-  private async loadTeamActivityAndMacroData(dateRange: { start: Date; end: Date }): Promise<void> {
+  private async loadTeamActivityAndMacroData(_dateRange: { start: Date; end: Date }): Promise<void> {
     try {
-      console.log('📊 Loading team activity and process data (OPTIMIZED)...');
-      
-      if (this.teamMemberIds.length === 0) {
-        console.warn('⚠️ No team members to aggregate data from');
+      console.log('📊 Loading team panel progress (Game4U, mesmo fluxo que gamificação + team_id)...');
+      const panelId = this.getPanelPlayerId();
+      if (!panelId) {
+        console.warn('⚠️ Sem utilizador na sessão para métricas Game4U');
         return;
       }
-      
-      // OPTIMIZED: Single aggregate query for all team members
+      const teamScope = this.getGame4uTeamScopeId();
       const metrics = await firstValueFrom(
-        this.teamAggregateService.getTeamActivityMetrics(
-          this.selectedTeamId,
-          dateRange.start,
-          dateRange.end
-        ).pipe(takeUntil(this.destroy$))
+        this.actionLogService
+          .getProgressMetrics(panelId, this.selectedMonth, {
+            gamificationDashboardReportsOnly: true,
+            teamId: teamScope
+          })
+          .pipe(takeUntil(this.destroy$))
       ).catch((error) => {
-        console.error('Error loading team activity metrics:', error);
-        return { finalizadas: 0, pontos: 0, processosFinalizados: 0, processosIncompletos: 0 };
+        console.error('Error loading team progress metrics (Game4U):', error);
+        return {
+          activity: { pendentes: 0, emExecucao: 0, finalizadas: 0, pontos: 0 },
+          processo: { pendentes: 0, incompletas: 0, finalizadas: 0 }
+        };
       });
 
       this.teamActivityMetrics = {
-        pendentes: 0,
-        emExecucao: 0,
-        finalizadas: metrics.finalizadas,
-        pontos: Math.floor(metrics.pontos),
-        ...('pontosDone' in metrics &&
-        'pontosTodosStatus' in metrics &&
-        metrics.pontosDone !== undefined &&
-        metrics.pontosTodosStatus !== undefined
-          ? { pontosDone: metrics.pontosDone, pontosTodosStatus: metrics.pontosTodosStatus }
+        pendentes: metrics.activity.pendentes,
+        emExecucao: metrics.activity.emExecucao,
+        finalizadas: metrics.activity.finalizadas,
+        pontos: Math.floor(metrics.activity.pontos),
+        ...('pontosDone' in metrics.activity &&
+        'pontosTodosStatus' in metrics.activity &&
+        metrics.activity.pontosDone !== undefined &&
+        metrics.activity.pontosTodosStatus !== undefined
+          ? {
+              pontosDone: metrics.activity.pontosDone,
+              pontosTodosStatus: metrics.activity.pontosTodosStatus
+            }
           : {})
       };
 
       this.teamProcessMetrics = {
-        pendentes: 0,
-        incompletas: Math.max(0, metrics.processosIncompletos),
-        finalizadas: metrics.processosFinalizados
+        pendentes: metrics.processo.pendentes,
+        incompletas: metrics.processo.incompletas,
+        finalizadas: metrics.processo.finalizadas
       };
 
-      console.log('✅ Team activity and process data (OPTIMIZED - 1 API call instead of', this.teamMemberIds.length, '):', {
+      console.log('✅ Team activity and process data (Game4U reports):', {
         activities: this.teamActivityMetrics,
         processos: this.teamProcessMetrics,
         selectedMonth: this.selectedMonth
       });
-      
+
       this.cdr.markForCheck();
     } catch (error) {
       console.error('Error loading team activity and process data:', error);
@@ -1841,7 +2108,8 @@ private calculateCollaboratorTotals(memberData: Array<{
       
       // Get CNPJ list with action counts and process counts for the collaborator
       const carteiraData = await firstValueFrom(
-        this.actionLogService.getPlayerCnpjListWithCount(collaboratorId, this.selectedMonth)
+        this.actionLogService
+          .getPlayerCnpjListWithCount(collaboratorId, this.selectedMonth, this.getGame4uTeamScopeId())
           .pipe(takeUntil(this.destroy$))
       ).catch((error) => {
         console.error(`Error loading carteira for collaborator ${collaboratorId}:`, error);
@@ -1913,11 +2181,11 @@ private calculateCollaboratorTotals(memberData: Array<{
    * @param dateRange - Date range for filtering actions
    * @returns Promise that resolves when carteira data is loaded
    */
-  private async loadTeamCarteiraData(dateRange: { start: Date; end: Date }): Promise<void> {
+  private async loadTeamCarteiraData(_dateRange: { start: Date; end: Date }): Promise<void> {
     try {
       this.isLoadingCarteira = true;
-      console.log('📊 Loading team carteira data (OPTIMIZED)...');
-      
+      console.log('📊 Loading team carteira (Game4U + team_id, alinhado à gamificação)...');
+
       if (!this.selectedTeamId) {
         console.warn('⚠️ No team selected for carteira data');
         this.teamCarteiraClientes = [];
@@ -1925,28 +2193,25 @@ private calculateCollaboratorTotals(memberData: Array<{
         this.cdr.markForCheck();
         return;
       }
-      
-      // Calculate date range for the selected month (or wide range for Toda temporada)
-      const monthStart = this.selectedMonth 
-        ? dayjs(this.selectedMonth).startOf('month').toDate() 
-        : new Date('2000-01-01T00:00:00.000Z');
-      const monthEnd = this.selectedMonth 
-        ? dayjs(this.selectedMonth).endOf('month').toDate() 
-        : new Date('2099-12-31T23:59:59.999Z');
-      
-      // OPTIMIZED: Use single aggregate query with $lookup - 1 API call instead of N
+
+      const panelId = this.getPanelPlayerId();
+      if (!panelId) {
+        this.teamCarteiraClientes = [];
+        this.isLoadingCarteira = false;
+        this.cdr.markForCheck();
+        return;
+      }
+
       const cnpjListWithCounts = await firstValueFrom(
-        this.teamAggregateService.getTeamCnpjListWithCount(
-          this.selectedTeamId,
-          monthStart,
-          monthEnd
-        ).pipe(takeUntil(this.destroy$))
+        this.actionLogService
+          .getPlayerCnpjListWithCount(panelId, this.selectedMonth, this.getGame4uTeamScopeId())
+          .pipe(takeUntil(this.destroy$))
       ).catch((error) => {
-        console.error('Error loading team carteira data (optimized):', error);
+        console.error('Error loading team carteira (Game4U):', error);
         return [];
       });
-      
-      console.log('✅ Team CNPJ list loaded (OPTIMIZED - 1 API call):', cnpjListWithCounts.length, 'unique CNPJs');
+
+      console.log('✅ Team cliente list (Game4U):', cnpjListWithCounts.length, 'linhas');
       
       if (cnpjListWithCounts.length === 0) {
         this.teamCarteiraClientes = [];
@@ -1995,10 +2260,11 @@ private calculateCollaboratorTotals(memberData: Array<{
       // Update formatted sidebar data after carteira is loaded (for clientes count)
       this.updateFormattedSidebarData();
       
-      console.log('✅ Team carteira data loaded (OPTIMIZED - 1 API call instead of', this.teamMemberIds.length, 'members):', 
-        this.teamCarteiraClientes.length, 'unique CNPJs');
-      console.log('✅ Total actions across all CNPJs:', 
-        this.teamCarteiraClientes.reduce((sum, item) => sum + item.actionCount, 0));
+      console.log('✅ Team carteira data loaded:', this.teamCarteiraClientes.length, 'itens');
+      console.log(
+        '✅ Total actions across all CNPJs:',
+        this.teamCarteiraClientes.reduce((sum, item) => sum + item.actionCount, 0)
+      );
       
       this.isLoadingCarteira = false;
       this.cdr.markForCheck();
@@ -2369,6 +2635,9 @@ private calculateCollaboratorTotals(memberData: Array<{
       case 'atividades-finalizadas':
         this.progressModalType = 'atividades';
         break;
+      case 'atividades-pendentes':
+        this.progressModalType = 'atividades-pendentes';
+        break;
       case 'atividades-pontos':
         this.progressModalType = 'pontos';
         break;
@@ -2417,40 +2686,36 @@ private calculateCollaboratorTotals(memberData: Array<{
    */
   private async loadMonthlyPointsBreakdown(collaboratorId?: string): Promise<void> {
     try {
+      const teamScope = this.getGame4uTeamScopeId();
       if (collaboratorId) {
-        // Load for specific collaborator (single request)
         const breakdown = await firstValueFrom(
-          this.actionLogService.getMonthlyPointsBreakdown(collaboratorId, this.selectedMonth)
+          this.actionLogService
+            .getMonthlyPointsBreakdown(collaboratorId, this.selectedMonth, teamScope)
             .pipe(takeUntil(this.destroy$))
         ).catch((error) => {
           console.error(`Error loading monthly points breakdown for collaborator ${collaboratorId}:`, error);
           return { bloqueados: 0, desbloqueados: 0 };
         });
-        
+
         this.monthlyPointsBreakdown = breakdown;
       } else {
-        // OPTIMIZED: Use single aggregate query for all team members
-        if (this.teamMemberIds.length === 0) {
+        const panelId = this.getPanelPlayerId();
+        if (!panelId) {
           this.monthlyPointsBreakdown = { bloqueados: 0, desbloqueados: 0 };
+          this.cdr.markForCheck();
           return;
         }
-        
-        const range = this.calculateDateRange();
-
         const breakdown = await firstValueFrom(
-          this.teamAggregateService.getTeamMonthlyPointsBreakdown(
-            this.selectedTeamId,
-            this.teamMemberIds,
-            range.start,
-            range.end
-          ).pipe(takeUntil(this.destroy$))
+          this.actionLogService
+            .getMonthlyPointsBreakdown(panelId, this.selectedMonth, teamScope)
+            .pipe(takeUntil(this.destroy$))
         ).catch((error) => {
-          console.error('Error loading team monthly points breakdown (optimized):', error);
+          console.error('Error loading team monthly points breakdown (Game4U):', error);
           return { bloqueados: 0, desbloqueados: 0 };
         });
-        
+
         this.monthlyPointsBreakdown = breakdown;
-        console.log('✅ Monthly points breakdown loaded (OPTIMIZED - 1 API call instead of', this.teamMemberIds.length, '):', this.monthlyPointsBreakdown);
+        console.log('✅ Monthly points breakdown (Game4U + team_id):', this.monthlyPointsBreakdown);
       }
       
       this.cdr.markForCheck();
@@ -2601,230 +2866,34 @@ private calculateCollaboratorTotals(memberData: Array<{
   }
 
   /**
-   * Load team KPIs
-   * OPTIMIZED: Uses already-loaded teamCarteiraClientes for company count
-   * and single aggregate query for delivery percentage
-   * 
-   * Calculates:
-   * 1. Total de empresas da carteira (atual) vs soma das metas dos colaboradores (target)
-   * 2. KPI de processos no prazo: média dos processos no prazo de todos os usuários no time
+   * KPIs: mesmo serviço que o painel de gamificação individual (`KPIService.getPlayerKPIs`),
+   * com chave de cache incluindo o `team_id` do painel para não misturar equipas.
    */
   private async loadTeamKPIs(collaboratorId?: string): Promise<void> {
     try {
       this.isLoadingKPIs = true;
       
+      const scope = this.getGame4uTeamScopeId();
       if (collaboratorId) {
-        // For single collaborator, use their KPIs
         const kpis = await firstValueFrom(
-          this.kpiService.getPlayerKPIs(collaboratorId, this.selectedMonth, this.actionLogService)
+          this.kpiService
+            .getPlayerKPIs(collaboratorId, this.selectedMonth, this.actionLogService, scope)
             .pipe(takeUntil(this.destroy$))
         );
         this.teamKPIs = kpis || [];
       } else {
-        // OPTIMIZED: For team, use already-loaded data instead of N individual calls
-        const teamKPIs: KPIData[] = [];
-        
-        if (this.teamMemberIds.length === 0) {
+        const panelId = this.getPanelPlayerId();
+        if (!panelId) {
           this.teamKPIs = [];
-          this.isLoadingKPIs = false;
-          this.cdr.markForCheck();
-          return;
+        } else {
+          const kpis = await firstValueFrom(
+            this.kpiService
+              .getPlayerKPIs(panelId, this.selectedMonth, this.actionLogService, scope)
+              .pipe(takeUntil(this.destroy$))
+          );
+          this.teamKPIs = kpis || [];
         }
-        
-        // 1. Clientes na Carteira: count from player_company__c where type = "cnpj_resp"
-        // Use aggregate query to count all cnpj_resp entries for team members
-        let totalEmpresasAtual = 0;
-        try {
-          const cnpjRespAggregate = [
-            {
-              $match: {
-                playerId: { $in: this.teamMemberIds },
-                type: 'cnpj_resp'
-              }
-            },
-            {
-              $group: {
-                _id: null,
-                uniqueCnpjs: { $addToSet: '$cnpj' }
-              }
-            },
-            {
-              $project: {
-                _id: 0,
-                count: { $size: '$uniqueCnpjs' }
-              }
-            }
-          ];
-          
-          const cnpjRespResult = await firstValueFrom(
-            this.backendApi.post<any[]>(
-              '/v3/database/player_company__c/aggregate?strict=true',
-              cnpjRespAggregate
-            ).pipe(takeUntil(this.destroy$))
-          ).catch(error => {
-            console.error('Error fetching team cnpj_resp count:', error);
-            return [];
-          });
-          
-          totalEmpresasAtual = cnpjRespResult.length > 0 ? (cnpjRespResult[0].count || 0) : 0;
-          console.log('📊 Team clientes na carteira (from player_company__c cnpj_resp):', totalEmpresasAtual);
-        } catch (error) {
-          console.error('Error loading team cnpj_resp count:', error);
-        }
-        
-        // Fetch client_goals from all team members using aggregate query
-        let somaMetasEmpresas = 0;
-        try {
-          const aggregateQuery = [
-            {
-              $match: {
-                _id: { $in: this.teamMemberIds }
-              }
-            },
-            {
-              $project: {
-                _id: 1,
-                client_goals: '$extra.client_goals'
-              }
-            }
-          ];
-          
-          const playerClientGoals = await firstValueFrom(
-            this.backendApi.post<{ _id: string; client_goals?: number | { goalValue?: number } }[]>(
-              '/database/player_status/aggregate?strict=true',
-              aggregateQuery
-            ).pipe(takeUntil(this.destroy$))
-          ).catch(error => {
-            console.error('Error fetching team client_goals data:', error);
-            return [] as { _id: string; client_goals?: number | { goalValue?: number } }[];
-          });
-          
-          // Sum all client_goals from team members
-          // Support both formats: client_goals as number or client_goals.goalValue (backward compatibility)
-          somaMetasEmpresas = playerClientGoals.reduce((sum: number, player: { _id: string; client_goals?: number | { goalValue?: number } }) => {
-            const clientGoals = player.client_goals;
-            if (clientGoals === undefined || clientGoals === null) {
-              return sum; // Skip if no goal set
-            }
-            
-            // Handle both formats: number directly or object with goalValue
-            const goalValue = typeof clientGoals === 'number' 
-              ? clientGoals 
-              : clientGoals?.goalValue;
-            
-            if (goalValue !== undefined && goalValue !== null) {
-              const numValue = typeof goalValue === 'number' 
-                ? goalValue 
-                : parseInt(String(goalValue), 10);
-              return sum + (isNaN(numValue) ? 0 : numValue);
-            }
-            
-            return sum;
-          }, 0);
-          
-          console.log('📊 Team client_goals sum:', somaMetasEmpresas, 'from', playerClientGoals.length, 'members');
-        } catch (error) {
-          console.error('Error loading team client_goals:', error);
-          // Fallback to default if error
-          somaMetasEmpresas = this.teamMemberIds.length * 100;
-        }
-        
-        // Use sum of goals, or fallback to default if no goals set
-        const targetEmpresas = somaMetasEmpresas > 0 ? somaMetasEmpresas : (this.teamMemberIds.length * 100);
-        const superTargetEmpresas = Math.ceil(targetEmpresas * 1.5);
-        
-        teamKPIs.push({
-          id: 'numero-empresas',
-          label: 'Clientes na Carteira',
-          current: totalEmpresasAtual,
-          target: targetEmpresas,
-          superTarget: superTargetEmpresas,
-          unit: 'clientes',
-          color: this.getKPIColorByGoals(totalEmpresasAtual, targetEmpresas, superTargetEmpresas),
-          percentage: Math.min((totalEmpresasAtual / superTargetEmpresas) * 100, 100)
-        });
-        
-        // 2. Entregas no Prazo: fetch from player.extra.entrega using single aggregate query
-        try {
-          // Use single aggregate query to get all team members' entrega values
-          const aggregateQuery = [
-            {
-              $match: {
-                _id: { $in: this.teamMemberIds }
-              }
-            },
-            {
-              $project: {
-                _id: 1,
-                entrega: '$extra.entrega'
-              }
-            }
-          ];
-          
-          const playerEntregas = await firstValueFrom(
-            this.backendApi.post<{ _id: string; entrega?: string }[]>(
-              '/database/player_status/aggregate?strict=true',
-              aggregateQuery
-            ).pipe(takeUntil(this.destroy$))
-          ).catch(error => {
-            console.error('Error fetching team entrega data:', error);
-            return [];
-          });
-          
-          // Calculate average entrega percentage
-          const validEntregas = playerEntregas
-            .filter(p => p.entrega != null && p.entrega !== '')
-            .map(p => parseFloat(p.entrega || '0'))
-            .filter(v => !isNaN(v));
-          
-          if (validEntregas.length > 0) {
-            const mediaEntregas = validEntregas.reduce((sum, v) => sum + v, 0) / validEntregas.length;
-            const targetEntregas = 90;
-            const superTargetEntregas = 100;
-            
-            teamKPIs.push({
-              id: 'entregas-prazo',
-              label: 'Entregas no Prazo',
-              current: Math.round(mediaEntregas * 100) / 100,
-              target: targetEntregas,
-              superTarget: superTargetEntregas,
-              unit: '%',
-              color: this.getKPIColorByGoals(mediaEntregas, targetEntregas, superTargetEntregas),
-              percentage: Math.min((mediaEntregas / superTargetEntregas) * 100, 100)
-            });
-          } else {
-            // No entrega data available - show as missing with gray
-            teamKPIs.push({
-              id: 'entregas-prazo',
-              label: 'Entregas no Prazo',
-              current: 0,
-              target: 90,
-              superTarget: 100,
-              unit: '%',
-              color: 'gray',
-              percentage: 0,
-              isMissing: true
-            });
-          }
-          
-          console.log('✅ Team KPIs loaded (OPTIMIZED - 2 API calls instead of', this.teamMemberIds.length, ')');
-        } catch (error) {
-          console.error('Error loading team entrega KPI:', error);
-          // API error - show as missing with gray
-          teamKPIs.push({
-            id: 'entregas-prazo',
-            label: 'Entregas no Prazo',
-            current: 0,
-            target: 90,
-            superTarget: 100,
-            unit: '%',
-            color: 'gray',
-            percentage: 0,
-            isMissing: true
-          });
-        }
-        
-        this.teamKPIs = teamKPIs;
+        console.log('✅ Team KPIs (mesmo fluxo que gamificação individual, cache por team_id):', this.teamKPIs.length);
       }
       
       this.isLoadingKPIs = false;

@@ -1,5 +1,5 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetectorRef, ChangeDetectionStrategy } from '@angular/core';
-import { Subject, of, forkJoin } from 'rxjs';
+import { Subject, of, forkJoin, Observable } from 'rxjs';
 import { takeUntil, switchMap, catchError, map } from 'rxjs/operators';
 
 import { ActionLogService, ActionLogEntry } from '@services/action-log.service';
@@ -42,6 +42,12 @@ export class ModalPlayerDetailComponent implements OnInit, OnDestroy {
 
   /** Current month filter value (0 = current month, -1 = "Toda temporada") */
   @Input() monthsAgo = 0;
+
+  /**
+   * Quando definido (ex.: aggregate `player_status` no dashboard supervisor), usa este `cnpj_resp`
+   * em vez de `getRawPlayerData` / `GET …/player/{id}`.
+   */
+  @Input() cnpjRespFromAggregate?: string;
 
   /** Emitted when the modal is closed */
   @Output() closed = new EventEmitter<void>();
@@ -116,11 +122,16 @@ export class ModalPlayerDetailComponent implements OnInit, OnDestroy {
 
     const month = this.getMonthDate();
 
-    // Get player's cnpj_resp from player status
-    this.playerService.getRawPlayerData(this.playerId).pipe(
+    const cnpjResp$: Observable<string> =
+      this.cnpjRespFromAggregate !== undefined
+        ? of(this.cnpjRespFromAggregate)
+        : this.playerService.getRawPlayerData(this.playerId).pipe(
+            map((playerData: any) => (playerData?.extra?.cnpj_resp || '') as string)
+          );
+
+    cnpjResp$.pipe(
       takeUntil(this.destroy$),
-      switchMap(playerData => {
-        const cnpjRespStr: string = playerData?.extra?.cnpj_resp || '';
+      switchMap(cnpjRespStr => {
         const cnpjList = cnpjRespStr
           .split(/[;,]/)
           .map((s: string) => s.trim())

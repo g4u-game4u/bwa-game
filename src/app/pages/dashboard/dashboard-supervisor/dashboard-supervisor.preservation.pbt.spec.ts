@@ -39,6 +39,7 @@ interface SupervisorPlayerCard {
   cnpjGoal: number;
   entregaGoal: number;
   kpis: KPIData[];
+  cnpjRespRaw: string;
 }
 
 /** Mirrors DashboardSupervisorComponent.loadSupervisorInfoCard mapping */
@@ -139,6 +140,7 @@ const arbPlayerCard: fc.Arbitrary<SupervisorPlayerCard> = fc.record({
   cnpjGoal: arbNonNeg,
   entregaGoal: arbNonNeg,
   kpis: fc.constant([] as KPIData[]),
+  cnpjRespRaw: fc.string({ maxLength: 80 }),
 });
 
 /** Arbitrary for raw player data as returned by playerService.getRawPlayerData */

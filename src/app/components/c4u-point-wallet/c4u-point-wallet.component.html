@@ -8,7 +8,12 @@
         <span class="label">Pontos</span>
         <c4u-info-button infoKey="pontos" position="top"></c4u-info-button>
       </div>
-      <span class="value">{{ totalPontos | number:'1.0-0':'pt-BR' }}</span>
+      <span class="value" [attr.aria-busy]="isPending">
+        <span *ngIf="isPending" class="app-loading-dots app-loading-dots--sidebar" aria-hidden="true">
+          <span>.</span><span>.</span><span>.</span>
+        </span>
+        <ng-container *ngIf="!isPending">{{ totalPontos | number:'1.0-0':'pt-BR' }}</ng-container>
+      </span>
     </div>
 
     <div class="point-row">
@@ -17,7 +22,12 @@
         <span class="label">Moedas</span>
         <c4u-info-button infoKey="moedas" position="top"></c4u-info-button>
       </div>
-      <span class="value">{{ points.moedas | number:'1.0-0':'pt-BR' }}</span>
+      <span class="value" [attr.aria-busy]="isPending">
+        <span *ngIf="isPending" class="app-loading-dots app-loading-dots--sidebar" aria-hidden="true">
+          <span>.</span><span>.</span><span>.</span>
+        </span>
+        <ng-container *ngIf="!isPending">{{ points.moedas | number:'1.0-0':'pt-BR' }}</ng-container>
+      </span>
     </div>
   </div>
 </div>

@@ -134,6 +134,8 @@ export interface ActivityListItem {
   title: string;
   /** Título do processo/entrega (user action), quando disponível. */
   delivery_title?: string;
+  /** Prazo da tarefa (`YYYY-MM-DD`), ex.: `GET /game/reports/user-actions`. */
+  dt_prazo?: string;
   points: number;
   created: number;
   player?: string;

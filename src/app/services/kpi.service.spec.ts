@@ -3,6 +3,7 @@ import { KPIService } from './kpi.service';
 import { BackendApiService } from './backend-api.service';
 import { KPIMapper } from './kpi-mapper.service';
 import { PlayerService } from './player.service';
+import { SessaoProvider } from '@providers/sessao/sessao.provider';
 import * as fc from 'fast-check';
 import { of } from 'rxjs';
 
@@ -22,7 +23,8 @@ describe('KPIService', () => {
         KPIService,
         { provide: BackendApiService, useValue: apiSpy },
         { provide: KPIMapper, useValue: kpiMapperSpy },
-        { provide: PlayerService, useValue: playerSpy }
+        { provide: PlayerService, useValue: playerSpy },
+        { provide: SessaoProvider, useValue: { usuario: null } }
       ]
     });
 
@@ -81,6 +83,45 @@ describe('KPIService', () => {
         expect(playerServiceSpy.getCurrentPlayerData).toHaveBeenCalled();
         done();
       });
+    });
+
+    it('should reuse sessao.usuario and not call getCurrentPlayerData when extra is present', () => {
+      playerServiceSpy.getCurrentPlayerData.calls.reset();
+      const apiSpy = jasmine.createSpyObj('BackendApiService', ['get', 'post']);
+      const kpiMapperSpy = jasmine.createSpyObj('KPIMapper', ['toKPIDataArray']);
+      const playerSpy = jasmine.createSpyObj('PlayerService', ['getCurrentPlayerData']);
+      TestBed.resetTestingModule();
+      TestBed.configureTestingModule({
+        providers: [
+          KPIService,
+          { provide: BackendApiService, useValue: apiSpy },
+          { provide: KPIMapper, useValue: kpiMapperSpy },
+          { provide: PlayerService, useValue: playerSpy },
+          {
+            provide: SessaoProvider,
+            useValue: {
+              usuario: {
+                extra: {
+                  client_goals: 100,
+                  entrega: '85',
+                  entrega_goal: 90,
+                  companies: 'a;b;c;d'
+                }
+              }
+            }
+          }
+        ]
+      });
+      const s = TestBed.inject(KPIService);
+      const ps = TestBed.inject(PlayerService) as jasmine.SpyObj<PlayerService>;
+
+      let kpis: unknown;
+      s.getPlayerKPIs('player@x.com').subscribe(k => {
+        kpis = k;
+      });
+      const carteira = (kpis as { id: string; current: number }[])?.find(k => k.id === 'numero-empresas');
+      expect(carteira?.current).toBe(4);
+      expect(ps.getCurrentPlayerData).not.toHaveBeenCalled();
     });
   });
 });

@@ -82,6 +82,7 @@ describe('GamificationDashboard - Company KPI Integration Tests', () => {
 
     const actionLogServiceSpy = jasmine.createSpyObj('ActionLogService', [
       'getProgressMetrics',
+      'getMonthlyPointsGoalTarget',
       'getPlayerCnpjListWithCount',
       'getUniqueClientesCount',
       'getCompletedTasksCount',
@@ -89,7 +90,7 @@ describe('GamificationDashboard - Company KPI Integration Tests', () => {
       'getMonthlyGame4uPlayerDashboardData'
     ]);
 
-    const emptyGamificacaoMaps = { byEmpId: new Map(), byCnpjNorm: new Map() };
+    const emptyGamificacaoMaps = { byEmpId: new Map(), byCnpjNorm: new Map(), byTitleNorm: new Map() };
     const companyKpiServiceSpy = jasmine.createSpyObj('CompanyKpiService', [
       'extractCnpjId',
       'getKpiData',
@@ -172,6 +173,8 @@ describe('GamificationDashboard - Company KPI Integration Tests', () => {
       activity: { pendentes: 0, emExecucao: 0, finalizadas: 0, pontos: 0 },
       processo: { pendentes: 0, incompletas: 0, finalizadas: 0 }
     }));
+    actionLogService.getMonthlyPointsGoalTarget.and.returnValue(of(0));
+    actionLogService.getPlayerCnpjListWithCount.and.returnValue(of([]));
     actionLogService.getUniqueClientesCount.and.returnValue(of(0));
     actionLogService.getCompletedTasksCount.and.returnValue(of(0));
     actionLogService.getPontosForMonth.and.returnValue(of(500));
@@ -623,7 +626,7 @@ describe('GamificationDashboard - Company KPI Integration Tests', () => {
     it('should manage loading state correctly during data fetch', fakeAsync(() => {
       // Arrange
       const enrichedCompanies = createEnrichedCompanies();
-      const delayedMaps = { byEmpId: new Map(), byCnpjNorm: new Map() };
+      const delayedMaps = { byEmpId: new Map(), byCnpjNorm: new Map(), byTitleNorm: new Map() };
       companyKpiService.fetchGamificacaoMapsAsync.and.returnValue(
         new Promise(resolve => setTimeout(() => resolve(delayedMaps), 100))
       );
@@ -931,7 +934,7 @@ describe('GamificationDashboard - Company KPI Integration Tests', () => {
       const enrichedCompanies = createEnrichedCompanies();
       const startTime = Date.now();
 
-      const perfMaps = { byEmpId: new Map(), byCnpjNorm: new Map() };
+      const perfMaps = { byEmpId: new Map(), byCnpjNorm: new Map(), byTitleNorm: new Map() };
       companyKpiService.fetchGamificacaoMapsAsync.and.returnValue(
         new Promise(resolve => setTimeout(() => resolve(perfMaps), 100))
       );

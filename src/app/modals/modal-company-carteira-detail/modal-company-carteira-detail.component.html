@@ -1,5 +1,5 @@
 <c4u-modal 
-  [modalTitle]="company ? getCompanyDisplayName(company.cnpj) : 'Detalhes da Empresa'" 
+  [modalTitle]="getModalTitle()" 
   (closed)="onClose()">
   <div class="company-detail-content">
     <!-- Company Status Badge -->
@@ -57,6 +57,7 @@
               <div class="task-col-process">Processo</div>
               <div class="task-col-title">Tarefa</div>
               <div class="task-col-executor">Executor</div>
+              <div class="task-col-points">Pontos</div>
               <div class="task-col-date">Data</div>
             </div>
             <div *ngFor="let task of tasks" class="task-row">
@@ -69,9 +70,34 @@
               <div class="task-col-executor">
                 <span class="task-executor">{{ formatEmailToName(task.player) }}</span>
               </div>
+              <div class="task-col-points">
+                <span class="task-points">{{ formatTaskPoints(task) }}</span>
+              </div>
               <div class="task-col-date">
                 <span class="task-date">{{ formatDate(task.created) }}</span>
               </div>
+            </div>
+          </div>
+
+          <div
+            *ngIf="!isLoadingTasks && company?.loadTasksViaGameReports && tasksTotal > 0"
+            class="tasks-pagination">
+            <span class="tasks-pagination-info">{{ tasksPaginationLabel }}</span>
+            <div class="tasks-pagination-buttons">
+              <button
+                type="button"
+                class="tasks-pagination-btn"
+                [disabled]="!tasksCanGoPrev"
+                (click)="goTasksPrevPage()">
+                Anterior
+              </button>
+              <button
+                type="button"
+                class="tasks-pagination-btn"
+                [disabled]="!tasksCanGoNext"
+                (click)="goTasksNextPage()">
+                Seguinte
+              </button>
             </div>
           </div>
         </div>

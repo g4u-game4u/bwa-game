@@ -16,6 +16,9 @@ export class C4uSeasonProgressComponent {
       end: new Date()
     }
   };
+
+  /** GET `/game/stats` / participação ainda a atualizar — reticências nos valores. */
+  @Input() isPending = false;
   
   @Input() processosFinalizados?: number;
 

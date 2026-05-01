@@ -8,6 +8,7 @@ import { BackendApiService } from './backend-api.service';
 import { PlayerMapper } from './player-mapper.service';
 import { CompanyMapper } from './company-mapper.service';
 import { KPIMapper } from './kpi-mapper.service';
+import { SessaoProvider } from '@providers/sessao/sessao.provider';
 import { createMockPlayerStatus, createMockCompany, createMockKPIData } from '@app/testing/mock-data-generators';
 
 /**
@@ -32,7 +33,8 @@ describe('Error Scenarios Unit Tests', () => {
         { provide: BackendApiService, useValue: spy },
         PlayerMapper,
         CompanyMapper,
-        KPIMapper
+        KPIMapper,
+        { provide: SessaoProvider, useValue: { usuario: null } }
       ]
     });
 

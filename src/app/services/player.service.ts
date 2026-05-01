@@ -26,6 +26,9 @@ export class PlayerService {
   // Cache the raw response Observable with shareReplay
   private cachedRawData: Map<string, CacheEntry> = new Map();
 
+  /** Evita 2× GET /auth/user quando vários consumidores chamam antes do cache ser escrito. */
+  private inFlightCurrentPlayer$: Observable<any> | null = null;
+
   constructor(
     private mapper: PlayerMapper,
     private http: HttpClient,
@@ -40,20 +43,42 @@ export class PlayerService {
 
   private resolvePlayerEmail(playerId: string): string {
     const id = (playerId || '').trim();
+    let out: string;
     if (!id || id === 'me') {
-      return (this.sessao.usuario?.email || '').trim();
+      out = (this.sessao.usuario?.email || '').trim();
+    } else {
+      out = id;
     }
-    return id;
+    /** Game4U compara `user` ao email do token (sou frequentemente em minúsculas). */
+    return out.includes('@') ? out.toLowerCase() : out;
+  }
+
+  /** `true` quando `playerId` é o utilizador autenticado (email, `_id` ou `me`). */
+  private isCurrentSessionPlayerId(playerId: string): boolean {
+    const pid = (playerId || '').trim();
+    if (!pid || pid === 'me') {
+      return true;
+    }
+    const u = this.sessao.usuario as { _id?: string; email?: string } | null | undefined;
+    const id = (u?._id || '').trim();
+    const email = (u?.email || '').trim();
+    if (id && pid === id) {
+      return true;
+    }
+    if (email && pid.toLowerCase() === email.toLowerCase()) {
+      return true;
+    }
+    return false;
   }
 
   /**
-   * Perfil do jogador sem GET …/status:
-   * - `me` (ou vazio): mesmo fluxo que {@link getCurrentPlayerData} (`/auth/user`).
-   * - outro id: `GET …/player/{id}` na API base (perfil sem sufixo `/status`).
+   * Perfil bruto do jogador:
+   * - utilizador da sessão (`me`, vazio, ou email/`_id` da sessão): {@link getCurrentPlayerData} (`GET /auth/user`), alinhado ao painel de gamificação e ao `KPIService`.
+   * - outro id: `GET …/player/{id}` na API base (só se o backend expuser a rota; p.ex. visão de outro jogador).
    */
   getRawPlayerData(playerId: string, forceRefresh: boolean = false): Observable<any> {
     const pid = (playerId || '').trim();
-    if (!pid || pid === 'me') {
+    if (!pid || pid === 'me' || this.isCurrentSessionPlayerId(pid)) {
       return this.getCurrentPlayerData(forceRefresh);
     }
 
@@ -98,27 +123,39 @@ export class PlayerService {
     const cacheKey = 'me';
     const cached = this.cachedRawData.get(cacheKey);
     const now = Date.now();
-    
+
+    if (forceRefresh) {
+      this.cachedRawData.delete(cacheKey);
+      this.inFlightCurrentPlayer$ = null;
+    }
+
     // Return cached Observable if valid and not forcing refresh
     if (!forceRefresh && cached && (now - cached.timestamp) < this.CACHE_DURATION) {
       return cached.data$;
     }
 
+    if (!forceRefresh && this.inFlightCurrentPlayer$) {
+      return this.inFlightCurrentPlayer$;
+    }
+
     // Use player/me endpoint (faster than player/me/status)
     const request$ = this.http.get<any>(`${environment.backend_url_base}/auth/user`).pipe(
       timeout(this.REQUEST_TIMEOUT),
-      tap(response => {
+      tap({
+        next: () => {
+          this.inFlightCurrentPlayer$ = null;
+        }
       }),
       shareReplay({ bufferSize: 1, refCount: true, windowTime: this.CACHE_DURATION }),
       catchError(error => {
         console.error('❌ Error fetching player/me:', error);
-        // Remove from cache on error
         this.cachedRawData.delete(cacheKey);
+        this.inFlightCurrentPlayer$ = null;
         return throwError(() => error);
       })
     );
 
-    // Cache the Observable
+    this.inFlightCurrentPlayer$ = request$;
     this.cachedRawData.set(cacheKey, {
       data$: request$,
       timestamp: now
@@ -155,14 +192,25 @@ export class PlayerService {
    * Get player points (Game4U: `/game/stats` com `start`/`end` alinhados ao mês do painel).
    * @param month Primeiro dia do mês visível no seletor (ou `undefined` = toda a temporada).
    */
-  getPlayerPoints(playerId: string, month?: Date): Observable<PointWallet> {
+  getPlayerPoints(
+    playerId: string,
+    month?: Date,
+    teamId?: string | number | null
+  ): Observable<PointWallet> {
     if (isGame4uDataEnabled() && this.game4uApi.isConfigured()) {
       const email = this.resolvePlayerEmail(playerId);
       if (!email) {
         return throwError(() => new Error('No user email for Game4U wallet'));
       }
       const range = this.game4uApi.toQueryRange(month);
-      return this.game4uApi.getGameStats({ user: email, ...range }).pipe(
+      const tid =
+        teamId == null
+          ? undefined
+          : String(teamId).trim() !== ''
+            ? String(teamId).trim()
+            : undefined;
+      const q = tid ? { user: email, ...range, team_id: tid } : { user: email, ...range };
+      return this.game4uApi.getGameStats(q).pipe(
         map(stats => {
           const points = mapGame4uStatsToPointWallet(stats);
           return points;
@@ -227,6 +275,7 @@ export class PlayerService {
    */
   clearCache(): void {
     this.cachedRawData.clear();
+    this.inFlightCurrentPlayer$ = null;
   }
 
   /**

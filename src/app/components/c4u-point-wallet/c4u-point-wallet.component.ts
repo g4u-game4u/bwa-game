@@ -12,6 +12,9 @@ export class C4uPointWalletComponent {
     desbloqueados: 0,
     moedas: 0
   };
+
+  /** Mostrar reticências animadas em vez dos números (snapshot / carteira a carregar). */
+  @Input() isPending = false;
   
   @Input() mediaPontos?: number;
 
