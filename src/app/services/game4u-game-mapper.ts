@@ -422,6 +422,49 @@ function filterGame4uActionsByListTimestampMonth(
   });
 }
 
+/**
+ * Modal «tarefas pendentes»: alinhado a `GET /game/reports/user-actions?dt_prazo_*`.
+ * Filtra pelo **mês de calendário do prazo** (`dt_prazo` na raiz ou `extra.dt_prazo` / `extra.dr_prazo`),
+ * não por `created_at` (senão linhas com prazo no mês mas criação antiga sumiam).
+ * Sem prazo parseável: mantém a linha (resposta já veio filtrada pelo backend).
+ */
+function filterGame4uActionsByDtPrazoCalendarMonth(
+  actions: Game4uUserActionModel[],
+  month: Date
+): Game4uUserActionModel[] {
+  const ty = month.getFullYear();
+  const tm = month.getMonth();
+  return actions.filter(a => {
+    const top = typeof a.dt_prazo === 'string' ? a.dt_prazo.trim() : '';
+    if (top) {
+      const ymd = /^(\d{4})-(\d{2})-(\d{2})/.exec(top);
+      if (ymd) {
+        const d = new Date(Number(ymd[1]), Number(ymd[2]) - 1, Number(ymd[3]));
+        if (!Number.isNaN(d.getTime())) {
+          return d.getFullYear() === ty && d.getMonth() === tm;
+        }
+      }
+      const t = Date.parse(top);
+      if (!Number.isNaN(t)) {
+        const d = new Date(t);
+        return d.getFullYear() === ty && d.getMonth() === tm;
+      }
+    }
+    const ex = readGame4uExtraRecord(a);
+    if (ex) {
+      const ms = parseExtraDrPrazoToUtcMs(ex['dt_prazo'] ?? ex['dr_prazo']);
+      if (ms != null) {
+        const d = new Date(ms);
+        return d.getFullYear() === ty && d.getMonth() === tm;
+      }
+    }
+    return true;
+  });
+}
+
+/** Modo de filtro por mês na lista de atividades do modal (Game4U). */
+export type ActivityListMonthFilterMode = 'listTimestamp' | 'dtPrazo';
+
 export function filterGame4uActionsByMonth(
   actions: Game4uUserActionModel[],
   month?: Date
@@ -602,17 +645,30 @@ export function mapGame4uActionsToProcessMetrics(actions: Game4uUserActionModel[
 
 export function mapGame4uActionsToActivityList(
   actions: Game4uUserActionModel[],
-  month?: Date
+  month?: Date,
+  opts?: { monthFilter?: ActivityListMonthFilterMode }
 ): ActivityListItem[] {
-  return filterGame4uActionsByListTimestampMonth(actions, month).map(a => ({
-    id: a.id,
-    title: (a.action_title as string) || 'Ação',
-    delivery_title: (a.delivery_title as string) || undefined,
-    points: Math.floor(Number(a.points) || PONTOS_POR_ATIVIDADE_FINALIZADA_ACTION_LOG),
-    created: game4uUserActionListTimestampMs(a),
-    player: asString(a.user_email),
-    cnpj: asString(a.integration_id) || undefined
-  }));
+  const mode = opts?.monthFilter ?? 'listTimestamp';
+  const scoped =
+    !month
+      ? actions
+      : mode === 'dtPrazo'
+        ? filterGame4uActionsByDtPrazoCalendarMonth(actions, month)
+        : filterGame4uActionsByListTimestampMonth(actions, month);
+  return scoped.map(a => {
+    const dp =
+      typeof a.dt_prazo === 'string' && a.dt_prazo.trim() ? a.dt_prazo.trim() : undefined;
+    return {
+      id: a.id,
+      title: (a.action_title as string) || 'Ação',
+      delivery_title: (a.delivery_title as string) || undefined,
+      ...(dp ? { dt_prazo: dp } : {}),
+      points: Math.floor(Number(a.points) || PONTOS_POR_ATIVIDADE_FINALIZADA_ACTION_LOG),
+      created: game4uUserActionListTimestampMs(a),
+      player: asString(a.user_email),
+      cnpj: asString(a.integration_id) || undefined
+    };
+  });
 }
 
 export function mapGame4uActionsToProcessList(actions: Game4uUserActionModel[], month?: Date): ProcessListItem[] {

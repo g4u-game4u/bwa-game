@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpHeaders, HttpParams } from '@angular/common/http';
 import { Observable, throwError } from 'rxjs';
-import { shareReplay, tap } from 'rxjs/operators';
+import { map, shareReplay, tap } from 'rxjs/operators';
 import { environment } from '../../environments/environment';
 import {
   Game4uDeliveryModel,
@@ -12,10 +12,19 @@ import {
   Game4uTeamScopedQuery,
   Game4uUserScopedQuery,
   Game4uReportsFinishedSummary,
+  Game4uReportsOpenSummary,
+  Game4uReportsOpenSummaryQuery,
   Game4uGoalMonthSummaryResponse,
   Game4uReportsFinishedQuery,
   Game4uReportsActionsByDeliveryQuery,
-  Game4uReportsGoalMonthQuery
+  Game4uReportsActionsByDeliveryPage,
+  Game4uReportsGoalMonthQuery,
+  normalizeGameReportsActionsByDeliveryResponse,
+  Game4uReportsFinishedDeliveryRow,
+  normalizeGameReportsFinishedDeliveriesPayload,
+  Game4uReportsUserActionsQuery,
+  Game4uReportsUserActionsPage,
+  normalizeGameReportsUserActionsResponse
 } from '@model/game4u-api.model';
 import { Game4uSupabaseFallbackService } from './game4u-supabase-fallback.service';
 import { SeasonDatesService } from './season-dates.service';
@@ -32,9 +41,16 @@ export class Game4uApiService {
   private readonly teamStatsDedupCache = new Map<string, Observable<Game4uUserActionStatsResponse>>();
   private readonly teamActionsDedupCache = new Map<string, Observable<Game4uUserActionModel[]>>();
   private readonly reportsFinishedSummaryCache = new Map<string, Observable<Game4uReportsFinishedSummary>>();
-  private readonly reportsFinishedDeliveriesCache = new Map<string, Observable<string[]>>();
-  private readonly reportsActionsByDeliveryCache = new Map<string, Observable<Game4uUserActionModel[]>>();
+  private readonly reportsFinishedDeliveriesCache = new Map<
+    string,
+    Observable<Game4uReportsFinishedDeliveryRow[]>
+  >();
+  private readonly reportsActionsByDeliveryCache = new Map<
+    string,
+    Observable<Game4uReportsActionsByDeliveryPage>
+  >();
   private readonly reportsGoalMonthCache = new Map<string, Observable<Game4uGoalMonthSummaryResponse>>();
+  private readonly reportsOpenSummaryCache = new Map<string, Observable<Game4uReportsOpenSummary>>();
 
   constructor(
     private http: HttpClient,
@@ -112,6 +128,7 @@ export class Game4uApiService {
     this.reportsFinishedDeliveriesCache.clear();
     this.reportsActionsByDeliveryCache.clear();
     this.reportsGoalMonthCache.clear();
+    this.reportsOpenSummaryCache.clear();
   }
 
   /** GET `/game/*` com partilha entre várias subscrições (evita N× a mesma chamada). */
@@ -203,6 +220,17 @@ export class Game4uApiService {
     return `rpt-goal|${q.email}|${q.dt_prazo_start}|${q.dt_prazo_end}`;
   }
 
+  private reportsOpenSummaryKey(q: Game4uReportsOpenSummaryQuery): string {
+    return `rpt-open-sum|${q.email}|${q.dt_prazo_start}|${q.dt_prazo_end}`;
+  }
+
+  private appendOpenSummaryParams(base: HttpParams, q: Game4uReportsOpenSummaryQuery): HttpParams {
+    return base
+      .set('email', q.email)
+      .set('dt_prazo_start', q.dt_prazo_start)
+      .set('dt_prazo_end', q.dt_prazo_end);
+  }
+
   private appendReportParams(
     base: HttpParams,
     q: Game4uReportsFinishedQuery
@@ -237,9 +265,28 @@ export class Game4uApiService {
   }
 
   /**
-   * `GET /game/reports/finished/deliveries` — lista ordenada de `delivery_title`.
+   * `GET /game/reports/open/summary` — agregados de tarefas PENDING/DOING (`tasks_count`, `points_sum`, `delivery_count`).
    */
-  getGameReportsFinishedDeliveries(q: Game4uReportsFinishedQuery): Observable<string[]> {
+  getGameReportsOpenSummary(q: Game4uReportsOpenSummaryQuery): Observable<Game4uReportsOpenSummary> {
+    if (!this.isConfigured()) {
+      return throwError(
+        () => new Error('[Game4U] reports/open/summary: defina backend_url_base.')
+      );
+    }
+    const key = this.reportsOpenSummaryKey(q);
+    return this.shareGame4uDedupe(key, this.reportsOpenSummaryCache, () => {
+      const params = this.appendOpenSummaryParams(new HttpParams(), q);
+      return this.http.get<Game4uReportsOpenSummary>(`${this.baseUrl}/game/reports/open/summary`, {
+        headers: this.headers(),
+        params
+      });
+    });
+  }
+
+  /**
+   * `GET /game/reports/finished/deliveries` — linhas com `delivery_title` e, quando existir, `delivery_id` (`EmpID-YYYY-MM-DD`).
+   */
+  getGameReportsFinishedDeliveries(q: Game4uReportsFinishedQuery): Observable<Game4uReportsFinishedDeliveryRow[]> {
     if (!this.isConfigured()) {
       return throwError(
         () => new Error('[Game4U] reports/finished/deliveries: defina backend_url_base.')
@@ -248,10 +295,12 @@ export class Game4uApiService {
     const key = this.reportsFinishedDeliveriesKey(q);
     return this.shareGame4uDedupe(key, this.reportsFinishedDeliveriesCache, () => {
       const params = this.appendReportParams(new HttpParams(), q);
-      return this.http.get<string[]>(`${this.baseUrl}/game/reports/finished/deliveries`, {
-        headers: this.headers(),
-        params
-      });
+      return this.http
+        .get<unknown>(`${this.baseUrl}/game/reports/finished/deliveries`, {
+          headers: this.headers(),
+          params
+        })
+        .pipe(map(body => normalizeGameReportsFinishedDeliveriesPayload(body)));
     });
   }
 
@@ -260,7 +309,7 @@ export class Game4uApiService {
    */
   getGameReportsFinishedActionsByDelivery(
     q: Game4uReportsActionsByDeliveryQuery
-  ): Observable<Game4uUserActionModel[]> {
+  ): Observable<Game4uReportsActionsByDeliveryPage> {
     if (!this.isConfigured()) {
       return throwError(
         () => new Error('[Game4U] reports/finished/actions-by-delivery: defina backend_url_base.')
@@ -272,14 +321,82 @@ export class Game4uApiService {
       const off = q.offset ?? 0;
       const lim = Math.min(q.limit ?? 500, 500);
       params = params.set('offset', String(off)).set('limit', String(lim));
-      return this.http.get<Game4uUserActionModel[]>(
-        `${this.baseUrl}/game/reports/finished/actions-by-delivery`,
-        {
+      return this.http
+        .get<unknown>(`${this.baseUrl}/game/reports/finished/actions-by-delivery`, {
           headers: this.headers(),
           params
-        }
-      );
+        })
+        .pipe(map(body => normalizeGameReportsActionsByDeliveryResponse(body)));
     });
+  }
+
+  /**
+   * `GET /game/reports/user-actions` (paginado, `offset`/`limit` máx. 500).
+   * Pares opcionais (um por pedido): `finished_at_*`, `dt_prazo_*`, `created_at_*` — par incompleto ou mais de um par → erro.
+   */
+  getGameReportsUserActions(q: Game4uReportsUserActionsQuery): Observable<Game4uReportsUserActionsPage> {
+    if (!this.isConfigured()) {
+      return throwError(
+        () => new Error('[Game4U] reports/user-actions: defina backend_url_base.')
+      );
+    }
+    let params = new HttpParams().set('email', q.email);
+    for (const s of q.status ?? []) {
+      params = params.append('status', s);
+    }
+    const fs = (q.finished_at_start ?? '').trim();
+    const fe = (q.finished_at_end ?? '').trim();
+    const ds = (q.dt_prazo_start ?? '').trim();
+    const de = (q.dt_prazo_end ?? '').trim();
+    const cs = (q.created_at_start ?? '').trim();
+    const ce = (q.created_at_end ?? '').trim();
+
+    if ((fs && !fe) || (!fs && fe)) {
+      return throwError(
+        () => new Error('[Game4U] reports/user-actions: informe finished_at_start e finished_at_end juntos.')
+      );
+    }
+    if ((ds && !de) || (!ds && de)) {
+      return throwError(
+        () => new Error('[Game4U] reports/user-actions: informe dt_prazo_start e dt_prazo_end juntos.')
+      );
+    }
+    if ((cs && !ce) || (!cs && ce)) {
+      return throwError(
+        () => new Error('[Game4U] reports/user-actions: informe created_at_start e created_at_end juntos.')
+      );
+    }
+
+    const finOk = !!(fs && fe);
+    const dtOk = !!(ds && de);
+    const crOk = !!(cs && ce);
+    const pairCount = (finOk ? 1 : 0) + (dtOk ? 1 : 0) + (crOk ? 1 : 0);
+    if (pairCount > 1) {
+      return throwError(
+        () =>
+          new Error(
+            '[Game4U] reports/user-actions: use apenas um intervalo (finished_at_*, dt_prazo_* ou created_at_*).'
+          )
+      );
+    }
+
+    if (finOk) {
+      params = params.set('finished_at_start', fs).set('finished_at_end', fe);
+    } else if (dtOk) {
+      params = params.set('dt_prazo_start', ds).set('dt_prazo_end', de);
+    } else if (crOk) {
+      params = params.set('created_at_start', cs).set('created_at_end', ce);
+    }
+
+    const off = q.offset ?? 0;
+    const lim = Math.min(q.limit ?? 500, 500);
+    params = params.set('offset', String(off)).set('limit', String(lim));
+    return this.http
+      .get<unknown>(`${this.baseUrl}/game/reports/user-actions`, {
+        headers: this.headers(),
+        params
+      })
+      .pipe(map(body => normalizeGameReportsUserActionsResponse(body)));
   }
 
   /**

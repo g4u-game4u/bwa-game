@@ -30,6 +30,10 @@ export class ModalCompanyCarteiraDetailComponent implements OnInit, OnDestroy {
   isLoadingTasks = false;
   companyKPIs: KPIData[] = [];
   tasks: ClienteActionItem[] = [];
+  /** Total no servidor (GET actions-by-delivery paginado). */
+  tasksTotal = 0;
+  tasksOffset = 0;
+  readonly tasksPageSizeFinishedReports = 25;
   cnpjNameMap = new Map<string, string>(); // Map of original CNPJ → clean empresa name
   companyStatus = ''; // Company status from empid_cnpj__c (e.g. "Ativa")
 
@@ -134,47 +138,175 @@ export class ModalCompanyCarteiraDetailComponent implements OnInit, OnDestroy {
     if (!this.company) return;
 
     this.isLoadingTasks = true;
+    this.tasksTotal = 0;
+    this.tasksOffset = 0;
     this.cdr.markForCheck();
 
     const uid = this.actionLogUserId?.trim() || undefined;
     const tid = !uid && this.actionLogTeamId?.trim() ? this.actionLogTeamId.trim() : undefined;
 
-    // Colaborador + Game4U: mesma semântica da lista «Clientes atendidos» (delivery_id, extra.cnpj ou chave CRM).
-    // Sem Game4U: action_log por CNPJ (individual) ou aggregate por time.
-    const tasks$ =
-      uid && !tid && isGame4uDataEnabled()
-        ? this.actionLogService.getGame4uUserActionsForParticipationModal(
-            uid,
-            {
-              cnpj: this.company.cnpj,
-              deliveryId: this.company.deliveryId,
-              delivery_extra_cnpj: this.company.delivery_extra_cnpj,
-              delivery_title: this.company.delivery_title,
-              loadTasksViaGameReports: this.company.loadTasksViaGameReports
-            },
-            this.month
-          )
-        : uid && !tid
-          ? this.actionLogService.getUserActionsForCompanyUsingPlayerActionLog(uid, this.company.cnpj, this.month)
-          : this.actionLogService.getActionsByCnpj(this.company.cnpj, this.month, {
-              userId: uid,
-              teamId: tid
-            });
+    // Colaborador + Game4U + relatório finished: resposta paginada (`items` + `total`).
+    if (uid && !tid && isGame4uDataEnabled() && this.company.loadTasksViaGameReports) {
+      this.fetchParticipationModalTasksPage(true);
+      return;
+    }
 
-    tasks$.pipe(takeUntil(this.destroy$)).subscribe({
-        next: (tasks) => {
-          console.log('📊 Tasks loaded for company:', tasks);
+    // Colaborador + Game4U (user-actions no mês): uma página em memória.
+    if (uid && !tid && isGame4uDataEnabled()) {
+      this.actionLogService
+        .getGame4uUserActionsForParticipationModal(
+          uid,
+          {
+            cnpj: this.company.cnpj,
+            deliveryId: this.company.deliveryId,
+            delivery_extra_cnpj: this.company.delivery_extra_cnpj,
+            delivery_title: this.company.delivery_title,
+            loadTasksViaGameReports: this.company.loadTasksViaGameReports
+          },
+          this.month
+        )
+        .pipe(takeUntil(this.destroy$))
+        .subscribe({
+          next: page => {
+            this.tasks = page.items;
+            this.tasksTotal = page.total;
+            this.isLoadingTasks = false;
+            this.cdr.markForCheck();
+          },
+          error: (error: unknown) => {
+            console.error('Error loading tasks:', error);
+            this.tasks = [];
+            this.tasksTotal = 0;
+            this.isLoadingTasks = false;
+            this.cdr.markForCheck();
+          }
+        });
+      return;
+    }
+
+    if (uid && !tid) {
+      this.actionLogService
+        .getUserActionsForCompanyUsingPlayerActionLog(uid, this.company.cnpj, this.month)
+        .pipe(takeUntil(this.destroy$))
+        .subscribe({
+          next: tasks => {
+            this.tasks = tasks;
+            this.tasksTotal = tasks.length;
+            this.isLoadingTasks = false;
+            this.cdr.markForCheck();
+          },
+          error: (error: unknown) => {
+            console.error('Error loading tasks:', error);
+            this.tasks = [];
+            this.tasksTotal = 0;
+            this.isLoadingTasks = false;
+            this.cdr.markForCheck();
+          }
+        });
+      return;
+    }
+
+    this.actionLogService
+      .getActionsByCnpj(this.company.cnpj, this.month, { userId: uid, teamId: tid })
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: tasks => {
           this.tasks = tasks;
+          this.tasksTotal = tasks.length;
           this.isLoadingTasks = false;
           this.cdr.markForCheck();
         },
-        error: (error) => {
+        error: (error: unknown) => {
           console.error('Error loading tasks:', error);
           this.tasks = [];
+          this.tasksTotal = 0;
           this.isLoadingTasks = false;
           this.cdr.markForCheck();
         }
       });
+  }
+
+  private fetchParticipationModalTasksPage(resetOffset: boolean): void {
+    if (!this.company) return;
+    const uid = this.actionLogUserId?.trim();
+    if (!uid) {
+      this.isLoadingTasks = false;
+      this.cdr.markForCheck();
+      return;
+    }
+    if (resetOffset) {
+      this.tasksOffset = 0;
+    }
+    this.isLoadingTasks = true;
+    this.cdr.markForCheck();
+    this.actionLogService
+      .getGame4uUserActionsForParticipationModal(
+        uid,
+        {
+          cnpj: this.company.cnpj,
+          deliveryId: this.company.deliveryId,
+          delivery_extra_cnpj: this.company.delivery_extra_cnpj,
+          delivery_title: this.company.delivery_title,
+          loadTasksViaGameReports: true
+        },
+        this.month,
+        { offset: this.tasksOffset, limit: this.tasksPageSizeFinishedReports }
+      )
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: page => {
+          this.tasks = page.items;
+          this.tasksTotal = page.total;
+          this.isLoadingTasks = false;
+          this.cdr.markForCheck();
+        },
+        error: (err: unknown) => {
+          console.error('Error loading tasks (reports page):', err);
+          this.tasks = [];
+          this.tasksTotal = 0;
+          this.isLoadingTasks = false;
+          this.cdr.markForCheck();
+        }
+      });
+  }
+
+  get tasksPaginationLabel(): string {
+    if (!this.company?.loadTasksViaGameReports || this.tasksTotal === 0) {
+      return '';
+    }
+    const from = this.tasks.length === 0 ? 0 : this.tasksOffset + 1;
+    const to = this.tasksOffset + this.tasks.length;
+    return `${from}–${to} de ${this.tasksTotal}`;
+  }
+
+  get tasksCanGoPrev(): boolean {
+    return !!this.company?.loadTasksViaGameReports && this.tasksOffset > 0;
+  }
+
+  get tasksCanGoNext(): boolean {
+    return (
+      !!this.company?.loadTasksViaGameReports &&
+      this.tasksOffset + this.tasks.length < this.tasksTotal
+    );
+  }
+
+  goTasksPrevPage(): void {
+    if (!this.tasksCanGoPrev) return;
+    this.tasksOffset = Math.max(0, this.tasksOffset - this.tasksPageSizeFinishedReports);
+    this.fetchParticipationModalTasksPage(false);
+  }
+
+  goTasksNextPage(): void {
+    if (!this.tasksCanGoNext) return;
+    this.tasksOffset += this.tasksPageSizeFinishedReports;
+    this.fetchParticipationModalTasksPage(false);
+  }
+
+  formatTaskPoints(task: ClienteActionItem): string {
+    if (task.points == null || !Number.isFinite(task.points)) {
+      return '—';
+    }
+    return String(task.points);
   }
 
   getCompanyDisplayName(cnpj: string): string {

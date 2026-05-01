@@ -67,7 +67,7 @@ describe('GamificationDashboardComponent - Accessibility', () => {
       })
     );
 
-    const emptyGamificacaoMaps = { byEmpId: new Map(), byCnpjNorm: new Map() };
+    const emptyGamificacaoMaps = { byEmpId: new Map(), byCnpjNorm: new Map(), byTitleNorm: new Map() };
     const companyKpiServiceSpy = jasmine.createSpyObj('CompanyKpiService', [
       'extractCnpjId',
       'getKpiData',

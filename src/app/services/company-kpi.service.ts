@@ -13,6 +13,8 @@ import {
 export interface ParticipacaoRowGamificacaoInput {
   participationKey: string;
   deliveryId?: string;
+  /** Título da entrega (ex. lista via `/game/reports/finished/deliveries`) para casar com nome/empresa no GET gamificação. */
+  deliveryTitle?: string;
 }
 
 /**
@@ -68,9 +70,9 @@ export interface CompanyDisplay {
   delivery_title?: string;
   /** `extra.cnpj` na entrega / user-action — exibir ao lado do título quando há ambiguidade. */
   delivery_extra_cnpj?: string;
-  /** Game4U: `delivery_id` da entrega representada na linha (detalhe = user-actions desta entrega). */
+  /** Game4U: identificador da entrega na linha (EmpID/cruzamento gamificação); o modal não envia isto em `actions-by-delivery`. */
   deliveryId?: string;
-  /** Lista via `GET /game/reports/finished/deliveries`: tarefas no modal vêm de `actions-by-delivery`. */
+  /** Lista via `GET /game/reports/finished/deliveries`: tarefas no modal vêm de `actions-by-delivery` (filtro por `delivery_title`). */
   loadTasksViaGameReports?: boolean;
   /** EmpID usado no mapa `byEmpId` da gamificação (ex.: extraído de `delivery_id` antes da competência). */
   gamificacaoEmpIdUsado?: string;
@@ -89,6 +91,8 @@ export interface CarteiraSupabaseKpiRow {
 export interface GamificacaoMaps {
   byEmpId: Map<string, CnpjKpiData>;
   byCnpjNorm: Map<string, CnpjKpiData>;
+  /** Nome/empresa normalizado (API) → KPI; usado quando só há `delivery_title` na participação. */
+  byTitleNorm: Map<string, CnpjKpiData>;
 }
 
 interface CacheEntry<T> {
@@ -299,6 +303,46 @@ export class CompanyKpiService {
   }
 
   /**
+   * Chave estável para casar `delivery_title` da participação com nome vindo no GET gamificação.
+   */
+  private normalizeTitleMatchKey(title: string): string {
+    const t = String(title || '')
+      .trim()
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '');
+    return t.replace(/\s+/g, ' ').trim();
+  }
+
+  /** Nome exibível na linha da API (varia por payload do hook). */
+  private pickCompanyDisplayNameForGamificacaoRow(row: GamificacaoEmpresaRow): string {
+    const r = row as Record<string, unknown>;
+    const cands: unknown[] = [
+      r['empresa'],
+      r['Empresa'],
+      r['nome'],
+      r['Nome'],
+      r['razao'],
+      r['razaoSocial'],
+      r['RazaoSocial'],
+      r['Cliente'],
+      r['cliente'],
+      r['delivery_title'],
+      r['DeliveryTitle'],
+      r['titulo'],
+      r['Titulo'],
+      r['descricao'],
+      r['Descricao']
+    ];
+    for (const v of cands) {
+      if (typeof v === 'string' && v.trim()) {
+        return v.trim();
+      }
+    }
+    return '';
+  }
+
+  /**
    * Converte porcentagem BR ("94,81") para número.
    */
   parsePorcEntregas(value: string | number | undefined | null): number {
@@ -376,6 +420,7 @@ export class CompanyKpiService {
   private buildGamificacaoMaps(rows: GamificacaoEmpresaRow[]): GamificacaoMaps {
     const byEmpId = new Map<string, CnpjKpiData>();
     const byCnpjNorm = new Map<string, CnpjKpiData>();
+    const byTitleNorm = new Map<string, CnpjKpiData>();
 
     for (const row of rows) {
       if (!row) {
@@ -396,9 +441,16 @@ export class CompanyKpiService {
       for (const cand of this.cnpjNormCandidates(cnpjRaw)) {
         byCnpjNorm.set(cand, kpi);
       }
+      const displayName = this.pickCompanyDisplayNameForGamificacaoRow(row);
+      if (displayName) {
+        const tk = this.normalizeTitleMatchKey(displayName);
+        if (tk && !byTitleNorm.has(tk)) {
+          byTitleNorm.set(tk, kpi);
+        }
+      }
     }
 
-    return { byEmpId, byCnpjNorm };
+    return { byEmpId, byCnpjNorm, byTitleNorm };
   }
 
   private extractGamificacaoRows(body: unknown): GamificacaoEmpresaRow[] {
@@ -423,7 +475,7 @@ export class CompanyKpiService {
 
     if (!url || !token) {
       console.warn('📊 Gamificação: defina gamificacaoApiUrl e gamificacaoApiToken (x-api-token).');
-      return of({ byEmpId: new Map(), byCnpjNorm: new Map() });
+      return of({ byEmpId: new Map(), byCnpjNorm: new Map(), byTitleNorm: new Map() });
     }
 
     const now = Date.now();
@@ -439,7 +491,7 @@ export class CompanyKpiService {
       map(body => this.buildGamificacaoMaps(this.extractGamificacaoRows(body))),
       catchError(err => {
         console.error('📊 Erro na API gamificação (empresas):', err);
-        return of({ byEmpId: new Map(), byCnpjNorm: new Map() });
+        return of({ byEmpId: new Map(), byCnpjNorm: new Map(), byTitleNorm: new Map() });
       }),
       /** `refCount: false` mantém o último valor após unsubscribe — evita cancelar o GET após `take(1)` no prefetch. */
       shareReplay({ bufferSize: 1, refCount: false })
@@ -583,30 +635,42 @@ export class CompanyKpiService {
 
     const normalized: ParticipacaoRowGamificacaoInput[] = rows.map(r =>
       typeof r === 'string'
-        ? { participationKey: String(r).trim(), deliveryId: undefined }
+        ? { participationKey: String(r).trim(), deliveryId: undefined, deliveryTitle: undefined }
         : {
             participationKey: String(r.participationKey || '').trim(),
-            deliveryId: r.deliveryId?.trim()
+            deliveryId: r.deliveryId?.trim(),
+            deliveryTitle: r.deliveryTitle?.trim()
           }
     );
 
     return this.getGamificacaoMaps$().pipe(
-      map(({ byEmpId, byCnpjNorm }) =>
-        normalized.map(({ participationKey, deliveryId }) => {
+      map(({ byEmpId, byCnpjNorm, byTitleNorm }) =>
+        normalized.map(({ participationKey, deliveryId, deliveryTitle }) => {
           const lookupKey = buildGamificacaoLookupKeyForParticipacaoRow(
             participationKey,
             deliveryId
           );
-          const { kpi: kpiData, gamificacaoEmpIdUsado } = this.resolveKpiForParticipacaoRowKey(
+          let { kpi: kpiData, gamificacaoEmpIdUsado } = this.resolveKpiForParticipacaoRowKey(
             lookupKey,
             byEmpId,
             byCnpjNorm
           );
 
+          if (!kpiData && deliveryTitle && byTitleNorm.size > 0) {
+            const tk = this.normalizeTitleMatchKey(deliveryTitle);
+            if (tk) {
+              const hit = byTitleNorm.get(tk);
+              if (hit) {
+                kpiData = hit;
+              }
+            }
+          }
+
           if (!kpiData) {
             console.warn('📊 enrichFromParticipacaoRowKeys: sem KPI', {
               participationKey,
               deliveryId: deliveryId || null,
+              deliveryTitle: deliveryTitle || null,
               lookupKeyGamificacao: lookupKey
             });
           }
@@ -704,6 +768,13 @@ export class CompanyKpiService {
       return;
     }
     result.classificacao = kpiData['Classificação do Cliente'];
+    const cnpjRaw = kpiData.CNPJ?.trim();
+    if (cnpjRaw) {
+      const d = cnpjRaw.replace(/\D/g, '');
+      if (d.length === 14) {
+        result.cnpjNumber = d;
+      }
+    }
     const e = kpiData.entrega;
     if (e !== undefined && e !== null && Number.isFinite(Number(e))) {
       const n = Number(e);

@@ -3,7 +3,7 @@
     <!-- Loading State -->
     <div *ngIf="isLoading" class="loading-state">
       <i class="ri-loader-4-line loading-icon"></i>
-      <span>Carregando...</span>
+      <span>{{ activityLoadingMessage }}</span>
     </div>
 
     <!-- Content -->
@@ -12,7 +12,7 @@
       <div *ngIf="isActivityList" class="chart-section">
         <h3 class="section-title">
           <i class="ri-bar-chart-line section-icon" aria-hidden="true"></i>
-          Volume de Tarefas por Dia
+          {{ chartSectionTitle }}
         </h3>
         <div *ngIf="isLoadingChart" class="loading-chart">
           <i class="ri-loader-4-line loading-icon"></i>
@@ -45,15 +45,15 @@
           </div>
           
           <ng-container *ngIf="activityItems.length > 0">
-            <div *ngIf="listType === 'atividades'" class="activity-search-bar">
+            <div *ngIf="isGroupedTasksModal" class="activity-search-bar">
               <i class="ri-search-line search-icon" aria-hidden="true"></i>
               <input
                 type="search"
                 class="activity-search-input"
                 [value]="activitySearchQuery"
                 (input)="onActivitySearchInput($event)"
-                placeholder="Buscar por tarefa, cliente ou data…"
-                aria-label="Buscar tarefas por título, cliente ou data"
+                [placeholder]="isPendingActivitiesModal ? 'Buscar por tarefa, cliente ou prazo…' : 'Buscar por tarefa, cliente ou data…'"
+                [attr.aria-label]="isPendingActivitiesModal ? 'Buscar por título, cliente ou data de prazo' : 'Buscar tarefas por título, cliente ou data'"
               />
               <button
                 *ngIf="activitySearchQuery.trim()"
@@ -65,26 +65,84 @@
               </button>
             </div>
 
-            <div *ngIf="listType === 'atividades' && displayedActivityItems.length === 0" class="empty-state empty-search">
+            <div *ngIf="isGroupedTasksModal && displayedActivityItems.length === 0" class="empty-state empty-search">
               <i class="ri-search-line empty-icon"></i>
               <span>Nenhuma tarefa corresponde à busca</span>
             </div>
 
-            <div *ngIf="displayedActivityItems.length > 0" class="tasks-table">
-            <div class="task-header" [class.with-delivery]="listType === 'atividades'" [class.with-points]="listType === 'pontos'">
+            <!-- Tarefas finalizadas: agrupadas por nome da tarefa + acordeão por cliente -->
+            <div
+              *ngIf="displayedActivityItems.length > 0 && isGroupedTasksModal"
+              class="finished-tasks-accordion"
+              [class.finished-tasks-accordion--pending-only]="isPendingActivitiesModal">
+              <div
+                *ngFor="let grp of finishedTaskGroups; trackBy: trackByFinishedTaskGroup"
+                class="task-group-card">
+                <button
+                  type="button"
+                  class="task-group-header"
+                  [class.expanded]="isFinishedTaskExpanded(grp.groupKey)"
+                  [attr.aria-expanded]="isFinishedTaskExpanded(grp.groupKey)"
+                  (click)="toggleFinishedTaskGroup(grp.groupKey)">
+                  <i
+                    class="ri-arrow-down-s-line accordion-icon"
+                    [class.expanded]="isFinishedTaskExpanded(grp.groupKey)"
+                    aria-hidden="true"></i>
+                  <span class="task-group-title">{{ grp.title }}</span>
+                  <span
+                    class="task-group-count"
+                    [attr.aria-label]="grp.items.length === 1 ? '1 ocorrência' : grp.items.length + ' ocorrências'">
+                    {{ grp.items.length }} {{ grp.items.length === 1 ? 'vez' : 'vezes' }}
+                  </span>
+                </button>
+                <div
+                  *ngIf="isFinishedTaskExpanded(grp.groupKey)"
+                  class="task-group-body"
+                  [@slideDown]>
+                  <div class="task-group-detail-header">
+                    <div class="task-col-delivery">Cliente</div>
+                    <div class="task-col-prazo">Prazo</div>
+                    <div *ngIf="!isPendingActivitiesModal" class="task-col-date">Data de Finalização</div>
+                  </div>
+                  <div class="task-group-rows">
+                    <div *ngFor="let item of grp.items" class="task-row task-row--nested">
+                      <div class="task-col-delivery">
+                        <span class="task-delivery">{{ getActivityClientDisplay(item) }}</span>
+                      </div>
+                      <div class="task-col-prazo">
+                        <div class="task-prazo-cell">
+                          <span class="task-prazo">{{ formatDtPrazo(item.dt_prazo) }}</span>
+                          <span
+                            *ngIf="isPendingActivitiesModal && isPendingTaskOverdue(item.dt_prazo)"
+                            class="task-prazo-overdue-badge"
+                            role="status"
+                            [attr.aria-label]="'Atrasado: prazo em ' + formatDtPrazo(item.dt_prazo)">
+                            <i class="ri-error-warning-line" aria-hidden="true"></i>
+                            <span>Atrasado</span>
+                          </span>
+                        </div>
+                      </div>
+                      <div *ngIf="!isPendingActivitiesModal" class="task-col-date">
+                        <span class="task-date">{{ formatDateOnly(item.created) }}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Pontos obtidos: tabela plana -->
+            <div *ngIf="displayedActivityItems.length > 0 && listType === 'pontos'" class="tasks-table">
+            <div class="task-header with-points">
               <div class="task-col-title">Tarefa</div>
-              <div class="task-col-delivery" *ngIf="listType === 'atividades'">Cliente</div>
               <div class="task-col-executor">Executor</div>
               <div class="task-col-date">Data</div>
-              <div class="task-col-points" *ngIf="listType === 'pontos'">Pontos</div>
+              <div class="task-col-points">Pontos</div>
             </div>
             <div class="tasks-list">
-              <div *ngFor="let item of displayedActivityItems" class="task-row" [class.with-delivery]="listType === 'atividades'" [class.with-points]="listType === 'pontos'">
+              <div *ngFor="let item of displayedActivityItems" class="task-row with-points">
                 <div class="task-col-title">
                   <span class="task-title">{{ item.title }}</span>
-                </div>
-                <div class="task-col-delivery" *ngIf="listType === 'atividades'">
-                  <span class="task-delivery">{{ getActivityClientDisplay(item) }}</span>
                 </div>
                 <div class="task-col-executor">
                   <span class="task-executor">{{ formatEmailToName(item.player) }}</span>
@@ -92,7 +150,7 @@
                 <div class="task-col-date">
                   <span class="task-date">{{ formatDate(item.created) }}</span>
                 </div>
-                <div class="task-col-points" *ngIf="listType === 'pontos'">
+                <div class="task-col-points">
                   <span class="task-points">+{{ item.points }} pts</span>
                 </div>
               </div>

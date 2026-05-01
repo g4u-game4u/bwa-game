@@ -5,6 +5,17 @@
       <button 
         class="metric-item metric-button" 
         type="button"
+        (click)="onCardClick('atividades-pendentes')"
+        aria-label="Ver tarefas pendentes ou em execução">
+        <i class="ri-time-line metric-icon"></i>
+        <div class="metric-content">
+          <div class="metric-label">Pendentes</div>
+          <div class="metric-value">{{ formatNumber(activities.pendentes) }}</div>
+        </div>
+      </button>
+      <button 
+        class="metric-item metric-button" 
+        type="button"
         (click)="onCardClick('atividades-finalizadas')"
         aria-label="Ver tarefas finalizadas">
         <i class="ri-checkbox-circle-line metric-icon"></i>

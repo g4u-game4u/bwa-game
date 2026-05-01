@@ -448,6 +448,30 @@ describe('CompanyKpiService', () => {
         data: [{ EmpID: '2944', porcEntregas: '55,00', procFinalizados: '0', procPendentes: '0' }]
       });
     });
+
+    it('should match porcEntregas by deliveryTitle when participation key is synthetic (reports list)', done => {
+      service
+        .enrichFromParticipacaoRowKeys([
+          { participationKey: 'g4u-rpt:ACME LTDA', deliveryTitle: 'ACME LTDA' }
+        ])
+        .subscribe(res => {
+          expect(res[0].cnpj).toBe('g4u-rpt:ACME LTDA');
+          expect(res[0].porcEntregas).toBeCloseTo(82, 5);
+          done();
+        });
+      httpMock.expectOne(TEST_GAMIFICACAO_URL).flush({
+        data: [
+          {
+            EmpID: 42,
+            empresa: 'ACME LTDA',
+            cnpj: '12.345.678/0001-90',
+            porcEntregas: '82,00',
+            procFinalizados: '1',
+            procPendentes: '0'
+          }
+        ]
+      });
+    });
   });
 
   describe('mapToKpiData / colors (target 90)', () => {

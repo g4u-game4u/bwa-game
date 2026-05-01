@@ -1018,6 +1018,9 @@ export class DashboardSupervisorTecnicoComponent implements OnInit, OnDestroy {
       case 'atividades-finalizadas':
         this.progressModalType = 'atividades';
         break;
+      case 'atividades-pendentes':
+        this.progressModalType = 'atividades-pendentes';
+        break;
       case 'atividades-pontos':
         this.progressModalType = 'pontos';
         break;

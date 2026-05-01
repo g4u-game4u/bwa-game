@@ -3,10 +3,23 @@ import { trigger, transition, style, animate } from '@angular/animations';
 import { Subject, forkJoin, of, firstValueFrom } from 'rxjs';
 import { takeUntil, map, catchError } from 'rxjs/operators';
 import { ActionLogService, ActivityListItem, ProcessListItem } from '@services/action-log.service';
+import type { Game4uUserActionStatus } from '@model/game4u-api.model';
 import { ChartDataset } from '@model/gamification-dashboard.model';
 import { CnpjLookupService } from '@services/cnpj-lookup.service';
 
-export type ProgressListType = 'atividades' | 'pontos' | 'processos-pendentes' | 'processos-finalizados';
+export type ProgressListType =
+  | 'atividades'
+  | 'atividades-pendentes'
+  | 'pontos'
+  | 'processos-pendentes'
+  | 'processos-finalizados';
+
+/** Agrupamento por título de tarefa (modal tarefas finalizadas). */
+export interface FinishedTaskGroup {
+  groupKey: string;
+  title: string;
+  items: ActivityListItem[];
+}
 
 @Component({
   selector: 'modal-progress-list',
@@ -45,6 +58,9 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
   expandedProcesses: Set<string> = new Set();
   processActivities: Map<string, ActivityListItem[]> = new Map();
   loadingProcessActivities: Set<string> = new Set();
+
+  /** Acordeão: grupos de tarefas finalizadas expandidos (chave = título normalizado). */
+  expandedFinishedTaskGroups = new Set<string>();
   
   // Copy state
   copiedDeliveryId: string | null = null;
@@ -72,6 +88,8 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
     switch (this.listType) {
       case 'atividades':
         return 'Tarefas Finalizadas';
+      case 'atividades-pendentes':
+        return 'Tarefas Pendentes';
       case 'pontos':
         return 'Pontos Obtidos';
       case 'processos-pendentes':
@@ -87,6 +105,8 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
     switch (this.listType) {
       case 'atividades':
         return 'ri-checkbox-circle-line'; // Round checkbox icon for finished tasks
+      case 'atividades-pendentes':
+        return 'ri-time-line';
       case 'pontos':
         return 'ri-coins-line';
       case 'processos-pendentes':
@@ -99,7 +119,44 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
   }
 
   get isActivityList(): boolean {
-    return this.listType === 'atividades' || this.listType === 'pontos';
+    return (
+      this.listType === 'atividades' ||
+      this.listType === 'atividades-pendentes' ||
+      this.listType === 'pontos'
+    );
+  }
+
+  /** Mesmo layout em acordeão que «finalizadas» (agrupamento por título). */
+  get isGroupedTasksModal(): boolean {
+    return this.listType === 'atividades' || this.listType === 'atividades-pendentes';
+  }
+
+  /** Modal «Tarefas Pendentes»: sem coluna de finalização; gráfico por prazo. */
+  get isPendingActivitiesModal(): boolean {
+    return this.listType === 'atividades-pendentes';
+  }
+
+  /**
+   * Mensagem enquanto `forkJoin` aguarda cada `getActivityList` terminar (inclui todas as páginas de
+   * `GET /game/reports/user-actions` para pendentes e finalizadas), depois gráfico + enrich CNPJ.
+   */
+  get activityLoadingMessage(): string {
+    switch (this.listType) {
+      case 'atividades-pendentes':
+        return 'Carregando tarefas pendentes e gráfico (todas as páginas)…';
+      case 'atividades':
+        return 'Carregando tarefas finalizadas e gráfico (todas as páginas)…';
+      case 'pontos':
+        return 'Carregando pontos…';
+      default:
+        return 'Carregando…';
+    }
+  }
+
+  get chartSectionTitle(): string {
+    return this.isPendingActivitiesModal
+      ? 'Tarefas por dia de prazo no mês'
+      : 'Volume de Tarefas por Dia';
   }
 
   get isProcessList(): boolean {
@@ -110,7 +167,7 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
    * Linhas exibidas na tabela: com filtro em «Tarefas finalizadas», lista completa nos demais tipos.
    */
   get displayedActivityItems(): ActivityListItem[] {
-    if (this.listType !== 'atividades') {
+    if (!this.isGroupedTasksModal) {
       return this.activityItems;
     }
     const q = this.activitySearchQuery.trim().toLowerCase();
@@ -118,6 +175,57 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
       return this.activityItems;
     }
     return this.activityItems.filter(item => this.activityMatchesSearch(item, q));
+  }
+
+  /**
+   * Tarefas finalizadas agrupadas pelo nome da tarefa (`title`), com contagem e detalhes por cliente ao expandir.
+   */
+  get finishedTaskGroups(): FinishedTaskGroup[] {
+    if (!this.isGroupedTasksModal) {
+      return [];
+    }
+    const items = this.displayedActivityItems;
+    const map = new Map<string, ActivityListItem[]>();
+    for (const item of items) {
+      const raw = (item.title || '').trim();
+      const title = raw || 'Sem título';
+      const list = map.get(title) ?? [];
+      list.push(item);
+      map.set(title, list);
+    }
+    const groups: FinishedTaskGroup[] = [...map.entries()].map(([title, row]) => ({
+      groupKey: title,
+      title,
+      items: [...row].sort((a, b) => {
+        if (this.isPendingActivitiesModal) {
+          const ka = this.dtPrazoSortKey(a.dt_prazo);
+          const kb = this.dtPrazoSortKey(b.dt_prazo);
+          if (ka !== kb) {
+            return ka - kb;
+          }
+        }
+        return b.created - a.created;
+      })
+    }));
+    groups.sort((a, b) => a.title.localeCompare(b.title, 'pt-BR', { sensitivity: 'base' }));
+    return groups;
+  }
+
+  trackByFinishedTaskGroup(_index: number, g: FinishedTaskGroup): string {
+    return g.groupKey;
+  }
+
+  toggleFinishedTaskGroup(groupKey: string): void {
+    if (this.expandedFinishedTaskGroups.has(groupKey)) {
+      this.expandedFinishedTaskGroups.delete(groupKey);
+    } else {
+      this.expandedFinishedTaskGroups.add(groupKey);
+    }
+    this.cdr.markForCheck();
+  }
+
+  isFinishedTaskExpanded(groupKey: string): boolean {
+    return this.expandedFinishedTaskGroups.has(groupKey);
   }
 
   onActivitySearchInput(event: Event): void {
@@ -163,27 +271,24 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
     if (item.delivery_title?.toLowerCase().includes(qLower)) {
       return true;
     }
-    const formatted = this.formatDate(item.created).toLowerCase();
-    if (formatted.includes(qLower)) {
+    if (item.dt_prazo?.toLowerCase().includes(qLower)) {
       return true;
     }
-    const dateOnly = new Date(item.created).toLocaleDateString('pt-BR', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric'
-    }).toLowerCase();
-    if (dateOnly.includes(qLower)) {
+    const prazoFmt = this.formatDtPrazo(item.dt_prazo).toLowerCase();
+    if (prazoFmt && prazoFmt !== '—' && prazoFmt.includes(qLower)) {
       return true;
     }
-    const digits = qLower.replace(/\D/g, '');
-    if (digits.length >= 2) {
-      const dateDigits = dateOnly.replace(/\D/g, '');
-      if (dateDigits.includes(digits)) {
+    if (!this.isPendingActivitiesModal) {
+      const completionDateStr = this.formatDateOnly(item.created).toLowerCase();
+      if (completionDateStr.includes(qLower)) {
         return true;
       }
-      const fullDigits = formatted.replace(/\D/g, '');
-      if (fullDigits.includes(digits)) {
-        return true;
+      const digits = qLower.replace(/\D/g, '');
+      if (digits.length >= 2) {
+        const dateDigits = completionDateStr.replace(/\D/g, '');
+        if (dateDigits.includes(digits)) {
+          return true;
+        }
       }
     }
     return false;
@@ -219,12 +324,27 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
 
     if (this.isActivityList) {
       this.isLoadingChart = true;
-      // Load activities for all player IDs in parallel
+      this.activityItems = [];
+      this.chartLabels = [];
+      this.chartDatasets = [];
+      /**
+       * Pendentes e finalizadas (Game4U): cada `getActivityList` agrega todas as páginas de
+       * `GET /game/reports/user-actions` antes de completar. `forkJoin` espera todos os jogadores;
+       * só então montamos gráfico e tabela (e enrich CNPJ).
+       */
+      const reportStatuses: Game4uUserActionStatus[] | undefined =
+        this.listType === 'atividades-pendentes'
+          ? ['PENDING', 'DOING']
+          : this.listType === 'atividades'
+            ? ['DONE', 'DELIVERED']
+            : undefined;
+
       const activityRequests = playerIds.map(playerId =>
         this.actionLogService.getActivityList(
           playerId,
           this.month,
-          this.listType === 'atividades' ? 'DONE' : undefined
+          undefined,
+          reportStatuses
         ).pipe(
           catchError(error => {
             console.error(`Error loading activity list for player ${playerId}:`, error);
@@ -240,15 +360,26 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
             // Aggregate all activities from all players
             this.activityItems = results.flat();
 
-            // Sort by created date (newest first)
-            this.activityItems.sort((a, b) => b.created - a.created);
+            if (this.listType === 'atividades-pendentes') {
+              this.activityItems.sort((a, b) => {
+                const ka = this.dtPrazoSortKey(a.dt_prazo);
+                const kb = this.dtPrazoSortKey(b.dt_prazo);
+                if (ka !== kb) {
+                  return ka - kb;
+                }
+                return b.created - a.created;
+              });
+            } else {
+              this.activityItems.sort((a, b) => b.created - a.created);
+            }
 
-            // Gráfico: mesma base da tabela (uma linha por user-action / action_log já mapeada em getActivityList)
+            // Gráfico: finalizadas por dia de registro; pendentes por dia de prazo (`dt_prazo`)
             this.applyChartFromActivityItems(this.activityItems);
 
-            // Enrich CNPJ names
+            // Enrich CNPJ names (tabela); só depois exibir conteúdo + gráfico juntos
             await this.enrichCnpjNames(this.activityItems.map(item => item.cnpj).filter(cnpj => cnpj));
 
+            this.isLoadingChart = false;
             this.isLoading = false;
             this.cdr.markForCheck();
           },
@@ -256,6 +387,7 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
             console.error('Error loading activity lists:', err);
             this.activityItems = [];
             this.applyChartFromActivityItems([]);
+            this.isLoadingChart = false;
             this.isLoading = false;
             this.cdr.markForCheck();
           }
@@ -328,8 +460,14 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
   /**
    * Conta tarefas por dia do mês usando os mesmos itens da tabela (origem: user-actions Game4U
    * ou action_log Funifier, conforme getActivityList).
+   * «Tarefas pendentes»: eixo = dia do calendário do **prazo** (`dt_prazo`), não data de criação/finalização.
    */
   private applyChartFromActivityItems(items: ActivityListItem[]): void {
+    if (this.listType === 'atividades-pendentes') {
+      this.applyChartFromDtPrazoItems(items);
+      return;
+    }
+
     const targetMonth = this.month || new Date();
     const year = targetMonth.getFullYear();
     const month = targetMonth.getMonth();
@@ -384,9 +522,80 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
         borderWidth: 1
       }
     ];
+  }
 
-    this.isLoadingChart = false;
-    this.cdr.markForCheck();
+  /** Ordenação e gráfico: milissegundos no início do dia do prazo; sem prazo → fim da lista. */
+  private dtPrazoSortKey(dt?: string): number {
+    const ms = this.parseDtPrazoToLocalStartMs(dt);
+    return ms ?? Number.MAX_SAFE_INTEGER;
+  }
+
+  private parseDtPrazoToLocalStartMs(dt?: string): number | null {
+    if (!dt?.trim()) {
+      return null;
+    }
+    const ymd = /^(\d{4})-(\d{2})-(\d{2})/.exec(dt.trim());
+    if (!ymd) {
+      return null;
+    }
+    const d = new Date(Number(ymd[1]), Number(ymd[2]) - 1, Number(ymd[3]), 0, 0, 0, 0);
+    return Number.isNaN(d.getTime()) ? null : d.getTime();
+  }
+
+  /** Barras = contagem de tarefas cujo `dt_prazo` cai em cada dia do mês visível. */
+  private applyChartFromDtPrazoItems(items: ActivityListItem[]): void {
+    const targetMonth = this.month || new Date();
+    const year = targetMonth.getFullYear();
+    const month = targetMonth.getMonth();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const today = new Date();
+    const isCurrentMonth = year === today.getFullYear() && month === today.getMonth();
+    const currentDay = isCurrentMonth ? today.getDate() : daysInMonth;
+
+    const newDailyCounts: number[] = Array.from({ length: daysInMonth }, () => 0);
+
+    for (const item of items) {
+      const ms = this.parseDtPrazoToLocalStartMs(item.dt_prazo);
+      if (ms == null) {
+        continue;
+      }
+      const entryDate = new Date(ms);
+      const entryYear = entryDate.getFullYear();
+      const entryMonth = entryDate.getMonth();
+      const entryDay = entryDate.getDate();
+      if (entryYear === year && entryMonth === month && entryDay >= 1 && entryDay <= daysInMonth) {
+        newDailyCounts[entryDay - 1]++;
+      }
+    }
+
+    this.chartLabels = [...Array.from({ length: daysInMonth }, (_, i) => String(i + 1))];
+
+    const fillPending = (count: number, index: number, active: string, muted: string) => {
+      if (isCurrentMonth && index + 1 > currentDay) {
+        return 'rgba(255, 255, 255, 0.1)';
+      }
+      if (count > 0) {
+        return active;
+      }
+      return muted;
+    };
+
+    const bg = newDailyCounts.map((count, index) =>
+      fillPending(count, index, 'rgba(251, 191, 36, 0.65)', 'rgba(255, 255, 255, 0.05)')
+    );
+    const border = newDailyCounts.map((count, index) =>
+      fillPending(count, index, 'rgba(245, 158, 11, 1)', 'rgba(255, 255, 255, 0.1)')
+    );
+
+    this.chartDatasets = [
+      {
+        label: 'Por prazo',
+        data: [...newDailyCounts],
+        backgroundColor: bg,
+        borderColor: border,
+        borderWidth: 1
+      }
+    ];
   }
 
   onClose(): void {
@@ -403,6 +612,71 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
       hour: '2-digit',
       minute: '2-digit'
     });
+  }
+
+  /** Data sem horário (coluna «Data de Finalização» em tarefas finalizadas). */
+  formatDateOnly(timestamp: number): string {
+    if (!timestamp) return '';
+    const date = new Date(timestamp);
+    return date.toLocaleDateString('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric'
+    });
+  }
+
+  /** Exibe `dt_prazo` (`YYYY-MM-DD` ou ISO) no formato local; sem valor → em dash. */
+  formatDtPrazo(value?: string): string {
+    if (!value?.trim()) {
+      return '—';
+    }
+    const s = value.trim();
+    const ymd = /^(\d{4})-(\d{2})-(\d{2})/.exec(s);
+    if (ymd) {
+      const d = new Date(Number(ymd[1]), Number(ymd[2]) - 1, Number(ymd[3]));
+      if (!Number.isNaN(d.getTime())) {
+        return d.toLocaleDateString('pt-BR', {
+          day: '2-digit',
+          month: '2-digit',
+          year: 'numeric'
+        });
+      }
+    }
+    const t = Date.parse(s);
+    if (!Number.isNaN(t)) {
+      return new Date(t).toLocaleDateString('pt-BR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric'
+      });
+    }
+    return s;
+  }
+
+  /**
+   * Início do dia local do prazo (alinha a {@link formatDtPrazo}: `YYYY-MM-DD` ou ISO).
+   */
+  private dtPrazoToLocalDayStartMs(dt?: string): number | null {
+    let ms = this.parseDtPrazoToLocalStartMs(dt);
+    if (ms == null && dt?.trim()) {
+      const t = Date.parse(dt.trim());
+      if (!Number.isNaN(t)) {
+        const d = new Date(t);
+        ms = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0).getTime();
+      }
+    }
+    return ms;
+  }
+
+  /** Tarefas pendentes: prazo estritamente anterior a hoje (calendário local). */
+  isPendingTaskOverdue(dt_prazo?: string): boolean {
+    const ms = this.dtPrazoToLocalDayStartMs(dt_prazo);
+    if (ms == null) {
+      return false;
+    }
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0).getTime();
+    return ms < todayStart;
   }
 
   /**

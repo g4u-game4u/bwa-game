@@ -249,6 +249,156 @@
   padding-bottom: $spacing-md;
 }
 
+// Tarefas finalizadas — agrupamento por título + detalhe por cliente
+.finished-tasks-accordion {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-sm;
+}
+
+.task-group-card {
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.task-group-header {
+  display: flex;
+  align-items: center;
+  gap: $spacing-md;
+  width: 100%;
+  padding: $spacing-md $spacing-lg;
+  margin: 0;
+  text-align: left;
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.03);
+  border: none;
+  color: inherit;
+  font: inherit;
+  transition: background 0.2s ease;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.06);
+  }
+
+  &:focus-visible {
+    outline: 2px solid $primary-electric-blue;
+    outline-offset: -2px;
+  }
+
+  &.expanded {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  .accordion-icon {
+    font-size: 1.25rem;
+    color: $text-secondary;
+    transition: transform 0.25s ease;
+    flex-shrink: 0;
+
+    &.expanded {
+      transform: rotate(180deg);
+    }
+  }
+
+  .task-group-title {
+    flex: 1;
+    min-width: 0;
+    color: $text-primary;
+    font-weight: 600;
+    font-size: 0.9375rem;
+    line-height: 1.35;
+  }
+
+  .task-group-count {
+    flex-shrink: 0;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: $text-secondary;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+  }
+}
+
+.task-group-body {
+  background: rgba(0, 0, 0, 0.15);
+}
+
+.task-group-detail-header {
+  display: grid;
+  grid-template-columns: 1.6fr 1fr 1.4fr;
+  gap: $spacing-md;
+  padding: $spacing-sm $spacing-lg;
+  background: #323339;
+  font-weight: 600;
+  font-size: 0.75rem;
+  color: $text-secondary;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.finished-tasks-accordion--pending-only {
+  .task-group-detail-header,
+  .task-row--nested {
+    grid-template-columns: 1.65fr 1.35fr;
+  }
+}
+
+.task-prazo-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  min-width: 0;
+}
+
+.task-prazo-overdue-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: #fb923c;
+
+  i {
+    font-size: 14px;
+    color: #f97316;
+  }
+}
+
+.task-group-rows {
+  display: flex;
+  flex-direction: column;
+}
+
+.task-row--nested {
+  display: grid;
+  grid-template-columns: 1.6fr 1fr 1.4fr;
+  gap: $spacing-md;
+  padding: $spacing-md $spacing-lg;
+  background: rgba(255, 255, 255, 0.02);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+
+  &:last-child {
+    border-bottom: none;
+  }
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.05);
+  }
+
+  .task-delivery,
+  .task-prazo,
+  .task-date {
+    color: $text-secondary;
+    font-size: 0.875rem;
+  }
+}
+
 .tasks-table {
   display: flex;
   flex-direction: column;
@@ -278,9 +428,9 @@
       grid-template-columns: 2fr 1.5fr 1.5fr 1fr;
     }
 
-    // Tarefas finalizadas: Tarefa, Processo (delivery_title), Executor, Data
+    // Tarefas finalizadas: Tarefa, Cliente, Prazo, Data de finalização
     &.with-delivery:not(.with-points) {
-      grid-template-columns: 2fr 1.5fr 1.5fr 1.5fr;
+      grid-template-columns: 2fr 1.5fr 1fr 1.5fr;
     }
     
     // Adjust grid for processes
@@ -317,7 +467,7 @@
     }
 
     &.with-delivery:not(.with-points) {
-      grid-template-columns: 2fr 1.5fr 1.5fr 1.5fr;
+      grid-template-columns: 2fr 1.5fr 1fr 1.5fr;
     }
     
     // Adjust grid for processes
@@ -341,6 +491,13 @@
 
     .task-col-executor {
       .task-executor {
+        color: $text-secondary;
+        font-size: 0.875rem;
+      }
+    }
+
+    .task-col-prazo {
+      .task-prazo {
         color: $text-secondary;
         font-size: 0.875rem;
       }
@@ -716,6 +873,35 @@
     padding: $spacing-md;
   }
 
+  .finished-tasks-accordion {
+    .task-group-detail-header {
+      display: none;
+    }
+
+    .task-row--nested {
+      grid-template-columns: 1fr;
+      gap: $spacing-xs;
+
+      .task-col-delivery::before {
+        content: 'Cliente: ';
+        font-weight: 600;
+        color: $text-secondary;
+      }
+
+      .task-col-prazo::before {
+        content: 'Prazo: ';
+        font-weight: 600;
+        color: $text-secondary;
+      }
+
+      .task-col-date::before {
+        content: 'Data de Finalização: ';
+        font-weight: 600;
+        color: $text-secondary;
+      }
+    }
+  }
+
   .tasks-table {
     .task-header,
     .task-row {
@@ -744,7 +930,13 @@
         color: $text-secondary;
       }
 
-      .task-col-executor::before {
+      &.with-delivery .task-col-prazo::before {
+        content: 'Prazo: ';
+        font-weight: 600;
+        color: $text-secondary;
+      }
+
+      &.with-points:not(.with-delivery) .task-col-executor::before {
         content: 'Executor: ';
         font-weight: 600;
         color: $text-secondary;
@@ -754,6 +946,10 @@
         content: 'Data: ';
         font-weight: 600;
         color: $text-secondary;
+      }
+
+      &.with-delivery .task-col-date::before {
+        content: 'Data de Finalização: ';
       }
 
       .task-col-status::before {

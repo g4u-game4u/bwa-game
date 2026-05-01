@@ -377,6 +377,37 @@ describe('game4u-game-mapper', () => {
       expect(list.length).toBe(1);
       expect(list[0].created).toBe(Date.parse('2024-06-10T10:00:00.000Z'));
     });
+
+    it('maps dt_prazo from reports/user-actions payload', () => {
+      const month = new Date(2024, 5, 1);
+      const actions: Game4uUserActionModel[] = [
+        {
+          id: '1',
+          points: 1,
+          status: 'DONE',
+          created_at: '2024-06-10T10:00:00.000Z',
+          finished_at: '2024-06-15T12:00:00.000Z',
+          dt_prazo: '2024-06-20'
+        }
+      ];
+      const list = mapGame4uActionsToActivityList(actions, month);
+      expect(list[0].dt_prazo).toBe('2024-06-20');
+    });
+
+    it('monthFilter dtPrazo keeps pending rows whose created_at is outside month but dt_prazo is inside', () => {
+      const month = new Date(2024, 5, 1);
+      const actions: Game4uUserActionModel[] = [
+        {
+          id: 'pend',
+          points: 1,
+          status: 'PENDING',
+          created_at: '2024-01-01T10:00:00.000Z',
+          dt_prazo: '2024-06-25'
+        }
+      ];
+      expect(mapGame4uActionsToActivityList(actions, month).length).toBe(0);
+      expect(mapGame4uActionsToActivityList(actions, month, { monthFilter: 'dtPrazo' }).length).toBe(1);
+    });
   });
 
   describe('computeMonthlyPointsFromGame4uActions', () => {
