@@ -1,13 +1,13 @@
 import { Injectable } from '@angular/core';
-import { Observable, throwError, of, forkJoin } from 'rxjs';
+import { Observable, throwError, of, from } from 'rxjs';
 import { map, catchError, shareReplay, switchMap } from 'rxjs/operators';
 import { FunifierApiService } from './funifier-api.service';
 import { KPIMapper } from './kpi-mapper.service';
 import { KPIData } from '@model/gamification-dashboard.model';
 import { PlayerService } from './player.service';
 import { UserActionDashboardService } from './user-action-dashboard.service';
-import { GoalsApiService } from './goals-api.service';
 import { META_PROTOCOLO_TARGET, APOSENTADORIAS_TARGET } from '../constants/kpi-targets.constants';
+import { GoalsKpiService } from './goals-kpi.service';
 
 interface CacheEntry<T> {
   data: Observable<T>;
@@ -37,7 +37,7 @@ export class KPIService {
     private mapper: KPIMapper,
     private playerService: PlayerService,
     private userActionDashboard: UserActionDashboardService,
-    private goalsApi: GoalsApiService
+    private goalsKpiService: GoalsKpiService
   ) {}
 
   /**
@@ -77,10 +77,7 @@ export class KPIService {
   }
 
   /**
-   * Get player KPIs from goals API based on team:
-   * - Financeiro: Receita Concedida
-   * - Jurídico: Meta de Protocolo + Aposentadorias Concedidas
-   * - CS: Meta de Protocolo + Aposentadorias Concedidas
+   * Get player KPIs from player's extra info:
    * - Porcentagem de Entregas no Prazo - value from extra.entrega (only for current month)
    * 
    * @param playerId - Player ID or 'me' for current player
@@ -103,178 +100,70 @@ export class KPIService {
 
     const request$: Observable<KPIData[]> = playerData$.pipe(
       switchMap((playerStatus): Observable<KPIData[]> => {
-        const kpis: KPIData[] = [];
         const now = new Date();
-        const isCurrentMonth = !selectedMonth || 
-          (selectedMonth.getFullYear() === now.getFullYear() && 
+        const isCurrentMonth = !selectedMonth ||
+          (selectedMonth.getFullYear() === now.getFullYear() &&
            selectedMonth.getMonth() === now.getMonth());
 
-        // Get team name from player metadata - check multiple sources
-        const teamName = String(
-          playerStatus.metadata?.time || 
-          playerStatus.extra?.time || 
-          playerStatus.extra?.team_name ||
-          playerStatus.extra?.teamName ||
-          ''
-        ).toLowerCase().trim();
+        // Fetch Meta de Protocolo and Aposentadorias from G4U goals API in parallel
+        return from(Promise.all([
+          this.goalsKpiService.getMetaProtocolo(),
+          this.goalsKpiService.getAposentadoriasConcedidas()
+        ])).pipe(
+          map(([metaProtocolo, aposentadorias]) => {
+            const kpis: KPIData[] = [];
 
-        console.log('📊 [KPI Service] Player team name:', teamName, 'Full metadata:', playerStatus.metadata, 'Extra:', playerStatus.extra);
-
-        // Porcentagem de Entregas no Prazo - only for current month
-        if (isCurrentMonth && playerStatus.extra?.entrega) {
-          const deliveryPercentage = parseFloat(playerStatus.extra.entrega);
-          
-          kpis.push({
-            id: 'entregas-prazo',
-            label: 'Entregas no Prazo',
-            current: deliveryPercentage,
-            target: 90,
-            superTarget: 100,
-            unit: '%',
-            color: this.getKPIColorByGoals(deliveryPercentage, 90, 100),
-            percentage: Math.min(deliveryPercentage / 100 * 100, 100)
-          });
-        }
-
-        // Fetch KPIs from goals API based on team
-        console.log('📊 [KPI Service] Fetching KPIs for team:', teamName);
-        return this.goalsApi.getAllKpisForTeam(teamName).pipe(
-          map(goalKpis => {
-            console.log('📊 [KPI Service] Received', goalKpis.length, 'KPIs from Goals API');
-            
-            // If no KPIs returned from Goals API, use fallback
-            if (goalKpis.length === 0) {
-              console.warn('📊 [KPI Service] No KPIs from Goals API, using fallback');
-              // Return the fallback observable's value synchronously
-              const fallbackKpis: KPIData[] = [];
-              
-              // Add fallback KPIs based on team
-              if (teamName.includes('juridico') || teamName.includes('jurídico') || teamName.includes('cs')) {
-                // Meta de protocolo
-                fallbackKpis.push({
-                  id: 'meta-protocolo',
-                  label: 'Meta de protocolo',
-                  current: 0,
-                  target: 1000000,
-                  superTarget: 1500000,
-                  unit: 'R$',
-                  color: 'red',
-                  percentage: 0
-                });
-                
-                // Aposentadorias concedidas
-                fallbackKpis.push({
-                  id: 'aposentadorias-concedidas',
-                  label: 'Aposentadorias concedidas',
-                  current: 0,
-                  target: 50,
-                  superTarget: 75,
-                  unit: 'concedidos',
-                  color: 'red',
-                  percentage: 0
-                });
-              } else if (teamName.includes('financeiro')) {
-                // Receita concedida
-                fallbackKpis.push({
-                  id: 'receita-concedida',
-                  label: 'Receita concedida',
-                  current: 0,
-                  target: 775000,
-                  superTarget: 1162500,
-                  unit: 'R$',
-                  color: 'red',
-                  percentage: 0
-                });
-              }
-              
-              console.log('📊 [KPI Service] Using', fallbackKpis.length, 'fallback KPIs');
-              return [...kpis, ...fallbackKpis];
-            }
-            
-            // Convert goal KPIs to KPIData format
-            for (const goalKpi of goalKpis) {
-              const superTarget = Math.ceil(goalKpi.target * 1.5);
-              
-              // Determine unit and label based on goal title
-              let unit = '';
-              let label = goalKpi.title;
-              
-              if (goalKpi.title.toLowerCase().includes('receita') || goalKpi.title.toLowerCase().includes('protocolo')) {
-                unit = 'R$';
-              } else if (goalKpi.title.toLowerCase().includes('aposentadoria')) {
-                unit = 'concedidos';
-                label = 'Aposentadorias concedidas';
-              }
-              
-              // Map goal template ID to KPI ID
-              let kpiId = 'unknown';
-              if (goalKpi.id === '126bfa2d-5845-4a3f-94d0-301b988dac33') {
-                kpiId = 'aposentadorias-concedidas';
-              } else if (goalKpi.id === '6429c552-989a-47fe-82b8-ee57ee685dc5' || goalKpi.id === 'ddda4928-6e01-452a-bbac-edaf4d873b85') {
-                kpiId = 'receita-concedida';
-                label = 'Receita concedida';
-              } else if (goalKpi.id === 'b96dd54a-2847-4267-b234-2bd02e63b118') {
-                kpiId = 'meta-protocolo';
-                label = 'Meta de protocolo';
-              }
-              
+            // Porcentagem de Entregas no Prazo - only for current month, from Funifier extra
+            if (isCurrentMonth && playerStatus.extra?.entrega) {
+              const deliveryPercentage = parseFloat(playerStatus.extra.entrega);
               kpis.push({
-                id: kpiId,
-                label: label,
-                current: goalKpi.current,
-                target: goalKpi.target,
-                superTarget: superTarget,
-                unit: unit,
-                color: this.getKPIColorByGoals(goalKpi.current, goalKpi.target, superTarget),
-                percentage: goalKpi.percentage
+                id: 'entregas-prazo',
+                label: 'Entregas no Prazo',
+                current: deliveryPercentage,
+                target: 90,
+                superTarget: 100,
+                unit: '%',
+                color: this.getKPIColorByGoals(deliveryPercentage, 90, 100),
+                percentage: Math.min(deliveryPercentage / 100 * 100, 100)
               });
             }
 
-            console.log('📊 [KPI Service] Generated', kpis.length, 'KPIs from goals API');
-            return kpis;
-          }),
-          catchError(error => {
-            console.error('📊 [KPI Service] Error fetching KPIs from goals API:', error);
-            // Return fallback KPIs
-            const fallbackKpis: KPIData[] = [];
-            
-            if (teamName.includes('juridico') || teamName.includes('jurídico') || teamName.includes('cs')) {
-              fallbackKpis.push({
+            // Meta de protocolo — from G4U goals API, fallback to hardcoded target with 0 current
+            {
+              const current = metaProtocolo?.current ?? 0;
+              const target = metaProtocolo?.target ?? META_PROTOCOLO_TARGET;
+              const superTarget = Math.ceil(target * 1.5);
+              kpis.push({
                 id: 'meta-protocolo',
                 label: 'Meta de protocolo',
-                current: 0,
-                target: 1000000,
-                superTarget: 1500000,
+                current,
+                target,
+                superTarget,
                 unit: 'R$',
-                color: 'red',
-                percentage: 0
-              });
-              
-              fallbackKpis.push({
-                id: 'aposentadorias-concedidas',
-                label: 'Aposentadorias concedidas',
-                current: 0,
-                target: 50,
-                superTarget: 75,
-                unit: 'concedidos',
-                color: 'red',
-                percentage: 0
-              });
-            } else if (teamName.includes('financeiro')) {
-              fallbackKpis.push({
-                id: 'receita-concedida',
-                label: 'Receita concedida',
-                current: 0,
-                target: 775000,
-                superTarget: 1162500,
-                unit: 'R$',
-                color: 'red',
-                percentage: 0
+                color: this.getKPIColorByGoals(current, target, superTarget),
+                percentage: target > 0 ? Math.round((current / target) * 100) : 0
               });
             }
-            
-            console.log('📊 [KPI Service] Using', fallbackKpis.length, 'fallback KPIs after error');
-            return of([...kpis, ...fallbackKpis]);
+
+            // Aposentadorias concedidas — from G4U goals API, fallback to hardcoded target with 0 current
+            {
+              const current = aposentadorias?.current ?? 0;
+              const target = aposentadorias?.target ?? APOSENTADORIAS_TARGET;
+              const superTarget = Math.ceil(target * 1.5);
+              kpis.push({
+                id: 'aposentadorias-concedidas',
+                label: 'Aposentadorias concedidas',
+                current,
+                target,
+                superTarget,
+                unit: 'concedidos',
+                color: this.getKPIColorByGoals(current, target, superTarget),
+                percentage: target > 0 ? Math.round((current / target) * 100) : 0
+              });
+            }
+
+            console.log('📊 Generated KPIs:', kpis, `(${kpis.length} KPIs)`, isCurrentMonth ? '(current month)' : '(previous month)');
+            return kpis;
           })
         );
       }),
@@ -291,49 +180,7 @@ export class KPIService {
   }
 
   /**
-   * Fallback KPIs when goals API is unavailable (uses hardcoded values from player extra)
-   */
-  private getFallbackKPIs(playerStatus: any, teamName: string): Observable<KPIData[]> {
-    const kpis: KPIData[] = [];
-
-    // Meta de protocolo — always generated (cumulative target, not month-dependent)
-    if (teamName.includes('juridico') || teamName.includes('jurídico') || teamName.includes('cs')) {
-      const current = parseFloat(playerStatus.extra?.meta_protocolo) || 0;
-      const target = META_PROTOCOLO_TARGET;
-      const superTarget = Math.ceil(target * 1.5);
-      kpis.push({
-        id: 'meta-protocolo',
-        label: 'Meta de protocolo',
-        current,
-        target,
-        superTarget,
-        unit: 'R$',
-        color: this.getKPIColorByGoals(current, target, superTarget),
-        percentage: target > 0 ? Math.round((current / target) * 100) : 0
-      });
-
-      // Aposentadorias concedidas — always generated (cumulative target, not month-dependent)
-      const currentAposent = parseFloat(playerStatus.extra?.aposentadorias_concedidas) || 0;
-      const targetAposent = APOSENTADORIAS_TARGET;
-      const superTargetAposent = Math.ceil(targetAposent * 1.5);
-      kpis.push({
-        id: 'aposentadorias-concedidas',
-        label: 'Aposentadorias concedidas',
-        current: currentAposent,
-        target: targetAposent,
-        superTarget: superTargetAposent,
-        unit: 'concedidos',
-        color: this.getKPIColorByGoals(currentAposent, targetAposent, superTargetAposent),
-        percentage: targetAposent > 0 ? Math.round((currentAposent / targetAposent) * 100) : 0
-      });
-    }
-
-    console.log('📊 Using fallback KPIs:', kpis);
-    return of(kpis);
-  }
-
-  /**
-   * KPIs para um intervalo explícito (ex.: temporada fixa), via goals API.
+   * KPIs para um intervalo explícito (ex.: temporada fixa), via GET `/game/actions?start&end`.
    * Usado pelo cartão de progresso da temporada para não seguir o filtro de mês do painel.
    */
   getPlayerKPIsForDateRange(
@@ -353,77 +200,68 @@ export class KPIService {
 
     const request$: Observable<KPIData[]> = playerData$.pipe(
       switchMap((playerStatus): Observable<KPIData[]> => {
-        const kpis: KPIData[] = [];
         const now = new Date();
         const inRange =
           now.getTime() >= rangeStart.getTime() && now.getTime() <= rangeEnd.getTime();
 
-        // Get team name from player metadata
-        const teamName = String(playerStatus.metadata?.time || playerStatus.extra?.time || '').toLowerCase().trim();
+        return from(Promise.all([
+          this.goalsKpiService.getMetaProtocolo(),
+          this.goalsKpiService.getAposentadoriasConcedidas()
+        ])).pipe(
+          map(([metaProtocolo, aposentadorias]) => {
+            const kpis: KPIData[] = [];
 
-        // Porcentagem de Entregas no Prazo - only when current date is within range
-        if (inRange && playerStatus.extra?.entrega) {
-          const deliveryPercentage = parseFloat(playerStatus.extra.entrega);
-          kpis.push({
-            id: 'entregas-prazo',
-            label: 'Entregas no Prazo',
-            current: deliveryPercentage,
-            target: 90,
-            superTarget: 100,
-            unit: '%',
-            color: this.getKPIColorByGoals(deliveryPercentage, 90, 100),
-            percentage: Math.min((deliveryPercentage / 100) * 100, 100)
-          });
-        }
-
-        // Fetch KPIs from goals API based on team
-        return this.goalsApi.getAllKpisForTeam(teamName).pipe(
-          map(goalKpis => {
-            // Convert goal KPIs to KPIData format
-            for (const goalKpi of goalKpis) {
-              const superTarget = Math.ceil(goalKpi.target * 1.5);
-              
-              // Determine unit and label based on goal title
-              let unit = '';
-              let label = goalKpi.title;
-              
-              if (goalKpi.title.toLowerCase().includes('receita') || goalKpi.title.toLowerCase().includes('protocolo')) {
-                unit = 'R$';
-              } else if (goalKpi.title.toLowerCase().includes('aposentadoria')) {
-                unit = 'concedidos';
-                label = 'Aposentadorias concedidas';
-              }
-              
-              // Map goal template ID to KPI ID
-              let kpiId = 'unknown';
-              if (goalKpi.id === '126bfa2d-5845-4a3f-94d0-301b988dac33') {
-                kpiId = 'aposentadorias-concedidas';
-              } else if (goalKpi.id === '6429c552-989a-47fe-82b8-ee57ee685dc5' || goalKpi.id === 'ddda4928-6e01-452a-bbac-edaf4d873b85') {
-                kpiId = 'receita-concedida';
-                label = 'Receita concedida';
-              } else if (goalKpi.id === 'b96dd54a-2847-4267-b234-2bd02e63b118') {
-                kpiId = 'meta-protocolo';
-                label = 'Meta de protocolo';
-              }
-              
+            // Porcentagem de Entregas no Prazo - only when current date is within range
+            if (inRange && playerStatus.extra?.entrega) {
+              const deliveryPercentage = parseFloat(playerStatus.extra.entrega);
               kpis.push({
-                id: kpiId,
-                label: label,
-                current: goalKpi.current,
-                target: goalKpi.target,
-                superTarget: superTarget,
-                unit: unit,
-                color: this.getKPIColorByGoals(goalKpi.current, goalKpi.target, superTarget),
-                percentage: goalKpi.percentage
+                id: 'entregas-prazo',
+                label: 'Entregas no Prazo',
+                current: deliveryPercentage,
+                target: 90,
+                superTarget: 100,
+                unit: '%',
+                color: this.getKPIColorByGoals(deliveryPercentage, 90, 100),
+                percentage: Math.min((deliveryPercentage / 100) * 100, 100)
               });
             }
 
-            console.log('📊 Generated KPIs (date range) from goals API:', kpis, `(${kpis.length} KPIs)`, inRange ? '(in range)' : '(out of range)');
+            // Meta de protocolo — from G4U goals API
+            {
+              const current = metaProtocolo?.current ?? 0;
+              const target = metaProtocolo?.target ?? META_PROTOCOLO_TARGET;
+              const superTarget = Math.ceil(target * 1.5);
+              kpis.push({
+                id: 'meta-protocolo',
+                label: 'Meta de protocolo',
+                current,
+                target,
+                superTarget,
+                unit: 'R$',
+                color: this.getKPIColorByGoals(current, target, superTarget),
+                percentage: target > 0 ? Math.round((current / target) * 100) : 0
+              });
+            }
+
+            // Aposentadorias concedidas — from G4U goals API
+            {
+              const current = aposentadorias?.current ?? 0;
+              const target = aposentadorias?.target ?? APOSENTADORIAS_TARGET;
+              const superTarget = Math.ceil(target * 1.5);
+              kpis.push({
+                id: 'aposentadorias-concedidas',
+                label: 'Aposentadorias concedidas',
+                current,
+                target,
+                superTarget,
+                unit: 'concedidos',
+                color: this.getKPIColorByGoals(current, target, superTarget),
+                percentage: target > 0 ? Math.round((current / target) * 100) : 0
+              });
+            }
+
+            console.log('📊 Generated KPIs (date range):', kpis, `(${kpis.length} KPIs)`, inRange ? '(in range)' : '(out of range)');
             return kpis;
-          }),
-          catchError(error => {
-            console.error('📊 Error fetching KPIs from goals API for date range, falling back:', error);
-            return this.getFallbackKPIs(playerStatus, teamName);
           })
         );
       }),

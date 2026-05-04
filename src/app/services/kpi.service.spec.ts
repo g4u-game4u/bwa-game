@@ -4,6 +4,7 @@ import { FunifierApiService } from './funifier-api.service';
 import { KPIMapper } from './kpi-mapper.service';
 import { PlayerService } from './player.service';
 import { UserActionDashboardService } from './user-action-dashboard.service';
+import { GoalsKpiService } from './goals-kpi.service';
 import { META_PROTOCOLO_TARGET, APOSENTADORIAS_TARGET } from '../constants/kpi-targets.constants';
 import * as fc from 'fast-check';
 import { of } from 'rxjs';
@@ -13,15 +14,21 @@ describe('KPIService', () => {
   let funifierApiSpy: jasmine.SpyObj<FunifierApiService>;
   let mapperSpy: jasmine.SpyObj<KPIMapper>;
   let playerServiceSpy: jasmine.SpyObj<PlayerService>;
+  let goalsKpiServiceSpy: jasmine.SpyObj<GoalsKpiService>;
 
   beforeEach(() => {
     const apiSpy = jasmine.createSpyObj('FunifierApiService', ['get']);
     const kpiMapperSpy = jasmine.createSpyObj('KPIMapper', ['toKPIDataArray']);
     const playerSpy = jasmine.createSpyObj('PlayerService', ['getCurrentPlayerData', 'getRawPlayerData']);
     const userActionSpy = jasmine.createSpyObj('UserActionDashboardService', ['getDeliveryCount']);
+    const goalsKpiSpy = jasmine.createSpyObj('GoalsKpiService', ['getMetaProtocolo', 'getAposentadoriasConcedidas']);
+
     userActionSpy.getDeliveryCount.and.returnValue(of(0));
     playerSpy.getRawPlayerData.and.returnValue(of({ _id: 'test-player', extra: {} }));
     playerSpy.getCurrentPlayerData.and.returnValue(of({ _id: 'test-player', extra: {} }));
+    // Default: return realistic values from goals API
+    goalsKpiSpy.getMetaProtocolo.and.returnValue(Promise.resolve({ current: 500000, target: META_PROTOCOLO_TARGET }));
+    goalsKpiSpy.getAposentadoriasConcedidas.and.returnValue(Promise.resolve({ current: 150, target: APOSENTADORIAS_TARGET }));
 
     TestBed.configureTestingModule({
       providers: [
@@ -29,7 +36,8 @@ describe('KPIService', () => {
         { provide: FunifierApiService, useValue: apiSpy },
         { provide: KPIMapper, useValue: kpiMapperSpy },
         { provide: PlayerService, useValue: playerSpy },
-        { provide: UserActionDashboardService, useValue: userActionSpy }
+        { provide: UserActionDashboardService, useValue: userActionSpy },
+        { provide: GoalsKpiService, useValue: goalsKpiSpy }
       ]
     });
 
@@ -37,6 +45,7 @@ describe('KPIService', () => {
     funifierApiSpy = TestBed.inject(FunifierApiService) as jasmine.SpyObj<FunifierApiService>;
     mapperSpy = TestBed.inject(KPIMapper) as jasmine.SpyObj<KPIMapper>;
     playerServiceSpy = TestBed.inject(PlayerService) as jasmine.SpyObj<PlayerService>;
+    goalsKpiServiceSpy = TestBed.inject(GoalsKpiService) as jasmine.SpyObj<GoalsKpiService>;
   });
 
   it('should be created', () => {
@@ -246,12 +255,12 @@ describe('KPIService', () => {
         _id: 'test-player',
         name: 'Test Player',
         extra: {
-          meta_protocolo: '500000',
           entrega: '85'
         }
       };
 
       playerServiceSpy.getRawPlayerData.and.returnValue(of(mockPlayerStatus));
+      goalsKpiServiceSpy.getMetaProtocolo.and.returnValue(Promise.resolve({ current: 500000, target: META_PROTOCOLO_TARGET }));
 
       service.getPlayerKPIs('test-player').subscribe(result => {
         const metaKPI = result.find(kpi => kpi.id === 'meta-protocolo');
@@ -271,12 +280,12 @@ describe('KPIService', () => {
         _id: 'test-player',
         name: 'Test Player',
         extra: {
-          aposentadorias_concedidas: '150',
           entrega: '85'
         }
       };
 
       playerServiceSpy.getRawPlayerData.and.returnValue(of(mockPlayerStatus));
+      goalsKpiServiceSpy.getAposentadoriasConcedidas.and.returnValue(Promise.resolve({ current: 150, target: APOSENTADORIAS_TARGET }));
 
       service.getPlayerKPIs('test-player').subscribe(result => {
         const aposentKPI = result.find(kpi => kpi.id === 'aposentadorias-concedidas');
@@ -299,6 +308,9 @@ describe('KPIService', () => {
       };
 
       playerServiceSpy.getRawPlayerData.and.returnValue(of(mockPlayerStatus));
+      // Goals API returns null — fallback to 0 current, hardcoded target
+      goalsKpiServiceSpy.getMetaProtocolo.and.returnValue(Promise.resolve(null));
+      goalsKpiServiceSpy.getAposentadoriasConcedidas.and.returnValue(Promise.resolve(null));
 
       service.getPlayerKPIs('test-player').subscribe(result => {
         const metaKPI = result.find(kpi => kpi.id === 'meta-protocolo');
@@ -389,6 +401,9 @@ describe('KPIService', () => {
       };
 
       playerServiceSpy.getRawPlayerData.and.returnValue(of(mockPlayerStatus));
+      // Goals API returns null — current defaults to 0
+      goalsKpiServiceSpy.getMetaProtocolo.and.returnValue(Promise.resolve(null));
+      goalsKpiServiceSpy.getAposentadoriasConcedidas.and.returnValue(Promise.resolve(null));
 
       service.getPlayerKPIs('test-player').subscribe(result => {
         const metaKPI = result.find(kpi => kpi.id === 'meta-protocolo');
@@ -418,9 +433,7 @@ describe('KPIService', () => {
         name: 'Test Player',
         extra: {
           cnpj: '10282,2368,10492',
-          entrega: '85',
-          meta_protocolo: '500000',
-          aposentadorias_concedidas: '150'
+          entrega: '85'
         }
       };
 
@@ -441,14 +454,12 @@ describe('KPIService', () => {
       const mockPlayerStatus = {
         _id: 'test-player',
         name: 'Test Player',
-        extra: {
-          meta_protocolo: '500000',
-          aposentadorias_concedidas: '150',
-          entrega: '85'
-        }
+        extra: { entrega: '85' }
       };
 
       playerServiceSpy.getRawPlayerData.and.returnValue(of(mockPlayerStatus));
+      goalsKpiServiceSpy.getMetaProtocolo.and.returnValue(Promise.resolve({ current: 500000, target: META_PROTOCOLO_TARGET }));
+      goalsKpiServiceSpy.getAposentadoriasConcedidas.and.returnValue(Promise.resolve({ current: 150, target: APOSENTADORIAS_TARGET }));
 
       service.getPlayerKPIsForDateRange('test-player', rangeStart, rangeEnd).subscribe(result => {
         const metaKPI = result.find(kpi => kpi.id === 'meta-protocolo');
@@ -470,7 +481,7 @@ describe('KPIService', () => {
       });
     });
 
-    it('should default current to 0 in date range when extra data is missing', (done) => {
+    it('should default current to 0 in date range when goals API returns null', (done) => {
       const now = new Date();
       const rangeStart = new Date(now.getFullYear(), now.getMonth(), 1);
       const rangeEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
@@ -482,6 +493,8 @@ describe('KPIService', () => {
       };
 
       playerServiceSpy.getRawPlayerData.and.returnValue(of(mockPlayerStatus));
+      goalsKpiServiceSpy.getMetaProtocolo.and.returnValue(Promise.resolve(null));
+      goalsKpiServiceSpy.getAposentadoriasConcedidas.and.returnValue(Promise.resolve(null));
 
       service.getPlayerKPIsForDateRange('test-player', rangeStart, rangeEnd).subscribe(result => {
         const metaKPI = result.find(kpi => kpi.id === 'meta-protocolo');
