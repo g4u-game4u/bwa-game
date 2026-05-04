@@ -1,7 +1,7 @@
-import { DefinePlugin } from 'webpack';
-import { config } from 'dotenv';
-import * as path from 'path';
-import * as fs from 'fs';
+const { DefinePlugin } = require('webpack');
+const { config } = require('dotenv');
+const path = require('path');
+const fs = require('fs');
 
 // Debug: Check if .env files exist
 const envLocalPath = path.resolve(__dirname, '.env.local');
@@ -20,26 +20,24 @@ if (envLocalResult.error) console.log('  .env.local error:', envLocalResult.erro
 if (envResult.error) console.log('  .env error:', envResult.error.message);
 
 // Debug: Log what we got from process.env
-console.log('  process.env.BACKEND_URL_BASE:', process.env['BACKEND_URL_BASE']);
-console.log('  process.env.G4U_API_BASE:', process.env['G4U_API_BASE']);
+console.log('  process.env.BACKEND_URL_BASE:', process.env.BACKEND_URL_BASE);
+console.log('  process.env.G4U_API_BASE:', process.env.G4U_API_BASE);
 
 // Helper to safely get environment variable
-const getEnv = (key: string, defaultValue: string = ''): string => {
+const getEnv = (key, defaultValue = '') => {
     return process.env[key] || defaultValue;
 };
+
+// Log the final values that will be injected
+console.log('📦 Values being injected into bundle:');
+console.log('  BACKEND_URL_BASE:', getEnv('BACKEND_URL_BASE'));
+console.log('  G4U_API_BASE:', getEnv('G4U_API_BASE'));
 
 module.exports = {
     plugins: [
         new DefinePlugin({
-            // Define process.env for browser compatibility
-            // This replaces process.env references at build time
-            //
-            // Chaves explícitas `process.env.NAME`: o Webpack nem sempre substitui
-            // `process.env['NAME']` quando só existe o objeto abaixo — aí o valor some
-            // no bundle e o código cai no fallback (ex.: BACKEND_URL_BASE = http://localhost).
-            'process.env.G4U_API_BASE': JSON.stringify(getEnv('G4U_API_BASE')),
-            'process.env.USE_API_PROXY': JSON.stringify(getEnv('USE_API_PROXY')),
-            'process.env.g4u_api_base': JSON.stringify(getEnv('g4u_api_base')),
+            // Define process.env as a complete object
+            // This replaces ALL process.env references at build time
             'process.env': JSON.stringify({
                 // Uppercase (standard convention)
                 BACKEND_URL_BASE: getEnv('BACKEND_URL_BASE'),
@@ -52,9 +50,11 @@ module.exports = {
                 GESTOR_TEAM_CODE: getEnv('GESTOR_TEAM_CODE'),
                 DIRETOR_TEAM_CODE: getEnv('DIRETOR_TEAM_CODE'),
                 G4U_API_BASE: getEnv('G4U_API_BASE'),
+                USE_API_PROXY: getEnv('USE_API_PROXY'),
                 SUPABASE_URL: getEnv('SUPABASE_URL'),
                 SUPABASE_ANON_KEY: getEnv('SUPABASE_ANON_KEY'),
                 SUPABASE_SERVICE_ROLE_SECRET: getEnv('SUPABASE_SERVICE_ROLE_SECRET'),
+                RECEITA_CONCEDIDA_GOAL_TEMPLATE_ID: getEnv('RECEITA_CONCEDIDA_GOAL_TEMPLATE_ID'),
                 // Lowercase (Vercel compatibility)
                 backend_url_base: getEnv('backend_url_base'),
                 client_id: getEnv('client_id'),
@@ -66,9 +66,11 @@ module.exports = {
                 gestor_team_code: getEnv('gestor_team_code'),
                 diretor_team_code: getEnv('diretor_team_code'),
                 g4u_api_base: getEnv('g4u_api_base'),
+                use_api_proxy: getEnv('use_api_proxy'),
                 supabase_url: getEnv('supabase_url'),
                 supabase_anon_key: getEnv('supabase_anon_key'),
-                supabase_service_role_secret: getEnv('supabase_service_role_secret')
+                supabase_service_role_secret: getEnv('supabase_service_role_secret'),
+                receita_concedida_goal_template_id: getEnv('receita_concedida_goal_template_id')
             })
         })
     ]

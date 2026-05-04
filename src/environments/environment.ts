@@ -1,5 +1,14 @@
 const _proc = typeof process !== 'undefined' ? process : { env: {} as Record<string, string | undefined> };
 
+// Debug: Log what webpack injected
+console.log('🔍 Environment Debug:', {
+  'process.env.BACKEND_URL_BASE': _proc.env['BACKEND_URL_BASE'],
+  'process.env.backend_url_base': _proc.env['backend_url_base'],
+  'process.env.G4U_API_BASE': _proc.env['G4U_API_BASE'],
+  'process.env.g4u_api_base': _proc.env['g4u_api_base'],
+  'process.env.USE_API_PROXY': _proc.env['USE_API_PROXY']
+});
+
 const useApiProxyFlag = (() => {
   const v = String(_proc.env.USE_API_PROXY ?? '').trim().toLowerCase();
   return v === 'true' || v === '1';
@@ -88,3 +97,10 @@ export const environment = {
       ''
   }
 };
+
+// Debug: Log final environment values
+console.log('✅ Final Environment Values:', {
+  backend_url_base: environment.backend_url_base,
+  g4u_api_base: environment.g4u_api_base,
+  useApiProxyFlag
+});

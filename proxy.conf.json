@@ -1,25 +1,25 @@
 {
   "/game": {
-    "target": "http://localhost:3001",
-    "secure": false,
+    "target": "https://g4u-api-bwa.onrender.com",
+    "secure": true,
     "changeOrigin": true,
     "logLevel": "silent"
   },
   "/user-action": {
-    "target": "http://localhost:3001",
-    "secure": false,
+    "target": "https://g4u-api-bwa.onrender.com",
+    "secure": true,
     "changeOrigin": true,
     "logLevel": "silent"
   },
   "/auth": {
-    "target": "http://localhost:3001",
-    "secure": false,
+    "target": "https://g4u-api-bwa.onrender.com",
+    "secure": true,
     "changeOrigin": true,
     "logLevel": "silent"
   },
   "/action": {
-    "target": "http://localhost:3001",
-    "secure": false,
+    "target": "https://g4u-api-bwa.onrender.com",
+    "secure": true,
     "changeOrigin": true,
     "logLevel": "silent"
   }

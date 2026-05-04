@@ -130,3 +130,5 @@ coverage/
 
 # Zoho runner debug output
 /zoho-tasks-debug-summary.json
+.vercel
+.env*.local
