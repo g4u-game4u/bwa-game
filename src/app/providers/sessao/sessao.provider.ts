@@ -222,7 +222,25 @@ export class SessaoProvider {
 
     public storeLoginInfo(loginResponse: LoginResponse) {
         this.loginResponse = loginResponse;
-        sessionStorage.setItem(TKN_KEY, btoa(JSON.stringify(loginResponse)));
+        sessionStorage.setItem(TKN_KEY, this.utf8ToBase64(JSON.stringify(loginResponse)));
+    }
+
+    private utf8ToBase64(text: string): string {
+        const bytes = new TextEncoder().encode(text);
+        let binary = '';
+        for (let i = 0; i < bytes.length; i++) {
+            binary += String.fromCharCode(bytes[i]!);
+        }
+        return btoa(binary);
+    }
+
+    private base64ToUtf8(b64: string): string {
+        const binary = atob(b64);
+        const out = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) {
+            out[i] = binary.charCodeAt(i);
+        }
+        return new TextDecoder().decode(out);
     }
 
     private getStoredLoginInfo() {
@@ -231,7 +249,7 @@ export class SessaoProvider {
             if (!login)
                 return null;
 
-            return JSON.parse(atob(login));
+            return JSON.parse(this.base64ToUtf8(login));
         } catch (error) {
             sessionStorage.removeItem(TKN_KEY);
             return null;
