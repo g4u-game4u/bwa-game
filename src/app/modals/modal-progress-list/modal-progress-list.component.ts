@@ -39,6 +39,8 @@ export interface FinishedTaskGroup {
 })
 export class ModalProgressListComponent implements OnInit, OnDestroy {
   @Input() playerId = '';
+  /** Quando definido (ex. painel de equipa Game4U), escopo `team_id` num único GET com o jogador em `playerId`. */
+  @Input() teamId: string | null = null;
   @Input() listType: ProgressListType = 'atividades';
   @Input() month?: Date;
   @Output() closed = new EventEmitter<void>();
@@ -134,6 +136,11 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
   /** Modal «Tarefas Pendentes»: sem coluna de finalização; gráfico por prazo. */
   get isPendingActivitiesModal(): boolean {
     return this.listType === 'atividades-pendentes';
+  }
+
+  /** Painel de equipa (escopo `team_id`): coluna com o jogador da user-action (`user_email`). */
+  get showActivityExecutorColumn(): boolean {
+    return (this.teamId ?? '').trim().length > 0;
   }
 
   /**
@@ -274,6 +281,15 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
     if (item.dt_prazo?.toLowerCase().includes(qLower)) {
       return true;
     }
+    if (this.showActivityExecutorColumn) {
+      const exec = this.formatEmailToName(item.player).toLowerCase();
+      if (exec.includes(qLower)) {
+        return true;
+      }
+      if ((item.player || '').toLowerCase().includes(qLower)) {
+        return true;
+      }
+    }
     const prazoFmt = this.formatDtPrazo(item.dt_prazo).toLowerCase();
     if (prazoFmt && prazoFmt !== '—' && prazoFmt.includes(qLower)) {
       return true;
@@ -295,13 +311,18 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Get array of player IDs from comma-separated string
+   * Com `teamId`, um único jogador (gestor ou colaborador) + escopo equipa na API.
+   * Sem `teamId`, comportamento legado: vários IDs separados por vírgula (forkJoin).
    */
   private getPlayerIds(): string[] {
     if (!this.playerId) {
       return [];
     }
-    // Split by comma and filter out empty strings
+    const scope = (this.teamId ?? '').trim();
+    if (scope) {
+      const single = this.playerId.split(',')[0]?.trim() ?? '';
+      return single ? [single] : [];
+    }
     return this.playerId.split(',').map(id => id.trim()).filter(id => id.length > 0);
   }
 
@@ -339,12 +360,14 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
             ? ['DONE', 'DELIVERED']
             : undefined;
 
+      const tid = (this.teamId ?? '').trim() || undefined;
       const activityRequests = playerIds.map(playerId =>
         this.actionLogService.getActivityList(
           playerId,
           this.month,
           undefined,
-          reportStatuses
+          reportStatuses,
+          tid
         ).pipe(
           catchError(error => {
             console.error(`Error loading activity list for player ${playerId}:`, error);
@@ -393,9 +416,9 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
           }
         });
     } else if (this.isProcessList) {
-      // Load processes for all player IDs in parallel
+      const tid = (this.teamId ?? '').trim() || undefined;
       const processRequests = playerIds.map(playerId =>
-        this.actionLogService.getProcessList(playerId, this.month).pipe(
+        this.actionLogService.getProcessList(playerId, this.month, tid).pipe(
           catchError(error => {
             console.error(`Error loading process list for player ${playerId}:`, error);
             return of([] as ProcessListItem[]);

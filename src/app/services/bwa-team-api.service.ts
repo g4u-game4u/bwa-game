@@ -32,6 +32,26 @@ export class BwaTeamApiService {
     return [];
   }
 
+  /** Resposta de `GET .../team/:id/users`: array direto ou `{ data | users }`. */
+  normalizeTeamUsersResponse(raw: unknown): any[] {
+    if (raw == null) {
+      return [];
+    }
+    if (Array.isArray(raw)) {
+      return raw;
+    }
+    if (typeof raw === 'object' && raw !== null) {
+      const o = raw as Record<string, unknown>;
+      if (Array.isArray(o['data'])) {
+        return o['data'] as any[];
+      }
+      if (Array.isArray(o['users'])) {
+        return o['users'] as any[];
+      }
+    }
+    return [];
+  }
+
   /**
    * GET `{backend_url_base}/team`
    */
@@ -69,6 +89,30 @@ export class BwaTeamApiService {
     } catch (err) {
       console.warn('[BwaTeamApi] falha GET detalhe:', url, err);
       return null;
+    }
+  }
+
+  /**
+   * GET `{backend_url_base}/team/{teamId}/users` — membros do time (BWA).
+   */
+  async fetchTeamUsers(teamId: string): Promise<any[]> {
+    const b = this.baseUrl();
+    const tid = (teamId || '').trim();
+    if (!b || !tid) {
+      if (!tid) {
+        console.warn('[BwaTeamApi] fetchTeamUsers: teamId vazio');
+      }
+      return [];
+    }
+    const path = `team/${encodeURIComponent(tid)}/users`;
+    const url = joinApiPath(b, path);
+    console.log('[BwaTeamApi] GET', url);
+    try {
+      const raw = await firstValueFrom(this.http.get<any>(url));
+      return this.normalizeTeamUsersResponse(raw);
+    } catch (err) {
+      console.warn('[BwaTeamApi] falha GET users:', url, err);
+      return [];
     }
   }
 }

@@ -1564,13 +1564,15 @@ export class ActionLogService {
     playerId: string,
     month?: Date,
     game4uActionStatus?: Game4uUserActionStatus,
-    reportUserActionsStatuses?: Game4uUserActionStatus[]
+    reportUserActionsStatuses?: Game4uUserActionStatus[],
+    teamId?: string | number | null
   ): Observable<ActivityListItem[]> {
     if (isGame4uDataEnabled() && this.game4u.isConfigured()) {
       const baseQ = this.game4uUserQuery(playerId, month);
       if (!baseQ) {
         return of([]);
       }
+      const tid = this.normalizeGame4uTeamId(teamId);
       if (reportUserActionsStatuses?.length) {
         const openOnly =
           reportUserActionsStatuses.every(s => s === 'PENDING' || s === 'DOING');
@@ -1583,13 +1585,15 @@ export class ActionLogService {
               email: baseQ.user,
               status: reportUserActionsStatuses,
               dt_prazo_start: dtPrazoRange.start,
-              dt_prazo_end: dtPrazoRange.end
+              dt_prazo_end: dtPrazoRange.end,
+              ...(tid ? { team_id: tid } : {})
             }
           : {
               email: baseQ.user,
               status: reportUserActionsStatuses,
               finished_at_start: baseQ.start,
-              finished_at_end: baseQ.end
+              finished_at_end: baseQ.end,
+              ...(tid ? { team_id: tid } : {})
             };
         return this.fetchGameReportsUserActionsAllPages(pageQuery).pipe(
           map(actions =>
@@ -1606,7 +1610,8 @@ export class ActionLogService {
           email: baseQ.user,
           status: ['DONE', 'DELIVERED'],
           finished_at_start: baseQ.start,
-          finished_at_end: baseQ.end
+          finished_at_end: baseQ.end,
+          ...(tid ? { team_id: tid } : {})
         }).pipe(
           map(actions => mapGame4uActionsToActivityList(actions, month)),
           catchError(error => {
@@ -1616,7 +1621,8 @@ export class ActionLogService {
         );
       }
       const q = game4uActionStatus ? { ...baseQ, status: game4uActionStatus } : baseQ;
-      return this.game4u.getGameActions(q).pipe(
+      const qScoped = tid ? ({ ...q, team_id: tid } as typeof q & { team_id: string }) : q;
+      return this.game4u.getGameActions(qScoped).pipe(
         map(actions => mapGame4uActionsToActivityList(actions, month)),
         catchError(error => {
           console.error('Error fetching activity list (Game4U):', error);
@@ -1653,13 +1659,19 @@ export class ActionLogService {
    * Fetches ALL data and filters by month on frontend
    * Cached with shareReplay to avoid duplicate requests
    */
-  getProcessList(playerId: string, month?: Date): Observable<ProcessListItem[]> {
+  getProcessList(
+    playerId: string,
+    month?: Date,
+    teamId?: string | number | null
+  ): Observable<ProcessListItem[]> {
     if (isGame4uDataEnabled() && this.game4u.isConfigured()) {
       const q = this.game4uUserQuery(playerId, month);
       if (!q) {
         return of([]);
       }
-      return this.game4u.getGameActions(q).pipe(
+      const tid = this.normalizeGame4uTeamId(teamId);
+      const qScoped = tid ? ({ ...q, team_id: tid } as typeof q & { team_id: string }) : q;
+      return this.game4u.getGameActions(qScoped).pipe(
         map(actions => mapGame4uActionsToProcessList(actions, month)),
         catchError(error => {
           console.error('Error fetching process list (Game4U):', error);

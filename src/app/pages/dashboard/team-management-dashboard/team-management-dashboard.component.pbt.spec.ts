@@ -110,6 +110,7 @@ describe('TeamManagementDashboardComponent - Property-Based Tests', () => {
 
     fixture = TestBed.createComponent(TeamManagementDashboardComponent);
     component = fixture.componentInstance;
+    component.productivityAnalysisTabEnabled = true;
   });
 
   /**

@@ -52,7 +52,7 @@
                 class="activity-search-input"
                 [value]="activitySearchQuery"
                 (input)="onActivitySearchInput($event)"
-                [placeholder]="isPendingActivitiesModal ? 'Buscar por tarefa, cliente ou prazo…' : 'Buscar por tarefa, cliente ou data…'"
+                [placeholder]="isPendingActivitiesModal ? (showActivityExecutorColumn ? 'Buscar por tarefa, cliente, responsável ou prazo…' : 'Buscar por tarefa, cliente ou prazo…') : (showActivityExecutorColumn ? 'Buscar por tarefa, cliente, responsável ou data…' : 'Buscar por tarefa, cliente ou data…')"
                 [attr.aria-label]="isPendingActivitiesModal ? 'Buscar por título, cliente ou data de prazo' : 'Buscar tarefas por título, cliente ou data'"
               />
               <button
@@ -74,7 +74,8 @@
             <div
               *ngIf="displayedActivityItems.length > 0 && isGroupedTasksModal"
               class="finished-tasks-accordion"
-              [class.finished-tasks-accordion--pending-only]="isPendingActivitiesModal">
+              [class.finished-tasks-accordion--pending-only]="isPendingActivitiesModal"
+              [class.finished-tasks-accordion--team-scope]="showActivityExecutorColumn">
               <div
                 *ngFor="let grp of finishedTaskGroups; trackBy: trackByFinishedTaskGroup"
                 class="task-group-card">
@@ -101,6 +102,7 @@
                   [@slideDown]>
                   <div class="task-group-detail-header">
                     <div class="task-col-delivery">Cliente</div>
+                    <div *ngIf="showActivityExecutorColumn" class="task-col-executor">Responsável</div>
                     <div class="task-col-prazo">Prazo</div>
                     <div *ngIf="!isPendingActivitiesModal" class="task-col-date">Data de Finalização</div>
                   </div>
@@ -108,6 +110,9 @@
                     <div *ngFor="let item of grp.items" class="task-row task-row--nested">
                       <div class="task-col-delivery">
                         <span class="task-delivery">{{ getActivityClientDisplay(item) }}</span>
+                      </div>
+                      <div *ngIf="showActivityExecutorColumn" class="task-col-executor">
+                        <span class="task-executor" [title]="item.player || ''">{{ formatEmailToName(item.player) }}</span>
                       </div>
                       <div class="task-col-prazo">
                         <div class="task-prazo-cell">

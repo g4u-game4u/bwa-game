@@ -118,6 +118,7 @@ describe('TeamManagementDashboardComponent - Responsive Behavior', () => {
 
     fixture = TestBed.createComponent(TeamManagementDashboardComponent);
     component = fixture.componentInstance;
+    component.productivityAnalysisTabEnabled = true;
     debugElement = fixture.debugElement;
   });
 

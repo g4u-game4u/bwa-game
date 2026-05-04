@@ -53,7 +53,7 @@
           <c4u-season-progress
             *ngIf="teamSeasonProgress"
             [progress]="teamSeasonProgress"
-            [processosFinalizados]="progressMetrics.processosFinalizados">
+            [processosFinalizados]="seasonProcessosFinalizadosCount">
           </c4u-season-progress>
           
           <c4u-shimmer *ngIf="isLoadingSidebar && !teamSeasonProgress"></c4u-shimmer>
@@ -159,11 +159,11 @@
         
         <!-- Circular KPIs Compact - Show only enabled KPIs -->
         <ng-container *ngFor="let kpi of enabledKPIs">
-          <div class="compact-item" [title]="kpi.isMissing ? kpi.label + ': dado indisponível' : kpi.label + ': ' + roundValue(kpi.current) + ' / ' + roundValue(kpi.target) + (kpi.unit ? ' ' + kpi.unit : '')">
+          <div class="compact-item" [title]="kpiSidebarTitle(kpi)">
             <i class="ri-time-line compact-icon entregas" *ngIf="kpi.id === 'entregas-prazo'"></i>
             <i class="ri-building-line compact-icon clientes" *ngIf="kpi.id === 'numero-empresas'"></i>
-            <span class="compact-value" *ngIf="!kpi.isMissing">{{ roundValue(kpi.current) }}{{ kpi.unit || '' }}</span>
-            <span class="compact-value" *ngIf="kpi.isMissing">?</span>
+            <span class="compact-value" *ngIf="!getKpiCircularIsMissing(kpi)">{{ kpiSidebarValue(kpi) }}</span>
+            <span class="compact-value" *ngIf="getKpiCircularIsMissing(kpi)">?</span>
           </div>
         </ng-container>
         
@@ -183,9 +183,9 @@
           <i class="ri-star-fill compact-icon media"></i>
           <span class="compact-value">{{ teamAveragePoints | number:'1.0-0':'pt-BR' }}</span>
         </div>
-        <div class="compact-item" *ngIf="progressMetrics">
+        <div class="compact-item" *ngIf="teamSeasonProgress">
           <i class="ri-check-double-line compact-icon processos"></i>
-          <span class="compact-value">{{ progressMetrics.processosFinalizados | number:'1.0-0':'pt-BR' }}</span>
+          <span class="compact-value">{{ seasonProcessosFinalizadosCount | number:'1.0-0':'pt-BR' }}</span>
         </div>
         
         <!-- Sidebar Toggle Button - Compact View -->
@@ -243,16 +243,22 @@
           <span>Metas e Progresso</span>
         </button>
         <button 
+          type="button"
+          id="productivity-tab"
           class="tab-button"
           role="tab"
-          [attr.aria-selected]="activeTab === 'productivity'"
+          [disabled]="!productivityAnalysisTabEnabled"
+          [attr.aria-selected]="productivityAnalysisTabEnabled && activeTab === 'productivity'"
           [attr.aria-controls]="'productivity-panel'"
-          [attr.tabindex]="activeTab === 'productivity' ? 0 : -1"
-          [class.active]="activeTab === 'productivity'"
+          [attr.tabindex]="productivityAnalysisTabEnabled && activeTab === 'productivity' ? 0 : -1"
+          [class.active]="productivityAnalysisTabEnabled && activeTab === 'productivity'"
           (click)="switchTab('productivity')"
           (keydown.enter)="switchTab('productivity')"
           (keydown.space)="switchTab('productivity'); $event.preventDefault()"
-          aria-label="Visualizar análise de produtividade">
+          [attr.aria-label]="productivityAnalysisTabEnabled ? 'Visualizar análise de produtividade' : 'Análise de produtividade indisponível (em atualização)'"
+          (mouseenter)="onProductivityTabDisabledHover(true, $event)"
+          (mousemove)="onProductivityTabDisabledMove($event)"
+          (mouseleave)="onProductivityTabDisabledHover(false)">
           <i class="fas fa-chart-line" aria-hidden="true"></i>
           <span>Análise de Produtividade</span>
         </button>
@@ -303,13 +309,14 @@
                   <c4u-kpi-circular-progress
                     *ngIf="kpi.id !== 'numero-empresas'"
                     [label]="kpi.label"
-                    [current]="roundValue(kpi.current)"
+                    [current]="kpi.id === 'entregas-prazo' ? getKpiCurrentValue(kpi) : roundValue(getKpiCurrentValue(kpi))"
                     [target]="roundValue(kpi.target)"
                     [superTarget]="kpi.superTarget ? roundValue(kpi.superTarget) : undefined"
                     [color]="kpi.color"
                     [unit]="kpi.unit"
                     [colorIndex]="i"
-                    [isMissing]="!!kpi.isMissing">
+                    [isPending]="isEntregasPrazoCircularPending(kpi)"
+                    [isMissing]="getKpiCircularIsMissing(kpi)">
                   </c4u-kpi-circular-progress>
                 </ng-container>
               </div>
@@ -339,7 +346,15 @@
             <!-- Clientes atendidos: lista única (CNPJs com participação no período via action_log agregado); sem abas Carteira/Participação. -->
             <section class="dashboard-section carteira-section" aria-labelledby="company-section-title">
               <div class="section-header">
-                <h3 id="company-section-title" class="section-title">Clientes atendidos</h3>
+                <h3 id="company-section-title" class="section-title">
+                  Clientes atendidos este mês
+                  <span *ngIf="!isLoadingCarteira" class="section-title-count" aria-hidden="true">({{ teamCarteiraClientes.length }})</span>
+                  <c4u-info-button 
+                    [infoKey]="''"
+                    [customText]="'São os clientes para os quais a equipa ou o colaborador selecionado realizou alguma entrega ou obrigação neste mês na plataforma Acessórias. A lista segue o mês (ou período) selecionado no filtro do painel e as atividades contabilizadas pela competência das entregas no Game4U'"
+                    position="bottom">
+                  </c4u-info-button>
+                </h3>
               </div>
               
               <c4u-card class="carteira-card">
@@ -349,14 +364,14 @@
                   <div *ngFor="let cliente of teamCarteiraClientes" 
                        class="carteira-item"
                        (click)="openCompanyDetailModal(cliente)"
-                       role="button"
-                       tabindex="0"
-                       [attr.aria-label]="'Ver detalhes de ' + getClienteAtendidoDisplayName(cliente)"
+                       role="article"
+                       style="cursor: pointer;"
+                       [title]="getClienteAtendidoTooltip(cliente)"
                        (keydown.enter)="openCompanyDetailModal(cliente)"
                        (keydown.space)="openCompanyDetailModal(cliente); $event.preventDefault()">
                     <div class="carteira-item-info">
                       <i class="ri-building-line"></i>
-                      <span class="carteira-cnpj">{{ getClienteAtendidoDisplayName(cliente) }}</span>
+                      <span class="carteira-cnpj">{{ getClienteAtendidoListTitle(cliente) }}</span>
                       <span class="status-badge" *ngIf="getCompanyStatus(cliente.cnpj)" 
                             [class.active]="isCompanyActive(cliente.cnpj)"
                             [class.inactive]="!isCompanyActive(cliente.cnpj)">
@@ -364,22 +379,25 @@
                       </span>
                     </div>
                     <div class="carteira-item-meta">
-                      <div *ngIf="cliente.deliveryKpi" 
-                           class="carteira-kpi-compact" 
-                           [ngClass]="'kpi-' + (cliente.deliveryKpi.color || 'default')"
-                           [title]="getKpiTooltip(cliente.deliveryKpi)">
-                        <span class="kpi-value">{{ formatKpiValue(cliente.deliveryKpi) }}</span>
-                        <i class="ri-time-line kpi-icon" aria-hidden="true"></i>
-                      </div>
-                      <span *ngIf="!cliente.deliveryKpi" class="kpi-na">N/A</span>
-                      <span class="carteira-action-count">{{ cliente.actionCount }} tarefas</span>
-                      <span class="carteira-process-count">{{ cliente.processCount }} processos</span>
+                      <span
+                        *ngIf="isLoadingParticipacaoKpi"
+                        class="carteira-entrega carteira-entrega--pending"
+                        aria-busy="true"
+                        title="A carregar percentual de entregas no prazo (gamificação)…">…</span>
+                      <span
+                        *ngIf="!isLoadingParticipacaoKpi"
+                        [ngClass]="listaEntregaPrazoClasses(cliente)">
+                        <ng-container *ngIf="getListaEntregaPercent(cliente) !== null; else entregaNaParticipacao">
+                          {{ getListaEntregaPercent(cliente)! | number:'1.0-2':'pt-BR' }}%
+                        </ng-container>
+                        <ng-template #entregaNaParticipacao>n/a</ng-template>
+                      </span>
                     </div>
                   </div>
                 </div>
                 
                 <div *ngIf="!isLoadingCarteira && teamCarteiraClientes.length === 0" class="empty-state">
-                  <p>Nenhum cliente atendido neste período</p>
+                  <p>Nenhum cliente atendido neste mês</p>
                 </div>
               </c4u-card>
             </section>
@@ -400,7 +418,7 @@
         <!-- Productivity Tab - Only show when no specific collaborator is selected -->
         <div 
           class="tab-pane" 
-          *ngIf="activeTab === 'productivity' && !selectedCollaborator" 
+          *ngIf="productivityAnalysisTabEnabled && activeTab === 'productivity' && !selectedCollaborator" 
           [@fadeIn]
           role="tabpanel"
           id="productivity-panel"
@@ -511,7 +529,8 @@
   <!-- Progress List Modal -->
   <modal-progress-list
     *ngIf="isProgressModalOpen"
-    [playerId]="teamPlayerIdsForModal"
+    [playerId]="progressModalPlayerId"
+    [teamId]="progressModalTeamId"
     [listType]="progressModalType"
     [month]="selectedMonth"
     (closed)="onProgressModalClosed()">

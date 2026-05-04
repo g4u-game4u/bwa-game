@@ -99,6 +99,7 @@ describe('TeamManagementDashboardComponent Performance Tests', () => {
 
     fixture = TestBed.createComponent(TeamManagementDashboardComponent);
     component = fixture.componentInstance;
+    component.productivityAnalysisTabEnabled = true;
     changeDetectorRef = fixture.debugElement.injector.get(ChangeDetectorRef);
   });
 

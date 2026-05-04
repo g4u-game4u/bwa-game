@@ -347,6 +347,20 @@
   }
 }
 
+.finished-tasks-accordion--team-scope:not(.finished-tasks-accordion--pending-only) {
+  .task-group-detail-header,
+  .task-row--nested {
+    grid-template-columns: 1.35fr 1.1fr 0.95fr 1.15fr;
+  }
+}
+
+.finished-tasks-accordion--team-scope.finished-tasks-accordion--pending-only {
+  .task-group-detail-header,
+  .task-row--nested {
+    grid-template-columns: 1.35fr 1.1fr 1.15fr;
+  }
+}
+
 .task-prazo-cell {
   display: flex;
   flex-direction: column;
@@ -393,9 +407,21 @@
 
   .task-delivery,
   .task-prazo,
-  .task-date {
+  .task-date,
+  .task-executor {
     color: $text-secondary;
     font-size: 0.875rem;
+  }
+
+  .task-col-executor {
+    min-width: 0;
+  }
+
+  .task-executor {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 }
 
@@ -884,6 +910,12 @@
 
       .task-col-delivery::before {
         content: 'Cliente: ';
+        font-weight: 600;
+        color: $text-secondary;
+      }
+
+      .task-col-executor::before {
+        content: 'Responsável: ';
         font-weight: 600;
         color: $text-secondary;
       }
