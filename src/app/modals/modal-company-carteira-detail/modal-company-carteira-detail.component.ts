@@ -340,13 +340,6 @@ export class ModalCompanyCarteiraDetailComponent implements OnInit, OnDestroy {
     this.fetchParticipationModalTasksPage(false);
   }
 
-  formatTaskPoints(task: ClienteActionItem): string {
-    if (task.points == null || !Number.isFinite(task.points)) {
-      return '—';
-    }
-    return String(task.points);
-  }
-
   getCompanyDisplayName(cnpj: string): string {
     if (!cnpj) {
       return '';
