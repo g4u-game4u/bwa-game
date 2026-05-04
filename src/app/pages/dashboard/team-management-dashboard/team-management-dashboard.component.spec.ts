@@ -53,9 +53,14 @@ describe('TeamManagementDashboardComponent', () => {
       }
     });
 
-    mockBwaTeamApi = jasmine.createSpyObj('BwaTeamApiService', ['fetchTeamList', 'fetchTeamDetail']);
+    mockBwaTeamApi = jasmine.createSpyObj('BwaTeamApiService', [
+      'fetchTeamList',
+      'fetchTeamDetail',
+      'fetchTeamUsers'
+    ]);
     mockBwaTeamApi.fetchTeamList.and.returnValue(Promise.resolve([]));
     mockBwaTeamApi.fetchTeamDetail.and.returnValue(Promise.resolve(null));
+    mockBwaTeamApi.fetchTeamUsers.and.returnValue(Promise.resolve([]));
 
     // Setup default mock returns
     mockTeamAggregateService.getTeamSeasonPoints.and.returnValue(
@@ -97,6 +102,7 @@ describe('TeamManagementDashboardComponent', () => {
 
     fixture = TestBed.createComponent(TeamManagementDashboardComponent);
     component = fixture.componentInstance;
+    component.productivityAnalysisTabEnabled = true;
   });
 
   it('should create', () => {
@@ -242,6 +248,13 @@ describe('TeamManagementDashboardComponent', () => {
       component.switchTab('productivity');
       
       expect(component.activeTab).toBe('productivity');
+    });
+
+    it('should not switch to productivity tab when disabled', () => {
+      component.productivityAnalysisTabEnabled = false;
+      component.activeTab = 'goals';
+      component.switchTab('productivity');
+      expect(component.activeTab).toBe('goals');
     });
 
     it('should preserve selections when switching tabs', () => {

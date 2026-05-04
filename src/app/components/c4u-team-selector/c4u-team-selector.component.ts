@@ -4,6 +4,8 @@ export interface Team {
   id: string;
   name: string;
   memberCount: number;
+  /** Id numérico no Game4U para `GET /game/team-stats` e `team-deliveries` (query `team`). */
+  game4uTeamId?: string;
 }
 
 @Component({

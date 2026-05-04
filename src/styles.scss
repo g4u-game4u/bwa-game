@@ -323,6 +323,26 @@ input, textarea, select {
   transition: transform 0.3s ease-in-out !important;
 }
 
+// Segue o cursor: aba "Análise de produtividade" desativada (painel do time)
+.tab-disabled-hover-toast {
+  position: fixed;
+  z-index: 10050;
+  left: 0;
+  top: 0;
+  transform: translate(-50%, calc(-100% - 10px));
+  pointer-events: none;
+  max-width: min(280px, calc(100vw - 24px));
+  padding: 10px 14px;
+  border-radius: $border-radius-sm;
+  font-size: $font-size-small;
+  font-weight: $font-weight-semibold;
+  line-height: 1.35;
+  color: $text-primary;
+  background: rgba(0, 9, 20, 0.92);
+  border: 1px solid rgba($primary-electric-blue, 0.35);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
 // Estilos para os confetes
 .confetti-container {
   position: fixed;

@@ -107,35 +107,73 @@ export class Game4uApiService {
     return t ? params.set('team_id', t) : params;
   }
 
-  /** Com `team_id`, o backend escopa por equipa (utilizador via JWT) — não enviar `email`/`user` na query. */
-  private teamScopedOmitUserEmail(teamId?: string): boolean {
-    return (teamId ?? '').trim() !== '';
+  /**
+   * Em `/game/stats`, `/game/actions` e `/game/deliveries`, a API não aceita `team_id` na query
+   * quando `user` está definido (validação: "property team_id should not exist").
+   */
+  private withOptionalTeamIdUserScoped(
+    params: HttpParams,
+    teamId: string | undefined,
+    user: string | undefined
+  ): HttpParams {
+    if (this.shouldIncludeUserQueryParam(user)) {
+      return params;
+    }
+    return this.withOptionalTeamId(params, teamId);
   }
 
-  private reportIdentitySegment(q: { email: string; team_id?: string }): string {
+  /** Envia `user` quando há alvo explícito. */
+  private shouldIncludeUserQueryParam(user?: string): boolean {
+    return (user ?? '').trim() !== '';
+  }
+
+  /** Envia `email` nos relatórios quando definido (idem com `team_id` + gestor). */
+  private shouldIncludeEmailQueryParam(email?: string): boolean {
+    return (email ?? '').trim() !== '';
+  }
+
+  /** Chave de cache: equipa + opcionalmente e-mail (colaborador dentro da equipa). */
+  private reportIdentitySegment(q: { email?: string; team_id?: string }): string {
     const tid = (q.team_id ?? '').trim();
-    return tid ? `team:${tid}` : `email:${q.email}`;
+    const em = (q.email ?? '').trim();
+    if (tid && em) {
+      return `team:${tid}|email:${em}`;
+    }
+    if (tid) {
+      return `team:${tid}`;
+    }
+    return em ? `email:${em}` : 'none';
+  }
+
+  /** Relatórios exigem `email` (colaborador) ou `team_id` (consolidado da equipa). */
+  private hasReportsIdentity(q: { email?: string; team_id?: string }): boolean {
+    return this.shouldIncludeEmailQueryParam(q.email) || (q.team_id ?? '').trim() !== '';
   }
 
   private userScopedCacheSegment(q: Game4uUserScopedQuery): string {
+    const u = (q.user ?? '').trim();
+    if (u) {
+      return `user:${u}`;
+    }
     const tid = (q.team_id ?? '').trim();
-    return tid ? `team:${tid}` : `user:${q.user}`;
+    return tid ? `team:${tid}` : 'none';
   }
 
   private statsRequestKey(q: Game4uUserScopedQuery): string {
-    return `stats|${this.userScopedCacheSegment(q)}|${q.start}|${q.end}|${q.team_id ?? ''}`;
+    return `stats|${this.userScopedCacheSegment(q)}|${q.start}|${q.end}`;
   }
 
   private actionsRequestKey(q: Game4uUserScopedQuery & { status?: Game4uUserActionStatus }): string {
-    return `actions|${this.userScopedCacheSegment(q)}|${q.start}|${q.end}|${q.status ?? ''}|${q.team_id ?? ''}`;
+    return `actions|${this.userScopedCacheSegment(q)}|${q.start}|${q.end}|${q.status ?? ''}`;
   }
 
   private teamStatsRequestKey(q: Game4uTeamScopedQuery): string {
-    return `team-stats|${q.team}|${q.start}|${q.end}|${q.team_id ?? ''}`;
+    return `team-stats|${q.team}|${q.start}|${q.end}`;
   }
 
   private teamActionsRequestKey(q: Game4uTeamScopedQuery & { status?: Game4uUserActionStatus }): string {
-    return `team-actions|${q.team}|${q.start}|${q.end}|${q.status ?? ''}|${q.team_id ?? ''}`;
+    const u = (q.user ?? '').trim();
+    return `team-actions|${q.team}|${q.start}|${q.end}|${q.status ?? ''}|${u}`;
   }
 
   /** Limpa dedupe de stats/actions (user e team) — ex.: troca de mês / campanha. */
@@ -246,8 +284,8 @@ export class Game4uApiService {
 
   private appendOpenSummaryParams(base: HttpParams, q: Game4uReportsOpenSummaryQuery): HttpParams {
     let p = base.set('dt_prazo_start', q.dt_prazo_start).set('dt_prazo_end', q.dt_prazo_end);
-    if (!this.teamScopedOmitUserEmail(q.team_id)) {
-      p = p.set('email', q.email);
+    if (this.shouldIncludeEmailQueryParam(q.email)) {
+      p = p.set('email', (q.email ?? '').trim());
     }
     return this.withOptionalTeamId(p, q.team_id);
   }
@@ -259,8 +297,8 @@ export class Game4uApiService {
     let p = base
       .set('finished_at_start', q.finished_at_start)
       .set('finished_at_end', q.finished_at_end);
-    if (!this.teamScopedOmitUserEmail(q.team_id)) {
-      p = p.set('email', q.email);
+    if (this.shouldIncludeEmailQueryParam(q.email)) {
+      p = p.set('email', (q.email ?? '').trim());
     }
     for (const s of q.status ?? []) {
       p = p.append('status', s);
@@ -275,6 +313,11 @@ export class Game4uApiService {
     if (!this.isConfigured()) {
       return throwError(
         () => new Error('[Game4U] reports/finished/summary: defina backend_url_base.')
+      );
+    }
+    if (!this.hasReportsIdentity(q)) {
+      return throwError(
+        () => new Error('[Game4U] reports/finished/summary: informe email ou team_id.')
       );
     }
     const key = this.reportsFinishedSummaryKey(q);
@@ -296,6 +339,11 @@ export class Game4uApiService {
         () => new Error('[Game4U] reports/open/summary: defina backend_url_base.')
       );
     }
+    if (!this.hasReportsIdentity(q)) {
+      return throwError(
+        () => new Error('[Game4U] reports/open/summary: informe email ou team_id.')
+      );
+    }
     const key = this.reportsOpenSummaryKey(q);
     return this.shareGame4uDedupe(key, this.reportsOpenSummaryCache, () => {
       const params = this.appendOpenSummaryParams(new HttpParams(), q);
@@ -313,6 +361,11 @@ export class Game4uApiService {
     if (!this.isConfigured()) {
       return throwError(
         () => new Error('[Game4U] reports/finished/deliveries: defina backend_url_base.')
+      );
+    }
+    if (!this.hasReportsIdentity(q)) {
+      return throwError(
+        () => new Error('[Game4U] reports/finished/deliveries: informe email ou team_id.')
       );
     }
     const key = this.reportsFinishedDeliveriesKey(q);
@@ -336,6 +389,11 @@ export class Game4uApiService {
     if (!this.isConfigured()) {
       return throwError(
         () => new Error('[Game4U] reports/finished/actions-by-delivery: defina backend_url_base.')
+      );
+    }
+    if (!this.hasReportsIdentity(q)) {
+      return throwError(
+        () => new Error('[Game4U] reports/finished/actions-by-delivery: informe email ou team_id.')
       );
     }
     const key = this.reportsActionsByDeliveryKey(q);
@@ -363,9 +421,14 @@ export class Game4uApiService {
         () => new Error('[Game4U] reports/user-actions: defina backend_url_base.')
       );
     }
+    if (!this.hasReportsIdentity(q)) {
+      return throwError(
+        () => new Error('[Game4U] reports/user-actions: informe email ou team_id.')
+      );
+    }
     let params = new HttpParams();
-    if (!this.teamScopedOmitUserEmail(q.team_id)) {
-      params = params.set('email', q.email);
+    if (this.shouldIncludeEmailQueryParam(q.email)) {
+      params = params.set('email', (q.email ?? '').trim());
     }
     for (const s of q.status ?? []) {
       params = params.append('status', s);
@@ -435,13 +498,18 @@ export class Game4uApiService {
         () => new Error('[Game4U] reports/goal/month/summary: defina backend_url_base.')
       );
     }
+    if (!this.hasReportsIdentity(q)) {
+      return throwError(
+        () => new Error('[Game4U] reports/goal/month/summary: informe email ou team_id.')
+      );
+    }
     const key = this.reportsGoalMonthKey(q);
     return this.shareGame4uDedupe(key, this.reportsGoalMonthCache, () => {
       let inner = new HttpParams()
         .set('dt_prazo_start', q.dt_prazo_start)
         .set('dt_prazo_end', q.dt_prazo_end);
-      if (!this.teamScopedOmitUserEmail(q.team_id)) {
-        inner = inner.set('email', q.email);
+      if (this.shouldIncludeEmailQueryParam(q.email)) {
+        inner = inner.set('email', (q.email ?? '').trim());
       }
       const params = this.withOptionalTeamId(inner, q.team_id);
       return this.http.get<Game4uGoalMonthSummaryResponse>(
@@ -481,10 +549,10 @@ export class Game4uApiService {
     }
     return this.shareGame4uDedupe(key, this.statsDedupCache, () => {
       let params = new HttpParams().set('start', q.start).set('end', q.end);
-      if (!this.teamScopedOmitUserEmail(q.team_id)) {
+      if (this.shouldIncludeUserQueryParam(q.user)) {
         params = params.set('user', q.user);
       }
-      params = this.withOptionalTeamId(params, q.team_id);
+      params = this.withOptionalTeamIdUserScoped(params, q.team_id, q.user);
       return this.http.get<Game4uUserActionStatsResponse>(`${this.baseUrl}/game/stats`, {
         headers: this.headers(),
         params
@@ -506,13 +574,13 @@ export class Game4uApiService {
     }
     return this.shareGame4uDedupe(key, this.actionsDedupCache, () => {
       let params = new HttpParams().set('start', q.start).set('end', q.end);
-      if (!this.teamScopedOmitUserEmail(q.team_id)) {
+      if (this.shouldIncludeUserQueryParam(q.user)) {
         params = params.set('user', q.user);
       }
       if (q.status) {
         params = params.set('status', q.status);
       }
-      params = this.withOptionalTeamId(params, q.team_id);
+      params = this.withOptionalTeamIdUserScoped(params, q.team_id, q.user);
       return this.http.get<Game4uUserActionModel[]>(`${this.baseUrl}/game/actions`, {
         headers: this.headers(),
         params
@@ -535,10 +603,10 @@ export class Game4uApiService {
       .set('start', q.start.slice(0, 10))
       .set('end', q.end.slice(0, 10))
       .set('status', q.status);
-    if (!this.teamScopedOmitUserEmail(q.team_id)) {
+    if (this.shouldIncludeUserQueryParam(q.user)) {
       delParams = delParams.set('user', q.user);
     }
-    const params = this.withOptionalTeamId(delParams, q.team_id);
+    const params = this.withOptionalTeamIdUserScoped(delParams, q.team_id, q.user);
     const http$ = this.http.get<Game4uDeliveryModel[]>(`${this.baseUrl}/game/deliveries`, {
       headers: this.headers(),
       params
@@ -559,10 +627,7 @@ export class Game4uApiService {
       );
     }
     return this.shareGame4uDedupe(key, this.teamStatsDedupCache, () => {
-      const params = this.withOptionalTeamId(
-        new HttpParams().set('start', q.start).set('end', q.end).set('team', q.team),
-        q.team_id
-      );
+      const params = new HttpParams().set('start', q.start).set('end', q.end).set('team', q.team);
       return this.http.get<Game4uUserActionStatsResponse>(`${this.baseUrl}/game/team-stats`, {
         headers: this.headers(),
         params
@@ -587,10 +652,12 @@ export class Game4uApiService {
     return this.shareGame4uDedupe(key, this.teamActionsDedupCache, () => {
       let params = new HttpParams().set('start', q.start).set('end', q.end);
       params = params.set('team', q.team);
+      if (this.shouldIncludeUserQueryParam(q.user)) {
+        params = params.set('user', q.user!);
+      }
       if (q.status) {
         params = params.set('status', q.status);
       }
-      params = this.withOptionalTeamId(params, q.team_id);
       return this.http.get<Game4uUserActionModel[]>(`${this.baseUrl}/game/team-actions`, {
         headers: this.headers(),
         params
@@ -610,14 +677,11 @@ export class Game4uApiService {
           new Error('[Game4U] team-deliveries: defina backend_url_base (ou GAME4U_SUPABASE_FALLBACK=true + Supabase).')
       );
     }
-    const params = this.withOptionalTeamId(
-      new HttpParams()
-        .set('start', q.start.slice(0, 10))
-        .set('end', q.end.slice(0, 10))
-        .set('status', q.status)
-        .set('team', q.team),
-      q.team_id
-    );
+    const params = new HttpParams()
+      .set('start', q.start.slice(0, 10))
+      .set('end', q.end.slice(0, 10))
+      .set('status', q.status)
+      .set('team', q.team);
     const http$ = this.http.get<Game4uDeliveryModel[]>(`${this.baseUrl}/game/team-deliveries`, {
       headers: this.headers(),
       params

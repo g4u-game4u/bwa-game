@@ -1,8 +1,13 @@
-import { Component, OnInit, OnDestroy, ChangeDetectionStrategy, ChangeDetectorRef } from '@angular/core';
+import { Component, OnInit, OnDestroy, ChangeDetectionStrategy, ChangeDetectorRef, Renderer2, Inject } from '@angular/core';
+import { DOCUMENT } from '@angular/common';
 import { Router } from '@angular/router';
-import { Subject } from 'rxjs';
-import { takeUntil, finalize } from 'rxjs/operators';
-import { firstValueFrom } from 'rxjs';
+import { Subject, of, firstValueFrom, Observable } from 'rxjs';
+import { takeUntil, finalize, map, take, mergeMap } from 'rxjs/operators';
+import { PONTOS_POR_ATIVIDADE_FINALIZADA_ACTION_LOG } from '@app/constants/pontos-por-atividade-action-log';
+import {
+  extractGamificacaoEmpIdFromDeliveryKey,
+  extractEmpIdPrefixFromDeliveryIdFirstSegment
+} from '@services/gamificacao-delivery-empid.util';
 import * as dayjs from 'dayjs';
 import { trigger, transition, style, animate } from '@angular/animations';
 
@@ -23,7 +28,6 @@ import { CompanyDisplay, CompanyKpiService } from '@services/company-kpi.service
 import { KPIData } from '@app/model/gamification-dashboard.model';
 import { KPIService } from '@services/kpi.service';
 import { CnpjLookupService } from '@services/cnpj-lookup.service';
-import { PONTOS_POR_ATIVIDADE_FINALIZADA_ACTION_LOG } from '@app/constants/pontos-por-atividade-action-log';
 
 // Models
 import { Team } from '@components/c4u-team-selector/c4u-team-selector.component';
@@ -83,6 +87,14 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
   })();
   selectedMonth: Date | undefined = new Date(2026, 1, 1); // February 2026 (month is 0-indexed: 1 = February)
   activeTab: 'goals' | 'productivity' = 'goals';
+
+  /** `false` enquanto a aba estiver em refactor; voltar a `true` quando estiver pronta. */
+  productivityAnalysisTabEnabled = false;
+
+  /** Mensagem do toast flutuante (anexado a `document.body` junto ao ponteiro). */
+  readonly productivityTabDisabledToastMessage = 'Esta análise estará disponível em breve.';
+
+  private productivityTabBodyToastEl: HTMLElement | null = null;
   
   // Loading states
   isLoading: boolean = false;
@@ -154,12 +166,24 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
     incompletas: 0,
     finalizadas: 0
   };
+
+  /** Meta do circular «Pontos no mês» (`/game/reports/goal/month/summary`) quando um colaborador está selecionado. */
+  monthlyPointsGoalTarget: number | null = null;
   
   // Company/Carteira data for team
   teamCarteiraClientes: CompanyDisplay[] = [];
   isLoadingCarteira: boolean = false;
   cnpjNameMap = new Map<string, string>(); // Map of original CNPJ → clean empresa name
   cnpjStatusMap = new Map<string, string>(); // Map of CNPJ → status (Ativa/Inativa)
+  /** EmpID → CNPJ 14 dígitos (participação / gamificação), alinhado ao gamification-dashboard. */
+  cnpjNumberMap = new Map<string, string>();
+
+  /** Processos finalizados na temporada: `deliveries_count` do snapshot Game4U (não métricas de progresso do mês). */
+  seasonProcessosFinalizadosCount = 0;
+
+  /** KPI % entregas no prazo por linha: carregamento após cruzamento gamificação. */
+  isLoadingParticipacaoKpi = false;
+  private participacaoKpiLoadGen = 0;
   
   // Monthly points breakdown
   monthlyPointsBreakdown: { bloqueados: number; desbloqueados: number } | null = null;
@@ -217,7 +241,9 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
     private kpiService: KPIService,
     private cnpjLookupService: CnpjLookupService,
     private router: Router,
-    private cdr: ChangeDetectorRef
+    private cdr: ChangeDetectorRef,
+    private renderer: Renderer2,
+    @Inject(DOCUMENT) private document: Document
   ) {}
 
   ngOnInit(): void {
@@ -253,6 +279,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.removeProductivityTabBodyToast();
     this.destroy$.next();
     this.destroy$.complete();
   }
@@ -393,6 +420,65 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
   private getGame4uTeamScopeId(): string | undefined {
     const t = (this.selectedTeamId || '').trim();
     return t !== '' ? t : undefined;
+  }
+
+  /**
+   * Id numérico (bigint no Postgres) para query `team` em `/game/team-stats` e `/game/team-deliveries`.
+   * Não usar {@link selectedTeam} (nome legível) — causa 400 «invalid input syntax for type bigint».
+   */
+  private pickGame4uNumericTeamIdFromRaw(team: Record<string, unknown> | null | undefined): string | undefined {
+    if (!team || typeof team !== 'object') {
+      return undefined;
+    }
+    const keys = [
+      'game4u_team_id',
+      'game_team_id',
+      'g4u_team_id',
+      'gameTeamId',
+      'numeric_team_id',
+      'team_numeric_id'
+    ];
+    for (const k of keys) {
+      const v = team[k];
+      if (v != null && /^\d+$/.test(String(v).trim())) {
+        return String(v).trim();
+      }
+    }
+    const id = team['_id'] ?? team['id'];
+    if (id != null && /^\d+$/.test(String(id).trim())) {
+      return String(id).trim();
+    }
+    return undefined;
+  }
+
+  /** Valor do parâmetro `team` nos endpoints Game4U que esperam id numérico da equipa no jogo. */
+  private getGame4uTeamHttpParam(): string {
+    const sel = this.teams.find(t => t.id === this.selectedTeamId) as
+      | (Team & { game4uTeamId?: string })
+      | undefined;
+    const fromPicker = sel?.game4uTeamId?.trim();
+    if (fromPicker && /^\d+$/.test(fromPicker)) {
+      return fromPicker;
+    }
+    const detail = this.teamDetailApiResponse;
+    const raw = (Array.isArray(detail) ? detail[0] : detail) as Record<string, unknown> | undefined;
+    const fromDetail = this.pickGame4uNumericTeamIdFromRaw(raw);
+    if (fromDetail) {
+      return fromDetail;
+    }
+    const sid = (this.selectedTeamId || '').trim();
+    if (/^\d+$/.test(sid)) {
+      return sid;
+    }
+    const bwa = this.getBwaSessionTeamId();
+    if (bwa != null && /^\d+$/.test(String(bwa).trim())) {
+      return String(bwa).trim();
+    }
+    console.warn(
+      '[Game4U] Defina na API BWA um campo numérico (ex.: game4u_team_id) em GET /team, ou use id de equipa só com dígitos. ' +
+        'Enviar o nome da equipa ou um ObjectId em `team` falha no backend.'
+    );
+    return sid;
   }
 
   /**
@@ -598,11 +684,15 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       
       if (profile === UserProfile.DIRETOR) {
         // DIRETOR can see all teams
-        availableTeams = allTeams.map((team: any) => ({
-          id: team._id || team.id,
-          name: team.name || team._id || team.id,
-          memberCount: 0 // Will be updated below
-        }));
+        availableTeams = allTeams.map((team: any) => {
+          const g4u = this.pickGame4uNumericTeamIdFromRaw(team as Record<string, unknown>);
+          return {
+            id: team._id || team.id,
+            name: team.name || team._id || team.id,
+            memberCount: 0,
+            ...(g4u ? { game4uTeamId: g4u } : {})
+          };
+        });
         console.log('✅ DIRETOR: Showing all teams:', availableTeams.length);
       } else {
         const accessibleTeamIds = this.computeAccessibleTeamIdsFromSession(profile, userTeams);
@@ -613,11 +703,15 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
             const teamId = team._id || team.id;
             return teamId != null && accessibleTeamIds.includes(String(teamId));
           })
-          .map((team: any) => ({
-            id: String(team._id || team.id),
-            name: team.name || team._id || team.id,
-            memberCount: 0
-          }));
+          .map((team: any) => {
+            const g4u = this.pickGame4uNumericTeamIdFromRaw(team as Record<string, unknown>);
+            return {
+              id: String(team._id || team.id),
+              name: team.name || team._id || team.id,
+              memberCount: 0,
+              ...(g4u ? { game4uTeamId: g4u } : {})
+            };
+          });
 
         console.log('✅ Available teams for profile (intersect API):', profile, availableTeams.length);
       }
@@ -633,13 +727,18 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
             if (rawId == null || String(rawId).trim() === '') {
               return null;
             }
+            const g4u = this.pickGame4uNumericTeamIdFromRaw(team as Record<string, unknown>);
             return {
               id: String(rawId),
               name: String(team.name ?? team.nome ?? team.descricao ?? rawId),
-              memberCount: 0
+              memberCount: 0,
+              ...(g4u ? { game4uTeamId: g4u } : {})
             };
           })
-          .filter((t): t is { id: string; name: string; memberCount: number } => t !== null);
+          .filter(
+            (t): t is { id: string; name: string; memberCount: number; game4uTeamId?: string } =>
+              t !== null
+          );
       }
 
       // API vazia ou GESTOR sem detalhe: selector mínimo só com ids da sessão/perfil
@@ -1099,80 +1198,151 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       this.isLoadingSidebar = true;
       this.hasSidebarError = false;
       this.sidebarErrorMessage = '';
+      this.monthlyPointsGoalTarget = null;
       
       console.log('📊 Loading sidebar data for collaborator:', collaboratorId);
       
-      // Get progress metrics and points for the collaborator
-      const metrics = await firstValueFrom(
-        this.actionLogService
-          .getProgressMetrics(collaboratorId, this.selectedMonth, {
-            teamId: this.getGame4uTeamScopeId()
-          })
-          .pipe(takeUntil(this.destroy$))
-      ).catch((error) => {
-        console.error('Error loading collaborator progress metrics:', error);
-        this.hasSidebarError = true;
-        this.sidebarErrorMessage = 'Erro ao carregar métricas de progresso';
-        return {
-          activity: { pendentes: 0, emExecucao: 0, finalizadas: 0, pontos: 0 },
-          processo: { pendentes: 0, incompletas: 0, finalizadas: 0 }
-        };
-      });
-      
-      // Pontos bloqueados: não usar GET …/player/…/status no painel do gestor; métricas vêm do action_log.
-      const blockedPoints = 0;
-      
-      const totalPoints = metrics.activity.pontos;
-      const unlockedPoints = Math.max(0, totalPoints - blockedPoints);
-      
-      // Set sidebar data for collaborator
-      // Round down all values to remove decimals
-      this.seasonPoints = {
-        total: Math.floor(totalPoints),
-        bloqueados: Math.floor(blockedPoints),
-        desbloqueados: Math.floor(unlockedPoints)
+      const emptyMetrics = {
+        activity: { pendentes: 0, emExecucao: 0, finalizadas: 0, pontos: 0 },
+        processo: { pendentes: 0, incompletas: 0, finalizadas: 0 }
       };
-      
+
+      let metrics = emptyMetrics;
+      let snap: {
+        wallet: { moedas: number; bloqueados: number; desbloqueados: number };
+        sidebar: { tarefasFinalizadas: number; deliveryStatsTotal?: number };
+      } | null = null;
+
+      if (this.playerService.usesGame4uWalletFromStats()) {
+        const goalPromise =
+          this.selectedMonth != null
+            ? firstValueFrom(
+                this.actionLogService
+                  .getMonthlyPointsGoalTarget(
+                    collaboratorId,
+                    this.selectedMonth,
+                    this.getGame4uTeamScopeId()
+                  )
+                  .pipe(takeUntil(this.destroy$))
+              ).catch((error: unknown) => {
+                console.error('Error loading monthly goal target (collaborator sidebar):', error);
+                return null;
+              })
+            : Promise.resolve(null);
+
+        let goalPts: number | null;
+        [snap, metrics, goalPts] = await Promise.all([
+          firstValueFrom(
+            this.actionLogService
+              .getMonthlyGame4uPlayerDashboardData(collaboratorId, undefined)
+              .pipe(takeUntil(this.destroy$))
+          ).catch((error: unknown) => {
+            console.error('Error loading Game4U collaborator sidebar snapshot:', error);
+            this.hasSidebarError = true;
+            this.sidebarErrorMessage = 'Erro ao carregar pontos da temporada';
+            return {
+              wallet: { moedas: 0, bloqueados: 0, desbloqueados: 0 },
+              sidebar: { tarefasFinalizadas: 0 }
+            };
+          }),
+          firstValueFrom(
+            this.actionLogService
+              .getProgressMetrics(collaboratorId, this.selectedMonth, {
+                gamificationDashboardReportsOnly: true
+              })
+              .pipe(takeUntil(this.destroy$))
+          ).catch((error: unknown) => {
+            console.error('Error loading collaborator progress metrics:', error);
+            this.hasSidebarError = true;
+            this.sidebarErrorMessage = 'Erro ao carregar métricas de progresso';
+            return emptyMetrics;
+          }),
+          goalPromise
+        ]);
+        const g = goalPts != null ? Math.floor(Number(goalPts) || 0) : 0;
+        this.monthlyPointsGoalTarget = g > 0 ? g : null;
+      } else {
+        metrics = await firstValueFrom(
+          this.actionLogService
+            .getProgressMetrics(collaboratorId, this.selectedMonth, {
+              gamificationDashboardReportsOnly: true
+            })
+            .pipe(takeUntil(this.destroy$))
+        ).catch((error: unknown) => {
+          console.error('Error loading collaborator progress metrics:', error);
+          this.hasSidebarError = true;
+          this.sidebarErrorMessage = 'Erro ao carregar métricas de progresso';
+          return emptyMetrics;
+        });
+        this.monthlyPointsGoalTarget = null;
+      }
+
+      const blockedPoints = 0;
+
+      if (snap) {
+        const w = snap.wallet;
+        this.seasonPoints = {
+          total: Math.floor(w.desbloqueados + w.bloqueados),
+          bloqueados: Math.floor(w.bloqueados),
+          desbloqueados: Math.floor(w.desbloqueados)
+        };
+        this.seasonProcessosFinalizadosCount = Math.floor(
+          Number('deliveryStatsTotal' in snap.sidebar ? snap.sidebar.deliveryStatsTotal : 0) || 0
+        );
+      } else {
+        const totalPoints = metrics.activity.pontos;
+        const unlockedPoints = Math.max(0, totalPoints - blockedPoints);
+        this.seasonPoints = {
+          total: Math.floor(totalPoints),
+          bloqueados: Math.floor(blockedPoints),
+          desbloqueados: Math.floor(unlockedPoints)
+        };
+        this.seasonProcessosFinalizadosCount = Math.floor(metrics.processo.finalizadas);
+      }
+
       this.progressMetrics = {
         processosIncompletos: Math.floor(metrics.processo.incompletas),
         atividadesFinalizadas: Math.floor(metrics.activity.finalizadas),
         processosFinalizados: Math.floor(metrics.processo.finalizadas)
       };
-      
+
+      const totalPointsForTotals = snap
+        ? snap.wallet.desbloqueados + snap.wallet.bloqueados
+        : metrics.activity.pontos;
+
+      const actExt = metrics.activity as ActivityMetrics & {
+        pontosDone?: number;
+        pontosTodosStatus?: number;
+      };
       this.teamActivityMetrics = {
-        pendentes: metrics.activity.pendentes,
-        emExecucao: metrics.activity.emExecucao,
-        finalizadas: metrics.activity.finalizadas,
-        pontos: Math.floor(metrics.activity.pontos),
-        ...('pontosDone' in metrics.activity &&
-        'pontosTodosStatus' in metrics.activity &&
-        metrics.activity.pontosDone !== undefined &&
-        metrics.activity.pontosTodosStatus !== undefined
-          ? { pontosDone: metrics.activity.pontosDone, pontosTodosStatus: metrics.activity.pontosTodosStatus }
+        pendentes: actExt.pendentes,
+        emExecucao: actExt.emExecucao,
+        finalizadas: actExt.finalizadas,
+        pontos: Math.floor(actExt.pontos),
+        ...(typeof actExt.pontosDone === 'number' && typeof actExt.pontosTodosStatus === 'number'
+          ? { pontosDone: actExt.pontosDone, pontosTodosStatus: actExt.pontosTodosStatus }
           : {})
       };
-      
+
       this.teamProcessMetrics = {
         pendentes: metrics.processo.pendentes,
         incompletas: metrics.processo.incompletas,
         finalizadas: metrics.processo.finalizadas
       };
-      
-      // Set team totals to collaborator values
-      // Round down all values to remove decimals
-      this.teamTotalPoints = Math.floor(totalPoints);
-      this.teamAveragePoints = Math.floor(totalPoints); // For single collaborator, average = total
+
+      this.teamTotalPoints = Math.floor(totalPointsForTotals);
+      this.teamAveragePoints = Math.floor(totalPointsForTotals);
       this.teamTotalTasks = Math.floor(metrics.activity.finalizadas);
       this.teamTotalBlockedPoints = Math.floor(blockedPoints);
-      
-      // Update formatted data for gamification dashboard components
+
       this.updateFormattedSidebarData();
-      
+
       this.isLoadingSidebar = false;
-      
+
       console.log('✅ Collaborator sidebar data loaded:', {
         points: this.seasonPoints,
         metrics: this.progressMetrics,
+        seasonProcessosFinalizadosCount: this.seasonProcessosFinalizadosCount,
         collaboratorId
       });
       this.cdr.markForCheck();
@@ -1195,46 +1365,67 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       this.sidebarErrorMessage = '';
 
       console.log('📊 Loading sidebar data for team:', this.selectedTeam);
+      this.monthlyPointsGoalTarget = null;
 
       if (this.playerService.usesGame4uWalletFromStats()) {
-        const panelId = this.getPanelPlayerId();
-        if (!panelId) {
+        if (!this.selectedTeam) {
           this.hasSidebarError = true;
-          this.sidebarErrorMessage = 'Sessão sem utilizador para dados Game4U';
+          this.sidebarErrorMessage = 'Nenhuma equipa selecionada para dados Game4U';
           this.isLoadingSidebar = false;
           this.cdr.markForCheck();
           return;
         }
-        const snap = await firstValueFrom(
-          this.actionLogService
-            .getMonthlyGame4uPlayerDashboardData(panelId, undefined, this.getGame4uTeamScopeId())
-            .pipe(takeUntil(this.destroy$))
-        ).catch((error) => {
-          console.error('Error loading Game4U team sidebar snapshot:', error);
-          this.hasSidebarError = true;
-          this.sidebarErrorMessage = 'Erro ao carregar pontos da temporada';
-          return {
-            wallet: { moedas: 0, bloqueados: 0, desbloqueados: 0 },
-            pontosActionLog: 0,
-            sidebar: { tarefasFinalizadas: 0 }
-          };
-        });
+        const scope = this.getGame4uTeamScopeId() ?? '';
+        const monthForGoal = this.selectedMonth;
+        const goal$ =
+          scope && monthForGoal != null
+            ? this.actionLogService
+                .getMonthlyTeamGoalPointsTarget(scope, monthForGoal)
+                .pipe(takeUntil(this.destroy$))
+            : of(0);
+        const [snap, goalPts] = await Promise.all([
+          firstValueFrom(
+            this.actionLogService
+              .getMonthlyGame4uTeamDashboardData(scope)
+              .pipe(takeUntil(this.destroy$))
+          ).catch((error) => {
+            console.error('Error loading Game4U team sidebar snapshot:', error);
+            this.hasSidebarError = true;
+            this.sidebarErrorMessage = 'Erro ao carregar pontos da temporada';
+            return {
+              wallet: { moedas: 0, bloqueados: 0, desbloqueados: 0 },
+              pontosActionLog: 0,
+              sidebar: { tarefasFinalizadas: 0 }
+            };
+          }),
+          firstValueFrom(goal$).catch((error: unknown) => {
+            console.error('Error loading team goal/month summary (sidebar):', error);
+            return 0;
+          })
+        ]);
+        const g = Math.floor(Number(goalPts) || 0);
+        this.monthlyPointsGoalTarget = g > 0 ? g : null;
         const w = snap.wallet;
         this.seasonPoints = {
           total: Math.floor(w.desbloqueados + w.bloqueados),
           bloqueados: Math.floor(w.bloqueados),
           desbloqueados: Math.floor(w.desbloqueados)
         };
+        this.seasonProcessosFinalizadosCount = Math.floor(
+          Number('deliveryStatsTotal' in snap.sidebar ? snap.sidebar.deliveryStatsTotal : 0) || 0
+        );
+        // Tarefas do menu lateral: `tasks_count` de `GET /game/reports/finished/summary` (equipa, `team_id`).
+        const tarefasReports = Math.floor(Number(snap.sidebar.tarefasFinalizadas) || 0);
         this.progressMetrics = {
           processosIncompletos: Math.floor(this.teamProcessMetrics.incompletas),
-          atividadesFinalizadas: Math.floor(this.teamActivityMetrics.finalizadas),
+          atividadesFinalizadas: tarefasReports,
           processosFinalizados: Math.floor(this.teamProcessMetrics.finalizadas)
         };
       } else {
         const [points, metrics] = await Promise.all([
           firstValueFrom(
             this.teamAggregateService
-              .getTeamSeasonPoints(this.selectedTeam, dateRange.start, dateRange.end)
+              .getTeamSeasonPoints(this.getGame4uTeamHttpParam(), dateRange.start, dateRange.end)
               .pipe(takeUntil(this.destroy$))
           ).catch((error) => {
             console.error('Error loading season points:', error);
@@ -1244,7 +1435,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
           }),
           firstValueFrom(
             this.teamAggregateService
-              .getTeamProgressMetrics(this.selectedTeam, dateRange.start, dateRange.end)
+              .getTeamProgressMetrics(this.getGame4uTeamHttpParam(), dateRange.start, dateRange.end)
               .pipe(takeUntil(this.destroy$))
           ).catch((error) => {
             console.error('Error loading progress metrics:', error);
@@ -1275,6 +1466,9 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
           ),
           processosFinalizados: Math.floor(this.teamProcessMetrics.finalizadas || metrics.processosFinalizados)
         };
+        this.seasonProcessosFinalizadosCount = Math.floor(
+          this.teamProcessMetrics.finalizadas || metrics.processosFinalizados
+        );
       }
 
       this.updateFormattedSidebarData();
@@ -1297,54 +1491,89 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
   }
 
   /**
+   * Membros do seletor: prioridade a `BwaTeamApiService.fetchTeamUsers` (`GET /team/{id}/users`).
+   * Fallback: aggregate `player_status` / action_log (Funifier) como antes.
+   */
+  private mapBwaTeamUsersToCollaborators(raw: any[]): Collaborator[] {
+    const out: Collaborator[] = [];
+    for (const u of raw) {
+      if (u == null || typeof u !== 'object') {
+        continue;
+      }
+      if (u.deactivated_at != null && String(u.deactivated_at).trim() !== '') {
+        continue;
+      }
+      const email = String(u.email ?? u.user_email ?? '').trim();
+      const id = String(u._id ?? u.id ?? '').trim();
+      const userId = email || id;
+      if (!userId) {
+        continue;
+      }
+      const nameRaw = u.name ?? u.full_name ?? u.fullName ?? userId;
+      const name = String(nameRaw).trim() || userId;
+      out.push({
+        userId,
+        name,
+        email: email || userId
+      });
+    }
+    out.sort((a, b) => a.name.localeCompare(b.name, 'pt-BR', { sensitivity: 'base' }));
+    return out;
+  }
+
+  /**
    * Load collaborators for selected team
-   * 
-   * OPTIMIZED: Uses the data already loaded from loadTeamMembersData aggregate query
-   * instead of making individual player status requests.
+   *
+   * 1) GET `/team/{id}/users` (BWA) — lista oficial para o gestor alternar colaboradores.
+   * 2) Dados já carregados em `loadTeamMembersData`, ou aggregate Funifier, ou IDs.
    */
   private async loadCollaborators(): Promise<void> {
     try {
       this.isLoadingCollaborators = true;
-      console.log('👥 Loading collaborators for team:', this.selectedTeam);
-      
-      // Preservar o selectedCollaborator ANTES de carregar
-      const preservedCollaboratorId = this.selectedCollaborator || localStorage.getItem('selectedCollaboratorId');
-      
-      // OPTIMIZED: Use data already loaded from loadTeamMembersData aggregate query
-      // No need for individual requests - all data is already in teamMembersData
-      if (this.teamMembersData.length > 0) {
-        // Extract collaborator info directly from the aggregate result
-        this.collaborators = this.teamMembersData.map((playerStatus: any) => ({
-          userId: playerStatus._id,
-          name: playerStatus.name || playerStatus._id,
-          email: playerStatus._id
-        }));
-        
-        console.log('✅ Collaborators loaded from aggregate data (OPTIMIZED):', this.collaborators.length, 'no additional API calls');
-      } else if (this.teamMemberIds.length === 0) {
-        console.warn('⚠️ No member data available, trying to load from aggregate query');
-        // Fallback: try to load from aggregate query
-        const members = await firstValueFrom(
-          this.teamAggregateService
-            .getTeamMembers(this.selectedTeam)
-            .pipe(takeUntil(this.destroy$))
-        ).catch((error) => {
-          console.error('Error loading collaborators:', error);
-          return [];
-        });
-        
-        this.collaborators = members;
-      } else {
-        // Fallback: Use member IDs if teamMembersData is empty but memberIds exist
-        // This shouldn't happen normally, but provides a safety net
-        this.collaborators = this.teamMemberIds.map(memberId => ({
-          userId: memberId,
-          name: memberId,
-          email: memberId
-        }));
-        console.log('⚠️ Using fallback collaborator data from member IDs');
+      console.log('👥 Loading collaborators for team:', this.selectedTeam, 'id:', this.selectedTeamId);
+
+      let list: Collaborator[] = [];
+      if (this.selectedTeamId?.trim()) {
+        const raw = await this.bwaTeamApi.fetchTeamUsers(this.selectedTeamId.trim());
+        list = this.mapBwaTeamUsersToCollaborators(raw);
+        if (list.length > 0) {
+          this.collaborators = list;
+          console.log('✅ Collaborators from GET /team/{id}/users:', this.collaborators.length);
+        }
       }
-      
+
+      if (list.length === 0) {
+        if (this.teamMembersData.length > 0) {
+          this.collaborators = this.teamMembersData.map((playerStatus: any) => ({
+            userId: playerStatus._id,
+            name: playerStatus.name || playerStatus._id,
+            email: playerStatus._id
+          }));
+          console.log(
+            '✅ Collaborators from player_status aggregate:',
+            this.collaborators.length
+          );
+        } else if (this.teamMemberIds.length === 0) {
+          console.warn('⚠️ No member data available, trying action_log aggregate');
+          const members = await firstValueFrom(
+            this.teamAggregateService
+              .getTeamMembers(this.selectedTeam)
+              .pipe(takeUntil(this.destroy$))
+          ).catch((error) => {
+            console.error('Error loading collaborators:', error);
+            return [];
+          });
+          this.collaborators = members;
+        } else {
+          this.collaborators = this.teamMemberIds.map(memberId => ({
+            userId: memberId,
+            name: memberId,
+            email: memberId
+          }));
+          console.log('⚠️ Using fallback collaborator data from member IDs');
+        }
+      }
+
       // Validate current selection exists in the list
       if (this.selectedCollaborator) {
         const collaboratorExists = this.collaborators.find(c => c.userId === this.selectedCollaborator);
@@ -1353,7 +1582,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
           this.selectedCollaborator = null;
         }
       }
-      
+
       this.isLoadingCollaborators = false;
       console.log('✅ Collaborators loaded:', this.collaborators.length);
       
@@ -1385,9 +1614,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       // Get progress metrics for the collaborator
       const metrics = await firstValueFrom(
         this.actionLogService
-          .getProgressMetrics(collaboratorId, this.selectedMonth, {
-            teamId: this.getGame4uTeamScopeId()
-          })
+          .getProgressMetrics(collaboratorId, this.selectedMonth)
           .pipe(takeUntil(this.destroy$))
       ).catch((error) => {
         console.error('Error loading collaborator progress metrics for goals:', error);
@@ -1475,6 +1702,9 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
    * @returns Promise that resolves when productivity data is loaded
    */
   private async loadCollaboratorProductivityData(collaboratorId: string, dateRange: { start: Date; end: Date }): Promise<void> {
+    if (!this.productivityAnalysisTabEnabled) {
+      return;
+    }
     try {
       this.isLoadingProductivity = true;
       this.hasProductivityError = false;
@@ -1665,6 +1895,9 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
    * OPTIMIZED: Uses single aggregate query with $lookup to get all action logs for the team
    */
   private async loadProductivityData(dateRange: { start: Date; end: Date }): Promise<void> {
+    if (!this.productivityAnalysisTabEnabled) {
+      return;
+    }
     try {
       this.isLoadingProductivity = true;
       this.hasProductivityError = false;
@@ -2036,18 +2269,20 @@ private calculateCollaboratorTotals(memberData: Array<{
    */
   private async loadTeamActivityAndMacroData(_dateRange: { start: Date; end: Date }): Promise<void> {
     try {
-      console.log('📊 Loading team panel progress (Game4U, mesmo fluxo que gamificação + team_id)...');
-      const panelId = this.getPanelPlayerId();
-      if (!panelId) {
-        console.warn('⚠️ Sem utilizador na sessão para métricas Game4U');
+      if (!this.selectedTeam) {
+        console.warn('⚠️ Sem equipa selecionada para métricas agregadas Game4U');
         return;
       }
-      const teamScope = this.getGame4uTeamScopeId();
+      console.log(
+        '📊 Loading team panel progress (Game4U: reports finished/summary + open/summary quando há team_id BWA; team-actions só para processos)...'
+      );
       const metrics = await firstValueFrom(
         this.actionLogService
-          .getProgressMetrics(panelId, this.selectedMonth, {
-            gamificationDashboardReportsOnly: true,
-            teamId: teamScope
+          .getProgressMetrics(this.selectedTeam, this.selectedMonth, {
+            game4uTeamAggregate: {
+              team: this.getGame4uTeamHttpParam(),
+              bwaTeamId: this.getGame4uTeamScopeId()
+            }
           })
           .pipe(takeUntil(this.destroy$))
       ).catch((error) => {
@@ -2080,7 +2315,7 @@ private calculateCollaboratorTotals(memberData: Array<{
         finalizadas: metrics.processo.finalizadas
       };
 
-      console.log('✅ Team activity and process data (Game4U reports):', {
+      console.log('✅ Team activity and process data (Game4U):', {
         activities: this.teamActivityMetrics,
         processos: this.teamProcessMetrics,
         selectedMonth: this.selectedMonth
@@ -2093,6 +2328,312 @@ private calculateCollaboratorTotals(memberData: Array<{
   }
 
   /**
+   * Lista «Clientes atendidos»: mesmo fluxo que `gamification-dashboard.loadParticipacaoData`
+   * (GET participação + cruzamento gamificação para % no prazo).
+   */
+  private async loadParticipacaoClientesList(
+    playerId: string,
+    opts?: { useTeamDeliveriesAggregate?: boolean; teamRange?: { start: Date; end: Date } }
+  ): Promise<void> {
+    this.isLoadingCarteira = true;
+    this.isLoadingParticipacaoKpi = false;
+    const loadGen = ++this.participacaoKpiLoadGen;
+    this.cdr.markForCheck();
+
+    const useTeam =
+      !!opts?.useTeamDeliveriesAggregate &&
+      !!opts?.teamRange &&
+      (this.selectedTeam || '').trim() !== '';
+
+    if (!useTeam && !playerId) {
+      this.teamCarteiraClientes = [];
+      this.isLoadingCarteira = false;
+      this.cdr.markForCheck();
+      return;
+    }
+
+    const teamTid = this.getGame4uTeamScopeId();
+
+    try {
+      const participacaoSource$: Observable<any[]> = useTeam
+        ? this.teamAggregateService.getTeamCnpjListWithCount(
+            this.getGame4uTeamHttpParam(),
+            opts!.teamRange!.start,
+            opts!.teamRange!.end,
+            teamTid ? { game4uBwaTeamScopeId: teamTid } : undefined
+          )
+        : this.actionLogService.getPlayerCnpjListWithCount(playerId, this.selectedMonth, teamTid);
+
+      const mapped$ = participacaoSource$.pipe(
+        mergeMap((items: any[]) => {
+          if (items.length > 0 && items.every(i => i.fromGameReportsDeliveries)) {
+            const baseClientes: CompanyDisplay[] = items.map(i => ({
+              cnpj: i.cnpj,
+              cnpjId: i.cnpj,
+              actionCount: i.actionCount ?? 0,
+              processCount: 0,
+              delivery_title: i.delivery_title,
+              ...(i.deliveryId?.trim() ? { deliveryId: i.deliveryId.trim() } : {}),
+              loadTasksViaGameReports: true
+            }));
+            return of({
+              empids: [] as string[],
+              baseClientes,
+              skipKpi: false as const
+            });
+          }
+
+          const empids = items.map(i => i.cnpj).filter((c): c is string => !!c && String(c).trim().length > 0);
+          const actionCountByCnpj = new Map<string, number>(
+            items.map(i => [i.cnpj, i.actionCount ?? 0] as [string, number])
+          );
+          const deliveryTitleByKey = new Map<string, string>();
+          const deliveryIdByCnpj = new Map<string, string>();
+          const deliveryExtraCnpjByKey = new Map<string, string>();
+          for (const i of items) {
+            const t = i.delivery_title?.trim();
+            if (t) {
+              deliveryTitleByKey.set(i.cnpj, t);
+            }
+            const d = i.deliveryId?.trim();
+            if (d) {
+              deliveryIdByCnpj.set(i.cnpj, d);
+            }
+            const ec = i.delivery_extra_cnpj?.trim();
+            if (ec) {
+              deliveryExtraCnpjByKey.set(i.cnpj, ec);
+            }
+          }
+
+          if (empids.length === 0) {
+            return of({
+              empids: [] as string[],
+              baseClientes: [] as CompanyDisplay[],
+              skipKpi: true as const
+            });
+          }
+
+          return this.cnpjLookupService.enrichCnpjListFull(empids).pipe(
+            map(cnpjInfo => {
+              cnpjInfo.forEach((info, key) => {
+                this.cnpjNameMap.set(key, info.empresa);
+                if (info.status) {
+                  this.cnpjStatusMap.set(key, info.status);
+                }
+                if (info.cnpj) {
+                  this.cnpjNumberMap.set(key, info.cnpj);
+                }
+              });
+              const baseClientes = this.buildParticipacaoBaseClientes(
+                empids,
+                actionCountByCnpj,
+                deliveryTitleByKey,
+                deliveryIdByCnpj,
+                deliveryExtraCnpjByKey
+              );
+              return { empids, baseClientes, skipKpi: false as const };
+            })
+          );
+        })
+      );
+
+      const result = (await firstValueFrom(
+        mapped$.pipe(take(1), takeUntil(this.destroy$))
+      )) as {
+        baseClientes: CompanyDisplay[];
+        skipKpi: boolean;
+      };
+
+      const { baseClientes, skipKpi } = result;
+      const uniqueBase = this.dedupeParticipacaoClientes(baseClientes);
+      uniqueBase.forEach(c => {
+        const status = this.cnpjStatusMap.get(c.cnpj);
+        if (status) {
+          c.status = status;
+        }
+      });
+      this.teamCarteiraClientes = uniqueBase;
+      this.isLoadingCarteira = false;
+      this.isLoadingParticipacaoKpi = !skipKpi && uniqueBase.length > 0;
+      this.updateFormattedSidebarData();
+      this.syncEntregasPrazoKpiFromParticipacao();
+      this.cdr.markForCheck();
+
+      if (!skipKpi && uniqueBase.length > 0) {
+        void this.applyParticipacaoPorcEntregasKpiAfterGamificacaoAsync(uniqueBase, loadGen).catch(
+          (err: unknown) => {
+            console.error('📊 Falha ao aplicar KPI de entregas (gamificação, painel equipa):', err);
+          }
+        );
+      }
+    } catch (err: unknown) {
+      console.error('📊 Failed to load participação (painel equipa):', err);
+      this.teamCarteiraClientes = [];
+      this.isLoadingCarteira = false;
+      this.isLoadingParticipacaoKpi = false;
+      this.syncEntregasPrazoKpiFromParticipacao();
+      this.cdr.markForCheck();
+    }
+  }
+
+  /** Alinhado a `gamification-dashboard.buildParticipacaoBaseClientes`. */
+  private buildParticipacaoBaseClientes(
+    empids: string[],
+    actionCountByCnpj: Map<string, number>,
+    deliveryTitleByKey: Map<string, string>,
+    deliveryIdByCnpj: Map<string, string>,
+    deliveryExtraCnpjByKey: Map<string, string>
+  ): CompanyDisplay[] {
+    return empids.map(key => {
+      const k = String(key).trim();
+      const row: CompanyDisplay = {
+        cnpj: k,
+        cnpjId: k,
+        actionCount: actionCountByCnpj.get(k) ?? 0,
+        processCount: 0
+      };
+      const t = deliveryTitleByKey.get(k)?.trim();
+      if (t) {
+        row.delivery_title = t;
+      }
+      const d = deliveryIdByCnpj.get(k)?.trim();
+      if (d) {
+        row.deliveryId = d;
+      }
+      const ec = deliveryExtraCnpjByKey.get(k)?.trim();
+      if (ec) {
+        row.delivery_extra_cnpj = ec;
+      }
+      return row;
+    });
+  }
+
+  private participacaoClienteDistinctKey(c: CompanyDisplay): string {
+    const did = c.deliveryId?.trim();
+    if (did) {
+      const emp =
+        extractGamificacaoEmpIdFromDeliveryKey(did) ?? extractEmpIdPrefixFromDeliveryIdFirstSegment(did);
+      if (emp) {
+        return `emp:${emp}`;
+      }
+    }
+    const digits =
+      String(c.cnpjNumber ?? '')
+        .replace(/\D/g, '')
+        .trim() ||
+      String(c.delivery_extra_cnpj ?? '')
+        .replace(/\D/g, '')
+        .trim() ||
+      String(this.cnpjNumberMap.get(c.cnpj) ?? '')
+        .replace(/\D/g, '')
+        .trim();
+    if (digits.length === 14) {
+      return `cnpj:${digits}`;
+    }
+    return `row:${String(c.cnpj || '').trim()}`;
+  }
+
+  private mergeParticipacaoClienteRows(keep: CompanyDisplay, add: CompanyDisplay): CompanyDisplay {
+    return {
+      ...keep,
+      actionCount: (keep.actionCount ?? 0) + (add.actionCount ?? 0),
+      processCount: Math.max(keep.processCount ?? 0, add.processCount ?? 0),
+      delivery_title: keep.delivery_title?.trim() || add.delivery_title?.trim() || keep.delivery_title,
+      deliveryId: keep.deliveryId?.trim() || add.deliveryId?.trim() || keep.deliveryId,
+      delivery_extra_cnpj: keep.delivery_extra_cnpj?.trim() || add.delivery_extra_cnpj?.trim() || keep.delivery_extra_cnpj,
+      cnpjNumber: keep.cnpjNumber || add.cnpjNumber,
+      loadTasksViaGameReports: keep.loadTasksViaGameReports ?? add.loadTasksViaGameReports,
+      porcEntregas: keep.porcEntregas ?? add.porcEntregas,
+      entrega: keep.entrega ?? add.entrega,
+      deliveryKpi: keep.deliveryKpi ?? add.deliveryKpi,
+      classificacao: keep.classificacao ?? add.classificacao,
+      gamificacaoEmpIdUsado: keep.gamificacaoEmpIdUsado ?? add.gamificacaoEmpIdUsado
+    };
+  }
+
+  private dedupeParticipacaoClientes(rows: CompanyDisplay[]): CompanyDisplay[] {
+    if (rows.length <= 1) {
+      return rows;
+    }
+    const byKey = new Map<string, CompanyDisplay>();
+    for (const c of rows) {
+      const key = this.participacaoClienteDistinctKey(c);
+      const prev = byKey.get(key);
+      if (!prev) {
+        byKey.set(key, { ...c });
+      } else {
+        byKey.set(key, this.mergeParticipacaoClienteRows(prev, c));
+      }
+    }
+    return Array.from(byKey.values());
+  }
+
+  private async applyParticipacaoPorcEntregasKpiAfterGamificacaoAsync(
+    baseClientes: CompanyDisplay[],
+    loadGen: number
+  ): Promise<void> {
+    if (baseClientes.length === 0) {
+      if (loadGen === this.participacaoKpiLoadGen) {
+        this.isLoadingParticipacaoKpi = false;
+        this.syncEntregasPrazoKpiFromParticipacao();
+        this.cdr.markForCheck();
+      }
+      return;
+    }
+
+    const participacaoGamificacaoRows = baseClientes.map(b => ({
+      participationKey: b.cnpj,
+      deliveryId: b.deliveryId,
+      deliveryTitle: b.delivery_title
+    }));
+
+    try {
+      const kpiRows = await firstValueFrom(
+        this.companyKpiService.enrichFromParticipacaoRowKeys(participacaoGamificacaoRows).pipe(take(1))
+      );
+      if (loadGen !== this.participacaoKpiLoadGen) {
+        return;
+      }
+
+      const merged = baseClientes.map((base, i) => {
+        const k = kpiRows[i];
+        if (!k) {
+          return { ...base };
+        }
+        const cnpjNum = k.cnpjNumber ?? base.cnpjNumber;
+        return {
+          ...base,
+          processCount: k.processCount,
+          classificacao: k.classificacao,
+          entrega: k.entrega,
+          porcEntregas: k.porcEntregas,
+          deliveryKpi: k.deliveryKpi,
+          ...(cnpjNum ? { cnpjNumber: cnpjNum } : {}),
+          ...(k.gamificacaoEmpIdUsado ? { gamificacaoEmpIdUsado: k.gamificacaoEmpIdUsado } : {})
+        };
+      });
+      merged.forEach(c => {
+        const status = this.cnpjStatusMap.get(c.cnpj);
+        if (status) {
+          c.status = status;
+        }
+      });
+      this.teamCarteiraClientes = this.dedupeParticipacaoClientes(merged);
+    } catch (err: unknown) {
+      console.error('📊 Erro ao enriquecer participação (painel equipa):', err);
+      if (loadGen === this.participacaoKpiLoadGen) {
+        this.teamCarteiraClientes = baseClientes.map(b => ({ ...b }));
+      }
+    } finally {
+      if (loadGen === this.participacaoKpiLoadGen) {
+        this.isLoadingParticipacaoKpi = false;
+        this.syncEntregasPrazoKpiFromParticipacao();
+        this.cdr.markForCheck();
+      }
+    }
+  }
+
+  /**
    * Load carteira data for a specific collaborator
    * 
    * @private
@@ -2101,73 +2642,9 @@ private calculateCollaboratorTotals(memberData: Array<{
    * @param dateRange - Date range for filtering data
    * @returns Promise that resolves when carteira data is loaded
    */
-  private async loadCollaboratorCarteiraData(collaboratorId: string, dateRange: { start: Date; end: Date }): Promise<void> {
-    try {
-      this.isLoadingCarteira = true;
-      console.log('📊 Loading carteira data for collaborator:', collaboratorId);
-      
-      // Get CNPJ list with action counts and process counts for the collaborator
-      const carteiraData = await firstValueFrom(
-        this.actionLogService
-          .getPlayerCnpjListWithCount(collaboratorId, this.selectedMonth, this.getGame4uTeamScopeId())
-          .pipe(takeUntil(this.destroy$))
-      ).catch((error) => {
-        console.error(`Error loading carteira for collaborator ${collaboratorId}:`, error);
-        return [];
-      });
-      
-      // Extract all CNPJ strings for lookup
-      const cnpjList = carteiraData.map(c => c.cnpj);
-      
-      // Enrich CNPJs with clean company names and status
-      const cnpjInfo = await firstValueFrom(
-        this.cnpjLookupService.enrichCnpjListFull(cnpjList)
-          .pipe(takeUntil(this.destroy$))
-      ).catch((error) => {
-        console.error('Error enriching CNPJ names:', error);
-        return new Map<string, import('@services/cnpj-lookup.service').CnpjEnrichedInfo>();
-      });
-      const nameMap = new Map<string, string>();
-      cnpjInfo.forEach((info, key) => {
-        nameMap.set(key, info.empresa);
-        if (info.status) {
-          this.cnpjStatusMap.set(key, info.status);
-        }
-      });
-      this.cnpjNameMap = nameMap;
-      console.log('📊 Collaborator: CNPJ name map loaded with', this.cnpjNameMap.size, 'entries');
-      
-      // Enrich with KPI data
-      const enrichedClientes = await firstValueFrom(
-        this.companyKpiService.enrichCompaniesWithKpis(carteiraData)
-          .pipe(takeUntil(this.destroy$))
-      ).catch((error) => {
-        console.error(`Error enriching carteira data for collaborator ${collaboratorId}:`, error);
-        // Return data without KPI enrichment on error
-        return carteiraData.map(item => ({
-          cnpj: item.cnpj,
-          actionCount: item.actionCount,
-          processCount: (item as any).processCount || 0
-        } as CompanyDisplay));
-      });
-      
-      this.teamCarteiraClientes = enrichedClientes;
-      
-      // Update formatted sidebar data after carteira is loaded (for clientes count)
-      this.updateFormattedSidebarData();
-      
-      console.log('✅ Collaborator carteira data loaded:', this.teamCarteiraClientes.length, 'unique CNPJs');
-      console.log('✅ Total actions across all CNPJs:', 
-        this.teamCarteiraClientes.reduce((sum, item) => sum + item.actionCount, 0));
-      
-      this.isLoadingCarteira = false;
-      this.cdr.markForCheck();
-    } catch (error) {
-      console.error('Error loading collaborator carteira data:', error);
-      this.teamCarteiraClientes = [];
-      this.isLoadingCarteira = false;
-      this.cdr.markForCheck();
-    }
+  private async loadCollaboratorCarteiraData(collaboratorId: string, _dateRange: { start: Date; end: Date }): Promise<void> {
+    console.log('📊 Loading clientes atendidos (participação) for collaborator:', collaboratorId);
+    await this.loadParticipacaoClientesList(collaboratorId);
   }
 
   /**
@@ -2182,98 +2659,19 @@ private calculateCollaboratorTotals(memberData: Array<{
    * @returns Promise that resolves when carteira data is loaded
    */
   private async loadTeamCarteiraData(_dateRange: { start: Date; end: Date }): Promise<void> {
-    try {
-      this.isLoadingCarteira = true;
-      console.log('📊 Loading team carteira (Game4U + team_id, alinhado à gamificação)...');
-
-      if (!this.selectedTeamId) {
-        console.warn('⚠️ No team selected for carteira data');
-        this.teamCarteiraClientes = [];
-        this.isLoadingCarteira = false;
-        this.cdr.markForCheck();
-        return;
-      }
-
-      const panelId = this.getPanelPlayerId();
-      if (!panelId) {
-        this.teamCarteiraClientes = [];
-        this.isLoadingCarteira = false;
-        this.cdr.markForCheck();
-        return;
-      }
-
-      const cnpjListWithCounts = await firstValueFrom(
-        this.actionLogService
-          .getPlayerCnpjListWithCount(panelId, this.selectedMonth, this.getGame4uTeamScopeId())
-          .pipe(takeUntil(this.destroy$))
-      ).catch((error) => {
-        console.error('Error loading team carteira (Game4U):', error);
-        return [];
-      });
-
-      console.log('✅ Team cliente list (Game4U):', cnpjListWithCounts.length, 'linhas');
-      
-      if (cnpjListWithCounts.length === 0) {
-        this.teamCarteiraClientes = [];
-        this.isLoadingCarteira = false;
-        this.cdr.markForCheck();
-        return;
-      }
-      
-      // Extract all CNPJ strings for lookup
-      const cnpjList = cnpjListWithCounts.map(c => c.cnpj);
-      
-      // Enrich CNPJs with clean company names and status
-      const cnpjInfo2 = await firstValueFrom(
-        this.cnpjLookupService.enrichCnpjListFull(cnpjList)
-          .pipe(takeUntil(this.destroy$))
-      ).catch((error) => {
-        console.error('Error enriching CNPJ names:', error);
-        return new Map<string, import('@services/cnpj-lookup.service').CnpjEnrichedInfo>();
-      });
-      const nameMap2 = new Map<string, string>();
-      cnpjInfo2.forEach((info, key) => {
-        nameMap2.set(key, info.empresa);
-        if (info.status) {
-          this.cnpjStatusMap.set(key, info.status);
-        }
-      });
-      this.cnpjNameMap = nameMap2;
-      console.log('📊 Team: CNPJ name map loaded with', this.cnpjNameMap.size, 'entries');
-      
-      // Enrich with KPI data
-      const enrichedClientes = await firstValueFrom(
-        this.companyKpiService.enrichCompaniesWithKpis(cnpjListWithCounts)
-          .pipe(takeUntil(this.destroy$))
-      ).catch((error) => {
-        console.error('Error enriching team carteira data:', error);
-        // Return data without KPI enrichment on error
-        return cnpjListWithCounts.map(item => ({
-          cnpj: item.cnpj,
-          actionCount: item.actionCount,
-          processCount: (item as any).processCount || 0
-        } as CompanyDisplay));
-      });
-      
-      this.teamCarteiraClientes = enrichedClientes;
-      
-      // Update formatted sidebar data after carteira is loaded (for clientes count)
-      this.updateFormattedSidebarData();
-      
-      console.log('✅ Team carteira data loaded:', this.teamCarteiraClientes.length, 'itens');
-      console.log(
-        '✅ Total actions across all CNPJs:',
-        this.teamCarteiraClientes.reduce((sum, item) => sum + item.actionCount, 0)
-      );
-      
-      this.isLoadingCarteira = false;
-      this.cdr.markForCheck();
-    } catch (error) {
-      console.error('Error loading team carteira data:', error);
+    console.log('📊 Loading clientes atendidos (participação, equipa agregada via team-deliveries)...');
+    if (!this.selectedTeamId || !(this.selectedTeam || '').trim()) {
+      console.warn('⚠️ No team selected for carteira data');
       this.teamCarteiraClientes = [];
       this.isLoadingCarteira = false;
+      this.isLoadingParticipacaoKpi = false;
       this.cdr.markForCheck();
+      return;
     }
+    await this.loadParticipacaoClientesList('', {
+      useTeamDeliveriesAggregate: true,
+      teamRange: _dateRange
+    });
   }
 
   /**
@@ -2502,7 +2900,56 @@ private calculateCollaboratorTotals(memberData: Array<{
    * Switch active tab
    */
   switchTab(tab: 'goals' | 'productivity'): void {
+    if (tab === 'productivity' && !this.productivityAnalysisTabEnabled) {
+      return;
+    }
     this.activeTab = tab;
+  }
+
+  onProductivityTabDisabledHover(active: boolean, event?: MouseEvent): void {
+    if (this.productivityAnalysisTabEnabled) {
+      return;
+    }
+    if (active && event) {
+      this.ensureProductivityTabBodyToast();
+      this.updateProductivityTabBodyToastPosition(event);
+    } else {
+      this.removeProductivityTabBodyToast();
+    }
+  }
+
+  onProductivityTabDisabledMove(event: MouseEvent): void {
+    if (!this.productivityAnalysisTabEnabled && this.productivityTabBodyToastEl) {
+      this.updateProductivityTabBodyToastPosition(event);
+    }
+  }
+
+  private ensureProductivityTabBodyToast(): void {
+    if (this.productivityTabBodyToastEl) {
+      return;
+    }
+    const el = this.renderer.createElement('div');
+    this.renderer.addClass(el, 'tab-disabled-hover-toast');
+    this.renderer.setAttribute(el, 'role', 'status');
+    this.renderer.setAttribute(el, 'aria-live', 'polite');
+    el.textContent = this.productivityTabDisabledToastMessage;
+    this.renderer.appendChild(this.document.body, el);
+    this.productivityTabBodyToastEl = el;
+  }
+
+  private updateProductivityTabBodyToastPosition(event: MouseEvent): void {
+    if (!this.productivityTabBodyToastEl) {
+      return;
+    }
+    this.renderer.setStyle(this.productivityTabBodyToastEl, 'left', `${event.clientX}px`);
+    this.renderer.setStyle(this.productivityTabBodyToastEl, 'top', `${event.clientY}px`);
+  }
+
+  private removeProductivityTabBodyToast(): void {
+    if (this.productivityTabBodyToastEl) {
+      this.renderer.removeChild(this.document.body, this.productivityTabBodyToastEl);
+      this.productivityTabBodyToastEl = null;
+    }
   }
 
   /**
@@ -2686,11 +3133,10 @@ private calculateCollaboratorTotals(memberData: Array<{
    */
   private async loadMonthlyPointsBreakdown(collaboratorId?: string): Promise<void> {
     try {
-      const teamScope = this.getGame4uTeamScopeId();
       if (collaboratorId) {
         const breakdown = await firstValueFrom(
           this.actionLogService
-            .getMonthlyPointsBreakdown(collaboratorId, this.selectedMonth, teamScope)
+            .getMonthlyPointsBreakdown(collaboratorId, this.selectedMonth)
             .pipe(takeUntil(this.destroy$))
         ).catch((error) => {
           console.error(`Error loading monthly points breakdown for collaborator ${collaboratorId}:`, error);
@@ -2699,23 +3145,24 @@ private calculateCollaboratorTotals(memberData: Array<{
 
         this.monthlyPointsBreakdown = breakdown;
       } else {
-        const panelId = this.getPanelPlayerId();
-        if (!panelId) {
+        if (!this.selectedTeam) {
           this.monthlyPointsBreakdown = { bloqueados: 0, desbloqueados: 0 };
           this.cdr.markForCheck();
           return;
         }
+        const dr = this.calculateDateRange();
+        const members = this.collaborators.map(c => c.userId).filter(Boolean);
         const breakdown = await firstValueFrom(
-          this.actionLogService
-            .getMonthlyPointsBreakdown(panelId, this.selectedMonth, teamScope)
+          this.teamAggregateService
+            .getTeamMonthlyPointsBreakdown(this.getGame4uTeamHttpParam(), members, dr.start, dr.end)
             .pipe(takeUntil(this.destroy$))
         ).catch((error) => {
-          console.error('Error loading team monthly points breakdown (Game4U):', error);
+          console.error('Error loading team monthly points breakdown (Game4U team-stats):', error);
           return { bloqueados: 0, desbloqueados: 0 };
         });
 
         this.monthlyPointsBreakdown = breakdown;
-        console.log('✅ Monthly points breakdown (Game4U + team_id):', this.monthlyPointsBreakdown);
+        console.log('✅ Monthly points breakdown (Game4U team aggregate):', this.monthlyPointsBreakdown);
       }
       
       this.cdr.markForCheck();
@@ -2727,32 +3174,30 @@ private calculateCollaboratorTotals(memberData: Array<{
   }
 
   /**
-   * Get team player IDs as comma-separated string for modal
-   * The modal expects a single playerId, but we'll pass all team member IDs
+   * Funifier / modais legados: todos os membros; Game4U usa `progressModalPlayerId` + `teamId`.
    */
   get teamPlayerIdsForModal(): string {
     return this.teamMemberIds.join(',');
   }
 
+  /** Jogador efetivo para modais Game4U (colaborador filtrado ou gestor). */
+  get progressModalPlayerId(): string {
+    return (this.selectedCollaborator || this.getPanelPlayerId() || '').trim();
+  }
+
+  get progressModalTeamId(): string | null {
+    const t = this.getGame4uTeamScopeId();
+    return t != null && String(t).trim() !== '' ? String(t).trim() : null;
+  }
+
   /**
-   * Get player ID for month selector component
-   * Uses the first team member ID if available, otherwise uses current user ID
-   * Similar to gamification-dashboard implementation
+   * Ator dos pedidos Game4U no seletor de mês: colaborador selecionado, senão o gestor (painel).
    */
   getTeamPlayerIdForMonthSelector(): string {
-    // If we have team members, use the first one
-    if (this.teamMemberIds.length > 0) {
-      return this.teamMemberIds[0];
+    if (this.selectedCollaborator) {
+      return this.selectedCollaborator;
     }
-    
-    // Otherwise, use current user ID from session
-    const usuario = this.sessaoProvider.usuario as { _id?: string; email?: string } | null;
-    if (usuario) {
-      return (usuario._id || usuario.email || '') as string;
-    }
-    
-    // Fallback to empty string
-    return '';
+    return this.getPanelPlayerId() || '';
   }
 
   /**
@@ -2807,10 +3252,90 @@ private calculateCollaboratorTotals(memberData: Array<{
 
   getClienteAtendidoDisplayName(cliente: CompanyDisplay): string {
     const t = cliente.delivery_title?.trim();
-    if (t) {
-      return t;
+    const ec = cliente.delivery_extra_cnpj?.trim();
+    const base = t || this.getCompanyDisplayName(cliente.cnpj) || cliente.cnpj;
+    if (ec) {
+      return t ? `${t} · ${ec}` : `${base} · ${ec}`;
     }
-    return this.getCompanyDisplayName(cliente.cnpj) || cliente.cnpj;
+    return base;
+  }
+
+  /** Lista: mesmo texto que `getClienteAtendidoDisplayName` + CNPJ (lookup) ao lado quando útil. */
+  getClienteAtendidoListTitle(cliente: CompanyDisplay): string {
+    const base = this.getClienteAtendidoDisplayName(cliente);
+    const digits =
+      String(cliente.cnpjNumber ?? '')
+        .replace(/\D/g, '')
+        .trim() ||
+      String(this.cnpjNumberMap.get(cliente.cnpj) ?? '')
+        .replace(/\D/g, '')
+        .trim();
+    if (digits.length !== 14) {
+      return base;
+    }
+    const formatted = this.formatCnpjBr14(digits);
+    const baseDigits = base.replace(/\D/g, '');
+    if (baseDigits.includes(digits)) {
+      return base;
+    }
+    return `${base} · ${formatted}`;
+  }
+
+  private formatCnpjBr14(digits14: string): string {
+    const d = digits14.replace(/\D/g, '');
+    if (d.length !== 14) {
+      return digits14;
+    }
+    return d.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5');
+  }
+
+  getListaEntregaPercent(cliente: CompanyDisplay): number | null {
+    const p = cliente.porcEntregas;
+    if (p !== undefined && p !== null && Number.isFinite(Number(p))) {
+      return Number(p);
+    }
+    if (cliente.entrega !== undefined && cliente.entrega !== null && Number.isFinite(Number(cliente.entrega))) {
+      return Number(cliente.entrega);
+    }
+    const k = cliente.deliveryKpi?.current;
+    if (k !== undefined && k !== null && Number.isFinite(Number(k))) {
+      return Number(k);
+    }
+    return null;
+  }
+
+  listaEntregaPrazoClasses(cliente: CompanyDisplay): Record<string, boolean> {
+    const v = this.getListaEntregaPercent(cliente);
+    const na = v === null;
+    const good = !na && v > 90;
+    const below = !na && !good;
+    return {
+      'carteira-entrega': true,
+      'carteira-entrega--na': na,
+      'carteira-entrega--good': good,
+      'carteira-entrega--below': below
+    };
+  }
+
+  getCompanyTooltip(empid: string): string {
+    const name = this.cnpjNameMap.get(empid) || '';
+    const cnpjNumber = this.cnpjNumberMap.get(empid) || '';
+    const status = this.cnpjStatusMap.get(empid) || '';
+    const parts = [`ID: ${empid}`];
+    if (cnpjNumber) parts.push(`CNPJ: ${cnpjNumber}`);
+    if (status) parts.push(`Status: ${status}`);
+    return parts.join(' | ');
+  }
+
+  getClienteAtendidoTooltip(cliente: CompanyDisplay): string {
+    const base = this.getCompanyTooltip(cliente.cnpj);
+    const t = cliente.delivery_title?.trim();
+    const ec = cliente.delivery_extra_cnpj?.trim();
+    const titleParts = [t, ec].filter(Boolean).join(' · ');
+    if (titleParts) {
+      return `${titleParts} | ${base}`;
+    }
+    return base;
   }
 
   getCompanyStatus(cnpj: string): string {
@@ -2895,7 +3420,9 @@ private calculateCollaboratorTotals(memberData: Array<{
         }
         console.log('✅ Team KPIs (mesmo fluxo que gamificação individual, cache por team_id):', this.teamKPIs.length);
       }
-      
+
+      this.syncEntregasPrazoKpiFromParticipacao();
+
       this.isLoadingKPIs = false;
       this.cdr.markForCheck();
     } catch (error) {
@@ -2904,6 +3431,120 @@ private calculateCollaboratorTotals(memberData: Array<{
       this.isLoadingKPIs = false;
       this.cdr.markForCheck();
     }
+  }
+
+  /**
+   * KPI «entregas-prazo»: média das % na lista «Clientes atendidos este mês» (após gamificação),
+   * alinhado a `gamification-dashboard.syncEntregasPrazoKpiFromParticipacao`.
+   */
+  private syncEntregasPrazoKpiFromParticipacao(): void {
+    const idx = this.teamKPIs.findIndex(k => k.id === 'entregas-prazo');
+    if (idx === -1 || this.isLoadingCarteira || this.isLoadingParticipacaoKpi) {
+      return;
+    }
+
+    const base = this.teamKPIs[idx];
+    const avg = this.getEntregasPrazoPercentFromParticipacao();
+
+    if (avg === null) {
+      const updated: KPIData = {
+        ...base,
+        current: 0,
+        percentage: 0,
+        color: 'gray',
+        isMissing: true
+      };
+      this.teamKPIs = this.teamKPIs.map((k, i) => (i === idx ? updated : k));
+      this.updateFormattedSidebarData();
+      this.cdr.markForCheck();
+      return;
+    }
+
+    const target = base.target;
+    const superTarget = base.superTarget ?? 100;
+    const updated: KPIData = {
+      ...base,
+      current: avg,
+      isMissing: false,
+      percentage: Math.min(avg, 100),
+      color: this.kpiService.getKPIColorByGoals(avg, target, superTarget)
+    };
+    this.teamKPIs = this.teamKPIs.map((k, i) => (i === idx ? updated : k));
+    this.updateFormattedSidebarData();
+    this.cdr.markForCheck();
+  }
+
+  /**
+   * Média dos percentuais na lista de clientes atendidos (mês), após enriquecimento gamificação.
+   */
+  getEntregasPrazoPercentFromParticipacao(): number | null {
+    if (this.isLoadingCarteira || this.teamCarteiraClientes.length === 0) {
+      return null;
+    }
+    if (this.isLoadingParticipacaoKpi) {
+      return null;
+    }
+    const values = this.teamCarteiraClientes
+      .map(c => this.getListaEntregaPercent(c))
+      .filter((v): v is number => v !== null && Number.isFinite(v));
+    if (values.length === 0) {
+      return null;
+    }
+    return Math.round((values.reduce((a, b) => a + b, 0) / values.length) * 100) / 100;
+  }
+
+  /**
+   * Valor atual do anel: para entregas no prazo, prioriza a média da lista de participação.
+   */
+  getKpiCurrentValue(kpi: KPIData): number {
+    if (kpi.id === 'entregas-prazo') {
+      const fromList = this.getEntregasPrazoPercentFromParticipacao();
+      if (fromList !== null) {
+        return fromList;
+      }
+    }
+    return kpi.current;
+  }
+
+  /** Circular «Entregas no Prazo»: reticências enquanto cruza com GET gamificação. */
+  isEntregasPrazoCircularPending(kpi: KPIData): boolean {
+    return (
+      kpi.id === 'entregas-prazo' &&
+      !this.isLoadingCarteira &&
+      this.teamCarteiraClientes.length > 0 &&
+      this.isLoadingParticipacaoKpi
+    );
+  }
+
+  /** Estado «dado indisponível» do anel para entregas: deriva da lista, não só do perfil. */
+  getKpiCircularIsMissing(kpi: KPIData): boolean {
+    if (kpi.id !== 'entregas-prazo') {
+      return !!kpi.isMissing;
+    }
+    if (this.isLoadingCarteira || this.teamCarteiraClientes.length === 0) {
+      return !!kpi.isMissing;
+    }
+    if (this.isLoadingParticipacaoKpi) {
+      return false;
+    }
+    return this.getEntregasPrazoPercentFromParticipacao() === null;
+  }
+
+  /** Barra lateral recolhida: % entregas como no painel individual. */
+  kpiSidebarValue(kpi: KPIData): string {
+    if (kpi.id === 'entregas-prazo' && kpi.unit === '%') {
+      const n = Math.round(this.getKpiCurrentValue(kpi) * 100) / 100;
+      const text = Number.isInteger(n) ? String(n) : n.toFixed(2).replace(/\.?0+$/, '');
+      return `${text}%`;
+    }
+    return `${this.roundValue(kpi.current)}${kpi.unit || ''}`;
+  }
+
+  kpiSidebarTitle(kpi: KPIData): string {
+    if (kpi.id === 'entregas-prazo') {
+      return `${kpi.label}: ${this.kpiSidebarValue(kpi)} (meta ${kpi.target}${kpi.unit || '%'})`;
+    }
+    return `${kpi.label}: ${this.roundValue(kpi.current)} / ${this.roundValue(kpi.target)}${kpi.unit ? ' ' + kpi.unit : ''}`;
   }
 
   /**
@@ -2946,12 +3587,17 @@ private calculateCollaboratorTotals(memberData: Array<{
   get monthlyPointsProgressData(): { current: number; target: number } {
     const donePts = this.teamActivityMetrics?.pontosDone;
     const allPts = this.teamActivityMetrics?.pontosTodosStatus;
+    const current =
+      donePts !== undefined ? Math.floor(donePts) : Math.floor(this.teamActivityMetrics?.pontos ?? 0);
+
+    if (this.monthlyPointsGoalTarget != null && this.monthlyPointsGoalTarget > 0) {
+      return { current, target: Math.max(this.monthlyPointsGoalTarget, 1) };
+    }
+
     if (donePts !== undefined && allPts !== undefined) {
-      const current = Math.floor(donePts);
       const target = Math.max(Math.floor(allPts), 1);
       return { current, target };
     }
-    const current = Math.floor(this.teamActivityMetrics?.pontos ?? 0);
     const pendingTasks =
       (this.teamProcessMetrics?.pendentes ?? 0) + (this.teamProcessMetrics?.incompletas ?? 0);
     const target =
@@ -3003,7 +3649,7 @@ private calculateCollaboratorTotals(memberData: Array<{
     // For teams, we use:
     // - metas: Calculated from teamKPIs (number of KPIs achieved / total KPIs)
     // - clientes: Count from player_company__c cnpj_resp (from numero-empresas KPI)
-    // - tarefasFinalizadas: atividadesFinalizadas from progressMetrics
+    // - tarefasFinalizadas: Game4U equipa = `tasks_count` de finished/summary; resto = progressMetrics.atividadesFinalizadas
     const empresasKpi = this.teamKPIs?.find(kpi => kpi.id === 'numero-empresas');
     const uniqueClientes = empresasKpi ? empresasKpi.current : (this.teamCarteiraClientes?.length || 0);
     

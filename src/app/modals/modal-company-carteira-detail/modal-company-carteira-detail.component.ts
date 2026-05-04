@@ -144,14 +144,15 @@ export class ModalCompanyCarteiraDetailComponent implements OnInit, OnDestroy {
 
     const uid = this.actionLogUserId?.trim() || undefined;
     const tid = !uid && this.actionLogTeamId?.trim() ? this.actionLogTeamId.trim() : undefined;
+    const oneScope = (uid && !tid) || (!uid && tid);
 
-    // Colaborador + Game4U + relatório finished: resposta paginada (`items` + `total`).
-    if (uid && !tid && isGame4uDataEnabled() && this.company.loadTasksViaGameReports) {
+    // Colaborador OU equipa agregada + Game4U + relatório finished: resposta paginada (`items` + `total`).
+    if (oneScope && isGame4uDataEnabled() && this.company.loadTasksViaGameReports) {
       this.fetchParticipationModalTasksPage(true);
       return;
     }
 
-    // Colaborador + Game4U (user-actions no mês): uma página em memória.
+    // Colaborador + Game4U (user-actions finalizadas no mês): igual ao painel de gamificação individual.
     if (uid && !tid && isGame4uDataEnabled()) {
       this.actionLogService
         .getGame4uUserActionsForParticipationModal(
@@ -175,6 +176,41 @@ export class ModalCompanyCarteiraDetailComponent implements OnInit, OnDestroy {
           },
           error: (error: unknown) => {
             console.error('Error loading tasks:', error);
+            this.tasks = [];
+            this.tasksTotal = 0;
+            this.isLoadingTasks = false;
+            this.cdr.markForCheck();
+          }
+        });
+      return;
+    }
+
+    // Equipa (sem colaborador) + Game4U: mesmas user-actions finalizadas com `team_id` (não Funifier action_log).
+    if (!uid && tid && isGame4uDataEnabled()) {
+      this.actionLogService
+        .getGame4uUserActionsForParticipationModal(
+          'me',
+          {
+            cnpj: this.company.cnpj,
+            deliveryId: this.company.deliveryId,
+            delivery_extra_cnpj: this.company.delivery_extra_cnpj,
+            delivery_title: this.company.delivery_title,
+            loadTasksViaGameReports: this.company.loadTasksViaGameReports
+          },
+          this.month,
+          undefined,
+          tid
+        )
+        .pipe(takeUntil(this.destroy$))
+        .subscribe({
+          next: page => {
+            this.tasks = page.items;
+            this.tasksTotal = page.total;
+            this.isLoadingTasks = false;
+            this.cdr.markForCheck();
+          },
+          error: (error: unknown) => {
+            console.error('Error loading tasks (team Game4U):', error);
             this.tasks = [];
             this.tasksTotal = 0;
             this.isLoadingTasks = false;
@@ -229,7 +265,8 @@ export class ModalCompanyCarteiraDetailComponent implements OnInit, OnDestroy {
   private fetchParticipationModalTasksPage(resetOffset: boolean): void {
     if (!this.company) return;
     const uid = this.actionLogUserId?.trim();
-    if (!uid) {
+    const tid = !uid && this.actionLogTeamId?.trim() ? this.actionLogTeamId.trim() : undefined;
+    if (!uid && !tid) {
       this.isLoadingTasks = false;
       this.cdr.markForCheck();
       return;
@@ -241,7 +278,7 @@ export class ModalCompanyCarteiraDetailComponent implements OnInit, OnDestroy {
     this.cdr.markForCheck();
     this.actionLogService
       .getGame4uUserActionsForParticipationModal(
-        uid,
+        uid || 'me',
         {
           cnpj: this.company.cnpj,
           deliveryId: this.company.deliveryId,
@@ -250,7 +287,8 @@ export class ModalCompanyCarteiraDetailComponent implements OnInit, OnDestroy {
           loadTasksViaGameReports: true
         },
         this.month,
-        { offset: this.tasksOffset, limit: this.tasksPageSizeFinishedReports }
+        { offset: this.tasksOffset, limit: this.tasksPageSizeFinishedReports },
+        tid
       )
       .pipe(takeUntil(this.destroy$))
       .subscribe({

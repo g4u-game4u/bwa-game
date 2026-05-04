@@ -86,6 +86,7 @@ describe('TeamManagementDashboardComponent - Accessibility', () => {
 
     fixture = TestBed.createComponent(TeamManagementDashboardComponent);
     component = fixture.componentInstance;
+    component.productivityAnalysisTabEnabled = true;
     fixture.detectChanges();
   });
 

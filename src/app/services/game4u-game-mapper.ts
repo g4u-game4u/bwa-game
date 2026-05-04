@@ -9,6 +9,7 @@ import {
 } from '@model/gamification-dashboard.model';
 import {
   Game4uDeliveryModel,
+  Game4uReportsFinishedDeliveryRow,
   Game4uUserActionModel,
   Game4uUserActionStatsResponse,
   Game4uUserActionStatus
@@ -760,6 +761,122 @@ export function mergeGame4uDeliveryParticipation(
     }
     if (v.delivery_extra_cnpj) {
       row.delivery_extra_cnpj = v.delivery_extra_cnpj;
+    }
+    return row;
+  });
+}
+
+/** Participação a partir de `GET /game/reports/finished/deliveries` (equipa ou colaborador). */
+export function mapGame4uFinishedDeliveryRowsToParticipacaoCnpjRows(
+  rows: Game4uReportsFinishedDeliveryRow[]
+): {
+  cnpj: string;
+  actionCount: number;
+  processCount: number;
+  delivery_title?: string;
+  deliveryId?: string;
+  fromGameReportsDeliveries?: boolean;
+  loadTasksViaGameReports?: boolean;
+}[] {
+  const out: {
+    cnpj: string;
+    actionCount: number;
+    processCount: number;
+    delivery_title?: string;
+    deliveryId?: string;
+    fromGameReportsDeliveries?: boolean;
+    loadTasksViaGameReports?: boolean;
+  }[] = [];
+  const seen = new Set<string>();
+  for (const row of rows || []) {
+    const title = row.delivery_title?.trim() || '';
+    const did = row.delivery_id?.trim() || '';
+    const dedupeKey = did || title;
+    if (!dedupeKey || seen.has(dedupeKey)) {
+      continue;
+    }
+    seen.add(dedupeKey);
+    out.push({
+      cnpj: did ? `g4u-rpt:${did}` : `g4u-rpt:${title}`,
+      actionCount: 0,
+      processCount: 1,
+      delivery_title: title || undefined,
+      ...(did ? { deliveryId: did } : {}),
+      fromGameReportsDeliveries: true,
+      loadTasksViaGameReports: true
+    });
+  }
+  return out;
+}
+
+/**
+ * «Clientes atendidos» Game4U: uma linha por `delivery_id` com pelo menos uma user-action **DONE** ou **DELIVERED**
+ * (exclui entregas só com PENDING/DOING no período).
+ */
+export function mapGame4uUserActionsToParticipacaoCnpjRows(actions: Game4uUserActionModel[]): {
+  cnpj: string;
+  actionCount: number;
+  processCount: number;
+  delivery_title?: string;
+  deliveryId?: string;
+  delivery_extra_cnpj?: string;
+}[] {
+  const byDel = new Map<
+    string,
+    { count: number; hasDeliveredAction: boolean; title?: string; extraCnpj?: string }
+  >();
+  for (const a of actions) {
+    const st = a.status;
+    if (st !== 'DONE' && st !== 'DELIVERED') {
+      continue;
+    }
+    const did = String(a.delivery_id ?? '').trim();
+    if (!did) {
+      continue;
+    }
+    const row = byDel.get(did) ?? { count: 0, hasDeliveredAction: false };
+    row.count++;
+    if (st === 'DELIVERED') {
+      row.hasDeliveredAction = true;
+    }
+    if (!row.title) {
+      const t = String(a.delivery_title ?? a.action_title ?? '').trim();
+      if (t) {
+        row.title = t;
+      }
+    }
+    if (!row.extraCnpj) {
+      const integ = asString(a.integration_id).trim();
+      if (integ) {
+        row.extraCnpj = integ;
+      } else {
+        const ec = readGame4uExtraCnpjFromRecord(a as Record<string, unknown>);
+        if (ec) {
+          row.extraCnpj = ec;
+        }
+      }
+    }
+    byDel.set(did, row);
+  }
+  return [...byDel.entries()].map(([deliveryId, v]) => {
+    const row: {
+      cnpj: string;
+      actionCount: number;
+      processCount: number;
+      delivery_title?: string;
+      deliveryId?: string;
+      delivery_extra_cnpj?: string;
+    } = {
+      cnpj: deliveryId,
+      actionCount: v.count,
+      processCount: v.hasDeliveredAction ? 1 : 0,
+      deliveryId
+    };
+    if (v.title) {
+      row.delivery_title = v.title;
+    }
+    if (v.extraCnpj) {
+      row.delivery_extra_cnpj = v.extraCnpj;
     }
     return row;
   });

@@ -6,7 +6,6 @@ import { DetalheAtividade } from '@model/detalheAtividade.model';
 import { environment } from 'src/environments/environment';
 import { HttpClient } from '@angular/common/http';
 import { DetalheMacro } from '@model/detalheMacro.model';
-
 @Injectable({
   providedIn: 'root'
 })
@@ -14,7 +13,10 @@ export class MesAnteriorService {
 
   basePath = '/game/stats';
 
-  constructor(private api: ApiProvider, private http: HttpClient) {
+  constructor(
+    private api: ApiProvider,
+    private http: HttpClient
+  ) {
   }
 
   public async getDadosMesAnteriorDashboard(id: number, tipo: number, mesesAnteriores: number): Promise<ResumoMes> {

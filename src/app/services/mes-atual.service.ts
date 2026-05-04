@@ -6,7 +6,6 @@ import {HttpClient} from '@angular/common/http';
 import {environment} from '../../environments/environment';
 import {DetalheAtividade} from '../model/detalheAtividade.model';
 import {DetalheMacro} from '../model/detalheMacro.model';
-
 @Injectable({
     providedIn: 'root'
 })

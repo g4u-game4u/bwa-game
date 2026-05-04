@@ -546,6 +546,27 @@
         text-transform: uppercase;
         letter-spacing: 0.05em;
       }
+
+      .selector-label--with-count {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: $spacing-sm;
+      }
+
+      .selector-label__count {
+        font-size: $font-size-small;
+        font-weight: $font-weight-bold;
+        color: $text-primary;
+        letter-spacing: 0;
+        text-transform: none;
+        white-space: nowrap;
+      }
+
+      .selector-label__count--muted {
+        color: $text-secondary;
+        font-weight: $font-weight-medium;
+      }
       
       .team-display {
         padding: $spacing-sm $spacing-md;
@@ -805,6 +826,11 @@
             animation: pulse 2s ease-in-out infinite;
             color: $text-primary;
           }
+        }
+
+        &:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
         }
 
         &:focus-visible {
@@ -1117,6 +1143,34 @@
                 background-color: rgba(239, 68, 68, 0.15);
                 color: #dc2626;
               }
+            }
+          }
+
+          /* % entregas no prazo — mesma lógica de cores que gamification-dashboard (lista participação). */
+          .carteira-entrega {
+            font-size: 0.8125rem;
+            font-weight: 600;
+            min-width: 3.25rem;
+            text-align: right;
+            color: $text-primary;
+
+            &--na {
+              font-weight: 500;
+              color: $text-secondary;
+            }
+
+            &--good {
+              color: #059669;
+            }
+
+            &--below {
+              color: #c56685;
+            }
+
+            &--pending {
+              font-weight: 500;
+              color: $text-secondary;
+              letter-spacing: 0.05em;
             }
           }
 

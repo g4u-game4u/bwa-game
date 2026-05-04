@@ -7,7 +7,7 @@
     [attr.aria-label]="'Selecionar equipe ou departamento'"
   >
     <option *ngFor="let team of teams" [value]="team.id">
-      {{ team.name }} ({{ team.memberCount }} membros)
+      {{ team.name }}
     </option>
   </select>
 </div>
