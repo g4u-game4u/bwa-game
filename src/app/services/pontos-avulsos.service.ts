@@ -1069,7 +1069,7 @@ export class PontosAvulsosService {
   ): Promise<AtividadeDetalhe[]> {
     try {
       const url = '/game/team-actions';
-      const params = {
+      const params: { status: string; team: number; start: string; end: string } = {
         status: status,
         team: teamId,
         start: startDate,

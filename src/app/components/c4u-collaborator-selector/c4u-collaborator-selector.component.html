@@ -7,7 +7,7 @@
     (change)="onCollaboratorChange($any($event.target).value)"
     [attr.aria-label]="'Filtrar por colaborador'"
   >
-    <option value="">Todos os colaboradores (equipa)</option>
+    <option value="">Todos os colaboradores (equipe)</option>
     <option value="RESET">Redefinir seleção</option>
     <option *ngFor="let collaborator of collaborators" [value]="collaborator.userId">
       {{ collaborator.name }}

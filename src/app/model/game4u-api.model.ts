@@ -20,12 +20,23 @@ export interface Game4uDateRangeQuery {
 
 export interface Game4uUserScopedQuery extends Game4uDateRangeQuery {
   user: string;
-  /** Escopo BWA / gestão de equipa: repete-se em todas as chamadas `GET /game/*` quando definido. */
+  /**
+   * Escopo BWA (opcional). Nos endpoints `GET /game/stats`, `/game/actions` e `/game/deliveries`,
+   * **não** é enviado na query quando `user` está definido — a API rejeita `team_id` nesse caso.
+   * Continua útil em relatórios Supabase/cache quando aplicável.
+   */
   team_id?: string;
 }
 
 export interface Game4uTeamScopedQuery extends Game4uDateRangeQuery {
+  /** Id numérico da equipa no jogo (query `team`). Não usar nome legível. */
   team: string;
+  /** Evitar em `team-actions` se o backend rejeitar (`property user should not exist`). */
+  user?: string;
+  /**
+   * Escopo BWA (opcional em memória/DTOs). O cliente **não** envia `team_id` em `GET /game/team-actions`
+   * (só `team`, `start`, `end`, opcional `user`/`status`). Em `team-stats` / `team-deliveries` também não vai na query.
+   */
   team_id?: string;
 }
 
@@ -127,9 +138,10 @@ export interface Game4uReportsOpenSummary {
   [key: string]: unknown;
 }
 
-/** Query para `GET /game/reports/open/summary`: `email` + intervalo em `dt_prazo` (ISO 8601), não `finished_at_*`. */
+/** Query para `GET /game/reports/open/summary`: intervalo em `dt_prazo` (ISO 8601), não `finished_at_*`. */
 export interface Game4uReportsOpenSummaryQuery {
-  email: string;
+  /** Utilizador; omitir com `team_id` para consolidado da equipa (gestor). */
+  email?: string;
   dt_prazo_start: string;
   dt_prazo_end: string;
   team_id?: string;
@@ -202,11 +214,16 @@ export interface Game4uGoalMonthSummaryResponse {
 }
 
 export interface Game4uReportsFinishedQuery {
-  email: string;
+  /**
+   * E-mail do colaborador filtrado; omitir quando só `team_id` for usado (dados consolidados da equipa).
+   * Ver `game-reports-doc.md`.
+   */
+  email?: string;
   finished_at_start: string;
   finished_at_end: string;
   /** Opcional: repete `status` na query string se necessário. */
   status?: string[];
+  /** Escopo BWA / equipa — consolidado sem `email`. */
   team_id?: string;
 }
 
@@ -241,7 +258,8 @@ export function normalizeGameReportsActionsByDeliveryResponse(body: unknown): Ga
 
 /** `GET /game/reports/user-actions` — query (pares de data só completos; um par por pedido). */
 export interface Game4uReportsUserActionsQuery {
-  email: string;
+  /** Colaborador; com `team_id` omitir para agregado da equipa (se o backend permitir). */
+  email?: string;
   /** Repetido na query string (`status=DONE&status=…`) ou equivalente CSV no backend. */
   status?: Game4uUserActionStatus[];
   finished_at_start?: string;
@@ -299,7 +317,8 @@ export function normalizeGameReportsUserActionsResponse(body: unknown): Game4uRe
 }
 
 export interface Game4uReportsGoalMonthQuery {
-  email: string;
+  /** Meta por colaborador; omitir com `team_id` se o contrato de consolidado for suportado. */
+  email?: string;
   /** `YYYY-MM-DD` (início do mês). */
   dt_prazo_start: string;
   /** `YYYY-MM-DD` (exclusivo: primeiro dia do mês seguinte, como no curl do doc). */

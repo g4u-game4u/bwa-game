@@ -150,9 +150,9 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
   get activityLoadingMessage(): string {
     switch (this.listType) {
       case 'atividades-pendentes':
-        return 'Carregando tarefas pendentes e gráfico (todas as páginas)…';
+        return 'Carregando tarefas pendentes e gráfico…';
       case 'atividades':
-        return 'Carregando tarefas finalizadas e gráfico (todas as páginas)…';
+        return 'Carregando tarefas finalizadas e gráfico…';
       case 'pontos':
         return 'Carregando pontos…';
       default:

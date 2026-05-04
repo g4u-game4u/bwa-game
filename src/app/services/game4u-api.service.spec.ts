@@ -69,6 +69,50 @@ describe('Game4uApiService', () => {
     req.flush({ stats: [], total_actions: 0, total_points: 5, total_blocked_points: 0 });
   });
 
+  it('getGameTeamStats omits user query param (API agrega só por team + intervalo)', done => {
+    service
+      .getGameTeamStats({
+        team: '26',
+        user: 'gestor@example.com',
+        start: '2026-04-01T03:00:00.000Z',
+        end: '2026-05-01T02:59:59.999Z'
+      })
+      .subscribe(res => {
+        expect(res.total_points).toBe(2);
+        done();
+      });
+
+    const req = httpMock.expectOne(
+      r =>
+        r.url === `${baseUrl}/game/team-stats` &&
+        r.params.get('team') === '26' &&
+        r.params.get('user') == null
+    );
+    req.flush({ stats: [], total_actions: 0, total_points: 2, total_blocked_points: 0 });
+  });
+
+  it('getGameStats sends user but omits team_id (API rejeita team_id com user em /game/stats)', done => {
+    service
+      .getGameStats({
+        user: 'colab@example.com',
+        start: '2026-04-01T03:00:00.000Z',
+        end: '2026-05-01T02:59:59.999Z',
+        team_id: '26'
+      })
+      .subscribe(res => {
+        expect(res.total_points).toBe(1);
+        done();
+      });
+
+    const req = httpMock.expectOne(
+      r =>
+        r.url === `${baseUrl}/game/stats` &&
+        r.params.get('user') === 'colab@example.com' &&
+        r.params.get('team_id') == null
+    );
+    req.flush({ stats: [], total_actions: 0, total_points: 1, total_blocked_points: 0 });
+  });
+
   it('toIsoRange returns ISO strings', () => {
     const a = new Date('2024-02-01T10:00:00.000Z');
     const b = new Date('2024-02-28T10:00:00.000Z');
@@ -106,6 +150,28 @@ describe('Game4uApiService', () => {
     );
     expect(req.request.headers.get('client_id')).toBeTruthy();
     req.flush({ tasks_count: 3, points_sum: 40, deliveries_count: 2 });
+  });
+
+  it('getGameReportsFinishedSummary builds team_id without email (consolidado equipa)', done => {
+    service
+      .getGameReportsFinishedSummary({
+        team_id: '42',
+        finished_at_start: '2026-04-01T00:00:00.000Z',
+        finished_at_end: '2026-04-30T23:59:59.999Z'
+      })
+      .subscribe(res => {
+        expect(res.tasks_count).toBe(10);
+        done();
+      });
+
+    const req = httpMock.expectOne(
+      r =>
+        r.url === `${baseUrl}/game/reports/finished/summary` &&
+        r.params.get('team_id') === '42' &&
+        r.params.get('finished_at_start') === '2026-04-01T00:00:00.000Z' &&
+        r.params.keys().indexOf('email') === -1
+    );
+    req.flush({ tasks_count: 10, points_sum: 100, deliveries_count: 5 });
   });
 
   it('getGameReportsOpenSummary builds email and dt_prazo params (no finished_at)', done => {

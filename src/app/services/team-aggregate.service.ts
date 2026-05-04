@@ -16,7 +16,8 @@ import {
   mapGame4uStatsToPointWallet,
   mapGame4uStatsToTeamProgressMetrics,
   mapGame4uStatsToTeamSeasonPoints,
-  mergeGame4uTeamDeliveryRows
+  mapGame4uFinishedDeliveryRowsToParticipacaoCnpjRows,
+  mapGame4uUserActionsToParticipacaoCnpjRows
 } from './game4u-game-mapper';
 
 /**
@@ -749,9 +750,9 @@ export class TeamAggregateService {
 
       return forkJoin({
         stats: this.game4u.getGameTeamStats({ team: teamId, ...range }),
-        actions: this.game4u.getGameTeamActions({ team: teamId, ...actionsRange }).pipe(
-          catchError(() => of([] as Game4uUserActionModel[]))
-        )
+        actions: this.game4u
+          .getGameTeamActions({ team: teamId, ...actionsRange })
+          .pipe(catchError(() => of([] as Game4uUserActionModel[])))
       }).pipe(
         map(({ stats, actions }) => {
           const prog = mapGame4uStatsToTeamProgressMetrics(stats);
@@ -954,25 +955,50 @@ export class TeamAggregateService {
   getTeamCnpjListWithCount(
     teamId: string,
     startDate: Date,
-    endDate: Date
+    endDate: Date,
+    opts?: { game4uBwaTeamScopeId?: string }
   ): Observable<{ cnpj: string; actionCount: number; processCount: number }[]> {
-    const cacheKey = `team_cnpj_${teamId}_${startDate.getTime()}_${endDate.getTime()}`;
-    
+    const scopeId = (opts?.game4uBwaTeamScopeId ?? '').trim();
+    const cacheKey = scopeId
+      ? `team_cnpj_rpt_${scopeId}_${startDate.getTime()}_${endDate.getTime()}`
+      : `team_cnpj_ad_${teamId}_${startDate.getTime()}_${endDate.getTime()}`;
+
     const cached = this.getFromCache<any[]>(cacheKey);
     if (cached) {
       return of(cached);
+    }
+
+    if (isGame4uDataEnabled() && this.game4u.isConfigured() && scopeId) {
+      const range = this.game4u.toIsoRange(startDate, endDate);
+      return this.game4u
+        .getGameReportsFinishedDeliveries({
+          team_id: scopeId,
+          finished_at_start: range.start,
+          finished_at_end: range.end
+        })
+        .pipe(
+          map(rows => mapGame4uFinishedDeliveryRowsToParticipacaoCnpjRows(rows)),
+          tap(data => this.setCache(cacheKey, data)),
+          catchError(error => {
+            console.error('Error in getTeamCnpjListWithCount (reports):', error);
+            return of([]);
+          })
+        );
     }
 
     if (isGame4uDataEnabled() && this.game4u.isConfigured()) {
       const range = this.game4u.toIsoRange(startDate, endDate);
       const base = { team: teamId, ...range };
       return forkJoin({
-        delivered: this.game4u.getGameTeamDeliveries({ ...base, status: 'DELIVERED' }),
-        incomplete: this.game4u.getGameTeamDeliveries({ ...base, status: 'INCOMPLETE' }),
-        pending: this.game4u.getGameTeamDeliveries({ ...base, status: 'PENDING' })
+        done: this.game4u.getGameTeamActions({ ...base, status: 'DONE' }).pipe(
+          catchError(() => of([] as Game4uUserActionModel[]))
+        ),
+        delivered: this.game4u.getGameTeamActions({ ...base, status: 'DELIVERED' }).pipe(
+          catchError(() => of([] as Game4uUserActionModel[]))
+        )
       }).pipe(
-        map(({ delivered, incomplete, pending }) =>
-          mergeGame4uTeamDeliveryRows(delivered, incomplete, pending)
+        map(({ done, delivered }) =>
+          mapGame4uUserActionsToParticipacaoCnpjRows([...done, ...delivered])
         ),
         tap(data => this.setCache(cacheKey, data)),
         catchError(error => {
@@ -1067,11 +1093,10 @@ export class TeamAggregateService {
       return of(cached);
     }
 
-    if (memberIds.length === 0 || !teamId) {
-      return of({ bloqueados: 0, desbloqueados: 0 });
-    }
-
     if (isGame4uDataEnabled() && this.game4u.isConfigured()) {
+      if (!teamId) {
+        return of({ bloqueados: 0, desbloqueados: 0 });
+      }
       const range = this.game4u.toIsoRange(startDate, endDate);
       return this.game4u.getGameTeamStats({ team: teamId, ...range }).pipe(
         map(stats => {
@@ -1086,6 +1111,10 @@ export class TeamAggregateService {
           return of({ bloqueados: 0, desbloqueados: 0 });
         })
       );
+    }
+
+    if (memberIds.length === 0 || !teamId) {
+      return of({ bloqueados: 0, desbloqueados: 0 });
     }
 
     const achievementQuery = [

@@ -27,7 +27,13 @@
 
         <!-- Collaborator Selector -->
         <div class="sidebar-section">
-          <label class="selector-label" for="collaborator-selector">Colaborador</label>
+          <label class="selector-label selector-label--with-count" for="collaborator-selector">
+            <span>Colaborador</span>
+            <span *ngIf="!isLoadingCollaborators" class="selector-label__count" aria-hidden="true">
+              ({{ collaborators.length }})
+            </span>
+            <span *ngIf="isLoadingCollaborators" class="selector-label__count selector-label__count--muted" aria-hidden="true">…</span>
+          </label>
           <c4u-collaborator-selector
             id="collaborator-selector"
             [collaborators]="collaborators"
@@ -397,7 +403,7 @@
                 </div>
                 
                 <div *ngIf="!isLoadingCarteira && teamCarteiraClientes.length === 0" class="empty-state">
-                  <p>Nenhum cliente atendido neste mês</p>
+                  <p>Ainda não encontramos clientes atendidos neste mês. Volte novamente mais tarde.</p>
                 </div>
               </c4u-card>
             </section>

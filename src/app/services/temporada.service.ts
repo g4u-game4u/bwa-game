@@ -13,7 +13,6 @@ import {
   mapGame4uActionsToProcessMetrics,
   sumGame4uActionPointsByStatus
 } from './game4u-game-mapper';
-
 const OPEN_ACTION_STATUSES = new Set(['PENDING', 'DOING']);
 
 /**

@@ -546,6 +546,27 @@
         text-transform: uppercase;
         letter-spacing: 0.05em;
       }
+
+      .selector-label--with-count {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: $spacing-sm;
+      }
+
+      .selector-label__count {
+        font-size: $font-size-small;
+        font-weight: $font-weight-bold;
+        color: $text-primary;
+        letter-spacing: 0;
+        text-transform: none;
+        white-space: nowrap;
+      }
+
+      .selector-label__count--muted {
+        color: $text-secondary;
+        font-weight: $font-weight-medium;
+      }
       
       .team-display {
         padding: $spacing-sm $spacing-md;
