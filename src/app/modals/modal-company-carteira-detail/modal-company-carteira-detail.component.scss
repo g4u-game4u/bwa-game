@@ -134,7 +134,7 @@
 
       .task-header {
         display: grid;
-        grid-template-columns: 1.25fr 2fr 1.1fr 0.55fr 1fr;
+        grid-template-columns: 1.25fr 2fr 1.1fr 1fr;
         gap: $spacing-md;
         padding: $spacing-md $spacing-lg;
         background: #323339;
@@ -152,7 +152,7 @@
 
       .task-row {
         display: grid;
-        grid-template-columns: 1.25fr 2fr 1.1fr 0.55fr 1fr;
+        grid-template-columns: 1.25fr 2fr 1.1fr 1fr;
         gap: $spacing-md;
         padding: $spacing-md $spacing-lg;
         background: rgba(255, 255, 255, 0.02);
@@ -178,15 +178,6 @@
           .task-executor {
             color: $text-secondary;
             font-size: 0.875rem;
-          }
-        }
-
-        .task-col-points {
-          .task-points {
-            color: $text-secondary;
-            font-size: 0.875rem;
-            text-align: right;
-            display: block;
           }
         }
 
@@ -261,7 +252,7 @@
         margin-bottom: $spacing-sm;
 
         .task-col-process::before {
-          content: 'Processo: ';
+          content: 'Cliente: ';
           font-weight: 600;
           color: $text-secondary;
         }
@@ -274,12 +265,6 @@
 
         .task-col-executor::before {
           content: 'Executor: ';
-          font-weight: 600;
-          color: $text-secondary;
-        }
-
-        .task-col-points::before {
-          content: 'Pontos: ';
           font-weight: 600;
           color: $text-secondary;
         }

@@ -983,7 +983,10 @@ export class ActionLogService {
     const teamExtras = tid ? { team_id: tid } : {};
     const title = row.delivery_title?.trim();
     if (row.loadTasksViaGameReports && title && month != null) {
-      const email = this.resolveGame4uUserEmail(playerId);
+      /** Modal equipa passa `playerId` `'me'` + `team_id`; não enviar `email` (consolidado). Com utilizador real + `team_id`, mantém-se o e-mail. */
+      const pid = String(playerId ?? '').trim();
+      const email =
+        tid && pid === 'me' ? undefined : this.resolveGame4uUserEmail(playerId);
       if (!tid && !email) {
         return of({ items: [], total: 0 });
       }
@@ -992,7 +995,7 @@ export class ActionLogService {
       const limit = page?.limit ?? 25;
       return this.game4u
         .getGameReportsFinishedActionsByDelivery({
-          email: email || '',
+          ...(email ? { email } : {}),
           finished_at_start: rng.start,
           finished_at_end: rng.end,
           delivery_title: title,

@@ -54,10 +54,9 @@
 
           <div *ngIf="tasks.length > 0" class="tasks-table">
             <div class="task-header">
-              <div class="task-col-process">Processo</div>
+              <div class="task-col-process">Cliente</div>
               <div class="task-col-title">Tarefa</div>
               <div class="task-col-executor">Executor</div>
-              <div class="task-col-points">Pontos</div>
               <div class="task-col-date">Data</div>
             </div>
             <div *ngFor="let task of tasks" class="task-row">
@@ -69,9 +68,6 @@
               </div>
               <div class="task-col-executor">
                 <span class="task-executor">{{ formatEmailToName(task.player) }}</span>
-              </div>
-              <div class="task-col-points">
-                <span class="task-points">{{ formatTaskPoints(task) }}</span>
               </div>
               <div class="task-col-date">
                 <span class="task-date">{{ formatDate(task.created) }}</span>
