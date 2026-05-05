@@ -89,8 +89,8 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
   selectedMonth: Date | undefined = new Date(2026, 1, 1); // February 2026 (month is 0-indexed: 1 = February)
   activeTab: 'goals' | 'productivity' = 'goals';
 
-  /** `false` enquanto a aba estiver em refactor; voltar a `true` quando estiver pronta. */
-  productivityAnalysisTabEnabled = false;
+  /** Aba reativada: dados vêm do endpoint Game4U “team daily finished stats”. */
+  productivityAnalysisTabEnabled = true;
 
   /** Mensagem do toast flutuante (anexado a `document.body` junto ao ponteiro). */
   readonly productivityTabDisabledToastMessage = 'Esta análise estará disponível em breve.';
@@ -432,6 +432,27 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
   private getGame4uTeamScopeId(): string | undefined {
     const t = (this.selectedTeamId || '').trim();
     return t !== '' ? t : undefined;
+  }
+
+  /**
+   * `team_id` em `GET /game/reports/*`: preferir id numérico da sessão BWA quando `selectedTeamId` for id Funifier/nome.
+   */
+  private getGame4uReportTeamId(): string | undefined {
+    const sid = (this.selectedTeamId || '').trim();
+    const bwa = this.getBwaSessionTeamId();
+    if (sid && /^\d+$/.test(sid)) {
+      return sid;
+    }
+    if (bwa != null) {
+      const b = String(bwa).trim();
+      if (b && /^\d+$/.test(b)) {
+        return b;
+      }
+    }
+    if (sid) {
+      return sid;
+    }
+    return bwa != null ? String(bwa).trim() || undefined : undefined;
   }
 
   /**
@@ -1732,51 +1753,32 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       const endDate = dayjs();
       const startDate = endDate.subtract(this.selectedPeriod, 'day');
       
-      // Query action_log for daily completed tasks count for this collaborator
-      const aggregateBody = [
-        {
-          $match: {
-            userId: collaboratorId,
-            time: {
-              $gte: { $date: startDate.toISOString() },
-              $lte: { $date: endDate.toISOString() }
-            }
-          }
-        },
-        {
-          $group: {
-            _id: {
-              $dateToString: {
-                format: '%Y-%m-%d',
-                date: { $toDate: '$time' }
-              }
-            },
-            count: { $sum: 1 }
-          }
-        },
-        {
-          $sort: { _id: 1 }
-        }
-      ];
-      
-      const dailyData = await firstValueFrom(
-        this.backendApi.post<any[]>(
-          '/v3/database/action_log/aggregate?strict=true',
-          aggregateBody
-        ).pipe(takeUntil(this.destroy$))
-      ).catch((error) => {
-        console.error(`Error loading productivity for collaborator ${collaboratorId}:`, error);
-        return [];
-      });
-      
-      // Convert to GraphDataPoint format
+      const teamTid = this.getGame4uReportTeamId();
+      const dailyRows = teamTid
+        ? await firstValueFrom(
+            this.actionLogService
+              .getReportTeamDailyFinishedStats({
+                team_id: teamTid,
+                email: collaboratorId,
+                start: startDate.toISOString(),
+                end: endDate.toISOString()
+              })
+              .pipe(takeUntil(this.destroy$))
+          )
+        : [];
+
+      // Convert to GraphDataPoint format (activities) + keep a points map
       const dataPoints: GraphDataPoint[] = [];
       const dataMap = new Map<string, number>();
+      const pointsMap = new Map<string, number>();
       
-      dailyData.forEach((item: any) => {
-        const dateStr = item._id;
-        const count = item.count || 0;
+      dailyRows.forEach((row: any) => {
+        const dateStr = String(row?.day ?? '').trim();
+        if (!dateStr) return;
+        const count = Math.floor(Number(row?.tasksCount ?? 0) || 0);
+        const pts = Math.floor(Number(row?.pointsSum ?? 0) || 0);
         dataMap.set(dateStr, count);
+        pointsMap.set(dateStr, pts);
       });
       
       // Fill all dates in range
@@ -1815,8 +1817,8 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       // For single collaborator, percentage is always 100%
       this.activitiesByCollaboratorLabels = [`${memberName} - ${activitiesTotal} (100%)`];
       
-      // Load points data for the same period
-      await this.loadCollaboratorPointsData(startDate, endDate, memberName, dataMap);
+      // Load points data for the same period (prefer API points_sum; fallback = count × constante)
+      await this.loadCollaboratorPointsData(startDate, endDate, memberName, dataMap, pointsMap);
       
       this.isLoadingProductivity = false;
       console.log('✅ Collaborator productivity data loaded:', {
@@ -1850,7 +1852,8 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
     startDate: dayjs.Dayjs,
     endDate: dayjs.Dayjs,
     memberName: string,
-    dailyActivities: Map<string, number>
+    dailyActivities: Map<string, number>,
+    dailyPoints?: Map<string, number>
   ): Promise<void> {
     try {
       const pointsDataPoints: GraphDataPoint[] = [];
@@ -1859,9 +1862,13 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       while (currentDate.isBefore(endDate) || currentDate.isSame(endDate, 'day')) {
         const dateStr = currentDate.format('YYYY-MM-DD');
         const count = dailyActivities.get(dateStr) || 0;
+        const pointsFromApi = dailyPoints?.get(dateStr);
         pointsDataPoints.push({
           date: currentDate.toDate(),
-          value: Math.floor(count * PONTOS_POR_ATIVIDADE_FINALIZADA_ACTION_LOG)
+          value:
+            typeof pointsFromApi === 'number' && Number.isFinite(pointsFromApi)
+              ? Math.floor(pointsFromApi)
+              : Math.floor(count * PONTOS_POR_ATIVIDADE_FINALIZADA_ACTION_LOG)
         });
         currentDate = currentDate.add(1, 'day');
       }
@@ -1916,9 +1923,14 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       this.productivityErrorMessage = '';
       
       console.log('📈 Loading productivity data for team members (OPTIMIZED)...');
-      
-      if (this.teamMemberIds.length === 0) {
-        console.warn('⚠️ No team members to load productivity data for');
+
+      // For productivity tab, use the selected period instead of month range
+      const endDate = dayjs();
+      const startDate = endDate.subtract(this.selectedPeriod, 'day');
+
+      const teamTid = this.getGame4uReportTeamId();
+      if (!teamTid) {
+        // Sem escopo Game4U/BWA: não há como obter stats por equipa nesse endpoint.
         this.graphData = [];
         this.graphDatasets = [];
         this.pointsGraphData = [];
@@ -1932,77 +1944,46 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
         this.isLoadingProductivity = false;
         return;
       }
-      
-      // For productivity tab, use the selected period instead of month range
-      const endDate = dayjs();
-      const startDate = endDate.subtract(this.selectedPeriod, 'day');
-      
+
       try {
-        // OPTIMIZED: Single aggregate query with $lookup to get all action logs for the team
-        // This replaces N individual requests with 1 aggregate request
-        const actionLogsAggregateBody = [
-          {
-            $lookup: {
-              from: 'player',
-              localField: 'userId',
-              foreignField: '_id',
-              as: 'playerData'
-            }
-          },
-          {
-            $unwind: '$playerData'
-          },
-          {
-            $match: {
-              'playerData.teams': this.selectedTeamId,
-              time: {
-                $gte: { $date: startDate.toISOString() },
-                $lte: { $date: endDate.toISOString() }
-              }
-            }
-          },
-          {
-            $group: {
-              _id: {
-                userId: '$userId',
-                date: {
-                  $dateToString: {
-                    format: '%Y-%m-%d',
-                    date: { $toDate: '$time' }
-                  }
-                }
-              },
-              count: { $sum: 1 }
-            }
-          },
-          {
-            $sort: { '_id.date': 1 }
-          }
-        ];
-        
-        const allActionLogs = await this.fetchAllPaginatedData<any>(
-          '/database/action_log/aggregate?strict=true',
-          actionLogsAggregateBody,
-          100
+        const rows = await firstValueFrom(
+          this.actionLogService
+            .getReportTeamDailyFinishedStats({
+              team_id: teamTid,
+              start: startDate.toISOString(),
+              end: endDate.toISOString()
+            })
+            .pipe(takeUntil(this.destroy$))
         );
 
-        console.log('✅ Action logs aggregate returned:', allActionLogs.length, 'records');
-        
-        // Process action logs into per-member data
+        // Process rows into per-member daily maps (activities + points) and/or agregado por dia (sem email)
         const memberActivitiesMap = new Map<string, Map<string, number>>();
-        allActionLogs.forEach((item: any) => {
-          const userId = item._id?.userId;
-          const dateStr = item._id?.date;
-          const count = item.count || 0;
-          
-          if (userId && dateStr) {
-            if (!memberActivitiesMap.has(userId)) {
-              memberActivitiesMap.set(userId, new Map());
-            }
-            memberActivitiesMap.get(userId)!.set(dateStr, count);
-          }
+        const memberPointsMap = new Map<string, Map<string, number>>();
+        const AGG_KEY = '__team_aggregate__';
+
+        rows.forEach(r => {
+          const day = String((r as any)?.day ?? '').trim();
+          if (!day) return;
+          const email = String((r as any)?.email ?? '').trim();
+          const cnt = Math.floor(Number((r as any)?.tasksCount ?? 0) || 0);
+          const pts = Math.floor(Number((r as any)?.pointsSum ?? 0) || 0);
+          const key = email || AGG_KEY;
+          if (!memberActivitiesMap.has(key)) memberActivitiesMap.set(key, new Map());
+          if (!memberPointsMap.has(key)) memberPointsMap.set(key, new Map());
+          const am = memberActivitiesMap.get(key)!;
+          const pm = memberPointsMap.get(key)!;
+          am.set(day, (am.get(day) || 0) + cnt);
+          pm.set(day, (pm.get(day) || 0) + pts);
         });
-        
+
+        const emailsFromApi = [...memberActivitiesMap.keys()].filter(k => k !== AGG_KEY);
+        const memberKeysOrdered =
+          emailsFromApi.length > 0
+            ? emailsFromApi
+            : memberActivitiesMap.has(AGG_KEY)
+              ? [AGG_KEY]
+              : [...this.teamMemberIds];
+
         // Build member data from the aggregated results
         const validMemberData: Array<{ 
           memberId: string; 
@@ -2010,12 +1991,16 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
           activitiesDataPoints: GraphDataPoint[]; 
           pointsDataPoints: GraphDataPoint[] 
         }> = [];
-        
-        this.teamMemberIds.forEach(memberId => {
+
+        memberKeysOrdered.forEach(memberId => {
           const collaborator = this.collaborators.find(c => c.userId === memberId);
-          const memberName = this.formatCollaboratorName(memberId, collaborator?.name);
-          
+          const memberName =
+            memberId === AGG_KEY
+              ? 'Equipe'
+              : this.formatCollaboratorName(memberId, collaborator?.name);
+
           const activitiesMap = memberActivitiesMap.get(memberId) || new Map();
+          const pointsMap = memberPointsMap.get(memberId) || new Map();
 
           const activitiesDataPoints: GraphDataPoint[] = [];
           const pointsDataPoints: GraphDataPoint[] = [];
@@ -2024,17 +2009,21 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
           while (currentDate.isBefore(endDate) || currentDate.isSame(endDate, 'day')) {
             const dateStr = currentDate.format('YYYY-MM-DD');
             const act = activitiesMap.get(dateStr) || 0;
+            const pts = pointsMap.get(dateStr);
             activitiesDataPoints.push({
               date: currentDate.toDate(),
               value: act
             });
             pointsDataPoints.push({
               date: currentDate.toDate(),
-              value: Math.floor(act * PONTOS_POR_ATIVIDADE_FINALIZADA_ACTION_LOG)
+              value:
+                typeof pts === 'number' && Number.isFinite(pts)
+                  ? Math.floor(pts)
+                  : Math.floor(act * PONTOS_POR_ATIVIDADE_FINALIZADA_ACTION_LOG)
             });
             currentDate = currentDate.add(1, 'day');
           }
-          
+
           validMemberData.push({
             memberId,
             memberName,
@@ -2046,7 +2035,9 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
         // Create multiple datasets (one per member) for activities and points
         if (validMemberData.length > 0) {
           // Generate date labels
+          // Trigger the same label computation path used by the chart component.
           const dateLabels = this.graphDataProcessor.getDateLabels(this.selectedPeriod);
+          void dateLabels;
           
           // Create datasets for activities (one per member)
           this.graphDatasets = validMemberData.map((memberData, index) => {
@@ -2115,7 +2106,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
           console.log('✅ Productivity data loaded (OPTIMIZED):', {
             members: validMemberData.length,
             apiCalls: 1,
-            totalActionLogs: allActionLogs.length
+            rows: rows.length
           });
         } else {
           this.graphData = [];
@@ -2143,6 +2134,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       this.pointsByCollaboratorDatasets = [];
       this.hasProductivityError = true;
       this.productivityErrorMessage = 'Erro ao carregar dados de produtividade';
+      this.toastService.error('Erro ao carregar dados de produtividade');
     } finally {
       this.isLoadingProductivity = false;
     }
@@ -2158,6 +2150,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
     this.pointsByCollaboratorDatasets = [];
     this.hasProductivityError = true;
     this.productivityErrorMessage = 'Erro ao carregar dados de produtividade';
+    this.toastService.error('Erro ao carregar dados de produtividade');
     this.isLoadingProductivity = false;
   }
 }
@@ -3092,6 +3085,10 @@ private calculateCollaboratorTotals(memberData: Array<{
       return;
     }
     this.activeTab = tab;
+    if (tab === 'productivity' && !this.selectedCollaborator && this.productivityAnalysisTabEnabled) {
+      const dateRange = this.calculateDateRange();
+      void this.loadProductivityData(dateRange);
+    }
   }
 
   onProductivityTabDisabledHover(active: boolean, event?: MouseEvent): void {

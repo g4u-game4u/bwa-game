@@ -26,7 +26,8 @@ import {
   normalizeGameReportsFinishedDeliveriesPagePayload,
   Game4uReportsUserActionsQuery,
   Game4uReportsUserActionsPage,
-  normalizeGameReportsUserActionsResponse
+  normalizeGameReportsUserActionsResponse,
+  Game4uReportsTeamDailyFinishedStatsQuery
 } from '@model/game4u-api.model';
 import { Game4uSupabaseFallbackService } from './game4u-supabase-fallback.service';
 import { SeasonDatesService } from './season-dates.service';
@@ -53,6 +54,7 @@ export class Game4uApiService {
   >();
   private readonly reportsGoalMonthCache = new Map<string, Observable<Game4uGoalMonthSummaryResponse>>();
   private readonly reportsOpenSummaryCache = new Map<string, Observable<Game4uReportsOpenSummary>>();
+  private readonly reportsTeamDailyFinishedStatsCache = new Map<string, Observable<unknown>>();
 
   constructor(
     private http: HttpClient,
@@ -189,6 +191,7 @@ export class Game4uApiService {
     this.reportsActionsByDeliveryCache.clear();
     this.reportsGoalMonthCache.clear();
     this.reportsOpenSummaryCache.clear();
+    this.reportsTeamDailyFinishedStatsCache.clear();
   }
 
   /** GET `/game/*` com partilha entre várias subscrições (evita N× a mesma chamada). */
@@ -282,6 +285,32 @@ export class Game4uApiService {
 
   private reportsOpenSummaryKey(q: Game4uReportsOpenSummaryQuery): string {
     return `rpt-open-sum|${this.reportIdentitySegment(q)}|${q.dt_prazo_start}|${q.dt_prazo_end}|${q.team_id ?? ''}`;
+  }
+
+  private reportsTeamDailyFinishedStatsKey(q: Game4uReportsTeamDailyFinishedStatsQuery): string {
+    return `rpt-team-daily|${this.reportIdentitySegment(q)}|${q.start}|${q.end}|${q.team_id ?? ''}`;
+  }
+
+  private appendTeamDailyFinishedStatsParams(
+    base: HttpParams,
+    q: Game4uReportsTeamDailyFinishedStatsQuery
+  ): HttpParams {
+    let p = base.set('start', q.start).set('end', q.end);
+    if (this.shouldIncludeEmailQueryParam(q.email)) {
+      p = p.set('email', (q.email ?? '').trim());
+    }
+    for (const s of q.status ?? []) {
+      p = p.append('status', s);
+    }
+    const off = q.offset;
+    const lim = q.limit;
+    if (off != null && Number.isFinite(off)) {
+      p = p.set('offset', String(Math.max(0, Math.floor(off))));
+    }
+    if (lim != null && Number.isFinite(lim)) {
+      p = p.set('limit', String(Math.min(Math.max(1, Math.floor(lim)), 500)));
+    }
+    return this.withOptionalTeamId(p, q.team_id);
   }
 
   private appendOpenSummaryParams(base: HttpParams, q: Game4uReportsOpenSummaryQuery): HttpParams {
@@ -545,6 +574,38 @@ export class Game4uApiService {
       const params = this.withOptionalTeamId(inner, q.team_id);
       return this.http.get<Game4uGoalMonthSummaryResponse>(
         `${this.baseUrl}/game/reports/goal/month/summary`,
+        {
+          headers: this.headers(),
+          params
+        }
+      );
+    });
+  }
+
+  /**
+   * `GET /game/reports/team/daily-finished-stats`
+   * OpenAPI: `GameController_getReportTeamDailyFinishedStats`.
+   *
+   * Observação: o path foi alinhado ao padrão `/game/reports/*` usado no restante do app.
+   */
+  getGameReportsTeamDailyFinishedStats(
+    q: Game4uReportsTeamDailyFinishedStatsQuery
+  ): Observable<unknown> {
+    if (!this.isConfigured()) {
+      return throwError(
+        () => new Error('[Game4U] reports/team/daily-finished-stats: defina backend_url_base.')
+      );
+    }
+    if (!this.hasReportsIdentity(q)) {
+      return throwError(
+        () => new Error('[Game4U] reports/team/daily-finished-stats: informe email ou team_id.')
+      );
+    }
+    const key = this.reportsTeamDailyFinishedStatsKey(q);
+    return this.shareGame4uDedupe(key, this.reportsTeamDailyFinishedStatsCache, () => {
+      const params = this.appendTeamDailyFinishedStatsParams(new HttpParams(), q);
+      return this.http.get<unknown>(
+        `${this.baseUrl}/game/reports/team/daily-finished-stats`,
         {
           headers: this.headers(),
           params

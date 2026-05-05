@@ -6,6 +6,7 @@ import { SeasonDatesService } from '@services/season-dates.service';
 import { ToastService } from '@services/toast.service';
 import { SessaoProvider } from '@providers/sessao/sessao.provider';
 import { BwaTeamApiService } from '@services/bwa-team-api.service';
+import { ActionLogService } from '@services/action-log.service';
 import { of, throwError } from 'rxjs';
 import { BrowserAnimationsModule } from '@angular/platform-browser/animations';
 import { NO_ERRORS_SCHEMA } from '@angular/core';
@@ -19,6 +20,7 @@ describe('TeamManagementDashboardComponent', () => {
   let mockToastService: jasmine.SpyObj<ToastService>;
   let mockSessaoProvider: jasmine.SpyObj<SessaoProvider>;
   let mockBwaTeamApi: jasmine.SpyObj<BwaTeamApiService>;
+  let mockActionLogService: jasmine.SpyObj<ActionLogService>;
 
   beforeEach(async () => {
     // Create mock services
@@ -44,6 +46,15 @@ describe('TeamManagementDashboardComponent', () => {
       'error',
       'success'
     ]);
+
+    mockActionLogService = jasmine.createSpyObj('ActionLogService', [
+      'getReportTeamDailyFinishedStats',
+      'getTeamFinishedSummaryForMonth'
+    ]);
+    mockActionLogService.getReportTeamDailyFinishedStats.and.returnValue(of([] as any));
+    mockActionLogService.getTeamFinishedSummaryForMonth.and.returnValue(
+      of({ tarefasFinalizadas: 0, deliveriesCount: 0 } as any)
+    );
 
     mockSessaoProvider = jasmine.createSpyObj('SessaoProvider', [], {
       usuario: {
@@ -94,6 +105,7 @@ describe('TeamManagementDashboardComponent', () => {
         { provide: GraphDataProcessorService, useValue: mockGraphDataProcessor },
         { provide: SeasonDatesService, useValue: mockSeasonDatesService },
         { provide: ToastService, useValue: mockToastService },
+        { provide: ActionLogService, useValue: mockActionLogService },
         { provide: SessaoProvider, useValue: mockSessaoProvider },
         { provide: BwaTeamApiService, useValue: mockBwaTeamApi }
       ],
@@ -966,11 +978,14 @@ describe('TeamManagementDashboardComponent', () => {
       }));
 
       it('should display error message when productivity query fails', fakeAsync(() => {
-        mockTeamAggregateService.getTeamProgressMetrics.and.returnValue(
+        // Force the new daily stats endpoint to fail (used by productivity tab).
+        mockActionLogService.getReportTeamDailyFinishedStats.and.returnValue(
           throwError(() => new Error('API Error'))
         );
 
         component.selectedTeam = 'Departamento Pessoal';
+        // Ensure Game4U team scope exists for the query path
+        (component as any).selectedTeam = 'Departamento Pessoal';
         component['loadProductivityData']({ start: new Date(), end: new Date() });
 
         tick();
