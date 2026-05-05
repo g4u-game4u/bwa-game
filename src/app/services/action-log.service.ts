@@ -19,7 +19,8 @@ import type {
   Game4uUserScopedQuery,
   Game4uTeamScopedQuery,
   Game4uGoalMonthSummaryResponse,
-  Game4uReportsOpenSummaryQuery
+  Game4uReportsOpenSummaryQuery,
+  Game4uReportsTeamDailyFinishedStatsQuery
 } from '@model/game4u-api.model';
 import { SessaoProvider } from '@providers/sessao/sessao.provider';
 import {
@@ -39,6 +40,7 @@ import {
   mapGame4uActionsToProcessList,
   mapGame4uActionsToProcessMetrics,
   mapGame4uStatsToActivityMetrics,
+  mapGame4uStatsToTeamProgressMetrics,
   mapGame4uStatsToPointWallet,
   mapGame4uUserActionsToParticipacaoCnpjRows,
   isGame4uUserActionFinalizedStatus,
@@ -92,6 +94,13 @@ export interface TeamFinishedSummaryMonthResult {
   deliveriesCount: number;
 }
 
+export interface TeamDailyFinishedStatsRow {
+  day: string; // `YYYY-MM-DD`
+  email?: string;
+  tasksCount: number;
+  pointsSum: number;
+}
+
 /** Opções de {@link ActionLogService.getProgressMetrics}. */
 export interface GetProgressMetricsOptions {
   /**
@@ -102,8 +111,8 @@ export interface GetProgressMetricsOptions {
   /** Repete-se como `team_id` em GET `/game/*` **user-scoped** (ignorado quando {@link game4uTeamAggregate} está definido). */
   teamId?: string | number | null;
   /**
-   * Painel equipa sem colaborador: usa só `GET /game/team-stats` + `GET /game/team-actions` (agregado).
-   * Não combina com queries por `user` + `team_id`.
+   * Painel equipa sem colaborador: com `team_id` BWA → `GET /game/reports/finished|open/summary`;
+   * sem BWA → só `GET /game/team-stats` (sem `team-actions`, sem `/game/stats`).
    */
   game4uTeamAggregate?: { team: string; bwaTeamId?: string | number | null };
 }
@@ -953,6 +962,183 @@ export class ActionLogService {
   }
 
   /**
+   * Game4U (reports): daily stats de tarefas finalizadas por equipa (e opcionalmente por colaborador),
+   * usado na aba “Análise de Produtividade”.
+   */
+  getReportTeamDailyFinishedStats(
+    q: Game4uReportsTeamDailyFinishedStatsQuery
+  ): Observable<TeamDailyFinishedStatsRow[]> {
+    if (!(isGame4uDataEnabled() && this.game4u.isConfigured())) {
+      return throwError(
+        () => new Error('[ActionLog] getReportTeamDailyFinishedStats: Game4U indisponível')
+      );
+    }
+    const tid = (q.team_id ?? '').trim();
+    if (!tid) {
+      return of([]);
+    }
+
+    return this.game4u.getGameReportsTeamDailyFinishedStats(q).pipe(
+      map(rows => this.normalizeTeamDailyFinishedStatsRows(rows)),
+      catchError(err => {
+        console.error('Error in getReportTeamDailyFinishedStats:', err);
+        return of([]);
+      })
+    );
+  }
+
+  /**
+   * Normaliza a resposta do daily finished stats:
+   * - Formato aninhado: `{ stats: [{ date, users: [{ email, total_actions, total_points }], ... }] }`
+   * - Formato legado: array plano de linhas `{ day|date, email?, tasks_count?, points_sum? }`
+   */
+  private normalizeTeamDailyFinishedStatsRows(body: unknown): TeamDailyFinishedStatsRow[] {
+    if (body && typeof body === 'object' && Array.isArray((body as { stats?: unknown }).stats)) {
+      return this.normalizeTeamDailyFinishedStatsNested(
+        (body as { stats: unknown[] }).stats
+      );
+    }
+    if (Array.isArray(body)) {
+      return this.normalizeTeamDailyFinishedStatsFlatArray(body);
+    }
+    return [];
+  }
+
+  /** `stats[]` do payload aninhado (ver `exemplo-resposta-get-daily-finished-stats.md`). */
+  private normalizeTeamDailyFinishedStatsNested(stats: unknown[]): TeamDailyFinishedStatsRow[] {
+    const out: TeamDailyFinishedStatsRow[] = [];
+    for (const raw of stats) {
+      if (!raw || typeof raw !== 'object') continue;
+      const o = raw as Record<string, unknown>;
+      const dayRaw =
+        (typeof o['date'] === 'string' && (o['date'] as string).trim()) ||
+        (typeof o['day'] === 'string' && (o['day'] as string).trim()) ||
+        '';
+      const day = this.toYmdDay(dayRaw);
+      if (!day) continue;
+
+      const users = o['users'];
+      if (Array.isArray(users) && users.length > 0) {
+        for (const u of users) {
+          if (!u || typeof u !== 'object') continue;
+          const ur = u as Record<string, unknown>;
+          const email =
+            (typeof ur['email'] === 'string' && (ur['email'] as string).trim()) ||
+            (typeof ur['user_email'] === 'string' && (ur['user_email'] as string).trim()) ||
+            '';
+          if (!email) continue;
+          const tasksCount = Math.max(
+            0,
+            Math.floor(
+              Number(
+                ur['total_actions'] ??
+                  ur['totalActions'] ??
+                  ur['tasks_count'] ??
+                  ur['actions_count'] ??
+                  0
+              ) || 0
+            )
+          );
+          const pointsSum = Math.max(
+            0,
+            Math.floor(
+              Number(
+                ur['total_points'] ?? ur['totalPoints'] ?? ur['points_sum'] ?? ur['points'] ?? 0
+              ) || 0
+            )
+          );
+          out.push({ day, email, tasksCount, pointsSum });
+        }
+      } else {
+        const tasksCount = Math.max(
+          0,
+          Math.floor(
+            Number(o['total_actions'] ?? o['totalActions'] ?? o['tasks_count'] ?? 0) || 0
+          )
+        );
+        const pointsSum = Math.max(
+          0,
+          Math.floor(Number(o['total_points'] ?? o['totalPoints'] ?? o['points_sum'] ?? 0) || 0)
+        );
+        if (tasksCount > 0 || pointsSum > 0) {
+          out.push({ day, email: undefined, tasksCount, pointsSum });
+        }
+      }
+    }
+    return out;
+  }
+
+  private normalizeTeamDailyFinishedStatsFlatArray(rows: unknown[]): TeamDailyFinishedStatsRow[] {
+    const out: TeamDailyFinishedStatsRow[] = [];
+    for (const raw of rows) {
+      if (!raw || typeof raw !== 'object') continue;
+      const o = raw as Record<string, unknown>;
+
+      const dayRaw =
+        (typeof o['day'] === 'string' && (o['day'] as string).trim()) ||
+        (typeof o['date'] === 'string' && (o['date'] as string).trim()) ||
+        (typeof o['dt'] === 'string' && (o['dt'] as string).trim()) ||
+        (typeof o['finished_day'] === 'string' && (o['finished_day'] as string).trim()) ||
+        (typeof o['finished_date'] === 'string' && (o['finished_date'] as string).trim()) ||
+        '';
+
+      const day = this.toYmdDay(dayRaw);
+      if (!day) continue;
+
+      const email =
+        (typeof o['email'] === 'string' && (o['email'] as string).trim()) ||
+        (typeof o['user_email'] === 'string' && (o['user_email'] as string).trim()) ||
+        (typeof o['user'] === 'string' && (o['user'] as string).trim()) ||
+        undefined;
+
+      const tasksCount = Math.max(
+        0,
+        Math.floor(
+          Number(
+            o['tasks_count'] ??
+              o['tasksCount'] ??
+              o['count'] ??
+              o['actions_count'] ??
+              o['actionsCount'] ??
+              o['total_actions'] ??
+              o['totalActions'] ??
+              0
+          ) || 0
+        )
+      );
+      const pointsSum = Math.max(
+        0,
+        Math.floor(
+          Number(
+            o['points_sum'] ??
+              o['pointsSum'] ??
+              o['points'] ??
+              o['total_points'] ??
+              o['totalPoints'] ??
+              0
+          ) || 0
+        )
+      );
+
+      out.push({ day, email, tasksCount, pointsSum });
+    }
+    return out;
+  }
+
+  private toYmdDay(raw: string): string | null {
+    const t = String(raw ?? '').trim();
+    if (!t) return null;
+    // If it already looks like YYYY-MM-DD, keep it.
+    const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(t);
+    if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+    const ms = Date.parse(t);
+    if (!Number.isFinite(ms)) return null;
+    const d = new Date(ms);
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
+  }
+
+  /**
    * Todas as user-actions Game4U com o mesmo `delivery_id` (intervalo alinhado ao mês do painel ou temporada).
    */
   getGame4uUserActionsForDeliveryId(
@@ -1437,8 +1623,8 @@ export class ActionLogService {
    * {@link GetProgressMetricsOptions.gamificationDashboardReportsOnly}: painel gamificação evita
    * `GET /game/stats`, `GET /game/actions` e **`GET /game/reports/user-actions`** neste método — só relatórios agregados.
    *
-   * Vista equipa (`game4uTeamAggregate` + `team_id` BWA): `finished/summary` + `open/summary` no mês;
-   * `team-actions` só para métricas de processo por entrega.
+   * Vista equipa (`game4uTeamAggregate` + `team_id` BWA): `finished/summary` + `open/summary` no mês
+   * (sem `GET /game/team-actions`). Sem BWA: só `GET /game/team-stats` (não é `/game/stats`).
    */
   getProgressMetrics(
     playerId: string,
@@ -1452,13 +1638,6 @@ export class ActionLogService {
         const bwa = this.normalizeGame4uTeamId(teamAgg.bwaTeamId);
         const finishedRange = this.game4u.toQueryRange(month);
         const dp = this.game4u.toDtPrazoMonthRange(month);
-        const actionsRange = this.game4u.toCampaignStartThroughMonthEnd(month);
-        /** Vista equipa (sem colaborador): não enviar `user` em `team-actions`. */
-        const actionsBase: Game4uTeamScopedQuery = {
-          team: teamKey,
-          start: actionsRange.start,
-          end: actionsRange.end
-        };
 
         if (bwa) {
           return forkJoin({
@@ -1471,7 +1650,7 @@ export class ActionLogService {
               .pipe(
                 catchError(err => {
                   console.warn('getProgressMetrics (team finished/summary):', err);
-                  return of({ tasks_count: 0, points_sum: 0 });
+                  return of({ tasks_count: 0, points_sum: 0, deliveries_count: 0 });
                 })
               ),
             open: this.game4u
@@ -1483,22 +1662,21 @@ export class ActionLogService {
               .pipe(
                 catchError(err => {
                   console.warn('getProgressMetrics (team open/summary):', err);
-                  return of({ tasks_count: 0 });
+                  return of({ tasks_count: 0, delivery_count: 0 });
                 })
-              ),
-            actions: this.game4u.getGameTeamActions(actionsBase).pipe(
-              catchError(err => {
-                console.error('getProgressMetrics (team-actions processo):', err);
-                return of([] as Game4uUserActionModel[]);
-              })
-            )
+              )
           }).pipe(
-            map(({ finished, open, actions }) => {
-              const byCompetence = filterGame4uActionsByCompetenceMonth(actions, month);
-              const processo = mapGame4uActionsToProcessMetrics(byCompetence);
+            map(({ finished, open }) => {
               const pendingFromReport = Math.floor(Number(open.tasks_count) || 0);
               const finalizadas = Math.floor(Number(finished.tasks_count) || 0);
               const pts = Math.floor(Number(finished.points_sum) || 0);
+              const procFin = Math.floor(Number(finished.deliveries_count) || 0);
+              const openDel = Math.floor(Number(open.delivery_count) || 0);
+              const processo: ProcessMetrics = {
+                pendentes: 0,
+                incompletas: openDel,
+                finalizadas: procFin
+              };
               return {
                 activity: {
                   pendentes: pendingFromReport,
@@ -1527,18 +1705,19 @@ export class ActionLogService {
           start: range.start,
           end: range.end
         };
-        return forkJoin({
-          stats: this.game4u.getGameTeamStats(statsQuery),
-          actions: this.game4u.getGameTeamActions(actionsBase)
-        }).pipe(
-          map(({ stats, actions }) => {
-            const byCompetence = filterGame4uActionsByCompetenceMonth(actions, month);
-            const processo = mapGame4uActionsToProcessMetrics(byCompetence);
+        return this.game4u.getGameTeamStats(statsQuery).pipe(
+          map(stats => {
+            const tpm = mapGame4uStatsToTeamProgressMetrics(stats);
             const activity = mapGame4uStatsToActivityMetrics(stats);
+            const processo: ProcessMetrics = {
+              pendentes: 0,
+              incompletas: tpm.processosIncompletos,
+              finalizadas: tpm.processosFinalizados
+            };
             return { activity, processo };
           }),
           catchError(err => {
-            console.error('getProgressMetrics (Game4U team aggregate):', err);
+            console.error('getProgressMetrics (Game4U team-stats only):', err);
             return of({
               activity: { pendentes: 0, emExecucao: 0, finalizadas: 0, pontos: 0 },
               processo: { pendentes: 0, incompletas: 0, finalizadas: 0 }
@@ -1597,7 +1776,7 @@ export class ActionLogService {
               .pipe(
                 catchError(err => {
                   console.warn('Error fetching season finished summary (progress metrics):', err);
-                  return of({ tasks_count: 0, points_sum: 0 });
+                  return of({ tasks_count: 0, points_sum: 0, deliveries_count: 0 });
                 })
               )
           : of(null);
@@ -1615,10 +1794,10 @@ export class ActionLogService {
                 .pipe(
                   catchError(err => {
                     console.warn('Error fetching finished summary (progress metrics):', err);
-                    return of({ tasks_count: 0, points_sum: 0 });
+                    return of({ tasks_count: 0, points_sum: 0, deliveries_count: 0 });
                   })
                 )
-            : of({ tasks_count: 0, points_sum: 0 }),
+            : of({ tasks_count: 0, points_sum: 0, deliveries_count: 0 }),
         pendingSummary:
           dtPrazoOpenSummary != null
             ? this.game4u
@@ -1626,10 +1805,10 @@ export class ActionLogService {
                 .pipe(
                   catchError(err => {
                     console.warn('Error fetching open summary (progress metrics):', err);
-                    return of({ tasks_count: 0 });
+                    return of({ tasks_count: 0, delivery_count: 0 });
                   })
                 )
-            : of({ tasks_count: 0 }),
+            : of({ tasks_count: 0, delivery_count: 0 }),
         seasonSummary: seasonSummary$,
         stats: stats$
       }).pipe(
@@ -1658,10 +1837,19 @@ export class ActionLogService {
           const statsMissing = stats == null;
           if (month != null) {
             const byCompetence = filterGame4uActionsByCompetenceMonth(actions, month);
-            const processo = mapGame4uActionsToProcessMetrics(byCompetence);
+            const processoFromActions = mapGame4uActionsToProcessMetrics(byCompetence);
             const fromReportTasks = Math.floor(Number(summary.tasks_count) || 0);
             const fromReportPts = Math.floor(Number(summary.points_sum) || 0);
-            if (fromReportTasks > 0 || fromReportPts > 0) {
+            const fromReportDel = Math.floor(Number(summary.deliveries_count) || 0);
+            const openDel = Math.floor(Number(pendingSummary.delivery_count) || 0);
+            const hasActionProcessoDetail =
+              processoFromActions.finalizadas > 0 ||
+              processoFromActions.incompletas > 0 ||
+              processoFromActions.pendentes > 0;
+            const processo: ProcessMetrics = hasActionProcessoDetail
+              ? processoFromActions
+              : { pendentes: 0, incompletas: openDel, finalizadas: fromReportDel };
+            if (fromReportTasks > 0 || fromReportPts > 0 || fromReportDel > 0) {
               return {
                 activity: {
                   pendentes: pendingFromReport,

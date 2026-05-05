@@ -230,6 +230,39 @@ export interface Game4uReportsFinishedQuery {
   limit?: number;
 }
 
+/**
+ * Query para `GET /game/reports/team/daily-finished-stats` (`getReportTeamDailyFinishedStats`).
+ * Este endpoint usa `start` / `end` (ISO 8601), não `finished_at_start` / `finished_at_end`.
+ */
+export interface Game4uReportsTeamDailyFinishedStatsQuery {
+  email?: string;
+  /** Escopo BWA / equipa (consolidado sem `email`). */
+  team_id: string;
+  /** Início do intervalo (ISO 8601). */
+  start: string;
+  /** Fim do intervalo (ISO 8601). */
+  end: string;
+  status?: string[];
+  offset?: number;
+  limit?: number;
+}
+
+/**
+ * Linha normalizada de `GET /game/reports/team/daily-finished-stats`.
+ * O backend pode variar os nomes das colunas; usamos normalização no service.
+ */
+export interface Game4uReportsTeamDailyFinishedStatRow {
+  /** Dia (ISO `YYYY-MM-DD` ou ISO date-time). */
+  day: string;
+  /** E-mail do colaborador quando a resposta é “por membro” (pode vir vazio no consolidado). */
+  email?: string;
+  /** Total de tarefas/ações finalizadas no dia. */
+  tasks_count?: number;
+  /** Soma de pontos no dia. */
+  points_sum?: number;
+  [key: string]: unknown;
+}
+
 export interface Game4uReportsActionsByDeliveryQuery extends Game4uReportsFinishedQuery {
   delivery_title: string;
 }
