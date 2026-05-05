@@ -354,7 +354,9 @@
               <div class="section-header">
                 <h3 id="company-section-title" class="section-title">
                   Clientes atendidos este mês
-                  <span *ngIf="!isLoadingCarteira" class="section-title-count" aria-hidden="true">({{ teamCarteiraClientes.length }})</span>
+                  <span *ngIf="!isLoadingClientesAtendidosCount" class="section-title-count" aria-hidden="true">
+                    ({{ clientesAtendidosThisMonthCount ?? teamCarteiraClientes.length }})
+                  </span>
                   <c4u-info-button 
                     [infoKey]="''"
                     [customText]="'São os clientes para os quais a equipa ou o colaborador selecionado realizou alguma entrega ou obrigação neste mês na plataforma Acessórias. A lista segue o mês (ou período) selecionado no filtro do painel e as atividades contabilizadas pela competência das entregas no Game4U'"
@@ -400,6 +402,20 @@
                       </span>
                     </div>
                   </div>
+                </div>
+
+                <div
+                  *ngIf="!isLoadingCarteira && teamCarteiraClientes.length > 0 && (showParticipacaoLoadMoreButton || isLoadingCarteiraMore)"
+                  class="participacao-load-more-wrap">
+                  <button
+                    type="button"
+                    class="participacao-load-more-btn"
+                    [disabled]="isLoadingCarteiraMore"
+                    [attr.aria-busy]="isLoadingCarteiraMore"
+                    (click)="loadMoreParticipacao()">
+                    <i *ngIf="isLoadingCarteiraMore" class="ri-loader-4-line loading-icon" aria-hidden="true"></i>
+                    {{ isLoadingCarteiraMore ? 'A carregar…' : 'Carregar mais' }}
+                  </button>
                 </div>
                 
                 <div *ngIf="!isLoadingCarteira && teamCarteiraClientes.length === 0" class="empty-state">

@@ -1,13 +1,15 @@
 import { Component, OnInit, OnDestroy, ChangeDetectionStrategy, ChangeDetectorRef } from '@angular/core';
 import { Router } from '@angular/router';
+import { NgbModal } from '@ng-bootstrap/ng-bootstrap';
 import { Subject, forkJoin, of } from 'rxjs';
-import { takeUntil, switchMap, catchError, map } from 'rxjs/operators';
+import { takeUntil, switchMap, catchError, map, take } from 'rxjs/operators';
 
 import { ACLService, AclMetadata } from '@services/acl.service';
 import { UserProfileService } from '@services/user-profile.service';
 import { PlayerService } from '@services/player.service';
 import { KPIService } from '@services/kpi.service';
 import { BackendApiService } from '@services/backend-api.service';
+import { ToastService } from '@services/toast.service';
 import { CnpjLookupService } from '@services/cnpj-lookup.service';
 import { CompanyKpiService, CompanyDisplay } from '@services/company-kpi.service';
 import { SessaoProvider } from '@providers/sessao/sessao.provider';
@@ -113,13 +115,15 @@ export class DashboardSupervisorComponent implements OnInit, OnDestroy {
     private playerService: PlayerService,
     private kpiService: KPIService,
     private backendApi: BackendApiService,
+    private toastService: ToastService,
     private cnpjLookupService: CnpjLookupService,
     private companyKpiService: CompanyKpiService,
     private sessaoProvider: SessaoProvider,
     private cacheManagerService: CacheManagerService,
     private supabaseCompaniesService: SupabaseCompaniesService,
     private router: Router,
-    private cdr: ChangeDetectorRef
+    private cdr: ChangeDetectorRef,
+    private ngbModal: NgbModal
   ) {}
 
   ngOnInit(): void {
@@ -719,16 +723,16 @@ export class DashboardSupervisorComponent implements OnInit, OnDestroy {
    * Includes double confirmation to prevent accidental logout
    */
   logout(): void {
-    const firstConfirm = window.confirm('Tem certeza que deseja sair do sistema?');
-    if (!firstConfirm) {
-      return;
-    }
+    const snack = this.toastService.action('Deseja sair do sistema?', 'Sair', {
+      duration: 8000,
+      panelClass: ['snackbar-warning']
+    });
 
-    const secondConfirm = window.confirm('Esta ação irá desconectar você do sistema. Deseja continuar?');
-    if (!secondConfirm) {
-      return;
-    }
-
-    this.sessaoProvider.logout();
+    snack
+      .onAction()
+      .pipe(take(1))
+      .subscribe(() => {
+        void this.sessaoProvider.logout();
+      });
   }
 }

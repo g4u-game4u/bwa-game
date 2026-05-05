@@ -1,6 +1,7 @@
 import { Component, OnInit, OnDestroy, ChangeDetectionStrategy, ChangeDetectorRef, Renderer2, Inject } from '@angular/core';
 import { DOCUMENT } from '@angular/common';
 import { Router } from '@angular/router';
+import { NgbModal } from '@ng-bootstrap/ng-bootstrap';
 import { Subject, of, firstValueFrom, Observable } from 'rxjs';
 import { takeUntil, finalize, map, take, mergeMap } from 'rxjs/operators';
 import { PONTOS_POR_ATIVIDADE_FINALIZADA_ACTION_LOG } from '@app/constants/pontos-por-atividade-action-log';
@@ -184,6 +185,16 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
   /** KPI % entregas no prazo por linha: carregamento após cruzamento gamificação. */
   isLoadingParticipacaoKpi = false;
   private participacaoKpiLoadGen = 0;
+
+  clientesAtendidosThisMonthCount: number | null = null;
+  isLoadingClientesAtendidosCount = false;
+
+  useParticipacaoReportsPagination = false;
+  isLoadingCarteiraMore = false;
+  participacaoHasMore = false;
+  private participacaoNextOffset = 0;
+  private participacaoTotal?: number;
+  private readonly participacaoPageLimit = 30;
   
   // Monthly points breakdown
   monthlyPointsBreakdown: { bloqueados: number; desbloqueados: number } | null = null;
@@ -243,7 +254,8 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
     private router: Router,
     private cdr: ChangeDetectorRef,
     private renderer: Renderer2,
-    @Inject(DOCUMENT) private document: Document
+    @Inject(DOCUMENT) private document: Document,
+    private ngbModal: NgbModal
   ) {}
 
   ngOnInit(): void {
@@ -2337,6 +2349,11 @@ private calculateCollaboratorTotals(memberData: Array<{
   ): Promise<void> {
     this.isLoadingCarteira = true;
     this.isLoadingParticipacaoKpi = false;
+    this.isLoadingCarteiraMore = false;
+    this.participacaoHasMore = false;
+    this.participacaoNextOffset = 0;
+    this.participacaoTotal = undefined;
+    this.useParticipacaoReportsPagination = false;
     const loadGen = ++this.participacaoKpiLoadGen;
     this.cdr.markForCheck();
 
@@ -2355,6 +2372,89 @@ private calculateCollaboratorTotals(memberData: Array<{
     const teamTid = this.getGame4uTeamScopeId();
 
     try {
+      // Count no título: `deliveries_count` de finished/summary (mês selecionado) quando houver escopo equipa
+      if (this.playerService.usesGame4uWalletFromStats() && this.selectedMonth != null && teamTid && useTeam) {
+        this.isLoadingClientesAtendidosCount = true;
+        this.cdr.markForCheck();
+        this.actionLogService
+          .getTeamFinishedSummaryForMonth(teamTid, this.selectedMonth)
+          .pipe(takeUntil(this.destroy$))
+          .subscribe({
+            next: ({ deliveriesCount }) => {
+              this.clientesAtendidosThisMonthCount = Number.isFinite(deliveriesCount)
+                ? Math.floor(deliveriesCount)
+                : null;
+              this.isLoadingClientesAtendidosCount = false;
+              this.cdr.markForCheck();
+            },
+            error: err => {
+              console.error('📊 Failed to load team finished/summary deliveries_count:', err);
+              this.clientesAtendidosThisMonthCount = null;
+              this.isLoadingClientesAtendidosCount = false;
+              this.cdr.markForCheck();
+            }
+          });
+      } else {
+        this.clientesAtendidosThisMonthCount = null;
+        this.isLoadingClientesAtendidosCount = false;
+      }
+
+      // Paginação (reports/finished/deliveries): só na vista equipa agregada (sem colaborador) quando há month + scopeId
+      if (useTeam && this.playerService.usesGame4uWalletFromStats() && this.selectedMonth != null && teamTid) {
+        const page = await firstValueFrom(
+          this.teamAggregateService
+            .getTeamFinishedDeliveriesParticipacaoPage(
+              teamTid,
+              opts!.teamRange!.start,
+              opts!.teamRange!.end,
+              0,
+              this.participacaoPageLimit
+            )
+            .pipe(takeUntil(this.destroy$))
+        );
+        this.useParticipacaoReportsPagination = true;
+        const received = page.items?.length ?? 0;
+        this.participacaoNextOffset = received;
+        if (typeof page.total === 'number' && Number.isFinite(page.total)) {
+          this.participacaoTotal = page.total;
+        }
+        const fullPage = received >= this.participacaoPageLimit;
+        const knownTotal = this.participacaoTotal;
+        this.participacaoHasMore =
+          fullPage && (knownTotal == null || this.participacaoNextOffset < knownTotal);
+
+        const baseClientes: CompanyDisplay[] = (page.items || []).map(i => ({
+          cnpj: i.cnpj,
+          cnpjId: i.cnpj,
+          actionCount: (i as any).actionCount ?? 0,
+          processCount: 0,
+          delivery_title: (i as any).delivery_title,
+          ...(String((i as any).deliveryId ?? '').trim() ? { deliveryId: String((i as any).deliveryId).trim() } : {}),
+          loadTasksViaGameReports: true
+        }));
+
+        const uniqueBase = this.dedupeParticipacaoClientes(baseClientes);
+        uniqueBase.forEach(c => {
+          const status = this.cnpjStatusMap.get(c.cnpj);
+          if (status) {
+            c.status = status;
+          }
+        });
+        this.teamCarteiraClientes = uniqueBase;
+        this.isLoadingCarteira = false;
+        this.isLoadingParticipacaoKpi = uniqueBase.length > 0;
+        this.updateFormattedSidebarData();
+        this.syncEntregasPrazoKpiFromParticipacao();
+        this.cdr.markForCheck();
+
+        if (uniqueBase.length > 0) {
+          void this.applyParticipacaoPorcEntregasKpiAfterGamificacaoAsync(uniqueBase, loadGen).catch(
+            (err: unknown) => console.error('📊 Falha ao aplicar KPI de entregas (gamificação, painel equipa):', err)
+          );
+        }
+        return;
+      }
+
       const participacaoSource$: Observable<any[]> = useTeam
         ? this.teamAggregateService.getTeamCnpjListWithCount(
             this.getGame4uTeamHttpParam(),
@@ -2471,9 +2571,97 @@ private calculateCollaboratorTotals(memberData: Array<{
       this.teamCarteiraClientes = [];
       this.isLoadingCarteira = false;
       this.isLoadingParticipacaoKpi = false;
+      this.isLoadingCarteiraMore = false;
+      this.participacaoHasMore = false;
       this.syncEntregasPrazoKpiFromParticipacao();
       this.cdr.markForCheck();
     }
+  }
+
+  get showParticipacaoLoadMoreButton(): boolean {
+    return (
+      this.useParticipacaoReportsPagination &&
+      !this.isLoadingCarteira &&
+      !this.isLoadingCarteiraMore &&
+      this.participacaoHasMore &&
+      this.teamCarteiraClientes.length > 0
+    );
+  }
+
+  loadMoreParticipacao(): void {
+    if (
+      !this.useParticipacaoReportsPagination ||
+      this.isLoadingCarteira ||
+      this.isLoadingCarteiraMore ||
+      !this.participacaoHasMore
+    ) {
+      return;
+    }
+    if (!this.selectedMonth || !this.getGame4uTeamScopeId()) {
+      return;
+    }
+    const teamTid = this.getGame4uTeamScopeId()!;
+    const range = this.calculateDateRange();
+    this.isLoadingCarteiraMore = true;
+    const loadGen = this.participacaoKpiLoadGen;
+    this.cdr.markForCheck();
+
+    this.teamAggregateService
+      .getTeamFinishedDeliveriesParticipacaoPage(
+        teamTid,
+        range.start,
+        range.end,
+        this.participacaoNextOffset,
+        this.participacaoPageLimit
+      )
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: async page => {
+          try {
+            const appended: CompanyDisplay[] = (page.items || []).map(i => ({
+              cnpj: i.cnpj,
+              cnpjId: i.cnpj,
+              actionCount: (i as any).actionCount ?? 0,
+              processCount: 0,
+              delivery_title: (i as any).delivery_title,
+              ...(String((i as any).deliveryId ?? '').trim() ? { deliveryId: String((i as any).deliveryId).trim() } : {}),
+              loadTasksViaGameReports: true
+            }));
+
+            const merged = this.dedupeParticipacaoClientes([...this.teamCarteiraClientes, ...appended]);
+            this.teamCarteiraClientes = merged;
+
+            const received = page.items?.length ?? 0;
+            if (typeof page.total === 'number' && Number.isFinite(page.total)) {
+              this.participacaoTotal = page.total;
+            }
+            this.participacaoNextOffset += received;
+            const fullPage = received >= this.participacaoPageLimit;
+            const knownTotal = this.participacaoTotal;
+            this.participacaoHasMore =
+              fullPage && (knownTotal == null || this.participacaoNextOffset < knownTotal);
+
+            this.isLoadingParticipacaoKpi = merged.length > 0;
+            this.updateFormattedSidebarData();
+            this.syncEntregasPrazoKpiFromParticipacao();
+            this.cdr.markForCheck();
+
+            if (merged.length > 0) {
+              await this.applyParticipacaoPorcEntregasKpiAfterGamificacaoAsync(merged, loadGen);
+            }
+          } catch (err) {
+            console.error('📊 Falha ao aplicar KPI após carregar mais participação (painel equipa):', err);
+          } finally {
+            this.isLoadingCarteiraMore = false;
+            this.cdr.markForCheck();
+          }
+        },
+        error: err => {
+          console.error('📊 Failed to load more participação (painel equipa):', err);
+          this.isLoadingCarteiraMore = false;
+          this.cdr.markForCheck();
+        }
+      });
   }
 
   /** Alinhado a `gamification-dashboard.buildParticipacaoBaseClientes`. */
@@ -3823,19 +4011,16 @@ private calculateCollaboratorTotals(memberData: Array<{
    * Includes double confirmation to prevent accidental logout
    */
   logout(): void {
-    // First confirmation
-    const firstConfirm = window.confirm('Tem certeza que deseja sair do sistema?');
-    if (!firstConfirm) {
-      return;
-    }
-    
-    // Second confirmation (double validation)
-    const secondConfirm = window.confirm('Esta ação irá desconectar você do sistema. Deseja continuar?');
-    if (!secondConfirm) {
-      return;
-    }
-    
-    // If both confirmations are accepted, proceed with logout
-    this.sessaoProvider.logout();
+    const snack = this.toastService.action('Deseja sair do sistema?', 'Sair', {
+      duration: 8000,
+      panelClass: ['snackbar-warning']
+    });
+
+    snack
+      .onAction()
+      .pipe(take(1))
+      .subscribe(() => {
+        void this.sessaoProvider.logout();
+      });
   }
 }

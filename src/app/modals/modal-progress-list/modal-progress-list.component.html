@@ -136,6 +136,20 @@
               </div>
             </div>
 
+            <div
+              *ngIf="useActivityReportsPagination && activityItems.length > 0 && (activityHasMore || isLoadingMore)"
+              class="activity-load-more-wrap">
+              <button
+                type="button"
+                class="activity-load-more-btn"
+                [disabled]="isLoadingMore"
+                [attr.aria-busy]="isLoadingMore"
+                (click)="loadMoreActivityReports()">
+                <i *ngIf="isLoadingMore" class="ri-loader-4-line loading-icon" aria-hidden="true"></i>
+                {{ isLoadingMore ? 'A carregar…' : 'Carregar mais' }}
+              </button>
+            </div>
+
             <!-- Pontos obtidos: tabela plana -->
             <div *ngIf="displayedActivityItems.length > 0 && listType === 'pontos'" class="tasks-table">
             <div class="task-header with-points">

@@ -20,6 +20,13 @@ import {
   mapGame4uUserActionsToParticipacaoCnpjRows
 } from './game4u-game-mapper';
 
+export interface TeamFinishedDeliveriesPageResult {
+  items: { cnpj: string; actionCount: number; processCount: number; delivery_title?: string; deliveryId?: string; fromGameReportsDeliveries?: boolean; loadTasksViaGameReports?: boolean }[];
+  offset: number;
+  limit: number;
+  total?: number;
+}
+
 /**
  * Team season points model
  */
@@ -1074,6 +1081,45 @@ export class TeamAggregateService {
         return of([]);
       })
     );
+  }
+
+  /**
+   * Game4U (reports): uma página de `GET /game/reports/finished/deliveries` para «Clientes atendidos» no painel equipa.
+   */
+  getTeamFinishedDeliveriesParticipacaoPage(
+    bwaTeamScopeId: string,
+    startDate: Date,
+    endDate: Date,
+    offset: number,
+    limit: number
+  ): Observable<TeamFinishedDeliveriesPageResult> {
+    const scopeId = (bwaTeamScopeId ?? '').trim();
+    const off = Math.max(0, Math.floor(offset));
+    const lim = Math.min(Math.max(Math.floor(limit), 1), 500);
+    if (!(isGame4uDataEnabled() && this.game4u.isConfigured()) || !scopeId) {
+      return of({ items: [], offset: off, limit: lim });
+    }
+    const range = this.game4u.toIsoRange(startDate, endDate);
+    return this.game4u
+      .getGameReportsFinishedDeliveriesPage({
+        team_id: scopeId,
+        finished_at_start: range.start,
+        finished_at_end: range.end,
+        offset: off,
+        limit: lim
+      })
+      .pipe(
+        map(page => ({
+          items: mapGame4uFinishedDeliveryRowsToParticipacaoCnpjRows(page.items || []),
+          offset: page.offset ?? off,
+          limit: page.limit ?? lim,
+          ...(page.total != null ? { total: page.total } : {})
+        })),
+        catchError(error => {
+          console.error('Error in getTeamFinishedDeliveriesParticipacaoPage:', error);
+          return of({ items: [], offset: off, limit: lim });
+        })
+      );
   }
 
   /**

@@ -14,6 +14,7 @@ import { C4uInfoButtonModule } from '@components/c4u-info-button/c4u-info-button
 import { C4uKpiCircularProgressModule } from '@components/c4u-kpi-circular-progress/c4u-kpi-circular-progress.module';
 import { ModalPlayerDetailModule } from '@app/modals/modal-player-detail/modal-player-detail.module';
 import { ModalCompanyDetailModule } from '@app/modals/modal-company-detail/modal-company-detail.module';
+import { NgbModule } from '@ng-bootstrap/ng-bootstrap';
 
 const routes: Routes = [
   {
@@ -38,7 +39,8 @@ const routes: Routes = [
     C4uInfoButtonModule,
     C4uKpiCircularProgressModule,
     ModalPlayerDetailModule,
-    ModalCompanyDetailModule
+    ModalCompanyDetailModule,
+    NgbModule
   ],
   exports: [
     DashboardSupervisorComponent

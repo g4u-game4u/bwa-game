@@ -27,6 +27,7 @@ import { C4uMonthlyPointsGoalProgressModule } from '@components/c4u-monthly-poin
 import { ModalProgressListModule } from '@modals/modal-progress-list/modal-progress-list.module';
 import { ModalCarteiraModule } from '@modals/modal-carteira/modal-carteira.module';
 import { ModalCompanyCarteiraDetailModule } from '@modals/modal-company-carteira-detail/modal-company-carteira-detail.module';
+import { NgbModule } from '@ng-bootstrap/ng-bootstrap';
 
 // Shared modules
 import { SharedModule } from '../../../shared.module';
@@ -69,7 +70,8 @@ const routes: Routes = [
     C4uMonthlyPointsGoalProgressModule,
     ModalProgressListModule,
     ModalCarteiraModule,
-    ModalCompanyCarteiraDetailModule
+    ModalCompanyCarteiraDetailModule,
+    NgbModule
   ]
 })
 export class TeamManagementDashboardModule { }

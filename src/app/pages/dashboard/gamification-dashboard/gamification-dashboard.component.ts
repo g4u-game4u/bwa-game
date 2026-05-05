@@ -150,6 +150,15 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   isLoadingParticipacao = true;
   /** true enquanto GET /gamificação + cruzamento (enrichFromCnpjResp) ainda não aplicaram porcEntregas na lista. */
   isLoadingParticipacaoKpi = false;
+  /** Contador do título: Game4U `deliveries_count` de `/game/reports/finished/summary` (mês selecionado). */
+  clientesAtendidosThisMonthCount: number | null = null;
+  isLoadingClientesAtendidosCount = false;
+  isLoadingParticipacaoMore = false;
+  participacaoHasMore = false;
+  private participacaoNextOffset = 0;
+  private participacaoTotal?: number;
+  private readonly participacaoPageLimit = 30;
+  private useParticipacaoReportsPagination = false;
   /** Invalida merges de KPI em voo quando o mês muda ou um novo load de participação começa. */
   private participacaoKpiLoadGen = 0;
   
@@ -667,6 +676,11 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   private loadParticipacaoData(): void {
     this.isLoadingParticipacao = true;
     this.isLoadingParticipacaoKpi = false;
+    this.isLoadingParticipacaoMore = false;
+    this.participacaoHasMore = false;
+    this.participacaoNextOffset = 0;
+    this.participacaoTotal = undefined;
+    this.useParticipacaoReportsPagination = false;
     const loadGen = ++this.participacaoKpiLoadGen;
     this.cdr.markForCheck();
 
@@ -678,12 +692,102 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
       return;
     }
 
+    this.loadParticipacaoFirstPageOrFallback(playerId, loadGen);
+  }
+
+  get showParticipacaoLoadMoreButton(): boolean {
+    return (
+      this.useParticipacaoReportsPagination &&
+      !this.isLoadingParticipacao &&
+      !this.isLoadingParticipacaoMore &&
+      this.participacaoHasMore &&
+      this.participacaoClientes.length > 0
+    );
+  }
+
+  loadMoreParticipacao(): void {
+    if (
+      !this.useParticipacaoReportsPagination ||
+      this.isLoadingParticipacao ||
+      this.isLoadingParticipacaoMore ||
+      !this.participacaoHasMore
+    ) {
+      return;
+    }
+    const playerId = this.getPlayerId();
+    if (!playerId) {
+      return;
+    }
+    this.isLoadingParticipacaoMore = true;
+    const loadGen = this.participacaoKpiLoadGen;
+    this.cdr.markForCheck();
+
     this.actionLogService
-      .getPlayerCnpjListWithCount(playerId, this.selectedMonth)
+      .getPlayerFinishedDeliveriesParticipacaoPage(
+        playerId,
+        this.selectedMonth,
+        this.participacaoNextOffset,
+        this.participacaoPageLimit
+      )
+      .pipe(takeUntil(this.destroy$), takeUntil(this.monthChange$))
+      .subscribe({
+        next: async page => {
+          try {
+            const appended = (page.items || []).map(i => ({
+              cnpj: i.cnpj,
+              cnpjId: i.cnpj,
+              actionCount: i.actionCount ?? 0,
+              processCount: 0,
+              delivery_title: i.delivery_title,
+              ...(i.deliveryId?.trim() ? { deliveryId: i.deliveryId.trim() } : {}),
+              loadTasksViaGameReports: true
+            })) as CompanyDisplay[];
+
+            const merged = this.dedupeParticipacaoClientes([...this.participacaoClientes, ...appended]);
+            this.participacaoClientes = merged;
+
+            const received = page.items?.length ?? 0;
+            const total = page.total;
+            if (typeof total === 'number' && Number.isFinite(total)) {
+              this.participacaoTotal = total;
+            }
+            this.participacaoNextOffset += received;
+            const fullPage = received >= this.participacaoPageLimit;
+            const knownTotal = this.participacaoTotal;
+            this.participacaoHasMore =
+              fullPage && (knownTotal == null || this.participacaoNextOffset < knownTotal);
+
+            this.isLoadingParticipacaoKpi = merged.length > 0;
+            this.syncClientesKpiWithTabs();
+            this.cdr.markForCheck();
+
+            if (merged.length > 0) {
+              await this.applyParticipacaoPorcEntregasKpiAfterGamificacaoAsync(merged, loadGen);
+            }
+          } catch (err) {
+            console.error('📊 Falha ao aplicar KPI após carregar mais participação:', err);
+          } finally {
+            this.isLoadingParticipacaoMore = false;
+            this.cdr.markForCheck();
+          }
+        },
+        error: err => {
+          console.error('📊 Failed to load more participação:', err);
+          this.isLoadingParticipacaoMore = false;
+          this.cdr.markForCheck();
+        }
+      });
+  }
+
+  private loadParticipacaoFirstPageOrFallback(playerId: string, loadGen: number): void {
+    const pageLimit = this.participacaoPageLimit;
+    this.actionLogService
+      .getPlayerFinishedDeliveriesParticipacaoPage(playerId, this.selectedMonth, 0, pageLimit)
       .pipe(
-        switchMap(items => {
-          if (items.length > 0 && items.every(i => i.fromGameReportsDeliveries)) {
-            const baseClientes: CompanyDisplay[] = items.map(i => ({
+        switchMap(page => {
+          if (page.items?.length) {
+            this.useParticipacaoReportsPagination = true;
+            const baseClientes: CompanyDisplay[] = page.items.map(i => ({
               cnpj: i.cnpj,
               cnpjId: i.cnpj,
               actionCount: i.actionCount ?? 0,
@@ -692,60 +796,68 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
               ...(i.deliveryId?.trim() ? { deliveryId: i.deliveryId.trim() } : {}),
               loadTasksViaGameReports: true
             }));
-            return of({
-              empids: [] as string[],
-              baseClientes,
-              skipKpi: false as const
-            });
-          }
-
-          const empids = items.map(i => i.cnpj).filter((c): c is string => !!c && String(c).trim().length > 0);
-          const actionCountByCnpj = new Map(items.map(i => [i.cnpj, i.actionCount]));
-          const deliveryTitleByKey = new Map<string, string>();
-          const deliveryIdByCnpj = new Map<string, string>();
-          const deliveryExtraCnpjByKey = new Map<string, string>();
-          for (const i of items) {
-            const t = i.delivery_title?.trim();
-            if (t) {
-              deliveryTitleByKey.set(i.cnpj, t);
+            const received = page.items.length;
+            if (typeof page.total === 'number' && Number.isFinite(page.total)) {
+              this.participacaoTotal = page.total;
             }
-            const d = i.deliveryId?.trim();
-            if (d) {
-              deliveryIdByCnpj.set(i.cnpj, d);
-            }
-            const ec = i.delivery_extra_cnpj?.trim();
-            if (ec) {
-              deliveryExtraCnpjByKey.set(i.cnpj, ec);
-            }
+            this.participacaoNextOffset = received;
+            const fullPage = received >= pageLimit;
+            const knownTotal = this.participacaoTotal;
+            this.participacaoHasMore = fullPage && (knownTotal == null || this.participacaoNextOffset < knownTotal);
+            return of({ empids: [] as string[], baseClientes, skipKpi: false as const });
           }
-
-          if (empids.length === 0) {
-            return of({
-              empids: [] as string[],
-              baseClientes: [] as CompanyDisplay[],
-              skipKpi: true as const
-            });
-          }
-
-          return this.cnpjLookupService.enrichCnpjListFull(empids).pipe(
-            map(cnpjInfo => {
-              cnpjInfo.forEach((info, key) => {
-                this.cnpjNameMap.set(key, info.empresa);
-                if (info.status) {
-                  this.cnpjStatusMap.set(key, info.status);
+          // Fallback: comportamento legado (sem paginação / backend sem suporte)
+          return this.actionLogService.getPlayerCnpjListWithCount(playerId, this.selectedMonth).pipe(
+            switchMap(items => {
+              const empids = items.map(i => i.cnpj).filter((c): c is string => !!c && String(c).trim().length > 0);
+              const actionCountByCnpj = new Map(items.map(i => [i.cnpj, i.actionCount]));
+              const deliveryTitleByKey = new Map<string, string>();
+              const deliveryIdByCnpj = new Map<string, string>();
+              const deliveryExtraCnpjByKey = new Map<string, string>();
+              for (const i of items) {
+                const t = i.delivery_title?.trim();
+                if (t) {
+                  deliveryTitleByKey.set(i.cnpj, t);
                 }
-                if (info.cnpj) {
-                  this.cnpjNumberMap.set(key, info.cnpj);
+                const d = i.deliveryId?.trim();
+                if (d) {
+                  deliveryIdByCnpj.set(i.cnpj, d);
                 }
-              });
-              const baseClientes = this.buildParticipacaoBaseClientes(
-                empids,
-                actionCountByCnpj,
-                deliveryTitleByKey,
-                deliveryIdByCnpj,
-                deliveryExtraCnpjByKey
+                const ec = i.delivery_extra_cnpj?.trim();
+                if (ec) {
+                  deliveryExtraCnpjByKey.set(i.cnpj, ec);
+                }
+              }
+
+              if (empids.length === 0) {
+                return of({
+                  empids: [] as string[],
+                  baseClientes: [] as CompanyDisplay[],
+                  skipKpi: true as const
+                });
+              }
+
+              return this.cnpjLookupService.enrichCnpjListFull(empids).pipe(
+                map(cnpjInfo => {
+                  cnpjInfo.forEach((info, key) => {
+                    this.cnpjNameMap.set(key, info.empresa);
+                    if (info.status) {
+                      this.cnpjStatusMap.set(key, info.status);
+                    }
+                    if (info.cnpj) {
+                      this.cnpjNumberMap.set(key, info.cnpj);
+                    }
+                  });
+                  const baseClientes = this.buildParticipacaoBaseClientes(
+                    empids,
+                    actionCountByCnpj,
+                    deliveryTitleByKey,
+                    deliveryIdByCnpj,
+                    deliveryExtraCnpjByKey
+                  );
+                  return { empids, baseClientes, skipKpi: false as const };
+                })
               );
-              return { empids, baseClientes, skipKpi: false as const };
             })
           );
         }),
@@ -753,7 +865,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
         takeUntil(this.monthChange$)
       )
       .subscribe({
-        next: ({ empids, baseClientes, skipKpi }) => {
+        next: ({ baseClientes, skipKpi }) => {
           const uniqueBase = this.dedupeParticipacaoClientes(baseClientes);
           uniqueBase.forEach(c => {
             const status = this.cnpjStatusMap.get(c.cnpj);
@@ -780,6 +892,8 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
           this.participacaoClientes = [];
           this.isLoadingParticipacao = false;
           this.isLoadingParticipacaoKpi = false;
+          this.isLoadingParticipacaoMore = false;
+          this.participacaoHasMore = false;
           this.syncClientesKpiWithTabs();
           this.cdr.markForCheck();
         }
@@ -1208,12 +1322,55 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     this.isLoadingMonthlyGoal = true;
     this.isLoadingParticipacao = true;
     this.isLoadingParticipacaoKpi = false;
+    this.isLoadingClientesAtendidosCount = true;
     this.cdr.markForCheck();
 
     this.companyKpiService.prefetchGamificacaoSnapshot();
     this.loadKPIData();
     this.loadProgressData();
+    this.loadClientesAtendidosCountFromFinishedSummary();
     this.loadParticipacaoData();
+  }
+
+  private loadClientesAtendidosCountFromFinishedSummary(): void {
+    const month = this.selectedMonth;
+    if (month == null) {
+      this.clientesAtendidosThisMonthCount = null;
+      this.isLoadingClientesAtendidosCount = false;
+      this.cdr.markForCheck();
+      return;
+    }
+
+    const usuario = this.sessaoProvider.usuario as { _id?: string; email?: string } | null;
+    const playerId: string = (usuario?._id || usuario?.email || '') as string;
+    if (!playerId) {
+      this.clientesAtendidosThisMonthCount = null;
+      this.isLoadingClientesAtendidosCount = false;
+      this.cdr.markForCheck();
+      return;
+    }
+
+    this.isLoadingClientesAtendidosCount = true;
+    this.cdr.markForCheck();
+    this.actionLogService
+      .getSeasonProgressSidebarDetails(playerId, month)
+      .pipe(takeUntil(this.destroy$), takeUntil(this.monthChange$))
+      .subscribe({
+        next: ({ deliveryStatsTotal }) => {
+          this.clientesAtendidosThisMonthCount =
+            typeof deliveryStatsTotal === 'number' && Number.isFinite(deliveryStatsTotal)
+              ? Math.floor(deliveryStatsTotal)
+              : null;
+          this.isLoadingClientesAtendidosCount = false;
+          this.cdr.markForCheck();
+        },
+        error: err => {
+          console.error('📊 Failed to load clientes atendidos count (finished/summary):', err);
+          this.clientesAtendidosThisMonthCount = null;
+          this.isLoadingClientesAtendidosCount = false;
+          this.cdr.markForCheck();
+        }
+      });
   }
 
   /**
@@ -1737,20 +1894,17 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
    * Includes double confirmation to prevent accidental logout
    */
   logout(): void {
-    // First confirmation
-    const firstConfirm = window.confirm('Tem certeza que deseja sair do sistema?');
-    if (!firstConfirm) {
-      return;
-    }
-    
-    // Second confirmation (double validation)
-    const secondConfirm = window.confirm('Esta ação irá desconectar você do sistema. Deseja continuar?');
-    if (!secondConfirm) {
-      return;
-    }
-    
-    // If both confirmations are accepted, proceed with logout
-    this.announceToScreenReader('Saindo do sistema...');
-    this.sessaoProvider.logout();
+    const snack = this.toastService.action('Deseja sair do sistema?', 'Sair', {
+      duration: 8000,
+      panelClass: ['snackbar-warning']
+    });
+
+    snack
+      .onAction()
+      .pipe(take(1))
+      .subscribe(() => {
+        this.announceToScreenReader('Saindo do sistema...');
+        void this.sessaoProvider.logout();
+      });
   }
 }
