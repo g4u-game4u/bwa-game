@@ -1281,7 +1281,8 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
           firstValueFrom(
             this.actionLogService
               .getProgressMetrics(collaboratorId, this.selectedMonth, {
-                gamificationDashboardReportsOnly: true
+                gamificationDashboardReportsOnly: true,
+                teamId: this.getGame4uTeamScopeId()
               })
               .pipe(takeUntil(this.destroy$))
           ).catch((error: unknown) => {
@@ -1298,7 +1299,8 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
         metrics = await firstValueFrom(
           this.actionLogService
             .getProgressMetrics(collaboratorId, this.selectedMonth, {
-              gamificationDashboardReportsOnly: true
+              gamificationDashboardReportsOnly: true,
+              teamId: this.getGame4uTeamScopeId()
             })
             .pipe(takeUntil(this.destroy$))
         ).catch((error: unknown) => {
@@ -1647,7 +1649,10 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       // Get progress metrics for the collaborator
       const metrics = await firstValueFrom(
         this.actionLogService
-          .getProgressMetrics(collaboratorId, this.selectedMonth)
+          .getProgressMetrics(collaboratorId, this.selectedMonth, {
+            gamificationDashboardReportsOnly: true,
+            teamId: this.getGame4uTeamScopeId()
+          })
           .pipe(takeUntil(this.destroy$))
       ).catch((error) => {
         console.error('Error loading collaborator progress metrics for goals:', error);
@@ -2279,7 +2284,7 @@ private calculateCollaboratorTotals(memberData: Array<{
         return;
       }
       console.log(
-        '📊 Loading team panel progress (Game4U: reports finished/summary + open/summary quando há team_id BWA; team-actions só para processos)...'
+        '📊 Loading team panel progress (Game4U: reports finished/summary + open/summary com team_id BWA; sem team-actions / sem /game/stats)...'
       );
       const metrics = await firstValueFrom(
         this.actionLogService

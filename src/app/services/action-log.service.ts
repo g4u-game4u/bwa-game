@@ -40,6 +40,7 @@ import {
   mapGame4uActionsToProcessList,
   mapGame4uActionsToProcessMetrics,
   mapGame4uStatsToActivityMetrics,
+  mapGame4uStatsToTeamProgressMetrics,
   mapGame4uStatsToPointWallet,
   mapGame4uUserActionsToParticipacaoCnpjRows,
   isGame4uUserActionFinalizedStatus,
@@ -110,8 +111,8 @@ export interface GetProgressMetricsOptions {
   /** Repete-se como `team_id` em GET `/game/*` **user-scoped** (ignorado quando {@link game4uTeamAggregate} está definido). */
   teamId?: string | number | null;
   /**
-   * Painel equipa sem colaborador: usa só `GET /game/team-stats` + `GET /game/team-actions` (agregado).
-   * Não combina com queries por `user` + `team_id`.
+   * Painel equipa sem colaborador: com `team_id` BWA → `GET /game/reports/finished|open/summary`;
+   * sem BWA → só `GET /game/team-stats` (sem `team-actions`, sem `/game/stats`).
    */
   game4uTeamAggregate?: { team: string; bwaTeamId?: string | number | null };
 }
@@ -1622,8 +1623,8 @@ export class ActionLogService {
    * {@link GetProgressMetricsOptions.gamificationDashboardReportsOnly}: painel gamificação evita
    * `GET /game/stats`, `GET /game/actions` e **`GET /game/reports/user-actions`** neste método — só relatórios agregados.
    *
-   * Vista equipa (`game4uTeamAggregate` + `team_id` BWA): `finished/summary` + `open/summary` no mês;
-   * `team-actions` só para métricas de processo por entrega.
+   * Vista equipa (`game4uTeamAggregate` + `team_id` BWA): `finished/summary` + `open/summary` no mês
+   * (sem `GET /game/team-actions`). Sem BWA: só `GET /game/team-stats` (não é `/game/stats`).
    */
   getProgressMetrics(
     playerId: string,
@@ -1637,13 +1638,6 @@ export class ActionLogService {
         const bwa = this.normalizeGame4uTeamId(teamAgg.bwaTeamId);
         const finishedRange = this.game4u.toQueryRange(month);
         const dp = this.game4u.toDtPrazoMonthRange(month);
-        const actionsRange = this.game4u.toCampaignStartThroughMonthEnd(month);
-        /** Vista equipa (sem colaborador): não enviar `user` em `team-actions`. */
-        const actionsBase: Game4uTeamScopedQuery = {
-          team: teamKey,
-          start: actionsRange.start,
-          end: actionsRange.end
-        };
 
         if (bwa) {
           return forkJoin({
@@ -1656,7 +1650,7 @@ export class ActionLogService {
               .pipe(
                 catchError(err => {
                   console.warn('getProgressMetrics (team finished/summary):', err);
-                  return of({ tasks_count: 0, points_sum: 0 });
+                  return of({ tasks_count: 0, points_sum: 0, deliveries_count: 0 });
                 })
               ),
             open: this.game4u
@@ -1668,22 +1662,21 @@ export class ActionLogService {
               .pipe(
                 catchError(err => {
                   console.warn('getProgressMetrics (team open/summary):', err);
-                  return of({ tasks_count: 0 });
+                  return of({ tasks_count: 0, delivery_count: 0 });
                 })
-              ),
-            actions: this.game4u.getGameTeamActions(actionsBase).pipe(
-              catchError(err => {
-                console.error('getProgressMetrics (team-actions processo):', err);
-                return of([] as Game4uUserActionModel[]);
-              })
-            )
+              )
           }).pipe(
-            map(({ finished, open, actions }) => {
-              const byCompetence = filterGame4uActionsByCompetenceMonth(actions, month);
-              const processo = mapGame4uActionsToProcessMetrics(byCompetence);
+            map(({ finished, open }) => {
               const pendingFromReport = Math.floor(Number(open.tasks_count) || 0);
               const finalizadas = Math.floor(Number(finished.tasks_count) || 0);
               const pts = Math.floor(Number(finished.points_sum) || 0);
+              const procFin = Math.floor(Number(finished.deliveries_count) || 0);
+              const openDel = Math.floor(Number(open.delivery_count) || 0);
+              const processo: ProcessMetrics = {
+                pendentes: 0,
+                incompletas: openDel,
+                finalizadas: procFin
+              };
               return {
                 activity: {
                   pendentes: pendingFromReport,
@@ -1712,18 +1705,19 @@ export class ActionLogService {
           start: range.start,
           end: range.end
         };
-        return forkJoin({
-          stats: this.game4u.getGameTeamStats(statsQuery),
-          actions: this.game4u.getGameTeamActions(actionsBase)
-        }).pipe(
-          map(({ stats, actions }) => {
-            const byCompetence = filterGame4uActionsByCompetenceMonth(actions, month);
-            const processo = mapGame4uActionsToProcessMetrics(byCompetence);
+        return this.game4u.getGameTeamStats(statsQuery).pipe(
+          map(stats => {
+            const tpm = mapGame4uStatsToTeamProgressMetrics(stats);
             const activity = mapGame4uStatsToActivityMetrics(stats);
+            const processo: ProcessMetrics = {
+              pendentes: 0,
+              incompletas: tpm.processosIncompletos,
+              finalizadas: tpm.processosFinalizados
+            };
             return { activity, processo };
           }),
           catchError(err => {
-            console.error('getProgressMetrics (Game4U team aggregate):', err);
+            console.error('getProgressMetrics (Game4U team-stats only):', err);
             return of({
               activity: { pendentes: 0, emExecucao: 0, finalizadas: 0, pontos: 0 },
               processo: { pendentes: 0, incompletas: 0, finalizadas: 0 }
@@ -1782,7 +1776,7 @@ export class ActionLogService {
               .pipe(
                 catchError(err => {
                   console.warn('Error fetching season finished summary (progress metrics):', err);
-                  return of({ tasks_count: 0, points_sum: 0 });
+                  return of({ tasks_count: 0, points_sum: 0, deliveries_count: 0 });
                 })
               )
           : of(null);
@@ -1800,10 +1794,10 @@ export class ActionLogService {
                 .pipe(
                   catchError(err => {
                     console.warn('Error fetching finished summary (progress metrics):', err);
-                    return of({ tasks_count: 0, points_sum: 0 });
+                    return of({ tasks_count: 0, points_sum: 0, deliveries_count: 0 });
                   })
                 )
-            : of({ tasks_count: 0, points_sum: 0 }),
+            : of({ tasks_count: 0, points_sum: 0, deliveries_count: 0 }),
         pendingSummary:
           dtPrazoOpenSummary != null
             ? this.game4u
@@ -1811,10 +1805,10 @@ export class ActionLogService {
                 .pipe(
                   catchError(err => {
                     console.warn('Error fetching open summary (progress metrics):', err);
-                    return of({ tasks_count: 0 });
+                    return of({ tasks_count: 0, delivery_count: 0 });
                   })
                 )
-            : of({ tasks_count: 0 }),
+            : of({ tasks_count: 0, delivery_count: 0 }),
         seasonSummary: seasonSummary$,
         stats: stats$
       }).pipe(
@@ -1843,10 +1837,19 @@ export class ActionLogService {
           const statsMissing = stats == null;
           if (month != null) {
             const byCompetence = filterGame4uActionsByCompetenceMonth(actions, month);
-            const processo = mapGame4uActionsToProcessMetrics(byCompetence);
+            const processoFromActions = mapGame4uActionsToProcessMetrics(byCompetence);
             const fromReportTasks = Math.floor(Number(summary.tasks_count) || 0);
             const fromReportPts = Math.floor(Number(summary.points_sum) || 0);
-            if (fromReportTasks > 0 || fromReportPts > 0) {
+            const fromReportDel = Math.floor(Number(summary.deliveries_count) || 0);
+            const openDel = Math.floor(Number(pendingSummary.delivery_count) || 0);
+            const hasActionProcessoDetail =
+              processoFromActions.finalizadas > 0 ||
+              processoFromActions.incompletas > 0 ||
+              processoFromActions.pendentes > 0;
+            const processo: ProcessMetrics = hasActionProcessoDetail
+              ? processoFromActions
+              : { pendentes: 0, incompletas: openDel, finalizadas: fromReportDel };
+            if (fromReportTasks > 0 || fromReportPts > 0 || fromReportDel > 0) {
               return {
                 activity: {
                   pendentes: pendingFromReport,
