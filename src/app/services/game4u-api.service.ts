@@ -22,6 +22,8 @@ import {
   normalizeGameReportsActionsByDeliveryResponse,
   Game4uReportsFinishedDeliveryRow,
   normalizeGameReportsFinishedDeliveriesPayload,
+  Game4uReportsFinishedDeliveriesPage,
+  normalizeGameReportsFinishedDeliveriesPagePayload,
   Game4uReportsUserActionsQuery,
   Game4uReportsUserActionsPage,
   normalizeGameReportsUserActionsResponse
@@ -378,6 +380,35 @@ export class Game4uApiService {
         })
         .pipe(map(body => normalizeGameReportsFinishedDeliveriesPayload(body)));
     });
+  }
+
+  /**
+   * `GET /game/reports/finished/deliveries` com `offset`/`limit` (paginado quando suportado no backend).
+   * Não usa cache de dedupe por chave, pois cada página tem parâmetros distintos.
+   */
+  getGameReportsFinishedDeliveriesPage(
+    q: Game4uReportsFinishedQuery
+  ): Observable<Game4uReportsFinishedDeliveriesPage> {
+    if (!this.isConfigured()) {
+      return throwError(
+        () => new Error('[Game4U] reports/finished/deliveries: defina backend_url_base.')
+      );
+    }
+    if (!this.hasReportsIdentity(q)) {
+      return throwError(
+        () => new Error('[Game4U] reports/finished/deliveries: informe email ou team_id.')
+      );
+    }
+    let params = this.appendReportParams(new HttpParams(), q);
+    const off = Math.max(0, Math.floor(q.offset ?? 0));
+    const lim = Math.min(Math.max(Math.floor(q.limit ?? 500), 1), 500);
+    params = params.set('offset', String(off)).set('limit', String(lim));
+    return this.http
+      .get<unknown>(`${this.baseUrl}/game/reports/finished/deliveries`, {
+        headers: this.headers(),
+        params
+      })
+      .pipe(map(body => normalizeGameReportsFinishedDeliveriesPagePayload(body)));
   }
 
   /**

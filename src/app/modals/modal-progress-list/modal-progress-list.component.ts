@@ -63,7 +63,16 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
 
   /** Acordeão: grupos de tarefas finalizadas expandidos (chave = título normalizado). */
   expandedFinishedTaskGroups = new Set<string>();
-  
+
+  /** Game4U + um jogador: lista via páginas de `user-actions` (100 itens). */
+  useActivityReportsPagination = false;
+  activityHasMore = false;
+  isLoadingMore = false;
+  private readonly activityReportPageLimit = 100;
+  /** Próximo `offset` a enviar à API (a resposta pode devolver `offset` sempre 0). */
+  private activityReportsNextOffset = 0;
+  private activityReportsTotal?: number;
+
   // Copy state
   copiedDeliveryId: string | null = null;
   cnpjNameMap = new Map<string, string>(); // Map of original CNPJ → clean empresa name
@@ -144,10 +153,17 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Mensagem enquanto `forkJoin` aguarda cada `getActivityList` terminar (inclui todas as páginas de
-   * `GET /game/reports/user-actions` para pendentes e finalizadas), depois gráfico + enrich CNPJ.
+   * Mensagem no carregamento inicial da lista de atividades (uma página ou forkJoin legado).
    */
   get activityLoadingMessage(): string {
+    if (
+      this.useActivityReportsPagination &&
+      (this.listType === 'atividades-pendentes' || this.listType === 'atividades')
+    ) {
+      return this.listType === 'atividades-pendentes'
+        ? 'Carregando primeira página de tarefas pendentes…'
+        : 'Carregando primeira página de tarefas finalizadas…';
+    }
     switch (this.listType) {
       case 'atividades-pendentes':
         return 'Carregando tarefas pendentes e gráfico…';
@@ -348,17 +364,30 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
       this.activityItems = [];
       this.chartLabels = [];
       this.chartDatasets = [];
-      /**
-       * Pendentes e finalizadas (Game4U): cada `getActivityList` agrega todas as páginas de
-       * `GET /game/reports/user-actions` antes de completar. `forkJoin` espera todos os jogadores;
-       * só então montamos gráfico e tabela (e enrich CNPJ).
-       */
       const reportStatuses: Game4uUserActionStatus[] | undefined =
         this.listType === 'atividades-pendentes'
           ? ['PENDING', 'DOING']
           : this.listType === 'atividades'
             ? ['DONE', 'DELIVERED']
             : undefined;
+
+      const canPaginateReports =
+        !!reportStatuses?.length &&
+        playerIds.length === 1 &&
+        this.actionLogService.canPaginateGame4uActivityReports();
+
+      if (canPaginateReports) {
+        this.useActivityReportsPagination = true;
+        this.activityHasMore = false;
+        this.isLoadingMore = false;
+        this.activityReportsNextOffset = 0;
+        this.activityReportsTotal = undefined;
+        this.fetchActivityReportPage(true);
+        return;
+      }
+
+      this.useActivityReportsPagination = false;
+      this.activityHasMore = false;
 
       const tid = (this.teamId ?? '').trim() || undefined;
       const activityRequests = playerIds.map(playerId =>
@@ -380,26 +409,11 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
         .pipe(takeUntil(this.destroy$))
         .subscribe({
           next: async (results: ActivityListItem[][]) => {
-            // Aggregate all activities from all players
             this.activityItems = results.flat();
+            this.sortActivityItems();
 
-            if (this.listType === 'atividades-pendentes') {
-              this.activityItems.sort((a, b) => {
-                const ka = this.dtPrazoSortKey(a.dt_prazo);
-                const kb = this.dtPrazoSortKey(b.dt_prazo);
-                if (ka !== kb) {
-                  return ka - kb;
-                }
-                return b.created - a.created;
-              });
-            } else {
-              this.activityItems.sort((a, b) => b.created - a.created);
-            }
-
-            // Gráfico: finalizadas por dia de registro; pendentes por dia de prazo (`dt_prazo`)
             this.applyChartFromActivityItems(this.activityItems);
 
-            // Enrich CNPJ names (tabela); só depois exibir conteúdo + gráfico juntos
             await this.enrichCnpjNames(this.activityItems.map(item => item.cnpj).filter(cnpj => cnpj));
 
             this.isLoadingChart = false;
@@ -478,6 +492,103 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
           }
         });
     }
+  }
+
+  loadMoreActivityReports(): void {
+    if (
+      !this.useActivityReportsPagination ||
+      !this.activityHasMore ||
+      this.isLoadingMore ||
+      this.isLoading
+    ) {
+      return;
+    }
+    this.fetchActivityReportPage(false);
+  }
+
+  private sortActivityItems(): void {
+    if (this.listType === 'atividades-pendentes') {
+      this.activityItems.sort((a, b) => {
+        const ka = this.dtPrazoSortKey(a.dt_prazo);
+        const kb = this.dtPrazoSortKey(b.dt_prazo);
+        if (ka !== kb) {
+          return ka - kb;
+        }
+        return b.created - a.created;
+      });
+    } else {
+      this.activityItems.sort((a, b) => b.created - a.created);
+    }
+  }
+
+  private fetchActivityReportPage(isFirstPage: boolean): void {
+    const playerIds = this.getPlayerIds();
+    const playerId = playerIds[0];
+    const reportStatuses: Game4uUserActionStatus[] =
+      this.listType === 'atividades-pendentes'
+        ? ['PENDING', 'DOING']
+        : ['DONE', 'DELIVERED'];
+    const tid = (this.teamId ?? '').trim() || undefined;
+
+    if (!isFirstPage) {
+      this.isLoadingMore = true;
+      this.cdr.markForCheck();
+    }
+
+    this.actionLogService
+      .getActivityListReportsPage(
+        playerId,
+        this.month,
+        reportStatuses,
+        this.activityReportsNextOffset,
+        this.activityReportPageLimit,
+        tid
+      )
+      .pipe(
+        takeUntil(this.destroy$),
+        catchError(error => {
+          console.error('Error loading activity report page:', error);
+          return of({
+            items: [] as ActivityListItem[],
+            offset: this.activityReportsNextOffset,
+            limit: this.activityReportPageLimit,
+            total: this.activityReportsTotal
+          });
+        })
+      )
+      .subscribe({
+        next: async page => {
+          try {
+            if (isFirstPage) {
+              this.activityItems = [...page.items];
+            } else {
+              this.activityItems = [...this.activityItems, ...page.items];
+            }
+            if (page.total != null && Number.isFinite(page.total)) {
+              this.activityReportsTotal = page.total;
+            }
+
+            this.sortActivityItems();
+
+            const received = page.items.length;
+            const fullPage = received >= this.activityReportPageLimit;
+            this.activityReportsNextOffset += received;
+            const total = this.activityReportsTotal;
+            this.activityHasMore = fullPage && (total == null || this.activityReportsNextOffset < total);
+
+            this.applyChartFromActivityItems(this.activityItems);
+            await this.enrichCnpjNames(page.items.map(item => item.cnpj).filter(cnpj => cnpj));
+          } finally {
+            if (isFirstPage) {
+              this.isLoadingChart = false;
+              this.isLoading = false;
+            } else {
+              this.isLoadingMore = false;
+            }
+            this.cdr.markForCheck();
+          }
+        }
+      });
   }
 
   /**
@@ -862,11 +973,13 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
     try {
       const validCnpjs = cnpjList.filter((cnpj): cnpj is string => !!cnpj);
       if (validCnpjs.length === 0) return;
-      
+
       const cnpjNames = await firstValueFrom(
         this.cnpjLookupService.enrichCnpjList(validCnpjs)
       );
-      this.cnpjNameMap = cnpjNames;
+      const merged = new Map(this.cnpjNameMap);
+      cnpjNames.forEach((name, cnpj) => merged.set(cnpj, name));
+      this.cnpjNameMap = merged;
     } catch (error) {
       console.error('Error enriching CNPJ names:', error);
     }

@@ -79,6 +79,19 @@ export interface ActionLogEntry {
 
 export type { ActivityListItem, ProcessListItem } from '@model/gamification-dashboard.model';
 
+/** Uma página de `GET /game/reports/user-actions` para modais com «Carregar mais». */
+export interface ActivityListReportsPageResult {
+  items: ActivityListItem[];
+  offset: number;
+  limit: number;
+  total?: number;
+}
+
+export interface TeamFinishedSummaryMonthResult {
+  tarefasFinalizadas: number;
+  deliveriesCount: number;
+}
+
 /** Opções de {@link ActionLogService.getProgressMetrics}. */
 export interface GetProgressMetricsOptions {
   /**
@@ -901,6 +914,40 @@ export class ActionLogService {
             pontosActionLog: 0,
             sidebar: { tarefasFinalizadas: 0 }
           });
+        })
+      );
+  }
+
+  /**
+   * Game4U (reports): `GET /game/reports/finished/summary` no mês selecionado, escopo equipa (`team_id`), sem `email`.
+   * Usado para o contador «Clientes atendidos este mês» (deliveries_count) no painel de equipa.
+   */
+  getTeamFinishedSummaryForMonth(
+    bwaTeamScopeId: string,
+    month: Date
+  ): Observable<TeamFinishedSummaryMonthResult> {
+    if (!(isGame4uDataEnabled() && this.game4u.isConfigured())) {
+      return throwError(() => new Error('[ActionLog] getTeamFinishedSummaryForMonth: Game4U indisponível'));
+    }
+    const tid = (bwaTeamScopeId || '').trim();
+    if (!tid) {
+      return of({ tarefasFinalizadas: 0, deliveriesCount: 0 });
+    }
+    const range = this.game4u.toQueryRange(month);
+    return this.game4u
+      .getGameReportsFinishedSummary({
+        team_id: tid,
+        finished_at_start: range.start,
+        finished_at_end: range.end
+      })
+      .pipe(
+        map(summary => ({
+          tarefasFinalizadas: Math.floor(Number(summary.tasks_count) || 0),
+          deliveriesCount: Math.floor(Number(summary.deliveries_count) || 0)
+        })),
+        catchError(error => {
+          console.error('Error in getTeamFinishedSummaryForMonth:', error);
+          return of({ tarefasFinalizadas: 0, deliveriesCount: 0 });
         })
       );
   }
@@ -1869,6 +1916,81 @@ export class ActionLogService {
     );
   }
 
+  /** Indica se o modal pode paginar `GET /game/reports/user-actions` (Game4U ativo). */
+  canPaginateGame4uActivityReports(): boolean {
+    return isGame4uDataEnabled() && this.game4u.isConfigured();
+  }
+
+  /**
+   * Uma página de tarefas via `GET /game/reports/user-actions` (offset/limit; máx. 500).
+   * Mesmos filtros que {@link getActivityList} com `reportUserActionsStatuses` definido.
+   */
+  getActivityListReportsPage(
+    playerId: string,
+    month: Date | undefined,
+    reportUserActionsStatuses: Game4uUserActionStatus[],
+    offset: number,
+    limit: number,
+    teamId?: string | number | null
+  ): Observable<ActivityListReportsPageResult> {
+    if (!isGame4uDataEnabled() || !this.game4u.isConfigured()) {
+      return throwError(
+        () => new Error('[ActionLog] getActivityListReportsPage requer Game4U configurado.')
+      );
+    }
+    if (!reportUserActionsStatuses?.length) {
+      return throwError(() => new Error('[ActionLog] getActivityListReportsPage: informe status.'));
+    }
+    const baseQ = this.game4uUserQuery(playerId, month);
+    const lim = Math.min(Math.max(Math.floor(limit), 1), 500);
+    const off = Math.max(0, Math.floor(offset));
+    if (!baseQ) {
+      return of({ items: [], offset: off, limit: lim });
+    }
+    const tid = this.normalizeGame4uTeamId(teamId);
+    const openOnly = reportUserActionsStatuses.every(s => s === 'PENDING' || s === 'DOING');
+    const dtPrazoRange =
+      month != null
+        ? this.game4u.toDtPrazoMonthRange(month)
+        : { start: baseQ.start, end: baseQ.end };
+    const pageQuery: Game4uReportsUserActionsQuery = openOnly
+      ? {
+          email: baseQ.user,
+          status: reportUserActionsStatuses,
+          dt_prazo_start: dtPrazoRange.start,
+          dt_prazo_end: dtPrazoRange.end,
+          ...(tid ? { team_id: tid } : {}),
+          offset: off,
+          limit: lim
+        }
+      : {
+          email: baseQ.user,
+          status: reportUserActionsStatuses,
+          finished_at_start: baseQ.start,
+          finished_at_end: baseQ.end,
+          ...(tid ? { team_id: tid } : {}),
+          offset: off,
+          limit: lim
+        };
+
+    return this.game4u.getGameReportsUserActions(pageQuery).pipe(
+      map(page => ({
+        items: mapGame4uActionsToActivityList(
+          page.items,
+          month,
+          openOnly ? { monthFilter: 'dtPrazo' } : undefined
+        ),
+        offset: page.offset,
+        limit: page.limit,
+        ...(page.total != null && Number.isFinite(page.total) ? { total: page.total } : {})
+      })),
+      catchError(error => {
+        console.error('Error fetching activity list page (Game4U reports/user-actions):', error);
+        return of({ items: [], offset: off, limit: lim });
+      })
+    );
+  }
+
   /**
    * Get list of processes for modal display
    * Groups by attributes.delivery_id (number), shows attributes.delivery_title and action count
@@ -2231,6 +2353,80 @@ export class ActionLogService {
     // Cache using existing cache map.
     this.setCachedData(this.cnpjListWithCountCache, cacheKey, request$);
     return request$;
+  }
+
+  /**
+   * Game4U (mês definido): uma página de `GET /game/reports/finished/deliveries` para «Clientes atendidos».
+   * Retorna no mesmo formato usado por {@link getPlayerCnpjListWithCount} quando `fromGameReportsDeliveries` é true.
+   */
+  getPlayerFinishedDeliveriesParticipacaoPage(
+    playerId: string,
+    month: Date | undefined,
+    offset: number,
+    limit: number,
+    teamId?: string | number | null
+  ): Observable<{ items: { cnpj: string; actionCount: number; delivery_title?: string; deliveryId?: string; fromGameReportsDeliveries?: boolean; loadTasksViaGameReports?: boolean }[]; offset: number; limit: number; total?: number }> {
+    if (!isGame4uDataEnabled() || !this.game4u.isConfigured() || month == null) {
+      return of({ items: [], offset: Math.max(0, Math.floor(offset)), limit: Math.max(1, Math.floor(limit)) });
+    }
+    const user = this.resolveGame4uUserEmail(playerId);
+    if (!user) {
+      return of({ items: [], offset: Math.max(0, Math.floor(offset)), limit: Math.max(1, Math.floor(limit)) });
+    }
+    const range = this.game4u.toQueryRange(month);
+    const tid = this.normalizeGame4uTeamId(teamId);
+    const off = Math.max(0, Math.floor(offset));
+    const lim = Math.min(Math.max(Math.floor(limit), 1), 500);
+
+    return this.game4u
+      .getGameReportsFinishedDeliveriesPage({
+        email: user,
+        finished_at_start: range.start,
+        finished_at_end: range.end,
+        ...(tid ? { team_id: tid } : {}),
+        offset: off,
+        limit: lim
+      })
+      .pipe(
+        map(page => {
+          const rows: {
+            cnpj: string;
+            actionCount: number;
+            delivery_title?: string;
+            deliveryId?: string;
+            fromGameReportsDeliveries?: boolean;
+            loadTasksViaGameReports?: boolean;
+          }[] = [];
+          const seen = new Set<string>();
+          for (const row of page.items || []) {
+            const title = row.delivery_title?.trim() || '';
+            const did = row.delivery_id?.trim() || '';
+            const dedupeKey = did || title;
+            if (!dedupeKey || seen.has(dedupeKey)) {
+              continue;
+            }
+            seen.add(dedupeKey);
+            rows.push({
+              cnpj: did ? `g4u-rpt:${did}` : `g4u-rpt:${title}`,
+              actionCount: 0,
+              delivery_title: title || undefined,
+              ...(did ? { deliveryId: did } : {}),
+              fromGameReportsDeliveries: true,
+              loadTasksViaGameReports: true
+            });
+          }
+          return {
+            items: rows,
+            offset: page.offset ?? off,
+            limit: page.limit ?? lim,
+            ...(page.total != null ? { total: page.total } : {})
+          };
+        }),
+        catchError(error => {
+          console.error('Error fetching finished deliveries page (participação):', error);
+          return of({ items: [], offset: off, limit: lim });
+        })
+      );
   }
 
   /**

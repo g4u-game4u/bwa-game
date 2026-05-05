@@ -225,18 +225,63 @@ export interface Game4uReportsFinishedQuery {
   status?: string[];
   /** Escopo BWA / equipa — consolidado sem `email`. */
   team_id?: string;
+  /** Paginação opcional (quando suportada no backend). */
+  offset?: number;
+  limit?: number;
 }
 
 export interface Game4uReportsActionsByDeliveryQuery extends Game4uReportsFinishedQuery {
   delivery_title: string;
-  offset?: number;
-  limit?: number;
 }
 
 /** Resposta paginada de `GET /game/reports/finished/actions-by-delivery` (`items` + total). */
 export interface Game4uReportsActionsByDeliveryPage {
   items: Game4uUserActionModel[];
   total: number;
+}
+
+/** Resposta paginada de `GET /game/reports/finished/deliveries` (quando o backend suporta). */
+export interface Game4uReportsFinishedDeliveriesPage {
+  offset: number;
+  limit: number;
+  items: Game4uReportsFinishedDeliveryRow[];
+  total?: number;
+}
+
+export function normalizeGameReportsFinishedDeliveriesPagePayload(
+  body: unknown
+): Game4uReportsFinishedDeliveriesPage {
+  const empty: Game4uReportsFinishedDeliveriesPage = { offset: 0, limit: 30, items: [] };
+  if (Array.isArray(body)) {
+    const items = normalizeGameReportsFinishedDeliveriesPayload(body);
+    return { offset: 0, limit: items.length || 30, items, total: items.length };
+  }
+  if (body && typeof body === 'object') {
+    const o = body as Record<string, unknown>;
+    const raw = o['items'] ?? o['data'] ?? o['results'];
+    const items = normalizeGameReportsFinishedDeliveriesPayload(Array.isArray(raw) ? raw : []);
+    const offRaw = o['offset'];
+    const limRaw = o['limit'];
+    const offset =
+      typeof offRaw === 'number' && Number.isFinite(offRaw)
+        ? Math.floor(offRaw)
+        : typeof offRaw === 'string' && offRaw.trim() !== ''
+          ? Math.floor(Number(offRaw)) || 0
+          : 0;
+    const limit =
+      typeof limRaw === 'number' && Number.isFinite(limRaw)
+        ? Math.floor(limRaw)
+        : typeof limRaw === 'string' && limRaw.trim() !== ''
+          ? Math.floor(Number(limRaw)) || (items.length > 0 ? items.length : 30)
+          : items.length > 0
+            ? items.length
+            : 30;
+    const totalRaw = o['total'] ?? o['total_count'] ?? o['count'] ?? o['total_items'];
+    const n = typeof totalRaw === 'number' ? totalRaw : typeof totalRaw === 'string' ? Number(totalRaw) : NaN;
+    const total = Number.isFinite(n) && n >= 0 ? Math.floor(n) : undefined;
+    return { offset, limit, items, ...(total != null ? { total } : {}) };
+  }
+  return empty;
 }
 
 export function normalizeGameReportsActionsByDeliveryResponse(body: unknown): Game4uReportsActionsByDeliveryPage {
