@@ -1073,6 +1073,31 @@
         padding: $spacing-xl;
         text-align: center;
         color: $text-secondary;
+
+        .empty-state-retry-btn {
+          margin-top: $spacing-md;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          padding: 10px 16px;
+          border-radius: 8px;
+          border: 1px solid rgba(255, 255, 255, 0.2);
+          background: rgba(255, 255, 255, 0.06);
+          color: #e5e7eb;
+          font-size: 14px;
+          font-weight: 500;
+          cursor: pointer;
+          transition: background 0.2s ease, border-color 0.2s ease;
+
+          &:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: rgba(255, 255, 255, 0.28);
+          }
+
+          &:focus-visible {
+            @include focus-visible;
+          }
+        }
       }
 
       .carteira-list {
@@ -1453,21 +1478,72 @@
       background: $surface;
       border-radius: $border-radius;
       box-shadow: $shadow-hover;
+      min-width: 320px;
 
-      .spinner-border {
-        width: 4rem;
-        height: 4rem;
-        border: 4px solid rgba($primary-electric-blue, 0.2);
-        border-top-color: $primary-electric-blue;
-        border-radius: 50%;
-        animation: spin 1s linear infinite;
+      .loading-badge {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: $spacing-sm;
+        padding: $spacing-sm $spacing-md;
+        border-radius: 999px;
+        background: rgba($primary-electric-blue, 0.12);
+        border: 1px solid rgba($primary-electric-blue, 0.22);
+        animation: pulse 1.4s ease-in-out infinite;
       }
 
-      .loading-text {
+      .loading-badge__icon {
+        font-size: 1.25rem;
+        line-height: 1;
+        filter: saturate(1.2);
+        animation: bounceTiny 900ms ease-in-out infinite;
+      }
+
+      .loading-badge__icon--delay {
+        animation-delay: 120ms;
+      }
+
+      .loading-badge__icon--delay2 {
+        animation-delay: 240ms;
+      }
+
+      .loading-title {
         margin: 0;
         color: $text-primary;
         font-size: $font-size-body;
-        font-weight: $font-weight-medium;
+        font-weight: $font-weight-semibold;
+        letter-spacing: 0.2px;
+        text-align: center;
+      }
+
+      .loading-subtitle {
+        margin: 0;
+        color: $text-secondary;
+        font-size: $font-size-small;
+        text-align: center;
+        max-width: 44ch;
+      }
+
+      .loading-bar {
+        width: 100%;
+        height: 8px;
+        border-radius: 999px;
+        background: rgba($primary-electric-blue, 0.12);
+        overflow: hidden;
+        border: 1px solid rgba($primary-electric-blue, 0.18);
+      }
+
+      .loading-bar__fill {
+        height: 100%;
+        width: 45%;
+        border-radius: 999px;
+        background: linear-gradient(
+          90deg,
+          rgba($primary-electric-blue, 0.35),
+          rgba($primary-electric-blue, 0.9),
+          rgba($primary-electric-blue, 0.35)
+        );
+        animation: loadingBar 1100ms ease-in-out infinite;
       }
     }
   }
@@ -1498,6 +1574,27 @@
   50% {
     transform: scale(1.05);
     opacity: 0.8;
+  }
+}
+
+@keyframes bounceTiny {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-3px);
+  }
+}
+
+@keyframes loadingBar {
+  0% {
+    transform: translateX(-20%);
+  }
+  50% {
+    transform: translateX(120%);
+  }
+  100% {
+    transform: translateX(240%);
   }
 }
 

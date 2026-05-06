@@ -12,6 +12,17 @@ import { joinApiPath } from '../../environments/backend-url';
 export class BwaTeamApiService {
   constructor(private http: HttpClient) {}
 
+  private readonly CACHE_DURATION = 15 * 60 * 1000; // 15 minutes
+
+  private teamListCache: { timestamp: number; value: any[] } | null = null;
+  private teamListPromise: Promise<any[]> | null = null;
+
+  private teamDetailCache = new Map<string, { timestamp: number; value: any | null }>();
+  private teamDetailPromises = new Map<string, Promise<any | null>>();
+
+  private teamUsersCache = new Map<string, { timestamp: number; value: any[] }>();
+  private teamUsersPromises = new Map<string, Promise<any[]>>();
+
   private baseUrl(): string {
     return (environment.backend_url_base || '').trim().replace(/\/+$/, '');
   }
@@ -56,40 +67,85 @@ export class BwaTeamApiService {
    * GET `{backend_url_base}/team`
    */
   async fetchTeamList(): Promise<any[]> {
-    const b = this.baseUrl();
-    if (!b) {
-      console.error('[BwaTeamApi] backend_url_base vazio — defina G4U_API_BASE / BACKEND_URL_BASE no build.');
-      return [];
+    const now = Date.now();
+    if (this.teamListCache && now - this.teamListCache.timestamp < this.CACHE_DURATION) {
+      return this.teamListCache.value;
     }
-    const url = joinApiPath(b, 'team');
-    console.log('[BwaTeamApi] GET', url);
-    try {
-      const raw = await firstValueFrom(this.http.get<any>(url));
-      return this.normalizeTeamListResponse(raw);
-    } catch (err) {
-      console.error('[BwaTeamApi] falha GET lista:', url, err);
-      return [];
+    if (this.teamListPromise) {
+      return this.teamListPromise;
     }
+
+    this.teamListPromise = (async () => {
+      const b = this.baseUrl();
+      if (!b) {
+        console.error('[BwaTeamApi] backend_url_base vazio — defina G4U_API_BASE / BACKEND_URL_BASE no build.');
+        const v: any[] = [];
+        this.teamListCache = { timestamp: Date.now(), value: v };
+        return v;
+      }
+      const url = joinApiPath(b, 'team');
+      console.log('[BwaTeamApi] GET', url);
+      try {
+        const raw = await firstValueFrom(this.http.get<any>(url));
+        const v = this.normalizeTeamListResponse(raw);
+        this.teamListCache = { timestamp: Date.now(), value: v };
+        return v;
+      } catch (err) {
+        console.error('[BwaTeamApi] falha GET lista:', url, err);
+        const v: any[] = [];
+        this.teamListCache = { timestamp: Date.now(), value: v };
+        return v;
+      } finally {
+        this.teamListPromise = null;
+      }
+    })();
+
+    return this.teamListPromise;
   }
 
   /**
    * GET `{backend_url_base}/team/{teamId}`
    */
   async fetchTeamDetail(teamId: string): Promise<any | null> {
-    const b = this.baseUrl();
-    if (!b) {
-      console.error('[BwaTeamApi] backend_url_base vazio — defina G4U_API_BASE / BACKEND_URL_BASE no build.');
+    const tid = (teamId || '').trim();
+    if (!tid) {
       return null;
     }
-    const path = `team/${encodeURIComponent(teamId)}`;
-    const url = joinApiPath(b, path);
-    console.log('[BwaTeamApi] GET', url);
-    try {
-      return await firstValueFrom(this.http.get<any>(url));
-    } catch (err) {
-      console.warn('[BwaTeamApi] falha GET detalhe:', url, err);
-      return null;
+    const now = Date.now();
+    const cached = this.teamDetailCache.get(tid);
+    if (cached && now - cached.timestamp < this.CACHE_DURATION) {
+      return cached.value;
     }
+    const inFlight = this.teamDetailPromises.get(tid);
+    if (inFlight) {
+      return inFlight;
+    }
+
+    const p = (async () => {
+      const b = this.baseUrl();
+      if (!b) {
+        console.error('[BwaTeamApi] backend_url_base vazio — defina G4U_API_BASE / BACKEND_URL_BASE no build.');
+        this.teamDetailCache.set(tid, { timestamp: Date.now(), value: null });
+        return null;
+      }
+      const path = `team/${encodeURIComponent(tid)}`;
+      const url = joinApiPath(b, path);
+      console.log('[BwaTeamApi] GET', url);
+      try {
+        const v = await firstValueFrom(this.http.get<any>(url));
+        this.teamDetailCache.set(tid, { timestamp: Date.now(), value: v });
+        return v;
+      } catch (err) {
+        console.warn('[BwaTeamApi] falha GET detalhe:', url, err);
+        this.teamDetailCache.set(tid, { timestamp: Date.now(), value: null });
+        return null;
+      } finally {
+        this.teamDetailPromises.delete(tid);
+      }
+    })();
+
+    this.teamDetailPromises.set(tid, p);
+    return p;
   }
 
   /**
@@ -104,15 +160,47 @@ export class BwaTeamApiService {
       }
       return [];
     }
+
+    const now = Date.now();
+    const cached = this.teamUsersCache.get(tid);
+    if (cached && now - cached.timestamp < this.CACHE_DURATION) {
+      return cached.value;
+    }
+    const inFlight = this.teamUsersPromises.get(tid);
+    if (inFlight) {
+      return inFlight;
+    }
+
     const path = `team/${encodeURIComponent(tid)}/users`;
     const url = joinApiPath(b, path);
     console.log('[BwaTeamApi] GET', url);
-    try {
-      const raw = await firstValueFrom(this.http.get<any>(url));
-      return this.normalizeTeamUsersResponse(raw);
-    } catch (err) {
-      console.warn('[BwaTeamApi] falha GET users:', url, err);
-      return [];
-    }
+
+    const p = (async () => {
+      try {
+        const raw = await firstValueFrom(this.http.get<any>(url));
+        const v = this.normalizeTeamUsersResponse(raw);
+        this.teamUsersCache.set(tid, { timestamp: Date.now(), value: v });
+        return v;
+      } catch (err) {
+        console.warn('[BwaTeamApi] falha GET users:', url, err);
+        const v: any[] = [];
+        this.teamUsersCache.set(tid, { timestamp: Date.now(), value: v });
+        return v;
+      } finally {
+        this.teamUsersPromises.delete(tid);
+      }
+    })();
+
+    this.teamUsersPromises.set(tid, p);
+    return p;
+  }
+
+  clearCache(): void {
+    this.teamListCache = null;
+    this.teamListPromise = null;
+    this.teamDetailCache.clear();
+    this.teamDetailPromises.clear();
+    this.teamUsersCache.clear();
+    this.teamUsersPromises.clear();
   }
 }

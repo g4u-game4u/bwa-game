@@ -352,6 +352,12 @@
         
         <div *ngIf="!isLoadingParticipacao && participacaoClientes.length === 0" class="empty-state">
           <p>Ainda não encontramos clientes atendidos neste mês. Volte novamente mais tarde.</p>
+          <button
+            type="button"
+            class="empty-state-retry-btn"
+            (click)="retryClientesAtendidosThisMonth()">
+            Tentar carregar novamente
+          </button>
         </div>
       </c4u-card>
     </section>

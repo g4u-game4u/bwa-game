@@ -1373,6 +1373,12 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
       });
   }
 
+  retryClientesAtendidosThisMonth(): void {
+    // Recarrega contador (finished/summary) + lista (finished/deliveries / fallback)
+    this.loadClientesAtendidosCountFromFinishedSummary();
+    this.loadParticipacaoData();
+  }
+
   /**
    * Handle company selection from table
    */

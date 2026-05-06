@@ -14,6 +14,7 @@ import { GoalsConfigService } from './goals-config.service';
 import { RankingService } from './ranking.service';
 import { HelpTextsService } from './help-texts.service';
 import { FeaturesService } from './features.service';
+import { BwaTeamApiService } from './bwa-team-api.service';
 
 /**
  * Centralized cache management service.
@@ -36,6 +37,7 @@ export class CacheManagerService {
     private aclService: ACLService,
     private acessoService: AcessoService,
     private campaignService: CampaignService,
+    private bwaTeamApiService: BwaTeamApiService,
     private aliasService: AliasService,
     private goalsConfigService: GoalsConfigService,
     private rankingService: RankingService,
@@ -81,6 +83,9 @@ export class CacheManagerService {
       // Campaign cache
       this.campaignService.clearCache();
       
+      // BWA Team API cache (lista, detalhe, users)
+      this.bwaTeamApiService.clearCache();
+
       // Alias cache
       this.aliasService.clearCache();
       
