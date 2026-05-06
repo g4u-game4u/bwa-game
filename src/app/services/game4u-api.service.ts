@@ -325,9 +325,12 @@ export class Game4uApiService {
     base: HttpParams,
     q: Game4uReportsFinishedQuery
   ): HttpParams {
-    let p = base
-      .set('finished_at_start', q.finished_at_start)
-      .set('finished_at_end', q.finished_at_end);
+    let p = base;
+    const fs = (q.finished_at_start ?? '').trim();
+    const fe = (q.finished_at_end ?? '').trim();
+    if (fs && fe) {
+      p = p.set('finished_at_start', fs).set('finished_at_end', fe);
+    }
     if (this.shouldIncludeEmailQueryParam(q.email)) {
       p = p.set('email', (q.email ?? '').trim());
     }

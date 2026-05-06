@@ -331,10 +331,14 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
    * Sem `teamId`, comportamento legado: vários IDs separados por vírgula (forkJoin).
    */
   private getPlayerIds(): string[] {
+    const scope = (this.teamId ?? '').trim();
+    /** Painel equipa sem colaborador: um pedido com `team_id` e sem `email` / `user`. */
+    if (scope && !(this.playerId || '').trim()) {
+      return [''];
+    }
     if (!this.playerId) {
       return [];
     }
-    const scope = (this.teamId ?? '').trim();
     if (scope) {
       const single = this.playerId.split(',')[0]?.trim() ?? '';
       return single ? [single] : [];

@@ -219,8 +219,9 @@ export interface Game4uReportsFinishedQuery {
    * Ver `game-reports-doc.md`.
    */
   email?: string;
-  finished_at_start: string;
-  finished_at_end: string;
+  /** Opcional: omitir no `GET …/finished/deliveries` quando o backend filtra por contexto (sem `finished_at_*` na query). */
+  finished_at_start?: string;
+  finished_at_end?: string;
   /** Opcional: repete `status` na query string se necessário. */
   status?: string[];
   /** Escopo BWA / equipa — consolidado sem `email`. */

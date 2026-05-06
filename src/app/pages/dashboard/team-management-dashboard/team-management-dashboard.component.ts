@@ -191,8 +191,8 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
   /** EmpID → CNPJ 14 dígitos (participação / gamificação), alinhado ao gamification-dashboard. */
   cnpjNumberMap = new Map<string, string>();
 
-  /** Processos finalizados na temporada: `deliveries_count` do snapshot Game4U (não métricas de progresso do mês). */
-  seasonProcessosFinalizadosCount = 0;
+  /** `deliveries_count` do snapshot Game4U (reports) → «Clientes atendidos» no progresso da temporada (como no painel individual). */
+  private teamSidebarDeliveryStatsTotal?: number;
 
   /** KPI % entregas no prazo por linha: carregamento após cruzamento gamificação. */
   isLoadingParticipacaoKpi = false;
@@ -1288,6 +1288,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       this.hasSidebarError = false;
       this.sidebarErrorMessage = '';
       this.monthlyPointsGoalTarget = null;
+      this.teamSidebarDeliveryStatsTotal = undefined;
       
       console.log('📊 Loading sidebar data for collaborator:', collaboratorId);
       
@@ -1377,9 +1378,10 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
           bloqueados: Math.floor(w.bloqueados),
           desbloqueados: Math.floor(w.desbloqueados)
         };
-        this.seasonProcessosFinalizadosCount = Math.floor(
-          Number('deliveryStatsTotal' in snap.sidebar ? snap.sidebar.deliveryStatsTotal : 0) || 0
-        );
+        const dc = snap.sidebar?.deliveryStatsTotal;
+        if (typeof dc === 'number' && Number.isFinite(dc)) {
+          this.teamSidebarDeliveryStatsTotal = Math.floor(dc);
+        }
       } else {
         const totalPoints = metrics.activity.pontos;
         const unlockedPoints = Math.max(0, totalPoints - blockedPoints);
@@ -1388,7 +1390,6 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
           bloqueados: Math.floor(blockedPoints),
           desbloqueados: Math.floor(unlockedPoints)
         };
-        this.seasonProcessosFinalizadosCount = Math.floor(metrics.processo.finalizadas);
       }
 
       this.progressMetrics = {
@@ -1433,7 +1434,6 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       console.log('✅ Collaborator sidebar data loaded:', {
         points: this.seasonPoints,
         metrics: this.progressMetrics,
-        seasonProcessosFinalizadosCount: this.seasonProcessosFinalizadosCount,
         collaboratorId
       });
       this.cdr.markForCheck();
@@ -1454,6 +1454,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       this.isLoadingSidebar = true;
       this.hasSidebarError = false;
       this.sidebarErrorMessage = '';
+      this.teamSidebarDeliveryStatsTotal = undefined;
 
       console.log('📊 Loading sidebar data for team:', this.selectedTeam);
       this.monthlyPointsGoalTarget = null;
@@ -1502,9 +1503,11 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
           bloqueados: Math.floor(w.bloqueados),
           desbloqueados: Math.floor(w.desbloqueados)
         };
-        this.seasonProcessosFinalizadosCount = Math.floor(
-          Number('deliveryStatsTotal' in snap.sidebar ? snap.sidebar.deliveryStatsTotal : 0) || 0
-        );
+        const dcTeam =
+          'deliveryStatsTotal' in snap.sidebar ? snap.sidebar.deliveryStatsTotal : undefined;
+        if (typeof dcTeam === 'number' && Number.isFinite(dcTeam)) {
+          this.teamSidebarDeliveryStatsTotal = Math.floor(dcTeam);
+        }
         // Tarefas do menu lateral: `tasks_count` de `GET /game/reports/finished/summary` (equipa, `team_id`).
         const tarefasReports = Math.floor(Number(snap.sidebar.tarefasFinalizadas) || 0);
         this.progressMetrics = {
@@ -1557,9 +1560,6 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
           ),
           processosFinalizados: Math.floor(this.teamProcessMetrics.finalizadas || metrics.processosFinalizados)
         };
-        this.seasonProcessosFinalizadosCount = Math.floor(
-          this.teamProcessMetrics.finalizadas || metrics.processosFinalizados
-        );
       }
 
       this.updateFormattedSidebarData();
@@ -2426,28 +2426,36 @@ private calculateCollaboratorTotals(memberData: Array<{
     const teamTid = this.getGame4uTeamScopeId();
 
     try {
-      // Count no título: `deliveries_count` de finished/summary (mês selecionado) quando houver escopo equipa
-      if (this.playerService.usesGame4uWalletFromStats() && this.selectedMonth != null && teamTid && useTeam) {
+      // Count no título: `deliveries_count` de `GET /game/reports/finished/summary` no mês do filtro (equipa ou colaborador).
+      const countFromFinishedSummary =
+        this.playerService.usesGame4uWalletFromStats() &&
+        this.selectedMonth != null &&
+        teamTid &&
+        (useTeam || (!useTeam && !!playerId));
+
+      if (countFromFinishedSummary) {
         this.isLoadingClientesAtendidosCount = true;
         this.cdr.markForCheck();
-        this.actionLogService
-          .getTeamFinishedSummaryForMonth(teamTid, this.selectedMonth)
-          .pipe(takeUntil(this.destroy$))
-          .subscribe({
-            next: ({ deliveriesCount }) => {
-              this.clientesAtendidosThisMonthCount = Number.isFinite(deliveriesCount)
-                ? Math.floor(deliveriesCount)
-                : null;
-              this.isLoadingClientesAtendidosCount = false;
-              this.cdr.markForCheck();
-            },
-            error: err => {
-              console.error('📊 Failed to load team finished/summary deliveries_count:', err);
-              this.clientesAtendidosThisMonthCount = null;
-              this.isLoadingClientesAtendidosCount = false;
-              this.cdr.markForCheck();
-            }
-          });
+        const month = this.selectedMonth!;
+        const deliveriesCount$ = useTeam
+          ? this.actionLogService.getTeamFinishedSummaryForMonth(teamTid, month).pipe(map(r => r.deliveriesCount))
+          : this.actionLogService.getPlayerFinishedSummaryDeliveriesCountForMonth(playerId, month, teamTid);
+
+        deliveriesCount$.pipe(takeUntil(this.destroy$)).subscribe({
+          next: deliveriesCount => {
+            this.clientesAtendidosThisMonthCount = Number.isFinite(deliveriesCount)
+              ? Math.floor(deliveriesCount)
+              : null;
+            this.isLoadingClientesAtendidosCount = false;
+            this.cdr.markForCheck();
+          },
+          error: err => {
+            console.error('📊 Failed to load finished/summary deliveries_count (clientes atendidos):', err);
+            this.clientesAtendidosThisMonthCount = null;
+            this.isLoadingClientesAtendidosCount = false;
+            this.cdr.markForCheck();
+          }
+        });
       } else {
         this.clientesAtendidosThisMonthCount = null;
         this.isLoadingClientesAtendidosCount = false;
@@ -2457,13 +2465,7 @@ private calculateCollaboratorTotals(memberData: Array<{
       if (useTeam && this.playerService.usesGame4uWalletFromStats() && this.selectedMonth != null && teamTid) {
         const page = await firstValueFrom(
           this.teamAggregateService
-            .getTeamFinishedDeliveriesParticipacaoPage(
-              teamTid,
-              opts!.teamRange!.start,
-              opts!.teamRange!.end,
-              0,
-              this.participacaoPageLimit
-            )
+            .getTeamFinishedDeliveriesParticipacaoPage(teamTid, 0, this.participacaoPageLimit)
             .pipe(takeUntil(this.destroy$))
         );
         this.useParticipacaoReportsPagination = true;
@@ -2655,7 +2657,6 @@ private calculateCollaboratorTotals(memberData: Array<{
       return;
     }
     const teamTid = this.getGame4uTeamScopeId()!;
-    const range = this.calculateDateRange();
     this.isLoadingCarteiraMore = true;
     const loadGen = this.participacaoKpiLoadGen;
     this.cdr.markForCheck();
@@ -2663,8 +2664,6 @@ private calculateCollaboratorTotals(memberData: Array<{
     this.teamAggregateService
       .getTeamFinishedDeliveriesParticipacaoPage(
         teamTid,
-        range.start,
-        range.end,
         this.participacaoNextOffset,
         this.participacaoPageLimit
       )
@@ -2719,6 +2718,8 @@ private calculateCollaboratorTotals(memberData: Array<{
   }
 
   retryClientesAtendidosThisMonth(): void {
+    this.isLoadingCarteira = true;
+    this.cdr.markForCheck();
     const dateRange = this.calculateDateRange();
     if (this.selectedCollaborator) {
       void this.loadCollaboratorCarteiraData(this.selectedCollaborator, dateRange);
@@ -3441,9 +3442,18 @@ private calculateCollaboratorTotals(memberData: Array<{
     return this.teamMemberIds.join(',');
   }
 
-  /** Jogador efetivo para modais Game4U (colaborador filtrado ou gestor). */
+  /**
+   * Jogador efetivo para modais Game4U: colaborador filtrado; senão, com escopo de equipa (`team_id`),
+   * string vazia para pedidos consolidados **sem** `email` (apenas `team_id`), não o e-mail do gestor.
+   */
   get progressModalPlayerId(): string {
-    return (this.selectedCollaborator || this.getPanelPlayerId() || '').trim();
+    if (this.selectedCollaborator) {
+      return this.selectedCollaborator.trim();
+    }
+    if (this.progressModalTeamId) {
+      return '';
+    }
+    return (this.getPanelPlayerId() || '').trim();
   }
 
   get progressModalTeamId(): string | null {
@@ -3913,8 +3923,8 @@ private calculateCollaboratorTotals(memberData: Array<{
     // - tarefasFinalizadas: Game4U equipa = `tasks_count` de finished/summary; resto = progressMetrics.atividadesFinalizadas
     const empresasKpi = this.teamKPIs?.find(kpi => kpi.id === 'numero-empresas');
     const uniqueClientes = empresasKpi ? empresasKpi.current : (this.teamCarteiraClientes?.length || 0);
-    
-    this.teamSeasonProgress = {
+
+    const progress: SeasonProgress = {
       metas: {
         current: metasAchieved,
         target: totalKPIs
@@ -3923,6 +3933,13 @@ private calculateCollaboratorTotals(memberData: Array<{
       tarefasFinalizadas: this.progressMetrics?.atividadesFinalizadas || 0,
       seasonDates: this.seasonDates
     };
+    if (
+      this.teamSidebarDeliveryStatsTotal !== undefined &&
+      Number.isFinite(this.teamSidebarDeliveryStatsTotal)
+    ) {
+      progress.deliveryStatsTotal = Math.floor(this.teamSidebarDeliveryStatsTotal);
+    }
+    this.teamSeasonProgress = progress;
     
     console.log('📊 Team metas updated from KPIs:', this.teamSeasonProgress.metas, `(${metasAchieved}/${totalKPIs})`, `from ${totalKPIs} KPIs`);
     

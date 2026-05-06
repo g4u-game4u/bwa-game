@@ -58,8 +58,7 @@
         <div class="sidebar-section" *ngIf="!isLoadingSidebar && !hasSidebarError; else sidebarLoadingOrError" role="region" aria-label="Progresso da temporada da equipe">
           <c4u-season-progress
             *ngIf="teamSeasonProgress"
-            [progress]="teamSeasonProgress"
-            [processosFinalizados]="seasonProcessosFinalizadosCount">
+            [progress]="teamSeasonProgress">
           </c4u-season-progress>
           
           <c4u-shimmer *ngIf="isLoadingSidebar && !teamSeasonProgress"></c4u-shimmer>
@@ -172,13 +171,23 @@
             <span class="compact-value" *ngIf="getKpiCircularIsMissing(kpi)">?</span>
           </div>
         </ng-container>
+
+        <!-- Clientes atendidos (mesmo rótulo/ícone que o painel individual: `c4u-season-progress` + sidebar compacta) -->
+        <div
+          class="compact-item"
+          *ngIf="teamSeasonProgress && (teamSeasonProgress.deliveryStatsTotal !== undefined || isLoadingSidebar)">
+          <i class="ri-building-line compact-icon clientes"></i>
+          <span class="compact-value" [attr.aria-busy]="isLoadingSidebar">
+            <span *ngIf="isLoadingSidebar" class="app-loading-dots app-loading-dots--compact" aria-hidden="true">
+              <span>.</span><span>.</span><span>.</span>
+            </span>
+            <ng-container *ngIf="!isLoadingSidebar && teamSeasonProgress.deliveryStatsTotal !== undefined">
+              {{ teamSeasonProgress.deliveryStatsTotal | number:'1.0-0':'pt-BR' }}
+            </ng-container>
+          </span>
+        </div>
         
         <!-- Season Progress Compact -->
-        <!-- Barra de metas de Clientes na carteira - Comentada temporariamente -->
-        <!-- <div class="compact-item" *ngIf="teamSeasonProgress">
-          <i class="ri-building-line compact-icon clientes"></i>
-          <span class="compact-value">{{ teamSeasonProgress.clientes | number:'1.0-0':'pt-BR' }}</span>
-        </div> -->
         <div class="compact-item" *ngIf="teamSeasonProgress">
           <i class="ri-checkbox-circle-line compact-icon tarefas"></i>
           <span class="compact-value">{{ teamSeasonProgress.tarefasFinalizadas | number:'1.0-0':'pt-BR' }}</span>
@@ -188,10 +197,6 @@
         <div class="compact-item" *ngIf="teamAveragePoints > 0">
           <i class="ri-star-fill compact-icon media"></i>
           <span class="compact-value">{{ teamAveragePoints | number:'1.0-0':'pt-BR' }}</span>
-        </div>
-        <div class="compact-item" *ngIf="teamSeasonProgress">
-          <i class="ri-check-double-line compact-icon processos"></i>
-          <span class="compact-value">{{ seasonProcessosFinalizadosCount | number:'1.0-0':'pt-BR' }}</span>
         </div>
         
         <!-- Sidebar Toggle Button - Compact View -->
@@ -284,7 +289,7 @@
           <div *ngIf="!isLoadingGoals && !hasGoalsError">
             <!-- KPI Section -->
             <section class="dashboard-section" aria-labelledby="kpi-section-title">
-              <h3 id="kpi-section-title" class="section-title">Carteira da Equipe</h3>
+              <h3 id="kpi-section-title" class="section-title">Metas da Equipe</h3>
               
               <div class="kpi-grid" *ngIf="!isLoadingKPIs" role="group" aria-labelledby="kpi-section-title">
                 <c4u-monthly-points-goal-progress
@@ -350,7 +355,11 @@
             </section>
             
             <!-- Clientes atendidos: lista única (CNPJs com participação no período via action_log agregado); sem abas Carteira/Participação. -->
-            <section class="dashboard-section carteira-section" aria-labelledby="company-section-title">
+            <section
+              class="dashboard-section carteira-section"
+              [class.carteira-section--loading]="isLoadingCarteira"
+              [attr.aria-busy]="isLoadingCarteira ? 'true' : null"
+              aria-labelledby="company-section-title">
               <div class="section-header">
                 <h3 id="company-section-title" class="section-title">
                   Clientes atendidos este mês
@@ -423,6 +432,8 @@
                   <button
                     type="button"
                     class="empty-state-retry-btn"
+                    [disabled]="isLoadingCarteira"
+                    [attr.aria-busy]="isLoadingCarteira ? 'true' : null"
                     (click)="retryClientesAtendidosThisMonth()">
                     Tentar carregar novamente
                   </button>
