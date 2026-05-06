@@ -1050,6 +1050,10 @@
     width: 100%;
     box-sizing: border-box;
 
+    &.carteira-section--loading .carteira-card {
+      min-height: 160px;
+    }
+
     .carteira-card {
       display: block;
       width: 100%;

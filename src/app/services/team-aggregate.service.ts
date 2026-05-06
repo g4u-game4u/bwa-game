@@ -967,7 +967,7 @@ export class TeamAggregateService {
   ): Observable<{ cnpj: string; actionCount: number; processCount: number }[]> {
     const scopeId = (opts?.game4uBwaTeamScopeId ?? '').trim();
     const cacheKey = scopeId
-      ? `team_cnpj_rpt_${scopeId}_${startDate.getTime()}_${endDate.getTime()}`
+      ? `team_cnpj_rpt_${scopeId}`
       : `team_cnpj_ad_${teamId}_${startDate.getTime()}_${endDate.getTime()}`;
 
     const cached = this.getFromCache<any[]>(cacheKey);
@@ -976,12 +976,9 @@ export class TeamAggregateService {
     }
 
     if (isGame4uDataEnabled() && this.game4u.isConfigured() && scopeId) {
-      const range = this.game4u.toIsoRange(startDate, endDate);
       return this.game4u
         .getGameReportsFinishedDeliveries({
-          team_id: scopeId,
-          finished_at_start: range.start,
-          finished_at_end: range.end
+          team_id: scopeId
         })
         .pipe(
           map(rows => mapGame4uFinishedDeliveryRowsToParticipacaoCnpjRows(rows)),
@@ -1088,8 +1085,6 @@ export class TeamAggregateService {
    */
   getTeamFinishedDeliveriesParticipacaoPage(
     bwaTeamScopeId: string,
-    startDate: Date,
-    endDate: Date,
     offset: number,
     limit: number
   ): Observable<TeamFinishedDeliveriesPageResult> {
@@ -1099,12 +1094,9 @@ export class TeamAggregateService {
     if (!(isGame4uDataEnabled() && this.game4u.isConfigured()) || !scopeId) {
       return of({ items: [], offset: off, limit: lim });
     }
-    const range = this.game4u.toIsoRange(startDate, endDate);
     return this.game4u
       .getGameReportsFinishedDeliveriesPage({
         team_id: scopeId,
-        finished_at_start: range.start,
-        finished_at_end: range.end,
         offset: off,
         limit: lim
       })

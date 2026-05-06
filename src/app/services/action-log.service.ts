@@ -44,7 +44,8 @@ import {
   mapGame4uStatsToPointWallet,
   mapGame4uUserActionsToParticipacaoCnpjRows,
   isGame4uUserActionFinalizedStatus,
-  game4uActionMatchesParticipacaoModalRow
+  game4uActionMatchesParticipacaoModalRow,
+  readDeliveriesCountFromFinishedSummary
 } from './game4u-game-mapper';
 
 export interface ActionLogEntry {
@@ -844,10 +845,10 @@ export class ActionLogService {
         .pipe(
           map(summary => {
             const tarefasFinalizadas = Math.floor(Number(summary.tasks_count) || 0);
-            const dc = Math.floor(Number(summary.deliveries_count) || 0);
+            const dc = readDeliveriesCountFromFinishedSummary(summary);
             return {
               tarefasFinalizadas,
-              ...(dc > 0 ? { deliveryStatsTotal: dc } : {})
+              deliveryStatsTotal: dc
             };
           }),
           catchError(error => {
@@ -913,17 +914,13 @@ export class ActionLogService {
       .pipe(
         map(seasonSummary => {
           const tasks = Math.floor(Number(seasonSummary.tasks_count) || 0);
-          const deliveries = Math.floor(Number(seasonSummary.deliveries_count) || 0);
+          const deliveries = readDeliveriesCountFromFinishedSummary(seasonSummary);
           const pts = Math.floor(Number(seasonSummary.points_sum) || 0);
           const wallet: PointWallet = { moedas: 0, bloqueados: 0, desbloqueados: pts };
-          const deliveryStatsTotal = deliveries > 0 ? deliveries : undefined;
           return {
             wallet,
             pontosActionLog: pts,
-            sidebar:
-              deliveryStatsTotal !== undefined
-                ? { tarefasFinalizadas: tasks, deliveryStatsTotal }
-                : { tarefasFinalizadas: tasks }
+            sidebar: { tarefasFinalizadas: tasks, deliveryStatsTotal: deliveries }
           };
         }),
         catchError(error => {
@@ -1045,7 +1042,7 @@ export class ActionLogService {
       .pipe(
         map(summary => ({
           tarefasFinalizadas: Math.floor(Number(summary.tasks_count) || 0),
-          deliveriesCount: Math.floor(Number(summary.deliveries_count) || 0)
+          deliveriesCount: readDeliveriesCountFromFinishedSummary(summary)
         })),
         catchError(error => {
           console.error('Error in getTeamFinishedSummaryForMonth:', error);
@@ -1056,6 +1053,43 @@ export class ActionLogService {
 
     this.setCachedData(this.game4uTeamFinishedSummaryForMonthCache, cacheKey, request$);
     return request$;
+  }
+
+  /**
+   * `deliveries_count` de `GET /game/reports/finished/summary` para um colaborador no mês do filtro
+   * (`finished_at_*` + `email`; opcional `team_id` BWA).
+   */
+  getPlayerFinishedSummaryDeliveriesCountForMonth(
+    playerId: string,
+    month: Date,
+    teamId?: string | number | null
+  ): Observable<number> {
+    if (!(isGame4uDataEnabled() && this.game4u.isConfigured())) {
+      return of(0);
+    }
+    const q = this.game4uUserQuery(playerId, month);
+    if (!q) {
+      return of(0);
+    }
+    const email = this.resolveGame4uUserEmail(playerId);
+    if (!email) {
+      return of(0);
+    }
+    const tid = this.normalizeGame4uTeamId(teamId);
+    return this.game4u
+      .getGameReportsFinishedSummary({
+        email,
+        finished_at_start: q.start,
+        finished_at_end: q.end,
+        ...(tid ? { team_id: tid } : {})
+      })
+      .pipe(
+        map(summary => readDeliveriesCountFromFinishedSummary(summary)),
+        catchError(error => {
+          console.error('Error in getPlayerFinishedSummaryDeliveriesCountForMonth:', error);
+          return of(0);
+        })
+      );
   }
 
   /**
@@ -2133,31 +2167,37 @@ export class ActionLogService {
     teamId?: string | number | null
   ): Observable<ActivityListItem[]> {
     if (isGame4uDataEnabled() && this.game4u.isConfigured()) {
-      const baseQ = this.game4uUserQuery(playerId, month);
-      if (!baseQ) {
+      const tid = this.normalizeGame4uTeamId(teamId);
+      const teamOnly = !!tid && !(playerId || '').trim();
+      const baseQ = teamOnly ? null : this.game4uUserQuery(playerId, month);
+      if (!teamOnly && !baseQ) {
         return of([]);
       }
-      const tid = this.normalizeGame4uTeamId(teamId);
+
+      const finishedRange = (): { start: string; end: string } =>
+        teamOnly ? this.game4u.toQueryRange(month) : { start: baseQ!.start, end: baseQ!.end };
+
       if (reportUserActionsStatuses?.length) {
         const openOnly =
           reportUserActionsStatuses.every(s => s === 'PENDING' || s === 'DOING');
         const dtPrazoRange =
           month != null
             ? this.game4u.toDtPrazoMonthRange(month)
-            : { start: baseQ.start, end: baseQ.end };
+            : finishedRange();
+        const emailPart = teamOnly ? {} : { email: baseQ!.user };
         const pageQuery: Omit<Game4uReportsUserActionsQuery, 'offset' | 'limit'> = openOnly
           ? {
-              email: baseQ.user,
+              ...emailPart,
               status: reportUserActionsStatuses,
               dt_prazo_start: dtPrazoRange.start,
               dt_prazo_end: dtPrazoRange.end,
               ...(tid ? { team_id: tid } : {})
             }
           : {
-              email: baseQ.user,
+              ...emailPart,
               status: reportUserActionsStatuses,
-              finished_at_start: baseQ.start,
-              finished_at_end: baseQ.end,
+              finished_at_start: finishedRange().start,
+              finished_at_end: finishedRange().end,
               ...(tid ? { team_id: tid } : {})
             };
         return this.fetchGameReportsUserActionsAllPages(pageQuery).pipe(
@@ -2171,11 +2211,12 @@ export class ActionLogService {
         );
       }
       if (game4uActionStatus === 'DONE') {
+        const fr = finishedRange();
         return this.fetchGameReportsUserActionsAllPages({
-          email: baseQ.user,
+          ...(teamOnly ? {} : { email: baseQ!.user }),
           status: ['DONE', 'DELIVERED'],
-          finished_at_start: baseQ.start,
-          finished_at_end: baseQ.end,
+          finished_at_start: fr.start,
+          finished_at_end: fr.end,
           ...(tid ? { team_id: tid } : {})
         }).pipe(
           map(actions => mapGame4uActionsToActivityList(actions, month)),
@@ -2185,7 +2226,13 @@ export class ActionLogService {
           })
         );
       }
-      const q = game4uActionStatus ? { ...baseQ, status: game4uActionStatus } : baseQ;
+      const range = finishedRange();
+      const q: Game4uUserScopedQuery & { status?: Game4uUserActionStatus } = {
+        user: teamOnly ? '' : baseQ!.user,
+        start: range.start,
+        end: range.end,
+        ...(game4uActionStatus ? { status: game4uActionStatus } : {})
+      };
       const qScoped = tid ? ({ ...q, team_id: tid } as typeof q & { team_id: string }) : q;
       return this.game4u.getGameActions(qScoped).pipe(
         map(actions => mapGame4uActionsToActivityList(actions, month)),
@@ -2242,21 +2289,25 @@ export class ActionLogService {
     if (!reportUserActionsStatuses?.length) {
       return throwError(() => new Error('[ActionLog] getActivityListReportsPage: informe status.'));
     }
-    const baseQ = this.game4uUserQuery(playerId, month);
+    const tid = this.normalizeGame4uTeamId(teamId);
+    const teamOnly = !!tid && !(playerId || '').trim();
+    const baseQ = teamOnly ? null : this.game4uUserQuery(playerId, month);
     const lim = Math.min(Math.max(Math.floor(limit), 1), 500);
     const off = Math.max(0, Math.floor(offset));
-    if (!baseQ) {
+    if (!teamOnly && !baseQ) {
       return of({ items: [], offset: off, limit: lim });
     }
-    const tid = this.normalizeGame4uTeamId(teamId);
+    const finishedRange = (): { start: string; end: string } =>
+      teamOnly ? this.game4u.toQueryRange(month) : { start: baseQ!.start, end: baseQ!.end };
     const openOnly = reportUserActionsStatuses.every(s => s === 'PENDING' || s === 'DOING');
     const dtPrazoRange =
       month != null
         ? this.game4u.toDtPrazoMonthRange(month)
-        : { start: baseQ.start, end: baseQ.end };
+        : finishedRange();
+    const emailPart = teamOnly ? {} : { email: baseQ!.user };
     const pageQuery: Game4uReportsUserActionsQuery = openOnly
       ? {
-          email: baseQ.user,
+          ...emailPart,
           status: reportUserActionsStatuses,
           dt_prazo_start: dtPrazoRange.start,
           dt_prazo_end: dtPrazoRange.end,
@@ -2265,10 +2316,10 @@ export class ActionLogService {
           limit: lim
         }
       : {
-          email: baseQ.user,
+          ...emailPart,
           status: reportUserActionsStatuses,
-          finished_at_start: baseQ.start,
-          finished_at_end: baseQ.end,
+          finished_at_start: finishedRange().start,
+          finished_at_end: finishedRange().end,
           ...(tid ? { team_id: tid } : {}),
           offset: off,
           limit: lim
@@ -2305,12 +2356,19 @@ export class ActionLogService {
     teamId?: string | number | null
   ): Observable<ProcessListItem[]> {
     if (isGame4uDataEnabled() && this.game4u.isConfigured()) {
-      const q = this.game4uUserQuery(playerId, month);
-      if (!q) {
-        return of([]);
-      }
       const tid = this.normalizeGame4uTeamId(teamId);
-      const qScoped = tid ? ({ ...q, team_id: tid } as typeof q & { team_id: string }) : q;
+      const teamOnly = !!tid && !(playerId || '').trim();
+      let qScoped: Game4uUserScopedQuery & { team_id?: string };
+      if (teamOnly) {
+        const range = this.game4u.toQueryRange(month);
+        qScoped = { user: '', ...range, team_id: tid };
+      } else {
+        const q = this.game4uUserQuery(playerId, month);
+        if (!q) {
+          return of([]);
+        }
+        qScoped = tid ? ({ ...q, team_id: tid } as typeof q & { team_id: string }) : q;
+      }
       return this.game4u.getGameActions(qScoped).pipe(
         map(actions => mapGame4uActionsToProcessList(actions, month)),
         catchError(error => {
@@ -2465,13 +2523,10 @@ export class ActionLogService {
           if (!user) {
             return of([]);
           }
-          const range = this.game4u.toQueryRange(month);
           const tid = this.normalizeGame4uTeamId(teamId);
           const request$ = this.game4u
             .getGameReportsFinishedDeliveries({
               email: user,
-              finished_at_start: range.start,
-              finished_at_end: range.end,
               ...(tid ? { team_id: tid } : {})
             })
             .pipe(
@@ -2674,7 +2729,6 @@ export class ActionLogService {
     if (!user) {
       return of({ items: [], offset: Math.max(0, Math.floor(offset)), limit: Math.max(1, Math.floor(limit)) });
     }
-    const range = this.game4u.toQueryRange(month);
     const tid = this.normalizeGame4uTeamId(teamId);
     const off = Math.max(0, Math.floor(offset));
     const lim = Math.min(Math.max(Math.floor(limit), 1), 500);
@@ -2682,8 +2736,6 @@ export class ActionLogService {
     return this.game4u
       .getGameReportsFinishedDeliveriesPage({
         email: user,
-        finished_at_start: range.start,
-        finished_at_end: range.end,
         ...(tid ? { team_id: tid } : {}),
         offset: off,
         limit: lim

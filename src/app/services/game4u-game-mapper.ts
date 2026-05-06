@@ -10,6 +10,7 @@ import {
 import {
   Game4uDeliveryModel,
   Game4uReportsFinishedDeliveryRow,
+  Game4uReportsFinishedSummary,
   Game4uUserActionModel,
   Game4uUserActionStatsResponse,
   Game4uUserActionStatus
@@ -25,6 +26,28 @@ function readDeliveryTitle(d: Game4uDeliveryModel): string | undefined {
   if (dt) return dt;
   const t = d.title != null ? String(d.title).trim() : '';
   return t || undefined;
+}
+
+/**
+ * `deliveries_count` em `GET /game/reports/finished/summary` (variantes no JSON da API).
+ */
+export function readDeliveriesCountFromFinishedSummary(
+  summary: Game4uReportsFinishedSummary | Record<string, unknown>
+): number {
+  const o = summary as Record<string, unknown>;
+  const candidates = [
+    o['deliveries_count'],
+    o['delivery_count'],
+    o['deliveriesCount'],
+    o['deliveryCount']
+  ];
+  for (const v of candidates) {
+    const n = typeof v === 'number' ? v : typeof v === 'string' ? Number(v) : NaN;
+    if (Number.isFinite(n)) {
+      return Math.floor(n);
+    }
+  }
+  return 0;
 }
 
 /** Bucket `DONE` / `done` em `action_stats` (resposta `/game/stats`). */
