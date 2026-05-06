@@ -1078,9 +1078,13 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
           this.loadSidebarData(dateRange),
           this.loadCollaborators(),
           this.loadGoalsData(dateRange),
-          this.loadProductivityData(dateRange),
           this.loadMonthlyPointsBreakdown()
         ]);
+
+        // Productivity charts are loaded only when the user clicks the tab.
+        if (this.activeTab === 'productivity') {
+          await this.loadProductivityData(dateRange);
+        }
         
         // Load carteira data first, then KPIs (which depend on carteira)
         await this.loadTeamCarteiraData(dateRange);
@@ -1116,13 +1120,19 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       console.log('👤 Loading data for collaborator:', collaboratorId);
       
       // Load collaborator-specific data in parallel
-      await Promise.all([
+      const baseLoads: Array<Promise<void>> = [
         this.loadCollaboratorSidebarData(collaboratorId, dateRange),
         this.loadCollaborators(), // Still load collaborators list
         this.loadCollaboratorGoalsData(collaboratorId, dateRange),
-        this.loadCollaboratorProductivityData(collaboratorId, dateRange),
         this.loadMonthlyPointsBreakdown(collaboratorId)
-      ]);
+      ];
+
+      // Productivity charts are loaded only when the user clicks the tab.
+      if (this.activeTab === 'productivity') {
+        baseLoads.push(this.loadCollaboratorProductivityData(collaboratorId, dateRange));
+      }
+
+      await Promise.all(baseLoads);
       
       // Load carteira data first, then KPIs (which depend on carteira)
       await this.loadCollaboratorCarteiraData(collaboratorId, dateRange);
@@ -2662,6 +2672,15 @@ private calculateCollaboratorTotals(memberData: Array<{
       });
   }
 
+  retryClientesAtendidosThisMonth(): void {
+    const dateRange = this.calculateDateRange();
+    if (this.selectedCollaborator) {
+      void this.loadCollaboratorCarteiraData(this.selectedCollaborator, dateRange);
+      return;
+    }
+    void this.loadTeamCarteiraData(dateRange);
+  }
+
   /** Alinhado a `gamification-dashboard.buildParticipacaoBaseClientes`. */
   private buildParticipacaoBaseClientes(
     empids: string[],
@@ -3074,6 +3093,9 @@ private calculateCollaboratorTotals(memberData: Array<{
    */
   onPeriodChange(period: number): void {
     this.selectedPeriod = period;
+    if (this.activeTab !== 'productivity' || !this.productivityAnalysisTabEnabled) {
+      return;
+    }
     const dateRange = {
       start: dayjs().subtract(period, 'day').toDate(),
       end: new Date()
@@ -3259,6 +3281,9 @@ private calculateCollaboratorTotals(memberData: Array<{
    * Requirements: 14.3
    */
   retryProductivityData(): void {
+    if (this.activeTab !== 'productivity' || !this.productivityAnalysisTabEnabled) {
+      return;
+    }
     const dateRange = this.calculateDateRange();
     this.loadProductivityData(dateRange);
   }
