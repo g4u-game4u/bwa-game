@@ -22,6 +22,8 @@ interface CacheEntry {
 export class PlayerService {
   private readonly REQUEST_TIMEOUT = 15000; // 15 seconds timeout
   private readonly CACHE_DURATION = 3 * 60 * 1000; // 3 minutes cache
+  /** Cache mais longo para `/auth/user` (perfil do utilizador da sessão). */
+  private readonly CURRENT_USER_CACHE_DURATION = 15 * 60 * 1000; // 15 minutes
   
   // Cache the raw response Observable with shareReplay
   private cachedRawData: Map<string, CacheEntry> = new Map();
@@ -130,7 +132,7 @@ export class PlayerService {
     }
 
     // Return cached Observable if valid and not forcing refresh
-    if (!forceRefresh && cached && (now - cached.timestamp) < this.CACHE_DURATION) {
+    if (!forceRefresh && cached && (now - cached.timestamp) < this.CURRENT_USER_CACHE_DURATION) {
       return cached.data$;
     }
 
@@ -146,7 +148,7 @@ export class PlayerService {
           this.inFlightCurrentPlayer$ = null;
         }
       }),
-      shareReplay({ bufferSize: 1, refCount: true, windowTime: this.CACHE_DURATION }),
+      shareReplay({ bufferSize: 1, refCount: true, windowTime: this.CURRENT_USER_CACHE_DURATION }),
       catchError(error => {
         console.error('❌ Error fetching player/me:', error);
         this.cachedRawData.delete(cacheKey);

@@ -104,6 +104,18 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
   isLoadingSidebar: boolean = false;
   isLoadingGoals: boolean = false;
   isLoadingProductivity: boolean = false;
+
+  /** Loading overlay microcopy (rotate while loading). */
+  loadingTitle: string = 'Carregando dados…';
+  loadingSubtitle: string = 'Aquecendo a gamificação e somando pontos.';
+  private loadingMessageTimer: number | null = null;
+  private loadingMessageIdx = 0;
+  private readonly loadingMessages: Array<{ title: string; subtitle: string }> = [
+    { title: 'Carregando o painel…', subtitle: 'Somando pontos e alinhando metas.' },
+    { title: 'Puxando dados do time…', subtitle: 'Conferindo tarefas finalizadas e pendências.' },
+    { title: 'Preparando o placar…', subtitle: 'Organizando clientes atendidos e KPIs.' },
+    { title: 'Quase lá…', subtitle: 'Ajustando o filtro do mês e consolidando a equipe.' }
+  ];
   
   // Error states
   hasError: boolean = false;
@@ -292,8 +304,38 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.removeProductivityTabBodyToast();
+    this.stopLoadingMessageRotation();
     this.destroy$.next();
     this.destroy$.complete();
+  }
+
+  private startLoadingMessageRotation(): void {
+    this.stopLoadingMessageRotation();
+    // seed immediately
+    this.loadingMessageIdx = 0;
+    const first = this.loadingMessages[0];
+    if (first) {
+      this.loadingTitle = first.title;
+      this.loadingSubtitle = first.subtitle;
+    }
+    this.loadingMessageTimer = window.setInterval(() => {
+      if (!this.isLoading) {
+        this.stopLoadingMessageRotation();
+        return;
+      }
+      this.loadingMessageIdx = (this.loadingMessageIdx + 1) % this.loadingMessages.length;
+      const m = this.loadingMessages[this.loadingMessageIdx];
+      this.loadingTitle = m.title;
+      this.loadingSubtitle = m.subtitle;
+      this.cdr.markForCheck();
+    }, 1200);
+  }
+
+  private stopLoadingMessageRotation(): void {
+    if (this.loadingMessageTimer != null) {
+      window.clearInterval(this.loadingMessageTimer);
+      this.loadingMessageTimer = null;
+    }
   }
 
   /**
@@ -316,6 +358,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
   private async initializeDashboard(): Promise<void> {
     try {
       this.isLoading = true;
+      this.startLoadingMessageRotation();
       console.log('🚀 Initializing team management dashboard...');
 
       await this.ensureSessionReady();
@@ -340,6 +383,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       console.error('❌ Error initializing dashboard:', error);
     } finally {
       this.isLoading = false;
+      this.stopLoadingMessageRotation();
       console.log('🏁 Dashboard initialization complete, isLoading:', this.isLoading);
       this.cdr.markForCheck();
     }
@@ -1054,6 +1098,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
     
     try {
       this.isLoading = true;
+      this.startLoadingMessageRotation();
       this.companyKpiService.prefetchGamificacaoSnapshot();
 
       // Calculate date range based on selected month
@@ -1102,6 +1147,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       console.error('Error loading team data:', error);
     } finally {
       this.isLoading = false;
+      this.stopLoadingMessageRotation();
       this.cdr.markForCheck();
     }
   }

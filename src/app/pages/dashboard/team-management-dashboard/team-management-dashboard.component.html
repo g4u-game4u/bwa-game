@@ -585,10 +585,16 @@
   <!-- Global Loading Overlay -->
   <div class="loading-overlay" *ngIf="isLoading" role="status" aria-live="polite" aria-atomic="true">
     <div class="loading-content">
-      <div class="spinner-border text-light" role="status" aria-hidden="true">
-        <span class="sr-only">Carregando...</span>
+      <div class="loading-badge" aria-hidden="true">
+        <span class="loading-badge__icon">⚡</span>
+        <span class="loading-badge__icon loading-badge__icon--delay">🏁</span>
+        <span class="loading-badge__icon loading-badge__icon--delay2">🎯</span>
       </div>
-      <p class="loading-text">Carregando dados...</p>
+      <div class="loading-title">{{ loadingTitle }}</div>
+      <div class="loading-subtitle">{{ loadingSubtitle }}</div>
+      <div class="loading-bar" aria-hidden="true">
+        <div class="loading-bar__fill"></div>
+      </div>
     </div>
   </div>
 </div>
