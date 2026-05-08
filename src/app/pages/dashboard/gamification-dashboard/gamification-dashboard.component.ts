@@ -547,7 +547,9 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     this.sidebarSeasonDetailsPending = true;
     this.cdr.markForCheck();
     this.actionLogService
-      .getSeasonProgressSidebarDetails(playerId, this.selectedMonth)
+      // Progresso "da temporada" não deve variar com o mês selecionado.
+      // Mantemos os dados mensais em `loadMonthDependentData` (KPIs / progresso / participação).
+      .getSeasonProgressSidebarDetails(playerId, undefined)
       .pipe(
         takeUntil(this.destroy$),
         finalize(() => {
