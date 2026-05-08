@@ -3,7 +3,8 @@ import {
   MANAGEMENT_TEAM_IDS,
   determineUserProfile,
   getUserOwnTeamId,
-  getAccessibleTeamIds
+  getAccessibleTeamIds,
+  extractObserverTeamIdsFromSessionUser
 } from './user-profile';
 import { TeamCodes } from '../services/team-code.service';
 
@@ -451,6 +452,30 @@ describe('User Profile Utility', () => {
       const accessible = getAccessibleTeamIds(teams, UserProfile.GESTOR, CUSTOM_CODES);
       
       expect(accessible).toEqual(['team_X', 'team_Y', 'team_Z']);
+    });
+  });
+
+  describe('extractObserverTeamIdsFromSessionUser()', () => {
+    it('should return empty for null/invalid user', () => {
+      expect(extractObserverTeamIdsFromSessionUser(null)).toEqual([]);
+      expect(extractObserverTeamIdsFromSessionUser(undefined)).toEqual([]);
+    });
+
+    it('should read observer_teams and dedupe', () => {
+      expect(
+        extractObserverTeamIdsFromSessionUser({
+          observer_teams: ['t1', 't2', 't1']
+        })
+      ).toEqual(['t1', 't2']);
+    });
+
+    it('should read camelCase and extra.observer_teams', () => {
+      expect(
+        extractObserverTeamIdsFromSessionUser({
+          observerTeams: ['a'],
+          extra: { observer_teams: ['b', { _id: 'c' }] }
+        })
+      ).toEqual(['a', 'b', 'c']);
     });
   });
 
