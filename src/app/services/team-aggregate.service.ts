@@ -978,7 +978,9 @@ export class TeamAggregateService {
     if (isGame4uDataEnabled() && this.game4u.isConfigured() && scopeId) {
       return this.game4u
         .getGameReportsFinishedDeliveries({
-          team_id: scopeId
+          team_id: scopeId,
+          finished_at_start: startDate.toISOString(),
+          finished_at_end: endDate.toISOString()
         })
         .pipe(
           map(rows => mapGame4uFinishedDeliveryRowsToParticipacaoCnpjRows(rows)),
@@ -1085,18 +1087,23 @@ export class TeamAggregateService {
    */
   getTeamFinishedDeliveriesParticipacaoPage(
     bwaTeamScopeId: string,
+    month: Date,
     offset: number,
     limit: number
   ): Observable<TeamFinishedDeliveriesPageResult> {
     const scopeId = (bwaTeamScopeId ?? '').trim();
+    const monthAnchor = month instanceof Date ? month : new Date(month);
     const off = Math.max(0, Math.floor(offset));
     const lim = Math.min(Math.max(Math.floor(limit), 1), 500);
     if (!(isGame4uDataEnabled() && this.game4u.isConfigured()) || !scopeId) {
       return of({ items: [], offset: off, limit: lim });
     }
+    const range = this.game4u.toQueryRange(monthAnchor);
     return this.game4u
       .getGameReportsFinishedDeliveriesPage({
         team_id: scopeId,
+        finished_at_start: range.start,
+        finished_at_end: range.end,
         offset: off,
         limit: lim
       })

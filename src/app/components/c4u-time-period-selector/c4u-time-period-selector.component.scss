@@ -16,6 +16,8 @@
   }
 
   .period-select {
+    // Ajuda browsers a renderizar o dropdown nativo em modo escuro
+    color-scheme: dark;
     background-color: rgba($primary-electric-blue, 0.05);
     border: 1px solid rgba($primary-electric-blue, 0.2);
     border-radius: $border-radius-sm;
@@ -47,9 +49,16 @@
     }
 
     option {
-      background-color: $surface;
+      // No Windows/Chrome o dropdown nativo tende a ignorar transparência.
+      // Use um fundo sólido do tema para manter identidade visual.
+      background-color: $bg-secondary;
       color: $text-primary;
       padding: $spacing-sm;
+    }
+
+    option:checked {
+      background-color: rgba($primary-electric-blue, 0.25);
+      color: $text-primary;
     }
   }
 }

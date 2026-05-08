@@ -1817,6 +1817,9 @@ export class ActionLogService {
               const pendingFromReport = Math.floor(Number(open.tasks_count) || 0);
               const finalizadas = Math.floor(Number(finished.tasks_count) || 0);
               const pts = Math.floor(Number(finished.points_sum) || 0);
+              // Meta de pontos do mês (equipa): soma de pontos já concluídos + estimativa do que está em aberto.
+              // O endpoint open/summary não devolve points_sum; usamos a regra provisória de pontos por atividade.
+              const ptsAllStatuses = pts + pendingFromReport * PONTOS_POR_ATIVIDADE_FINALIZADA_ACTION_LOG;
               const procFin = Math.floor(Number(finished.deliveries_count) || 0);
               const openDel = Math.floor(Number(open.delivery_count) || 0);
               const processo: ProcessMetrics = {
@@ -1831,7 +1834,7 @@ export class ActionLogService {
                   finalizadas,
                   pontos: pts,
                   pontosDone: pts,
-                  pontosTodosStatus: pts
+                  pontosTodosStatus: ptsAllStatuses
                 },
                 processo
               };

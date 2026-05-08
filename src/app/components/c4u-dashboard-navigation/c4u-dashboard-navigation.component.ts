@@ -27,12 +27,12 @@ export class C4uDashboardNavigationComponent implements OnInit {
       route: '/dashboard',
       icon: 'ri-dashboard-line'
     },
-    {
-      label: 'Gestão de Equipe',
-      route: '/dashboard/team-management',
-      icon: 'ri-team-line',
-      requiresRole: ROLES_LIST.ACCESS_TEAM_MANAGEMENT
-    },
+    // {
+    //   label: 'Gestão de Equipe',
+    //   route: '/dashboard/team-management',
+    //   icon: 'ri-team-line',
+    //   requiresRole: ROLES_LIST.ACCESS_TEAM_MANAGEMENT
+    // },
     {
       label: 'Supervisor',
       route: '/dashboard/supervisor',

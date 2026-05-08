@@ -9,11 +9,17 @@ import { Component, EventEmitter, Input, Output, ChangeDetectionStrategy } from 
 export class C4uTimePeriodSelectorComponent {
   @Input() periods: number[] = [7, 15, 30, 60, 90];
   @Input() selectedPeriod: number = 30;
+  /** When true, adds a "Mês atual" option to the select. */
+  @Input() includeCurrentMonthOption: boolean = false;
+
+  /** Optional explicit selection value (e.g. 0 for "Mês atual"). */
+  @Input() selectedValue?: number;
+
   @Output() periodSelected = new EventEmitter<number>();
 
   onPeriodChange(event: Event): void {
     const target = event.target as HTMLSelectElement;
-    const period = Number(target.value);
+    const period = Number(String(target.value));
     this.selectedPeriod = period;
     this.periodSelected.emit(period);
   }

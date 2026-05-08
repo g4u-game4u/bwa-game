@@ -44,41 +44,37 @@
         </div>
 
         <!-- Point Wallet -->
-        <div class="sidebar-section" *ngIf="!isLoadingSidebar && !hasSidebarError; else sidebarLoadingOrError" role="region" aria-label="Carteira de pontos da equipe">
+        <div class="sidebar-section" role="region" aria-label="Carteira de pontos da equipe">
           <c4u-point-wallet
-            *ngIf="teamPointWallet"
-            [points]="teamPointWallet"
-            [mediaPontos]="selectedCollaborator ? undefined : teamAveragePoints">
+            *ngIf="!hasSidebarError && (teamPointWallet || sidebarWalletPending)"
+            [points]="teamPointWallet || emptyPointWallet"
+            [mediaPontos]="selectedCollaborator ? undefined : teamAveragePoints"
+            [isPending]="sidebarWalletPending">
           </c4u-point-wallet>
-          
-          <c4u-shimmer *ngIf="isLoadingSidebar && !teamPointWallet"></c4u-shimmer>
+
+          <c4u-shimmer *ngIf="!hasSidebarError && isLoadingSidebar && !teamPointWallet && !sidebarWalletPending"></c4u-shimmer>
         </div>
         
         <!-- Season Progress -->
-        <div class="sidebar-section" *ngIf="!isLoadingSidebar && !hasSidebarError; else sidebarLoadingOrError" role="region" aria-label="Progresso da temporada da equipe">
+        <div class="sidebar-section" role="region" aria-label="Progresso da temporada da equipe">
           <c4u-season-progress
-            *ngIf="teamSeasonProgress"
-            [progress]="teamSeasonProgress">
+            *ngIf="!hasSidebarError && (teamSeasonProgress || sidebarSeasonStatsPending)"
+            [progress]="teamSeasonProgress || emptySeasonProgress"
+            [isPending]="sidebarSeasonStatsPending">
           </c4u-season-progress>
-          
-          <c4u-shimmer *ngIf="isLoadingSidebar && !teamSeasonProgress"></c4u-shimmer>
+
+          <c4u-shimmer *ngIf="!hasSidebarError && isLoadingSidebar && !teamSeasonProgress"></c4u-shimmer>
         </div>
         
 
-        <ng-template #sidebarLoadingOrError>
-          <div class="sidebar-section" *ngIf="isLoadingSidebar" role="status" aria-live="polite">
-            <c4u-shimmer></c4u-shimmer>
-          </div>
-          
-          <div class="sidebar-section" *ngIf="hasSidebarError && !isLoadingSidebar" role="alert" aria-live="assertive">
-            <c4u-error-message
-              [message]="sidebarErrorMessage"
-              [showRetry]="true"
-              [isRetrying]="isLoadingSidebar"
-              (retry)="retrySidebarData()">
-            </c4u-error-message>
-          </div>
-        </ng-template>
+        <div class="sidebar-section" *ngIf="hasSidebarError && !isLoadingSidebar" role="alert" aria-live="assertive">
+          <c4u-error-message
+            [message]="sidebarErrorMessage"
+            [showRetry]="true"
+            [isRetrying]="isLoadingSidebar"
+            (retry)="retrySidebarData()">
+          </c4u-error-message>
+        </div>
         
         <!-- Meta Configuration Section — comentado (pedido produto) -->
         <!--
@@ -221,10 +217,10 @@
       <button 
         class="refresh-button"
         (click)="refreshData()"
-        [disabled]="isLoading"
-        [attr.aria-label]="isLoading ? 'Atualizando dados...' : 'Atualizar dados do dashboard'"
+        [disabled]="isAnyLoading"
+        [attr.aria-label]="isAnyLoading ? 'Atualizando dados...' : 'Atualizar dados do dashboard'"
         title="Atualizar dados">
-        <i class="ri-refresh-line" [class.spinning]="isLoading" aria-hidden="true"></i>
+        <i class="ri-refresh-line" [class.spinning]="isAnyLoading" aria-hidden="true"></i>
         <span class="refresh-time" *ngIf="lastRefresh">{{ getLastRefreshTime() }}</span>
       </button>
       <button 
@@ -291,12 +287,17 @@
             <section class="dashboard-section" aria-labelledby="kpi-section-title">
               <h3 id="kpi-section-title" class="section-title">Metas da Equipe</h3>
               
-              <div class="kpi-grid" *ngIf="!isLoadingKPIs" role="group" aria-labelledby="kpi-section-title">
+              <div
+                class="kpi-grid"
+                role="group"
+                aria-labelledby="kpi-section-title"
+                [attr.aria-busy]="isLoadingKPIs">
                 <c4u-monthly-points-goal-progress
                   [label]="monthlyPointsProgressLabel"
                   [helpDescription]="teamMonthlyPointsHelpText"
                   [current]="monthlyPointsProgressData.current"
                   [target]="monthlyPointsProgressData.target"
+                  [isLoading]="isLoadingMonthlyPointsProgress"
                   [color]="monthlyPointsGoalColor">
                 </c4u-monthly-points-goal-progress>
                 <!--
@@ -316,26 +317,34 @@
                     </c4u-kpi-circular-progress>
                   </ng-container>
                 -->
-                <ng-container *ngFor="let kpi of teamKPIs; let i = index; trackBy: trackByKpiId">
+                <ng-container *ngIf="!isLoadingKPIs">
+                  <ng-container *ngFor="let kpi of teamKPIs; let i = index; trackBy: trackByKpiId">
+                    <c4u-kpi-circular-progress
+                      *ngIf="kpi.id !== 'numero-empresas'"
+                      [label]="kpi.label"
+                      [current]="kpi.id === 'entregas-prazo' ? getKpiCurrentValue(kpi) : roundValue(getKpiCurrentValue(kpi))"
+                      [target]="roundValue(kpi.target)"
+                      [superTarget]="kpi.superTarget ? roundValue(kpi.superTarget) : undefined"
+                      [color]="kpi.color"
+                      [unit]="kpi.unit"
+                      [colorIndex]="i"
+                      [isPending]="isEntregasPrazoCircularPending(kpi)"
+                      [isMissing]="getKpiCircularIsMissing(kpi)">
+                    </c4u-kpi-circular-progress>
+                  </ng-container>
+                </ng-container>
+
+                <ng-container *ngIf="isLoadingKPIs">
                   <c4u-kpi-circular-progress
-                    *ngIf="kpi.id !== 'numero-empresas'"
-                    [label]="kpi.label"
-                    [current]="kpi.id === 'entregas-prazo' ? getKpiCurrentValue(kpi) : roundValue(getKpiCurrentValue(kpi))"
-                    [target]="roundValue(kpi.target)"
-                    [superTarget]="kpi.superTarget ? roundValue(kpi.superTarget) : undefined"
-                    [color]="kpi.color"
-                    [unit]="kpi.unit"
+                    *ngFor="let slot of kpiLoadingSlots; let i = index"
+                    [label]="'Carregando metas'"
+                    [current]="0"
+                    [target]="1"
+                    [color]="'gray'"
                     [colorIndex]="i"
-                    [isPending]="isEntregasPrazoCircularPending(kpi)"
-                    [isMissing]="getKpiCircularIsMissing(kpi)">
+                    [isPending]="true">
                   </c4u-kpi-circular-progress>
                 </ng-container>
-              </div>
-              
-              <div class="kpi-grid" *ngIf="isLoadingKPIs">
-                <c4u-shimmer></c4u-shimmer>
-                <c4u-shimmer></c4u-shimmer>
-                <c4u-shimmer></c4u-shimmer>
               </div>
             </section>
             
@@ -469,6 +478,8 @@
               <c4u-time-period-selector
                 [periods]="[7, 15, 30, 60, 90]"
                 [selectedPeriod]="selectedPeriod"
+                [selectedValue]="productivityPeriodSelection"
+                [includeCurrentMonthOption]="true"
                 (periodSelected)="onPeriodChange($event)"
                 aria-label="Selecionar período de análise">
               </c4u-time-period-selector>
@@ -476,33 +487,175 @@
 
             <!-- Activities Chart -->
             <section class="dashboard-section" aria-labelledby="activities-chart-title">
-              <h3 id="activities-chart-title" class="section-title">Volume de Atividades por Dia</h3>
-              <c4u-productivity-analysis-tab
-                [graphData]="graphData"
-                [chartDatasetsInput]="graphDatasets"
-                [selectedPeriod]="selectedPeriod"
-                [isLoading]="isLoadingProductivity"
-                [externalChartType]="'line'"
-                [hideHeader]="true">
-              </c4u-productivity-analysis-tab>
+              <div class="section-header section-header--with-toggle">
+                <h3 id="activities-chart-title" class="section-title">Volume de Atividades por Dia</h3>
+                <div class="data-view-toggle" role="group" aria-label="Alternar visualização do volume de atividades">
+                  <button
+                    type="button"
+                    class="toggle-btn"
+                    [class.active]="productivityActivitiesDailyView === 'chart'"
+                    (click)="setProductivityChartView('activitiesDaily', 'chart')"
+                    [attr.aria-pressed]="productivityActivitiesDailyView === 'chart'"
+                    [disabled]="isLoadingProductivity">
+                    <i class="ri-line-chart-line" aria-hidden="true"></i>
+                    <span class="toggle-text">Gráfico</span>
+                  </button>
+                  <button
+                    type="button"
+                    class="toggle-btn"
+                    [class.active]="productivityActivitiesDailyView === 'table'"
+                    (click)="setProductivityChartView('activitiesDaily', 'table')"
+                    [attr.aria-pressed]="productivityActivitiesDailyView === 'table'"
+                    [disabled]="isLoadingProductivity">
+                    <i class="ri-table-line" aria-hidden="true"></i>
+                    <span class="toggle-text">Tabela</span>
+                  </button>
+                </div>
+              </div>
+
+              <ng-container *ngIf="productivityActivitiesDailyView === 'chart'; else activitiesDailyTable">
+                <c4u-productivity-analysis-tab
+                  [graphData]="graphData"
+                  [chartDatasetsInput]="graphDatasets"
+                  [selectedPeriod]="selectedPeriod"
+                  [isLoading]="isLoadingProductivity"
+                  [externalChartType]="'line'"
+                  [hideHeader]="true">
+                </c4u-productivity-analysis-tab>
+              </ng-container>
+
+              <ng-template #activitiesDailyTable>
+                <div class="heatmap-table-wrap" role="region" aria-label="Tabela (heatmap) de volume de atividades por dia">
+                  <table class="heatmap-table">
+                    <thead>
+                      <tr>
+                        <th class="heatmap-table__sticky-col" scope="col">Pessoa</th>
+                        <th
+                          *ngFor="let col of productivityActivitiesDailyTable.columns; trackBy: trackByHeatmapColumn"
+                          scope="col"
+                          [title]="col.tooltip">
+                          {{ col.label }}
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr *ngFor="let row of productivityActivitiesDailyTable.rows; trackBy: trackByHeatmapRow">
+                        <th class="heatmap-table__sticky-col heatmap-table__row-label" scope="row" [title]="row.memberName">
+                          {{ row.memberName }}
+                        </th>
+                        <td
+                          *ngFor="let col of productivityActivitiesDailyTable.columns; let i = index; trackBy: trackByHeatmapColumn"
+                          class="heatmap-table__cell"
+                          [ngStyle]="getHeatmapCellStyle(row.values[i] || 0, productivityActivitiesDailyTable.maxValue)"
+                          [title]="(row.values[i] || 0) + ' atividades em ' + col.tooltip">
+                          {{ row.values[i] || 0 }}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </ng-template>
             </section>
 
             <!-- Points Chart -->
             <section class="dashboard-section" aria-labelledby="points-chart-title">
-              <h3 id="points-chart-title" class="section-title">Volume de Pontos por Dia</h3>
-              <c4u-productivity-analysis-tab
-                [graphData]="pointsGraphData"
-                [chartDatasetsInput]="pointsGraphDatasets"
-                [selectedPeriod]="selectedPeriod"
-                [isLoading]="isLoadingProductivity"
-                [externalChartType]="'line'"
-                [hideHeader]="true">
-              </c4u-productivity-analysis-tab>
+              <div class="section-header section-header--with-toggle">
+                <h3 id="points-chart-title" class="section-title">Volume de Pontos por Dia</h3>
+                <div class="data-view-toggle" role="group" aria-label="Alternar visualização do volume de pontos">
+                  <button
+                    type="button"
+                    class="toggle-btn"
+                    [class.active]="productivityPointsDailyView === 'chart'"
+                    (click)="setProductivityChartView('pointsDaily', 'chart')"
+                    [attr.aria-pressed]="productivityPointsDailyView === 'chart'"
+                    [disabled]="isLoadingProductivity">
+                    <i class="ri-line-chart-line" aria-hidden="true"></i>
+                    <span class="toggle-text">Gráfico</span>
+                  </button>
+                  <button
+                    type="button"
+                    class="toggle-btn"
+                    [class.active]="productivityPointsDailyView === 'table'"
+                    (click)="setProductivityChartView('pointsDaily', 'table')"
+                    [attr.aria-pressed]="productivityPointsDailyView === 'table'"
+                    [disabled]="isLoadingProductivity">
+                    <i class="ri-table-line" aria-hidden="true"></i>
+                    <span class="toggle-text">Tabela</span>
+                  </button>
+                </div>
+              </div>
+
+              <ng-container *ngIf="productivityPointsDailyView === 'chart'; else pointsDailyTable">
+                <c4u-productivity-analysis-tab
+                  [graphData]="pointsGraphData"
+                  [chartDatasetsInput]="pointsGraphDatasets"
+                  [selectedPeriod]="selectedPeriod"
+                  [isLoading]="isLoadingProductivity"
+                  [externalChartType]="'line'"
+                  [hideHeader]="true">
+                </c4u-productivity-analysis-tab>
+              </ng-container>
+
+              <ng-template #pointsDailyTable>
+                <div class="heatmap-table-wrap" role="region" aria-label="Tabela (heatmap) de volume de pontos por dia">
+                  <table class="heatmap-table">
+                    <thead>
+                      <tr>
+                        <th class="heatmap-table__sticky-col" scope="col">Pessoa</th>
+                        <th
+                          *ngFor="let col of productivityPointsDailyTable.columns; trackBy: trackByHeatmapColumn"
+                          scope="col"
+                          [title]="col.tooltip">
+                          {{ col.label }}
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr *ngFor="let row of productivityPointsDailyTable.rows; trackBy: trackByHeatmapRow">
+                        <th class="heatmap-table__sticky-col heatmap-table__row-label" scope="row" [title]="row.memberName">
+                          {{ row.memberName }}
+                        </th>
+                        <td
+                          *ngFor="let col of productivityPointsDailyTable.columns; let i = index; trackBy: trackByHeatmapColumn"
+                          class="heatmap-table__cell"
+                          [ngStyle]="getHeatmapCellStyle(row.values[i] || 0, productivityPointsDailyTable.maxValue)"
+                          [title]="(row.values[i] || 0) + ' pontos em ' + col.tooltip">
+                          {{ row.values[i] || 0 }}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </ng-template>
             </section>
 
             <!-- Activities by Collaborator Chart -->
             <section class="dashboard-section" aria-labelledby="activities-by-collaborator-chart-title">
-              <h3 id="activities-by-collaborator-chart-title" class="section-title">Total de Atividades por Colaborador</h3>
+              <div class="section-header section-header--with-toggle">
+                <h3 id="activities-by-collaborator-chart-title" class="section-title">Total de Atividades por Colaborador</h3>
+                <div class="data-view-toggle" role="group" aria-label="Alternar visualização do total de atividades por colaborador">
+                  <button
+                    type="button"
+                    class="toggle-btn"
+                    [class.active]="productivityActivitiesByCollaboratorView === 'chart'"
+                    (click)="setProductivityChartView('activitiesByCollaborator', 'chart')"
+                    [attr.aria-pressed]="productivityActivitiesByCollaboratorView === 'chart'"
+                    [disabled]="isLoadingProductivity">
+                    <i class="ri-bar-chart-line" aria-hidden="true"></i>
+                    <span class="toggle-text">Gráfico</span>
+                  </button>
+                  <button
+                    type="button"
+                    class="toggle-btn"
+                    [class.active]="productivityActivitiesByCollaboratorView === 'table'"
+                    (click)="setProductivityChartView('activitiesByCollaborator', 'table')"
+                    [attr.aria-pressed]="productivityActivitiesByCollaboratorView === 'table'"
+                    [disabled]="isLoadingProductivity">
+                    <i class="ri-table-line" aria-hidden="true"></i>
+                    <span class="toggle-text">Tabela</span>
+                  </button>
+                </div>
+              </div>
               <div class="chart-container" [class.loading]="isLoadingProductivity">
                 <div *ngIf="isLoadingProductivity" class="loading-overlay" role="status" aria-live="polite">
                   <div class="spinner-border text-primary" role="status" aria-hidden="true">
@@ -510,15 +663,37 @@
                   </div>
                   <p class="loading-text">Carregando dados do gráfico...</p>
                 </div>
-                <div *ngIf="!isLoadingProductivity && activitiesByCollaboratorDatasets.length > 0" class="chart-wrapper">
-                  <c4u-grafico-barras
-                    [labels]="activitiesByCollaboratorLabels"
-                    [datasets]="activitiesByCollaboratorDatasets"
-                    [showLegend]="false"
-                    role="img"
-                    [attr.aria-label]="'Gráfico de barras mostrando total de atividades por colaborador'">
-                  </c4u-grafico-barras>
-                </div>
+                <ng-container *ngIf="!isLoadingProductivity && activitiesByCollaboratorDatasets.length > 0">
+                  <div *ngIf="productivityActivitiesByCollaboratorView === 'chart'; else activitiesByCollaboratorTable" class="chart-wrapper">
+                    <c4u-grafico-barras
+                      [labels]="activitiesByCollaboratorLabels"
+                      [datasets]="activitiesByCollaboratorDatasets"
+                      [showLegend]="false"
+                      role="img"
+                      [attr.aria-label]="'Gráfico de barras mostrando total de atividades por colaborador'">
+                    </c4u-grafico-barras>
+                  </div>
+                  <ng-template #activitiesByCollaboratorTable>
+                    <div class="simple-table-wrap" role="region" aria-label="Tabela de total de atividades por colaborador">
+                      <table class="simple-table">
+                        <thead>
+                          <tr>
+                            <th scope="col">Pessoa</th>
+                            <th scope="col" class="simple-table__num">Total</th>
+                            <th scope="col" class="simple-table__num">%</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr *ngFor="let row of productivityActivitiesByCollaboratorTable">
+                            <th scope="row" [title]="row.name">{{ row.name }}</th>
+                            <td class="simple-table__num">{{ row.total }}</td>
+                            <td class="simple-table__num">{{ row.percent }}%</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </ng-template>
+                </ng-container>
                 <div *ngIf="!isLoadingProductivity && activitiesByCollaboratorDatasets.length === 0" class="empty-state" role="status" aria-live="polite">
                   <p class="empty-text">Nenhum dado disponível</p>
                 </div>
@@ -527,7 +702,31 @@
 
             <!-- Points by Collaborator Chart -->
             <section class="dashboard-section" aria-labelledby="points-by-collaborator-chart-title">
-              <h3 id="points-by-collaborator-chart-title" class="section-title">Total de Pontos por Colaborador</h3>
+              <div class="section-header section-header--with-toggle">
+                <h3 id="points-by-collaborator-chart-title" class="section-title">Total de Pontos por Colaborador</h3>
+                <div class="data-view-toggle" role="group" aria-label="Alternar visualização do total de pontos por colaborador">
+                  <button
+                    type="button"
+                    class="toggle-btn"
+                    [class.active]="productivityPointsByCollaboratorView === 'chart'"
+                    (click)="setProductivityChartView('pointsByCollaborator', 'chart')"
+                    [attr.aria-pressed]="productivityPointsByCollaboratorView === 'chart'"
+                    [disabled]="isLoadingProductivity">
+                    <i class="ri-bar-chart-line" aria-hidden="true"></i>
+                    <span class="toggle-text">Gráfico</span>
+                  </button>
+                  <button
+                    type="button"
+                    class="toggle-btn"
+                    [class.active]="productivityPointsByCollaboratorView === 'table'"
+                    (click)="setProductivityChartView('pointsByCollaborator', 'table')"
+                    [attr.aria-pressed]="productivityPointsByCollaboratorView === 'table'"
+                    [disabled]="isLoadingProductivity">
+                    <i class="ri-table-line" aria-hidden="true"></i>
+                    <span class="toggle-text">Tabela</span>
+                  </button>
+                </div>
+              </div>
               <div class="chart-container" [class.loading]="isLoadingProductivity">
                 <div *ngIf="isLoadingProductivity" class="loading-overlay" role="status" aria-live="polite">
                   <div class="spinner-border text-primary" role="status" aria-hidden="true">
@@ -535,15 +734,37 @@
                   </div>
                   <p class="loading-text">Carregando dados do gráfico...</p>
                 </div>
-                <div *ngIf="!isLoadingProductivity && pointsByCollaboratorDatasets.length > 0" class="chart-wrapper">
-                  <c4u-grafico-barras
-                    [labels]="pointsByCollaboratorLabels"
-                    [datasets]="pointsByCollaboratorDatasets"
-                    [showLegend]="false"
-                    role="img"
-                    [attr.aria-label]="'Gráfico de barras mostrando total de pontos por colaborador'">
-                  </c4u-grafico-barras>
-                </div>
+                <ng-container *ngIf="!isLoadingProductivity && pointsByCollaboratorDatasets.length > 0">
+                  <div *ngIf="productivityPointsByCollaboratorView === 'chart'; else pointsByCollaboratorTable" class="chart-wrapper">
+                    <c4u-grafico-barras
+                      [labels]="pointsByCollaboratorLabels"
+                      [datasets]="pointsByCollaboratorDatasets"
+                      [showLegend]="false"
+                      role="img"
+                      [attr.aria-label]="'Gráfico de barras mostrando total de pontos por colaborador'">
+                    </c4u-grafico-barras>
+                  </div>
+                  <ng-template #pointsByCollaboratorTable>
+                    <div class="simple-table-wrap" role="region" aria-label="Tabela de total de pontos por colaborador">
+                      <table class="simple-table">
+                        <thead>
+                          <tr>
+                            <th scope="col">Pessoa</th>
+                            <th scope="col" class="simple-table__num">Total</th>
+                            <th scope="col" class="simple-table__num">%</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr *ngFor="let row of productivityPointsByCollaboratorTable">
+                            <th scope="row" [title]="row.name">{{ row.name }}</th>
+                            <td class="simple-table__num">{{ row.total }}</td>
+                            <td class="simple-table__num">{{ row.percent }}%</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </ng-template>
+                </ng-container>
                 <div *ngIf="!isLoadingProductivity && pointsByCollaboratorDatasets.length === 0" class="empty-state" role="status" aria-live="polite">
                   <p class="empty-text">Nenhum dado disponível</p>
                 </div>
@@ -593,19 +814,4 @@
     (closed)="onCarteiraModalClosed()">
   </modal-carteira>
 
-  <!-- Global Loading Overlay -->
-  <div class="loading-overlay" *ngIf="isLoading" role="status" aria-live="polite" aria-atomic="true">
-    <div class="loading-content">
-      <div class="loading-badge" aria-hidden="true">
-        <span class="loading-badge__icon">⚡</span>
-        <span class="loading-badge__icon loading-badge__icon--delay">🏁</span>
-        <span class="loading-badge__icon loading-badge__icon--delay2">🎯</span>
-      </div>
-      <div class="loading-title">{{ loadingTitle }}</div>
-      <div class="loading-subtitle">{{ loadingSubtitle }}</div>
-      <div class="loading-bar" aria-hidden="true">
-        <div class="loading-bar__fill"></div>
-      </div>
-    </div>
-  </div>
 </div>

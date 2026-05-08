@@ -2,8 +2,8 @@ import { Component, OnInit, OnDestroy, ChangeDetectionStrategy, ChangeDetectorRe
 import { DOCUMENT } from '@angular/common';
 import { Router } from '@angular/router';
 import { NgbModal } from '@ng-bootstrap/ng-bootstrap';
-import { Subject, of, firstValueFrom, Observable } from 'rxjs';
-import { takeUntil, finalize, map, take, mergeMap } from 'rxjs/operators';
+import { Subject, of, firstValueFrom, lastValueFrom, Observable } from 'rxjs';
+import { takeUntil, finalize, map, take, mergeMap, last } from 'rxjs/operators';
 import { PONTOS_POR_ATIVIDADE_FINALIZADA_ACTION_LOG } from '@app/constants/pontos-por-atividade-action-log';
 import {
   extractGamificacaoEmpIdFromDeliveryKey,
@@ -104,6 +104,24 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
   isLoadingSidebar: boolean = false;
   isLoadingGoals: boolean = false;
   isLoadingProductivity: boolean = false;
+  /** Loading específico do circular «Pontos no mês» (depende de finished/summary + open/summary). */
+  isLoadingMonthlyPointsProgress = false;
+  /** Estado agregado: usado para desabilitar ações globais (ex.: refresh) sem travar a tela inteira. */
+  get isAnyLoading(): boolean {
+    return (
+      this.isLoadingTeams ||
+      this.isLoadingCollaborators ||
+      this.isLoadingSidebar ||
+      this.isLoadingGoals ||
+      this.isLoadingKPIs ||
+      this.isLoadingCarteira ||
+      this.isLoadingCarteiraMore ||
+      this.isLoadingClientesAtendidosCount ||
+      this.isLoadingParticipacaoKpi ||
+      this.isLoadingProductivity ||
+      this.isSavingMeta
+    );
+  }
 
   /** Loading overlay microcopy (rotate while loading). */
   loadingTitle: string = 'Carregando dados…';
@@ -144,12 +162,42 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
   teamSeasonProgress: SeasonProgress | null = null;
   teamKPIs: KPIData[] = [];
   isLoadingKPIs: boolean = false;
+  /** Placeholders visuais enquanto KPIs não retornam (cartões em pending, igual ao painel individual). */
+  readonly kpiLoadingSlots: readonly number[] = [0];
   goalMetrics: GoalMetric[] = [];
   graphData: GraphDataPoint[] = []; // Activities data
   graphDatasets: ChartDataset[] = []; // Multiple datasets for team members (one line per player) - Activities
   pointsGraphData: GraphDataPoint[] = []; // Points data
   pointsGraphDatasets: ChartDataset[] = []; // Multiple datasets for team members (one line per player) - Points
   selectedPeriod: number = 30;
+
+  /** Seleção do seletor de período (0 = "mês atual"). */
+  productivityPeriodSelection: number = 0;
+
+  /** End date usado para construir colunas das tabelas (alinha com o request). */
+  private productivityLastRangeEnd: dayjs.Dayjs = dayjs();
+
+  // Productivity view modes (per-chart)
+  productivityActivitiesDailyView: 'chart' | 'table' = 'table';
+  productivityPointsDailyView: 'chart' | 'table' = 'table';
+  productivityActivitiesByCollaboratorView: 'chart' | 'table' = 'table';
+  productivityPointsByCollaboratorView: 'chart' | 'table' = 'table';
+
+  // Table views (computed from chart datasets)
+  productivityActivitiesDailyTable: {
+    columns: Array<{ key: string; label: string; tooltip: string }>;
+    rows: Array<{ memberName: string; values: number[] }>;
+    maxValue: number;
+  } = { columns: [], rows: [], maxValue: 0 };
+
+  productivityPointsDailyTable: {
+    columns: Array<{ key: string; label: string; tooltip: string }>;
+    rows: Array<{ memberName: string; values: number[] }>;
+    maxValue: number;
+  } = { columns: [], rows: [], maxValue: 0 };
+
+  productivityActivitiesByCollaboratorTable: Array<{ name: string; total: number; percent: number }> = [];
+  productivityPointsByCollaboratorTable: Array<{ name: string; total: number; percent: number }> = [];
   
   // Bar charts data for collaborator comparison
   activitiesByCollaboratorGraphData: GraphDataPoint[] = [];
@@ -222,6 +270,29 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
   
   // Refresh tracking
   lastRefresh: Date = new Date();
+
+  /** Placeholder para exibir a carteira com reticências antes dos dados chegarem. */
+  readonly emptyPointWallet: PointWallet = { moedas: 0, bloqueados: 0, desbloqueados: 0 };
+
+  /** Placeholder para exibir o progresso da temporada com reticências antes dos dados chegarem. */
+  get emptySeasonProgress(): SeasonProgress {
+    return {
+      metas: { current: 0, target: 0 },
+      clientes: 0,
+      tarefasFinalizadas: 0,
+      seasonDates: this.seasonDates
+    };
+  }
+
+  /** Reticências na carteira enquanto o menu lateral consolida dados. */
+  get sidebarWalletPending(): boolean {
+    return this.isLoadingSidebar;
+  }
+
+  /** Reticências em stats da temporada enquanto o menu lateral consolida dados. */
+  get sidebarSeasonStatsPending(): boolean {
+    return this.isLoadingSidebar;
+  }
   
   // Accessibility properties
   screenReaderAnnouncement: string = '';
@@ -229,6 +300,9 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
   
   // Sidebar collapse state
   sidebarCollapsed: boolean = false;
+
+  /** Evita “piscar” loading do menu lateral ao trocar mês. */
+  private sidebarLoadedOnce = false;
 
   /** Resposta de GET /team/:team_id (ApiProvider / BWA). */
   teamDetailApiResponse: any | null = null;
@@ -281,7 +355,6 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       await this.initializeDashboard();
     } catch (error) {
       console.error('❌ bootstrapDashboard:', error);
-      this.isLoading = false;
       this.cdr.markForCheck();
     }
   }
@@ -357,8 +430,6 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
    */
   private async initializeDashboard(): Promise<void> {
     try {
-      this.isLoading = true;
-      this.startLoadingMessageRotation();
       console.log('🚀 Initializing team management dashboard...');
 
       await this.ensureSessionReady();
@@ -381,10 +452,6 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       }
     } catch (error) {
       console.error('❌ Error initializing dashboard:', error);
-    } finally {
-      this.isLoading = false;
-      this.stopLoadingMessageRotation();
-      console.log('🏁 Dashboard initialization complete, isLoading:', this.isLoading);
       this.cdr.markForCheck();
     }
   }
@@ -664,7 +731,9 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
 
   /** Identificadores do utilizador para cruzar com `leader` / `observers` na API BWA. */
   private getPanelUserIdentitySet(): Set<string> {
-    const u = this.sessaoProvider.usuario as { _id?: string; email?: string; user_id?: string } | null;
+    const u = this.sessaoProvider.usuario as
+      | { _id?: string; email?: string; user_id?: string; id?: string | number; uuid?: string }
+      | null;
     const ids = new Set<string>();
     const add = (v: unknown) => {
       if (v == null) {
@@ -678,6 +747,8 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
     add(u?._id);
     add(u?.email);
     add(u?.user_id);
+    add(u?.id);
+    add(u?.uuid);
     add(this.getPanelPlayerId());
     return ids;
   }
@@ -801,28 +872,41 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
         this.teamDetailApiResponse = null;
         console.log('📊 ADMIN: apenas GET /team →', allTeams.length, 'times');
       } else if (isGestorRole) {
+        // Preferir listar e filtrar por leader/observers quando possível (não depende de `observer_teams` em /auth/user)
+        const listTeams = await this.bwaTeamApi.fetchTeamList();
+
         let detailIds = this.computeAccessibleTeamIdsFromSession(profile, userTeams);
         if (detailIds.length === 0) {
           const one = this.getTeamIdForDetailEndpoint();
           detailIds = one ? [one] : [];
         }
 
-        if (detailIds.length > 0) {
+        if (listTeams.length > 0) {
+          const idsFromSession = new Set(detailIds.map((id) => String(id)));
+          allTeams = listTeams.filter((team: any) => {
+            const teamId = team?._id ?? team?.id;
+            if (teamId != null && idsFromSession.has(String(teamId))) {
+              return true;
+            }
+            return this.isCurrentUserLeaderOrObserverOnTeam(team as Record<string, unknown>);
+          });
+          teamDetailPayload = allTeams.length > 0 ? allTeams[0] : null;
+          console.log('📊 GESTOR: GET /team filtrado por leader/observers →', allTeams.length, 'times');
+        } else if (detailIds.length > 0) {
+          // Fallback: pedir detalhe por ids acessíveis vindos da sessão/perfil
           console.log('🔗 GESTOR: GET /team/:team_id para cada time acessível →', detailIds);
-          const responses = await Promise.all(
-            detailIds.map((id) => this.bwaTeamApi.fetchTeamDetail(id))
-          );
+          const responses = await Promise.all(detailIds.map((id) => this.bwaTeamApi.fetchTeamDetail(id)));
           allTeams = this.mergeFetchedTeamDetails(responses);
           teamDetailPayload = allTeams.length > 0 ? allTeams[0] : null;
         } else {
-          console.warn('⚠️ GESTOR: sem team_ids na sessão/perfil — não é possível GET /team/:team_id.');
+          console.warn('⚠️ GESTOR: sem team_ids na sessão/perfil e sem lista de times — não é possível carregar times.');
           teamDetailPayload = null;
           allTeams = [];
         }
 
         this.teamDetailApiResponse = teamDetailPayload;
         if (allTeams.length > 0) {
-          console.log('📊 GESTOR: respostas /team/:team_id (mescladas):', allTeams.length, 'times');
+          console.log('📊 GESTOR: times disponíveis (BWA):', allTeams.length);
         }
       } else {
         allTeams = await this.bwaTeamApi.fetchTeamList();
@@ -1200,42 +1284,51 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
     }
     
     try {
-      this.isLoading = true;
-      this.startLoadingMessageRotation();
+      // Sinaliza "refresh" por componente, sem overlay global
+      // Sidebar é season-scoped; ao trocar mês, não queremos “piscar” loading se já houve 1ª carga.
+      this.isLoadingSidebar = !this.sidebarLoadedOnce;
+      this.isLoadingGoals = true;
+      this.isLoadingCarteira = true;
+      this.isLoadingKPIs = true;
+      this.isLoadingCollaborators = true;
+      this.isLoadingMonthlyPointsProgress = true;
+      this.cdr.markForCheck();
+
       this.companyKpiService.prefetchGamificacaoSnapshot();
 
-      // Calculate date range based on selected month
-      const dateRange = this.calculateDateRange();
+      // Month range: KPIs/carteira/metas; Season range: sidebar (pontos/temporada)
+      const monthRange = this.calculateDateRange();
+      const seasonRange = this.seasonDates;
       
       // If a collaborator is selected, load only that collaborator's data
       if (this.selectedCollaborator) {
         console.log('👤 Loading data for selected collaborator:', this.selectedCollaborator);
-        await this.loadCollaboratorData(this.selectedCollaborator, dateRange);
+        await this.loadCollaboratorData(this.selectedCollaborator, monthRange);
       } else {
         // Otherwise, load team aggregated data
         console.log('👥 Loading team aggregated data');
         // First, reload team members data to recalculate points for the selected month
         // This is important when the month changes, as points need to be recalculated
-        await this.loadTeamMembersData(this.selectedTeamId, dateRange);
+        await this.loadTeamMembersData(this.selectedTeamId, monthRange);
         
         // Then, load team activity and macro data (needed for sidebar aggregation)
-        await this.loadTeamActivityAndMacroData(dateRange);
+        await this.loadTeamActivityAndMacroData(monthRange);
         
         // Load data in parallel, but KPIs need carteira data first
         await Promise.all([
-          this.loadSidebarData(dateRange),
+          this.loadSidebarData(seasonRange),
           this.loadCollaborators(),
-          this.loadGoalsData(dateRange),
+          this.loadGoalsData(monthRange),
           this.loadMonthlyPointsBreakdown()
         ]);
 
         // Productivity charts are loaded only when the user clicks the tab.
         if (this.activeTab === 'productivity') {
-          await this.loadProductivityData(dateRange);
+          await this.loadProductivityData(this.computeProductivityDateRange());
         }
         
         // Load carteira data first, then KPIs (which depend on carteira)
-        await this.loadTeamCarteiraData(dateRange);
+        await this.loadTeamCarteiraData(monthRange);
         await this.loadTeamKPIs();
         
         // Update formatted sidebar data after KPIs are loaded (includes metas calculation)
@@ -1249,8 +1342,6 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
     } catch (error) {
       console.error('Error loading team data:', error);
     } finally {
-      this.isLoading = false;
-      this.stopLoadingMessageRotation();
       this.cdr.markForCheck();
     }
   }
@@ -1278,7 +1369,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
 
       // Productivity charts are loaded only when the user clicks the tab.
       if (this.activeTab === 'productivity') {
-        baseLoads.push(this.loadCollaboratorProductivityData(collaboratorId, dateRange));
+        baseLoads.push(this.loadCollaboratorProductivityData(collaboratorId, this.computeProductivityDateRange()));
       }
 
       await Promise.all(baseLoads);
@@ -1387,7 +1478,8 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
    */
   private async loadCollaboratorSidebarData(collaboratorId: string, dateRange: { start: Date; end: Date }): Promise<void> {
     try {
-      this.isLoadingSidebar = true;
+      this.isLoadingSidebar = !this.sidebarLoadedOnce;
+      this.isLoadingMonthlyPointsProgress = true;
       this.hasSidebarError = false;
       this.sidebarErrorMessage = '';
       this.monthlyPointsGoalTarget = null;
@@ -1438,13 +1530,13 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
               sidebar: { tarefasFinalizadas: 0 }
             };
           }),
-          firstValueFrom(
+          lastValueFrom(
             this.actionLogService
               .getProgressMetrics(collaboratorId, this.selectedMonth, {
                 gamificationDashboardReportsOnly: true,
                 teamId: this.getGame4uTeamScopeId()
               })
-              .pipe(takeUntil(this.destroy$))
+              .pipe(takeUntil(this.destroy$), last())
           ).catch((error: unknown) => {
             console.error('Error loading collaborator progress metrics:', error);
             this.hasSidebarError = true;
@@ -1456,13 +1548,13 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
         const g = goalPts != null ? Math.floor(Number(goalPts) || 0) : 0;
         this.monthlyPointsGoalTarget = g > 0 ? g : null;
       } else {
-        metrics = await firstValueFrom(
+        metrics = await lastValueFrom(
           this.actionLogService
             .getProgressMetrics(collaboratorId, this.selectedMonth, {
               gamificationDashboardReportsOnly: true,
               teamId: this.getGame4uTeamScopeId()
             })
-            .pipe(takeUntil(this.destroy$))
+            .pipe(takeUntil(this.destroy$), last())
         ).catch((error: unknown) => {
           console.error('Error loading collaborator progress metrics:', error);
           this.hasSidebarError = true;
@@ -1533,6 +1625,8 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       this.updateFormattedSidebarData();
 
       this.isLoadingSidebar = false;
+      this.sidebarLoadedOnce = true;
+      this.isLoadingMonthlyPointsProgress = false;
 
       console.log('✅ Collaborator sidebar data loaded:', {
         points: this.seasonPoints,
@@ -1545,6 +1639,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       this.hasSidebarError = true;
       this.sidebarErrorMessage = 'Erro ao carregar dados da barra lateral';
       this.isLoadingSidebar = false;
+      this.isLoadingMonthlyPointsProgress = false;
       this.cdr.markForCheck();
     }
   }
@@ -1554,7 +1649,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
    */
   private async loadSidebarData(dateRange: { start: Date; end: Date }): Promise<void> {
     try {
-      this.isLoadingSidebar = true;
+      this.isLoadingSidebar = !this.sidebarLoadedOnce;
       this.hasSidebarError = false;
       this.sidebarErrorMessage = '';
       this.teamSidebarDeliveryStatsTotal = undefined;
@@ -1668,6 +1763,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       this.updateFormattedSidebarData();
 
       this.isLoadingSidebar = false;
+      this.sidebarLoadedOnce = true;
 
       console.log('✅ Sidebar data loaded:', {
         points: this.seasonPoints,
@@ -1806,13 +1902,13 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       console.log('📊 Loading goals data for collaborator:', collaboratorId);
       
       // Get progress metrics for the collaborator
-      const metrics = await firstValueFrom(
+      const metrics = await lastValueFrom(
         this.actionLogService
           .getProgressMetrics(collaboratorId, this.selectedMonth, {
             gamificationDashboardReportsOnly: true,
             teamId: this.getGame4uTeamScopeId()
           })
-          .pipe(takeUntil(this.destroy$))
+          .pipe(takeUntil(this.destroy$), last())
       ).catch((error) => {
         console.error('Error loading collaborator progress metrics for goals:', error);
         return {
@@ -1913,9 +2009,8 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       const collaborator = this.collaborators.find(c => c.userId === collaboratorId);
       const memberName = this.formatCollaboratorName(collaboratorId, collaborator?.name);
       
-      // For productivity tab, use the selected period instead of month range
-      const endDate = dayjs();
-      const startDate = endDate.subtract(this.selectedPeriod, 'day');
+      const startDate = dayjs(dateRange.start).startOf('day');
+      const endDate = dayjs(dateRange.end).endOf('day');
       
       const teamTid = this.getGame4uReportTeamId();
       const dailyRows = teamTid
@@ -1983,6 +2078,8 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       
       // Load points data for the same period (prefer API points_sum; fallback = count × constante)
       await this.loadCollaboratorPointsData(startDate, endDate, memberName, dataMap, pointsMap);
+
+      this.rebuildProductivityTables();
       
       this.isLoadingProductivity = false;
       console.log('✅ Collaborator productivity data loaded:', {
@@ -2088,9 +2185,8 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       
       console.log('📈 Loading productivity data for team members (OPTIMIZED)...');
 
-      // For productivity tab, use the selected period instead of month range
-      const endDate = dayjs();
-      const startDate = endDate.subtract(this.selectedPeriod, 'day');
+      const startDate = dayjs(dateRange.start).startOf('day');
+      const endDate = dayjs(dateRange.end).endOf('day');
 
       const teamTid = this.getGame4uReportTeamId();
       if (!teamTid) {
@@ -2266,6 +2362,8 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
           
           // Calculate totals by collaborator for bar charts
           this.calculateCollaboratorTotals(validMemberData);
+
+          this.rebuildProductivityTables();
           
           console.log('✅ Productivity data loaded (OPTIMIZED):', {
             members: validMemberData.length,
@@ -2408,6 +2506,18 @@ private calculateCollaboratorTotals(memberData: Array<{
     const percentage = totalPoints > 0 ? Math.round((item.total / totalPoints) * 100) : 0;
     return `${item.name} - ${item.total} (${percentage}%)`;
   });
+
+  // Structured table rows for table view
+  this.productivityActivitiesByCollaboratorTable = activitiesTotals.map(item => ({
+    name: item.name,
+    total: item.total,
+    percent: totalActivities > 0 ? Math.round((item.total / totalActivities) * 100) : 0
+  }));
+  this.productivityPointsByCollaboratorTable = pointsTotals.map(item => ({
+    name: item.name,
+    total: item.total,
+    percent: totalPoints > 0 ? Math.round((item.total / totalPoints) * 100) : 0
+  }));
   
   console.log('✅ Collaborator totals calculated:', {
     activities: activitiesTotals,
@@ -2416,6 +2526,81 @@ private calculateCollaboratorTotals(memberData: Array<{
     pointsLabels: this.pointsByCollaboratorLabels
   });
 }
+
+  setProductivityChartView(which: 'activitiesDaily' | 'pointsDaily' | 'activitiesByCollaborator' | 'pointsByCollaborator', view: 'chart' | 'table'): void {
+    switch (which) {
+      case 'activitiesDaily':
+        this.productivityActivitiesDailyView = view;
+        break;
+      case 'pointsDaily':
+        this.productivityPointsDailyView = view;
+        break;
+      case 'activitiesByCollaborator':
+        this.productivityActivitiesByCollaboratorView = view;
+        break;
+      case 'pointsByCollaborator':
+        this.productivityPointsByCollaboratorView = view;
+        break;
+    }
+    this.cdr.markForCheck();
+  }
+
+  getHeatmapCellStyle(value: number, maxValue: number): { [k: string]: string } {
+    if (!maxValue || maxValue <= 0) {
+      return { backgroundColor: 'transparent' };
+    }
+    const ratio = Math.min(1, Math.max(0, value / maxValue));
+    const alpha = 0.06 + ratio * 0.64; // 0.06 → 0.70
+    const textColor = alpha >= 0.42 ? '#ffffff' : 'inherit';
+    return {
+      backgroundColor: `rgba(239, 68, 68, ${alpha.toFixed(3)})`,
+      color: textColor
+    };
+  }
+
+  trackByHeatmapRow(_idx: number, row: { memberName: string }): string {
+    return row.memberName;
+  }
+
+  trackByHeatmapColumn(_idx: number, col: { key: string }): string {
+    return col.key;
+  }
+
+  private rebuildProductivityTables(): void {
+    this.productivityActivitiesDailyTable = this.buildDailyHeatmapTable(this.graphDatasets);
+    this.productivityPointsDailyTable = this.buildDailyHeatmapTable(this.pointsGraphDatasets);
+  }
+
+  private buildDailyHeatmapTable(datasets: ChartDataset[]): {
+    columns: Array<{ key: string; label: string; tooltip: string }>;
+    rows: Array<{ memberName: string; values: number[] }>;
+    maxValue: number;
+  } {
+    const normalizedDatasets = (datasets || []).filter(ds => Array.isArray((ds as any)?.data));
+    const length = normalizedDatasets.length > 0 ? (normalizedDatasets[0].data?.length ?? 0) : 0;
+    const end = this.productivityLastRangeEnd ?? dayjs(); // consistent with productivity tab range
+    const start = length > 0 ? end.subtract(length - 1, 'day') : end;
+
+    const columns: Array<{ key: string; label: string; tooltip: string }> = [];
+    let current = start;
+    for (let i = 0; i < length; i++) {
+      const key = current.format('YYYY-MM-DD');
+      columns.push({
+        key,
+        label: current.format('DD'),
+        tooltip: current.format('DD/MM/YYYY')
+      });
+      current = current.add(1, 'day');
+    }
+
+    const rows: Array<{ memberName: string; values: number[] }> = normalizedDatasets.map(ds => ({
+      memberName: String(ds.label ?? '').trim() || '—',
+      values: (ds.data || []).map(v => Math.floor(Number(v) || 0))
+    }));
+
+    const maxValue = rows.reduce((max, r) => Math.max(max, ...r.values), 0);
+    return { columns, rows, maxValue: Number.isFinite(maxValue) ? maxValue : 0 };
+  }
 
   /**
    * Get color for dataset by index (cycling through palette)
@@ -2442,10 +2627,12 @@ private calculateCollaboratorTotals(memberData: Array<{
         console.warn('⚠️ Sem equipa selecionada para métricas agregadas Game4U');
         return;
       }
+      this.isLoadingMonthlyPointsProgress = true;
+      this.cdr.markForCheck();
       console.log(
         '📊 Loading team panel progress (Game4U: reports finished/summary + open/summary com team_id BWA; sem team-actions / sem /game/stats)...'
       );
-      const metrics = await firstValueFrom(
+      const metrics = await lastValueFrom(
         this.actionLogService
           .getProgressMetrics(this.selectedTeam, this.selectedMonth, {
             game4uTeamAggregate: {
@@ -2453,7 +2640,7 @@ private calculateCollaboratorTotals(memberData: Array<{
               bwaTeamId: this.getGame4uTeamScopeId()
             }
           })
-          .pipe(takeUntil(this.destroy$))
+          .pipe(takeUntil(this.destroy$), last())
       ).catch((error) => {
         console.error('Error loading team progress metrics (Game4U):', error);
         return {
@@ -2493,6 +2680,9 @@ private calculateCollaboratorTotals(memberData: Array<{
       this.cdr.markForCheck();
     } catch (error) {
       console.error('Error loading team activity and process data:', error);
+    } finally {
+      this.isLoadingMonthlyPointsProgress = false;
+      this.cdr.markForCheck();
     }
   }
 
@@ -2566,9 +2756,10 @@ private calculateCollaboratorTotals(memberData: Array<{
 
       // Paginação (reports/finished/deliveries): só na vista equipa agregada (sem colaborador) quando há month + scopeId
       if (useTeam && this.playerService.usesGame4uWalletFromStats() && this.selectedMonth != null && teamTid) {
+        const month = this.selectedMonth!;
         const page = await firstValueFrom(
           this.teamAggregateService
-            .getTeamFinishedDeliveriesParticipacaoPage(teamTid, 0, this.participacaoPageLimit)
+            .getTeamFinishedDeliveriesParticipacaoPage(teamTid, month, 0, this.participacaoPageLimit)
             .pipe(takeUntil(this.destroy$))
         );
         this.useParticipacaoReportsPagination = true;
@@ -2760,6 +2951,7 @@ private calculateCollaboratorTotals(memberData: Array<{
       return;
     }
     const teamTid = this.getGame4uTeamScopeId()!;
+    const month = this.selectedMonth;
     this.isLoadingCarteiraMore = true;
     const loadGen = this.participacaoKpiLoadGen;
     this.cdr.markForCheck();
@@ -2767,6 +2959,7 @@ private calculateCollaboratorTotals(memberData: Array<{
     this.teamAggregateService
       .getTeamFinishedDeliveriesParticipacaoPage(
         teamTid,
+        month,
         this.participacaoNextOffset,
         this.participacaoPageLimit
       )
@@ -3069,6 +3262,9 @@ private calculateCollaboratorTotals(memberData: Array<{
       
       // Reset collaborator filter when team changes
       if (isTeamChanging) {
+        // Troca de time: o menu lateral deve indicar mudança de dados.
+        this.sidebarLoadedOnce = false;
+        this.isLoadingSidebar = true;
         this.selectedCollaborator = null;
       }
       
@@ -3236,21 +3432,33 @@ private calculateCollaboratorTotals(memberData: Array<{
     }
     
     this.loadTeamData();
+
+    // Se o preset "mês selecionado" estiver ativo, recalcula o tamanho do período
+    // (para labels/acessibilidade dos gráficos) e garante recarga da aba quando visível.
+    if (this.productivityPeriodSelection === 0) {
+      const { start, end } = this.computeProductivityDateRangeInternal();
+      const daysInclusive = end.startOf('day').diff(start.startOf('day'), 'day') + 1;
+      this.selectedPeriod = Math.max(1, daysInclusive);
+    }
   }
 
   /**
    * Handle period change from productivity tab
    */
   onPeriodChange(period: number): void {
-    this.selectedPeriod = period;
+    this.productivityPeriodSelection = period;
+    // `selectedPeriod` permanece numérico porque é usado por componentes de gráfico e helpers existentes.
+    if (period !== 0) {
+      this.selectedPeriod = period;
+    } else {
+      const { start, end } = this.computeProductivityDateRangeInternal();
+      const daysInclusive = end.startOf('day').diff(start.startOf('day'), 'day') + 1;
+      this.selectedPeriod = Math.max(1, daysInclusive);
+    }
     if (this.activeTab !== 'productivity' || !this.productivityAnalysisTabEnabled) {
       return;
     }
-    const dateRange = {
-      start: dayjs().subtract(period, 'day').toDate(),
-      end: new Date()
-    };
-    this.loadProductivityData(dateRange);
+    void this.loadProductivityData(this.computeProductivityDateRange());
   }
 
 
@@ -3263,9 +3471,41 @@ private calculateCollaboratorTotals(memberData: Array<{
     }
     this.activeTab = tab;
     if (tab === 'productivity' && !this.selectedCollaborator && this.productivityAnalysisTabEnabled) {
-      const dateRange = this.calculateDateRange();
-      void this.loadProductivityData(dateRange);
+      void this.loadProductivityData(this.computeProductivityDateRange());
     }
+  }
+
+  /**
+   * Intervalo do gráfico de produtividade (rolling window), normalizado ao dia.
+   * Isso evita gerar `start/end` diferentes a cada clique, permitindo cache do request
+   * (`/game/reports/team/daily-finished-stats`) quando alterna entre abas.
+   */
+  private computeProductivityDateRange(): { start: Date; end: Date } {
+    const { start, end } = this.computeProductivityDateRangeInternal();
+    this.productivityLastRangeEnd = end;
+    return { start: start.toDate(), end: end.toDate() };
+  }
+
+  /**
+   * Produz um intervalo coerente com o seletor de período:
+   * - `number`: janela móvel (últimos N dias) como antes.
+   * - `currentMonth`: do início do mês selecionado até o "dia atual" dentro desse mês.
+   */
+  private computeProductivityDateRangeInternal(): { start: dayjs.Dayjs; end: dayjs.Dayjs } {
+    const today = dayjs();
+    const selection = this.productivityPeriodSelection;
+
+    if (selection !== 0) {
+      const end = today.endOf('day');
+      const start = end.subtract(this.selectedPeriod, 'day').startOf('day');
+      return { start, end };
+    }
+
+    const baseMonth = this.selectedMonth ? dayjs(this.selectedMonth) : today;
+    const start = baseMonth.startOf('month').startOf('day');
+    const isCurrentMonth = baseMonth.isSame(today, 'month');
+    const end = isCurrentMonth ? today.endOf('day') : baseMonth.endOf('month').endOf('day');
+    return { start, end };
   }
 
   onProductivityTabDisabledHover(active: boolean, event?: MouseEvent): void {
@@ -3335,8 +3575,6 @@ private calculateCollaboratorTotals(memberData: Array<{
    * @see {@link loadTeamData}
    */
   refreshData(): void {
-    this.isLoading = true;
-    
     // Clear cache
     this.teamAggregateService.clearCache();
     
@@ -3434,8 +3672,7 @@ private calculateCollaboratorTotals(memberData: Array<{
     if (this.activeTab !== 'productivity' || !this.productivityAnalysisTabEnabled) {
       return;
     }
-    const dateRange = this.calculateDateRange();
-    this.loadProductivityData(dateRange);
+    void this.loadProductivityData(this.computeProductivityDateRange());
   }
 
   /**
@@ -3959,6 +4196,11 @@ private calculateCollaboratorTotals(memberData: Array<{
    * Circular “Pontos no mês”: atingido = pontos só em DONE; meta = soma em todos os status (Game4U). Sem Game4U: meta provisória action_log.
    */
   get monthlyPointsProgressData(): { current: number; target: number } {
+    // Evita preencher parcialmente enquanto ainda falta o `/game/reports/open/summary`
+    // (ou qualquer fonte que complete a meta). Enquanto carrega, o componente fica 100% em pending.
+    if (this.isLoadingMonthlyPointsProgress) {
+      return { current: 0, target: 1 };
+    }
     const donePts = this.teamActivityMetrics?.pontosDone;
     const allPts = this.teamActivityMetrics?.pontosTodosStatus;
     const current =
@@ -3982,6 +4224,9 @@ private calculateCollaboratorTotals(memberData: Array<{
   }
 
   get monthlyPointsGoalColor(): 'red' | 'yellow' | 'green' | 'gray' {
+    if (this.isLoadingMonthlyPointsProgress) {
+      return 'gray';
+    }
     const { current, target } = this.monthlyPointsProgressData;
     const superGoal = Math.ceil(target * 1.5);
     return this.kpiService.getKPIColorByGoals(current, target, superGoal);

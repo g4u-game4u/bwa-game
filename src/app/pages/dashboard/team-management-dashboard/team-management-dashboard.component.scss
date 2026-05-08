@@ -923,6 +923,63 @@
         margin-bottom: 0;
       }
     }
+
+    .section-header--with-toggle {
+      gap: $spacing-md;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .data-view-toggle {
+      display: flex;
+      gap: $spacing-xs;
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: $border-radius-sm;
+      padding: 4px;
+      flex-shrink: 0;
+
+      .toggle-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 8px 12px;
+        background: transparent;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: $border-radius-sm;
+        color: $text-secondary;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        min-height: 36px;
+        white-space: nowrap;
+
+        &:hover:not(:disabled) {
+          background: rgba($primary-electric-blue, 0.1);
+          border-color: $primary-electric-blue;
+          color: $primary-electric-blue;
+        }
+
+        &.active {
+          background: rgba($primary-electric-blue, 0.2);
+          border-color: $primary-electric-blue;
+          color: $primary-electric-blue;
+        }
+
+        &:disabled {
+          opacity: 0.6;
+          cursor: not-allowed;
+        }
+
+        i {
+          font-size: 1.05rem;
+        }
+
+        .toggle-text {
+          font-size: 0.8125rem;
+          font-weight: 600;
+        }
+      }
+    }
   }
 
   // Productivity Charts Container
@@ -1041,6 +1098,29 @@
 
       &:focus-visible {
         @include focus-visible;
+      }
+    }
+
+    // Local loading overlay for charts (no fullscreen lock)
+    .chart-container {
+      position: relative;
+
+      &.loading {
+        min-height: 220px;
+      }
+
+      .loading-overlay {
+        position: absolute;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.35);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-direction: column;
+        gap: $spacing-sm;
+        border-radius: $border-radius;
+        backdrop-filter: blur(6px);
+        z-index: 2;
       }
     }
   }
@@ -1432,6 +1512,171 @@
     }
   }
 
+  // Heatmap table (daily volume)
+  .heatmap-table-wrap {
+    width: 100%;
+    overflow: auto;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: $border-radius;
+    background: rgba(0, 0, 0, 0.14);
+
+    // Scrollbar styling (padrão app)
+    &::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+
+    &::-webkit-scrollbar-track {
+      background: rgba(0, 0, 0, 0.1);
+      border-radius: 4px;
+    }
+
+    &::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.2);
+      border-radius: 4px;
+
+      &:hover {
+        background: rgba(255, 255, 255, 0.3);
+      }
+    }
+  }
+
+  .heatmap-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    min-width: 720px;
+
+    th,
+    td {
+      padding: 8px 10px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      border-right: 1px solid rgba(255, 255, 255, 0.06);
+      text-align: center;
+      font-size: 12px;
+      line-height: 1.2;
+    }
+
+    thead th {
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      background: rgba(15, 23, 42, 0.92);
+      color: $text-secondary;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+    }
+
+    .heatmap-table__sticky-col {
+      position: sticky;
+      left: 0;
+      z-index: 3;
+      text-align: left;
+      min-width: 220px;
+      max-width: 260px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      background: rgba(15, 23, 42, 0.94);
+    }
+
+    .heatmap-table__row-label {
+      font-weight: 700;
+      color: $text-primary;
+    }
+
+    .heatmap-table__cell {
+      font-variant-numeric: tabular-nums;
+    }
+
+    tbody tr:hover td,
+    tbody tr:hover th.heatmap-table__sticky-col {
+      filter: brightness(1.08);
+    }
+
+    tr:last-child td,
+    tr:last-child th {
+      border-bottom: none;
+    }
+
+    th:last-child,
+    td:last-child {
+      border-right: none;
+    }
+  }
+
+  // Simple table (bar chart alternative)
+  .simple-table-wrap {
+    width: 100%;
+    overflow: auto;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: $border-radius;
+    background: rgba(0, 0, 0, 0.14);
+
+    // Scrollbar styling (padrão app)
+    &::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+
+    &::-webkit-scrollbar-track {
+      background: rgba(0, 0, 0, 0.1);
+      border-radius: 4px;
+    }
+
+    &::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.2);
+      border-radius: 4px;
+
+      &:hover {
+        background: rgba(255, 255, 255, 0.3);
+      }
+    }
+  }
+
+  .simple-table {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 520px;
+
+    th,
+    td {
+      padding: 10px 12px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      text-align: left;
+      font-size: 13px;
+    }
+
+    thead th {
+      position: sticky;
+      top: 0;
+      background: rgba(15, 23, 42, 0.92);
+      color: $text-secondary;
+      font-weight: 700;
+      z-index: 1;
+    }
+
+    th {
+      color: $text-primary;
+      font-weight: 700;
+    }
+
+    .simple-table__num {
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+
+    tbody tr:hover td,
+    tbody tr:hover th {
+      background: rgba(255, 255, 255, 0.04);
+    }
+
+    tr:last-child td,
+    tr:last-child th {
+      border-bottom: none;
+    }
+  }
+
   // Loading States
   .loading-section {
     display: flex;
@@ -1458,99 +1703,6 @@
     }
   }
 
-  // Global Loading Overlay
-  .loading-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background-color: rgba(0,0,0,0.5);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 9999;
-    backdrop-filter: blur(8px);
-    animation: fadeIn $transition-duration $transition-easing;
-
-    .loading-content {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: $spacing-md;
-      padding: $spacing-xl;
-      background: $surface;
-      border-radius: $border-radius;
-      box-shadow: $shadow-hover;
-      min-width: 320px;
-
-      .loading-badge {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: $spacing-sm;
-        padding: $spacing-sm $spacing-md;
-        border-radius: 999px;
-        background: rgba($primary-electric-blue, 0.12);
-        border: 1px solid rgba($primary-electric-blue, 0.22);
-        animation: pulse 1.4s ease-in-out infinite;
-      }
-
-      .loading-badge__icon {
-        font-size: 1.25rem;
-        line-height: 1;
-        filter: saturate(1.2);
-        animation: bounceTiny 900ms ease-in-out infinite;
-      }
-
-      .loading-badge__icon--delay {
-        animation-delay: 120ms;
-      }
-
-      .loading-badge__icon--delay2 {
-        animation-delay: 240ms;
-      }
-
-      .loading-title {
-        margin: 0;
-        color: $text-primary;
-        font-size: $font-size-body;
-        font-weight: $font-weight-semibold;
-        letter-spacing: 0.2px;
-        text-align: center;
-      }
-
-      .loading-subtitle {
-        margin: 0;
-        color: $text-secondary;
-        font-size: $font-size-small;
-        text-align: center;
-        max-width: 44ch;
-      }
-
-      .loading-bar {
-        width: 100%;
-        height: 8px;
-        border-radius: 999px;
-        background: rgba($primary-electric-blue, 0.12);
-        overflow: hidden;
-        border: 1px solid rgba($primary-electric-blue, 0.18);
-      }
-
-      .loading-bar__fill {
-        height: 100%;
-        width: 45%;
-        border-radius: 999px;
-        background: linear-gradient(
-          90deg,
-          rgba($primary-electric-blue, 0.35),
-          rgba($primary-electric-blue, 0.9),
-          rgba($primary-electric-blue, 0.35)
-        );
-        animation: loadingBar 1100ms ease-in-out infinite;
-      }
-    }
-  }
 }
 
 // Animations
