@@ -61,6 +61,61 @@ function extractTeamIds(teams: any[] | undefined | null): string[] {
   }).filter(Boolean) as string[];
 }
 
+function normalizeIdListToStrings(value: unknown): string[] {
+  if (value == null || !Array.isArray(value)) {
+    return [];
+  }
+  const out: string[] = [];
+  for (const item of value) {
+    if (typeof item === 'string' || typeof item === 'number') {
+      const s = String(item).trim();
+      if (s !== '') {
+        out.push(s);
+      }
+    } else if (item && typeof item === 'object' && '_id' in (item as object)) {
+      const id = (item as { _id?: unknown })._id;
+      if (id != null) {
+        const s = String(id).trim();
+        if (s !== '') {
+          out.push(s);
+        }
+      }
+    }
+  }
+  return out;
+}
+
+/**
+ * Team IDs where the user is an observer (BWA `Team.observers`), as returned on `/auth/user`.
+ * Supports snake_case / camelCase and `extra.*` for Funifier-style payloads.
+ */
+export function extractObserverTeamIdsFromSessionUser(user: unknown): string[] {
+  if (!user || typeof user !== 'object') {
+    return [];
+  }
+  const u = user as Record<string, unknown>;
+  const extra = u['extra'];
+  const extraObj = extra && typeof extra === 'object' ? (extra as Record<string, unknown>) : null;
+  const buckets: unknown[] = [
+    u['observer_teams'],
+    u['observerTeams'],
+    u['observer_team_ids'],
+    u['observerTeamIds'],
+    u['observing_teams'],
+    u['observingTeams'],
+    extraObj?.['observer_teams'],
+    extraObj?.['observerTeams'],
+    extraObj?.['observer_team_ids']
+  ];
+  const ids = new Set<string>();
+  for (const b of buckets) {
+    for (const id of normalizeIdListToStrings(b)) {
+      ids.add(id);
+    }
+  }
+  return [...ids];
+}
+
 /**
  * Determine user profile based on team membership
  * 

@@ -1,6 +1,12 @@
 import { Injectable } from '@angular/core';
 import { SessaoProvider } from '@providers/sessao/sessao.provider';
-import { UserProfile, determineUserProfile, getUserOwnTeamId, getAccessibleTeamIds } from '@utils/user-profile';
+import {
+  UserProfile,
+  determineUserProfile,
+  getUserOwnTeamId,
+  getAccessibleTeamIds,
+  extractObserverTeamIdsFromSessionUser
+} from '@utils/user-profile';
 import { TeamCodeService } from './team-code.service';
 
 /**
@@ -79,7 +85,22 @@ export class UserProfileService {
       return [];
     }
     const profile = this.getCurrentUserProfile();
-    return getAccessibleTeamIds(user.teams, profile, this.teamCodeService.getTeamCodes());
+    const base = getAccessibleTeamIds(user.teams, profile, this.teamCodeService.getTeamCodes());
+    if (profile === UserProfile.DIRETOR) {
+      return base;
+    }
+    const observerTeams = extractObserverTeamIdsFromSessionUser(user);
+    if (observerTeams.length === 0) {
+      return base;
+    }
+    const sessionMgmt =
+      profile !== UserProfile.JOGADOR ||
+      this.sessao.isAdmin() ||
+      this.sessao.isGerente();
+    if (!sessionMgmt) {
+      return base;
+    }
+    return [...new Set([...base.map(String), ...observerTeams.map(String)])];
   }
 
   /**

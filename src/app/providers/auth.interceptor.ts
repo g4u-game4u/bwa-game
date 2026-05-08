@@ -22,11 +22,20 @@ import {joinApiPath} from "../../environments/backend-url";
 const WHITELISTED_URLS = [
     '/auth/login',
     '/auth/refresh',
+    '/auth/change-password-request',
+    '/auth/change-password-recovery',
+    '/auth/change-password',
     '/client/system-params',
     '/campaign/current',
     '/campaign',
     'integrador-n8n.grupo4u.com.br' // Whitelist help button webhook (external, no auth needed)
 ]
+
+/** Rotas de auth públicas: não anexar Bearer da sessão (evita token expirado no pedido de reset). */
+const isPublicAuthPath = (url: string) =>
+    /\/auth\/(login|refresh|token|change-password-request|change-password-recovery|change-password)(\/|$|\?)/.test(
+        url
+    );
 
 @Injectable()
 export class AuthInterceptor implements HttpInterceptor {
@@ -108,8 +117,7 @@ export class AuthInterceptor implements HttpInterceptor {
         const clientIdForWhitelist: Record<string, string> = {};
         if (
             environment.client_id &&
-            (isGame4uBackend ||
-                /\/auth\/(login|refresh|token)(\/|$|\?)/.test(requestUrl))
+            (isGame4uBackend || isPublicAuthPath(requestUrl))
         ) {
             clientIdForWhitelist['client_id'] = environment.client_id;
         }
@@ -128,13 +136,9 @@ export class AuthInterceptor implements HttpInterceptor {
             }
 
             const token = this.sessao.token;
-            const isAuthAnonymous =
-                requestUrl.includes('/auth/login') ||
-                requestUrl.includes('/auth/refresh') ||
-                requestUrl.includes('/auth/token');
 
             const extra: { [k: string]: string } = {};
-            if (token && !isAuthAnonymous) {
+            if (token && !isPublicAuthPath(requestUrl)) {
                 extra['Authorization'] = `Bearer ${token}`;
             }
             if (Object.keys(extra).length > 0 || Object.keys(clientIdForWhitelist).length > 0) {

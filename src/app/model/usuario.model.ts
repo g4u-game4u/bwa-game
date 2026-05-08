@@ -18,4 +18,9 @@ export interface Usuario {
     squad?: string;
     [key: string]: any;
   }>;
+  /** BWA: times em que o utilizador é observer (ver `Team.observers` na API). */
+  observer_teams?: string[];
+  observerTeams?: string[];
+  observer_team_ids?: string[];
+  observerTeamIds?: string[];
 }

@@ -640,6 +640,97 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
     return [...new Set(accessibleTeamIds.map((id) => String(id)))];
   }
 
+  /** Junta várias respostas de GET /team/:id (sem duplicar por `_id`). */
+  private mergeFetchedTeamDetails(results: Array<any | null>): any[] {
+    const map = new Map<string, any>();
+    for (const r of results) {
+      if (r == null) {
+        continue;
+      }
+      const rows = Array.isArray(r) ? r : [r];
+      for (const row of rows) {
+        if (!row || typeof row !== 'object') {
+          continue;
+        }
+        const id = (row as { _id?: unknown; id?: unknown })._id ?? (row as { id?: unknown }).id;
+        if (id == null || String(id).trim() === '') {
+          continue;
+        }
+        map.set(String(id), row);
+      }
+    }
+    return [...map.values()];
+  }
+
+  /** Identificadores do utilizador para cruzar com `leader` / `observers` na API BWA. */
+  private getPanelUserIdentitySet(): Set<string> {
+    const u = this.sessaoProvider.usuario as { _id?: string; email?: string; user_id?: string } | null;
+    const ids = new Set<string>();
+    const add = (v: unknown) => {
+      if (v == null) {
+        return;
+      }
+      const s = String(v).trim();
+      if (s !== '') {
+        ids.add(s);
+      }
+    };
+    add(u?._id);
+    add(u?.email);
+    add(u?.user_id);
+    add(this.getPanelPlayerId());
+    return ids;
+  }
+
+  private leaderOrObserverRefMatches(ref: unknown, identities: Set<string>): boolean {
+    if (ref == null) {
+      return false;
+    }
+    if (typeof ref === 'string' || typeof ref === 'number') {
+      return identities.has(String(ref).trim());
+    }
+    if (typeof ref === 'object') {
+      const o = ref as Record<string, unknown>;
+      const cand = [o['_id'], o['id'], o['user_id'], o['email']];
+      return cand.some((c) => c != null && identities.has(String(c).trim()));
+    }
+    return false;
+  }
+
+  /**
+   * True se o utilizador atual for líder do time ou constar em `observers` (coluna BWA).
+   */
+  private isCurrentUserLeaderOrObserverOnTeam(team: Record<string, unknown>): boolean {
+    const identities = this.getPanelUserIdentitySet();
+    if (identities.size === 0) {
+      return false;
+    }
+    const leaderKeys = [
+      'leader',
+      'leader_id',
+      'leaderId',
+      'gestor_id',
+      'gestorId',
+      'manager_id',
+      'managerId',
+      'gestor'
+    ];
+    for (const k of leaderKeys) {
+      if (k in team && this.leaderOrObserverRefMatches(team[k], identities)) {
+        return true;
+      }
+    }
+    const obsRaw = team['observers'] ?? team['observer_ids'] ?? team['observerIds'];
+    if (Array.isArray(obsRaw)) {
+      for (const o of obsRaw) {
+        if (this.leaderOrObserverRefMatches(o, identities)) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
   /** ADMIN na sessão (ROLES_LIST ou texto com "admin", case-insensitive). */
   private hasAdminSessionRole(): boolean {
     if (this.sessaoProvider.isAdmin()) {
@@ -681,7 +772,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
    *
    * API BWA via {@link BwaTeamApiService} (`backend_url_base` + `/team`):
    * - ADMIN: apenas GET /team (lista)
-   * - GESTOR: apenas GET /team/{team_id} (detalhe; `allTeams` deriva da resposta)
+   * - GESTOR: GET /team/{team_id} para cada time acessível (líder + observers na sessão / payload)
    * - Demais: lista + detalhe quando houver `team_id` (perfil, sessão ou 1.º da lista)
    * 
    * @private
@@ -710,25 +801,28 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
         this.teamDetailApiResponse = null;
         console.log('📊 ADMIN: apenas GET /team →', allTeams.length, 'times');
       } else if (isGestorRole) {
-        const fromSessionOrProfile = this.getTeamIdForDetailEndpoint();
-        const detailTeamId =
-          fromSessionOrProfile != null && String(fromSessionOrProfile).trim() !== ''
-            ? String(fromSessionOrProfile).trim()
-            : null;
+        let detailIds = this.computeAccessibleTeamIdsFromSession(profile, userTeams);
+        if (detailIds.length === 0) {
+          const one = this.getTeamIdForDetailEndpoint();
+          detailIds = one ? [one] : [];
+        }
 
-        if (detailTeamId) {
-          console.log('🔗 GESTOR: apenas GET /team/:team_id →', detailTeamId);
-          teamDetailPayload = await this.bwaTeamApi.fetchTeamDetail(detailTeamId);
+        if (detailIds.length > 0) {
+          console.log('🔗 GESTOR: GET /team/:team_id para cada time acessível →', detailIds);
+          const responses = await Promise.all(
+            detailIds.map((id) => this.bwaTeamApi.fetchTeamDetail(id))
+          );
+          allTeams = this.mergeFetchedTeamDetails(responses);
+          teamDetailPayload = allTeams.length > 0 ? allTeams[0] : null;
         } else {
-          console.warn('⚠️ GESTOR: sem team_id na sessão/perfil — não é possível GET /team/:team_id.');
+          console.warn('⚠️ GESTOR: sem team_ids na sessão/perfil — não é possível GET /team/:team_id.');
+          teamDetailPayload = null;
+          allTeams = [];
         }
 
         this.teamDetailApiResponse = teamDetailPayload;
-        if (teamDetailPayload != null) {
-          console.log('📊 GESTOR: resposta /team/:team_id:', teamDetailPayload);
-          allTeams = Array.isArray(teamDetailPayload) ? teamDetailPayload : [teamDetailPayload];
-        } else {
-          allTeams = [];
+        if (allTeams.length > 0) {
+          console.log('📊 GESTOR: respostas /team/:team_id (mescladas):', allTeams.length, 'times');
         }
       } else {
         allTeams = await this.bwaTeamApi.fetchTeamList();
@@ -778,7 +872,16 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
         availableTeams = allTeams
           .filter((team: any) => {
             const teamId = team._id || team.id;
-            return teamId != null && accessibleTeamIds.includes(String(teamId));
+            if (teamId == null) {
+              return false;
+            }
+            const idStr = String(teamId);
+            if (accessibleTeamIds.includes(idStr)) {
+              return true;
+            }
+            return (
+              !isAdminRole && this.isCurrentUserLeaderOrObserverOnTeam(team as Record<string, unknown>)
+            );
           })
           .map((team: any) => {
             const g4u = this.pickGame4uNumericTeamIdFromRaw(team as Record<string, unknown>);

@@ -182,6 +182,51 @@ describe('UserProfileService', () => {
       expect(result).toContain('team-123');
       expect(result).toContain('team-456');
     });
+
+    it('should merge observer_teams for GESTOR', () => {
+      Object.defineProperty(mockSessaoProvider, 'usuario', {
+        value: {
+          teams: [defaultTeamCodes.gestor, 'team-led'],
+          observer_teams: ['team-obs']
+        }
+      });
+      const result = service.getAccessibleTeamIds();
+      expect(result).toContain('team-led');
+      expect(result).toContain('team-obs');
+      expect(result).not.toContain(defaultTeamCodes.gestor);
+    });
+
+    it('should not merge observer_teams for DIRETOR', () => {
+      Object.defineProperty(mockSessaoProvider, 'usuario', {
+        value: {
+          teams: [defaultTeamCodes.diretor],
+          observer_teams: ['should-not-appear']
+        }
+      });
+      expect(service.getAccessibleTeamIds()).toEqual([]);
+    });
+
+    it('should merge observer_teams for JOGADOR profile with session GESTOR role', () => {
+      mockSessaoProvider.isGerente.and.returnValue(true);
+      Object.defineProperty(mockSessaoProvider, 'usuario', {
+        value: {
+          teams: [],
+          observer_teams: ['team-obs-only']
+        }
+      });
+      expect(service.getAccessibleTeamIds()).toEqual(['team-obs-only']);
+      mockSessaoProvider.isGerente.and.returnValue(false);
+    });
+
+    it('should not merge observer_teams for plain JOGADOR', () => {
+      Object.defineProperty(mockSessaoProvider, 'usuario', {
+        value: {
+          teams: ['some-player-team'],
+          observer_teams: ['team-obs']
+        }
+      });
+      expect(service.getAccessibleTeamIds()).toEqual([]);
+    });
   });
 
   describe('Backward Compatibility', () => {
