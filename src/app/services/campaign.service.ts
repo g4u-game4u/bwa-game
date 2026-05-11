@@ -50,34 +50,53 @@ export class CampaignService {
 
   /**
    * Busca a campanha atual da API
-   * NOTA: Como migramos para Funifier, não temos mais o endpoint /campaign/current
-   * Retornamos uma campanha padrão baseada no ano atual
    */
   private async fetchCurrentCampaign(): Promise<Campaign> {
     try {
-      // Retorna campanha padrão para o ano atual
-      const defaultCampaign = this.getDefaultCampaign();
-      return defaultCampaign;
+      console.log('📡 Fetching campaign from /campaign/current...');
+      
+      // Tenta buscar da API
+      const response = await this.apiProvider.get<any>('/campaign/current');
+      
+      console.log('✅ Campaign fetched from API:', response);
+      
+      // Valida a resposta
+      if (response && response.id && response.starts_at && response.finishes_at) {
+        return {
+          id: response.id,
+          created_at: response.created_at || new Date().toISOString(),
+          name: response.name || 'Campanha Atual',
+          client_id: response.client_id || 'default',
+          starts_at: response.starts_at,
+          finishes_at: response.finishes_at,
+          isDefault: false
+        };
+      }
+      
+      // Se a resposta não tem o formato esperado, usa fallback
+      console.warn('⚠️ API response format invalid, using default campaign');
+      return this.getDefaultCampaign();
+      
     } catch (error) {
-      console.error('❌ Erro ao carregar campanha atual:', error);
+      console.error('❌ Erro ao carregar campanha atual da API:', error);
+      console.log('🔄 Usando campanha padrão como fallback');
       
       // Retorna campanha padrão em caso de erro
-      const defaultCampaign = this.getDefaultCampaign();
-      return defaultCampaign;
+      return this.getDefaultCampaign();
     }
   }
 
   /**
-   * Campanha padrão: temporada fixa 01/03/2026 — 30/04/2026 (dois meses).
+   * Campanha padrão: temporada fixa 01/03/2026 — 31/05/2026 (três meses: março, abril, maio).
    */
   private getDefaultCampaign(): Campaign {
     return {
       id: 1,
       created_at: new Date().toISOString(),
-      name: 'Temporada Mar–Abr 2026',
+      name: 'Temporada Mar–Mai 2026',
       client_id: 'default',
       starts_at: '2026-03-01',
-      finishes_at: '2026-04-30',
+      finishes_at: '2026-05-31',
       isDefault: true
     };
   }
