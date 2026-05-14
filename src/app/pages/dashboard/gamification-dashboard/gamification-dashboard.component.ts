@@ -314,6 +314,8 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
           this.playerStatus = status;
           this.isLoadingPlayer = false;
           this.maybeInjectFinanceBillingKpiForPlayer(this.getPlayerId());
+          this.kpiService.clearCache();
+          this.loadKPIData();
           this.cdr.markForCheck();
         },
         error: (error) => {
@@ -321,6 +323,8 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
           clearTimeout(loadingTimeout);
           this.toastService.error('Erro ao carregar dados do jogador');
           this.isLoadingPlayer = false;
+          this.kpiService.clearCache();
+          this.loadKPIData();
           this.cdr.markForCheck();
         },
         complete: () => {
@@ -517,6 +521,8 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
       seasonDates: { ...this.seasonDates }
     };
     this.maybeInjectFinanceBillingKpiForPlayer(playerId);
+    this.kpiService.clearCache();
+    this.loadKPIData();
     this.cdr.markForCheck();
     this.loadSeasonProgressDetails();
   }
@@ -697,7 +703,9 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     
     const playerId = this.getPlayerId();
     
-    this.kpiService.getPlayerKPIs(playerId, this.selectedMonth)
+    const teamHint = this.playerStatus?.metadata?.time?.trim();
+    this.kpiService
+      .getPlayerKPIs(playerId, this.selectedMonth, undefined, teamHint || undefined)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (kpis) => {
@@ -1177,6 +1185,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     this.announceToScreenReader('Atualizando dados do painel');
     this.playerService.clearCache();
     this.userActionDashboard.clearCache();
+    this.kpiService.clearCache();
     this.loadDashboardData();
   }
   

@@ -13,6 +13,7 @@ import {
   looksLikeEmail,
   pickSessionEmailForGameApi
 } from '@utils/game4u-user-id.util';
+import { SEASON_GAME_ACTION_RANGE } from '@app/constants/season-action-range';
 
 /** Mapear `userId` (ex.: UUID Game4U) → e-mail real para GET `/game/actions?user=`. */
 export type GameActionsUserRosterEntry = { userId: string; email?: string };
@@ -380,7 +381,8 @@ export class UserActionDashboardService {
    * GET `/game/actions?start&end&user` ou `/game/team-actions?start&end&team` (todas as páginas no intervalo).
    */
   async fetchAllUserActionsWithParams(extra: Record<string, string>): Promise<UserActionRow[]> {
-    let start = (extra['start'] || '2000-01-01T00:00:00.000Z').trim();
+    const seasonStartIso = SEASON_GAME_ACTION_RANGE.start.toISOString();
+    let start = (extra['start'] || seasonStartIso).trim();
     let end = (extra['end'] || new Date().toISOString()).trim();
     const t0 = Date.parse(start);
     const t1 = Date.parse(end);

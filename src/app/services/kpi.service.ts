@@ -56,8 +56,25 @@ export class KPIService {
       ? (playerStatus['metadata'] as Record<string, unknown>)
       : undefined;
 
+    /** Mesma origem que {@link PlayerMapper.extractMetadata}: `teams[0]` + extra + raiz (sidebar). */
+    const teamsArr = playerStatus['teams'];
+    const firstTeam =
+      Array.isArray(teamsArr) && teamsArr.length > 0 ? teamsArr[0] : undefined;
+    const fromSidebar = resolveTeamDisplayNameForPlayerSidebar(
+      firstTeam,
+      extra,
+      playerStatus
+    )
+      .toLowerCase()
+      .trim();
+
     const fromPlayer = String(
-      meta?.['time'] ?? extra?.['time'] ?? extra?.['team_name'] ?? extra?.['teamName'] ?? ''
+      fromSidebar ||
+        meta?.['time'] ||
+        extra?.['time'] ||
+        extra?.['team_name'] ||
+        extra?.['teamName'] ||
+        ''
     )
       .toLowerCase()
       .trim();
@@ -74,13 +91,7 @@ export class KPIService {
       fromSession = resolveTeamDisplayNameForPlayerSidebar(first, uExtra, user).toLowerCase().trim();
     }
 
-    const goalsRelevant = (s: string): boolean =>
-      !!s &&
-      (s.includes('financeiro') ||
-        s.includes('juridico') ||
-        s.includes('jurídico') ||
-        s === 'cs' ||
-        s.includes('cs'));
+    const goalsRelevant = (s: string): boolean => this.teamLabelRelatesToGoalsApi(s);
 
     if (goalsRelevant(fromPlayer)) {
       return fromPlayer;
@@ -89,6 +100,39 @@ export class KPIService {
       return fromSession;
     }
     return fromPlayer || fromSession;
+  }
+
+  /** Normaliza label de time para comparações (acentos, caixa). */
+  private normalizeTeamLabelForGoals(s: string): string {
+    return String(s || '')
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .trim();
+  }
+
+  /** Time cujo nome alimenta GET `/goals/logs` (Financeiro, Jurídico, CS, …). */
+  private teamLabelRelatesToGoalsApi(s: string): boolean {
+    const t = this.normalizeTeamLabelForGoals(s);
+    return (
+      !!t &&
+      (t.includes('financeiro') ||
+        t.includes('juridico') ||
+        t === 'cs' ||
+        t.includes('cs'))
+    );
+  }
+
+  private teamIsFinanceForGoals(teamName: string): boolean {
+    return this.normalizeTeamLabelForGoals(teamName).includes('financeiro');
+  }
+
+  private teamIsJuridicoOrCsForGoals(teamName: string): boolean {
+    const t = this.normalizeTeamLabelForGoals(teamName);
+    if (!t || t.includes('financeiro')) {
+      return false;
+    }
+    return t.includes('juridico') || t === 'cs' || t.includes('cs');
   }
 
   /**
@@ -137,11 +181,21 @@ export class KPIService {
    * @param playerId - Player ID or 'me' for current player
    * @param selectedMonth - Selected month for filtering (optional, defaults to current month)
    * @param _actionLogService - Legado; ignorado.
+   * @param teamDisplayHint Label já resolvido para a UI (ex. `PlayerStatus.metadata.time`); tem prioridade se for um time de goals.
    */
-  getPlayerKPIs(playerId: string, selectedMonth?: Date, _actionLogService?: unknown): Observable<KPIData[]> {
-    // Create cache key that includes month to avoid cache conflicts
+  getPlayerKPIs(
+    playerId: string,
+    selectedMonth?: Date,
+    _actionLogService?: unknown,
+    teamDisplayHint?: string | null
+  ): Observable<KPIData[]> {
     const monthKey = selectedMonth ? `_${selectedMonth.getFullYear()}-${selectedMonth.getMonth()}` : '_current';
-    const cacheKey = `${playerId}${monthKey}`;
+    const hintNorm = (teamDisplayHint ?? '').trim().toLowerCase();
+    const hintCache =
+      hintNorm && this.teamLabelRelatesToGoalsApi(hintNorm)
+        ? `_hint_${hintNorm.replace(/\s+/g, '_')}`
+        : '';
+    const cacheKey = `${playerId}${monthKey}${hintCache}`;
     const cached = this.getCachedData(this.playerKPICache, cacheKey);
     if (cached) {
       return cached;
@@ -161,9 +215,22 @@ export class KPIService {
            selectedMonth.getMonth() === now.getMonth());
 
         // Get team name from player metadata - check multiple sources
-        const teamName = this.resolveTeamNameForGoals(playerStatus as Record<string, unknown>);
+        const teamResolved = this.resolveTeamNameForGoals(playerStatus as Record<string, unknown>);
+        const hint = hintNorm;
+        const teamName =
+          hint && this.teamLabelRelatesToGoalsApi(hint) ? hint : teamResolved;
 
-        console.log('📊 [KPI Service] Player team name:', teamName, 'Full metadata:', playerStatus.metadata, 'Extra:', playerStatus.extra);
+        console.log(
+          '📊 [KPI Service] Player team name:',
+          teamName,
+          '(resolved:',
+          teamResolved,
+          hint ? `, hint: ${hint}` : '',
+          ') Full metadata:',
+          playerStatus.metadata,
+          'Extra:',
+          playerStatus.extra
+        );
 
         // Porcentagem de Entregas no Prazo - only for current month
         if (isCurrentMonth && playerStatus.extra?.entrega) {
@@ -189,12 +256,12 @@ export class KPIService {
 
             if (goalKpis.length === 0) {
               console.warn('📊 [KPI Service] No KPIs from Goals API, using fallback');
-              if (teamName.includes('juridico') || teamName.includes('jurídico') || teamName.includes('cs')) {
+              if (this.teamIsJuridicoOrCsForGoals(teamName)) {
                 return this.getFallbackKPIs(playerStatus, teamName).pipe(
                   map(fb => [...kpis, ...fb])
                 );
               }
-              if (teamName.includes('financeiro')) {
+              if (this.teamIsFinanceForGoals(teamName)) {
                 return of([
                   ...kpis,
                   {
@@ -222,16 +289,19 @@ export class KPIService {
                 unit = 'R$';
               }
 
+              const gid = String(goalKpi.id ?? '')
+                .trim()
+                .toLowerCase();
               let kpiId = 'unknown';
-              if (goalKpi.id === '126bfa2d-5845-4a3f-94d0-301b988dac33') {
+              if (gid === '126bfa2d-5845-4a3f-94d0-301b988dac33') {
                 kpiId = 'aposentadorias-concedidas';
                 label = 'Volume de concessões';
                 unit = 'concessões';
-              } else if (goalKpi.id === '75274eb5-0412-4c2b-8bcf-ac5c34ea904b') {
+              } else if (gid === '75274eb5-0412-4c2b-8bcf-ac5c34ea904b') {
                 kpiId = 'receita-concedida';
                 label = 'Receita concedida';
                 unit = 'R$';
-              } else if (goalKpi.id === 'b96dd54a-2847-4267-b234-2bd02e63b118') {
+              } else if (gid === 'b96dd54a-2847-4267-b234-2bd02e63b118') {
                 kpiId = 'meta-protocolo';
                 label = 'Valor de protocolos';
                 unit = 'R$';
@@ -262,12 +332,12 @@ export class KPIService {
           }),
           catchError(error => {
             console.error('📊 [KPI Service] Error fetching KPIs from goals API:', error);
-            if (teamName.includes('juridico') || teamName.includes('jurídico') || teamName.includes('cs')) {
+            if (this.teamIsJuridicoOrCsForGoals(teamName)) {
               return this.getFallbackKPIs(playerStatus, teamName).pipe(
                 map(fb => [...kpis, ...fb])
               );
             }
-            if (teamName.includes('financeiro')) {
+            if (this.teamIsFinanceForGoals(teamName)) {
               return of([
                 ...kpis,
                 {
@@ -304,7 +374,7 @@ export class KPIService {
   private getFallbackKPIs(playerStatus: any, teamName: string): Observable<KPIData[]> {
     const kpis: KPIData[] = [];
 
-    if (teamName.includes('juridico') || teamName.includes('jurídico') || teamName.includes('cs')) {
+    if (this.teamIsJuridicoOrCsForGoals(teamName)) {
       const currentAposent = parseFloat(playerStatus.extra?.aposentadorias_concedidas) || 0;
       const targetAposent = APOSENTADORIAS_TARGET;
       const superTargetAposent = Math.ceil(targetAposent * 1.5);
@@ -386,12 +456,12 @@ export class KPIService {
         return this.goalsApi.getAllKpisForTeam(teamName, undefined).pipe(
           switchMap(goalKpis => {
             if (goalKpis.length === 0) {
-              if (teamName.includes('juridico') || teamName.includes('jurídico') || teamName.includes('cs')) {
+              if (this.teamIsJuridicoOrCsForGoals(teamName)) {
                 return this.getFallbackKPIs(playerStatus, teamName).pipe(
                   map(fb => [...kpis, ...fb])
                 );
               }
-              if (teamName.includes('financeiro')) {
+              if (this.teamIsFinanceForGoals(teamName)) {
                 return of([
                   ...kpis,
                   {
@@ -419,16 +489,19 @@ export class KPIService {
                 unit = 'R$';
               }
 
+              const gid = String(goalKpi.id ?? '')
+                .trim()
+                .toLowerCase();
               let kpiId = 'unknown';
-              if (goalKpi.id === '126bfa2d-5845-4a3f-94d0-301b988dac33') {
+              if (gid === '126bfa2d-5845-4a3f-94d0-301b988dac33') {
                 kpiId = 'aposentadorias-concedidas';
                 label = 'Volume de concessões';
                 unit = 'concessões';
-              } else if (goalKpi.id === '75274eb5-0412-4c2b-8bcf-ac5c34ea904b') {
+              } else if (gid === '75274eb5-0412-4c2b-8bcf-ac5c34ea904b') {
                 kpiId = 'receita-concedida';
                 label = 'Receita concedida';
                 unit = 'R$';
-              } else if (goalKpi.id === 'b96dd54a-2847-4267-b234-2bd02e63b118') {
+              } else if (gid === 'b96dd54a-2847-4267-b234-2bd02e63b118') {
                 kpiId = 'meta-protocolo';
                 label = 'Valor de protocolos';
                 unit = 'R$';

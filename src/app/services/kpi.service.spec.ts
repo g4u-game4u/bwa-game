@@ -73,6 +73,28 @@ describe('KPIService', () => {
     });
   });
 
+  it('prefers Funifier teams[0] label over session when resolving /goals team (painel Jurídico)', (done) => {
+    sessaoStub.usuario = {
+      team_name: 'Financeiro'
+    } as Record<string, unknown>;
+    goalsApiSpy.getAllKpisForTeam.calls.reset();
+
+    const mockPlayerStatus = {
+      _id: 'test-player',
+      name: 'João',
+      extra: {},
+      teams: [{ name: 'Jurídico' }]
+    };
+    playerServiceSpy.getRawPlayerData.and.returnValue(of(mockPlayerStatus));
+
+    service.getPlayerKPIs('test-player').subscribe(() => {
+      const teamArg = goalsApiSpy.getAllKpisForTeam.calls.mostRecent().args[0] as string;
+      expect(teamArg.toLowerCase()).toContain('jur');
+      expect(teamArg.toLowerCase()).not.toContain('financeiro');
+      done();
+    });
+  });
+
   /**
    * Feature: gamification-dashboard, Property 4: KPI Progress Calculation
    * Validates: Requirements 5.2, 5.3
