@@ -1,0 +1,673 @@
+departamento,nome,email
+Admissão,Ana Raquel,ana.raquel@bwa.global
+Admissão,Deila Dantas,deila.dantas@bwa.global
+Admissão,Gerson Fernandes,gerson.fernandes@bwa.global
+Admissão,Glenda Fonseca,glenda.fonseca@bwa.global
+Admissão,Janaina Albuquerque,janaina.albuquerque@bwa.global
+Admissão,Joyce Carla,joyce.carla@bwa.global
+Admissão,Karine Silva,karine.silva@bwa.global
+Admissão,Maria Larissa,maria.larissa@bwa.global
+Admissão,Nalbert Julio,nalbert.julio@bwa.global
+Admissão,Ronaldo Silva,ronaldo.silva@bwa.global
+Admissão,Ronaldo Tavares,ronaldo.tavares@bwa.global
+Admissão,Sem Responsavel,sem.responsavel@bwa.global
+Admissão,Teresinha Souza,teresinha.souza@bwa.global
+Atendimento,Alessia Aquiliane,alessia.aquiliane@bwa.global
+Atendimento,Ana Carolina,ana.carolina@bwa.global
+Atendimento,Ana Geisiele,ana.geisiele@bwa.global
+Atendimento,Ana Paula,ana.paula@bwa.global
+Atendimento,Andreza Aquino,andreza.aquino@bwa.global
+Atendimento,Andreza Silva,andreza.silva@bwa.global
+Atendimento,Caio Rodrigues,caio.rodrigues.app@bwa.global
+Atendimento,Carlos Filipe,carlos.filipe@bwa.global
+Atendimento,Daiana Almeida,daiana.almeida@bwa.global
+Atendimento,Daniel Viana,daniel.viana.app@bwa.global
+Atendimento,Debora Pereira,debora.pereira@bwa.global
+Atendimento,Dionisio Neto,dionisio.neto@bwa.global
+Atendimento,Elaine Matos,elaine.matos@bwa.global
+Atendimento,Elizabete Costa,elizabete.costa@bwa.global
+Atendimento,Fabricio Oliveira,fabricio.oliveira@bwa.global
+Atendimento,Flavia Camara,flavia.camara@bwa.global
+Atendimento,Geiza Freitas,geiza.freitas.app@bwa.global
+Atendimento,Jannierlly Silva,jannierlly.silva@bwa.global
+Atendimento,Jefferson Reinaldo,jefferson.reinaldo@bwa.global
+Atendimento,Jennifer Ferreira,jennifer.ferreira@bwa.global
+Atendimento,Jessica Lopes,jessica.lopes@bwa.global
+Atendimento,Joao Neto,joao.neto@bwa.global
+Atendimento,Joelma Nascimento,joelma.nascimento.app@bwa.global
+Atendimento,Joelson Philippe,joelson.philippe@bwa.global
+Atendimento,Juliana Varela,juliana.varela@bwa.global
+Atendimento,Juliane Borges,juliane.borges@bwa.global
+Atendimento,Katarina Lima,katarina.lima@bwa.global
+Atendimento,Klijda Karielly,klijda.karielly@bwa.global
+Atendimento,Levy Benoni,levy.benoni@bwa.global
+Atendimento,Livia Andrade,livia.andrade@bwa.global
+Atendimento,Lucas Cunha,lucas.cunha@bwa.global
+Atendimento,Lucas Gabriel,lucas.gabriel@bwa.global
+Atendimento,Lucas Moura,lucas.moura@bwa.global
+Atendimento,Lucas Peixoto,lucas.peixoto@bwa.global
+Atendimento,Luiza Mendes,luiza.mendes@bwa.global
+Atendimento,Maiara Lucena,maiara.lucena@bwa.global
+Atendimento,Mariana Lavinia,mariana.lavinia@bwa.global
+Atendimento,Matheus Christian,matheus.christian@bwa.global
+Atendimento,Moises Rodrigues,moises.rodrigues.app@bwa.global
+Atendimento,Paulo Henrique Souza,paulohenrique.souza@bwa.global
+Atendimento,Pedro Aguiar,pedro.aguiar@bwa.global
+Atendimento,Pedro Henrique,pedro.henrique@bwa.global
+Atendimento,Pedro Lima,pedro.lima@bwa.global
+Atendimento,Rafael Costa,rafael.costa@bwa.global
+Atendimento,Rayna Nascimento,rayna.nascimento@bwa.global
+Atendimento,Rayson Raab,rayson.raab@bwa.global
+Atendimento,Sem Responsavel,sem.responsavel@bwa.global
+Atendimento,Sem Movimento,semmovimento@contauditoria.com.br
+Atendimento,Tarcísio Cassimiro,tarcisio.cassimiro@bwa.global
+Atendimento,Thayna Ferreira,thayna.ferreira@bwa.global
+Atendimento,Thays Souza,thays.souza@bwa.global
+Atendimento,Thiago Barbalho,thiago.barbalho@bwa.global
+Atendimento,Vania Diniz,vania.diniz@bwa.global
+Atendimento,Victor Silva,victor.silva@bwa.global
+Atendimento,Yasmin Azevedo,yasmin.azevedo@bwa.global
+Atendimento,Yasmin Silva,yasmin.silva@bwa.global
+Atendimento,Yuri Diogo,yuri.diogo@bwa.global
+Atendimento,Yuri Gadelha,yuri.gadelha@bwa.global
+Auditoria Interna - Fiscal,Ian Rio,ian.rio@bwa.global
+Caixa postal - Performance,Rhenan Delattre,rhenan.delattre@bwa.global
+Comercial,Carine Mendonca,carine.mendonca@bwa.global
+Comercial,Dionisio Neto,dionisio.neto@bwa.global
+Comercial,Maria Lukyany,maria.lukyany@bwa.global
+Comercial,Raldny Silva,raldny.silva@bwa.global
+Comercial,Victoria Carvalho,victoria.carvalho@bwa.global
+Compliance,Andreza Aquino,andreza.aquino@bwa.global
+Compliance,Jessica Lopes,jessica.lopes@bwa.global
+Compliance,Rayson Raab,rayson.raab@bwa.global
+Compliance - Contábil,Beatriz Bloise,beatriz.bloise@bwa.global
+Compliance - Contábil,Caio Miranda,caio.miranda@bwa.global
+Compliance - Contábil,Fabricio Oliveira,fabricio.oliveira@bwa.global
+Compliance - Fiscal,Andreza Araujo,andreza.araujo@bwa.global
+Compliance - Fiscal,Arthur Alexandre,arthur.alexandre@bwa.global
+Compliance - Fiscal,Atyla Kenuy,atyla.kenuy@bwa.global
+Compliance - Fiscal,Igor Fonseca,igor.fonseca@bwa.global
+Compliance - Fiscal,Jadde Ferreira,jadde.ferreira@bwa.global
+Compliance - Fiscal,Jairo Bezerra,jairo.bezerra@bwa.global
+Compliance - Fiscal,Tamires Tawane,tamires.tawane@bwa.global
+Compliance - Fiscal,Victor Mendonça,victor.mendonca@bwa.global
+Compliance - Pessoal,Deila Dantas,deila.dantas@bwa.global
+Compliance - Pessoal,Rayna Nascimento,rayna.nascimento@bwa.global
+Compliance - Pessoal,Rayson Raab,rayson.raab@bwa.global
+Compliance - Pessoal,Renata Cristina,renata.cristina@bwa.global
+Compliance - Pessoal,William Silva,william.silva@bwa.global
+Conformidade - Regularidade,Deila Dantas,deila.dantas@bwa.global
+Consolidação,Jordy Fernandes,jordy.fernandes@bwa.global
+Contábil,Adryel Stoffel,adryel.stoffel@bwa.global
+Contábil,Albemom Feliciano,albemom.feliciano@bwa.global
+Contábil,Alexsandra Santos,alexsandra.santos@bwa.global
+Contábil,Aline Campista,aline.campista@bwa.global
+Contábil,Allana Gonçalves,allana.goncalves@bwa.global
+Contábil,Amanda Caldas,amanda.caldas@bwa.global
+Contábil,Ana Beatriz,ana.beatriz@bwa.global
+Contábil,Ana Carolina,ana.carolina@bwa.global
+Contábil,Ana Geisiele,ana.geisiele@bwa.global
+Contábil,Anderson Guilherme,anderson.guilherme@bwa.global
+Contábil,Andrea Procopio,andrea.procopio@bwa.global
+Contábil,Andrey Almeida,andrey.almeida@bwa.global
+Contábil,Angela Silva,angela.silva@bwa.global
+Contábil,Arthur Valladao,arthur.valladao@bwa.global
+Contábil,Ashelley Melani,ashelley.melani@bwa.global
+Contábil,Barbara Farias,barbara.farias@bwa.global
+Contábil,Brena Bandeira,brena.bandeira@bwa.global
+Contábil,Camila Cardoso,camila.cardoso@bwa.global
+Contábil,Carina Brenna,carina.brenna@bwa.global
+Contábil,Carla Marinho,carla.marinho@bwa.global
+Contábil,Carla Silva,carla.silva@bwa.global
+Contábil,Carlos Filipe,carlos.filipe@bwa.global
+Contábil,Celina Ferreira,celina.ferreira@bwa.global
+Contábil,Daniele Batista,daniele.batista@bwa.global
+Contábil,Danilo Cavalcanti,danilo.cavalcanti@bwa.global
+Contábil,Davi Rodrigues,davi.rodrigues@bwa.global
+Contábil,David Julio,david.julio@bwa.global
+Contábil,Dayana Paiva,dayana.paiva@bwa.global
+Contábil,Dayane Silva,dayane.silva@bwa.global
+Contábil,Debora Pereira,debora.pereira@bwa.global
+Contábil,Denes Matheus,denes.matheus@bwa.global
+Contábil,Denilson Pimenta,denilson.pimenta@bwa.global
+Contábil,Dionisio Neto,dionisio.neto@bwa.global
+Contábil,Douglas Elisio,douglas.elisio@bwa.global
+Contábil,Eduarda Almeida,eduarda.almeida@bwa.global
+Contábil,Eduarda Ribeiro,eduarda.ribeiro@bwa.global
+Contábil,Elaine Matos,elaine.matos@bwa.global
+Contábil,Elton Tavares,elton.tavares@bwa.global
+Contábil,Emelly Soares,emelly.soares@bwa.global
+Contábil,Erick Matias,erick.matias@bwa.global
+Contábil,Fabricio Oliveira,fabricio.oliveira@bwa.global
+Contábil,Fayllon Candido,fayllon.candido@bwa.global
+Contábil,Gerlane Ferreira,gerlane.ferreira@bwa.global
+Contábil,Gizelly Marques,gizelly.marques@bwa.global
+Contábil,Guilherme Gonçalves,guilherme.goncalves@bwa.global
+Contábil,Guilherme Zenon,guilherme.zenon@bwa.global
+Contábil,Helton Victor,helton.victor@bwa.global
+Contábil,Henrique Targino,henrique.targino@bwa.global
+Contábil,Janaina Alves,janaina.alves@bwa.global
+Contábil,Janiele França,janiele.franca@bwa.global
+Contábil,Jefferson Reinaldo,jefferson.reinaldo@bwa.global
+Contábil,Jessica Nascimento,jessica.nascimento@bwa.global
+Contábil,Jhonatas Silva,jhonatas.silva@bwa.global
+Contábil,João Almeida,joao.almeida@bwa.global
+Contábil,Joao Neto,joao.neto@bwa.global
+Contábil,Joelson Philippe,joelson.philippe@bwa.global
+Contábil,Julia Lima,julia.lima@bwa.global
+Contábil,Juliana Salgado,juliana.salgado@bwa.global
+Contábil,Juliana Varela,juliana.varela@bwa.global
+Contábil,Karen Mota,karen.mota@bwa.global
+Contábil,Katarina Lima,katarina.lima@bwa.global
+Contábil,Kellen Silva,kellen.silva@bwa.global
+Contábil,Khley Alves,khley.alves@bwa.global
+Contábil,Klicia Raquel,klicia.raquel@bwa.global
+Contábil,Larissa Ferreira,larissa.ferreira@bwa.global
+Contábil,Laura Rodrigues,laura.rodrigues@bwa.global
+Contábil,Laysa Souza,laysa.souza@bwa.global
+Contábil,Lidia Barros,lidia.barros@bwa.global
+Contábil,Lucas Cunha,lucas.cunha@bwa.global
+Contábil,Lucas Gabriel,lucas.gabriel@bwa.global
+Contábil,Lucas Ramos,lucas.ramos@bwa.global
+Contábil,Lucas Vieira,lucas.vieira@bwa.global
+Contábil,Lucas Xavier,lucas.xavier@bwa.global
+Contábil,Luisa Carvalho,luisa.carvalho@bwa.global
+Contábil,Luiz Eduardo,luiz.eduardo@bwa.global
+Contábil,Luiz Ferreira,luiz.ferreira@bwa.global
+Contábil,Marcelo Silva,marcelo.silva@bwa.global
+Contábil,Maria Santos,maria.santos@bwa.global
+Contábil,Mariana Lavinia,mariana.lavinia@bwa.global
+Contábil,Mariana Miguez,mariana.miguez@bwa.global
+Contábil,Marianna Queiroz,marianna.queiroz@bwa.global
+Contábil,Marilucy Fidelis,marilucy.fidelis@bwa.global
+Contábil,Matheus Cruz,matheus.cruz@bwa.global
+Contábil,Milena Lima,milena.lima@bwa.global
+Contábil,Moises Rodrigues,moises.rodrigues.app@bwa.global
+Contábil,Monick Lopes,monick.lopes@bwa.global
+Contábil,Natalia Castelano,natalia.castelano@bwa.global
+Contábil,Paloma Araujo,paloma.araujo@bwa.global
+Contábil,Paulo Henrique Souza,paulohenrique.souza@bwa.global
+Contábil,Pedro Henrique,pedro.henrique@bwa.global
+Contábil,Pedro Silva,pedro.silva@bwa.global
+Contábil,Pedro Henrique da Cruz Silva,pedrohenrique.silva@bwa.global
+Contábil,Pericles Augusto,pericles.augusto@bwa.global
+Contábil,Phillipe Matheus,phillipe.matheus@bwa.global
+Contábil,Priscila Lisboa,priscila.lisboa@bwa.global
+Contábil,Rafaela Silverio,rafaela.silverio@bwa.global
+Contábil,Rafaelle Silva,rafaelle.silva@bwa.global
+Contábil,Regina Silva,regina.silva@bwa.global
+Contábil,Renan Damascena,renan.damascena@bwa.global
+Contábil,Rene Souza,rene.souza@bwa.global
+Contábil,Rhennan Lima,rhennan.lima@bwa.global
+Contábil,Roger Melo,roger.melo@bwa.global
+Contábil,Ronaldo Silva,ronaldo.silva@bwa.global
+Contábil,Samira Felix,samira.felix@bwa.global
+Contábil,Sem Responsavel,sem.responsavel@bwa.global
+Contábil,Shiu Mei,shiu.mei@bwa.global
+Contábil,Tacio D`assunção de Sa,tacio.sa@bwa.global
+Contábil,Tarcísio Cassimiro,tarcisio.cassimiro@bwa.global
+Contábil,Thales Silva,thales.silva@bwa.global
+Contábil,Thiago Fernandes,thiago.fernandes@bwa.global
+Contábil,Thiago Rodrigues,thiago.rodrigues@bwa.global
+Contábil,Thulio Azevedo,thulio.azevedo@bwa.global
+Contábil,Tiago Paiva,tiago.paiva@bwa.global
+Contábil,Vanubia Nunes,vanubia.nunes@bwa.global
+Contábil,Victor Silva,victor.silva@bwa.global
+Contábil,Victoria Carvalho,victoria.carvalho@bwa.global
+Contábil,Victoria Sousa,victoria.sousa@bwa.global
+Contábil,Virginia Silva,virginia.silva@bwa.global
+Contábil,Vitoria Azevedo,vitoria.azevedo@bwa.global
+Contábil,Vitoria Souza,vitoria.souza@bwa.global
+Contábil,Wesley Campelo,wesley.campelo@bwa.global
+Contábil,Yonara Sousa,yonara.sousa@bwa.global
+Contábil,Yuri Gadelha,yuri.gadelha@bwa.global
+Contábil - Atendimento,Aline Campista,aline.campista@bwa.global
+Contábil - Atendimento,Allana Gonçalves,allana.goncalves@bwa.global
+Contábil - Atendimento,Debora Pereira,debora.pereira@bwa.global
+Contábil - Atendimento,Erick Matias,erick.matias@bwa.global
+Contábil - Atendimento,Guilherme Gonçalves,guilherme.goncalves@bwa.global
+Contábil - Atendimento,Guilherme Zenon,guilherme.zenon@bwa.global
+Contábil - Atendimento,Joao Neto,joao.neto@bwa.global
+Contábil - Atendimento,Laysa Souza,laysa.souza@bwa.global
+Contábil - Atendimento,Luisa Carvalho,luisa.carvalho@bwa.global
+Contábil - Atendimento,Mariana Lavinia,mariana.lavinia@bwa.global
+Contábil - Atendimento,Matheus Cruz,matheus.cruz@bwa.global
+Contábil - Atendimento,Pedro Henrique,pedro.henrique@bwa.global
+Contábil - Atendimento,Tiago Paiva,tiago.paiva@bwa.global
+Contábil - Atendimento,Vitoria Azevedo,vitoria.azevedo@bwa.global
+Contábil - Atendimento,Vitoria Souza,vitoria.souza@bwa.global
+Contábil Suporte - Natal,Guilherme Zenon,guilherme.zenon@bwa.global
+Contábil Suporte - Natal,Janiele França,janiele.franca@bwa.global
+Contábil Suporte - Natal,Katarina Lima,katarina.lima@bwa.global
+Contábil Suporte - Natal,Matheus Cruz,matheus.cruz@bwa.global
+Contábil Suporte - Recife,Luana Santos,luana.santos@bwa.global
+Contábil Suporte - Recife,Ray Ouriques,ray.ouriques@bwa.global
+Customer Experience,Cintia,cintia@f360.com.br
+Customer Experience,Debora Pereira,debora.pereira@bwa.global
+Customer Experience,Dionisio Neto,dionisio.neto@bwa.global
+Customer Experience,Natiane Firmino,natiane.firmino@bwa.global
+Customer Experience,Viviane Silva,viviane.silva@bwa.global
+DP Atendimento,Bianca Ferreira,bianca.ferreira@bwa.global
+DP Atendimento,Brenda Araujo,brenda.araujo@bwa.global
+DP Atendimento,Daniel Martins,daniel.martins@bwa.global
+DP Atendimento,Deila Dantas,deila.dantas@bwa.global
+DP Atendimento,Izabel Simão,izabel.simao@bwa.global
+DP Atendimento,Lays Lopes,lays.lopes@bwa.global
+DP Atendimento,Lidiane Lima,lidiane.lima@bwa.global
+DP Atendimento,Lidiane Viana,lidiane.viana@bwa.global
+DP Atendimento,Lucia Oliveira,lucia.oliveira@bwa.global
+DP Atendimento,Luciana Leal,luciana.leal@bwa.global
+DP Atendimento,Mairla Araujo,mairla.araujo@bwa.global
+DP Atendimento,Marcos Daniel,marcos.daniel@bwa.global
+DP Atendimento,Nicoly Costa,nicoly.costa@bwa.global
+DP Atendimento,Ozenaide Maria,ozenaide.maria@bwa.global
+DP Atendimento,Raquel Silva,raquel.silva@bwa.global
+DP Atendimento,Rayane Lima,rayane.lima@bwa.global
+DP Atendimento,Rayson Raab,rayson.raab@bwa.global
+DP Atendimento,Rhayanne Torres,rhayanne.torres@bwa.global
+DP Atendimento,Sem Responsavel,sem.responsavel@bwa.global
+DP Atendimento,Thiago Costa,thiago.costa@bwa.global
+DP Atendimento,Vivian Pires,vivian.pires@bwa.global
+DP Atendimento,Wendya Rocha,wendya.rocha@bwa.global
+EFD REINF,Deborah Fidelis,deborah.fidelis@bwa.global
+EFD REINF,Jessica Monteiro,jessica.monteiro@bwa.global
+EFD REINF,Joana Costa,joana.costa@bwa.global
+EFD REINF,Joyce Silva,joyce.silva@bwa.global
+EFD REINF,Lilian Aguiar,lilian.aguiar@bwa.global
+EFD REINF,Lilian Fernandes,lilian.fernandes.app@bwa.global
+EFD REINF,Mara Santos,mara.santos@bwa.global
+EFD REINF,Maria Ribeiro,maria.ribeiro@bwa.global
+EFD REINF,Marinaldo Gomes,marinaldo.gomes@bwa.global
+EFD REINF,Karol Lourenço,nilza.lourenco@bwa.global
+EFD REINF,Segiane Almeida,segiane.almeida.app@bwa.global
+EFD REINF,Thaylisson Rafael,thaylisson.rafael@bwa.global
+EFD REINF,Vitoria Rocha,vitoria.rocha@bwa.global
+Financeiro,Andria Moreira,andria.moreira@bwa.global
+Financeiro,Ariane Gomes,ariane@contabil360.com.br
+Financeiro,Cintia Asceli,cintia.asceli.app@bwa.global
+Fiscal,Alan Rodrigo,alan.rodrigo@bwa.global
+Fiscal,Alexandre Galdino,alexandre.galdino@bwa.global
+Fiscal,Aline Brito,aline.brito@bwa.global
+Fiscal,Allycia Oliveira,allycia.oliveira@bwa.global
+Fiscal,Amanda Pedrozo,amanda.pedrozo@bwa.global
+Fiscal,Ana Rita,ana.rita@bwa.global
+Fiscal,Ana Santos,ana.santos@bwa.global
+Fiscal,Ana Beatriz Geraldo,anabeatriz.geraldo.app@bwa.global
+Fiscal,Ana Beatriz Souza,anabeatriz.souza@bwa.global
+Fiscal,Ana Carolina Silva,anacarolina.silva@bwa.global
+Fiscal,Andre Campos,andre.campos@bwa.global
+Fiscal,Andria Moreira,andria.moreira@bwa.global
+Fiscal,Andrieli Almeida,andrieli.almeida@bwa.global
+Fiscal,Beatriz Lima,beatriz.lima@bwa.global
+Fiscal,Beatriz Moreira,beatriz.moreira.app@bwa.global
+Fiscal,Bianca Cristina,bianca.cristina@bwa.global
+Fiscal,Bianka Fernandes,bianka.fernandes@bwa.global
+Fiscal,Carila Durel,carila.durel.app@bwa.global
+Fiscal,Carlos Coutinho,carlos.coutinho@bwa.global
+Fiscal,Cintia Asceli,cintia.asceli.app@bwa.global
+Fiscal,Daiana Almeida,daiana.almeida@bwa.global
+Fiscal,Dalmo Dornelas,dalmo.dornelas@bwa.global
+Fiscal,Danilo Faria,danilo.faria@bwa.global
+Fiscal,David Luan,david.luan@bwa.global
+Fiscal,Deborah Fidelis,deborah.fidelis@bwa.global
+Fiscal,Elizabete Costa,elizabete.costa@bwa.global
+Fiscal,Ennya Rafaelly,ennya.rafaelly@bwa.global
+Fiscal,Eric Agostinho,eric.agostinho@bwa.global
+Fiscal,Ericli Wallyson,ericli.wallyson@bwa.global
+Fiscal,Errily Pereira,errily.pereira@bwa.global
+Fiscal,Fernanda Dantas,fernanda.dantas@bwa.global
+Fiscal,Flavia Camara,flavia.camara@bwa.global
+Fiscal,Francisco Alves,francisco.alves@bwa.global
+Fiscal,Gabriel Teixeira,gabriel.teixeira@bwa.global
+Fiscal,Gabrielle Cruz,gabrielle.cruz@bwa.global
+Fiscal,Geiza Freitas,geiza.freitas.app@bwa.global
+Fiscal,Guilherme Gonçalves,guilherme.goncalves@bwa.global
+Fiscal,Hiago Kawan,hiago.kawan@bwa.global
+Fiscal,Hiran Silva,hiran.silva@bwa.global
+Fiscal,Ikaro Gurgel,ikaro.gurgel@bwa.global
+Fiscal,Ingrid Silva,ingrid.silva@bwa.global
+Fiscal,Irina Campos,irina.campos@bwa.global
+Fiscal,Jalis Camara,jalis.camara@bwa.global
+Fiscal,Janaina Rocha,janaina.rocha@bwa.global
+Fiscal,Jannierlly Silva,jannierlly.silva@bwa.global
+Fiscal,Jaqueline Sales,jaqueline.sales@bwa.global
+Fiscal,Jefferson Lima,jefferson.lima@bwa.global
+Fiscal,Jennifer Vitoria,jennifer.vitoria@bwa.global
+Fiscal,Joalisson Silva,joalisson.silva@bwa.global
+Fiscal,Joana Costa,joana.costa@bwa.global
+Fiscal,Joao Amaral,joao.amaral@bwa.global
+Fiscal,João Monteiro,joao.monteiro@bwa.global
+Fiscal,João Victor,joao.victor@bwa.global
+Fiscal,Joelma Nascimento,joelma.nascimento.app@bwa.global
+Fiscal,Jomabia Beatriz,jomabia.beatriz@bwa.global
+Fiscal,Josef Silva,josef.silva@bwa.global
+Fiscal,Joyce Duarte,joyce.duarte@bwa.global
+Fiscal,Joyce Silva,joyce.silva@bwa.global
+Fiscal,Jucelia Oliveira,jucelia.oliveira@bwa.global
+Fiscal,Juliana Benincaza,juliana.benincaza.app@bwa.global
+Fiscal,Juliane Cordeiro,juliane.cordeiro@bwa.global
+Fiscal,Kaline Linhares,kaline.linhares@bwa.global
+Fiscal,Kelly Cristina,kelly.cristina@bwa.global
+Fiscal,Larissa Alves,larissa.alves@bwa.global
+Fiscal,Larissa Santana,larissa.santana@bwa.global
+Fiscal,Larissa Tertulino,larissa.tertulino@bwa.global
+Fiscal,Laura Hemilly,laura.hemilly@bwa.global
+Fiscal,Lilian Fernandes,lilian.fernandes.app@bwa.global
+Fiscal,Lorena Silva,lorena.silva@bwa.global
+Fiscal,Lucas Moura,lucas.moura@bwa.global
+Fiscal,Lucas Roqueta,lucas.roqueta@bwa.global
+Fiscal,Luiz Carlos,luiz.carlos@bwa.global
+Fiscal,Luiza Albuquerque,luiza.albuquerque.app@bwa.global
+Fiscal,Maiara Lucena,maiara.lucena@bwa.global
+Fiscal,Mara Santos,mara.santos@bwa.global
+Fiscal,Marcelly Goulart,marcelly.goulart@bwa.global
+Fiscal,Maria Ashilley,maria.ashilley@bwa.global
+Fiscal,Maria Luisa,maria.luisa@bwa.global
+Fiscal,Maria Clara Melo,mariaclara.melo@bwa.global
+Fiscal,Mariana Paula,mariana.paula@bwa.global
+Fiscal,Mariane Oliveira,mariane.oliveira@bwa.global
+Fiscal,Marinaldo Gomes,marinaldo.gomes@bwa.global
+Fiscal,Marlon Assis,marlon.assis@bwa.global
+Fiscal,Mateus Miranda,mateus.miranda@bwa.global
+Fiscal,Mateus Teixeira,mateus.teixeira.app@bwa.global
+Fiscal,Mateus Teófilo,mateus.teofilo@bwa.global
+Fiscal,Matheus Christian,matheus.christian@bwa.global
+Fiscal,Michael Anderson,michael.anderson@bwa.global
+Fiscal,Mirleide Cabral,mirleide.cabral@bwa.global
+Fiscal,Mylene Sampaio,mylene.sampaio@bwa.global
+Fiscal,Myrlena Karla,myrlena.karla@bwa.global
+Fiscal,Nerino Filho,nerino.filho@bwa.global
+Fiscal,Karol Lourenço,nilza.lourenco@bwa.global
+Fiscal,Patricia Macedo,patricia.macedo@bwa.global
+Fiscal,Pedro Aguiar,pedro.aguiar@bwa.global
+Fiscal,Pedro Alves,pedro.alves@bwa.global
+Fiscal,Pedro Carvalho,pedro.carvalho@bwa.global
+Fiscal,Pedro Lima,pedro.lima@bwa.global
+Fiscal,Pedro Ribeiro,pedro.ribeiro@bwa.global
+Fiscal,Pollyana Freitas,pollyana.freitas@bwa.global
+Fiscal,Rafael Cruz,rafael.cruz@bwa.global
+Fiscal,Raissa Alves,raissa.alves@bwa.global
+Fiscal,Renan Emerson,renan.emerson@bwa.global
+Fiscal,Ricardo Janio,ricardo.janio@bwa.global
+Fiscal,Roberta Rodrigues,roberta.rodrigues@bwa.global
+Fiscal,Roberto Quaresma,roberto.quaresma@bwa.global
+Fiscal,Rudni Freitas,rudni.freitas@bwa.global
+Fiscal,Sabrina Almeida,sabrina.almeida@bwa.global
+Fiscal,Segiane Almeida,segiane.almeida.app@bwa.global
+Fiscal,Sem Responsavel,sem.responsavel@bwa.global
+Fiscal,Sheila Couto,sheila.couto@bwa.global
+Fiscal,Sophia Lopes,sophia.lopes@bwa.global
+Fiscal,Tamires Tawane,tamires.tawane@bwa.global
+Fiscal,Thaylisson Rafael,thaylisson.rafael@bwa.global
+Fiscal,Thayna Marques,thayna.marques@bwa.global
+Fiscal,Thays Souza,thays.souza@bwa.global
+Fiscal,Thayse Santos,thayse.santos@bwa.global
+Fiscal,Vanderli Silva,vanderli.silva@bwa.global
+Fiscal,Vania Diniz,vania.diniz@bwa.global
+Fiscal,Victoria Silva,victoria.silva@bwa.global
+Fiscal,Wellington Filho,wellington.filho@bwa.global
+Fiscal,Yasmin Silva,yasmin.silva@bwa.global
+Fiscal,Yuri Diogo,yuri.diogo@bwa.global
+Fiscal - Atendimento,Ana Beatriz Geraldo,anabeatriz.geraldo.app@bwa.global
+Fiscal - Atendimento,Andriele Monteiro,andriele.monteiro@bwa.global
+Fiscal - Atendimento,Bianca Ferreira,bianca.ferreira@bwa.global
+Fiscal - Atendimento,Jessica Monteiro,jessica.monteiro@bwa.global
+Fiscal - Atendimento,Josiane Barbosa,josiane.barbosa@bwa.global
+Fiscal - Atendimento,Laura Hemilly,laura.hemilly@bwa.global
+Fiscal - Atendimento,Lilian Fernandes,lilian.fernandes.app@bwa.global
+Fiscal - Atendimento,Marcos Alves,marcos.alves@bwa.global
+Fiscal - Atendimento,Maria Luisa,maria.luisa@bwa.global
+Fiscal - Atendimento,Matheus Alves,matheus.alves@bwa.global
+Fiscal - Atendimento,Natalia Barros,natalia.barros@bwa.global
+Fiscal - Atendimento,Rafael Costa,rafael.costa@bwa.global
+Fiscal - Atendimento,Sem Responsavel,sem.responsavel@bwa.global
+Fiscal - Atendimento,Sofya Marques,sofya.marques@bwa.global
+Fiscal - Atendimento,Vitoria Carvalho,vitoria.carvalho@bwa.global
+Fiscal - Serviços,Allycia Oliveira,allycia.oliveira@bwa.global
+Fiscal - Serviços,Ana Beatriz Geraldo,anabeatriz.geraldo.app@bwa.global
+Fiscal - Serviços,Ana Beatriz Souza,anabeatriz.souza@bwa.global
+Fiscal - Serviços,Bianca Cristina,bianca.cristina@bwa.global
+Fiscal - Serviços,Cintia Asceli,cintia.asceli.app@bwa.global
+Fiscal - Serviços,Deborah Fidelis,deborah.fidelis@bwa.global
+Fiscal - Serviços,Errily Pereira,errily.pereira@bwa.global
+Fiscal - Serviços,Gabrielle Cruz,gabrielle.cruz@bwa.global
+Fiscal - Serviços,Jennifer Vitoria,jennifer.vitoria@bwa.global
+Fiscal - Serviços,Joana Costa,joana.costa@bwa.global
+Fiscal - Serviços,Josiane Barbosa,josiane.barbosa@bwa.global
+Fiscal - Serviços,Joyce Silva,joyce.silva@bwa.global
+Fiscal - Serviços,Juliana Benincaza,juliana.benincaza.app@bwa.global
+Fiscal - Serviços,Lilian Aguiar,lilian.aguiar@bwa.global
+Fiscal - Serviços,Lorena Silva,lorena.silva@bwa.global
+Fiscal - Serviços,Marinaldo Gomes,marinaldo.gomes@bwa.global
+Fiscal - Serviços,Raissa Alves,raissa.alves@bwa.global
+Fiscal - Serviços,Segiane Almeida,segiane.almeida.app@bwa.global
+Fiscal - Serviços,Sheila Couto,sheila.couto@bwa.global
+Fiscal - Serviços,Stephanie Silva,stephanie.silva@bwa.global
+Fiscal - Serviços,Tamires Tawane,tamires.tawane@bwa.global
+Fiscal - Serviços,Thaylisson Rafael,thaylisson.rafael@bwa.global
+Fiscal - Serviços,Vania Diniz,vania.diniz@bwa.global
+Fiscal - Serviços,Victoria Silva,victoria.silva@bwa.global
+Fiscal - Serviços,Viviany Santos,viviany.santos@bwa.global
+Gestão,Andreza Aquino,andreza.aquino@bwa.global
+Gestão,Elizabete Costa,elizabete.costa@bwa.global
+Gestão,Joelma Nascimento,joelma.nascimento.app@bwa.global
+Gestão,Levy Benoni,levy.benoni@bwa.global
+Gestão,Lucas Cunha,lucas.cunha@bwa.global
+Gestão,Mara Santos,mara.santos@bwa.global
+Gestão,Sem Responsavel,sem.responsavel@bwa.global
+Gestão - Compliance Contábil,Bruna Rozario,bruna.rozario@bwa.global
+Gestão - Compliance Fiscal,Rafaela Souza,rafaela.souza@bwa.global
+Gestão - Compliance Pessoal,Deila Dantas,deila.dantas@bwa.global
+Gestão Contábil,Dionisio Neto,dionisio.neto@bwa.global
+Gestão Contábil,Jefferson Reinaldo,jefferson.reinaldo@bwa.global
+Gestão Contábil,Lucas Cunha,lucas.cunha@bwa.global
+Gestão Contábil,Moises Rodrigues,moises.rodrigues.app@bwa.global
+Gestão de DP,Caio Rodrigues,caio.rodrigues.app@bwa.global
+Gestão de DP,Jessica Lopes,jessica.lopes@bwa.global
+Gestão de DP,Lucas Peixoto,lucas.peixoto@bwa.global
+Gestão de DP,Nicoly Costa,nicoly.costa@bwa.global
+Gestão de DP,Sem Responsavel,sem.responsavel@bwa.global
+Gestão de DP,Wendya Rocha,wendya.rocha@bwa.global
+Gestão Fiscal,Flavia Camara,flavia.camara@bwa.global
+Gestão Fiscal,Joelma Nascimento,joelma.nascimento.app@bwa.global
+Gestão Fiscal,Lilian Fernandes,lilian.fernandes.app@bwa.global
+Gestão Fiscal,Maiara Lucena,maiara.lucena@bwa.global
+Gestão Fiscal,Mara Santos,mara.santos@bwa.global
+Gestão Fiscal,Sem Responsavel,sem.responsavel@bwa.global
+Gestão Fiscal,Thays Souza,thays.souza@bwa.global
+Gestão Fiscal,Yuri Diogo,yuri.diogo@bwa.global
+Lançamentos de Notas Fiscais,Allycia Oliveira,allycia.oliveira@bwa.global
+Lançamentos de Notas Fiscais,Ana Beatriz Souza,anabeatriz.souza@bwa.global
+Lançamentos de Notas Fiscais,Bianca Cristina,bianca.cristina@bwa.global
+Lançamentos de Notas Fiscais,Deborah Fidelis,deborah.fidelis@bwa.global
+Lançamentos de Notas Fiscais,Errily Pereira,errily.pereira@bwa.global
+Lançamentos de Notas Fiscais,Jennifer Vitoria,jennifer.vitoria@bwa.global
+Lançamentos de Notas Fiscais,Joyce Silva,joyce.silva@bwa.global
+Lançamentos de Notas Fiscais,Juliana Benincaza,juliana.benincaza.app@bwa.global
+Lançamentos de Notas Fiscais,Lilian Aguiar,lilian.aguiar@bwa.global
+Lançamentos de Notas Fiscais,Margareth Felix,margareth.felix@bwa.global
+Lançamentos de Notas Fiscais,Matheus Vitor,matheus.vitor@bwa.global
+Lançamentos de Notas Fiscais,Raissa Alves,raissa.alves@bwa.global
+Lançamentos de Notas Fiscais,Segiane Almeida,segiane.almeida.app@bwa.global
+Lançamentos de Notas Fiscais,Stephanie Silva,stephanie.silva@bwa.global
+Lançamentos de Notas Fiscais,Tamires Tawane,tamires.tawane@bwa.global
+Lançamentos de Notas Fiscais,Viviany Santos,viviany.santos@bwa.global
+Legalização,Ellem Sampaio,ellem.sampaio@bwa.global
+Legalização,Mirenne Guedes,mirenne.guedes@bwa.global
+Legalização,Monalisa Furtado,monalisa.furtado@bwa.global
+Legalização - Apoio,João Carlos,joao.carlos@bwa.global
+Legalização - Apoio,Thiago Batista,thiago.batista@bwa.global
+Legalização - Cadastro,Alan Jhones,alan.jhones@bwa.global
+Legalização - Cadastro,Natalia Ribeiro,natalia.ribeiro@bwa.global
+Legalização - Certificados,Fernanda Vitorino,fernanda.vitorino@bwa.global
+Legalização - Licenças,Melry Gomes,melry.gomes@bwa.global
+Legalização - Onboarding - Off,João Carlos,joao.carlos@bwa.global
+Legalização - Parcelamento,Jadde Ferreira,jadde.ferreira@bwa.global
+Legalização - Parcelamento,Thais Fernandes,thais.fernandes@bwa.global
+Legalização - Taxas,Jadde Ferreira,jadde.ferreira@bwa.global
+Legalização - Taxas,Thais Fernandes,thais.fernandes@bwa.global
+Perfomance Tributária,Dalton Salviano,dalton.salviano@bwa.global
+Perfomance Tributária,Leticia Cruz,leticia.cruz@bwa.global
+Pessoal,Amanda Alves,amanda.alves@bwa.global
+Pessoal,Amanda Matos,amanda.matos.app@bwa.global
+Pessoal,Ana Paula,ana.paula@bwa.global
+Pessoal,Ana Raquel,ana.raquel@bwa.global
+Pessoal,Andréia Barbosa,andreia.barbosa@bwa.global
+Pessoal,Andreza Aquino,andreza.aquino@bwa.global
+Pessoal,Andreza Fernandes,andreza.fernandes@bwa.global
+Pessoal,Andreza Pereira,andreza.pereira@bwa.global
+Pessoal,Aniele Rodrigues,aniele.rodrigues@bwa.global
+Pessoal,Beatriz Medeiros,beatriz.medeiros@bwa.global
+Pessoal,Bianca Cilene,bianca.cilene@bwa.global
+Pessoal,Brenda Araujo,brenda.araujo@bwa.global
+Pessoal,Caio Rodrigues,caio.rodrigues.app@bwa.global
+Pessoal,Camila Barbosa,camila.barbosa@bwa.global
+Pessoal,Carine Mendonca,carine.mendonca@bwa.global
+Pessoal,Caroline Pinho,caroline.pinho@bwa.global
+Pessoal,Clauber Diego,clauber.diego@bwa.global
+Pessoal,Cristiane Nunes,cristiane.nunes@bwa.global
+Pessoal,Daniel Viana,daniel.viana.app@bwa.global
+Pessoal,Deurislania Pessoa,deurislania.pessoa@bwa.global
+Pessoal,Fernanda Viana,fernanda.viana@bwa.global
+Pessoal,Hemily Souza,hemily.souza@bwa.global
+Pessoal,Jennifer Ferreira,jennifer.ferreira@bwa.global
+Pessoal,Jessica Cavalcanti,jessica.cavalcanti@bwa.global
+Pessoal,Jessica Lopes,jessica.lopes@bwa.global
+Pessoal,Jhonnatan Medeiros,jhonnatan.medeiros@bwa.global
+Pessoal,Juliana Vaz,juliana.vaz@bwa.global
+Pessoal,Juliane Borges,juliane.borges@bwa.global
+Pessoal,Julio Paiva,julio.paiva@bwa.global
+Pessoal,Junior Ferreira,junior.ferreira@bwa.global
+Pessoal,Karine Luccas,karine.luccas@bwa.global
+Pessoal,Karine Oliverio,karine.oliverio@bwa.global
+Pessoal,Katia Oliveira,katia.oliveira@bwa.global
+Pessoal,Kellyane Souza,kellyane.souza@bwa.global
+Pessoal,Laryssa Almeida,laryssa.almeida@bwa.global
+Pessoal,Laryssa Mattos,laryssa.mattos@bwa.global
+Pessoal,Leonardo Gomes,leonardo.gomes@bwa.global
+Pessoal,Livia Andrade,livia.andrade@bwa.global
+Pessoal,Luana Soares,luana.soares@bwa.global
+Pessoal,Ludimila Gonçalves,ludimila.goncalves@bwa.global
+Pessoal,Luiza Mendes,luiza.mendes@bwa.global
+Pessoal,Maria Adverssi,maria.adverssi@bwa.global
+Pessoal,Maria Lukyany,maria.lukyany@bwa.global
+Pessoal,Marina Fernandes,marina.fernandes@bwa.global
+Pessoal,Matheus Sousa,matheus.sousa@bwa.global
+Pessoal,Mayra Alves,mayra.alves@bwa.global
+Pessoal,Mylena Pacheco,mylena.pacheco@bwa.global
+Pessoal,Nathaly Trindade,nathaly.trindade@bwa.global
+Pessoal,Petruz Barros,petruz.barros@bwa.global
+Pessoal,Raíssa Silva,raissa.silva@bwa.global
+Pessoal,Rayna Nascimento,rayna.nascimento@bwa.global
+Pessoal,Rayson Raab,rayson.raab@bwa.global
+Pessoal,Renata Cristina,renata.cristina@bwa.global
+Pessoal,Renata Figueiredo,renata.figueiredo@bwa.global
+Pessoal,Ronaldo Tavares,ronaldo.tavares@bwa.global
+Pessoal,Sabrina Dias,sabrina.dias@bwa.global
+Pessoal,Samanta Oliveira,samanta.oliveira@bwa.global
+Pessoal,Sem Responsavel,sem.responsavel@bwa.global
+Pessoal,Sem Movimento,semmovimento@contauditoria.com.br
+Pessoal,Serviço Não Contratado,serviconaocontratato@contauditoria.com.br
+Pessoal,Taiane Rigonato,taiane.rigonato@bwa.global
+Pessoal,Tania Souza,tania.souza.app@bwa.global
+Pessoal,Thayna Pires,thayna.pires@bwa.global
+Pessoal,Valeria Medeiros,valeria.medeiros@bwa.global
+Pessoal,Victor Garcia,victor.garcia.app@bwa.global
+Pessoal,Vitor Lucas,vitor.lucas@bwa.global
+Pessoal,Vivian Pires,vivian.pires@bwa.global
+Pessoal,Viviane Freitas,viviane.freitas@bwa.global
+Pessoal,Wendya Rocha,wendya.rocha@bwa.global
+Pessoal,William Silva,william.silva@bwa.global
+Pessoal,Wirisllane Andrade,wirisllane.andrade@bwa.global
+Pessoal,Wladimir Montenegro,wladimir.montenegro@bwa.global
+Pessoal,Yasmin Azevedo,yasmin.azevedo@bwa.global
+Piscofins - DT,Ana Santos,ana.santos@bwa.global
+Piscofins - DT,Bianca Cristina,bianca.cristina@bwa.global
+Piscofins - DT,Dalmo Dornelas,dalmo.dornelas@bwa.global
+Piscofins - DT,Deborah Fidelis,deborah.fidelis@bwa.global
+Piscofins - DT,Errily Pereira,errily.pereira@bwa.global
+Piscofins - DT,Joyce Silva,joyce.silva@bwa.global
+Piscofins - DT,Juliana Benincaza,juliana.benincaza.app@bwa.global
+Piscofins - DT,Mariana Paula,mariana.paula@bwa.global
+Piscofins - DT,Mariane Oliveira,mariane.oliveira@bwa.global
+Piscofins - DT,Marinaldo Gomes,marinaldo.gomes@bwa.global
+Piscofins - DT,Mateus Teófilo,mateus.teofilo@bwa.global
+Piscofins - DT,Matheus Christian,matheus.christian@bwa.global
+Piscofins - DT,Pedro Carvalho,pedro.carvalho@bwa.global
+Piscofins - DT,Pollyana Freitas,pollyana.freitas@bwa.global
+Piscofins - DT,Segiane Almeida,segiane.almeida.app@bwa.global
+Piscofins - DT,Sheila Couto,sheila.couto@bwa.global
+Piscofins - DT,Tamires Tawane,tamires.tawane@bwa.global
+Piscofins - DT,Vania Diniz,vania.diniz@bwa.global
+Processos,Levy Benoni,levy.benoni@bwa.global
+Processos,Petruz Barros,petruz.barros@bwa.global
+Regularidade - Contábil,Ana Paula Santana,anapaula.santana@bwa.global
+Regularidade - Contábil,Bruna Rozario,bruna.rozario@bwa.global
+Regularidade - Fiscal,Maria Luisa,maria.luisa@bwa.global
+Regularidade - Fiscal,Rafaela Souza,rafaela.souza@bwa.global
+Regularidade - Parcelamento,Jadde Ferreira,jadde.ferreira@bwa.global
+Regularidade - Pessoal,Karinny Palma,karinny.palma@bwa.global
+Regularidade fiscal,Eliana Pereira,eliana.pereira@bwa.global
+Setup DP,Deila Dantas,deila.dantas@bwa.global
+Setup DP,Igor Ribeiro,igor.ribeiro@bwa.global
+Setup DP,Sem Movimento,semmovimento@contauditoria.com.br
+Setup DP,William Silva,william.silva@bwa.global
+SST,Carolina Vieira,carolina.vieira@bwa.global
+SST,Lidiane Lima,lidiane.lima@bwa.global
+SST,Lidiane Viana,lidiane.viana@bwa.global
+SST,Luiza Mendes,luiza.mendes@bwa.global
+Supervisão Contábil,Ana Carolina,ana.carolina@bwa.global
+Supervisão Contábil,Ana Geisiele,ana.geisiele@bwa.global
+Supervisão Contábil,Carlos Filipe,carlos.filipe@bwa.global
+Supervisão Contábil,Debora Pereira,debora.pereira@bwa.global
+Supervisão Contábil,Elaine Matos,elaine.matos@bwa.global
+Supervisão Contábil,Fabricio Oliveira,fabricio.oliveira@bwa.global
+Supervisão Contábil,Henrique Targino,henrique.targino@bwa.global
+Supervisão Contábil,Jefferson Reinaldo,jefferson.reinaldo@bwa.global
+Supervisão Contábil,Jessica Cavalcanti,jessica.cavalcanti@bwa.global
+Supervisão Contábil,Joelson Philippe,joelson.philippe@bwa.global
+Supervisão Contábil,Juliana Varela,juliana.varela@bwa.global
+Supervisão Contábil,Katarina Lima,katarina.lima@bwa.global
+Supervisão Contábil,Lucas Gabriel,lucas.gabriel@bwa.global
+Supervisão Contábil,Paulo Henrique Souza,paulohenrique.souza@bwa.global
+Supervisão Contábil,Pedro Henrique,pedro.henrique@bwa.global
+Supervisão Contábil,Tarcísio Cassimiro,tarcisio.cassimiro@bwa.global
+Supervisão Contábil,Victor Silva,victor.silva@bwa.global
+Supervisão Contábil,Yuri Gadelha,yuri.gadelha@bwa.global
+Supervisão de DP,Andreza Aquino,andreza.aquino@bwa.global
+Supervisão de DP,Deila Dantas,deila.dantas@bwa.global
+Supervisão de DP,Francisco Ramiro,francisco.ramiro@bwa.global
+Supervisão de DP,Jessica Lopes,jessica.lopes@bwa.global
+Supervisão de DP,Judson Lima,judson.lima@bwa.global
+Supervisão de DP,Juliane Borges,juliane.borges@bwa.global
+Supervisão de DP,Livia Andrade,livia.andrade@bwa.global
+Supervisão de DP,Luiza Mendes,luiza.mendes@bwa.global
+Supervisão de DP,Maria Adverssi,maria.adverssi@bwa.global
+Supervisão de DP,Nicoly Costa,nicoly.costa@bwa.global
+Supervisão de DP,Rayna Nascimento,rayna.nascimento@bwa.global
+Supervisão de DP,Rayson Raab,rayson.raab@bwa.global
+Supervisão de DP,Renata Cristina,renata.cristina@bwa.global
+Supervisão de DP,Rhayanne Torres,rhayanne.torres@bwa.global
+Supervisão de DP,Sem Responsavel,sem.responsavel@bwa.global
+Supervisão de DP,Simoney Santana,simoney.santana@bwa.global
+Supervisão de DP,Wendya Rocha,wendya.rocha@bwa.global
+Supervisão de DP,Yasmin Azevedo,yasmin.azevedo@bwa.global
+Supervisão Fiscal,Alessia Aquiliane,alessia.aquiliane@bwa.global
+Supervisão Fiscal,Andreza Silva,andreza.silva@bwa.global
+Supervisão Fiscal,Daiana Almeida,daiana.almeida@bwa.global
+Supervisão Fiscal,Elizabete Costa,elizabete.costa@bwa.global
+Supervisão Fiscal,Geiza Freitas,geiza.freitas.app@bwa.global
+Supervisão Fiscal,Jannierlly Silva,jannierlly.silva@bwa.global
+Supervisão Fiscal,Joelma Nascimento,joelma.nascimento.app@bwa.global
+Supervisão Fiscal,Lucas Moura,lucas.moura@bwa.global
+Supervisão Fiscal,Mara Santos,mara.santos@bwa.global
+Supervisão Fiscal,Matheus Christian,matheus.christian@bwa.global
+Supervisão Fiscal,Pedro Aguiar,pedro.aguiar@bwa.global
+Supervisão Fiscal,Pedro Lima,pedro.lima@bwa.global
+Supervisão Fiscal,Sem Responsavel,sem.responsavel@bwa.global
+Supervisão Fiscal,Thays Souza,thays.souza@bwa.global
+Supervisão Fiscal,Vania Diniz,vania.diniz@bwa.global
+Suporte SCI,Caio Rodrigues,caio.rodrigues.app@bwa.global
+Suporte SCI,Carolina Vieira,carolina.vieira@bwa.global
+Suporte SCI,Caroline Alves,caroline.alves@bwa.global
+Suporte SCI,Sem Responsavel,sem.responsavel@bwa.global

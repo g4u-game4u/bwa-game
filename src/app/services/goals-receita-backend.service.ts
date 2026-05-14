@@ -31,11 +31,41 @@ export class GoalsReceitaBackendService {
     private readonly systemParams: SystemParamsService
   ) {}
 
+  /** Temporário: Abril/Maio — valores fixos até integração API (alinhado a {@link GoalsApiService}). */
+  private tryHardcodedReceitaConcedidaForMonth(month: Date): ReceitaConcedidaGoalsKpi | null {
+    const m = month.getMonth();
+    if (m === 3) {
+      const current = 817_000;
+      const target = 775_000;
+      return {
+        current,
+        target,
+        percent: target > 0 ? Math.round((current / target) * 100) : 0
+      };
+    }
+    if (m === 4) {
+      const current = 191_836;
+      const target = 800_000;
+      return {
+        current,
+        target,
+        percent: target > 0 ? Math.round((current / target) * 100) : 0
+      };
+    }
+    return null;
+  }
+
   /**
    * Tenta obter current/target para o KPI circular (financeiro).
-   * `month` filtra por `extra.reference_month` === YYYY-MM quando a resposta é lista.
+   * `month`: último log com `cumulative_value` utilizável e `updated_at` nesse mês (calendário local),
+   * alinhado ao filtro de circulares em {@link GoalsApiService}.
    */
   async tryGetReceitaConcedidaKpi(month: Date): Promise<ReceitaConcedidaGoalsKpi | null> {
+    const demo = this.tryHardcodedReceitaConcedidaForMonth(month);
+    if (demo) {
+      console.warn('[GoalsReceitaBackend] Abril/Maio: valores hardcoded temporários (sem API).');
+      return demo;
+    }
     try {
       const templateId = await this.resolveGoalTemplateId();
       if (!templateId) {
@@ -50,7 +80,8 @@ export class GoalsReceitaBackendService {
           { templateId, candidateCount: candidates.length }
         );
       }
-      return this.parseLogRows(rows, month);
+      const rowsForMonth = this.filterRowsForCircularMonth(rows, month);
+      return this.parseLogRows(rowsForMonth);
     } catch (e) {
       console.warn('[GoalsReceitaBackend] indisponível:', e);
       return null;
@@ -346,8 +377,91 @@ export class GoalsReceitaBackendService {
     return [];
   }
 
-  private parseLogRows(rows: unknown[], month: Date): ReceitaConcedidaGoalsKpi | null {
-    void month;
+  /** Início e fim do mês de calendário local (inclusive), em ms. */
+  private selectedMonthWallRangeMs(selectedMonth: Date): { startMs: number; endMs: number } {
+    const y = selectedMonth.getFullYear();
+    const m = selectedMonth.getMonth();
+    const startMs = new Date(y, m, 1, 0, 0, 0, 0).getTime();
+    const endMs = new Date(y, m + 1, 0, 23, 59, 59, 999).getTime();
+    return { startMs, endMs };
+  }
+
+  private rowUpdatedAtMsFromLog(row: unknown): number | null {
+    if (row == null || typeof row !== 'object') {
+      return null;
+    }
+    const o = row as Record<string, unknown>;
+    for (const key of ['updated_at', 'updatedAt']) {
+      const v = o[key];
+      if (typeof v === 'string' && v.trim()) {
+        const t = Date.parse(v);
+        if (!Number.isNaN(t)) {
+          return t;
+        }
+      }
+    }
+    return null;
+  }
+
+  private rowUpdatedAtInSelectedCalendarMonth(row: unknown, month: Date): boolean {
+    const t = this.rowUpdatedAtMsFromLog(row);
+    if (t == null) {
+      return false;
+    }
+    const { startMs, endMs } = this.selectedMonthWallRangeMs(month);
+    return t >= startMs && t <= endMs;
+  }
+
+  private extractCumulativeRawFromLogRow(row: unknown): unknown {
+    if (row == null || typeof row !== 'object') {
+      return null;
+    }
+    const o = row as Record<string, unknown>;
+    const direct = o['cumulative_value'] ?? o['cumulativeValue'];
+    if (direct != null) {
+      return direct;
+    }
+    const extra = o['extra'];
+    if (extra && typeof extra === 'object' && !Array.isArray(extra)) {
+      const ex = extra as Record<string, unknown>;
+      return ex['cumulative_value'] ?? ex['cumulativeValue'];
+    }
+    return null;
+  }
+
+  private rowHasInterpretableCumulativeValue(row: unknown): boolean {
+    const v = this.extractCumulativeRawFromLogRow(row);
+    if (v == null) {
+      return false;
+    }
+    if (typeof v === 'string' && v.trim() === '') {
+      return false;
+    }
+    if (typeof v === 'number' && !Number.isFinite(v)) {
+      return false;
+    }
+    const n = this.parseLooseNumber(v);
+    return Number.isFinite(n);
+  }
+
+  /**
+   * Mesmo critério do painel (GoalsApiService): `updated_at` no mês do filtro + `cumulative_value` utilizável.
+   */
+  private filterRowsForCircularMonth(rows: unknown[], month: Date): unknown[] {
+    const scoped = rows.filter(
+      r => this.rowUpdatedAtInSelectedCalendarMonth(r, month) && this.rowHasInterpretableCumulativeValue(r)
+    );
+    console.log(
+      '[GoalsReceitaBackend] Filtro mês (updated_at + cumulative_value):',
+      scoped.length,
+      '/',
+      rows.length,
+      'linhas receita'
+    );
+    return scoped;
+  }
+
+  private parseLogRows(rows: unknown[]): ReceitaConcedidaGoalsKpi | null {
     if (rows.length === 0) {
       return null;
     }
@@ -586,20 +700,6 @@ export class GoalsReceitaBackendService {
       return this.looksLikeGoalLogRow(data);
     }
     return false;
-  }
-
-  private rowReferenceMonth(row: unknown): string | null {
-    if (row == null || typeof row !== 'object') {
-      return null;
-    }
-    const extra = (row as Record<string, unknown>)['extra'];
-    if (extra && typeof extra === 'object') {
-      const ref = (extra as Record<string, unknown>)['reference_month'];
-      if (typeof ref === 'string' && ref.trim()) {
-        return ref.trim();
-      }
-    }
-    return null;
   }
 
   private rowUpdatedTs(row: unknown): number {

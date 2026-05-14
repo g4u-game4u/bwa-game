@@ -633,8 +633,8 @@ describe('TeamManagementDashboardComponent - Responsive Behavior', () => {
       component.onCollaboratorChange('user1@test.com');
       expect(component.selectedCollaborator).toBe('user1@test.com');
       
-      component.onMonthChange(new Date(2026, 2, 1));
-      expect(component.selectedMonth.getMonth()).toBe(2);
+      component.onMonthChange(new Date(2026, 3, 1));
+      expect(component.selectedMonth.getMonth()).toBe(3);
     });
   });
 

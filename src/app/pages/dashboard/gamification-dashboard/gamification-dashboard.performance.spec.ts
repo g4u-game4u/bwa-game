@@ -28,17 +28,8 @@ describe('GamificationDashboardComponent - Performance Tests', () => {
     ]);
     performanceMonitorSpy.measureRenderTime.and.returnValue(() => {});
 
-    const playerServiceSpy = jasmine.createSpyObj('PlayerService', [
-      'getPlayerStatus',
-      'getPlayerPoints',
-      'getSeasonProgress'
-    ]);
+    const playerServiceSpy = jasmine.createSpyObj('PlayerService', ['getPlayerStatus', 'getSeasonProgress']);
     playerServiceSpy.getPlayerStatus.and.returnValue(of(generateMockPlayerStatus()));
-    playerServiceSpy.getPlayerPoints.and.returnValue(of({
-      available: 1000,
-      pending: 500,
-      redeemed: 2000
-    }));
     playerServiceSpy.getSeasonProgress.and.returnValue(of({
       currentLevel: 5,
       progress: 65,
@@ -221,7 +212,6 @@ describe('GamificationDashboardComponent - Performance Tests', () => {
       
       // All services should be called immediately
       expect(playerService.getPlayerStatus).toHaveBeenCalled();
-      expect(playerService.getPlayerPoints).toHaveBeenCalled();
       expect(playerService.getSeasonProgress).toHaveBeenCalled();
       expect(companyService.getCompanies).toHaveBeenCalled();
       expect(kpiService.getPlayerKPIs).toHaveBeenCalled();

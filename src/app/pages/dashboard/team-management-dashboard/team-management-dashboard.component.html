@@ -77,7 +77,8 @@
           </div>
         </ng-template>
         
-        <!-- Meta Configuration Section -->
+        <!-- Meta Configuration Section — comentado (configurar meta de clientes) -->
+        <!--
         <div class="sidebar-section meta-config-section" role="region" aria-labelledby="meta-config-section-title">
           <h4 id="meta-config-section-title" class="selector-label">Configurar Meta de Clientes</h4>
           
@@ -135,6 +136,7 @@
             </div>
           </form>
         </div>
+        -->
         
         <!-- Sidebar Toggle Button - At the end of sidebar content -->
         <div class="sidebar-section sidebar-toggle-section">
@@ -202,7 +204,7 @@
       <c4u-dashboard-navigation></c4u-dashboard-navigation>
       <div class="header-spacer"></div>
       <c4u-seletor-mes 
-        [playerId]="getTeamPlayerIdForMonthSelector()" 
+        [playerId]="getTeamPlayerIdForMonthSelector()"
         (onSelectedMonth)="onMonthChange($event)">
       </c4u-seletor-mes>
       <button 
@@ -287,6 +289,8 @@
               <div class="kpi-grid" *ngIf="teamKPIs.length > 0" role="group" aria-labelledby="kpi-section-title">
                 <!-- KPI de Clientes na Carteira - Comentado temporariamente -->
                 <ng-container *ngFor="let kpi of teamKPIs; let i = index; trackBy: trackByKpiId">
+                  <!-- KPI circular «Clientes atendidos» (numero-empresas) — comentado -->
+                  <!--
                   <c4u-kpi-circular-progress
                     *ngIf="kpi.id === 'numero-empresas'"
                     [label]="kpi.label"
@@ -296,9 +300,11 @@
                     [color]="kpi.color"
                     [unit]="kpi.unit"
                     [colorIndex]="i"
+                    [showTargetMeta]="false"
                     [animateProgressFromPercent]="kpi.animateProgressFromPercent ?? null"
                     [progressEvolutionLabel]="kpi.progressEvolutionLabel ?? null">
                   </c4u-kpi-circular-progress>
+                  -->
                   <c4u-kpi-circular-progress
                     *ngIf="kpi.id !== 'numero-empresas' && (kpi.id !== 'valor-concedido' || isSelectedFinanceTeam())"
                     [label]="kpi.label"

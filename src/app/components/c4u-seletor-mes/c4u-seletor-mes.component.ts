@@ -32,7 +32,8 @@ export class C4uSeletorMesComponent implements OnInit, OnChanges {
    */
   ngOnChanges(changes: SimpleChanges): void {
     const p = changes['playerId'];
-    if (!p || p.isFirstChange() || p.previousValue === p.currentValue) {
+    const playerChanged = p && !p.isFirstChange() && p.previousValue !== p.currentValue;
+    if (!playerChanged) {
       return;
     }
     this.months = [];
@@ -41,7 +42,7 @@ export class C4uSeletorMesComponent implements OnInit, OnChanges {
   }
 
   /**
-   * Meses = interseção da temporada (campanha). Navegação só entre eles (ex. março e abril).
+   * Meses = temporada fixa, só até o mês corrente (não mostra meses futuros da temporada, ex. junho em maio).
    */
   private async initializeMonths(): Promise<void> {
     try {

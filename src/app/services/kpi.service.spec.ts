@@ -4,6 +4,8 @@ import { FunifierApiService } from './funifier-api.service';
 import { KPIMapper } from './kpi-mapper.service';
 import { PlayerService } from './player.service';
 import { UserActionDashboardService } from './user-action-dashboard.service';
+import { GoalsApiService } from './goals-api.service';
+import { SessaoProvider } from '@providers/sessao/sessao.provider';
 import { META_PROTOCOLO_TARGET, APOSENTADORIAS_TARGET } from '../constants/kpi-targets.constants';
 import * as fc from 'fast-check';
 import { of } from 'rxjs';
@@ -13,6 +15,8 @@ describe('KPIService', () => {
   let funifierApiSpy: jasmine.SpyObj<FunifierApiService>;
   let mapperSpy: jasmine.SpyObj<KPIMapper>;
   let playerServiceSpy: jasmine.SpyObj<PlayerService>;
+  let goalsApiSpy: jasmine.SpyObj<GoalsApiService>;
+  let sessaoStub: { usuario: unknown };
 
   beforeEach(() => {
     const apiSpy = jasmine.createSpyObj('FunifierApiService', ['get']);
@@ -20,6 +24,9 @@ describe('KPIService', () => {
     const playerSpy = jasmine.createSpyObj('PlayerService', ['getCurrentPlayerData', 'getRawPlayerData']);
     const userActionSpy = jasmine.createSpyObj('UserActionDashboardService', ['getDeliveryCount']);
     userActionSpy.getDeliveryCount.and.returnValue(of(0));
+    goalsApiSpy = jasmine.createSpyObj('GoalsApiService', ['getAllKpisForTeam']);
+    goalsApiSpy.getAllKpisForTeam.and.returnValue(of([]));
+    sessaoStub = { usuario: null };
     playerSpy.getRawPlayerData.and.returnValue(of({ _id: 'test-player', extra: {} }));
     playerSpy.getCurrentPlayerData.and.returnValue(of({ _id: 'test-player', extra: {} }));
 
@@ -29,7 +36,9 @@ describe('KPIService', () => {
         { provide: FunifierApiService, useValue: apiSpy },
         { provide: KPIMapper, useValue: kpiMapperSpy },
         { provide: PlayerService, useValue: playerSpy },
-        { provide: UserActionDashboardService, useValue: userActionSpy }
+        { provide: UserActionDashboardService, useValue: userActionSpy },
+        { provide: GoalsApiService, useValue: goalsApiSpy },
+        { provide: SessaoProvider, useValue: sessaoStub }
       ]
     });
 
@@ -41,6 +50,27 @@ describe('KPIService', () => {
 
   it('should be created', () => {
     expect(service).toBeTruthy();
+  });
+
+  it('uses session team for /goals when player payload has no team label (painel individual)', (done) => {
+    sessaoStub.usuario = {
+      team_name: 'Jurídico - Negócios'
+    } as Record<string, unknown>;
+    goalsApiSpy.getAllKpisForTeam.calls.reset();
+
+    const mockPlayerStatus = {
+      _id: 'test-player',
+      name: 'Test Player',
+      extra: {}
+    };
+    playerServiceSpy.getRawPlayerData.and.returnValue(of(mockPlayerStatus));
+
+    service.getPlayerKPIs('test-player').subscribe(() => {
+      expect(goalsApiSpy.getAllKpisForTeam).toHaveBeenCalled();
+      const teamArg = goalsApiSpy.getAllKpisForTeam.calls.mostRecent().args[0] as string;
+      expect(teamArg.toLowerCase()).toContain('jur');
+      done();
+    });
   });
 
   /**
@@ -103,7 +133,7 @@ describe('KPIService', () => {
           fc.integer({ min: 0, max: 150 }), // current (can exceed target)
           (target, current) => {
             const color = service.getKPIColor(current, target);
-            const percentage = (current / target) * 100;
+            const percentage = Math.round((current / target) * 100);
             
             if (percentage >= 80) {
               expect(color).toBe('green');
@@ -245,6 +275,7 @@ describe('KPIService', () => {
       const mockPlayerStatus = {
         _id: 'test-player',
         name: 'Test Player',
+        metadata: { time: 'Jurídico' },
         extra: {
           meta_protocolo: '500000',
           entrega: '85'
@@ -257,7 +288,7 @@ describe('KPIService', () => {
         const metaKPI = result.find(kpi => kpi.id === 'meta-protocolo');
 
         expect(metaKPI).toBeDefined();
-        expect(metaKPI!.label).toBe('Meta de protocolo');
+        expect(metaKPI!.label).toBe('Valor de protocolos');
         expect(metaKPI!.unit).toBe('R$');
         expect(metaKPI!.target).toBe(META_PROTOCOLO_TARGET);
         expect(metaKPI!.current).toBe(500000);
@@ -270,6 +301,7 @@ describe('KPIService', () => {
       const mockPlayerStatus = {
         _id: 'test-player',
         name: 'Test Player',
+        metadata: { time: 'Jurídico' },
         extra: {
           aposentadorias_concedidas: '150',
           entrega: '85'
@@ -282,8 +314,8 @@ describe('KPIService', () => {
         const aposentKPI = result.find(kpi => kpi.id === 'aposentadorias-concedidas');
 
         expect(aposentKPI).toBeDefined();
-        expect(aposentKPI!.label).toBe('Aposentadorias concedidas');
-        expect(aposentKPI!.unit).toBe('concedidos');
+        expect(aposentKPI!.label).toBe('Volume de concessões');
+        expect(aposentKPI!.unit).toBe('concessões');
         expect(aposentKPI!.target).toBe(APOSENTADORIAS_TARGET);
         expect(aposentKPI!.current).toBe(150);
         expect(aposentKPI!.superTarget).toBe(Math.ceil(APOSENTADORIAS_TARGET * 1.5));
@@ -294,7 +326,8 @@ describe('KPIService', () => {
     it('should handle missing extra info gracefully — still generates meta-protocolo and aposentadorias-concedidas with current=0', (done) => {
       const mockPlayerStatus = {
         _id: 'test-player',
-        name: 'Test Player'
+        name: 'Test Player',
+        metadata: { time: 'Jurídico' }
         // No extra field
       };
 
@@ -385,6 +418,7 @@ describe('KPIService', () => {
       const mockPlayerStatus = {
         _id: 'test-player',
         name: 'Test Player',
+        metadata: { time: 'Jurídico' },
         extra: {} // No meta_protocolo or aposentadorias_concedidas
       };
 
@@ -416,6 +450,7 @@ describe('KPIService', () => {
       const mockPlayerStatus = {
         _id: 'test-player',
         name: 'Test Player',
+        metadata: { time: 'Jurídico' },
         extra: {
           cnpj: '10282,2368,10492',
           entrega: '85',
@@ -441,6 +476,7 @@ describe('KPIService', () => {
       const mockPlayerStatus = {
         _id: 'test-player',
         name: 'Test Player',
+        metadata: { time: 'Jurídico' },
         extra: {
           meta_protocolo: '500000',
           aposentadorias_concedidas: '150',
@@ -453,7 +489,7 @@ describe('KPIService', () => {
       service.getPlayerKPIsForDateRange('test-player', rangeStart, rangeEnd).subscribe(result => {
         const metaKPI = result.find(kpi => kpi.id === 'meta-protocolo');
         expect(metaKPI).toBeDefined();
-        expect(metaKPI!.label).toBe('Meta de protocolo');
+        expect(metaKPI!.label).toBe('Valor de protocolos');
         expect(metaKPI!.unit).toBe('R$');
         expect(metaKPI!.target).toBe(META_PROTOCOLO_TARGET);
         expect(metaKPI!.current).toBe(500000);
@@ -461,8 +497,8 @@ describe('KPIService', () => {
 
         const aposentKPI = result.find(kpi => kpi.id === 'aposentadorias-concedidas');
         expect(aposentKPI).toBeDefined();
-        expect(aposentKPI!.label).toBe('Aposentadorias concedidas');
-        expect(aposentKPI!.unit).toBe('concedidos');
+        expect(aposentKPI!.label).toBe('Volume de concessões');
+        expect(aposentKPI!.unit).toBe('concessões');
         expect(aposentKPI!.target).toBe(APOSENTADORIAS_TARGET);
         expect(aposentKPI!.current).toBe(150);
         expect(aposentKPI!.superTarget).toBe(Math.ceil(APOSENTADORIAS_TARGET * 1.5));
@@ -478,6 +514,7 @@ describe('KPIService', () => {
       const mockPlayerStatus = {
         _id: 'test-player',
         name: 'Test Player',
+        metadata: { time: 'Jurídico' },
         extra: {}
       };
 
@@ -665,6 +702,7 @@ describe('KPIService', () => {
           const mockPlayerStatus = {
             _id: 'pbt-player',
             name: 'PBT Player',
+            metadata: { time: 'Jurídico' },
             extra: cleanExtra
           };
 
@@ -674,7 +712,7 @@ describe('KPIService', () => {
           const metaKPI = result!.find(kpi => kpi.id === 'meta-protocolo');
 
           expect(metaKPI).toBeDefined();
-          expect(metaKPI!.label).toBe('Meta de protocolo');
+          expect(metaKPI!.label).toBe('Valor de protocolos');
           expect(metaKPI!.unit).toBe('R$');
           expect(metaKPI!.target).toBe(META_PROTOCOLO_TARGET);
           expect(metaKPI!.superTarget).toBe(Math.ceil(META_PROTOCOLO_TARGET * 1.5));
@@ -698,6 +736,7 @@ describe('KPIService', () => {
           const mockPlayerStatus = {
             _id: 'pbt-player',
             name: 'PBT Player',
+            metadata: { time: 'Jurídico' },
             extra: cleanExtra
           };
 
@@ -707,8 +746,8 @@ describe('KPIService', () => {
           const aposentKPI = result!.find(kpi => kpi.id === 'aposentadorias-concedidas');
 
           expect(aposentKPI).toBeDefined();
-          expect(aposentKPI!.label).toBe('Aposentadorias concedidas');
-          expect(aposentKPI!.unit).toBe('concedidos');
+          expect(aposentKPI!.label).toBe('Volume de concessões');
+          expect(aposentKPI!.unit).toBe('concessões');
           expect(aposentKPI!.target).toBe(APOSENTADORIAS_TARGET);
           expect(aposentKPI!.superTarget).toBe(Math.ceil(APOSENTADORIAS_TARGET * 1.5));
         }),

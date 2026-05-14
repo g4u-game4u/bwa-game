@@ -251,12 +251,12 @@ describe('TeamManagementDashboardComponent - Integration Tests', () => {
       const callCountBefore = mockTeamAggregateService.getTeamSeasonPoints.calls.count();
 
       // Change month
-      component.onMonthChange(new Date(2026, 2, 1));
+      component.onMonthChange(new Date(2026, 3, 1));
       tick();
 
       // Verify data was reloaded
       expect(mockTeamAggregateService.getTeamSeasonPoints.calls.count()).toBeGreaterThan(callCountBefore);
-      expect(component.selectedMonth.getMonth()).toBe(2);
+      expect(component.selectedMonth.getMonth()).toBe(3);
     }));
 
     it('should calculate correct date range for selected month', fakeAsync(() => {
@@ -288,7 +288,7 @@ describe('TeamManagementDashboardComponent - Integration Tests', () => {
       // Set up state
       component.selectedTeam = 'Financeiro';
       component.selectedCollaborator = 'user1@test.com';
-      component.selectedMonth = new Date(2026, 2, 1);
+      component.selectedMonth = new Date(2026, 3, 1);
 
       // Switch tabs
       component.switchTab('productivity');
@@ -297,7 +297,7 @@ describe('TeamManagementDashboardComponent - Integration Tests', () => {
       // Verify state is preserved
       expect(component.selectedTeam).toBe('Financeiro');
       expect(component.selectedCollaborator).toBe('user1@test.com');
-      expect(component.selectedMonth.getMonth()).toBe(2);
+      expect(component.selectedMonth.getMonth()).toBe(3);
 
       // Switch back
       component.switchTab('goals');
@@ -453,9 +453,9 @@ describe('TeamManagementDashboardComponent - Integration Tests', () => {
       expect(component.selectedCollaborator).toBe('user2@test.com');
 
       // Step 3: Change month
-      component.onMonthChange(new Date(2026, 2, 1));
+      component.onMonthChange(new Date(2026, 3, 1));
       tick();
-      expect(component.selectedMonth.getMonth()).toBe(2);
+      expect(component.selectedMonth.getMonth()).toBe(3);
 
       // Step 4: Switch to productivity tab
       component.switchTab('productivity');

@@ -211,15 +211,15 @@ describe('TeamManagementDashboardComponent', () => {
     }));
 
     it('should update selected month when month changes', () => {
-      component.onMonthChange(new Date(2026, 2, 1));
+      component.onMonthChange(new Date(2026, 3, 1));
 
       expect(component.selectedMonth.getFullYear()).toBe(2026);
-      expect(component.selectedMonth.getMonth()).toBe(2);
+      expect(component.selectedMonth.getMonth()).toBe(3);
     });
 
     it('should load team data when month changes', () => {
       spyOn(component, 'loadTeamData');
-      component.onMonthChange(new Date(2026, 2, 1));
+      component.onMonthChange(new Date(2026, 3, 1));
 
       expect(component.loadTeamData).toHaveBeenCalled();
     });
@@ -705,12 +705,12 @@ describe('TeamManagementDashboardComponent', () => {
       }));
 
       it('should refresh with different month selected', fakeAsync(() => {
-        component.selectedMonth = new Date(2026, 2, 1);
+        component.selectedMonth = new Date(2026, 3, 1);
 
         component.refreshData();
         tick();
 
-        expect(component.selectedMonth.getMonth()).toBe(2);
+        expect(component.selectedMonth.getMonth()).toBe(3);
         expect(mockTeamAggregateService.clearCache).toHaveBeenCalled();
       }));
     });
@@ -1169,8 +1169,8 @@ describe('TeamManagementDashboardComponent', () => {
     const sampleKPIs: KPIData[] = [
       { id: 'entregas-prazo', label: 'Entregas no prazo', current: 80, target: 100, unit: '%', color: 'green', percentage: 80 },
       { id: 'numero-empresas', label: 'Clientes atendidos', current: 50, target: 100, unit: 'clientes', color: 'yellow', percentage: 50 },
-      { id: 'meta-protocolo', label: 'Meta de protocolo', current: 500000, target: 1000000, unit: 'R$', color: 'yellow', percentage: 50 },
-      { id: 'aposentadorias-concedidas', label: 'Aposentadorias concedidas', current: 100, target: 220, unit: 'concedidos', color: 'yellow', percentage: 45 },
+      { id: 'meta-protocolo', label: 'Valor de protocolos', current: 500000, target: 1_100_000, unit: 'R$', color: 'yellow', percentage: 45 },
+      { id: 'aposentadorias-concedidas', label: 'Volume de concessões', current: 100, target: 240, unit: 'concessões', color: 'yellow', percentage: 42 },
       { id: 'valor-concedido', label: 'Valor concedido', current: 200000, target: 500000, unit: 'R$', color: 'green', percentage: 40 },
     ];
 

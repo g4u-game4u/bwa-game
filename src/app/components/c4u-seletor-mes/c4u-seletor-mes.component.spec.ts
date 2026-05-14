@@ -1,4 +1,4 @@
-import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { ComponentFixture, TestBed, waitForAsync } from '@angular/core/testing';
 import { FormsModule } from '@angular/forms';
 import { NgSelectModule } from '@ng-select/ng-select';
 import { TranslateModule } from '@ngx-translate/core';
@@ -14,10 +14,10 @@ describe('C4uSeletorMesComponent', () => {
   let fixture: ComponentFixture<C4uSeletorMesComponent>;
   let mockSeasonDatesService: jasmine.SpyObj<SeasonDatesService>;
 
-  const seasonMarAbr2026 = () =>
+  const seasonAbrMai2026 = () =>
     Promise.resolve([
-      { id: 0, name: 'MAR', date: new Date(2026, 2, 1) },
-      { id: 1, name: 'ABR', date: new Date(2026, 3, 1) }
+      { id: 0, name: 'ABR', date: new Date(2026, 3, 1) },
+      { id: 1, name: 'MAI', date: new Date(2026, 4, 1) }
     ]);
 
   beforeEach(async () => {
@@ -25,7 +25,7 @@ describe('C4uSeletorMesComponent', () => {
       'getAvailableMonths',
       'formatMonthAbbrevPtBr'
     ]);
-    mockSeasonDatesService.getAvailableMonths.and.callFake(seasonMarAbr2026);
+    mockSeasonDatesService.getAvailableMonths.and.callFake(seasonAbrMai2026);
     mockSeasonDatesService.formatMonthAbbrevPtBr.and.callFake((date: Date) =>
       date.toLocaleDateString('pt-BR', { month: 'short' }).replace(/\./g, '').trim().toUpperCase()
     );
@@ -156,11 +156,12 @@ describe('C4uSeletorMesComponent', () => {
   });
 
   describe('Unit Tests', () => {
-    beforeEach(async () => {
-      // Wait for async initialization
+    beforeEach(waitForAsync(async () => {
       await component.ngOnInit();
       fixture.detectChanges();
-    });
+      // initializeMonths agenda emitSelectedMonth em 100ms; evita done() duplicado nos testes que assinam o output
+      await new Promise<void>((resolve) => setTimeout(resolve, 120));
+    }));
 
     describe('Month Navigation', () => {
       it('should navigate to previous month when goLeft is called', () => {

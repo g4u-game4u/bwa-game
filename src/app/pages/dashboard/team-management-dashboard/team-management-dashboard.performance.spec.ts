@@ -404,12 +404,12 @@ describe('TeamManagementDashboardComponent Performance Tests', () => {
 
       const startTime = performance.now();
 
-      // Navigate through months (mar. / abr. 2026)
-      component.onMonthChange(new Date(2026, 2, 1));
-      tick();
+      // Navigate through months (abr. / mai. 2026)
       component.onMonthChange(new Date(2026, 3, 1));
       tick();
-      component.onMonthChange(new Date(2026, 2, 1));
+      component.onMonthChange(new Date(2026, 4, 1));
+      tick();
+      component.onMonthChange(new Date(2026, 3, 1));
       tick();
 
       const endTime = performance.now();

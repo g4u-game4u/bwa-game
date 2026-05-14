@@ -897,7 +897,7 @@ describe('GamificationDashboard - Company KPI Integration Tests', () => {
       const initialCallCount = actionLogService.getPlayerCnpjListWithCount.calls.count();
 
       // Act - Change month
-      component.onMonthChange(new Date(2026, 2, 1));
+      component.onMonthChange(new Date(2026, 3, 1));
       tick();
 
       // Assert

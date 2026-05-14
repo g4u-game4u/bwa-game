@@ -105,7 +105,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   isLoadingCarteira = true;
   cnpjNameMap = new Map<string, string>(); // Map of original CNPJ → clean empresa name
   
-  // Month selection (temporada padrão mar–abr/2026; alinhado ao seletor — abril = mais recente)
+  // Month selection (temporada abr–jun/2026; alinhado ao seletor — mês mais recente primeiro)
   selectedMonth: Date = new Date(2026, 3, 1);
   
   // Modal state
@@ -125,7 +125,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   // Refresh state
   lastRefreshTime: Date | null = null;
 
-  /** Intervalo exibido e usado em GET `/game/actions?start&end` para o cartão de temporada (fixo mar–abr/2026). */
+  /** Intervalo exibido e usado em GET `/game/actions?start&end` (carteira + temporada no painel). */
   private readonly seasonDates = SEASON_GAME_ACTION_RANGE;
   
   // Accessibility properties
@@ -328,26 +328,33 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
         }
       });
     
-    // Load point wallet
-    this.playerService.getPlayerPoints(playerId)
+    // Carteira lateral: GET `/game/actions` no intervalo fixo da temporada (não usa totais lifetime do Funifier).
+    this.userActionDashboard
+      .getActionsForPlayerDateRange(playerId, this.seasonDates.start, this.seasonDates.end)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
-        next: (points) => {
-          this.pointWallet = points;
-          // Load canceled points separately
+        next: (items) => {
+          const wallet = this.userActionDashboard.getSeasonPointWalletDoneDelivered(
+            items,
+            this.seasonDates.start,
+            this.seasonDates.end
+          );
+          this.pointWallet = {
+            bloqueados: wallet.bloqueados,
+            desbloqueados: wallet.desbloqueados,
+            moedas: 0
+          };
           this.loadCanceledPoints(playerId);
           this.cdr.markForCheck();
         },
         error: (error) => {
-          console.error('📊 Failed to load point wallet:', error);
-          // Set default values on error so UI doesn't stay stuck
+          console.error('📊 Failed to load point wallet from /game/actions (season range):', error);
           this.pointWallet = { moedas: 0, bloqueados: 0, desbloqueados: 0 };
+          this.loadCanceledPoints(playerId);
           this.cdr.markForCheck();
-        },
-        complete: () => {
         }
       });
-    
+
     // Load season progress (basic data from player status)
     this.playerService.getSeasonProgress(playerId, this.seasonDates)
       .pipe(takeUntil(this.destroy$))
@@ -387,7 +394,8 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
       return;
     }
 
-    this.userActionDashboard.getCanceledPoints(userKey)
+    this.userActionDashboard
+      .getCanceledPoints(userKey, this.seasonDates.start, this.seasonDates.end)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (cancelados) => {
@@ -406,9 +414,9 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   }
 
   /**
-   * Com Funifier desligado, `player/{id}/status` não existe — nome e metadados vêm da sessão;
-   * carteira Bloqueados/Desbloqueados na temporada soma GET `/game/actions` (DONE / DELIVERED);
-   * nível do cartão pode ainda vir de GET `/game/stats`.
+   * Com Funifier ligado, nome/nível vêm de `player/{id}/status`; carteira Bloqueados/Desbloqueados
+   * soma GET `/game/actions` no intervalo fixo da temporada (não totais lifetime do Funifier);
+   * nível pode ainda vir de GET `/game/stats`.
    */
   private async loadPlayerDataFromGame4u(playerId: string): Promise<void> {
     const loadingTimeout = setTimeout(() => {
@@ -445,7 +453,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     };
     this.pointWallet = { bloqueados: 0, desbloqueados: 0, moedas: 0 };
 
-    const range = SEASON_GAME_ACTION_RANGE;
+    const range = this.seasonDates;
     try {
       const items = await firstValueFrom(
         this.userActionDashboard.getActionsForPlayerDateRange(playerId, range.start, range.end)
@@ -546,7 +554,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
       return;
     }
 
-    const range = SEASON_GAME_ACTION_RANGE;
+    const range = this.seasonDates;
 
     // Clientes na temporada: entregas distintas no intervalo fixo (GET `/game/actions?start&end`)
     this.userActionDashboard
@@ -792,7 +800,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   }
 
   private maybeInjectFinanceBillingKpiForPlayer(playerId: string): void {
-    if (!playerId || playerId === 'me') {
+    if (!playerId) {
       return;
     }
     if (!this.isFinanceTeamMember()) {
@@ -803,9 +811,9 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
 
   private injectFinanceBillingKpi(playerId: string): void {
     void playerId;
-    this.playerKPIs = this.playerKPIs.filter(
-      k => k.id !== GamificationDashboardComponent.VALOR_CONCEDIDO_KPI_ID
-    );
+    const vcId = GamificationDashboardComponent.VALOR_CONCEDIDO_KPI_ID;
+    /** «Valor concedido» substitui a linha vinda de `/goals/logs` (`receita-concedida`) no painel individual. */
+    this.playerKPIs = this.playerKPIs.filter(k => k.id !== vcId && k.id !== 'receita-concedida');
     void this.loadFinanceBillingKpiLikeTeamManagement();
   }
 
@@ -815,7 +823,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   private async loadFinanceBillingKpiLikeTeamManagement(): Promise<void> {
     const gen = ++this.financeBillingKpiLoadGeneration;
     const vcId = GamificationDashboardComponent.VALOR_CONCEDIDO_KPI_ID;
-    this.playerKPIs = this.playerKPIs.filter(k => k.id !== vcId);
+    this.playerKPIs = this.playerKPIs.filter(k => k.id !== vcId && k.id !== 'receita-concedida');
     try {
       const billingGoal = await this.systemParamsService.getParam<number>(
         'financeiro_monthly_billing_goal' as any
@@ -871,7 +879,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
         return;
       }
 
-      this.playerKPIs = this.playerKPIs.filter(k => k.id !== vcId);
+      this.playerKPIs = this.playerKPIs.filter(k => k.id !== vcId && k.id !== 'receita-concedida');
 
       const billingKpi: KPIData = {
         id: vcId,
@@ -1200,13 +1208,16 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
    * and applies team-specific visibility via isKpiVisibleForTeam.
    */
   get enabledKPIs(): KPIData[] {
+    const sessionTeamId = pickTeamIdFromUserProfile(this.sessaoProvider.usuario);
     return this.playerKPIs.filter(kpi => {
       // numero-empresas removed at source, but defensive filter
       if (kpi.id === 'numero-empresas') return false;
       // valor-concedido only for finance team
       if (kpi.id === 'valor-concedido' && !this.isFinanceTeamMember()) return false;
-      // Team-specific visibility
-      return isKpiVisibleForTeam(kpi.id);
+      // receita-concedida (log goals) só no financeiro; «Valor concedido» é a linha exibida após injeção
+      if (kpi.id === 'receita-concedida' && !this.isFinanceTeamMember()) return false;
+      // Team-specific visibility (alinhado ao painel de gestão de equipa)
+      return isKpiVisibleForTeam(kpi.id, sessionTeamId);
     });
   }
 

@@ -4,6 +4,7 @@ import * as fc from 'fast-check';
 import { PlayerService } from './player.service';
 import { CompanyService } from './company.service';
 import { KPIService } from './kpi.service';
+import { SessaoProvider } from '@providers/sessao/sessao.provider';
 import { FunifierApiService } from './funifier-api.service';
 import { PlayerMapper } from './player-mapper.service';
 import { CompanyMapper } from './company-mapper.service';
@@ -23,7 +24,8 @@ describe('Property-Based Tests: Error Handling', () => {
         FunifierApiService,
         PlayerMapper,
         CompanyMapper,
-        KPIMapper
+        KPIMapper,
+        { provide: SessaoProvider, useValue: { usuario: null } }
       ]
     });
 

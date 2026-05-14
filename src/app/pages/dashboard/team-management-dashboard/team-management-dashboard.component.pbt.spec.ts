@@ -541,8 +541,8 @@ describe('TeamManagementDashboardComponent - Property-Based Tests', () => {
       return [
         { id: 'entregas-prazo', label: 'Entregas no prazo', current: 80, target: 100, unit: '%', color: 'green', percentage: 80 },
         { id: 'valor-concedido', label: 'Valor concedido', current: 50000, target: 100000, unit: 'R$', color: 'yellow', percentage: 50 },
-        { id: 'meta-protocolo', label: 'Meta de protocolo', current: 500000, target: 1000000, unit: 'R$', color: 'yellow', percentage: 50 },
-        { id: 'aposentadorias-concedidas', label: 'Aposentadorias concedidas', current: 100, target: 220, unit: 'concedidos', color: 'yellow', percentage: 45 }
+        { id: 'meta-protocolo', label: 'Valor de protocolos', current: 500000, target: 1_100_000, unit: 'R$', color: 'yellow', percentage: 45 },
+        { id: 'aposentadorias-concedidas', label: 'Volume de concessões', current: 100, target: 240, unit: 'concessões', color: 'yellow', percentage: 42 }
       ];
     }
 

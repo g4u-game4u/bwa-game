@@ -36,12 +36,12 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
   let kpiService: jasmine.SpyObj<KPIService>;
   let toastService: jasmine.SpyObj<ToastService>;
   let actionLogService: jasmine.SpyObj<ActionLogService>;
+  let userActionDashboard: jasmine.SpyObj<UserActionDashboardService>;
 
   beforeEach(async () => {
     // Create spy objects for services
     const playerServiceSpy = jasmine.createSpyObj('PlayerService', [
       'getPlayerStatus',
-      'getPlayerPoints',
       'getSeasonProgress'
     ]);
     
@@ -140,6 +140,9 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
       'countFinalizadasInRange',
       'getActivityMetricsFromActions',
       'getMonthlyPointsBreakdownFromActions',
+      'getSeasonPointWalletDoneDelivered',
+      'getCanceledPoints',
+      'pickPrimaryTeamNameFromActions',
       'clearCache'
     ]);
     userActionDashboardSpy.getCarteiraEnriched.and.returnValue(of([]));
@@ -147,6 +150,9 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
     userActionDashboardSpy.getActionsForPlayerDateRange.and.returnValue(of([]));
     userActionDashboardSpy.getActions.and.returnValue(of([]));
     userActionDashboardSpy.countFinalizadasInRange.and.returnValue(0);
+    userActionDashboardSpy.getSeasonPointWalletDoneDelivered.and.returnValue({ bloqueados: 1000, desbloqueados: 500 });
+    userActionDashboardSpy.getCanceledPoints.and.returnValue(of(0));
+    userActionDashboardSpy.pickPrimaryTeamNameFromActions.and.returnValue('');
     userActionDashboardSpy.getActivityMetricsFromActions.and.returnValue({
       pendentes: 0,
       emExecucao: 0,
@@ -188,6 +194,7 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
     }).compileComponents();
 
     playerService = TestBed.inject(PlayerService) as jasmine.SpyObj<PlayerService>;
+    userActionDashboard = TestBed.inject(UserActionDashboardService) as jasmine.SpyObj<UserActionDashboardService>;
     companyService = TestBed.inject(CompanyService) as jasmine.SpyObj<CompanyService>;
     kpiService = TestBed.inject(KPIService) as jasmine.SpyObj<KPIService>;
     toastService = TestBed.inject(ToastService) as jasmine.SpyObj<ToastService>;
@@ -204,26 +211,35 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
 
     it('should load all child components data on initialization', fakeAsync(() => {
       // Arrange
-      const mockPlayerStatus = generatePlayerStatus();
       const mockPointWallet = generatePointWallet();
-      const mockSeasonProgress = generateSeasonProgress();
       const mockCompanies = [generateCompany(), generateCompany()];
       const mockKPIs = [generateKPIData(), generateKPIData(), generateKPIData()];
 
-      playerService.getPlayerStatus.and.returnValue(of(mockPlayerStatus));
-      playerService.getPlayerPoints.and.returnValue(of(mockPointWallet));
-      playerService.getSeasonProgress.and.returnValue(of(mockSeasonProgress));
+      userActionDashboard.getSeasonPointWalletDoneDelivered.and.returnValue({
+        bloqueados: mockPointWallet.bloqueados,
+        desbloqueados: mockPointWallet.desbloqueados
+      });
       companyService.getCompanies.and.returnValue(of(mockCompanies));
       kpiService.getPlayerKPIs.and.returnValue(of(mockKPIs));
 
       // Act
-      fixture.detectChanges(); // Triggers ngOnInit
+      fixture.detectChanges(); // Triggers ngOnInit (FUNIFIER_HTTP_DISABLED → fluxo Game4U)
       tick();
+      tick(1000); // `announceToScreenReader` usa setTimeout(1000)
 
-      // Assert
-      expect(component.playerStatus).toEqual(mockPlayerStatus);
-      expect(component.pointWallet).toEqual(mockPointWallet);
-      expect(component.seasonProgress).toEqual(mockSeasonProgress);
+      // Assert — carteira vem de `/game/actions` no intervalo da temporada, não de `getPlayerPoints`
+      expect(component.playerStatus?.name).toBeTruthy();
+      expect(component.pointWallet).toEqual(
+        jasmine.objectContaining({
+          bloqueados: mockPointWallet.bloqueados,
+          desbloqueados: mockPointWallet.desbloqueados,
+          moedas: 0,
+          cancelados: 0
+        })
+      );
+      expect(component.seasonProgress?.seasonDates?.start?.getTime()).toBe(
+        (component as unknown as { seasonDates: { start: Date } }).seasonDates.start.getTime()
+      );
       expect(component.companies).toEqual(mockCompanies);
       expect(component.playerKPIs).toEqual(mockKPIs);
       expect(component.isLoadingPlayer).toBe(false);
@@ -234,7 +250,7 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
     it('should set loading states correctly during initialization', fakeAsync(() => {
       // Arrange
       playerService.getPlayerStatus.and.returnValue(of(generatePlayerStatus()).pipe(delay(100)));
-      playerService.getPlayerPoints.and.returnValue(of(generatePointWallet()).pipe(delay(100)));
+      userActionDashboard.getActionsForPlayerDateRange.and.returnValue(of([]).pipe(delay(100)));
       playerService.getSeasonProgress.and.returnValue(of(generateSeasonProgress()).pipe(delay(100)));
       companyService.getCompanies.and.returnValue(of([]).pipe(delay(100)));
       kpiService.getPlayerKPIs.and.returnValue(of([]).pipe(delay(100)));
@@ -256,6 +272,7 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
       expect(component.isLoadingCompanies).toBe(false);
       expect(component.isLoadingKPIs).toBe(false);
       expect(component.isLoading).toBe(false);
+      tick(1000);
     }));
   });
 
@@ -264,7 +281,6 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
       // Arrange
       const mockPlayerStatus = generatePlayerStatus();
       playerService.getPlayerStatus.and.returnValue(of(mockPlayerStatus));
-      playerService.getPlayerPoints.and.returnValue(of(generatePointWallet()));
       playerService.getSeasonProgress.and.returnValue(of(generateSeasonProgress()));
       companyService.getCompanies.and.returnValue(of([]));
       kpiService.getPlayerKPIs.and.returnValue(of([]));
@@ -272,19 +288,21 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
       // Act
       fixture.detectChanges();
       tick();
+      tick(1000);
 
-      // Assert
-      expect(component.playerStatus).toEqual(mockPlayerStatus);
-      expect(component.playerStatus?.seasonLevel).toBe(mockPlayerStatus.seasonLevel);
-      expect(component.playerStatus?.name).toBe(mockPlayerStatus.name);
-      expect(component.playerStatus?.metadata).toEqual(mockPlayerStatus.metadata);
+      // Assert (fluxo Game4U: estado do jogador vem da sessão + stats, não do mock Funifier)
+      expect(component.playerStatus?.name).toBeTruthy();
+      expect(component.playerStatus?.metadata).toBeTruthy();
     }));
 
     it('should pass correct data to PointWallet component', fakeAsync(() => {
       // Arrange
       const mockPointWallet = generatePointWallet();
       playerService.getPlayerStatus.and.returnValue(of(generatePlayerStatus()));
-      playerService.getPlayerPoints.and.returnValue(of(mockPointWallet));
+      userActionDashboard.getSeasonPointWalletDoneDelivered.and.returnValue({
+        bloqueados: mockPointWallet.bloqueados,
+        desbloqueados: mockPointWallet.desbloqueados
+      });
       playerService.getSeasonProgress.and.returnValue(of(generateSeasonProgress()));
       companyService.getCompanies.and.returnValue(of([]));
       kpiService.getPlayerKPIs.and.returnValue(of([]));
@@ -292,16 +310,23 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
       // Act
       fixture.detectChanges();
       tick();
+      tick(1000);
 
       // Assert
-      expect(component.pointWallet).toEqual(mockPointWallet);
+      expect(component.pointWallet).toEqual(
+        jasmine.objectContaining({
+          bloqueados: mockPointWallet.bloqueados,
+          desbloqueados: mockPointWallet.desbloqueados,
+          moedas: 0,
+          cancelados: 0
+        })
+      );
     }));
 
     it('should pass correct data to SeasonProgress component', fakeAsync(() => {
       // Arrange
       const mockSeasonProgress = generateSeasonProgress();
       playerService.getPlayerStatus.and.returnValue(of(generatePlayerStatus()));
-      playerService.getPlayerPoints.and.returnValue(of(generatePointWallet()));
       playerService.getSeasonProgress.and.returnValue(of(mockSeasonProgress));
       companyService.getCompanies.and.returnValue(of([]));
       kpiService.getPlayerKPIs.and.returnValue(of([]));
@@ -318,7 +343,6 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
       // Arrange
       const mockCompanies = [generateCompany(), generateCompany(), generateCompany()];
       playerService.getPlayerStatus.and.returnValue(of(generatePlayerStatus()));
-      playerService.getPlayerPoints.and.returnValue(of(generatePointWallet()));
       playerService.getSeasonProgress.and.returnValue(of(generateSeasonProgress()));
       companyService.getCompanies.and.returnValue(of(mockCompanies));
       kpiService.getPlayerKPIs.and.returnValue(of([]));
@@ -340,7 +364,6 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
         generateKPIData()
       ];
       playerService.getPlayerStatus.and.returnValue(of(generatePlayerStatus()));
-      playerService.getPlayerPoints.and.returnValue(of(generatePointWallet()));
       playerService.getSeasonProgress.and.returnValue(of(generateSeasonProgress()));
       companyService.getCompanies.and.returnValue(of([]));
       kpiService.getPlayerKPIs.and.returnValue(of(mockKPIs));
@@ -359,7 +382,6 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
     it('should trigger data reload when month changes', fakeAsync(() => {
       // Arrange
       playerService.getPlayerStatus.and.returnValue(of(generatePlayerStatus()));
-      playerService.getPlayerPoints.and.returnValue(of(generatePointWallet()));
       playerService.getSeasonProgress.and.returnValue(of(generateSeasonProgress()));
       companyService.getCompanies.and.returnValue(of([]));
       kpiService.getPlayerKPIs.and.returnValue(of([]));
@@ -372,7 +394,7 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
       companyService.getCompanies.calls.reset();
       kpiService.getPlayerKPIs.calls.reset();
 
-      const picked = new Date(2026, 2, 1);
+      const picked = new Date(2026, 3, 1);
 
       // Act
       component.onMonthChange(picked);
@@ -380,7 +402,7 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
 
       // Assert
       expect(component.selectedMonth.getFullYear()).toBe(2026);
-      expect(component.selectedMonth.getMonth()).toBe(2);
+      expect(component.selectedMonth.getMonth()).toBe(3);
       expect(playerService.getPlayerStatus).toHaveBeenCalled();
       expect(companyService.getCompanies).toHaveBeenCalled();
       expect(kpiService.getPlayerKPIs).toHaveBeenCalled();
@@ -389,19 +411,18 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
     it('should update selectedMonth property when month changes', fakeAsync(() => {
       // Arrange
       playerService.getPlayerStatus.and.returnValue(of(generatePlayerStatus()));
-      playerService.getPlayerPoints.and.returnValue(of(generatePointWallet()));
       playerService.getSeasonProgress.and.returnValue(of(generateSeasonProgress()));
       companyService.getCompanies.and.returnValue(of([]));
       kpiService.getPlayerKPIs.and.returnValue(of([]));
       
-      const picked = new Date(2026, 2, 1);
+      const picked = new Date(2026, 3, 1);
 
       // Act
       component.onMonthChange(picked);
       tick();
 
       // Assert
-      expect(component.selectedMonth.getMonth()).toBe(2);
+      expect(component.selectedMonth.getMonth()).toBe(3);
     }));
   });
 
@@ -413,7 +434,6 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
     it('should reload all data when manual refresh is triggered', fakeAsync(() => {
       // Arrange
       playerService.getPlayerStatus.and.returnValue(of(generatePlayerStatus()));
-      playerService.getPlayerPoints.and.returnValue(of(generatePointWallet()));
       playerService.getSeasonProgress.and.returnValue(of(generateSeasonProgress()));
       companyService.getCompanies.and.returnValue(of([]));
       kpiService.getPlayerKPIs.and.returnValue(of([]));
@@ -423,7 +443,7 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
 
       // Reset call counts
       playerService.getPlayerStatus.calls.reset();
-      playerService.getPlayerPoints.calls.reset();
+      userActionDashboard.getActionsForPlayerDateRange.calls.reset();
       playerService.getSeasonProgress.calls.reset();
       companyService.getCompanies.calls.reset();
       kpiService.getPlayerKPIs.calls.reset();
@@ -434,7 +454,7 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
 
       // Assert
       expect(playerService.getPlayerStatus).toHaveBeenCalled();
-      expect(playerService.getPlayerPoints).toHaveBeenCalled();
+      expect(userActionDashboard.getActionsForPlayerDateRange).toHaveBeenCalled();
       expect(playerService.getSeasonProgress).toHaveBeenCalled();
       expect(companyService.getCompanies).toHaveBeenCalled();
       expect(kpiService.getPlayerKPIs).toHaveBeenCalled();
@@ -448,7 +468,6 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
     it('should update lastRefreshTime when refresh is triggered', fakeAsync(() => {
       // Arrange
       playerService.getPlayerStatus.and.returnValue(of(generatePlayerStatus()));
-      playerService.getPlayerPoints.and.returnValue(of(generatePointWallet()));
       playerService.getSeasonProgress.and.returnValue(of(generateSeasonProgress()));
       companyService.getCompanies.and.returnValue(of([]));
       kpiService.getPlayerKPIs.and.returnValue(of([]));
@@ -471,7 +490,6 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
     it('should format refresh time correctly', fakeAsync(() => {
       // Arrange
       playerService.getPlayerStatus.and.returnValue(of(generatePlayerStatus()));
-      playerService.getPlayerPoints.and.returnValue(of(generatePointWallet()));
       playerService.getSeasonProgress.and.returnValue(of(generateSeasonProgress()));
       companyService.getCompanies.and.returnValue(of([]));
       kpiService.getPlayerKPIs.and.returnValue(of([]));
@@ -498,7 +516,6 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
     it('should update timestamp on each refresh call', fakeAsync(() => {
       // Arrange
       playerService.getPlayerStatus.and.returnValue(of(generatePlayerStatus()));
-      playerService.getPlayerPoints.and.returnValue(of(generatePointWallet()));
       playerService.getSeasonProgress.and.returnValue(of(generateSeasonProgress()));
       companyService.getCompanies.and.returnValue(of([]));
       kpiService.getPlayerKPIs.and.returnValue(of([]));
@@ -529,7 +546,6 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
     it('should preserve selected month during refresh', fakeAsync(() => {
       // Arrange
       playerService.getPlayerStatus.and.returnValue(of(generatePlayerStatus()));
-      playerService.getPlayerPoints.and.returnValue(of(generatePointWallet()));
       playerService.getSeasonProgress.and.returnValue(of(generateSeasonProgress()));
       companyService.getCompanies.and.returnValue(of([]));
       kpiService.getPlayerKPIs.and.returnValue(of([]));
@@ -555,7 +571,6 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
     it('should preserve modal state during refresh', fakeAsync(() => {
       // Arrange
       playerService.getPlayerStatus.and.returnValue(of(generatePlayerStatus()));
-      playerService.getPlayerPoints.and.returnValue(of(generatePointWallet()));
       playerService.getSeasonProgress.and.returnValue(of(generateSeasonProgress()));
       companyService.getCompanies.and.returnValue(of([generateCompany()]));
       kpiService.getPlayerKPIs.and.returnValue(of([]));
@@ -586,7 +601,6 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
       const updatedPlayerStatus = { ...initialPlayerStatus, seasonLevel: initialPlayerStatus.seasonLevel + 1 };
       
       playerService.getPlayerStatus.and.returnValue(of(initialPlayerStatus));
-      playerService.getPlayerPoints.and.returnValue(of(generatePointWallet()));
       playerService.getSeasonProgress.and.returnValue(of(generateSeasonProgress()));
       companyService.getCompanies.and.returnValue(of([]));
       kpiService.getPlayerKPIs.and.returnValue(of([]));
@@ -621,7 +635,6 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
     it('should show toast notification when refresh starts', fakeAsync(() => {
       // Arrange
       playerService.getPlayerStatus.and.returnValue(of(generatePlayerStatus()));
-      playerService.getPlayerPoints.and.returnValue(of(generatePointWallet()));
       playerService.getSeasonProgress.and.returnValue(of(generateSeasonProgress()));
       companyService.getCompanies.and.returnValue(of([]));
       kpiService.getPlayerKPIs.and.returnValue(of([]));
@@ -641,7 +654,6 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
     it('should handle errors during refresh without losing context', fakeAsync(() => {
       // Arrange
       playerService.getPlayerStatus.and.returnValue(of(generatePlayerStatus()));
-      playerService.getPlayerPoints.and.returnValue(of(generatePointWallet()));
       playerService.getSeasonProgress.and.returnValue(of(generateSeasonProgress()));
       companyService.getCompanies.and.returnValue(of([]));
       kpiService.getPlayerKPIs.and.returnValue(of([]));
@@ -676,7 +688,6 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
       const updatedCompanies = [generateCompany(), generateCompany()];
       
       playerService.getPlayerStatus.and.returnValue(of(generatePlayerStatus()));
-      playerService.getPlayerPoints.and.returnValue(of(generatePointWallet()));
       playerService.getSeasonProgress.and.returnValue(of(generateSeasonProgress()));
       companyService.getCompanies.and.returnValue(of(initialCompanies));
       kpiService.getPlayerKPIs.and.returnValue(of([]));
@@ -715,7 +726,7 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
     it('should manage loading states correctly during refresh', fakeAsync(() => {
       // Arrange
       playerService.getPlayerStatus.and.returnValue(of(generatePlayerStatus()).pipe(delay(50)));
-      playerService.getPlayerPoints.and.returnValue(of(generatePointWallet()).pipe(delay(50)));
+      userActionDashboard.getActionsForPlayerDateRange.and.returnValue(of([]).pipe(delay(50)));
       playerService.getSeasonProgress.and.returnValue(of(generateSeasonProgress()).pipe(delay(50)));
       companyService.getCompanies.and.returnValue(of([]).pipe(delay(50)));
       kpiService.getPlayerKPIs.and.returnValue(of([]).pipe(delay(50)));
@@ -742,7 +753,6 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
       // Arrange
       const error = new Error('Failed to load player data');
       playerService.getPlayerStatus.and.returnValue(throwError(() => error));
-      playerService.getPlayerPoints.and.returnValue(of(generatePointWallet()));
       playerService.getSeasonProgress.and.returnValue(of(generateSeasonProgress()));
       companyService.getCompanies.and.returnValue(of([]));
       kpiService.getPlayerKPIs.and.returnValue(of([]));
@@ -761,7 +771,6 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
       // Arrange
       const error = new Error('Failed to load companies');
       playerService.getPlayerStatus.and.returnValue(of(generatePlayerStatus()));
-      playerService.getPlayerPoints.and.returnValue(of(generatePointWallet()));
       playerService.getSeasonProgress.and.returnValue(of(generateSeasonProgress()));
       companyService.getCompanies.and.returnValue(throwError(() => error));
       kpiService.getPlayerKPIs.and.returnValue(of([]));
@@ -780,7 +789,6 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
       // Arrange
       const error = new Error('Failed to load KPIs');
       playerService.getPlayerStatus.and.returnValue(of(generatePlayerStatus()));
-      playerService.getPlayerPoints.and.returnValue(of(generatePointWallet()));
       playerService.getSeasonProgress.and.returnValue(of(generateSeasonProgress()));
       companyService.getCompanies.and.returnValue(of([]));
       kpiService.getPlayerKPIs.and.returnValue(throwError(() => error));
@@ -799,7 +807,6 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
       // Arrange
       const error = new Error('Failed to load player data');
       playerService.getPlayerStatus.and.returnValue(throwError(() => error));
-      playerService.getPlayerPoints.and.returnValue(of(generatePointWallet()));
       playerService.getSeasonProgress.and.returnValue(of(generateSeasonProgress()));
       companyService.getCompanies.and.returnValue(of([generateCompany()]));
       kpiService.getPlayerKPIs.and.returnValue(of([generateKPIData()]));
@@ -845,7 +852,6 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
     it('should unsubscribe from all observables on destroy', fakeAsync(() => {
       // Arrange
       playerService.getPlayerStatus.and.returnValue(of(generatePlayerStatus()));
-      playerService.getPlayerPoints.and.returnValue(of(generatePointWallet()));
       playerService.getSeasonProgress.and.returnValue(of(generateSeasonProgress()));
       companyService.getCompanies.and.returnValue(of([]));
       kpiService.getPlayerKPIs.and.returnValue(of([]));
@@ -868,7 +874,6 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
   describe('Responsive Behavior', () => {
     beforeEach(() => {
       playerService.getPlayerStatus.and.returnValue(of(generatePlayerStatus()));
-      playerService.getPlayerPoints.and.returnValue(of(generatePointWallet()));
       playerService.getSeasonProgress.and.returnValue(of(generateSeasonProgress()));
       companyService.getCompanies.and.returnValue(of([]));
       kpiService.getPlayerKPIs.and.returnValue(of([]));
@@ -1119,7 +1124,6 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
   describe('Carteira Data Loading', () => {
     beforeEach(() => {
       playerService.getPlayerStatus.and.returnValue(of(generatePlayerStatus()));
-      playerService.getPlayerPoints.and.returnValue(of(generatePointWallet()));
       playerService.getSeasonProgress.and.returnValue(of(generateSeasonProgress()));
       companyService.getCompanies.and.returnValue(of([]));
       kpiService.getPlayerKPIs.and.returnValue(of([]));
@@ -1303,7 +1307,7 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
       companyKpiService.enrichCompaniesWithKpis.and.returnValue(of(newEnrichedData));
 
       // Act - Change month
-      component.onMonthChange(new Date(2026, 2, 1));
+      component.onMonthChange(new Date(2026, 3, 1));
       tick();
 
       // Assert
@@ -1427,7 +1431,6 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
   describe('KPI Display in Carteira Section', () => {
     beforeEach(() => {
       playerService.getPlayerStatus.and.returnValue(of(generatePlayerStatus()));
-      playerService.getPlayerPoints.and.returnValue(of(generatePointWallet()));
       playerService.getSeasonProgress.and.returnValue(of(generateSeasonProgress()));
       companyService.getCompanies.and.returnValue(of([]));
       kpiService.getPlayerKPIs.and.returnValue(of([]));
@@ -1868,7 +1871,7 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
       setupComponentWithKPIs([
         { id: 'entregas-prazo', label: 'Entregas no prazo', current: 10, target: 20, unit: '%' },
         { id: 'numero-empresas', label: 'Clientes atendidos', current: 5, target: 10, unit: 'clientes' },
-        { id: 'meta-protocolo', label: 'Meta de protocolo', current: 500000, target: 1000000, unit: 'R$' },
+        { id: 'meta-protocolo', label: 'Valor de protocolos', current: 500000, target: 1_100_000, unit: 'R$' },
       ]);
 
       // Act
@@ -1896,7 +1899,7 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
       setupComponentWithKPIs([
         { id: 'entregas-prazo', label: 'Entregas no prazo', current: 10, target: 20, unit: '%' },
         { id: 'valor-concedido', label: 'Valor concedido', current: 100000, target: 500000, unit: 'R$' },
-        { id: 'meta-protocolo', label: 'Meta de protocolo', current: 500000, target: 1000000, unit: 'R$' },
+        { id: 'meta-protocolo', label: 'Valor de protocolos', current: 500000, target: 1_100_000, unit: 'R$' },
       ]);
 
       // Act
@@ -1921,7 +1924,7 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
       setupComponentWithKPIs([
         { id: 'entregas-prazo', label: 'Entregas no prazo', current: 10, target: 20, unit: '%' },
         { id: 'valor-concedido', label: 'Valor concedido', current: 100000, target: 500000, unit: 'R$' },
-        { id: 'meta-protocolo', label: 'Meta de protocolo', current: 500000, target: 1000000, unit: 'R$' },
+        { id: 'meta-protocolo', label: 'Valor de protocolos', current: 500000, target: 1_100_000, unit: 'R$' },
       ]);
 
       // Act
@@ -1939,8 +1942,8 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
       // Arrange
       setupComponentWithKPIs([
         { id: 'entregas-prazo', label: 'Entregas no prazo', current: 10, target: 20, unit: '%' },
-        { id: 'meta-protocolo', label: 'Meta de protocolo', current: 500000, target: 1000000, unit: 'R$' },
-        { id: 'aposentadorias-concedidas', label: 'Aposentadorias concedidas', current: 150, target: 220, unit: 'concedidos' },
+        { id: 'meta-protocolo', label: 'Valor de protocolos', current: 500000, target: 1_100_000, unit: 'R$' },
+        { id: 'aposentadorias-concedidas', label: 'Volume de concessões', current: 150, target: 240, unit: 'concessões' },
       ]);
 
       // Act
@@ -1961,7 +1964,7 @@ describe('GamificationDashboardComponent - Integration Tests', () => {
       setupComponentWithKPIs([
         { id: 'entregas-prazo', label: 'Entregas no prazo', current: 10, target: 20, unit: '%' },
         { id: 'unknown-kpi', label: 'Unknown KPI', current: 5, target: 10, unit: 'items' },
-        { id: 'meta-protocolo', label: 'Meta de protocolo', current: 500000, target: 1000000, unit: 'R$' },
+        { id: 'meta-protocolo', label: 'Valor de protocolos', current: 500000, target: 1_100_000, unit: 'R$' },
       ]);
 
       // Act

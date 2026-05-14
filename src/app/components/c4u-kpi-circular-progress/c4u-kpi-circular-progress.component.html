@@ -28,6 +28,6 @@
     {{ progressEvolutionLabel }}
   </div>
   <div class="kpi-value" aria-hidden="true">{{ displayValue }}</div>
-  <div class="kpi-target" aria-hidden="true">{{ targetDisplayValue }}</div>
+  <div class="kpi-target" *ngIf="showTargetMeta" aria-hidden="true">{{ targetDisplayValue }}</div>
   <div class="kpi-status" [class]="'status-' + color" [class.status-goal-achieved]="isGoalAchieved" aria-hidden="true">{{ goalStatus }}</div>
 </div>

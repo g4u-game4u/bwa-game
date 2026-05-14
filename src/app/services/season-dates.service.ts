@@ -1,4 +1,5 @@
 import { Injectable } from '@angular/core';
+import { SEASON_GAME_ACTION_RANGE } from '@app/constants/season-action-range';
 import { CampaignService } from './campaign.service';
 
 @Injectable({
@@ -8,18 +9,29 @@ export class SeasonDatesService {
 
   constructor(private campaignService: CampaignService) {}
 
-  /**
-   * Obtém a data de início da temporada (campanha)
-   */
-  public async getSeasonStartDate(): Promise<Date> {
-    return this.campaignService.getCampaignStartDate();
+  private cloneSeasonRange(): { start: Date; end: Date } {
+    return {
+      start: new Date(SEASON_GAME_ACTION_RANGE.start.getTime()),
+      end: new Date(SEASON_GAME_ACTION_RANGE.end.getTime())
+    };
+  }
+
+  private monthIndex(d: Date): number {
+    return d.getFullYear() * 12 + d.getMonth();
   }
 
   /**
-   * Obtém a data de fim da temporada (campanha)
+   * Obtém a data de início da temporada (fixa no app)
+   */
+  public async getSeasonStartDate(): Promise<Date> {
+    return this.cloneSeasonRange().start;
+  }
+
+  /**
+   * Obtém a data de fim da temporada (fixa no app)
    */
   public async getSeasonEndDate(): Promise<Date> {
-    return this.campaignService.getCampaignEndDate();
+    return this.cloneSeasonRange().end;
   }
 
   /**
@@ -105,27 +117,29 @@ export class SeasonDatesService {
   }
 
   /**
-   * Obtém os meses disponíveis para seleção baseado na temporada
+   * Meses da temporada no seletor: da abertura até o mês corrente (limitado ao fim da temporada).
+   * Meses futuros dentro da temporada (ex. junho enquanto ainda é maio) não entram na lista.
    */
   public async getAvailableMonths(): Promise<{ id: number; name: string; date: Date }[]> {
     const { start, end } = await this.getSeasonDates();
     const months: { id: number; name: string; date: Date }[] = [];
-    
-    let currentDate = new Date(start);
+
+    let currentDate = new Date(start.getFullYear(), start.getMonth(), 1);
+    const endCap = new Date(end.getFullYear(), end.getMonth(), 1);
     let id = 0;
-    
-    while (currentDate <= end) {
+
+    while (currentDate <= endCap) {
       months.push({
         id: id++,
         name: this.formatMonthAbbrevPtBr(currentDate),
         date: new Date(currentDate)
       });
-      
-      // Avança para o próximo mês
-      currentDate.setMonth(currentDate.getMonth() + 1);
+      currentDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1);
     }
-    
-    return months;
+
+    const now = new Date();
+    const visibleCap = Math.min(this.monthIndex(now), this.monthIndex(end));
+    return months.filter((m) => this.monthIndex(m.date) <= visibleCap);
   }
 
   /**

@@ -137,8 +137,8 @@
     <section class="dashboard-section" aria-labelledby="kpi-section-title">
       <h3 id="kpi-section-title" class="section-title">Meus Indicadores</h3>
       
-      <div class="kpi-grid" *ngIf="playerKPIs.length > 0" role="group" aria-labelledby="kpi-section-title">
-        <ng-container *ngFor="let kpi of playerKPIs; let i = index; trackBy: trackByKpiId">
+      <div class="kpi-grid" *ngIf="enabledKPIs.length > 0" role="group" aria-labelledby="kpi-section-title">
+        <ng-container *ngFor="let kpi of enabledKPIs; let i = index; trackBy: trackByKpiId">
           <c4u-kpi-circular-progress
             [label]="kpi.label"
             [current]="roundValue(kpi.current)"

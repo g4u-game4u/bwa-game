@@ -2,6 +2,7 @@ import { Injectable } from '@angular/core';
 import { Observable, from, of } from 'rxjs';
 import { map, catchError } from 'rxjs/operators';
 import { ApiProvider } from '@providers/api.provider';
+import { APOSENTADORIAS_TARGET, META_PROTOCOLO_TARGET } from '../constants/kpi-targets.constants';
 
 /**
  * Goal log row from GET /goals/logs
@@ -42,11 +43,13 @@ export interface GoalKpiData {
   providedIn: 'root'
 })
 export class GoalsApiService {
-  // Goal template IDs as specified
+  // IDs de goal / action template em GET `/goals/logs` (logTemplateId = raiz ou extra).
   private readonly GOAL_TEMPLATE_IDS = {
+    /** Volume de concessões — meta circular Jurídico/CS. */
     APOSENTADORIAS: '126bfa2d-5845-4a3f-94d0-301b988dac33',
-    RECEITA_1: '6429c552-989a-47fe-82b8-ee57ee685dc5',
-    RECEITA_2: 'ddda4928-6e01-452a-bbac-edaf4d873b85',
+    /** Receita concedida (circular / financeiro) — template único em `/goals/logs`. */
+    RECEITA_CONCEDIDA: '75274eb5-0412-4c2b-8bcf-ac5c34ea904b',
+    /** Valor de protocolos — meta circular Jurídico/CS. */
     META_PROTOCOLO: 'b96dd54a-2847-4267-b234-2bd02e63b118'
   };
 
@@ -130,11 +133,28 @@ export class GoalsApiService {
     return 0;
   }
 
+  /** `goal_template_id` na raiz ou em `extra` (respostas G4U variadas). */
+  private logTemplateId(log: GoalLogRow): string {
+    const root = String(log.goal_template_id || '').trim();
+    if (root) {
+      return root;
+    }
+    const ex = log.extra?.['goal_template_id'] ?? log.extra?.['goalTemplateId'];
+    if (typeof ex === 'string' && ex.trim()) {
+      return ex.trim();
+    }
+    if (typeof ex === 'number' && Number.isFinite(ex)) {
+      return String(Math.trunc(ex));
+    }
+    return '';
+  }
+
   /**
    * Get the most recent log for a specific goal template ID
    */
   private getMostRecentLog(logs: GoalLogRow[], templateId: string): GoalLogRow | null {
-    const filtered = logs.filter(log => log.goal_template_id === templateId);
+    const want = String(templateId || '').trim().toLowerCase();
+    const filtered = logs.filter(log => this.logTemplateId(log).toLowerCase() === want);
     if (filtered.length === 0) {
       return null;
     }
@@ -145,6 +165,104 @@ export class GoalsApiService {
       return dateB - dateA;
     });
     return filtered[0];
+  }
+
+  /** `YYYY-MM` no fuso local (igual ao seletor de mês dos dashboards). */
+  private formatMonthKeyFromDate(month: Date): string {
+    const y = month.getFullYear();
+    const m = month.getMonth() + 1;
+    return `${y}-${String(m).padStart(2, '0')}`;
+  }
+
+  /** Início e fim do mês de calendário local (inclusive), em ms desde epoch. */
+  private selectedMonthWallRangeMs(selectedMonth: Date): { startMs: number; endMs: number } {
+    const y = selectedMonth.getFullYear();
+    const m = selectedMonth.getMonth();
+    const startMs = new Date(y, m, 1, 0, 0, 0, 0).getTime();
+    const endMs = new Date(y, m + 1, 0, 23, 59, 59, 999).getTime();
+    return { startMs, endMs };
+  }
+
+  private logUpdatedAtInSelectedMonth(log: GoalLogRow, selectedMonth: Date): boolean {
+    const t = new Date(log.updated_at).getTime();
+    if (!isFinite(t)) {
+      return false;
+    }
+    const { startMs, endMs } = this.selectedMonthWallRangeMs(selectedMonth);
+    return t >= startMs && t <= endMs;
+  }
+
+  /** Valor bruto de `cumulative_value` na raiz do log ou em `extra` (respostas G4U variadas). */
+  private cumulativeRawFromLog(log: GoalLogRow): unknown {
+    const root = log.cumulative_value;
+    if (root != null && !(typeof root === 'string' && (root as string).trim() === '')) {
+      return root;
+    }
+    const ex = log.extra;
+    if (ex && typeof ex === 'object') {
+      return ex['cumulative_value'] ?? ex['cumulativeValue'];
+    }
+    return null;
+  }
+
+  /** `cumulative_value` presente e interpretável como número (0 é válido). */
+  private logHasInterpretableCumulativeValue(log: GoalLogRow): boolean {
+    const v = this.cumulativeRawFromLog(log);
+    if (v == null) {
+      return false;
+    }
+    if (typeof v === 'string' && v.trim() === '') {
+      return false;
+    }
+    if (typeof v === 'number' && !isFinite(v)) {
+      return false;
+    }
+    const n = this.parseNumber(v);
+    return isFinite(n);
+  }
+
+  /**
+   * Receita (financeiro): com mês seleccionado, só logs com `cumulative_value` utilizável e
+   * `updated_at` nesse mês (calendário local).
+   */
+  private scopeGoalLogsForCircularMonth(logs: GoalLogRow[], selectedMonth?: Date): GoalLogRow[] {
+    if (!selectedMonth) {
+      return logs;
+    }
+    const scoped = logs.filter(
+      l => this.logUpdatedAtInSelectedMonth(l, selectedMonth) && this.logHasInterpretableCumulativeValue(l)
+    );
+    console.log(
+      '📊 [Goals API] Month scope (receita: updated_at + cumulative_value)',
+      this.formatMonthKeyFromDate(selectedMonth),
+      ':',
+      scoped.length,
+      '/',
+      logs.length,
+      'logs'
+    );
+    return scoped;
+  }
+
+  /**
+   * Jurídico / CS: último log por `goal_template_id` com `updated_at` dentro do mês filtrado
+   * (templates `126bfa2d-…` volume de concessões, `b96dd54a-…` valor de protocolos — sem exigir `cumulative_value`).
+   */
+  private scopeGoalLogsJurCsByUpdatedAtInMonth(logs: GoalLogRow[], selectedMonth?: Date): GoalLogRow[] {
+    if (!selectedMonth) {
+      return logs;
+    }
+    const scoped = logs.filter(l => this.logUpdatedAtInSelectedMonth(l, selectedMonth));
+    console.log(
+      '📊 [Goals API] Month scope (Jur/CS: updated_at in',
+      this.formatMonthKeyFromDate(selectedMonth),
+      '):',
+      scoped.length,
+      '/',
+      logs.length,
+      'logs'
+    );
+    return scoped;
   }
 
   /**
@@ -164,29 +282,17 @@ export class GoalsApiService {
   }
 
   /**
-   * Get Receita Concedida KPI data (checks both template IDs and returns the most recent)
+   * Get Receita Concedida KPI data (template único em `/goals/logs`).
    */
   getReceitaConcedida(): Observable<GoalKpiData | null> {
     return this.fetchGoalLogs().pipe(
       map(logs => {
-        const log1 = this.getMostRecentLog(logs, this.GOAL_TEMPLATE_IDS.RECEITA_1);
-        const log2 = this.getMostRecentLog(logs, this.GOAL_TEMPLATE_IDS.RECEITA_2);
-        
-        // Pick the most recent between the two
-        let mostRecent: GoalLogRow | null = null;
-        if (log1 && log2) {
-          const date1 = new Date(log1.updated_at).getTime();
-          const date2 = new Date(log2.updated_at).getTime();
-          mostRecent = date1 > date2 ? log1 : log2;
-        } else {
-          mostRecent = log1 || log2;
-        }
-        
-        if (!mostRecent) {
+        const log = this.getMostRecentLog(logs, this.GOAL_TEMPLATE_IDS.RECEITA_CONCEDIDA);
+        if (!log) {
           console.warn('📊 No goal log found for Receita Concedida');
           return null;
         }
-        return this.parseGoalLog(mostRecent);
+        return this.parseGoalLog(log);
       })
     );
   }
@@ -207,6 +313,100 @@ export class GoalsApiService {
     );
   }
 
+  /** Linha sintética para demo (percentual = current/target × 100, arredondado). */
+  private buildSyntheticGoalKpi(id: string, title: string, current: number, target: number): GoalKpiData {
+    const percentage = target > 0 ? Math.round((current / target) * 100) : 0;
+    return {
+      id,
+      title,
+      current,
+      target,
+      percentage,
+      updated_at: new Date().toISOString()
+    };
+  }
+
+  /**
+   * Temporário: Abril e Maio com valores fixos até a integração com API estar estável.
+   * Financeiro: valor concedido / receita. Jurídico/CS: volume de concessões + valor de protocolos.
+   */
+  private buildHardcodedKpisIfDemoMonth(
+    normalizedTeam: string,
+    selectedMonth?: Date
+  ): GoalKpiData[] | null {
+    if (!selectedMonth) {
+      return null;
+    }
+    const monthIdx = selectedMonth.getMonth();
+    const isApril = monthIdx === 3;
+    const isMay = monthIdx === 4;
+    if (!isApril && !isMay) {
+      return null;
+    }
+
+    if (normalizedTeam.includes('financeiro')) {
+      if (isApril) {
+        return [
+          this.buildSyntheticGoalKpi(
+            this.GOAL_TEMPLATE_IDS.RECEITA_CONCEDIDA,
+            'Receita concedida',
+            817_000,
+            775_000
+          )
+        ];
+      }
+      return [
+        this.buildSyntheticGoalKpi(
+          this.GOAL_TEMPLATE_IDS.RECEITA_CONCEDIDA,
+          'Receita concedida',
+          191_836,
+          800_000
+        )
+      ];
+    }
+
+    const isJurCs =
+      normalizedTeam.includes('juridico') ||
+      normalizedTeam.includes('jurídico') ||
+      normalizedTeam.includes('cs') ||
+      normalizedTeam === 'cs';
+    if (!isJurCs) {
+      return null;
+    }
+
+    if (isApril) {
+      return [
+        this.buildSyntheticGoalKpi(
+          this.GOAL_TEMPLATE_IDS.APOSENTADORIAS,
+          'Volume de concessões',
+          230,
+          220
+        ),
+        this.buildSyntheticGoalKpi(
+          this.GOAL_TEMPLATE_IDS.META_PROTOCOLO,
+          'Valor de protocolos',
+          1_013_000,
+          1_000_000
+        )
+      ];
+    }
+
+    return [
+      this.buildSyntheticGoalKpi(
+        this.GOAL_TEMPLATE_IDS.APOSENTADORIAS,
+        'Volume de concessões',
+        16,
+        220
+      ),
+      this.buildSyntheticGoalKpi(
+        this.GOAL_TEMPLATE_IDS.META_PROTOCOLO,
+        'Valor de protocolos',
+        224_907,
+        1_000_000
+      )
+    ];
+  }
+
   /**
    * Parse a goal log into KPI data
    */
@@ -216,9 +416,8 @@ export class GoalsApiService {
     let current = this.parseNumber(log.updated_value);
     let target = this.parseNumber(log.current_goal_value);
     
-    // Check if cumulative values are available and make more sense
-    const cumulativeValue = this.parseNumber(log.cumulative_value);
-    if (cumulativeValue > 0) {
+    const cumulativeValue = this.parseNumber(this.cumulativeRawFromLog(log));
+    if (this.logHasInterpretableCumulativeValue(log)) {
       current = cumulativeValue;
     }
     
@@ -238,7 +437,7 @@ export class GoalsApiService {
     }
     
     return {
-      id: log.goal_template_id,
+      id: this.logTemplateId(log) || String(log.goal_template_id || ''),
       title: log.title,
       current: current,
       target: target,
@@ -248,40 +447,43 @@ export class GoalsApiService {
   }
 
   /**
-   * Get all KPIs for a team based on team name
+   * Get all KPIs for a team based on team name.
+   * @param selectedMonth Com mês definido: **Jurídico/CS** — último log por `updated_at` dentro do mês para cada
+   *   `goal_template_id` (`126bfa2d-…` volume de concessões, `b96dd54a-…` valor de protocolos).
+   *   **Financeiro** — receita: último log no mês com `cumulative_value` utilizável e `updated_at` no mês.
    */
-  getAllKpisForTeam(teamName: string): Observable<GoalKpiData[]> {
+  getAllKpisForTeam(teamName: string, selectedMonth?: Date): Observable<GoalKpiData[]> {
     const normalizedTeam = teamName.toLowerCase().trim();
     
     console.log('📊 [Goals API] Fetching KPIs for team:', normalizedTeam);
     
     return this.fetchGoalLogs().pipe(
       map(logs => {
+        const hardcoded = this.buildHardcodedKpisIfDemoMonth(normalizedTeam, selectedMonth);
+        if (hardcoded !== null) {
+          console.warn(
+            '📊 [Goals API] Abril/Maio: KPIs hardcoded temporários (integração API desligada para estes meses).'
+          );
+          return hardcoded;
+        }
+
+        const scopedFinance = this.scopeGoalLogsForCircularMonth(logs, selectedMonth);
+        const scopedJurCs = this.scopeGoalLogsJurCsByUpdatedAtInMonth(logs, selectedMonth);
         console.log('📊 [Goals API] Received', logs.length, 'goal logs');
         const kpis: GoalKpiData[] = [];
         
         if (normalizedTeam.includes('financeiro')) {
-          // Financeiro: Receita Concedida only
-          const receitaLog1 = this.getMostRecentLog(logs, this.GOAL_TEMPLATE_IDS.RECEITA_1);
-          const receitaLog2 = this.getMostRecentLog(logs, this.GOAL_TEMPLATE_IDS.RECEITA_2);
-          
-          let mostRecent: GoalLogRow | null = null;
-          if (receitaLog1 && receitaLog2) {
-            const date1 = new Date(receitaLog1.updated_at).getTime();
-            const date2 = new Date(receitaLog2.updated_at).getTime();
-            mostRecent = date1 > date2 ? receitaLog1 : receitaLog2;
-          } else {
-            mostRecent = receitaLog1 || receitaLog2;
-          }
-          
-          if (mostRecent) {
-            kpis.push(this.parseGoalLog(mostRecent));
+          // Financeiro: Receita concedida (template único)
+          const receitaLog = this.getMostRecentLog(scopedFinance, this.GOAL_TEMPLATE_IDS.RECEITA_CONCEDIDA);
+
+          if (receitaLog) {
+            kpis.push(this.parseGoalLog(receitaLog));
             console.log('📊 [Goals API] Found Receita Concedida from API');
           } else {
             // No data found - return with 0 current and hardcoded target
             console.warn('📊 [Goals API] No Receita Concedida data found, using defaults');
             kpis.push({
-              id: this.GOAL_TEMPLATE_IDS.RECEITA_1,
+              id: this.GOAL_TEMPLATE_IDS.RECEITA_CONCEDIDA,
               title: 'Receita concedida',
               current: 0,
               target: 775000, // Hardcoded default target
@@ -290,67 +492,67 @@ export class GoalsApiService {
             });
           }
         } else if (normalizedTeam.includes('juridico') || normalizedTeam.includes('jurídico')) {
-          // Jurídico: Meta de Protocolo + Aposentadorias Concedidas
-          const protocoloLog = this.getMostRecentLog(logs, this.GOAL_TEMPLATE_IDS.META_PROTOCOLO);
-          if (protocoloLog) {
-            kpis.push(this.parseGoalLog(protocoloLog));
-            console.log('📊 [Goals API] Found Meta de Protocolo from API');
+          // Jurídico: volume de concessões (126…) → valor de protocolos (b96…), alinhado à UI
+          const aposentadoriasLog = this.getMostRecentLog(scopedJurCs, this.GOAL_TEMPLATE_IDS.APOSENTADORIAS);
+          if (aposentadoriasLog) {
+            kpis.push(this.parseGoalLog(aposentadoriasLog));
+            console.log('📊 [Goals API] Found volume de concessões from API');
           } else {
-            console.warn('📊 [Goals API] No Meta de Protocolo data found, using defaults');
+            console.warn('📊 [Goals API] No volume de concessões data found, using defaults');
             kpis.push({
-              id: this.GOAL_TEMPLATE_IDS.META_PROTOCOLO,
-              title: 'Meta de protocolo',
+              id: this.GOAL_TEMPLATE_IDS.APOSENTADORIAS,
+              title: 'Volume de concessões',
               current: 0,
-              target: 1000000, // Hardcoded default target
+              target: APOSENTADORIAS_TARGET, // fallback alinhado a kpi-targets.constants
               percentage: 0,
               updated_at: new Date().toISOString()
             });
           }
-          
-          const aposentadoriasLog = this.getMostRecentLog(logs, this.GOAL_TEMPLATE_IDS.APOSENTADORIAS);
-          if (aposentadoriasLog) {
-            kpis.push(this.parseGoalLog(aposentadoriasLog));
-            console.log('📊 [Goals API] Found Aposentadorias Concedidas from API');
+
+          const protocoloLog = this.getMostRecentLog(scopedJurCs, this.GOAL_TEMPLATE_IDS.META_PROTOCOLO);
+          if (protocoloLog) {
+            kpis.push(this.parseGoalLog(protocoloLog));
+            console.log('📊 [Goals API] Found valor de protocolos from API');
           } else {
-            console.warn('📊 [Goals API] No Aposentadorias Concedidas data found, using defaults');
+            console.warn('📊 [Goals API] No valor de protocolos data found, using defaults');
             kpis.push({
-              id: this.GOAL_TEMPLATE_IDS.APOSENTADORIAS,
-              title: 'Aposentadorias concedidas',
+              id: this.GOAL_TEMPLATE_IDS.META_PROTOCOLO,
+              title: 'Valor de protocolos',
               current: 0,
-              target: 50, // Hardcoded default target
+              target: META_PROTOCOLO_TARGET, // fallback alinhado a kpi-targets.constants
               percentage: 0,
               updated_at: new Date().toISOString()
             });
           }
         } else if (normalizedTeam.includes('cs') || normalizedTeam === 'cs') {
-          // CS: Meta de Protocolo + Aposentadorias Concedidas
-          const protocoloLog = this.getMostRecentLog(logs, this.GOAL_TEMPLATE_IDS.META_PROTOCOLO);
-          if (protocoloLog) {
-            kpis.push(this.parseGoalLog(protocoloLog));
-            console.log('📊 [Goals API] Found Meta de Protocolo from API');
+          // CS: mesma ordem (volume de concessões, depois valor de protocolos)
+          const aposentadoriasLogCs = this.getMostRecentLog(scopedJurCs, this.GOAL_TEMPLATE_IDS.APOSENTADORIAS);
+          if (aposentadoriasLogCs) {
+            kpis.push(this.parseGoalLog(aposentadoriasLogCs));
+            console.log('📊 [Goals API] Found volume de concessões from API');
           } else {
-            console.warn('📊 [Goals API] No Meta de Protocolo data found, using defaults');
+            console.warn('📊 [Goals API] No volume de concessões data found, using defaults');
             kpis.push({
-              id: this.GOAL_TEMPLATE_IDS.META_PROTOCOLO,
-              title: 'Meta de protocolo',
+              id: this.GOAL_TEMPLATE_IDS.APOSENTADORIAS,
+              title: 'Volume de concessões',
               current: 0,
-              target: 1000000, // Hardcoded default target
+              target: APOSENTADORIAS_TARGET, // fallback alinhado a kpi-targets.constants
               percentage: 0,
               updated_at: new Date().toISOString()
             });
           }
-          
-          const aposentadoriasLog = this.getMostRecentLog(logs, this.GOAL_TEMPLATE_IDS.APOSENTADORIAS);
-          if (aposentadoriasLog) {
-            kpis.push(this.parseGoalLog(aposentadoriasLog));
-            console.log('📊 [Goals API] Found Aposentadorias Concedidas from API');
+
+          const protocoloLogCs = this.getMostRecentLog(scopedJurCs, this.GOAL_TEMPLATE_IDS.META_PROTOCOLO);
+          if (protocoloLogCs) {
+            kpis.push(this.parseGoalLog(protocoloLogCs));
+            console.log('📊 [Goals API] Found valor de protocolos from API');
           } else {
-            console.warn('📊 [Goals API] No Aposentadorias Concedidas data found, using defaults');
+            console.warn('📊 [Goals API] No valor de protocolos data found, using defaults');
             kpis.push({
-              id: this.GOAL_TEMPLATE_IDS.APOSENTADORIAS,
-              title: 'Aposentadorias concedidas',
+              id: this.GOAL_TEMPLATE_IDS.META_PROTOCOLO,
+              title: 'Valor de protocolos',
               current: 0,
-              target: 50, // Hardcoded default target
+              target: META_PROTOCOLO_TARGET, // fallback alinhado a kpi-targets.constants
               percentage: 0,
               updated_at: new Date().toISOString()
             });

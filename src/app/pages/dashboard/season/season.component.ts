@@ -13,6 +13,7 @@ import { ModalGerenciarPontosAvulsosProvider } from "../../../providers/modal-ge
 import { TIPO_CONSULTA_TIME } from "../dashboard.component";
 import { ModalDetalheExecutorComponent } from "./modal-detalhe-executor/modal-detalhe-executor.component";
 import { environment } from 'src/environments/environment';
+import { SEASON_GAME_ACTION_RANGE } from '@app/constants/season-action-range';
 
 @Component({
   selector: 'page-season',    
@@ -506,8 +507,8 @@ export class SeasonComponent implements OnInit, OnChanges {
     } catch (error) {
       console.error('Erro ao carregar datas da temporada:', error);
       this.seasonDates = {
-        start: new Date(2026, 2, 1),
-        end: new Date(2026, 3, 30, 23, 59, 59, 999)
+        start: new Date(SEASON_GAME_ACTION_RANGE.start.getTime()),
+        end: new Date(SEASON_GAME_ACTION_RANGE.end.getTime())
       };
     } finally {
       this.seasonDatesLoading = false;

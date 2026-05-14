@@ -20,6 +20,7 @@ import { UserProfile } from '@utils/user-profile';
 import { CompanyDisplay, CompanyKpiService } from '@services/company-kpi.service';
 import { KPIData } from '@app/model/gamification-dashboard.model';
 import { KPIService } from '@services/kpi.service';
+import { GoalsApiService, GoalKpiData } from '@services/goals-api.service';
 import { CnpjLookupService } from '@services/cnpj-lookup.service';
 import { SystemParamsService } from '@services/system-params.service';
 import { FinanceiroOmieRecebiveisService } from '@services/financeiro-omie-recebiveis.service';
@@ -104,7 +105,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
   selectedTeam: string = '';
   selectedTeamId: string = ''; // Funifier team ID (e.g., 'FkmdnFU')
   selectedCollaborator: string | null = null;
-  /** Alinhado ao c4u-seletor-mes: temporada padrão mar–abr/2026; mês inicial = abril (mais recente na lista). */
+  /** Até o c4u-seletor-mes emitir o mês; temporada fixa abr–jun/2026 (seletor só até o mês corrente). */
   selectedMonth: Date = new Date(2026, 3, 1);
   activeTab: 'goals' | 'productivity' = 'goals';
   /**
@@ -244,6 +245,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
     private userProfileService: UserProfileService,
     private companyKpiService: CompanyKpiService,
     private kpiService: KPIService,
+    private goalsApi: GoalsApiService,
     private cnpjLookupService: CnpjLookupService,
     private systemParamsService: SystemParamsService,
     private financeiroOmieRecebiveisService: FinanceiroOmieRecebiveisService,
@@ -406,11 +408,9 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       };
     } catch (error) {
       console.error('Error loading season dates:', error);
-      // Use default dates if service fails
-      const now = new Date();
       this.seasonDates = {
-        start: new Date(now.getFullYear(), 0, 1),
-        end: new Date(now.getFullYear(), 11, 31)
+        start: new Date(SEASON_GAME_ACTION_RANGE.start.getTime()),
+        end: new Date(SEASON_GAME_ACTION_RANGE.end.getTime())
       };
     }
   }
@@ -1009,16 +1009,24 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
   /**
    * Janela dos gráficos de produtividade: últimos `selectedPeriod` dias dentro do mês do dashboard,
    * com fim no último dia do mês ou em hoje (o que for menor).
+   * Se o mês selecionado é **inteiramente no futuro** em relação a hoje, usa o mês completo
+   * (evita `start` > `end` ao capar o fim em «hoje» antes do início do mês — rejeição na API).
    */
   private getProductivityChartRange(): { start: dayjs.Dayjs; end: dayjs.Dayjs } {
     const { start: mStart, end: mEnd } = this.calculateDateRange();
     const monthStart = dayjs(mStart).startOf('day');
     const monthEnd = dayjs(mEnd).endOf('day');
     const now = dayjs();
+    if (monthStart.isAfter(now, 'day')) {
+      return { start: monthStart, end: monthEnd };
+    }
     const endDj = monthEnd.isAfter(now, 'day') ? now.endOf('day') : monthEnd;
     let startDj = endDj.subtract(this.selectedPeriod, 'day');
     if (startDj.isBefore(monthStart)) {
       startDj = monthStart;
+    }
+    if (startDj.isAfter(endDj)) {
+      return { start: monthStart, end: monthEnd.isAfter(now, 'day') ? now.endOf('day') : monthEnd };
     }
     return { start: startDj, end: endDj };
   }
@@ -3347,6 +3355,68 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
   }
 
   /**
+   * Jurídico / CS na vista **equipa**: GET `/goals/logs` (via {@link GoalsApiService.getAllKpisForTeam})
+   * com filtro do mês selecionado — volume de concessões (126…) e valor de protocolos (b96…).
+   */
+  private async appendJuridicoCsGoalsKpisFromLogs(teamKPIs: KPIData[]): Promise<void> {
+    const teamLabel = (this.selectedTeam || this.displayTeamName || '').trim();
+    if (!teamLabel) {
+      return;
+    }
+    const normalized = teamLabel
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '');
+    const isJur = normalized.includes('juridico');
+    const isCs = normalized === 'cs' || normalized.includes('cs');
+    if (!isJur && !isCs) {
+      return;
+    }
+
+    const tplVolume = '126bfa2d-5845-4a3f-94d0-301b988dac33';
+    const tplProtocolo = 'b96dd54a-2847-4267-b234-2bd02e63b118';
+
+    try {
+      const rows = await firstValueFrom(
+        this.goalsApi.getAllKpisForTeam(teamLabel, this.selectedMonth).pipe(takeUntil(this.destroy$))
+      );
+      const without = teamKPIs.filter(
+        k => k.id !== 'meta-protocolo' && k.id !== 'aposentadorias-concedidas'
+      );
+      teamKPIs.length = 0;
+      teamKPIs.push(...without);
+
+      const pick = (id: string): GoalKpiData | undefined =>
+        rows.find(r => String(r.id).toLowerCase() === id.toLowerCase());
+
+      const pushFromGoal = (g: GoalKpiData, kpiId: string, label: string, unit: string) => {
+        const superT = Math.ceil(g.target * 1.5);
+        teamKPIs.push({
+          id: kpiId,
+          label,
+          current: g.current,
+          target: g.target,
+          superTarget: superT,
+          unit,
+          color: this.getKPIColorByGoals(g.current, g.target, superT),
+          percentage: g.percentage
+        });
+      };
+
+      const vol = pick(tplVolume);
+      if (vol) {
+        pushFromGoal(vol, 'aposentadorias-concedidas', 'Volume de concessões', 'concessões');
+      }
+      const proto = pick(tplProtocolo);
+      if (proto) {
+        pushFromGoal(proto, 'meta-protocolo', 'Valor de protocolos', 'R$');
+      }
+    } catch (e) {
+      console.error('[TeamManagement] KPIs Jurídico/CS (goals/logs):', e);
+    }
+  }
+
+  /**
    * KPI circular «Valor concedido» (metas coletivas do time financeiro via /goals/logs ou Omie).
    * Usado na vista do **time** e na vista de **um colaborador** (mesmos números).
    */
@@ -3601,6 +3671,8 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
             console.error('Error loading team entrega KPI:', error);
           }
         }
+
+        await this.appendJuridicoCsGoalsKpisFromLogs(teamKPIs);
 
         // 3. Valor concedido (coletivo; time financeiro) — mesmo KPI na vista equipa ou colaborador
         await this.appendFinanceValorConcedidoKpiIfFinance(teamKPIs);

@@ -6,12 +6,12 @@
  */
 
 // TODO: migrate to metric_targets__c or System_Params_Service
-/** Meta de protocolo — target in R$ (R$ 1.000.000). */
-export const META_PROTOCOLO_TARGET = 1_000_000;
+/** Valor de protocolos (R$) — meta mensal / fallback quando não há log em `/goals/logs`. */
+export const META_PROTOCOLO_TARGET = 1_100_000;
 
 // TODO: migrate to metric_targets__c or System_Params_Service
-/** Aposentadorias concedidas — target count (220 concedidos). */
-export const APOSENTADORIAS_TARGET = 220;
+/** Volume de concessões — meta / fallback (contagem) quando não há log em `/goals/logs`. */
+export const APOSENTADORIAS_TARGET = 240;
 
 /**
  * Team-specific KPI visibility overrides.
@@ -41,12 +41,16 @@ export const DEFAULT_VISIBLE_KPIS: string[] = [
  * - If `teamId` is provided and has an entry in `TEAM_KPI_VISIBILITY`,
  *   the KPI must appear in that team's list.
  * - Otherwise falls back to `DEFAULT_VISIBLE_KPIS`, also allowing
- *   `valor-concedido` (finance-specific filtering is handled separately
- *   by the dashboard components).
+ *   `valor-concedido` and `receita-concedida` (filtragem por time financeiro
+ *   nos painéis fica a cargo dos componentes).
  */
 export function isKpiVisibleForTeam(kpiId: string, teamId?: string | null): boolean {
   if (teamId && TEAM_KPI_VISIBILITY[teamId]) {
     return TEAM_KPI_VISIBILITY[teamId].includes(kpiId);
   }
-  return DEFAULT_VISIBLE_KPIS.includes(kpiId) || kpiId === 'valor-concedido';
+  return (
+    DEFAULT_VISIBLE_KPIS.includes(kpiId) ||
+    kpiId === 'valor-concedido' ||
+    kpiId === 'receita-concedida'
+  );
 }

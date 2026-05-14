@@ -8,12 +8,12 @@ import {
 
 describe('kpi-targets.constants', () => {
   describe('constant values', () => {
-    it('should define META_PROTOCOLO_TARGET as 1_000_000', () => {
-      expect(META_PROTOCOLO_TARGET).toBe(1_000_000);
+    it('should define META_PROTOCOLO_TARGET as 1_100_000', () => {
+      expect(META_PROTOCOLO_TARGET).toBe(1_100_000);
     });
 
-    it('should define APOSENTADORIAS_TARGET as 220', () => {
-      expect(APOSENTADORIAS_TARGET).toBe(220);
+    it('should define APOSENTADORIAS_TARGET as 240', () => {
+      expect(APOSENTADORIAS_TARGET).toBe(240);
     });
 
     it('should define DEFAULT_VISIBLE_KPIS with the three default KPIs', () => {
@@ -39,6 +39,10 @@ describe('kpi-targets.constants', () => {
 
       it('should return true for valor-concedido (finance filtering is handled by dashboards)', () => {
         expect(isKpiVisibleForTeam('valor-concedido')).toBe(true);
+      });
+
+      it('should return true for receita-concedida (finance filtering is handled by dashboards)', () => {
+        expect(isKpiVisibleForTeam('receita-concedida')).toBe(true);
       });
 
       it('should return false for an unknown KPI id', () => {

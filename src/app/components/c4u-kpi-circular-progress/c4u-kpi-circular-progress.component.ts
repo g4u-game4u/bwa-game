@@ -20,6 +20,9 @@ export class C4uKpiCircularProgressComponent {
 
   /** Texto curto sob o anel (ex. ganho em p.p.). */
   @Input() progressEvolutionLabel?: string | null;
+
+  /** Quando false, oculta a linha «Meta: …» (ex.: clientes atendidos no dashboard da equipa). */
+  @Input() showTargetMeta: boolean = true;
   
   @HostBinding('class')
   get hostClasses(): string {
@@ -206,12 +209,15 @@ export class C4uKpiCircularProgressComponent {
    */
   get ariaLabel(): string {
     const unitText = this.unit ? ` ${this.unit}` : '';
-    const metaRef =
-      this.unit === '%' ? (this.target > 0 ? this.target : 100) : this.target;
     const evo =
       this.progressEvolutionLabel != null && String(this.progressEvolutionLabel).trim()
         ? ` ${String(this.progressEvolutionLabel).trim()}.`
         : '';
+    if (!this.showTargetMeta) {
+      return `${this.label}: ${this.displayValue}. Progresso ${this.percentage}%.${evo} ${this.goalStatus}`.trim();
+    }
+    const metaRef =
+      this.unit === '%' ? (this.target > 0 ? this.target : 100) : this.target;
     return `${this.label}: ${this.percentage}% da meta (${this.current}${unitText} de ${metaRef}${unitText}).${evo} ${this.goalStatus}`;
   }
 
@@ -219,6 +225,9 @@ export class C4uKpiCircularProgressComponent {
    * Generate ARIA value text for screen readers
    */
   get ariaValueText(): string {
+    if (!this.showTargetMeta) {
+      return `${this.percentage}%`;
+    }
     return `${this.percentage}% da meta`;
   }
 

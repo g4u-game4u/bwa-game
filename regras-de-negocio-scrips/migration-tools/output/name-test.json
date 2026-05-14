@@ -1,0 +1,14 @@
+[
+  {
+    "email": "adonias.neto@bwa.global",
+    "fullName": "ADONIAS DE MEDEIROS COSTA NETO",
+    "plainPassword": "QVohEuw8",
+    "passwordFromCsv": true
+  },
+  {
+    "email": "adriane.meireles@bwa.global",
+    "fullName": "adriane.meireles",
+    "plainPassword": "123456",
+    "passwordFromCsv": false
+  }
+]

@@ -4,6 +4,7 @@ import { of, throwError } from 'rxjs';
 import { PlayerService } from './player.service';
 import { CompanyService } from './company.service';
 import { KPIService } from './kpi.service';
+import { SessaoProvider } from '@providers/sessao/sessao.provider';
 import { FunifierApiService } from './funifier-api.service';
 import { PlayerMapper } from './player-mapper.service';
 import { CompanyMapper } from './company-mapper.service';
@@ -32,7 +33,8 @@ describe('Error Scenarios Unit Tests', () => {
         { provide: FunifierApiService, useValue: spy },
         PlayerMapper,
         CompanyMapper,
-        KPIMapper
+        KPIMapper,
+        { provide: SessaoProvider, useValue: { usuario: null } }
       ]
     });
 

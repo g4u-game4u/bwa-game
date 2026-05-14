@@ -380,8 +380,20 @@ export class UserActionDashboardService {
    * GET `/game/actions?start&end&user` ou `/game/team-actions?start&end&team` (todas as páginas no intervalo).
    */
   async fetchAllUserActionsWithParams(extra: Record<string, string>): Promise<UserActionRow[]> {
-    const start = (extra['start'] || '2000-01-01T00:00:00.000Z').trim();
-    const end = (extra['end'] || new Date().toISOString()).trim();
+    let start = (extra['start'] || '2000-01-01T00:00:00.000Z').trim();
+    let end = (extra['end'] || new Date().toISOString()).trim();
+    const t0 = Date.parse(start);
+    const t1 = Date.parse(end);
+    if (Number.isFinite(t0) && Number.isFinite(t1) && t0 > t1) {
+      console.warn('[UserActionDashboard] Intervalo inválido start>end; ajustando para [min,max].', {
+        start,
+        end
+      });
+      const lo = Math.min(t0, t1);
+      const hi = Math.max(t0, t1);
+      start = new Date(lo).toISOString();
+      end = new Date(hi).toISOString();
+    }
     const teamId = String(extra['team_id'] || '').trim();
     const user =
       String(extra['user'] || extra['user_id'] || extra['user_email'] || '').trim();
@@ -1225,9 +1237,10 @@ export class UserActionDashboardService {
 
   /**
    * Get total canceled points for a user by fetching all CANCELLED actions
-   * and summing their points
+   * and summing their points. Optional `rangeStart`/`rangeEnd` restrict by
+   * {@link inDateRange} (mesma lógica da temporada no painel).
    */
-  getCanceledPoints(userId: string): Observable<number> {
+  getCanceledPoints(userId: string, rangeStart?: Date, rangeEnd?: Date): Observable<number> {
     const user = (userId || '').trim();
     if (!user || !looksLikeEmail(user)) {
       return of(0);
@@ -1242,8 +1255,12 @@ export class UserActionDashboardService {
 
     return from(this.fetchUserActionSearchAllPages(params)).pipe(
       map(items => {
+        const rows =
+          rangeStart && rangeEnd
+            ? this.filterDateRange(items, rangeStart, rangeEnd)
+            : items;
         // Sum all points from cancelled actions
-        return items.reduce((sum, item) => {
+        return rows.reduce((sum, item) => {
           const points = this.rowPoints(item);
           return sum + points;
         }, 0);

@@ -1,0 +1,32 @@
+[
+  {
+    "email": "adonias.neto@bwa.global",
+    "fullName": "ADONIAS DE MEDEIROS COSTA NETO",
+    "plainPassword": "QVohEuw8",
+    "passwordFromCsv": true
+  },
+  {
+    "email": "adriane.meireles@bwa.global",
+    "fullName": "adriane.meireles",
+    "plainPassword": "123456",
+    "passwordFromCsv": false
+  },
+  {
+    "email": "adriano.lima@bwa.global",
+    "fullName": "adriano.lima",
+    "plainPassword": "123456",
+    "passwordFromCsv": false
+  },
+  {
+    "email": "adrianoroh123@gmail.com",
+    "fullName": "adrianoroh123",
+    "plainPassword": "123456",
+    "passwordFromCsv": false
+  },
+  {
+    "email": "adryel.stoffel@bwa.global",
+    "fullName": "ADRYEL OLIVEIRA STOFFEL",
+    "plainPassword": "oNsnUr7b",
+    "passwordFromCsv": true
+  }
+]
