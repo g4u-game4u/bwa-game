@@ -289,19 +289,23 @@ export class UserActionDashboardService {
   /**
    * Todas as páginas de GET `/user-action/search` (delivery_id, datas, dismissed, limit; sem `status` — todos os estados).
    * Paginação: `page` ou `page_token`; continuação pelo corpo (`next_page_token` / variantes).
+   * Ordena por `finished_at` descendente para mostrar ações mais recentes primeiro.
    */
   private async fetchUserActionSearchAllPages(
     base: Record<string, string>
   ): Promise<UserActionRow[]> {
-    const limRaw = base['limit'] || '200';
-    const limit = Math.min(Math.max(parseInt(limRaw, 10) || 200, 1), 500);
+    const limRaw = base['limit'] || '500'; // Increased default from 200 to 500
+    const limit = Math.min(Math.max(parseInt(limRaw, 10) || 500, 1), 500);
     const merged: UserActionRow[] = [];
     let page = 1;
     let pageToken: string | null = null;
     const maxIterations = 200;
 
+    // Add ordering by finished_at descending to get newest actions first
+    const baseWithSort = { ...base, sort: 'finished_at:desc' };
+
     for (let iter = 0; iter < maxIterations; iter++) {
-      const entries: Record<string, string> = { ...base };
+      const entries: Record<string, string> = { ...baseWithSort };
       delete entries['status'];
       delete entries['page'];
       delete entries['page_token'];
@@ -314,10 +318,14 @@ export class UserActionDashboardService {
 
       const body = await firstValueFrom(this.backendUserActionApi.getUserActionSearch(entries));
       const parsed = this.parsePage(body);
+      
+      console.log(`[fetchUserActionSearchAllPages] Page ${page}: fetched ${parsed.items.length} items, total so far: ${merged.length + parsed.items.length}`);
+      
       merged.push(...parsed.items);
 
       const nextTok = this.extractNextPageToken(body);
       if (nextTok) {
+        console.log(`[fetchUserActionSearchAllPages] Found next_page_token, continuing to next page`);
         pageToken = nextTok;
         continue;
       }
@@ -331,6 +339,7 @@ export class UserActionDashboardService {
       }
 
       if (parsed.items.length === 0) {
+        console.log(`[fetchUserActionSearchAllPages] No more items. Total fetched: ${merged.length}`);
         break;
       }
 
@@ -341,10 +350,13 @@ export class UserActionDashboardService {
         continue;
       }
 
+      console.log(`[fetchUserActionSearchAllPages] Completed. Total pages: ${totalPages}, Total items: ${merged.length}`);
       break;
     }
 
-    return this.dedupeUserActionRows(merged);
+    const deduped = this.dedupeUserActionRows(merged);
+    console.log(`[fetchUserActionSearchAllPages] After deduplication: ${deduped.length} unique items`);
+    return deduped;
   }
 
   /**
@@ -407,9 +419,10 @@ export class UserActionDashboardService {
     const maxIterations = 200;
     const merged: UserActionRow[] = [];
     let pageToken: string | null = null;
+    const pageLimit = '500'; // Request 500 items per page to reduce number of requests
 
     for (let iter = 0; iter < maxIterations; iter++) {
-      const paging: { next_page_token?: string } = {};
+      const paging: { next_page_token?: string; limit?: string } = { limit: pageLimit };
       if (pageToken) {
         paging.next_page_token = pageToken;
       }
@@ -436,18 +449,55 @@ export class UserActionDashboardService {
       }
 
       const parsed = this.parsePage(body);
+      console.log(`[fetchAllUserActions] Page ${iter + 1}: fetched ${parsed.items.length} items, total so far: ${merged.length + parsed.items.length}`);
       merged.push(...parsed.items);
 
       const nextTok = this.extractNextPageToken(body);
       if (nextTok) {
+        console.log(`[fetchAllUserActions] Found next_page_token, continuing to page ${iter + 2}`);
         pageToken = nextTok;
         continue;
       }
 
+      console.log(`[fetchAllUserActions] No more pages. Total items fetched: ${merged.length}`);
       break;
     }
 
-    return this.dedupeUserActionRows(merged);
+    const deduped = this.dedupeUserActionRows(merged);
+    console.log(`[fetchAllUserActions] After deduplication: ${deduped.length} unique items`);
+    return deduped;
+  }
+
+  /**
+   * Busca todas as user actions de um usuário no mês usando GET `/user-action/search`.
+   * Mais eficiente e com melhor controle de paginação do que `/game/actions`.
+   */
+  async fetchAllUserActionsForMonthViaSearch(
+    userEmail: string,
+    month: Date
+  ): Promise<UserActionRow[]> {
+    const year = month.getFullYear();
+    const monthIndex = month.getMonth();
+    const rangeStart = new Date(year, monthIndex, 1, 0, 0, 0, 0);
+    const rangeEnd = new Date(year, monthIndex + 1, 0, 23, 59, 59, 999);
+
+    const finishedAtStart = rangeStart.toISOString();
+    const finishedAtEnd = rangeEnd.toISOString();
+
+    const base: Record<string, string> = {
+      user_email: userEmail,
+      finished_at_start: finishedAtStart,
+      finished_at_end: finishedAtEnd,
+      limit: '500' // Request 500 items per page
+    };
+
+    console.log(`[fetchAllUserActionsForMonthViaSearch] Fetching for ${userEmail}, month: ${year}-${monthIndex + 1}`);
+    
+    const allActions = await this.fetchUserActionSearchAllPages(base);
+    
+    console.log(`[fetchAllUserActionsForMonthViaSearch] Total actions fetched: ${allActions.length}`);
+    
+    return allActions;
   }
 
   async fetchAllUserActions(playerKey: string): Promise<UserActionRow[]> {
@@ -679,9 +729,12 @@ export class UserActionDashboardService {
   private referenceTimestamp(row: UserActionRow): number {
     const ft = this.parseInstant(row.finished_at);
     if (ft > 0) {
+      console.log(`[referenceTimestamp] Using finished_at for action ${row.id}:`, new Date(ft).toISOString());
       return ft;
     }
-    return this.parseInstant(row.created_at);
+    const ct = this.parseInstant(row.created_at);
+    console.log(`[referenceTimestamp] No finished_at, using created_at for action ${row.id}:`, new Date(ct).toISOString(), 'finished_at was:', row.finished_at);
+    return ct;
   }
 
   inSelectedMonth(row: UserActionRow, month: Date): boolean {
@@ -731,6 +784,7 @@ export class UserActionDashboardService {
       actionCount: number;
       deliveryId: string;
       deliveryTitle?: string;
+      latestActionTimestamp?: number;
     }[] = [];
     for (const [deliveryId, rows] of byDelivery) {
       const first = rows[0];
@@ -740,14 +794,25 @@ export class UserActionDashboardService {
         '';
       const cnpj = titleFromApi || `Entrega ${deliveryId}`;
       const deliveryTitle = (first.delivery_title && first.delivery_title.trim()) || undefined;
+      
+      // Find the most recent action timestamp for this delivery
+      const latestActionTimestamp = Math.max(...rows.map(r => this.referenceTimestamp(r)));
+      
       result.push({
         deliveryId,
         cnpj,
         actionCount: rows.length,
-        deliveryTitle
+        deliveryTitle,
+        latestActionTimestamp
       });
     }
-    result.sort((a, b) => b.actionCount - a.actionCount);
+    // Sort by most recent action first (descending timestamp), then by action count
+    result.sort((a, b) => {
+      const timeDiff = (b.latestActionTimestamp || 0) - (a.latestActionTimestamp || 0);
+      if (timeDiff !== 0) return timeDiff;
+      return b.actionCount - a.actionCount;
+    });
+    console.log(`[buildCarteiraCompaniesInRange] Built ${result.length} deliveries, sorted by most recent action first`);
     return result;
   }
 
@@ -1067,6 +1132,7 @@ export class UserActionDashboardService {
       actionCount: number;
       deliveryId: string;
       deliveryTitle?: string;
+      latestActionTimestamp?: number;
     }[] = [];
     for (const [deliveryId, rows] of byDelivery) {
       const first = rows[0];
@@ -1076,23 +1142,44 @@ export class UserActionDashboardService {
         '';
       const cnpj = titleFromApi || `Entrega ${deliveryId}`;
       const deliveryTitle = (first.delivery_title && first.delivery_title.trim()) || undefined;
+      
+      // Find the most recent action timestamp for this delivery
+      const latestActionTimestamp = Math.max(...rows.map(r => this.referenceTimestamp(r)));
+      
       result.push({
         deliveryId,
         cnpj,
         actionCount: rows.length,
-        deliveryTitle
+        deliveryTitle,
+        latestActionTimestamp
       });
     }
-    result.sort((a, b) => b.actionCount - a.actionCount);
+    // Sort by most recent action first (descending timestamp), then by action count
+    result.sort((a, b) => {
+      const timeDiff = (b.latestActionTimestamp || 0) - (a.latestActionTimestamp || 0);
+      if (timeDiff !== 0) return timeDiff;
+      return b.actionCount - a.actionCount;
+    });
+    console.log(`[buildCarteiraCompanies] Built ${result.length} deliveries, sorted by most recent action first`);
     return result;
   }
 
+  /**
+   * Carteira enriquecida com KPIs usando GET `/user-action/search` para melhor controle de paginação e filtros.
+   */
   getCarteiraEnriched(
     playerId: string,
     month: Date,
     roster?: ReadonlyArray<GameActionsUserRosterEntry> | null
   ): Observable<CompanyDisplay[]> {
-    return this.getActions(playerId, roster ?? null).pipe(
+    const userEmail = this.resolvePlayerKeyWithRoster(playerId, roster ?? null) || playerId.trim();
+    
+    if (!userEmail || !looksLikeEmail(userEmail)) {
+      console.warn('[getCarteiraEnriched] Invalid user email:', userEmail);
+      return of([]);
+    }
+
+    return from(this.fetchAllUserActionsForMonthViaSearch(userEmail, month)).pipe(
       switchMap(items => {
         const companies = this.buildCarteiraCompanies(items, month);
         if (companies.length === 0) {
