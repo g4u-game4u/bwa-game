@@ -44,7 +44,7 @@ export class BackendUserActionApiService {
    * GET `/game/actions?start=&end=&user=` — `user` = e-mail do utilizador (ex.: query da API Game4U).
    * `status` opcional (ex.: DONE), como no cliente de referência.
    * `next_page_token` quando o gateway pagina (não enviar `page` — a API rejeita).
-   * `limit` opcional para controlar o tamanho da página (se o backend suportar).
+   * Nota: Este endpoint NÃO suporta o parâmetro `limit`.
    */
   getGameActions(q: {
     start: string;
@@ -52,7 +52,6 @@ export class BackendUserActionApiService {
     user: string;
     status?: string;
     next_page_token?: string;
-    limit?: string;
   }): Observable<unknown> {
     const entries: Record<string, string> = {
       start: q.start,
@@ -65,9 +64,6 @@ export class BackendUserActionApiService {
     if (q.next_page_token != null && String(q.next_page_token).trim() !== '') {
       entries['next_page_token'] = String(q.next_page_token).trim();
     }
-    if (q.limit != null && String(q.limit).trim() !== '') {
-      entries['limit'] = String(q.limit).trim();
-    }
     const url = this.buildQueryUrl(this.gameActionsUrl(), entries);
     console.log('[API Request] GET /game/actions:', url, 'params:', entries);
     return this.http.get<unknown>(url, { headers: this.getHeaders() });
@@ -75,14 +71,13 @@ export class BackendUserActionApiService {
 
   /**
    * GET `/game/team-actions?start=&end=&team=` — só `next_page_token` para continuar páginas (sem `page`).
-   * `limit` opcional para controlar o tamanho da página (se o backend suportar).
+   * Nota: Este endpoint NÃO suporta o parâmetro `limit`.
    */
   getGameTeamActions(q: {
     start: string;
     end: string;
     team: string;
     next_page_token?: string;
-    limit?: string;
   }): Observable<unknown> {
     const entries: Record<string, string> = {
       start: q.start,
@@ -91,9 +86,6 @@ export class BackendUserActionApiService {
     };
     if (q.next_page_token != null && String(q.next_page_token).trim() !== '') {
       entries['next_page_token'] = String(q.next_page_token).trim();
-    }
-    if (q.limit != null && String(q.limit).trim() !== '') {
-      entries['limit'] = String(q.limit).trim();
     }
     const url = this.buildQueryUrl(this.gameTeamActionsUrl(), entries);
     console.log('[API Request] GET /game/team-actions:', url, 'params:', entries);

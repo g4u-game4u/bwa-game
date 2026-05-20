@@ -419,10 +419,10 @@ export class UserActionDashboardService {
     const maxIterations = 200;
     const merged: UserActionRow[] = [];
     let pageToken: string | null = null;
-    const pageLimit = '500'; // Request 500 items per page to reduce number of requests
+    // Note: /game/actions doesn't support 'limit' parameter, only next_page_token pagination
 
     for (let iter = 0; iter < maxIterations; iter++) {
-      const paging: { next_page_token?: string; limit?: string } = { limit: pageLimit };
+      const paging: { next_page_token?: string } = {};
       if (pageToken) {
         paging.next_page_token = pageToken;
       }
@@ -659,14 +659,21 @@ export class UserActionDashboardService {
   }
 
   /**
-   * Métricas de atividade no mês para um jogador (GET `/game/actions`).
+   * Métricas de atividade no mês para um jogador usando GET `/user-action/search` (mais eficiente).
    */
   getActivityMetricsForPlayer(
     playerId: string,
     month: Date,
     roster?: ReadonlyArray<GameActionsUserRosterEntry> | null
   ): Observable<ActivityMetrics> {
-    return this.getActions(playerId, roster ?? null).pipe(
+    const userEmail = this.resolvePlayerKeyWithRoster(playerId, roster ?? null) || playerId.trim();
+    
+    if (!userEmail || !looksLikeEmail(userEmail)) {
+      console.warn('[getActivityMetricsForPlayer] Invalid user email:', userEmail);
+      return of({ finalizadas: 0, pontos: 0, pendentes: 0, dispensadas: 0, emExecucao: 0 });
+    }
+
+    return from(this.fetchAllUserActionsForMonthViaSearch(userEmail, month)).pipe(
       map(items => this.getActivityMetricsFromActions(items, month))
     );
   }
@@ -1190,12 +1197,22 @@ export class UserActionDashboardService {
     );
   }
 
+  /**
+   * Contagem de entregas (deliveries) no mês usando GET `/user-action/search` (mais eficiente).
+   */
   getDeliveryCount(
     playerId: string,
     month: Date,
     roster?: ReadonlyArray<GameActionsUserRosterEntry> | null
   ): Observable<number> {
-    return this.getActions(playerId, roster ?? null).pipe(
+    const userEmail = this.resolvePlayerKeyWithRoster(playerId, roster ?? null) || playerId.trim();
+    
+    if (!userEmail || !looksLikeEmail(userEmail)) {
+      console.warn('[getDeliveryCount] Invalid user email:', userEmail);
+      return of(0);
+    }
+
+    return from(this.fetchAllUserActionsForMonthViaSearch(userEmail, month)).pipe(
       map(items => this.buildCarteiraCompanies(items, month).length)
     );
   }
@@ -1229,15 +1246,24 @@ export class UserActionDashboardService {
       .sort((a, b) => b.created - a.created);
   }
 
+  /**
+   * Ações de um cliente/entrega no mês usando GET `/user-action/search` (mais eficiente).
+   */
   getClienteActionsForDelivery(
     playerId: string,
     deliveryId: string,
     month: Date,
     roster?: ReadonlyArray<GameActionsUserRosterEntry> | null
   ): Observable<ClienteActionItem[]> {
-    return this.getActions(playerId, roster ?? null).pipe(
-      map(items => this.toClienteActionItemsForDelivery(items, deliveryId, month))
-    );
+    const userEmail = this.resolvePlayerKeyWithRoster(playerId, roster ?? null) || playerId.trim();
+    
+    if (!userEmail || !looksLikeEmail(userEmail)) {
+      console.warn('[getClienteActionsForDelivery] Invalid user email:', userEmail);
+      return of([]);
+    }
+
+    // Use the existing search-based method which is more efficient
+    return this.getDeliveryDetailActionsFromUserActionSearch(deliveryId, month);
   }
 
   private monthBoundsIso(month: Date): { start: string; end: string } {
