@@ -64,7 +64,6 @@ GET /user-action/search
   finished_at_end: "2026-05-31T23:59:59.999Z",
   limit: "500",                      // ✅ Supported!
   page: "1",                         // ✅ Supported!
-  sort: "finished_at:desc",          // ✅ Supported!
   delivery_id: "12345",              // Optional
   status: "DONE",                    // Optional
   dismissed: "false",                // Optional
@@ -75,9 +74,12 @@ GET /user-action/search
 ### ✅ Supported Features
 - `limit` - Control page size (default: 10, max: 500)
 - `page` - Page-based pagination
-- `sort` - Order by any field (e.g., `finished_at:desc`)
 - `finished_at_start` / `finished_at_end` - Precise date filtering
 - Multiple filter options
+
+### ❌ NOT Supported
+- `sort` - Backend returns 400 error: "property sort should not exist"
+  - **Solution**: Sort on client side after fetching all pages
 
 ### Pagination
 - Page-based: Uses `page` and `limit`

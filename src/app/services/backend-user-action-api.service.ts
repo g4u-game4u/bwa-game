@@ -95,7 +95,7 @@ export class BackendUserActionApiService {
   /**
    * GET `/user-action/search` — alinhado ao `UserActionController_search` (delivery_id, status, `finished_at_*` ou `created_at_*`, limit, page | page_token, dismissed).
    * Query montada com o mesmo encoding de datas que `/game/actions`.
-   * Suporta ordenação via parâmetro `sort` (ex.: "finished_at:desc").
+   * Nota: Backend NÃO suporta parâmetro `sort` - ordenação deve ser feita no cliente.
    */
   getUserActionSearch(entries: Record<string, string>): Observable<unknown> {
     const url = this.buildQueryUrl(this.userActionSearchUrl(), entries);

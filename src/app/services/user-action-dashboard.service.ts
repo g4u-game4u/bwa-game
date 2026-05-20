@@ -289,7 +289,7 @@ export class UserActionDashboardService {
   /**
    * Todas as páginas de GET `/user-action/search` (delivery_id, datas, dismissed, limit; sem `status` — todos os estados).
    * Paginação: `page` ou `page_token`; continuação pelo corpo (`next_page_token` / variantes).
-   * Ordena por `finished_at` descendente para mostrar ações mais recentes primeiro.
+   * Nota: Backend não suporta `sort` - ordenação feita no cliente após fetch.
    */
   private async fetchUserActionSearchAllPages(
     base: Record<string, string>
@@ -301,11 +301,12 @@ export class UserActionDashboardService {
     let pageToken: string | null = null;
     const maxIterations = 200;
 
-    // Add ordering by finished_at descending to get newest actions first
-    const baseWithSort = { ...base, sort: 'finished_at:desc' };
+    // Remove sort parameter as backend doesn't support it
+    const baseWithoutSort = { ...base };
+    delete baseWithoutSort['sort'];
 
     for (let iter = 0; iter < maxIterations; iter++) {
-      const entries: Record<string, string> = { ...baseWithSort };
+      const entries: Record<string, string> = { ...baseWithoutSort };
       delete entries['status'];
       delete entries['page'];
       delete entries['page_token'];
@@ -355,7 +356,15 @@ export class UserActionDashboardService {
     }
 
     const deduped = this.dedupeUserActionRows(merged);
-    console.log(`[fetchUserActionSearchAllPages] After deduplication: ${deduped.length} unique items`);
+    
+    // Sort by finished_at descending (newest first) on client side since backend doesn't support sort parameter
+    deduped.sort((a, b) => {
+      const aTime = this.referenceTimestamp(a);
+      const bTime = this.referenceTimestamp(b);
+      return bTime - aTime; // Descending order (newest first)
+    });
+    
+    console.log(`[fetchUserActionSearchAllPages] After deduplication and sorting: ${deduped.length} unique items`);
     return deduped;
   }
 
