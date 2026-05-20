@@ -28,7 +28,11 @@ import { CacheManagerService } from '@services/cache-manager.service';
 import { BwaTeamApiService } from '@services/bwa-team-api.service';
 import { BackendApiService } from '@services/backend-api.service';
 import { PlayerService } from '@services/player.service';
-import { ActionLogService, SupervisionTeamDashboardCachedBundle } from '@services/action-log.service';
+import {
+  ActionLogService,
+  SupervisionTeamDashboardCachedBundle,
+  PlayerParticipacaoDeliveriesPageResult
+} from '@services/action-log.service';
 import { hasMoreFinishedDeliveriesCachedPage } from '@services/game4u-game-mapper';
 import type { PlayerDashboardCachedParams } from '@model/game4u-api.model';
 import { UserProfileService } from '@services/user-profile.service';
@@ -3075,7 +3079,9 @@ private calculateCollaboratorTotals(memberData: Array<{
     const loadGen = this.participacaoKpiLoadGen;
     this.cdr.markForCheck();
 
-    const page$ = this.participacaoPagedPlayerId
+    const page$:
+      | Observable<TeamFinishedDeliveriesPageResult | PlayerParticipacaoDeliveriesPageResult>
+      | null = this.participacaoPagedPlayerId
       ? this.actionLogService.getPlayerFinishedDeliveriesParticipacaoPage(
           this.participacaoPagedPlayerId,
           month,
@@ -3102,7 +3108,9 @@ private calculateCollaboratorTotals(memberData: Array<{
     }
 
     page$.pipe(takeUntil(this.destroy$)).subscribe({
-      next: async page => {
+      next: async (
+        page: TeamFinishedDeliveriesPageResult | PlayerParticipacaoDeliveriesPageResult
+      ) => {
         try {
           const appended = this.mapTeamParticipacaoDeliveryRowsToCompanyDisplay(page.items || []);
           const merged = this.dedupeParticipacaoClientes([...this.teamCarteiraClientes, ...appended]);
@@ -3141,7 +3149,7 @@ private calculateCollaboratorTotals(memberData: Array<{
           this.cdr.markForCheck();
         }
       },
-      error: err => {
+      error: (err: unknown) => {
         console.error('📊 Failed to load more participação (painel equipa):', err);
         this.isLoadingCarteiraMore = false;
         this.cdr.markForCheck();
