@@ -155,6 +155,35 @@ export interface Game4uReportsOpenSummaryQuery {
 export interface Game4uReportsFinishedDeliveryRow {
   delivery_title: string;
   delivery_id?: string;
+  emp_id?: string | number;
+  user_email?: string;
+  /** % no prazo no mês (0–100), quando vem de `finished/deliveries/cached`. */
+  on_time_pct?: number | null;
+  /** Tarefas DONE/DELIVERED no mês (`dt_prazo`) nesta entrega; lista só inclui linhas com valor > 0. */
+  tasks_total?: number;
+  tasks_on_time?: number;
+}
+
+/** Query `GET /game/reports/finished/deliveries/cached` (informe `email` ou `team_id`). */
+export interface Game4uReportsFinishedDeliveriesCachedQuery {
+  email?: string;
+  team_id?: string;
+  /** `YYYY-MM` ou `YYYY-MM-DD` */
+  month: string;
+  offset?: number;
+  limit?: number;
+}
+
+/** Resposta paginada de `GET /game/reports/finished/deliveries/cached`. */
+export interface Game4uReportsFinishedDeliveriesCachedPage {
+  refreshed_at?: string;
+  params?: PlayerDashboardCachedParams;
+  offset: number;
+  limit: number;
+  items: Game4uReportsFinishedDeliveryRow[];
+  total?: number;
+  /** Quando presente, indica se há mais páginas além desta resposta. */
+  has_more?: boolean;
 }
 
 function pickFirstNonEmptyString(obj: Record<string, unknown>, keys: string[]): string | undefined {
@@ -187,6 +216,13 @@ export function normalizeGameReportsFinishedDeliveriesPayload(body: unknown): Ga
     if (raw && typeof raw === 'object') {
       const o = raw as Record<string, unknown>;
       const delivery_id = pickFirstNonEmptyString(o, ['delivery_id', 'deliveryId']);
+      const emp_id_raw = o['emp_id'] ?? o['empId'] ?? o['EmpID'];
+      const emp_id =
+        typeof emp_id_raw === 'number' && Number.isFinite(emp_id_raw)
+          ? emp_id_raw
+          : typeof emp_id_raw === 'string' && emp_id_raw.trim()
+            ? emp_id_raw.trim()
+            : undefined;
       let delivery_title = pickFirstNonEmptyString(o, ['delivery_title', 'deliveryTitle', 'title']);
       if (!delivery_title && delivery_id) {
         delivery_title = delivery_id;
@@ -194,11 +230,29 @@ export function normalizeGameReportsFinishedDeliveriesPayload(body: unknown): Ga
       if (!delivery_title) {
         continue;
       }
-      out.push(
-        delivery_id
-          ? { delivery_title, delivery_id }
-          : { delivery_title }
-      );
+      const on_time_raw = o['on_time_pct'] ?? o['onTimePct'];
+      let on_time_pct: number | null | undefined;
+      if (on_time_raw != null && on_time_raw !== '') {
+        let n = Number(on_time_raw);
+        if (Number.isFinite(n)) {
+          if (n > 0 && n <= 1) {
+            n = n * 100;
+          }
+          on_time_pct = Math.min(100, Math.max(0, Math.round(n * 100) / 100));
+        }
+      }
+      const user_email = pickFirstNonEmptyString(o, ['user_email', 'userEmail']);
+      const tasks_total = Number(o['tasks_total'] ?? o['tasksTotal']);
+      const tasks_on_time = Number(o['tasks_on_time'] ?? o['tasksOnTime']);
+      out.push({
+        delivery_title,
+        ...(delivery_id ? { delivery_id } : {}),
+        ...(emp_id !== undefined ? { emp_id } : {}),
+        ...(user_email ? { user_email } : {}),
+        ...(on_time_pct != null ? { on_time_pct } : {}),
+        ...(Number.isFinite(tasks_total) ? { tasks_total: Math.floor(tasks_total) } : {}),
+        ...(Number.isFinite(tasks_on_time) ? { tasks_on_time: Math.floor(tasks_on_time) } : {})
+      });
     }
   }
   return out;
@@ -213,13 +267,81 @@ export interface Game4uGoalMonthSummaryResponse {
   [key: string]: unknown;
 }
 
+/** Query `GET /game/reports/dashboard/cached` */
+export interface Game4uReportsDashboardCachedQuery {
+  email: string;
+  /** `YYYY-MM` ou `YYYY-MM-DD` */
+  month: string;
+}
+
+/** Intervalos usados no cálculo do cache (exibição no painel). */
+export interface PlayerDashboardCachedParams {
+  cache_month: string;
+  season_start: string;
+  season_end: string;
+  month_start: string;
+  month_end: string;
+}
+
+/** `GET /game/reports/dashboard/cached` — KPIs denormalizados do painel do jogador. */
+export interface PlayerDashboardCachedResponse {
+  refreshed_at: string;
+  params: PlayerDashboardCachedParams;
+  season_points_total: number;
+  season_clients_total: number;
+  season_tasks_finished_total: number;
+  month_points_done_delivered: number;
+  month_goal_points: number;
+  month_pending_tasks_count: number;
+  month_finished_tasks_count: number;
+  month_clients_served: number;
+  /** % de entregas no prazo no mês (0–100). */
+  month_on_time_delivery_pct?: number | null;
+  refresh_error?: string | null;
+}
+
+/** Parâmetros de intervalo (jogador e supervisão). */
+export type SupervisionDashboardCachedParams = PlayerDashboardCachedParams;
+
+/** Métricas agregadas por time (`GET /game/reports/supervision/dashboard/cached`). */
+export interface SupervisionTeamDashboardCached {
+  refreshed_at: string;
+  team_id: number;
+  team_name: string | null;
+  players_count: number;
+  params: SupervisionDashboardCachedParams;
+  season_points_total: number;
+  season_clients_total: number;
+  season_tasks_finished_total: number;
+  month_points_done_delivered: number;
+  month_goal_points: number;
+  month_pending_tasks_count: number;
+  month_finished_tasks_count: number;
+  month_clients_served: number;
+  month_on_time_delivery_pct?: number | null;
+  refresh_error?: string | null;
+}
+
+export interface SupervisionDashboardCachedListResponse {
+  teams: SupervisionTeamDashboardCached[];
+}
+
+export interface Game4uReportsSupervisionCachedQuery {
+  team_id: string;
+  month: string;
+}
+
+export interface Game4uReportsSupervisionCachedListQuery {
+  month: string;
+}
+
 export interface Game4uReportsFinishedQuery {
   /**
    * E-mail do colaborador filtrado; omitir quando só `team_id` for usado (dados consolidados da equipa).
    * Ver `game-reports-doc.md`.
    */
   email?: string;
-  /** Opcional: omitir no `GET …/finished/deliveries` quando o backend filtra por contexto (sem `finished_at_*` na query). */
+  /** Obrigatório em `GET …/finished/deliveries` e `…/actions-by-delivery` (ISO 8601). */
   finished_at_start?: string;
   finished_at_end?: string;
   /** Opcional: repete `status` na query string se necessário. */
@@ -314,6 +436,62 @@ export function normalizeGameReportsFinishedDeliveriesPagePayload(
     const n = typeof totalRaw === 'number' ? totalRaw : typeof totalRaw === 'string' ? Number(totalRaw) : NaN;
     const total = Number.isFinite(n) && n >= 0 ? Math.floor(n) : undefined;
     return { offset, limit, items, ...(total != null ? { total } : {}) };
+  }
+  return empty;
+}
+
+/** Normaliza corpo de `GET /game/reports/finished/deliveries/cached`. */
+export function normalizeGameReportsFinishedDeliveriesCachedPagePayload(
+  body: unknown,
+  fallbackOffset = 0,
+  fallbackLimit = 30
+): Game4uReportsFinishedDeliveriesCachedPage {
+  const empty: Game4uReportsFinishedDeliveriesCachedPage = {
+    offset: fallbackOffset,
+    limit: fallbackLimit,
+    items: []
+  };
+  if (body && typeof body === 'object') {
+    const o = body as Record<string, unknown>;
+    const raw = o['items'] ?? o['data'] ?? o['results'];
+    const items = normalizeGameReportsFinishedDeliveriesPayload(Array.isArray(raw) ? raw : []);
+    const offRaw = o['offset'];
+    const limRaw = o['limit'];
+    const offset =
+      typeof offRaw === 'number' && Number.isFinite(offRaw)
+        ? Math.floor(offRaw)
+        : typeof offRaw === 'string' && offRaw.trim() !== ''
+          ? Math.floor(Number(offRaw)) || fallbackOffset
+          : fallbackOffset;
+    const limit =
+      typeof limRaw === 'number' && Number.isFinite(limRaw)
+        ? Math.floor(limRaw)
+        : typeof limRaw === 'string' && limRaw.trim() !== ''
+          ? Math.floor(Number(limRaw)) || fallbackLimit
+          : fallbackLimit;
+    const totalRaw = o['total'] ?? o['total_count'] ?? o['count'] ?? o['total_items'];
+    const n = typeof totalRaw === 'number' ? totalRaw : typeof totalRaw === 'string' ? Number(totalRaw) : NaN;
+    const total = Number.isFinite(n) && n >= 0 ? Math.floor(n) : undefined;
+    const refreshed_at = pickFirstNonEmptyString(o, ['refreshed_at', 'refreshedAt']);
+    const paramsRaw = o['params'];
+    const params =
+      paramsRaw && typeof paramsRaw === 'object' ? (paramsRaw as PlayerDashboardCachedParams) : undefined;
+    const hasMoreRaw = o['has_more'] ?? o['hasMore'];
+    let has_more: boolean | undefined;
+    if (hasMoreRaw === true || hasMoreRaw === 'true') {
+      has_more = true;
+    } else if (hasMoreRaw === false || hasMoreRaw === 'false') {
+      has_more = false;
+    }
+    return {
+      offset,
+      limit,
+      items,
+      ...(total != null ? { total } : {}),
+      ...(has_more != null ? { has_more } : {}),
+      ...(refreshed_at ? { refreshed_at } : {}),
+      ...(params ? { params } : {})
+    };
   }
   return empty;
 }

@@ -259,6 +259,18 @@
     <!-- Progress Section -->
     <section class="dashboard-section" aria-labelledby="progress-section-title">
       <h3 id="progress-section-title" class="section-title">Meu Progresso</h3>
+      <p
+        *ngIf="playerDashboardCacheMissing && selectedMonth"
+        class="dashboard-cache-notice"
+        role="status">
+        Dados deste mês ainda não estão disponíveis. Tente outro período ou aguarde a atualização do painel.
+      </p>
+      <p
+        *ngIf="dashboardRefreshedAt && !playerDashboardCacheMissing"
+        class="dashboard-cache-refreshed"
+        aria-hidden="true">
+        Atualizado em {{ dashboardRefreshedAt | date:'dd/MM/yyyy HH:mm' }}
+      </p>
       
       <c4u-activity-progress
         *ngIf="!isLoadingProgress && activityMetrics && processMetrics"

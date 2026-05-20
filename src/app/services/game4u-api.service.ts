@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
-import { HttpClient, HttpHeaders, HttpParams } from '@angular/common/http';
-import { Observable, throwError } from 'rxjs';
-import { map, shareReplay, tap } from 'rxjs/operators';
+import { HttpClient, HttpHeaders, HttpParams, HttpErrorResponse } from '@angular/common/http';
+import { Observable, throwError, of } from 'rxjs';
+import { catchError, map, shareReplay, tap } from 'rxjs/operators';
 import { environment } from '../../environments/environment';
 import {
   Game4uDeliveryModel,
@@ -15,6 +15,15 @@ import {
   Game4uReportsOpenSummary,
   Game4uReportsOpenSummaryQuery,
   Game4uGoalMonthSummaryResponse,
+  Game4uReportsDashboardCachedQuery,
+  PlayerDashboardCachedResponse,
+  SupervisionTeamDashboardCached,
+  SupervisionDashboardCachedListResponse,
+  Game4uReportsSupervisionCachedQuery,
+  Game4uReportsSupervisionCachedListQuery,
+  Game4uReportsFinishedDeliveriesCachedQuery,
+  Game4uReportsFinishedDeliveriesCachedPage,
+  normalizeGameReportsFinishedDeliveriesCachedPagePayload,
   Game4uReportsFinishedQuery,
   Game4uReportsActionsByDeliveryQuery,
   Game4uReportsActionsByDeliveryPage,
@@ -53,6 +62,19 @@ export class Game4uApiService {
     Observable<Game4uReportsActionsByDeliveryPage>
   >();
   private readonly reportsGoalMonthCache = new Map<string, Observable<Game4uGoalMonthSummaryResponse>>();
+  private readonly reportsDashboardCachedCache = new Map<string, Observable<PlayerDashboardCachedResponse>>();
+  private readonly reportsFinishedDeliveriesCachedCache = new Map<
+    string,
+    Observable<Game4uReportsFinishedDeliveriesCachedPage>
+  >();
+  private readonly reportsSupervisionDashboardCachedCache = new Map<
+    string,
+    Observable<SupervisionTeamDashboardCached>
+  >();
+  private readonly reportsSupervisionDashboardListCache = new Map<
+    string,
+    Observable<SupervisionDashboardCachedListResponse>
+  >();
   private readonly reportsOpenSummaryCache = new Map<string, Observable<Game4uReportsOpenSummary>>();
   private readonly reportsTeamDailyFinishedStatsCache = new Map<string, Observable<unknown>>();
 
@@ -190,6 +212,10 @@ export class Game4uApiService {
     this.reportsFinishedDeliveriesCache.clear();
     this.reportsActionsByDeliveryCache.clear();
     this.reportsGoalMonthCache.clear();
+    this.reportsDashboardCachedCache.clear();
+    this.reportsFinishedDeliveriesCachedCache.clear();
+    this.reportsSupervisionDashboardCachedCache.clear();
+    this.reportsSupervisionDashboardListCache.clear();
     this.reportsOpenSummaryCache.clear();
     this.reportsTeamDailyFinishedStatsCache.clear();
   }
@@ -321,6 +347,17 @@ export class Game4uApiService {
     return this.withOptionalTeamId(p, q.team_id);
   }
 
+  /** Endpoints «finished» (deliveries, actions-by-delivery) exigem o par de datas no Nest. */
+  private assertFinishedAtRange(q: Game4uReportsFinishedQuery, endpoint: string): void {
+    const fs = (q.finished_at_start ?? '').trim();
+    const fe = (q.finished_at_end ?? '').trim();
+    if (!fs || !fe) {
+      throw new Error(
+        `[Game4U] ${endpoint}: informe finished_at_start e finished_at_end (ISO 8601).`
+      );
+    }
+  }
+
   private appendReportParams(
     base: HttpParams,
     q: Game4uReportsFinishedQuery
@@ -388,6 +425,70 @@ export class Game4uApiService {
     });
   }
 
+  private reportsFinishedDeliveriesCachedKey(q: Game4uReportsFinishedDeliveriesCachedQuery): string {
+    const email = (q.email ?? '').trim();
+    const teamId = (q.team_id ?? '').trim();
+    return `rpt-del-cached|${email}|${teamId}|${(q.month ?? '').trim()}|${q.offset ?? 0}|${q.limit ?? 30}`;
+  }
+
+  /**
+   * `GET /game/reports/finished/deliveries/cached` — lista paginada + `on_time_pct` por linha (mês).
+   * Escopo: `email` (jogador) ou `team_id` (equipa).
+   */
+  getGameReportsFinishedDeliveriesCached(
+    q: Game4uReportsFinishedDeliveriesCachedQuery
+  ): Observable<Game4uReportsFinishedDeliveriesCachedPage> {
+    if (!this.isConfigured()) {
+      return throwError(
+        () => new Error('[Game4U] reports/finished/deliveries/cached: defina backend_url_base.')
+      );
+    }
+    const email = (q.email ?? '').trim();
+    const teamId = (q.team_id ?? '').trim();
+    const month = (q.month ?? '').trim();
+    if (!email && !teamId) {
+      return throwError(
+        () => new Error('[Game4U] reports/finished/deliveries/cached: informe email ou team_id.')
+      );
+    }
+    if (!month) {
+      return throwError(() => new Error('[Game4U] reports/finished/deliveries/cached: informe month (YYYY-MM).'));
+    }
+    const off = Math.max(0, Math.floor(q.offset ?? 0));
+    const lim = Math.min(Math.max(Math.floor(q.limit ?? 30), 1), 500);
+    const key = this.reportsFinishedDeliveriesCachedKey({
+      ...q,
+      email: email || undefined,
+      team_id: teamId || undefined,
+      month,
+      offset: off,
+      limit: lim
+    });
+    return this.shareGame4uDedupe(key, this.reportsFinishedDeliveriesCachedCache, () => {
+      let params = new HttpParams().set('month', month).set('offset', String(off)).set('limit', String(lim));
+      if (email) {
+        params = params.set('email', email);
+      }
+      if (teamId) {
+        params = params.set('team_id', teamId);
+      }
+      return this.http
+        .get<unknown>(`${this.baseUrl}/game/reports/finished/deliveries/cached`, {
+          headers: this.headers(),
+          params
+        })
+        .pipe(
+          map(body => normalizeGameReportsFinishedDeliveriesCachedPagePayload(body, off, lim)),
+          catchError(err => {
+            if (err instanceof HttpErrorResponse && err.status === 404) {
+              return of({ offset: off, limit: lim, items: [] });
+            }
+            return throwError(() => err);
+          })
+        );
+    });
+  }
+
   /**
    * `GET /game/reports/finished/deliveries` — linhas com `delivery_title` e, quando existir, `delivery_id` (`EmpID-YYYY-MM-DD`).
    */
@@ -401,6 +502,11 @@ export class Game4uApiService {
       return throwError(
         () => new Error('[Game4U] reports/finished/deliveries: informe email ou team_id.')
       );
+    }
+    try {
+      this.assertFinishedAtRange(q, 'reports/finished/deliveries');
+    } catch (e) {
+      return throwError(() => e);
     }
     const key = this.reportsFinishedDeliveriesKey(q);
     return this.shareGame4uDedupe(key, this.reportsFinishedDeliveriesCache, () => {
@@ -431,6 +537,11 @@ export class Game4uApiService {
         () => new Error('[Game4U] reports/finished/deliveries: informe email ou team_id.')
       );
     }
+    try {
+      this.assertFinishedAtRange(q, 'reports/finished/deliveries (paginado)');
+    } catch (e) {
+      return throwError(() => e);
+    }
     let params = this.appendReportParams(new HttpParams(), q);
     const off = Math.max(0, Math.floor(q.offset ?? 0));
     const lim = Math.min(Math.max(Math.floor(q.limit ?? 500), 1), 500);
@@ -458,6 +569,11 @@ export class Game4uApiService {
       return throwError(
         () => new Error('[Game4U] reports/finished/actions-by-delivery: informe email ou team_id.')
       );
+    }
+    try {
+      this.assertFinishedAtRange(q, 'reports/finished/actions-by-delivery');
+    } catch (e) {
+      return throwError(() => e);
     }
     const key = this.reportsActionsByDeliveryKey(q);
     return this.shareGame4uDedupe(key, this.reportsActionsByDeliveryCache, () => {
@@ -550,6 +666,106 @@ export class Game4uApiService {
         params
       })
       .pipe(map(body => normalizeGameReportsUserActionsResponse(body)));
+  }
+
+  /**
+   * `GET /game/reports/dashboard/cached` — painel resumo do jogador (substitui finished/open/goal month summary).
+   */
+  getGameReportsDashboardCached(
+    q: Game4uReportsDashboardCachedQuery
+  ): Observable<PlayerDashboardCachedResponse> {
+    if (!this.isConfigured()) {
+      return throwError(
+        () => new Error('[Game4U] reports/dashboard/cached: defina backend_url_base.')
+      );
+    }
+    const email = (q.email ?? '').trim();
+    const month = (q.month ?? '').trim();
+    if (!email) {
+      return throwError(() => new Error('[Game4U] reports/dashboard/cached: informe email.'));
+    }
+    if (!month) {
+      return throwError(() => new Error('[Game4U] reports/dashboard/cached: informe month (YYYY-MM).'));
+    }
+    const key = `dashboard-cached|${email}|${month}`;
+    return this.shareGame4uDedupe(key, this.reportsDashboardCachedCache, () => {
+      const params = new HttpParams().set('email', email).set('month', month);
+      return this.http.get<PlayerDashboardCachedResponse>(
+        `${this.baseUrl}/game/reports/dashboard/cached`,
+        {
+          headers: this.headers(),
+          params
+        }
+      );
+    });
+  }
+
+  /**
+   * `GET /game/reports/supervision/dashboard/cached` — painel agregado por time (substitui finished/open/goal month summary com team_id).
+   */
+  getGameReportsSupervisionDashboardCached(
+    q: Game4uReportsSupervisionCachedQuery
+  ): Observable<SupervisionTeamDashboardCached> {
+    if (!this.isConfigured()) {
+      return throwError(
+        () => new Error('[Game4U] reports/supervision/dashboard/cached: defina backend_url_base.')
+      );
+    }
+    const teamId = (q.team_id ?? '').trim();
+    const month = (q.month ?? '').trim();
+    if (!teamId) {
+      return throwError(
+        () => new Error('[Game4U] reports/supervision/dashboard/cached: informe team_id.')
+      );
+    }
+    if (!month) {
+      return throwError(
+        () => new Error('[Game4U] reports/supervision/dashboard/cached: informe month (YYYY-MM).')
+      );
+    }
+    const key = `supervision-cached|${teamId}|${month}`;
+    return this.shareGame4uDedupe(key, this.reportsSupervisionDashboardCachedCache, () => {
+      const params = new HttpParams().set('team_id', teamId).set('month', month);
+      return this.http.get<SupervisionTeamDashboardCached>(
+        `${this.baseUrl}/game/reports/supervision/dashboard/cached`,
+        {
+          headers: this.headers(),
+          params
+        }
+      );
+    });
+  }
+
+  /**
+   * `GET /game/reports/supervision/dashboard/cached/list` — grade de times no mês.
+   */
+  getGameReportsSupervisionDashboardCachedList(
+    q: Game4uReportsSupervisionCachedListQuery
+  ): Observable<SupervisionDashboardCachedListResponse> {
+    if (!this.isConfigured()) {
+      return throwError(
+        () =>
+          new Error('[Game4U] reports/supervision/dashboard/cached/list: defina backend_url_base.')
+      );
+    }
+    const month = (q.month ?? '').trim();
+    if (!month) {
+      return throwError(
+        () =>
+          new Error('[Game4U] reports/supervision/dashboard/cached/list: informe month (YYYY-MM).')
+      );
+    }
+    const key = `supervision-cached-list|${month}`;
+    return this.shareGame4uDedupe(key, this.reportsSupervisionDashboardListCache, () => {
+      const params = new HttpParams().set('month', month);
+      return this.http.get<SupervisionDashboardCachedListResponse>(
+        `${this.baseUrl}/game/reports/supervision/dashboard/cached/list`,
+        {
+          headers: this.headers(),
+          params
+        }
+      );
+    });
   }
 
   /**

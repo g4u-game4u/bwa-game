@@ -1,4 +1,5 @@
 import { Injectable } from '@angular/core';
+import { HttpErrorResponse } from '@angular/common/http';
 import { Observable, of, forkJoin, throwError, EMPTY } from 'rxjs';
 import { map, catchError, shareReplay, switchMap, expand, reduce } from 'rxjs/operators';
 import { BackendApiService } from './backend-api.service';
@@ -20,7 +21,11 @@ import type {
   Game4uTeamScopedQuery,
   Game4uGoalMonthSummaryResponse,
   Game4uReportsOpenSummaryQuery,
-  Game4uReportsTeamDailyFinishedStatsQuery
+  Game4uReportsTeamDailyFinishedStatsQuery,
+  PlayerDashboardCachedResponse,
+  PlayerDashboardCachedParams,
+  SupervisionTeamDashboardCached,
+  SupervisionDashboardCachedParams
 } from '@model/game4u-api.model';
 import { SessaoProvider } from '@providers/sessao/sessao.provider';
 import {
@@ -45,8 +50,36 @@ import {
   mapGame4uUserActionsToParticipacaoCnpjRows,
   isGame4uUserActionFinalizedStatus,
   game4uActionMatchesParticipacaoModalRow,
-  readDeliveriesCountFromFinishedSummary
+  readDeliveriesCountFromFinishedSummary,
+  mapGame4uFinishedDeliveryRowsToParticipacaoCnpjRows,
+  hasMoreFinishedDeliveriesCachedPage
 } from './game4u-game-mapper';
+
+/** Linha de participação devolvida por {@link ActionLogService.getPlayerFinishedDeliveriesParticipacaoPage}. */
+export interface PlayerParticipacaoDeliveryRow {
+  cnpj: string;
+  actionCount: number;
+  delivery_title?: string;
+  deliveryId?: string;
+  porcEntregas?: number;
+  entrega?: number;
+  fromGameReportsDeliveries?: boolean;
+  fromCachedDeliveries?: boolean;
+  loadTasksViaGameReports?: boolean;
+  gamificacaoEmpIdUsado?: string | number;
+}
+
+export interface PlayerParticipacaoDeliveriesPageResult {
+  items: PlayerParticipacaoDeliveryRow[];
+  offset: number;
+  limit: number;
+  total?: number;
+  has_more?: boolean;
+  /** Linhas devolvidas pela API nesta página (antes do filtro por mês no cliente). */
+  apiRowCount?: number;
+  /** Lista veio de `GET /game/reports/finished/deliveries/cached` (não usar fallback ao vivo). */
+  fromCachedDeliveries?: boolean;
+}
 
 export interface ActionLogEntry {
   _id: string;
@@ -116,6 +149,61 @@ export interface GetProgressMetricsOptions {
    * sem BWA → só `GET /game/team-stats` (sem `team-actions`, sem `/game/stats`).
    */
   game4uTeamAggregate?: { team: string; bwaTeamId?: string | number | null };
+}
+
+/** KPIs do painel gamificação a partir de `GET /game/reports/dashboard/cached`. */
+export interface GamificationDashboardCachedBundle {
+  refreshedAt: string;
+  params: PlayerDashboardCachedParams;
+  activity: ActivityMetrics;
+  processo: ProcessMetrics;
+  monthlyGoalTarget: number;
+  monthClientsServed: number;
+  seasonWalletPoints: number;
+  seasonTasksFinished: number;
+  seasonClientsTotal: number;
+  /** % entregas no prazo no mês (`month_on_time_delivery_pct`), 0–100; `null` se ausente. */
+  monthOnTimeDeliveryPct: number | null;
+  refreshError?: string | null;
+}
+
+/** KPIs do painel de supervisão (`GET /game/reports/supervision/dashboard/cached`). */
+export interface SupervisionTeamDashboardCachedBundle {
+  refreshedAt: string;
+  teamId: number;
+  teamName: string | null;
+  playersCount: number;
+  params: SupervisionDashboardCachedParams;
+  activity: ActivityMetrics;
+  processo: ProcessMetrics;
+  monthlyGoalTarget: number;
+  monthClientsServed: number;
+  seasonWalletPoints: number;
+  seasonTasksFinished: number;
+  seasonClientsTotal: number;
+  monthOnTimeDeliveryPct: number | null;
+  refreshError?: string | null;
+}
+
+/** Normaliza `month_on_time_delivery_pct` (0–100; aceita fração 0–1). */
+export function readMonthOnTimeDeliveryPct(
+  dash: Pick<
+    PlayerDashboardCachedResponse | SupervisionTeamDashboardCached,
+    'month_on_time_delivery_pct'
+  >
+): number | null {
+  const raw = dash.month_on_time_delivery_pct;
+  if (raw == null || (typeof raw === 'string' && String(raw).trim() === '')) {
+    return null;
+  }
+  let n = Number(raw);
+  if (!Number.isFinite(n)) {
+    return null;
+  }
+  if (n > 0 && n <= 1) {
+    n = n * 100;
+  }
+  return Math.min(100, Math.max(0, Math.round(n * 100) / 100));
 }
 
 export interface ClienteListItem {
@@ -415,6 +503,14 @@ export class ActionLogService {
   >();
   private game4uTeamFinishedSummaryForMonthCache = new Map<string, CacheEntry<TeamFinishedSummaryMonthResult>>();
   private game4uTeamDailyFinishedStatsCache = new Map<string, CacheEntry<TeamDailyFinishedStatsRow[]>>();
+  private game4uPlayerDashboardCachedCache = new Map<
+    string,
+    CacheEntry<PlayerDashboardCachedResponse | null>
+  >();
+  private game4uSupervisionDashboardCachedCache = new Map<
+    string,
+    CacheEntry<SupervisionTeamDashboardCached | null>
+  >();
 
   constructor(
     private backendApi: BackendApiService,
@@ -443,6 +539,206 @@ export class ActionLogService {
     }
     const t = String(teamId).trim();
     return t !== '' ? t : undefined;
+  }
+
+  /** Parâmetro `month` da API (`YYYY-MM`). */
+  toDashboardCachedMonthParam(month: Date): string {
+    const y = month.getFullYear();
+    const m = String(month.getMonth() + 1).padStart(2, '0');
+    return `${y}-${m}`;
+  }
+
+  /** Mês de referência do cache quando o filtro do painel é «toda temporada». */
+  private resolveDashboardCachedMonth(month?: Date): Date {
+    if (month != null) {
+      return month;
+    }
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+  }
+
+  /**
+   * `GET /game/reports/dashboard/cached` — uma requisição para KPIs do painel do jogador.
+   * 404 → `null` (mês ainda sem cache).
+   */
+  fetchPlayerDashboardCached(
+    playerId: string,
+    month?: Date
+  ): Observable<PlayerDashboardCachedResponse | null> {
+    const email = this.resolveGame4uUserEmail(playerId);
+    if (!email || !(isGame4uDataEnabled() && this.game4u.isConfigured())) {
+      return of(null);
+    }
+    const refMonth = this.resolveDashboardCachedMonth(month);
+    const monthParam = this.toDashboardCachedMonthParam(refMonth);
+    const cacheKey = `g4u_dashboard_cached_${email}_${monthParam}`;
+    const cached = this.getCachedData(
+      this.game4uPlayerDashboardCachedCache,
+      cacheKey,
+      this.GAME4U_CACHE_DURATION
+    );
+    if (cached) {
+      return cached;
+    }
+
+    const request$ = this.game4u.getGameReportsDashboardCached({ email, month: monthParam }).pipe(
+      catchError(err => {
+        if (err instanceof HttpErrorResponse && err.status === 404) {
+          return of(null);
+        }
+        console.error('Error fetching dashboard/cached:', err);
+        return of(null);
+      }),
+      shareReplay({ bufferSize: 1, refCount: true, windowTime: this.GAME4U_CACHE_DURATION })
+    );
+
+    this.setCachedData(this.game4uPlayerDashboardCachedCache, cacheKey, request$);
+    return request$;
+  }
+
+  /**
+   * `GET /game/reports/supervision/dashboard/cached` — painel agregado por equipa (substitui finished/open/goal month summary com team_id).
+   */
+  fetchSupervisionTeamDashboardCached(
+    bwaTeamScopeId: string,
+    month?: Date
+  ): Observable<SupervisionTeamDashboardCached | null> {
+    const tid = (bwaTeamScopeId ?? '').trim();
+    if (!tid || !(isGame4uDataEnabled() && this.game4u.isConfigured())) {
+      return of(null);
+    }
+    const refMonth = this.resolveDashboardCachedMonth(month);
+    const monthParam = this.toDashboardCachedMonthParam(refMonth);
+    const cacheKey = `g4u_supervision_cached_${tid}_${monthParam}`;
+    const cached = this.getCachedData(
+      this.game4uSupervisionDashboardCachedCache,
+      cacheKey,
+      this.GAME4U_CACHE_DURATION
+    );
+    if (cached) {
+      return cached;
+    }
+
+    const request$ = this.game4u
+      .getGameReportsSupervisionDashboardCached({ team_id: tid, month: monthParam })
+      .pipe(
+        catchError(err => {
+          if (err instanceof HttpErrorResponse && err.status === 404) {
+            return of(null);
+          }
+          console.error('Error fetching supervision/dashboard/cached:', err);
+          return of(null);
+        }),
+        shareReplay({ bufferSize: 1, refCount: true, windowTime: this.GAME4U_CACHE_DURATION })
+      );
+    this.setCachedData(this.game4uSupervisionDashboardCachedCache, cacheKey, request$);
+    return request$;
+  }
+
+  /**
+   * Bundle do painel de supervisão (progresso, meta, clientes no mês, temporada) numa única chamada cacheada.
+   */
+  getSupervisionTeamDashboardCachedBundle(
+    bwaTeamScopeId: string,
+    month?: Date
+  ): Observable<SupervisionTeamDashboardCachedBundle | null> {
+    return this.fetchSupervisionTeamDashboardCached(bwaTeamScopeId, month).pipe(
+      map(dash => {
+        if (!dash) {
+          return null;
+        }
+        const { activity, processo } = this.mapPlayerDashboardCachedToProgressMetrics(dash, month);
+        const goal = Math.floor(Number(dash.month_goal_points) || 0);
+        return {
+          refreshedAt: dash.refreshed_at,
+          teamId: Math.floor(Number(dash.team_id) || 0),
+          teamName: dash.team_name ?? null,
+          playersCount: Math.floor(Number(dash.players_count) || 0),
+          params: dash.params,
+          activity,
+          processo,
+          monthlyGoalTarget: goal,
+          monthClientsServed: Math.floor(Number(dash.month_clients_served) || 0),
+          seasonWalletPoints: Math.floor(Number(dash.season_points_total) || 0),
+          seasonTasksFinished: Math.floor(Number(dash.season_tasks_finished_total) || 0),
+          seasonClientsTotal: Math.floor(Number(dash.season_clients_total) || 0),
+          monthOnTimeDeliveryPct: readMonthOnTimeDeliveryPct(dash),
+          refreshError: dash.refresh_error ?? null
+        };
+      })
+    );
+  }
+
+  private mapPlayerDashboardCachedToProgressMetrics(
+    dash: PlayerDashboardCachedResponse | SupervisionTeamDashboardCached,
+    month?: Date
+  ): { activity: ActivityMetrics; processo: ProcessMetrics } {
+    if (month != null) {
+      const ptsDone = Math.floor(Number(dash.month_points_done_delivered) || 0);
+      const goalPts = Math.floor(Number(dash.month_goal_points) || 0);
+      return {
+        activity: {
+          pendentes: Math.floor(Number(dash.month_pending_tasks_count) || 0),
+          emExecucao: 0,
+          finalizadas: Math.floor(Number(dash.month_finished_tasks_count) || 0),
+          pontos: ptsDone,
+          pontosDone: ptsDone,
+          pontosTodosStatus: goalPts > 0 ? goalPts : ptsDone
+        },
+        processo: {
+          pendentes: 0,
+          incompletas: 0,
+          finalizadas: Math.floor(Number(dash.month_clients_served) || 0)
+        }
+      };
+    }
+    const seasonPts = Math.floor(Number(dash.season_points_total) || 0);
+    return {
+      activity: {
+        pendentes: 0,
+        emExecucao: 0,
+        finalizadas: Math.floor(Number(dash.season_tasks_finished_total) || 0),
+        pontos: seasonPts,
+        pontosDone: seasonPts,
+        pontosTodosStatus: seasonPts
+      },
+      processo: {
+        pendentes: 0,
+        incompletas: 0,
+        finalizadas: Math.floor(Number(dash.season_clients_total) || 0)
+      }
+    };
+  }
+
+  /**
+   * Bundle do painel gamificação (progresso, meta, clientes no mês, temporada) numa única chamada cacheada.
+   */
+  getGamificationDashboardCachedBundle(
+    playerId: string,
+    month?: Date
+  ): Observable<GamificationDashboardCachedBundle | null> {
+    return this.fetchPlayerDashboardCached(playerId, month).pipe(
+      map(dash => {
+        if (!dash) {
+          return null;
+        }
+        const { activity, processo } = this.mapPlayerDashboardCachedToProgressMetrics(dash, month);
+        const goal = Math.floor(Number(dash.month_goal_points) || 0);
+        return {
+          refreshedAt: dash.refreshed_at,
+          params: dash.params,
+          activity,
+          processo,
+          monthlyGoalTarget: goal,
+          monthClientsServed: Math.floor(Number(dash.month_clients_served) || 0),
+          seasonWalletPoints: Math.floor(Number(dash.season_points_total) || 0),
+          seasonTasksFinished: Math.floor(Number(dash.season_tasks_finished_total) || 0),
+          seasonClientsTotal: Math.floor(Number(dash.season_clients_total) || 0),
+          monthOnTimeDeliveryPct: readMonthOnTimeDeliveryPct(dash),
+          refreshError: dash.refresh_error ?? null
+        };
+      })
+    );
   }
 
   private game4uUserQuery(playerId: string, month?: Date): Game4uUserScopedQuery | null {
@@ -579,72 +875,41 @@ export class ActionLogService {
     if (!email || !(isGame4uDataEnabled() && this.game4u.isConfigured())) {
       return of(0);
     }
-    const tid = this.normalizeGame4uTeamId(teamId);
-    const { start, end } = this.game4u.toDtPrazoMonthRange(month);
-    const cacheKey = `g4u_goal_month_target_${email}_${tid ?? 'no-team'}_${this.getMonthCacheKey(month)}`;
-    const cached = this.getCachedData(this.game4uGoalMonthTargetCache, cacheKey, this.GAME4U_CACHE_DURATION);
-    if (cached) {
-      return cached;
-    }
-
-    const request$ = this.game4u
-      .getGameReportsGoalMonthSummary({
-        email,
-        dt_prazo_start: start,
-        dt_prazo_end: end,
-        ...(tid ? { team_id: tid } : {})
+    return this.fetchPlayerDashboardCached(playerId, month).pipe(
+      map(dash => {
+        if (!dash) {
+          return 0;
+        }
+        const n = Number(dash.month_goal_points ?? 0);
+        return Number.isFinite(n) ? Math.floor(n) : 0;
       })
-      .pipe(
-        map((res: Game4uGoalMonthSummaryResponse) => {
-          const n = Number(res.points_sum ?? res.total_points ?? res.goal_points ?? 0);
-          return Number.isFinite(n) ? Math.floor(n) : 0;
-        }),
-        catchError(err => {
-          console.error('Error fetching goal/month summary:', err);
-          return of(0);
-        }),
-        shareReplay({ bufferSize: 1, refCount: true, windowTime: this.GAME4U_CACHE_DURATION })
-      );
-
-    this.setCachedData(this.game4uGoalMonthTargetCache, cacheKey, request$);
-    return request$;
+    );
   }
 
   /**
-   * Meta de pontos do mês agregada da equipa (`GET /game/reports/goal/month/summary` só com `team_id`).
+   * Meta de pontos do mês agregada da equipa (`supervision/dashboard/cached`).
    */
   getMonthlyTeamGoalPointsTarget(bwaTeamScopeId: string, month: Date): Observable<number> {
     const tid = this.normalizeGame4uTeamId(bwaTeamScopeId);
     if (!tid || !(isGame4uDataEnabled() && this.game4u.isConfigured())) {
       return of(0);
     }
-    const { start, end } = this.game4u.toDtPrazoMonthRange(month);
-    const cacheKey = `g4u_team_goal_month_target_${tid}_${this.getMonthCacheKey(month)}`;
-    const cached = this.getCachedData(this.game4uTeamGoalMonthTargetCache, cacheKey, this.GAME4U_CACHE_DURATION);
-    if (cached) {
-      return cached;
-    }
-
-    const request$ = this.game4u
-      .getGameReportsGoalMonthSummary({
-        team_id: tid,
-        dt_prazo_start: start,
-        dt_prazo_end: end
+    return this.fetchSupervisionTeamDashboardCached(tid, month).pipe(
+      map(dash => {
+        if (!dash) {
+          return 0;
+        }
+        const n = Number(dash.month_goal_points ?? 0);
+        return Number.isFinite(n) ? Math.floor(n) : 0;
       })
-      .pipe(
-        map((res: Game4uGoalMonthSummaryResponse) => {
-          const n = Number(res.points_sum ?? res.total_points ?? res.goal_points ?? 0);
-          return Number.isFinite(n) ? Math.floor(n) : 0;
-        }),
-        catchError(err => {
-          console.error('Error fetching team goal/month summary:', err);
-          return of(0);
-        }),
-        shareReplay({ bufferSize: 1, refCount: true, windowTime: this.GAME4U_CACHE_DURATION })
-      );
+    );
+  }
 
-    this.setCachedData(this.game4uTeamGoalMonthTargetCache, cacheKey, request$);
-    return request$;
+  /** `month_clients_served` do `GET /game/reports/dashboard/cached` (contador no título). */
+  getPlayerDashboardMonthClientsServedCount(playerId: string, month: Date): Observable<number> {
+    return this.fetchPlayerDashboardCached(playerId, month).pipe(
+      map(dash => (dash ? Math.floor(Number(dash.month_clients_served) || 0) : 0))
+    );
   }
 
   private getMonthCacheKey(month?: Date): string {
@@ -806,7 +1071,7 @@ export class ActionLogService {
   }
 
   /**
-   * Dados do card «Progresso da temporada»: Game4U via `GET /game/reports/finished/summary`;
+   * Dados do card «Progresso da temporada» / contador de clientes no mês: Game4U via `dashboard/cached`;
    * Funifier: só contagem de tarefas (action_log).
    */
   getSeasonProgressSidebarDetails(
@@ -815,16 +1080,34 @@ export class ActionLogService {
     teamId?: string | number | null
   ): Observable<{ tarefasFinalizadas: number; deliveryStatsTotal?: number }> {
     if (isGame4uDataEnabled() && this.game4u.isConfigured()) {
-      const q = this.game4uUserQuery(playerId, month);
-      if (!q) {
-        return of({ tarefasFinalizadas: 0 });
-      }
       const email = this.resolveGame4uUserEmail(playerId);
       if (!email) {
         return of({ tarefasFinalizadas: 0 });
       }
       const tid = this.normalizeGame4uTeamId(teamId);
-      // Painel gamificação: só `GET /game/reports/finished/summary` (sem `GET /game/stats`).
+      if (!tid) {
+        return this.fetchPlayerDashboardCached(playerId, month).pipe(
+          map(dash => {
+            if (!dash) {
+              return { tarefasFinalizadas: 0 };
+            }
+            if (month != null) {
+              return {
+                tarefasFinalizadas: Math.floor(Number(dash.month_finished_tasks_count) || 0),
+                deliveryStatsTotal: Math.floor(Number(dash.month_clients_served) || 0)
+              };
+            }
+            return {
+              tarefasFinalizadas: Math.floor(Number(dash.season_tasks_finished_total) || 0),
+              deliveryStatsTotal: Math.floor(Number(dash.season_clients_total) || 0)
+            };
+          })
+        );
+      }
+      const q = this.game4uUserQuery(playerId, month);
+      if (!q) {
+        return of({ tarefasFinalizadas: 0 });
+      }
       const cacheKey = `g4u_season_sidebar_${email}_${tid ?? 'no-team'}_${this.getMonthCacheKey(month)}`;
       const cached = this.getCachedData(
         this.game4uSeasonSidebarDetailsCache,
@@ -868,7 +1151,7 @@ export class ActionLogService {
 
   /**
    * Snapshot Game4U para carteira + sidebar no painel de gamificação.
-   * Usa apenas `GET /game/reports/finished/summary` na temporada (sem `GET /game/stats` nem `GET /game/actions`).
+   * Usa `GET /game/reports/dashboard/cached` (`season_*` no payload).
    */
   getMonthlyGame4uPlayerDashboardData(
     playerId: string,
@@ -884,65 +1167,55 @@ export class ActionLogService {
         () => new Error('[ActionLog] getMonthlyGame4uPlayerDashboardData: Game4U indisponível')
       );
     }
-    const q = this.game4uUserQuery(playerId, month);
-    if (!q) {
+    const email = this.resolveGame4uUserEmail(playerId);
+    if (!email) {
       return of({
         wallet: { moedas: 0, bloqueados: 0, desbloqueados: 0 },
         pontosActionLog: 0,
         sidebar: { tarefasFinalizadas: 0 }
       });
     }
-    const tid = this.normalizeGame4uTeamId(teamId);
-    const seasonRange = this.game4u.toQueryRange(undefined);
-    const cacheKey = `g4u_player_dashboard_snapshot_${q.user}_${tid ?? 'no-team'}`;
-    const cached = this.getCachedData(
-      this.game4uPlayerDashboardSnapshotCache,
-      cacheKey,
-      this.GAME4U_CACHE_DURATION
-    );
-    if (cached) {
-      return cached;
-    }
-
-    const request$ = this.game4u
-      .getGameReportsFinishedSummary({
-        email: q.user,
-        finished_at_start: seasonRange.start,
-        finished_at_end: seasonRange.end,
-        ...(tid ? { team_id: tid } : {})
-      })
-      .pipe(
-        map(seasonSummary => {
-          const tasks = Math.floor(Number(seasonSummary.tasks_count) || 0);
-          const deliveries = readDeliveriesCountFromFinishedSummary(seasonSummary);
-          const pts = Math.floor(Number(seasonSummary.points_sum) || 0);
-          const wallet: PointWallet = { moedas: 0, bloqueados: 0, desbloqueados: pts };
+    return this.fetchPlayerDashboardCached(playerId, month).pipe(
+      map(dash => {
+        if (!dash) {
           return {
-            wallet,
-            pontosActionLog: pts,
-            sidebar: { tarefasFinalizadas: tasks, deliveryStatsTotal: deliveries }
-          };
-        }),
-        catchError(error => {
-          console.error('Error in getMonthlyGame4uPlayerDashboardData (Game4U reports-only):', error);
-          return of({
             wallet: { moedas: 0, bloqueados: 0, desbloqueados: 0 },
             pontosActionLog: 0,
             sidebar: { tarefasFinalizadas: 0 }
-          });
-        }),
-        shareReplay({ bufferSize: 1, refCount: true, windowTime: this.GAME4U_CACHE_DURATION })
-      );
-
-    this.setCachedData(this.game4uPlayerDashboardSnapshotCache, cacheKey, request$);
-    return request$;
+          };
+        }
+        const tasks = Math.floor(Number(dash.season_tasks_finished_total) || 0);
+        const deliveries = Math.floor(Number(dash.season_clients_total) || 0);
+        const pts = Math.floor(Number(dash.season_points_total) || 0);
+        const wallet: PointWallet = { moedas: 0, bloqueados: 0, desbloqueados: pts };
+        return {
+          wallet,
+          pontosActionLog: pts,
+          sidebar:
+            deliveries > 0
+              ? { tarefasFinalizadas: tasks, deliveryStatsTotal: deliveries }
+              : { tarefasFinalizadas: tasks }
+        };
+      }),
+      catchError(error => {
+        console.error('Error in getMonthlyGame4uPlayerDashboardData (dashboard/cached):', error);
+        return of({
+          wallet: { moedas: 0, bloqueados: 0, desbloqueados: 0 },
+          pontosActionLog: 0,
+          sidebar: { tarefasFinalizadas: 0 }
+        });
+      })
+    );
   }
 
   /**
    * Snapshot Game4U para sidebar do **painel de equipa** (vista agregada sem colaborador):
    * `GET /game/reports/finished/summary` com `team_id` (= id BWA da equipa), sem `email`.
    */
-  getMonthlyGame4uTeamDashboardData(bwaTeamScopeId: string): Observable<{
+  getMonthlyGame4uTeamDashboardData(
+    bwaTeamScopeId: string,
+    month?: Date
+  ): Observable<{
     wallet: PointWallet;
     pontosActionLog: number;
     sidebar: { tarefasFinalizadas: number; deliveryStatsTotal?: number };
@@ -960,51 +1233,29 @@ export class ActionLogService {
         sidebar: { tarefasFinalizadas: 0 }
       });
     }
-    const seasonRange = this.game4u.toQueryRange(undefined);
-    const cacheKey = `g4u_team_dashboard_snapshot_${tid}`;
-    const cached = this.getCachedData(
-      this.game4uTeamDashboardSnapshotCache,
-      cacheKey,
-      this.GAME4U_CACHE_DURATION
-    );
-    if (cached) {
-      return cached;
-    }
-
-    const request$ = this.game4u
-      .getGameReportsFinishedSummary({
-        team_id: tid,
-        finished_at_start: seasonRange.start,
-        finished_at_end: seasonRange.end
-      })
-      .pipe(
-        map(summary => {
-          const tasks = Math.floor(Number(summary.tasks_count) || 0);
-          const deliveries = Math.floor(Number(summary.deliveries_count) || 0);
-          const pts = Math.floor(Number(summary.points_sum) || 0);
-          const wallet: PointWallet = { moedas: 0, bloqueados: 0, desbloqueados: pts };
+    return this.fetchSupervisionTeamDashboardCached(tid, month).pipe(
+      map(dash => {
+        if (!dash) {
           return {
-            wallet,
-            pontosActionLog: pts,
-            sidebar:
-              deliveries > 0
-                ? { tarefasFinalizadas: tasks, deliveryStatsTotal: deliveries }
-                : { tarefasFinalizadas: tasks }
-          };
-        }),
-        catchError(error => {
-          console.error('Error in getMonthlyGame4uTeamDashboardData (Game4U reports):', error);
-          return of({
             wallet: { moedas: 0, bloqueados: 0, desbloqueados: 0 },
             pontosActionLog: 0,
             sidebar: { tarefasFinalizadas: 0 }
-          });
-        }),
-        shareReplay({ bufferSize: 1, refCount: true, windowTime: this.GAME4U_CACHE_DURATION })
-      );
-
-    this.setCachedData(this.game4uTeamDashboardSnapshotCache, cacheKey, request$);
-    return request$;
+          };
+        }
+        const pts = Math.floor(Number(dash.season_points_total) || 0);
+        const tasks = Math.floor(Number(dash.season_tasks_finished_total) || 0);
+        const deliveries = Math.floor(Number(dash.season_clients_total) || 0);
+        const wallet: PointWallet = { moedas: 0, bloqueados: 0, desbloqueados: pts };
+        return {
+          wallet,
+          pontosActionLog: pts,
+          sidebar:
+            deliveries > 0
+              ? { tarefasFinalizadas: tasks, deliveryStatsTotal: deliveries }
+              : { tarefasFinalizadas: tasks }
+        };
+      })
+    );
   }
 
   /**
@@ -1022,37 +1273,14 @@ export class ActionLogService {
     if (!tid) {
       return of({ tarefasFinalizadas: 0, deliveriesCount: 0 });
     }
-    const range = this.game4u.toQueryRange(month);
-    const cacheKey = `g4u_team_finished_summary_month_${tid}_${this.getMonthCacheKey(month)}`;
-    const cached = this.getCachedData(
-      this.game4uTeamFinishedSummaryForMonthCache,
-      cacheKey,
-      this.GAME4U_CACHE_DURATION
+    return this.fetchSupervisionTeamDashboardCached(tid, month).pipe(
+      map(dash => ({
+        tarefasFinalizadas: dash
+          ? Math.floor(Number(dash.month_finished_tasks_count) || 0)
+          : 0,
+        deliveriesCount: dash ? Math.floor(Number(dash.month_clients_served) || 0) : 0
+      }))
     );
-    if (cached) {
-      return cached;
-    }
-
-    const request$ = this.game4u
-      .getGameReportsFinishedSummary({
-        team_id: tid,
-        finished_at_start: range.start,
-        finished_at_end: range.end
-      })
-      .pipe(
-        map(summary => ({
-          tarefasFinalizadas: Math.floor(Number(summary.tasks_count) || 0),
-          deliveriesCount: readDeliveriesCountFromFinishedSummary(summary)
-        })),
-        catchError(error => {
-          console.error('Error in getTeamFinishedSummaryForMonth:', error);
-          return of({ tarefasFinalizadas: 0, deliveriesCount: 0 });
-        }),
-        shareReplay({ bufferSize: 1, refCount: true, windowTime: this.GAME4U_CACHE_DURATION })
-      );
-
-    this.setCachedData(this.game4uTeamFinishedSummaryForMonthCache, cacheKey, request$);
-    return request$;
   }
 
   /**
@@ -1062,34 +1290,9 @@ export class ActionLogService {
   getPlayerFinishedSummaryDeliveriesCountForMonth(
     playerId: string,
     month: Date,
-    teamId?: string | number | null
+    _teamId?: string | number | null
   ): Observable<number> {
-    if (!(isGame4uDataEnabled() && this.game4u.isConfigured())) {
-      return of(0);
-    }
-    const q = this.game4uUserQuery(playerId, month);
-    if (!q) {
-      return of(0);
-    }
-    const email = this.resolveGame4uUserEmail(playerId);
-    if (!email) {
-      return of(0);
-    }
-    const tid = this.normalizeGame4uTeamId(teamId);
-    return this.game4u
-      .getGameReportsFinishedSummary({
-        email,
-        finished_at_start: q.start,
-        finished_at_end: q.end,
-        ...(tid ? { team_id: tid } : {})
-      })
-      .pipe(
-        map(summary => readDeliveriesCountFromFinishedSummary(summary)),
-        catchError(error => {
-          console.error('Error in getPlayerFinishedSummaryDeliveriesCountForMonth:', error);
-          return of(0);
-        })
-      );
+    return this.getPlayerDashboardMonthClientsServedCount(playerId, month);
   }
 
   /**
@@ -1770,8 +1973,8 @@ export class ActionLogService {
    * {@link GetProgressMetricsOptions.gamificationDashboardReportsOnly}: painel gamificação evita
    * `GET /game/stats`, `GET /game/actions` e **`GET /game/reports/user-actions`** neste método — só relatórios agregados.
    *
-   * Vista equipa (`game4uTeamAggregate` + `team_id` BWA): `finished/summary` + `open/summary` no mês
-   * (sem `GET /game/team-actions`). Sem BWA: só `GET /game/team-stats` (não é `/game/stats`).
+   * Vista equipa (`game4uTeamAggregate` + `team_id` BWA): `supervision/dashboard/cached` no mês
+   * (substitui `finished/summary` + `open/summary`). Sem BWA: só `GET /game/team-stats`.
    */
   getProgressMetrics(
     playerId: string,
@@ -1783,64 +1986,19 @@ export class ActionLogService {
       if (teamAgg && (teamAgg.team || '').trim() && month != null) {
         const teamKey = teamAgg.team.trim();
         const bwa = this.normalizeGame4uTeamId(teamAgg.bwaTeamId);
-        const finishedRange = this.game4u.toQueryRange(month);
-        const dp = this.game4u.toDtPrazoMonthRange(month);
-
         if (bwa) {
-          return forkJoin({
-            finished: this.game4u
-              .getGameReportsFinishedSummary({
-                team_id: bwa,
-                finished_at_start: finishedRange.start,
-                finished_at_end: finishedRange.end
-              })
-              .pipe(
-                catchError(err => {
-                  console.warn('getProgressMetrics (team finished/summary):', err);
-                  return of({ tasks_count: 0, points_sum: 0, deliveries_count: 0 });
-                })
-              ),
-            open: this.game4u
-              .getGameReportsOpenSummary({
-                team_id: bwa,
-                dt_prazo_start: dp.start,
-                dt_prazo_end: dp.end
-              })
-              .pipe(
-                catchError(err => {
-                  console.warn('getProgressMetrics (team open/summary):', err);
-                  return of({ tasks_count: 0, delivery_count: 0 });
-                })
-              )
-          }).pipe(
-            map(({ finished, open }) => {
-              const pendingFromReport = Math.floor(Number(open.tasks_count) || 0);
-              const finalizadas = Math.floor(Number(finished.tasks_count) || 0);
-              const pts = Math.floor(Number(finished.points_sum) || 0);
-              // Meta de pontos do mês (equipa): soma de pontos já concluídos + estimativa do que está em aberto.
-              // O endpoint open/summary não devolve points_sum; usamos a regra provisória de pontos por atividade.
-              const ptsAllStatuses = pts + pendingFromReport * PONTOS_POR_ATIVIDADE_FINALIZADA_ACTION_LOG;
-              const procFin = Math.floor(Number(finished.deliveries_count) || 0);
-              const openDel = Math.floor(Number(open.delivery_count) || 0);
-              const processo: ProcessMetrics = {
-                pendentes: 0,
-                incompletas: openDel,
-                finalizadas: procFin
-              };
-              return {
-                activity: {
-                  pendentes: pendingFromReport,
-                  emExecucao: 0,
-                  finalizadas,
-                  pontos: pts,
-                  pontosDone: pts,
-                  pontosTodosStatus: ptsAllStatuses
-                },
-                processo
-              };
+          return this.fetchSupervisionTeamDashboardCached(String(bwa), month).pipe(
+            map(dash => {
+              if (!dash) {
+                return {
+                  activity: { pendentes: 0, emExecucao: 0, finalizadas: 0, pontos: 0 },
+                  processo: { pendentes: 0, incompletas: 0, finalizadas: 0 }
+                };
+              }
+              return this.mapPlayerDashboardCachedToProgressMetrics(dash, month);
             }),
             catchError(err => {
-              console.error('getProgressMetrics (Game4U team reports):', err);
+              console.error('getProgressMetrics (supervision/dashboard/cached):', err);
               return of({
                 activity: { pendentes: 0, emExecucao: 0, finalizadas: 0, pontos: 0 },
                 processo: { pendentes: 0, incompletas: 0, finalizadas: 0 }
@@ -1849,25 +2007,28 @@ export class ActionLogService {
           );
         }
 
-        const range = this.game4u.toQueryRange(month);
-        const statsQuery: Game4uTeamScopedQuery = {
-          team: teamKey,
-          start: range.start,
-          end: range.end
-        };
-        return this.game4u.getGameTeamStats(statsQuery).pipe(
-          map(stats => {
-            const tpm = mapGame4uStatsToTeamProgressMetrics(stats);
-            const activity = mapGame4uStatsToActivityMetrics(stats);
-            const processo: ProcessMetrics = {
-              pendentes: 0,
-              incompletas: tpm.processosIncompletos,
-              finalizadas: tpm.processosFinalizados
-            };
-            return { activity, processo };
+        return of({
+          activity: { pendentes: 0, emExecucao: 0, finalizadas: 0, pontos: 0 },
+          processo: { pendentes: 0, incompletas: 0, finalizadas: 0 }
+        });
+      }
+
+      const reportsOnly = !!opts?.gamificationDashboardReportsOnly;
+      const tid = this.normalizeGame4uTeamId(opts?.teamId);
+      const emailForCache = this.resolveGame4uUserEmail(playerId);
+      if (reportsOnly && emailForCache) {
+        return this.fetchPlayerDashboardCached(playerId, month).pipe(
+          map(dash => {
+            if (!dash) {
+              return {
+                activity: { pendentes: 0, emExecucao: 0, finalizadas: 0, pontos: 0 },
+                processo: { pendentes: 0, incompletas: 0, finalizadas: 0 }
+              };
+            }
+            return this.mapPlayerDashboardCachedToProgressMetrics(dash, month);
           }),
-          catchError(err => {
-            console.error('getProgressMetrics (Game4U team-stats only):', err);
+          catchError(error => {
+            console.error('Error calculating progress metrics (dashboard/cached):', error);
             return of({
               activity: { pendentes: 0, emExecucao: 0, finalizadas: 0, pontos: 0 },
               processo: { pendentes: 0, incompletas: 0, finalizadas: 0 }
@@ -1875,9 +2036,6 @@ export class ActionLogService {
           })
         );
       }
-
-      const reportsOnly = !!opts?.gamificationDashboardReportsOnly;
-      const tid = this.normalizeGame4uTeamId(opts?.teamId);
       const teamExtras = tid ? { team_id: tid } : {};
       const qStatsBase = this.game4uUserQuery(playerId, month);
       const qActionsBase =
@@ -2527,47 +2685,32 @@ export class ActionLogService {
             return of([]);
           }
           const tid = this.normalizeGame4uTeamId(teamId);
-          const request$ = this.game4u
-            .getGameReportsFinishedDeliveries({
-              email: user,
-              ...(tid ? { team_id: tid } : {})
-            })
-            .pipe(
-              map(finishedRows => {
-                const rows: {
-                  cnpj: string;
-                  actionCount: number;
-                  delivery_title?: string;
-                  deliveryId?: string;
-                  fromGameReportsDeliveries?: boolean;
-                  loadTasksViaGameReports?: boolean;
-                }[] = [];
-                const seen = new Set<string>();
-                for (const row of finishedRows || []) {
-                  const title = row.delivery_title?.trim() || '';
-                  const did = row.delivery_id?.trim() || '';
-                  const dedupeKey = did || title;
-                  if (!dedupeKey || seen.has(dedupeKey)) {
-                    continue;
-                  }
-                  seen.add(dedupeKey);
-                  rows.push({
-                    cnpj: did ? `g4u-rpt:${did}` : `g4u-rpt:${title}`,
-                    actionCount: 0,
-                    delivery_title: title || undefined,
-                    ...(did ? { deliveryId: did } : {}),
-                    fromGameReportsDeliveries: true,
-                    loadTasksViaGameReports: true
-                  });
-                }
-                return rows;
-              }),
-              catchError(error => {
-                console.error('Error fetching finished deliveries (participação):', error);
-                return of([]);
-              }),
-              shareReplay({ bufferSize: 1, refCount: true, windowTime: this.CACHE_DURATION })
-            );
+          const monthParam = this.toDashboardCachedMonthParam(month);
+          const request$ = (tid
+            ? this.game4u.getGameReportsFinishedDeliveries({
+                email: user,
+                finished_at_start: this.game4u.toQueryRange(month).start,
+                finished_at_end: this.game4u.toQueryRange(month).end,
+                team_id: tid
+              })
+            : this.game4u
+                .getGameReportsFinishedDeliveriesCached({
+                  email: user,
+                  month: monthParam,
+                  offset: 0,
+                  limit: 500
+                })
+                .pipe(map(page => page.items))
+          ).pipe(
+            map(finishedRows =>
+              mapGame4uFinishedDeliveryRowsToParticipacaoCnpjRows(finishedRows || [], month)
+            ),
+            catchError(error => {
+              console.error('Error fetching finished deliveries (participação):', error);
+              return of([]);
+            }),
+            shareReplay({ bufferSize: 1, refCount: true, windowTime: this.CACHE_DURATION })
+          );
           this.setCachedData(this.cnpjListWithCountCache, cacheKey, request$);
           return request$;
         }
@@ -2715,8 +2858,7 @@ export class ActionLogService {
   }
 
   /**
-   * Game4U (mês definido): uma página de `GET /game/reports/finished/deliveries` para «Clientes atendidos».
-   * Retorna no mesmo formato usado por {@link getPlayerCnpjListWithCount} quando `fromGameReportsDeliveries` é true.
+   * Game4U (mês definido): página de clientes atendidos — `finished/deliveries/cached` (email ou team_id).
    */
   getPlayerFinishedDeliveriesParticipacaoPage(
     playerId: string,
@@ -2724,65 +2866,130 @@ export class ActionLogService {
     offset: number,
     limit: number,
     teamId?: string | number | null
-  ): Observable<{ items: { cnpj: string; actionCount: number; delivery_title?: string; deliveryId?: string; fromGameReportsDeliveries?: boolean; loadTasksViaGameReports?: boolean }[]; offset: number; limit: number; total?: number }> {
+  ): Observable<PlayerParticipacaoDeliveriesPageResult> {
+    const off = Math.max(0, Math.floor(offset));
+    const lim = Math.min(Math.max(Math.floor(limit), 1), 500);
     if (!isGame4uDataEnabled() || !this.game4u.isConfigured() || month == null) {
-      return of({ items: [], offset: Math.max(0, Math.floor(offset)), limit: Math.max(1, Math.floor(limit)) });
+      return of({ items: [], offset: off, limit: lim });
     }
     const user = this.resolveGame4uUserEmail(playerId);
     if (!user) {
-      return of({ items: [], offset: Math.max(0, Math.floor(offset)), limit: Math.max(1, Math.floor(limit)) });
+      return of({ items: [], offset: off, limit: lim });
     }
     const tid = this.normalizeGame4uTeamId(teamId);
-    const off = Math.max(0, Math.floor(offset));
-    const lim = Math.min(Math.max(Math.floor(limit), 1), 500);
 
+    if (!tid) {
+      const monthParam = this.toDashboardCachedMonthParam(month);
+      return this.game4u
+        .getGameReportsFinishedDeliveriesCached({
+          email: user,
+          month: monthParam,
+          offset: off,
+          limit: lim
+        })
+        .pipe(
+          map(page => {
+            const apiRows = page.items || [];
+            return {
+              items: mapGame4uFinishedDeliveryRowsToParticipacaoCnpjRows(apiRows, month),
+              apiRowCount: apiRows.length,
+              offset: page.offset ?? off,
+              limit: page.limit ?? lim,
+              ...(page.total != null ? { total: page.total } : {}),
+              ...(page.has_more != null ? { has_more: page.has_more } : {}),
+              fromCachedDeliveries: true
+            };
+          }),
+          catchError(error => {
+            console.error('Error fetching finished deliveries/cached (participação):', error);
+            return of({ items: [], offset: off, limit: lim, fromCachedDeliveries: true });
+          })
+        );
+    }
+
+    const range = this.game4u.toQueryRange(month);
     return this.game4u
       .getGameReportsFinishedDeliveriesPage({
         email: user,
-        ...(tid ? { team_id: tid } : {}),
+        finished_at_start: range.start,
+        finished_at_end: range.end,
+        team_id: tid,
         offset: off,
         limit: lim
       })
       .pipe(
-        map(page => {
-          const rows: {
-            cnpj: string;
-            actionCount: number;
-            delivery_title?: string;
-            deliveryId?: string;
-            fromGameReportsDeliveries?: boolean;
-            loadTasksViaGameReports?: boolean;
-          }[] = [];
-          const seen = new Set<string>();
-          for (const row of page.items || []) {
-            const title = row.delivery_title?.trim() || '';
-            const did = row.delivery_id?.trim() || '';
-            const dedupeKey = did || title;
-            if (!dedupeKey || seen.has(dedupeKey)) {
-              continue;
-            }
-            seen.add(dedupeKey);
-            rows.push({
-              cnpj: did ? `g4u-rpt:${did}` : `g4u-rpt:${title}`,
-              actionCount: 0,
-              delivery_title: title || undefined,
-              ...(did ? { deliveryId: did } : {}),
-              fromGameReportsDeliveries: true,
-              loadTasksViaGameReports: true
-            });
-          }
-          return {
-            items: rows,
-            offset: page.offset ?? off,
-            limit: page.limit ?? lim,
-            ...(page.total != null ? { total: page.total } : {})
-          };
-        }),
+        map(page => ({
+          items: mapGame4uFinishedDeliveryRowsToParticipacaoCnpjRows(page.items || [], month),
+          offset: page.offset ?? off,
+          limit: page.limit ?? lim,
+          ...(page.total != null ? { total: page.total } : {})
+        })),
         catchError(error => {
           console.error('Error fetching finished deliveries page (participação):', error);
           return of({ items: [], offset: off, limit: lim });
         })
       );
+  }
+
+  private static readonly MAX_DELIVERIES_CACHED_PAGES = 100;
+
+  /**
+   * Todas as páginas de `finished/deliveries/cached` por email (sem `team_id` no endpoint).
+   */
+  getPlayerFinishedDeliveriesParticipacaoAllPages(
+    playerId: string,
+    month: Date | undefined,
+    pageSize = 30,
+    teamId?: string | number | null
+  ): Observable<PlayerParticipacaoDeliveriesPageResult> {
+    const lim = Math.min(Math.max(Math.floor(pageSize), 1), 500);
+    const tid = this.normalizeGame4uTeamId(teamId);
+    if (tid) {
+      return this.getPlayerFinishedDeliveriesParticipacaoPage(playerId, month, 0, lim, teamId);
+    }
+    if (!isGame4uDataEnabled() || !this.game4u.isConfigured() || month == null) {
+      return of({ items: [], offset: 0, limit: lim, fromCachedDeliveries: true });
+    }
+
+    return this.getPlayerFinishedDeliveriesParticipacaoPage(playerId, month, 0, lim).pipe(
+      expand((page, index) => {
+        const received = page.items?.length ?? 0;
+        const nextOff = (page.offset ?? 0) + received;
+        if (
+          received === 0 ||
+          index >= ActionLogService.MAX_DELIVERIES_CACHED_PAGES - 1 ||
+          !hasMoreFinishedDeliveriesCachedPage(
+            received,
+            lim,
+            nextOff,
+            page.total,
+            page.has_more
+          )
+        ) {
+          return EMPTY;
+        }
+        return this.getPlayerFinishedDeliveriesParticipacaoPage(playerId, month, nextOff, lim);
+      }),
+      reduce(
+        (acc, page) => ({
+          items: acc.items.concat(page.items || []),
+          offset: 0,
+          limit: lim,
+          total: page.total ?? acc.total,
+          fromCachedDeliveries: true
+        }),
+        {
+          items: [],
+          offset: 0,
+          limit: lim,
+          fromCachedDeliveries: true
+        } as PlayerParticipacaoDeliveriesPageResult
+      ),
+      catchError(error => {
+        console.error('Error fetching all finished deliveries/cached (participação):', error);
+        return of({ items: [], offset: 0, limit: lim, fromCachedDeliveries: true });
+      })
+    );
   }
 
   /**
@@ -3116,6 +3323,8 @@ export class ActionLogService {
     this.game4uTeamDashboardSnapshotCache.clear();
     this.game4uTeamFinishedSummaryForMonthCache.clear();
     this.game4uTeamDailyFinishedStatsCache.clear();
+    this.game4uPlayerDashboardCachedCache.clear();
+    this.game4uSupervisionDashboardCachedCache.clear();
     this.teamMetricsCache.clear();
     this.teamCnpjCache.clear();
     this.teamPointsBreakdownCache.clear();

@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
-import { Observable, of, throwError, forkJoin } from 'rxjs';
+import { Observable, of, throwError, forkJoin, EMPTY } from 'rxjs';
 import { PONTOS_POR_ATIVIDADE_FINALIZADA_ACTION_LOG } from '@app/constants/pontos-por-atividade-action-log';
-import { map, catchError, tap, switchMap } from 'rxjs/operators';
+import { map, catchError, tap, switchMap, expand, reduce } from 'rxjs/operators';
 import { BackendApiService } from './backend-api.service';
 import { AggregateQueryBuilderService, AggregateQuery } from './aggregate-query-builder.service';
 import { PerformanceMonitorService } from './performance-monitor.service';
@@ -17,14 +17,30 @@ import {
   mapGame4uStatsToTeamProgressMetrics,
   mapGame4uStatsToTeamSeasonPoints,
   mapGame4uFinishedDeliveryRowsToParticipacaoCnpjRows,
-  mapGame4uUserActionsToParticipacaoCnpjRows
+  mapGame4uUserActionsToParticipacaoCnpjRows,
+  hasMoreFinishedDeliveriesCachedPage
 } from './game4u-game-mapper';
 
 export interface TeamFinishedDeliveriesPageResult {
-  items: { cnpj: string; actionCount: number; processCount: number; delivery_title?: string; deliveryId?: string; fromGameReportsDeliveries?: boolean; loadTasksViaGameReports?: boolean }[];
+  items: {
+    cnpj: string;
+    actionCount: number;
+    processCount: number;
+    delivery_title?: string;
+    deliveryId?: string;
+    porcEntregas?: number;
+    entrega?: number;
+    fromGameReportsDeliveries?: boolean;
+    fromCachedDeliveries?: boolean;
+    loadTasksViaGameReports?: boolean;
+  }[];
   offset: number;
   limit: number;
   total?: number;
+  has_more?: boolean;
+  /** Linhas devolvidas pela API nesta página (antes do filtro por mês no cliente). */
+  apiRowCount?: number;
+  fromCachedDeliveries?: boolean;
 }
 
 /**
@@ -76,6 +92,8 @@ interface CacheEntry<T> {
   providedIn: 'root'
 })
 export class TeamAggregateService {
+  private static readonly MAX_DELIVERIES_CACHED_PAGES = 100;
+
   private cache = new Map<string, CacheEntry<any>>();
   private readonly cacheTTL = 5 * 60 * 1000; // 5 minutes in milliseconds
 
@@ -976,17 +994,22 @@ export class TeamAggregateService {
     }
 
     if (isGame4uDataEnabled() && this.game4u.isConfigured() && scopeId) {
+      const monthAnchor = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
+      const monthParam = `${monthAnchor.getFullYear()}-${String(monthAnchor.getMonth() + 1).padStart(2, '0')}`;
       return this.game4u
-        .getGameReportsFinishedDeliveries({
+        .getGameReportsFinishedDeliveriesCached({
           team_id: scopeId,
-          finished_at_start: startDate.toISOString(),
-          finished_at_end: endDate.toISOString()
+          month: monthParam,
+          offset: 0,
+          limit: 500
         })
         .pipe(
-          map(rows => mapGame4uFinishedDeliveryRowsToParticipacaoCnpjRows(rows)),
+          map(page =>
+            mapGame4uFinishedDeliveryRowsToParticipacaoCnpjRows(page.items || [], monthAnchor)
+          ),
           tap(data => this.setCache(cacheKey, data)),
           catchError(error => {
-            console.error('Error in getTeamCnpjListWithCount (reports):', error);
+            console.error('Error in getTeamCnpjListWithCount (deliveries/cached):', error);
             return of([]);
           })
         );
@@ -1083,7 +1106,7 @@ export class TeamAggregateService {
   }
 
   /**
-   * Game4U (reports): uma página de `GET /game/reports/finished/deliveries` para «Clientes atendidos» no painel equipa.
+   * Game4U (reports): uma página de `GET /game/reports/finished/deliveries/cached` para «Clientes atendidos» no painel equipa.
    */
   getTeamFinishedDeliveriesParticipacaoPage(
     bwaTeamScopeId: string,
@@ -1098,27 +1121,84 @@ export class TeamAggregateService {
     if (!(isGame4uDataEnabled() && this.game4u.isConfigured()) || !scopeId) {
       return of({ items: [], offset: off, limit: lim });
     }
-    const range = this.game4u.toQueryRange(monthAnchor);
+    const y = monthAnchor.getFullYear();
+    const m = String(monthAnchor.getMonth() + 1).padStart(2, '0');
+    const monthParam = `${y}-${m}`;
     return this.game4u
-      .getGameReportsFinishedDeliveriesPage({
+      .getGameReportsFinishedDeliveriesCached({
         team_id: scopeId,
-        finished_at_start: range.start,
-        finished_at_end: range.end,
+        month: monthParam,
         offset: off,
         limit: lim
       })
       .pipe(
-        map(page => ({
-          items: mapGame4uFinishedDeliveryRowsToParticipacaoCnpjRows(page.items || []),
-          offset: page.offset ?? off,
-          limit: page.limit ?? lim,
-          ...(page.total != null ? { total: page.total } : {})
-        })),
+        map(page => {
+          const apiRows = page.items || [];
+          return {
+            items: mapGame4uFinishedDeliveryRowsToParticipacaoCnpjRows(apiRows, monthAnchor),
+            apiRowCount: apiRows.length,
+            offset: page.offset ?? off,
+            limit: page.limit ?? lim,
+            ...(page.total != null ? { total: page.total } : {}),
+            ...(page.has_more != null ? { has_more: page.has_more } : {}),
+            fromCachedDeliveries: true
+          };
+        }),
         catchError(error => {
-          console.error('Error in getTeamFinishedDeliveriesParticipacaoPage:', error);
-          return of({ items: [], offset: off, limit: lim });
+          console.error('Error in getTeamFinishedDeliveriesParticipacaoPage (cached):', error);
+          return of({ items: [], offset: off, limit: lim, fromCachedDeliveries: true });
         })
       );
+  }
+
+  /**
+   * Todas as páginas de `finished/deliveries/cached` (equipa) — concatena offset/limit até acabar.
+   */
+  getTeamFinishedDeliveriesParticipacaoAllPages(
+    bwaTeamScopeId: string,
+    month: Date,
+    pageSize = 30
+  ): Observable<TeamFinishedDeliveriesPageResult> {
+    const scopeId = (bwaTeamScopeId ?? '').trim();
+    const lim = Math.min(Math.max(Math.floor(pageSize), 1), 500);
+    if (!(isGame4uDataEnabled() && this.game4u.isConfigured()) || !scopeId) {
+      return of({ items: [], offset: 0, limit: lim, fromCachedDeliveries: true });
+    }
+
+    return this.getTeamFinishedDeliveriesParticipacaoPage(scopeId, month, 0, lim).pipe(
+      expand((page, index) => {
+        const received = page.items?.length ?? 0;
+        const nextOff = (page.offset ?? 0) + received;
+        if (
+          received === 0 ||
+          index >= TeamAggregateService.MAX_DELIVERIES_CACHED_PAGES - 1 ||
+          !hasMoreFinishedDeliveriesCachedPage(
+            received,
+            lim,
+            nextOff,
+            page.total,
+            page.has_more
+          )
+        ) {
+          return EMPTY;
+        }
+        return this.getTeamFinishedDeliveriesParticipacaoPage(scopeId, month, nextOff, lim);
+      }),
+      reduce(
+        (acc, page) => ({
+          items: acc.items.concat(page.items || []),
+          offset: 0,
+          limit: lim,
+          total: page.total ?? acc.total,
+          fromCachedDeliveries: true
+        }),
+        { items: [], offset: 0, limit: lim, fromCachedDeliveries: true } as TeamFinishedDeliveriesPageResult
+      ),
+      catchError(error => {
+        console.error('Error in getTeamFinishedDeliveriesParticipacaoAllPages (cached):', error);
+        return of({ items: [], offset: 0, limit: lim, fromCachedDeliveries: true });
+      })
+    );
   }
 
   /**

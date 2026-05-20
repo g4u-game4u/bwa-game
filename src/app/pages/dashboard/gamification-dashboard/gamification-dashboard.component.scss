@@ -568,6 +568,22 @@
         margin-left: 0.125rem;
       }
     }
+
+    .dashboard-cache-notice {
+      margin: 0 0 $spacing-md;
+      padding: $spacing-sm $spacing-md;
+      border-radius: 6px;
+      background: rgba(255, 193, 7, 0.12);
+      color: $text-secondary;
+      font-size: 0.9rem;
+    }
+
+    .dashboard-cache-refreshed {
+      margin: -$spacing-sm 0 $spacing-md;
+      font-size: 0.8rem;
+      color: $text-secondary;
+      opacity: 0.85;
+    }
     
     .carteira-expand-btn {
       display: flex;
