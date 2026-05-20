@@ -927,7 +927,15 @@ export function hasMoreFinishedDeliveriesCachedPage(
   const rec = Math.max(0, Math.floor(received));
   const next = Math.max(0, Math.floor(nextOffset));
   if (typeof total === 'number' && Number.isFinite(total)) {
-    return next < Math.floor(total);
+    const tot = Math.floor(total);
+    if (next < tot) {
+      return true;
+    }
+    // Algumas respostas enviam `total` = tamanho da página atual; página cheia ainda pode ter mais dados.
+    if (rec >= lim && next >= tot) {
+      return true;
+    }
+    return false;
   }
   return rec >= lim;
 }

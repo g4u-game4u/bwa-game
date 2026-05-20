@@ -714,8 +714,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
       this.useParticipacaoReportsPagination &&
       !this.isLoadingParticipacao &&
       !this.isLoadingParticipacaoMore &&
-      this.participacaoHasMore &&
-      this.participacaoClientes.length > 0
+      this.participacaoHasMore
     );
   }
 

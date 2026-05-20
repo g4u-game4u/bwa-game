@@ -621,6 +621,11 @@ describe('game4u-game-mapper', () => {
       expect(hasMoreFinishedDeliveriesCachedPage(0, 30, 0, 0, true)).toBe(true);
       expect(hasMoreFinishedDeliveriesCachedPage(30, 30, 30, 100, false)).toBe(false);
     });
+
+    it('treats total equal to full page size as possibly incomplete', () => {
+      expect(hasMoreFinishedDeliveriesCachedPage(30, 30, 30, 30)).toBe(true);
+      expect(hasMoreFinishedDeliveriesCachedPage(12, 30, 12, 12)).toBe(false);
+    });
   });
 
   describe('mapGame4uFinishedDeliveryRowsToParticipacaoCnpjRows', () => {

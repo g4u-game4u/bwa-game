@@ -273,6 +273,8 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
   participacaoHasMore = false;
   private participacaoNextOffset = 0;
   private participacaoTotal?: number;
+  /** Quando definido, «Carregar mais» usa `finished/deliveries/cached` por email (drill-down colaborador). */
+  private participacaoPagedPlayerId: string | null = null;
   private readonly participacaoPageLimit = 30;
   
   // Monthly points breakdown
@@ -2765,6 +2767,7 @@ private calculateCollaboratorTotals(memberData: Array<{
     this.participacaoHasMore = false;
     this.participacaoNextOffset = 0;
     this.participacaoTotal = undefined;
+    this.participacaoPagedPlayerId = null;
     this.useParticipacaoReportsPagination = false;
     const loadGen = ++this.participacaoKpiLoadGen;
     this.cdr.markForCheck();
@@ -2834,6 +2837,58 @@ private calculateCollaboratorTotals(memberData: Array<{
             .pipe(takeUntil(this.destroy$))
         );
         this.useParticipacaoReportsPagination = true;
+        const apiReceived = page.apiRowCount ?? page.items?.length ?? 0;
+        this.participacaoNextOffset = (page.offset ?? 0) + apiReceived;
+        if (typeof page.total === 'number' && Number.isFinite(page.total)) {
+          this.participacaoTotal = page.total;
+        }
+        this.participacaoHasMore = hasMoreFinishedDeliveriesCachedPage(
+          apiReceived,
+          this.participacaoPageLimit,
+          this.participacaoNextOffset,
+          this.participacaoTotal,
+          page.has_more
+        );
+
+        const baseClientes = this.mapTeamParticipacaoDeliveryRowsToCompanyDisplay(page.items || []);
+        const uniqueBase = this.dedupeParticipacaoClientes(baseClientes);
+        uniqueBase.forEach(c => {
+          const status = this.cnpjStatusMap.get(c.cnpj);
+          if (status) {
+            c.status = status;
+          }
+        });
+        this.teamCarteiraClientes = uniqueBase;
+        this.isLoadingCarteira = false;
+        const skipGamificacaoKpi = !!page.fromCachedDeliveries;
+        this.isLoadingParticipacaoKpi = !skipGamificacaoKpi && uniqueBase.length > 0;
+        this.updateFormattedSidebarData();
+        this.syncEntregasPrazoKpiFromParticipacao();
+        this.cdr.markForCheck();
+
+        if (uniqueBase.length > 0 && !skipGamificacaoKpi) {
+          void this.applyParticipacaoPorcEntregasKpiAfterGamificacaoAsync(uniqueBase, loadGen).catch(
+            (err: unknown) => console.error('📊 Falha ao aplicar KPI de entregas (gamificação, painel equipa):', err)
+          );
+        }
+        return;
+      }
+
+      // Paginação por email (`finished/deliveries/cached`): drill-down de colaborador no painel equipa
+      if (
+        !useTeam &&
+        playerId &&
+        this.playerService.usesGame4uWalletFromStats() &&
+        this.selectedMonth != null
+      ) {
+        const month = this.selectedMonth!;
+        const page = await firstValueFrom(
+          this.actionLogService
+            .getPlayerFinishedDeliveriesParticipacaoPage(playerId, month, 0, this.participacaoPageLimit)
+            .pipe(takeUntil(this.destroy$))
+        );
+        this.useParticipacaoReportsPagination = true;
+        this.participacaoPagedPlayerId = playerId;
         const apiReceived = page.apiRowCount ?? page.items?.length ?? 0;
         this.participacaoNextOffset = (page.offset ?? 0) + apiReceived;
         if (typeof page.total === 'number' && Number.isFinite(page.total)) {
@@ -2999,8 +3054,7 @@ private calculateCollaboratorTotals(memberData: Array<{
       this.useParticipacaoReportsPagination &&
       !this.isLoadingCarteira &&
       !this.isLoadingCarteiraMore &&
-      this.participacaoHasMore &&
-      this.teamCarteiraClientes.length > 0
+      this.participacaoHasMore
     );
   }
 
@@ -3013,69 +3067,86 @@ private calculateCollaboratorTotals(memberData: Array<{
     ) {
       return;
     }
-    if (!this.selectedMonth || !this.getGame4uTeamScopeId()) {
+    if (!this.selectedMonth) {
       return;
     }
-    const teamTid = this.getGame4uTeamScopeId()!;
     const month = this.selectedMonth;
     this.isLoadingCarteiraMore = true;
     const loadGen = this.participacaoKpiLoadGen;
     this.cdr.markForCheck();
 
-    this.teamAggregateService
-      .getTeamFinishedDeliveriesParticipacaoPage(
-        teamTid,
-        month,
-        this.participacaoNextOffset,
-        this.participacaoPageLimit
-      )
-      .pipe(takeUntil(this.destroy$))
-      .subscribe({
-        next: async page => {
-          try {
-            const appended = this.mapTeamParticipacaoDeliveryRowsToCompanyDisplay(page.items || []);
-            const merged = this.dedupeParticipacaoClientes([...this.teamCarteiraClientes, ...appended]);
-            this.teamCarteiraClientes = merged;
+    const page$ = this.participacaoPagedPlayerId
+      ? this.actionLogService.getPlayerFinishedDeliveriesParticipacaoPage(
+          this.participacaoPagedPlayerId,
+          month,
+          this.participacaoNextOffset,
+          this.participacaoPageLimit
+        )
+      : (() => {
+          const teamTid = this.getGame4uTeamScopeId();
+          if (!teamTid) {
+            return null;
+          }
+          return this.teamAggregateService.getTeamFinishedDeliveriesParticipacaoPage(
+            teamTid,
+            month,
+            this.participacaoNextOffset,
+            this.participacaoPageLimit
+          );
+        })();
 
-            const apiReceived = page.apiRowCount ?? page.items?.length ?? 0;
-            if (typeof page.total === 'number' && Number.isFinite(page.total)) {
-              this.participacaoTotal = page.total;
-            }
-            this.participacaoNextOffset = (page.offset ?? 0) + apiReceived;
-            this.participacaoHasMore = hasMoreFinishedDeliveriesCachedPage(
-              apiReceived,
-              this.participacaoPageLimit,
-              this.participacaoNextOffset,
-              this.participacaoTotal,
-              page.has_more
-            );
+    if (!page$) {
+      this.isLoadingCarteiraMore = false;
+      this.cdr.markForCheck();
+      return;
+    }
 
-            const skipGamificacaoKpi = !!page.fromCachedDeliveries;
-            this.isLoadingParticipacaoKpi = !skipGamificacaoKpi && merged.length > 0;
-            this.updateFormattedSidebarData();
+    page$.pipe(takeUntil(this.destroy$)).subscribe({
+      next: async page => {
+        try {
+          const appended = this.mapTeamParticipacaoDeliveryRowsToCompanyDisplay(page.items || []);
+          const merged = this.dedupeParticipacaoClientes([...this.teamCarteiraClientes, ...appended]);
+          this.teamCarteiraClientes = merged;
+
+          const apiReceived = page.apiRowCount ?? page.items?.length ?? 0;
+          if (typeof page.total === 'number' && Number.isFinite(page.total)) {
+            this.participacaoTotal = page.total;
+          }
+          this.participacaoNextOffset = (page.offset ?? this.participacaoNextOffset) + apiReceived;
+          this.participacaoHasMore = hasMoreFinishedDeliveriesCachedPage(
+            apiReceived,
+            this.participacaoPageLimit,
+            this.participacaoNextOffset,
+            this.participacaoTotal,
+            page.has_more
+          );
+
+          const skipGamificacaoKpi = !!page.fromCachedDeliveries;
+          this.isLoadingParticipacaoKpi = !skipGamificacaoKpi && merged.length > 0;
+          this.updateFormattedSidebarData();
+          this.syncEntregasPrazoKpiFromParticipacao();
+          this.cdr.markForCheck();
+
+          if (merged.length > 0 && !skipGamificacaoKpi) {
+            await this.applyParticipacaoPorcEntregasKpiAfterGamificacaoAsync(merged, loadGen);
+          } else if (merged.length > 0 && skipGamificacaoKpi) {
+            this.isLoadingParticipacaoKpi = false;
             this.syncEntregasPrazoKpiFromParticipacao();
             this.cdr.markForCheck();
-
-            if (merged.length > 0 && !skipGamificacaoKpi) {
-              await this.applyParticipacaoPorcEntregasKpiAfterGamificacaoAsync(merged, loadGen);
-            } else if (merged.length > 0 && skipGamificacaoKpi) {
-              this.isLoadingParticipacaoKpi = false;
-              this.syncEntregasPrazoKpiFromParticipacao();
-              this.cdr.markForCheck();
-            }
-          } catch (err) {
-            console.error('📊 Falha ao aplicar KPI após carregar mais participação (painel equipa):', err);
-          } finally {
-            this.isLoadingCarteiraMore = false;
-            this.cdr.markForCheck();
           }
-        },
-        error: err => {
-          console.error('📊 Failed to load more participação (painel equipa):', err);
+        } catch (err) {
+          console.error('📊 Falha ao aplicar KPI após carregar mais participação (painel equipa):', err);
+        } finally {
           this.isLoadingCarteiraMore = false;
           this.cdr.markForCheck();
         }
-      });
+      },
+      error: err => {
+        console.error('📊 Failed to load more participação (painel equipa):', err);
+        this.isLoadingCarteiraMore = false;
+        this.cdr.markForCheck();
+      }
+    });
   }
 
   retryClientesAtendidosThisMonth(): void {
