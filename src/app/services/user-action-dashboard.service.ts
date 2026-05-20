@@ -1256,7 +1256,7 @@ export class UserActionDashboardService {
   }
 
   /**
-   * Ações de um cliente/entrega no mês usando GET `/user-action/search` (mais eficiente).
+   * Ações de um cliente/entrega no mês - filtra as ações do usuário específico naquela entrega.
    */
   getClienteActionsForDelivery(
     playerId: string,
@@ -1271,8 +1271,10 @@ export class UserActionDashboardService {
       return of([]);
     }
 
-    // Use the existing search-based method which is more efficient
-    return this.getDeliveryDetailActionsFromUserActionSearch(deliveryId, month);
+    // Fetch user's actions for the month, then filter by delivery_id
+    return from(this.fetchAllUserActionsForMonthViaSearch(userEmail, month)).pipe(
+      map(items => this.toClienteActionItemsForDelivery(items, deliveryId, month, false))
+    );
   }
 
   private monthBoundsIso(month: Date): { start: string; end: string } {
