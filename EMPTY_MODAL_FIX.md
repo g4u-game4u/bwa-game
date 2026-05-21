@@ -1,9 +1,11 @@
-# Empty Modal Fix - Status DONE and DELIVERED Filter
+# Empty Modal Fix - Status DONE and DELIVERED Filter + Month Filter Issue
 
 ## Problem
 The Clientes list was showing action counts for deliveries, but when clicking to open the modal detail, it showed "Nenhuma atividade encontrada" (no activities found).
 
-## Root Cause
+## Root Causes
+
+### 1. Pending Actions Without finished_at
 Actions in the list included **pending/in-progress actions** (with `finished_at: null`), but the modal was querying by `finished_at` date range, which returned 0 results for pending actions.
 
 Console logs showed many messages like:
@@ -11,8 +13,26 @@ Console logs showed many messages like:
 [referenceTimestamp] No finished_at, using created_at for action f9eb1b3f-ad2f-41c1-b197-8cfe22b7374f: 2026-05-20T15:06:06.844Z finished_at was: null
 ```
 
+### 2. Double Month Filtering Mismatch
+Even after filtering by status, there was a **double filtering issue**:
+- **API fetch**: Filtered by `finished_at_start` and `finished_at_end` (correct month based on when action was finished)
+- **Client-side**: `buildCarteiraCompanies` → `filterMonth` → `inSelectedMonth` → `referenceTimestamp` which falls back to `created_at`
+
+This caused actions to be excluded if their `finished_at` was in one month but `created_at` was in another month.
+
+**Example scenario**:
+- Action finished on May 15 (`finished_at: 2026-05-15`)
+- Action created on April 28 (`created_at: 2026-04-28`)
+- API correctly returns it for May (filtered by `finished_at`)
+- Client-side `filterMonth` incorrectly excludes it (checks `created_at` which is in April)
+
 ## Solution
+
+### 1. Filter by DONE and DELIVERED Status
 Filter to only fetch **finished actions** (DONE or DELIVERED status, which always have `finished_at` set) by adding `status: ['DONE', 'DELIVERED']` parameter to the API requests.
+
+### 2. Skip Redundant Month Filter
+Added `skipMonthFilter` parameter to `buildCarteiraCompanies` to avoid re-filtering when the API already filtered by `finished_at` range.
 
 ## Changes Made
 
@@ -69,6 +89,40 @@ const base: Record<string, string | string[]> = {
 - Updated to accept `Record<string, string | string[]>` to support array values
 - Removed the line that was deleting `status` from entries (now preserves status filter)
 - Updated type of `entries` variable to support arrays
+- Fixed `limit` parameter handling to work with arrays
+
+### 5. `buildCarteiraCompanies` (line 1133)
+**Purpose**: Build list of deliveries with action counts
+
+**Changes**:
+- Added `skipMonthFilter` parameter (default: `false`)
+- When `skipMonthFilter=true`, skips the `filterMonth` call
+- Updated console log to show skipMonthFilter status
+
+```typescript
+buildCarteiraCompanies(
+  items: UserActionRow[],
+  month: Date,
+  skipMonthFilter = false
+): { ... }[] {
+  const monthRows = skipMonthFilter ? items : this.filterMonth(items, month);
+  // ... rest of the method
+}
+```
+
+### 6. `getCarteiraEnriched` (line 1189)
+**Purpose**: Get enriched carteira list for dashboard
+
+**Changes**:
+- Calls `buildCarteiraCompanies(items, month, true)` with `skipMonthFilter=true`
+- Added comment explaining why: "API already filtered by finished_at range"
+
+### 7. `getDeliveryCount` (line 1217)
+**Purpose**: Count deliveries for a player in a month
+
+**Changes**:
+- Calls `buildCarteiraCompanies(items, month, true)` with `skipMonthFilter=true`
+- Added comment explaining why: "API already filtered by finished_at range"
 
 ## Why This Works
 
@@ -77,6 +131,7 @@ const base: Record<string, string | string[]> = {
 3. **No more null timestamps**: Eliminates the fallback to `created_at` for pending actions
 4. **Accurate counts**: Action counts in the list match what's shown in the modal
 5. **Complete coverage**: Includes both DONE (awaiting approval) and DELIVERED (fully completed) actions
+6. **No double filtering**: When API filters by `finished_at` range, client doesn't re-filter by `created_at`
 
 ## Status Workflow
 
@@ -90,18 +145,21 @@ Based on the codebase analysis:
 
 Only **DONE** and **DELIVERED** have `finished_at` reliably set.
 
-## User Clarification
+## User Clarifications
 
 From the user:
 > "created_at is when I create it in the system, the reliable info is always finished_at as it is set by the integration for when the user finished the action, which may be even before created_at."
 
 > "status can be done or delivered, not only done"
 
+> "check again for created at filters please" - Found and fixed the double filtering issue
+
 This confirms that:
 - `finished_at` is the source of truth (set by integration when user completes the action)
 - `created_at` is when the action is registered in the system (may be after `finished_at`)
 - Both DONE and DELIVERED actions have `finished_at` set
 - Pending/in-progress actions have `finished_at: null`
+- When API filters by `finished_at` range, we shouldn't re-filter by `created_at` on the client
 
 ## Testing Checklist
 
@@ -113,11 +171,13 @@ To verify the fix works:
 4. ✅ Verify the modal shows the same actions that were counted in the list
 5. ✅ Check console logs for:
    - `[fetchAllUserActionsForMonthViaSearch] Total finished actions fetched: X`
+   - `[buildCarteiraCompanies] Built Y deliveries, sorted by most recent action first (skipMonthFilter: true)`
    - `[getClienteActionsForDelivery] Fetched X total actions for user@email.com`
    - `[getClienteActionsForDelivery] Filtered to Y actions for delivery 123`
 6. ✅ Verify no more "Nenhuma atividade encontrada" errors for deliveries with actions
 7. ✅ Verify no more `[referenceTimestamp] No finished_at` warnings in console
 8. ✅ Verify both DONE and DELIVERED actions appear in the list and modal
+9. ✅ Verify actions with `finished_at` in current month but `created_at` in previous month are included
 
 ## API Query Format
 

@@ -1128,12 +1128,14 @@ export class UserActionDashboardService {
 
   /**
    * Carteira = uma linha por entrega (delivery_id) com atividades no mês.
+   * @param skipMonthFilter - Se true, assume que items já foram filtrados pelo mês (ex: via API finished_at range)
    */
   buildCarteiraCompanies(
     items: UserActionRow[],
-    month: Date
+    month: Date,
+    skipMonthFilter = false
   ): { cnpj: string; actionCount: number; deliveryId: string; deliveryTitle?: string }[] {
-    const monthRows = this.filterMonth(items, month);
+    const monthRows = skipMonthFilter ? items : this.filterMonth(items, month);
     const byDelivery = new Map<string, UserActionRow[]>();
     for (const r of monthRows) {
       const did = (r.delivery_id || '').trim();
@@ -1177,12 +1179,13 @@ export class UserActionDashboardService {
       if (timeDiff !== 0) return timeDiff;
       return b.actionCount - a.actionCount;
     });
-    console.log(`[buildCarteiraCompanies] Built ${result.length} deliveries, sorted by most recent action first`);
+    console.log(`[buildCarteiraCompanies] Built ${result.length} deliveries, sorted by most recent action first (skipMonthFilter: ${skipMonthFilter})`);
     return result;
   }
 
   /**
    * Carteira enriquecida com KPIs usando GET `/user-action/search` para melhor controle de paginação e filtros.
+   * Usa finished_at range na API, então não precisa re-filtrar por mês no cliente.
    */
   getCarteiraEnriched(
     playerId: string,
@@ -1198,7 +1201,8 @@ export class UserActionDashboardService {
 
     return from(this.fetchAllUserActionsForMonthViaSearch(userEmail, month)).pipe(
       switchMap(items => {
-        const companies = this.buildCarteiraCompanies(items, month);
+        // skipMonthFilter=true because API already filtered by finished_at range
+        const companies = this.buildCarteiraCompanies(items, month, true);
         if (companies.length === 0) {
           return of([]);
         }
@@ -1209,6 +1213,7 @@ export class UserActionDashboardService {
 
   /**
    * Contagem de entregas (deliveries) no mês usando GET `/user-action/search` (mais eficiente).
+   * Usa finished_at range na API, então não precisa re-filtrar por mês no cliente.
    */
   getDeliveryCount(
     playerId: string,
@@ -1223,7 +1228,8 @@ export class UserActionDashboardService {
     }
 
     return from(this.fetchAllUserActionsForMonthViaSearch(userEmail, month)).pipe(
-      map(items => this.buildCarteiraCompanies(items, month).length)
+      // skipMonthFilter=true because API already filtered by finished_at range
+      map(items => this.buildCarteiraCompanies(items, month, true).length)
     );
   }
 
