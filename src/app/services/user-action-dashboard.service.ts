@@ -1266,6 +1266,8 @@ export class UserActionDashboardService {
   ): Observable<ClienteActionItem[]> {
     const userEmail = this.resolvePlayerKeyWithRoster(playerId, roster ?? null) || playerId.trim();
     
+    console.log(`[getClienteActionsForDelivery] playerId: ${playerId}, userEmail: ${userEmail}, deliveryId: ${deliveryId}`);
+    
     if (!userEmail || !looksLikeEmail(userEmail)) {
       console.warn('[getClienteActionsForDelivery] Invalid user email:', userEmail);
       return of([]);
@@ -1273,7 +1275,12 @@ export class UserActionDashboardService {
 
     // Fetch user's actions for the month, then filter by delivery_id
     return from(this.fetchAllUserActionsForMonthViaSearch(userEmail, month)).pipe(
-      map(items => this.toClienteActionItemsForDelivery(items, deliveryId, month, false))
+      map(items => {
+        console.log(`[getClienteActionsForDelivery] Fetched ${items.length} total actions for ${userEmail}`);
+        const filtered = this.toClienteActionItemsForDelivery(items, deliveryId, month, false);
+        console.log(`[getClienteActionsForDelivery] Filtered to ${filtered.length} actions for delivery ${deliveryId}`);
+        return filtered;
+      })
     );
   }
 
