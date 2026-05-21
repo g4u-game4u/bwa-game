@@ -295,7 +295,8 @@ export class UserActionDashboardService {
     base: Record<string, string | string[]>
   ): Promise<UserActionRow[]> {
     const limRaw = base['limit'] || '500'; // Increased default from 200 to 500
-    const limit = Math.min(Math.max(parseInt(limRaw, 10) || 500, 1), 500);
+    const limitStr = Array.isArray(limRaw) ? limRaw[0] : limRaw;
+    const limit = Math.min(Math.max(parseInt(limitStr, 10) || 500, 1), 500);
     const merged: UserActionRow[] = [];
     let page = 1;
     let pageToken: string | null = null;
