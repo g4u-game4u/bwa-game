@@ -371,6 +371,7 @@ export class UserActionDashboardService {
   /**
    * Todas as user actions da entrega na janela: busca ações DONE e DELIVERED separadamente e combina.
    * Usa `finished_at_start` / `finished_at_end` para filtrar pelo mês correto.
+   * Usa formato de data simples (YYYY-MM-DD) como no Postman.
    */
   private async fetchDeliveryActionsViaUserActionSearch(
     deliveryId: string,
@@ -383,6 +384,7 @@ export class UserActionDashboardService {
     }
     
     console.log(`[fetchDeliveryActionsViaUserActionSearch] Fetching DONE and DELIVERED actions for delivery ${did}`);
+    console.log(`[fetchDeliveryActionsViaUserActionSearch] Date range: ${finishedAtStart} to ${finishedAtEnd}`);
     
     // Fetch DONE and DELIVERED separately to ensure OR logic
     const baseDone: Record<string, string | string[]> = {
@@ -499,6 +501,7 @@ export class UserActionDashboardService {
    * Mais eficiente e com melhor controle de paginação do que `/game/actions`.
    * Usa finished_at para filtrar apenas ações finalizadas (DONE ou DELIVERED).
    * Faz duas requisições separadas para garantir lógica OR.
+   * Usa formato de data simples (YYYY-MM-DD) como no Postman.
    */
   async fetchAllUserActionsForMonthViaSearch(
     userEmail: string,
@@ -506,13 +509,17 @@ export class UserActionDashboardService {
   ): Promise<UserActionRow[]> {
     const year = month.getFullYear();
     const monthIndex = month.getMonth();
-    const rangeStart = new Date(year, monthIndex, 1, 0, 0, 0, 0);
-    const rangeEnd = new Date(year, monthIndex + 1, 0, 23, 59, 59, 999);
+    
+    // Format dates as YYYY-MM-DD (simple date format like Postman)
+    const finishedAtStart = `${year}-${String(monthIndex + 1).padStart(2, '0')}-01`;
+    
+    // Last day of month
+    const lastDay = new Date(year, monthIndex + 1, 0).getDate();
+    const finishedAtEnd = `${year}-${String(monthIndex + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
 
-    const finishedAtStart = rangeStart.toISOString();
-    const finishedAtEnd = rangeEnd.toISOString();
-
-    console.log(`[fetchAllUserActionsForMonthViaSearch] Fetching DONE and DELIVERED actions for ${userEmail}, month: ${year}-${monthIndex + 1}`);
+    console.log(`[fetchAllUserActionsForMonthViaSearch] Fetching DONE and DELIVERED actions for ${userEmail}`);
+    console.log(`[fetchAllUserActionsForMonthViaSearch] Month: ${year}-${String(monthIndex + 1).padStart(2, '0')}`);
+    console.log(`[fetchAllUserActionsForMonthViaSearch] Date range: ${finishedAtStart} to ${finishedAtEnd}`);
     
     // Fetch DONE and DELIVERED separately to ensure OR logic
     const baseDone: Record<string, string | string[]> = {
@@ -1326,9 +1333,15 @@ export class UserActionDashboardService {
   private monthBoundsIso(month: Date): { start: string; end: string } {
     const y = month.getFullYear();
     const m = month.getMonth();
-    const start = new Date(y, m, 1, 0, 0, 0, 0);
-    const end = new Date(y, m + 1, 0, 23, 59, 59, 999);
-    return { start: start.toISOString(), end: end.toISOString() };
+    
+    // Format as YYYY-MM-DD (simple date format like Postman)
+    const start = `${y}-${String(m + 1).padStart(2, '0')}-01`;
+    
+    // Last day of month
+    const lastDay = new Date(y, m + 1, 0).getDate();
+    const end = `${y}-${String(m + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+    
+    return { start, end };
   }
 
   /**
