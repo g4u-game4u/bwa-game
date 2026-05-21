@@ -369,7 +369,7 @@ export class UserActionDashboardService {
   }
 
   /**
-   * Todas as user actions da entrega na janela: busca apenas ações DONE ou DELIVERED (que têm finished_at).
+   * Todas as user actions da entrega na janela: busca ações DONE e DELIVERED separadamente e combina.
    * Usa `finished_at_start` / `finished_at_end` para filtrar pelo mês correto.
    */
   private async fetchDeliveryActionsViaUserActionSearch(
@@ -381,21 +381,36 @@ export class UserActionDashboardService {
     if (!did) {
       return [];
     }
-    const base: Record<string, string | string[]> = {
+    
+    console.log(`[fetchDeliveryActionsViaUserActionSearch] Fetching DONE and DELIVERED actions for delivery ${did}`);
+    
+    // Fetch DONE and DELIVERED separately to ensure OR logic
+    const baseDone: Record<string, string | string[]> = {
       delivery_id: did,
       finished_at_start: finishedAtStart,
       finished_at_end: finishedAtEnd,
       limit: '200',
-      status: ['DONE', 'DELIVERED'] // Fetch both finished statuses
+      status: 'DONE'
     };
     
-    console.log(`[fetchDeliveryActionsViaUserActionSearch] Fetching DONE and DELIVERED actions for delivery ${did}`);
+    const baseDelivered: Record<string, string | string[]> = {
+      delivery_id: did,
+      finished_at_start: finishedAtStart,
+      finished_at_end: finishedAtEnd,
+      limit: '200',
+      status: 'DELIVERED'
+    };
     
-    const actions = await this.fetchUserActionSearchAllPages(base).catch(
-      () => [] as UserActionRow[]
-    );
+    const [doneActions, deliveredActions] = await Promise.all([
+      this.fetchUserActionSearchAllPages(baseDone).catch(() => [] as UserActionRow[]),
+      this.fetchUserActionSearchAllPages(baseDelivered).catch(() => [] as UserActionRow[])
+    ]);
     
-    console.log(`[fetchDeliveryActionsViaUserActionSearch] Fetched ${actions.length} finished actions`);
+    // Combine and deduplicate
+    const combined = [...doneActions, ...deliveredActions];
+    const actions = this.dedupeUserActionRows(combined);
+    
+    console.log(`[fetchDeliveryActionsViaUserActionSearch] Fetched ${doneActions.length} DONE + ${deliveredActions.length} DELIVERED = ${actions.length} unique actions`);
     
     return actions;
   }
@@ -483,6 +498,7 @@ export class UserActionDashboardService {
    * Busca todas as user actions de um usuário no mês usando GET `/user-action/search`.
    * Mais eficiente e com melhor controle de paginação do que `/game/actions`.
    * Usa finished_at para filtrar apenas ações finalizadas (DONE ou DELIVERED).
+   * Faz duas requisições separadas para garantir lógica OR.
    */
   async fetchAllUserActionsForMonthViaSearch(
     userEmail: string,
@@ -496,19 +512,35 @@ export class UserActionDashboardService {
     const finishedAtStart = rangeStart.toISOString();
     const finishedAtEnd = rangeEnd.toISOString();
 
-    const base: Record<string, string | string[]> = {
+    console.log(`[fetchAllUserActionsForMonthViaSearch] Fetching DONE and DELIVERED actions for ${userEmail}, month: ${year}-${monthIndex + 1}`);
+    
+    // Fetch DONE and DELIVERED separately to ensure OR logic
+    const baseDone: Record<string, string | string[]> = {
       user_email: userEmail,
       finished_at_start: finishedAtStart,
       finished_at_end: finishedAtEnd,
-      limit: '500', // Request 500 items per page
-      status: ['DONE', 'DELIVERED'] // Fetch both finished statuses
+      limit: '500',
+      status: 'DONE'
     };
-
-    console.log(`[fetchAllUserActionsForMonthViaSearch] Fetching DONE and DELIVERED actions for ${userEmail}, month: ${year}-${monthIndex + 1}`);
     
-    const allActions = await this.fetchUserActionSearchAllPages(base);
+    const baseDelivered: Record<string, string | string[]> = {
+      user_email: userEmail,
+      finished_at_start: finishedAtStart,
+      finished_at_end: finishedAtEnd,
+      limit: '500',
+      status: 'DELIVERED'
+    };
     
-    console.log(`[fetchAllUserActionsForMonthViaSearch] Total finished actions fetched: ${allActions.length}`);
+    const [doneActions, deliveredActions] = await Promise.all([
+      this.fetchUserActionSearchAllPages(baseDone),
+      this.fetchUserActionSearchAllPages(baseDelivered)
+    ]);
+    
+    // Combine and deduplicate
+    const combined = [...doneActions, ...deliveredActions];
+    const allActions = this.dedupeUserActionRows(combined);
+    
+    console.log(`[fetchAllUserActionsForMonthViaSearch] Fetched ${doneActions.length} DONE + ${deliveredActions.length} DELIVERED = ${allActions.length} unique actions`);
     
     return allActions;
   }
