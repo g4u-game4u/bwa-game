@@ -287,12 +287,12 @@ export class UserActionDashboardService {
   }
 
   /**
-   * Todas as páginas de GET `/user-action/search` (delivery_id, datas, dismissed, limit; sem `status` — todos os estados).
+   * Todas as páginas de GET `/user-action/search` (delivery_id, datas, dismissed, limit; status pode ser string ou array).
    * Paginação: `page` ou `page_token`; continuação pelo corpo (`next_page_token` / variantes).
    * Nota: Backend não suporta `sort` - ordenação feita no cliente após fetch.
    */
   private async fetchUserActionSearchAllPages(
-    base: Record<string, string>
+    base: Record<string, string | string[]>
   ): Promise<UserActionRow[]> {
     const limRaw = base['limit'] || '500'; // Increased default from 200 to 500
     const limit = Math.min(Math.max(parseInt(limRaw, 10) || 500, 1), 500);
@@ -306,8 +306,7 @@ export class UserActionDashboardService {
     delete baseWithoutSort['sort'];
 
     for (let iter = 0; iter < maxIterations; iter++) {
-      const entries: Record<string, string> = { ...baseWithoutSort };
-      delete entries['status'];
+      const entries: Record<string, string | string[]> = { ...baseWithoutSort };
       delete entries['page'];
       delete entries['page_token'];
       entries['limit'] = String(limit);
@@ -369,8 +368,8 @@ export class UserActionDashboardService {
   }
 
   /**
-   * Todas as user actions da entrega na janela: duas buscas (dismissed false / true), sem filtro `status`.
-   * Usa `finished_at_start` / `finished_at_end` (não `created_at_*` / `updated_at`) para alinhar ao modal e ao painel.
+   * Todas as user actions da entrega na janela: busca apenas ações DONE ou DELIVERED (que têm finished_at).
+   * Usa `finished_at_start` / `finished_at_end` para filtrar pelo mês correto.
    */
   private async fetchDeliveryActionsViaUserActionSearch(
     deliveryId: string,
@@ -381,21 +380,23 @@ export class UserActionDashboardService {
     if (!did) {
       return [];
     }
-    const base = {
+    const base: Record<string, string | string[]> = {
       delivery_id: did,
       finished_at_start: finishedAtStart,
       finished_at_end: finishedAtEnd,
-      limit: '200'
+      limit: '200',
+      status: ['DONE', 'DELIVERED'] // Fetch both finished statuses
     };
-    const [a, b] = await Promise.all([
-      this.fetchUserActionSearchAllPages({ ...base, dismissed: 'false' }).catch(
-        () => [] as UserActionRow[]
-      ),
-      this.fetchUserActionSearchAllPages({ ...base, dismissed: 'true' }).catch(
-        () => [] as UserActionRow[]
-      )
-    ]);
-    return this.dedupeUserActionRows([...a, ...b]);
+    
+    console.log(`[fetchDeliveryActionsViaUserActionSearch] Fetching DONE and DELIVERED actions for delivery ${did}`);
+    
+    const actions = await this.fetchUserActionSearchAllPages(base).catch(
+      () => [] as UserActionRow[]
+    );
+    
+    console.log(`[fetchDeliveryActionsViaUserActionSearch] Fetched ${actions.length} finished actions`);
+    
+    return actions;
   }
 
   /**
@@ -480,6 +481,7 @@ export class UserActionDashboardService {
   /**
    * Busca todas as user actions de um usuário no mês usando GET `/user-action/search`.
    * Mais eficiente e com melhor controle de paginação do que `/game/actions`.
+   * Usa finished_at para filtrar apenas ações finalizadas (DONE ou DELIVERED).
    */
   async fetchAllUserActionsForMonthViaSearch(
     userEmail: string,
@@ -493,18 +495,19 @@ export class UserActionDashboardService {
     const finishedAtStart = rangeStart.toISOString();
     const finishedAtEnd = rangeEnd.toISOString();
 
-    const base: Record<string, string> = {
+    const base: Record<string, string | string[]> = {
       user_email: userEmail,
       finished_at_start: finishedAtStart,
       finished_at_end: finishedAtEnd,
-      limit: '500' // Request 500 items per page
+      limit: '500', // Request 500 items per page
+      status: ['DONE', 'DELIVERED'] // Fetch both finished statuses
     };
 
-    console.log(`[fetchAllUserActionsForMonthViaSearch] Fetching for ${userEmail}, month: ${year}-${monthIndex + 1}`);
+    console.log(`[fetchAllUserActionsForMonthViaSearch] Fetching DONE and DELIVERED actions for ${userEmail}, month: ${year}-${monthIndex + 1}`);
     
     const allActions = await this.fetchUserActionSearchAllPages(base);
     
-    console.log(`[fetchAllUserActionsForMonthViaSearch] Total actions fetched: ${allActions.length}`);
+    console.log(`[fetchAllUserActionsForMonthViaSearch] Total finished actions fetched: ${allActions.length}`);
     
     return allActions;
   }
@@ -745,12 +748,9 @@ export class UserActionDashboardService {
   private referenceTimestamp(row: UserActionRow): number {
     const ft = this.parseInstant(row.finished_at);
     if (ft > 0) {
-      console.log(`[referenceTimestamp] Using finished_at for action ${row.id}:`, new Date(ft).toISOString());
       return ft;
     }
-    const ct = this.parseInstant(row.created_at);
-    console.log(`[referenceTimestamp] No finished_at, using created_at for action ${row.id}:`, new Date(ct).toISOString(), 'finished_at was:', row.finished_at);
-    return ct;
+    return this.parseInstant(row.created_at);
   }
 
   inSelectedMonth(row: UserActionRow, month: Date): boolean {
