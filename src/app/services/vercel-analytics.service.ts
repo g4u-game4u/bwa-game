@@ -1,12 +1,11 @@
 import { Injectable, PLATFORM_ID, Inject } from '@angular/core';
 import { isPlatformBrowser } from '@angular/common';
-import { injectSpeedInsights } from '@vercel/speed-insights';
 import { environment } from '../../environments/environment';
 
 /**
- * Service to initialize Vercel Speed Insights
- * This service handles the initialization of Vercel Speed Insights for tracking page performance
- * Uses the official @vercel/speed-insights package (framework-agnostic, no React/Next.js dependencies)
+ * Service to initialize Vercel Analytics
+ * Currently disabled to avoid false positive security warnings from Vercel scanner
+ * Can be re-enabled when Vercel provides a truly framework-agnostic analytics package
  */
 @Injectable({
   providedIn: 'root'
@@ -17,9 +16,8 @@ export class VercelAnalyticsService {
   constructor(@Inject(PLATFORM_ID) private platformId: Object) {}
 
   /**
-   * Initialize Vercel Speed Insights
-   * Only runs in the browser (not during SSR)
-   * Uses the official injectSpeedInsights() function from @vercel/speed-insights package
+   * Initialize Vercel Analytics
+   * Currently disabled to avoid false positive security warnings
    */
   initialize(): void {
     if (this.initialized || !isPlatformBrowser(this.platformId)) {
@@ -32,15 +30,13 @@ export class VercelAnalyticsService {
     }
 
     try {
-      // Use the official injectSpeedInsights function from @vercel/speed-insights
-      injectSpeedInsights({
-        framework: 'angular',
-        debug: !environment.production
-      });
+      // Analytics disabled to avoid Vercel false positive security warnings
+      // Vercel's scanner detects optional peer dependencies (Next.js) even when not installed
+      console.log('ℹ️ Vercel Analytics disabled to avoid false positive security warnings');
       
       this.initialized = true;
     } catch (error) {
-      console.error('❌ Error initializing Vercel Speed Insights:', error);
+      console.error('❌ Error initializing Vercel Analytics:', error);
     }
   }
 }
