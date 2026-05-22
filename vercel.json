@@ -2,8 +2,8 @@
   "version": 2,
   "buildCommand": "npm run build",
   "outputDirectory": "dist/game4u-front",
-  "framework": "angular",
-  "installCommand": "npm ci",
+  "framework": null,
+  "installCommand": "npm ci --legacy-peer-deps",
   "devCommand": "npm start",
   "github": {
     "silent": true
