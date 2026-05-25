@@ -29,7 +29,7 @@ export class BackendUserActionApiService {
     return `${this.g4uBase()}/user-action/search`;
   }
 
-  private buildQueryUrl(base: string, entries: Record<string, string>): string {
+  private buildQueryUrl(base: string, entries: Record<string, string | string[]>): string {
     const qs = buildGame4uQueryString(entries);
     return qs ? `${base}?${qs}` : base;
   }
@@ -44,6 +44,7 @@ export class BackendUserActionApiService {
    * GET `/game/actions?start=&end=&user=` — `user` = e-mail do utilizador (ex.: query da API Game4U).
    * `status` opcional (ex.: DONE), como no cliente de referência.
    * `next_page_token` quando o gateway pagina (não enviar `page` — a API rejeita).
+   * Nota: Este endpoint NÃO suporta o parâmetro `limit`.
    */
   getGameActions(q: {
     start: string;
@@ -64,11 +65,13 @@ export class BackendUserActionApiService {
       entries['next_page_token'] = String(q.next_page_token).trim();
     }
     const url = this.buildQueryUrl(this.gameActionsUrl(), entries);
+    console.log('[API Request] GET /game/actions:', url, 'params:', entries);
     return this.http.get<unknown>(url, { headers: this.getHeaders() });
   }
 
   /**
    * GET `/game/team-actions?start=&end=&team=` — só `next_page_token` para continuar páginas (sem `page`).
+   * Nota: Este endpoint NÃO suporta o parâmetro `limit`.
    */
   getGameTeamActions(q: {
     start: string;
@@ -85,15 +88,19 @@ export class BackendUserActionApiService {
       entries['next_page_token'] = String(q.next_page_token).trim();
     }
     const url = this.buildQueryUrl(this.gameTeamActionsUrl(), entries);
+    console.log('[API Request] GET /game/team-actions:', url, 'params:', entries);
     return this.http.get<unknown>(url, { headers: this.getHeaders() });
   }
 
   /**
    * GET `/user-action/search` — alinhado ao `UserActionController_search` (delivery_id, status, `finished_at_*` ou `created_at_*`, limit, page | page_token, dismissed).
    * Query montada com o mesmo encoding de datas que `/game/actions`.
+   * Nota: Backend NÃO suporta parâmetro `sort` - ordenação deve ser feita no cliente.
+   * Status pode ser string única ou array de strings (ex.: ['DONE', 'DELIVERED']).
    */
-  getUserActionSearch(entries: Record<string, string>): Observable<unknown> {
+  getUserActionSearch(entries: Record<string, string | string[]>): Observable<unknown> {
     const url = this.buildQueryUrl(this.userActionSearchUrl(), entries);
+    console.log('[API Request] GET /user-action/search:', url, 'params:', entries);
     return this.http.get<unknown>(url, { headers: this.getHeaders() });
   }
 }

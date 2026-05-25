@@ -3,7 +3,7 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist/game4u-front",
   "framework": null,
-  "installCommand": "npm ci",
+  "installCommand": "npm ci --legacy-peer-deps",
   "devCommand": "npm start",
   "github": {
     "silent": true

@@ -97,6 +97,9 @@ coverage/
 # next.js build output
 .next
 
+# Vercel
+.vercel
+
 # nuxt.js build output
 .nuxt
 

@@ -287,22 +287,27 @@ export class UserActionDashboardService {
   }
 
   /**
-   * Todas as páginas de GET `/user-action/search` (delivery_id, datas, dismissed, limit; sem `status` — todos os estados).
+   * Todas as páginas de GET `/user-action/search` (delivery_id, datas, dismissed, limit; status pode ser string ou array).
    * Paginação: `page` ou `page_token`; continuação pelo corpo (`next_page_token` / variantes).
+   * Nota: Backend não suporta `sort` - ordenação feita no cliente após fetch.
    */
   private async fetchUserActionSearchAllPages(
-    base: Record<string, string>
+    base: Record<string, string | string[]>
   ): Promise<UserActionRow[]> {
-    const limRaw = base['limit'] || '200';
-    const limit = Math.min(Math.max(parseInt(limRaw, 10) || 200, 1), 500);
+    const limRaw = base['limit'] || '500'; // Increased default from 200 to 500
+    const limitStr = Array.isArray(limRaw) ? limRaw[0] : limRaw;
+    const limit = Math.min(Math.max(parseInt(limitStr, 10) || 500, 1), 500);
     const merged: UserActionRow[] = [];
     let page = 1;
     let pageToken: string | null = null;
     const maxIterations = 200;
 
+    // Remove sort parameter as backend doesn't support it
+    const baseWithoutSort = { ...base };
+    delete baseWithoutSort['sort'];
+
     for (let iter = 0; iter < maxIterations; iter++) {
-      const entries: Record<string, string> = { ...base };
-      delete entries['status'];
+      const entries: Record<string, string | string[]> = { ...baseWithoutSort };
       delete entries['page'];
       delete entries['page_token'];
       entries['limit'] = String(limit);
@@ -314,10 +319,14 @@ export class UserActionDashboardService {
 
       const body = await firstValueFrom(this.backendUserActionApi.getUserActionSearch(entries));
       const parsed = this.parsePage(body);
+      
+      console.log(`[fetchUserActionSearchAllPages] Page ${page}: fetched ${parsed.items.length} items, total so far: ${merged.length + parsed.items.length}`);
+      
       merged.push(...parsed.items);
 
       const nextTok = this.extractNextPageToken(body);
       if (nextTok) {
+        console.log(`[fetchUserActionSearchAllPages] Found next_page_token, continuing to next page`);
         pageToken = nextTok;
         continue;
       }
@@ -331,6 +340,7 @@ export class UserActionDashboardService {
       }
 
       if (parsed.items.length === 0) {
+        console.log(`[fetchUserActionSearchAllPages] No more items. Total fetched: ${merged.length}`);
         break;
       }
 
@@ -341,15 +351,27 @@ export class UserActionDashboardService {
         continue;
       }
 
+      console.log(`[fetchUserActionSearchAllPages] Completed. Total pages: ${totalPages}, Total items: ${merged.length}`);
       break;
     }
 
-    return this.dedupeUserActionRows(merged);
+    const deduped = this.dedupeUserActionRows(merged);
+    
+    // Sort by finished_at descending (newest first) on client side since backend doesn't support sort parameter
+    deduped.sort((a, b) => {
+      const aTime = this.referenceTimestamp(a);
+      const bTime = this.referenceTimestamp(b);
+      return bTime - aTime; // Descending order (newest first)
+    });
+    
+    console.log(`[fetchUserActionSearchAllPages] After deduplication and sorting: ${deduped.length} unique items`);
+    return deduped;
   }
 
   /**
-   * Todas as user actions da entrega na janela: duas buscas (dismissed false / true), sem filtro `status`.
-   * Usa `finished_at_start` / `finished_at_end` (não `created_at_*` / `updated_at`) para alinhar ao modal e ao painel.
+   * Todas as user actions da entrega na janela: busca ações DONE e DELIVERED separadamente e combina.
+   * Usa `finished_at_start` / `finished_at_end` para filtrar pelo mês correto.
+   * Usa formato de data simples (YYYY-MM-DD) como no Postman.
    */
   private async fetchDeliveryActionsViaUserActionSearch(
     deliveryId: string,
@@ -360,21 +382,39 @@ export class UserActionDashboardService {
     if (!did) {
       return [];
     }
-    const base = {
+    
+    console.log(`[fetchDeliveryActionsViaUserActionSearch] Fetching DONE and DELIVERED actions for delivery ${did}`);
+    console.log(`[fetchDeliveryActionsViaUserActionSearch] Date range: ${finishedAtStart} to ${finishedAtEnd}`);
+    
+    // Fetch DONE and DELIVERED separately to ensure OR logic
+    const baseDone: Record<string, string | string[]> = {
       delivery_id: did,
       finished_at_start: finishedAtStart,
       finished_at_end: finishedAtEnd,
-      limit: '200'
+      limit: '200',
+      status: 'DONE'
     };
-    const [a, b] = await Promise.all([
-      this.fetchUserActionSearchAllPages({ ...base, dismissed: 'false' }).catch(
-        () => [] as UserActionRow[]
-      ),
-      this.fetchUserActionSearchAllPages({ ...base, dismissed: 'true' }).catch(
-        () => [] as UserActionRow[]
-      )
+    
+    const baseDelivered: Record<string, string | string[]> = {
+      delivery_id: did,
+      finished_at_start: finishedAtStart,
+      finished_at_end: finishedAtEnd,
+      limit: '200',
+      status: 'DELIVERED'
+    };
+    
+    const [doneActions, deliveredActions] = await Promise.all([
+      this.fetchUserActionSearchAllPages(baseDone).catch(() => [] as UserActionRow[]),
+      this.fetchUserActionSearchAllPages(baseDelivered).catch(() => [] as UserActionRow[])
     ]);
-    return this.dedupeUserActionRows([...a, ...b]);
+    
+    // Combine and deduplicate
+    const combined = [...doneActions, ...deliveredActions];
+    const actions = this.dedupeUserActionRows(combined);
+    
+    console.log(`[fetchDeliveryActionsViaUserActionSearch] Fetched ${doneActions.length} DONE + ${deliveredActions.length} DELIVERED = ${actions.length} unique actions`);
+    
+    return actions;
   }
 
   /**
@@ -407,6 +447,7 @@ export class UserActionDashboardService {
     const maxIterations = 200;
     const merged: UserActionRow[] = [];
     let pageToken: string | null = null;
+    // Note: /game/actions doesn't support 'limit' parameter, only next_page_token pagination
 
     for (let iter = 0; iter < maxIterations; iter++) {
       const paging: { next_page_token?: string } = {};
@@ -436,18 +477,79 @@ export class UserActionDashboardService {
       }
 
       const parsed = this.parsePage(body);
+      console.log(`[fetchAllUserActions] Page ${iter + 1}: fetched ${parsed.items.length} items, total so far: ${merged.length + parsed.items.length}`);
       merged.push(...parsed.items);
 
       const nextTok = this.extractNextPageToken(body);
       if (nextTok) {
+        console.log(`[fetchAllUserActions] Found next_page_token, continuing to page ${iter + 2}`);
         pageToken = nextTok;
         continue;
       }
 
+      console.log(`[fetchAllUserActions] No more pages. Total items fetched: ${merged.length}`);
       break;
     }
 
-    return this.dedupeUserActionRows(merged);
+    const deduped = this.dedupeUserActionRows(merged);
+    console.log(`[fetchAllUserActions] After deduplication: ${deduped.length} unique items`);
+    return deduped;
+  }
+
+  /**
+   * Busca todas as user actions de um usuário no mês usando GET `/user-action/search`.
+   * Mais eficiente e com melhor controle de paginação do que `/game/actions`.
+   * Usa finished_at para filtrar apenas ações finalizadas (DONE ou DELIVERED).
+   * Faz duas requisições separadas para garantir lógica OR.
+   * Usa formato de data simples (YYYY-MM-DD) como no Postman.
+   */
+  async fetchAllUserActionsForMonthViaSearch(
+    userEmail: string,
+    month: Date
+  ): Promise<UserActionRow[]> {
+    const year = month.getFullYear();
+    const monthIndex = month.getMonth();
+    
+    // Format dates as YYYY-MM-DD (simple date format like Postman)
+    const finishedAtStart = `${year}-${String(monthIndex + 1).padStart(2, '0')}-01`;
+    
+    // Last day of month
+    const lastDay = new Date(year, monthIndex + 1, 0).getDate();
+    const finishedAtEnd = `${year}-${String(monthIndex + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+
+    console.log(`[fetchAllUserActionsForMonthViaSearch] Fetching DONE and DELIVERED actions for ${userEmail}`);
+    console.log(`[fetchAllUserActionsForMonthViaSearch] Month: ${year}-${String(monthIndex + 1).padStart(2, '0')}`);
+    console.log(`[fetchAllUserActionsForMonthViaSearch] Date range: ${finishedAtStart} to ${finishedAtEnd}`);
+    
+    // Fetch DONE and DELIVERED separately to ensure OR logic
+    const baseDone: Record<string, string | string[]> = {
+      user_email: userEmail,
+      finished_at_start: finishedAtStart,
+      finished_at_end: finishedAtEnd,
+      limit: '500',
+      status: 'DONE'
+    };
+    
+    const baseDelivered: Record<string, string | string[]> = {
+      user_email: userEmail,
+      finished_at_start: finishedAtStart,
+      finished_at_end: finishedAtEnd,
+      limit: '500',
+      status: 'DELIVERED'
+    };
+    
+    const [doneActions, deliveredActions] = await Promise.all([
+      this.fetchUserActionSearchAllPages(baseDone),
+      this.fetchUserActionSearchAllPages(baseDelivered)
+    ]);
+    
+    // Combine and deduplicate
+    const combined = [...doneActions, ...deliveredActions];
+    const allActions = this.dedupeUserActionRows(combined);
+    
+    console.log(`[fetchAllUserActionsForMonthViaSearch] Fetched ${doneActions.length} DONE + ${deliveredActions.length} DELIVERED = ${allActions.length} unique actions`);
+    
+    return allActions;
   }
 
   async fetchAllUserActions(playerKey: string): Promise<UserActionRow[]> {
@@ -609,14 +711,21 @@ export class UserActionDashboardService {
   }
 
   /**
-   * Métricas de atividade no mês para um jogador (GET `/game/actions`).
+   * Métricas de atividade no mês para um jogador usando GET `/user-action/search` (mais eficiente).
    */
   getActivityMetricsForPlayer(
     playerId: string,
     month: Date,
     roster?: ReadonlyArray<GameActionsUserRosterEntry> | null
   ): Observable<ActivityMetrics> {
-    return this.getActions(playerId, roster ?? null).pipe(
+    const userEmail = this.resolvePlayerKeyWithRoster(playerId, roster ?? null) || playerId.trim();
+    
+    if (!userEmail || !looksLikeEmail(userEmail)) {
+      console.warn('[getActivityMetricsForPlayer] Invalid user email:', userEmail);
+      return of({ finalizadas: 0, pontos: 0, pendentes: 0, dispensadas: 0, emExecucao: 0 });
+    }
+
+    return from(this.fetchAllUserActionsForMonthViaSearch(userEmail, month)).pipe(
       map(items => this.getActivityMetricsFromActions(items, month))
     );
   }
@@ -731,6 +840,7 @@ export class UserActionDashboardService {
       actionCount: number;
       deliveryId: string;
       deliveryTitle?: string;
+      latestActionTimestamp?: number;
     }[] = [];
     for (const [deliveryId, rows] of byDelivery) {
       const first = rows[0];
@@ -740,14 +850,25 @@ export class UserActionDashboardService {
         '';
       const cnpj = titleFromApi || `Entrega ${deliveryId}`;
       const deliveryTitle = (first.delivery_title && first.delivery_title.trim()) || undefined;
+      
+      // Find the most recent action timestamp for this delivery
+      const latestActionTimestamp = Math.max(...rows.map(r => this.referenceTimestamp(r)));
+      
       result.push({
         deliveryId,
         cnpj,
         actionCount: rows.length,
-        deliveryTitle
+        deliveryTitle,
+        latestActionTimestamp
       });
     }
-    result.sort((a, b) => b.actionCount - a.actionCount);
+    // Sort by most recent action first (descending timestamp), then by action count
+    result.sort((a, b) => {
+      const timeDiff = (b.latestActionTimestamp || 0) - (a.latestActionTimestamp || 0);
+      if (timeDiff !== 0) return timeDiff;
+      return b.actionCount - a.actionCount;
+    });
+    console.log(`[buildCarteiraCompaniesInRange] Built ${result.length} deliveries, sorted by most recent action first`);
     return result;
   }
 
@@ -1046,12 +1167,14 @@ export class UserActionDashboardService {
 
   /**
    * Carteira = uma linha por entrega (delivery_id) com atividades no mês.
+   * @param skipMonthFilter - Se true, assume que items já foram filtrados pelo mês (ex: via API finished_at range)
    */
   buildCarteiraCompanies(
     items: UserActionRow[],
-    month: Date
+    month: Date,
+    skipMonthFilter = false
   ): { cnpj: string; actionCount: number; deliveryId: string; deliveryTitle?: string }[] {
-    const monthRows = this.filterMonth(items, month);
+    const monthRows = skipMonthFilter ? items : this.filterMonth(items, month);
     const byDelivery = new Map<string, UserActionRow[]>();
     for (const r of monthRows) {
       const did = (r.delivery_id || '').trim();
@@ -1067,6 +1190,7 @@ export class UserActionDashboardService {
       actionCount: number;
       deliveryId: string;
       deliveryTitle?: string;
+      latestActionTimestamp?: number;
     }[] = [];
     for (const [deliveryId, rows] of byDelivery) {
       const first = rows[0];
@@ -1076,25 +1200,48 @@ export class UserActionDashboardService {
         '';
       const cnpj = titleFromApi || `Entrega ${deliveryId}`;
       const deliveryTitle = (first.delivery_title && first.delivery_title.trim()) || undefined;
+      
+      // Find the most recent action timestamp for this delivery
+      const latestActionTimestamp = Math.max(...rows.map(r => this.referenceTimestamp(r)));
+      
       result.push({
         deliveryId,
         cnpj,
         actionCount: rows.length,
-        deliveryTitle
+        deliveryTitle,
+        latestActionTimestamp
       });
     }
-    result.sort((a, b) => b.actionCount - a.actionCount);
+    // Sort by most recent action first (descending timestamp), then by action count
+    result.sort((a, b) => {
+      const timeDiff = (b.latestActionTimestamp || 0) - (a.latestActionTimestamp || 0);
+      if (timeDiff !== 0) return timeDiff;
+      return b.actionCount - a.actionCount;
+    });
+    console.log(`[buildCarteiraCompanies] Built ${result.length} deliveries, sorted by most recent action first (skipMonthFilter: ${skipMonthFilter})`);
     return result;
   }
 
+  /**
+   * Carteira enriquecida com KPIs usando GET `/user-action/search` para melhor controle de paginação e filtros.
+   * Usa finished_at range na API, então não precisa re-filtrar por mês no cliente.
+   */
   getCarteiraEnriched(
     playerId: string,
     month: Date,
     roster?: ReadonlyArray<GameActionsUserRosterEntry> | null
   ): Observable<CompanyDisplay[]> {
-    return this.getActions(playerId, roster ?? null).pipe(
+    const userEmail = this.resolvePlayerKeyWithRoster(playerId, roster ?? null) || playerId.trim();
+    
+    if (!userEmail || !looksLikeEmail(userEmail)) {
+      console.warn('[getCarteiraEnriched] Invalid user email:', userEmail);
+      return of([]);
+    }
+
+    return from(this.fetchAllUserActionsForMonthViaSearch(userEmail, month)).pipe(
       switchMap(items => {
-        const companies = this.buildCarteiraCompanies(items, month);
+        // skipMonthFilter=true because API already filtered by finished_at range
+        const companies = this.buildCarteiraCompanies(items, month, true);
         if (companies.length === 0) {
           return of([]);
         }
@@ -1103,13 +1250,25 @@ export class UserActionDashboardService {
     );
   }
 
+  /**
+   * Contagem de entregas (deliveries) no mês usando GET `/user-action/search` (mais eficiente).
+   * Usa finished_at range na API, então não precisa re-filtrar por mês no cliente.
+   */
   getDeliveryCount(
     playerId: string,
     month: Date,
     roster?: ReadonlyArray<GameActionsUserRosterEntry> | null
   ): Observable<number> {
-    return this.getActions(playerId, roster ?? null).pipe(
-      map(items => this.buildCarteiraCompanies(items, month).length)
+    const userEmail = this.resolvePlayerKeyWithRoster(playerId, roster ?? null) || playerId.trim();
+    
+    if (!userEmail || !looksLikeEmail(userEmail)) {
+      console.warn('[getDeliveryCount] Invalid user email:', userEmail);
+      return of(0);
+    }
+
+    return from(this.fetchAllUserActionsForMonthViaSearch(userEmail, month)).pipe(
+      // skipMonthFilter=true because API already filtered by finished_at range
+      map(items => this.buildCarteiraCompanies(items, month, true).length)
     );
   }
 
@@ -1142,23 +1301,47 @@ export class UserActionDashboardService {
       .sort((a, b) => b.created - a.created);
   }
 
+  /**
+   * Ações de um cliente/entrega no mês - filtra as ações do usuário específico naquela entrega.
+   */
   getClienteActionsForDelivery(
     playerId: string,
     deliveryId: string,
     month: Date,
     roster?: ReadonlyArray<GameActionsUserRosterEntry> | null
   ): Observable<ClienteActionItem[]> {
-    return this.getActions(playerId, roster ?? null).pipe(
-      map(items => this.toClienteActionItemsForDelivery(items, deliveryId, month))
+    const userEmail = this.resolvePlayerKeyWithRoster(playerId, roster ?? null) || playerId.trim();
+    
+    console.log(`[getClienteActionsForDelivery] playerId: ${playerId}, userEmail: ${userEmail}, deliveryId: ${deliveryId}`);
+    
+    if (!userEmail || !looksLikeEmail(userEmail)) {
+      console.warn('[getClienteActionsForDelivery] Invalid user email:', userEmail);
+      return of([]);
+    }
+
+    // Fetch user's actions for the month, then filter by delivery_id
+    return from(this.fetchAllUserActionsForMonthViaSearch(userEmail, month)).pipe(
+      map(items => {
+        console.log(`[getClienteActionsForDelivery] Fetched ${items.length} total actions for ${userEmail}`);
+        const filtered = this.toClienteActionItemsForDelivery(items, deliveryId, month, false);
+        console.log(`[getClienteActionsForDelivery] Filtered to ${filtered.length} actions for delivery ${deliveryId}`);
+        return filtered;
+      })
     );
   }
 
   private monthBoundsIso(month: Date): { start: string; end: string } {
     const y = month.getFullYear();
     const m = month.getMonth();
-    const start = new Date(y, m, 1, 0, 0, 0, 0);
-    const end = new Date(y, m + 1, 0, 23, 59, 59, 999);
-    return { start: start.toISOString(), end: end.toISOString() };
+    
+    // Format as YYYY-MM-DD (simple date format like Postman)
+    const start = `${y}-${String(m + 1).padStart(2, '0')}-01`;
+    
+    // Last day of month
+    const lastDay = new Date(y, m + 1, 0).getDate();
+    const end = `${y}-${String(m + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+    
+    return { start, end };
   }
 
   /**

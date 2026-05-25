@@ -1,7 +1,7 @@
 const _proc = typeof process !== 'undefined' ? process : { env: {} as Record<string, string | undefined> };
 
 const useApiProxyFlag = (() => {
-  const v = String(_proc.env.USE_API_PROXY ?? '').trim().toLowerCase();
+  const v = String(_proc.env['USE_API_PROXY'] ?? '').trim().toLowerCase();
   return v === 'true' || v === '1';
 })();
 
@@ -25,8 +25,8 @@ export const environment = {
    */
   g4u_api_base: useApiProxyFlag
     ? ''
-    : _proc.env.G4U_API_BASE ||
-      _proc.env.g4u_api_base ||
+    : _proc.env['G4U_API_BASE'] ||
+      _proc.env['g4u_api_base'] ||
       _proc.env['BACKEND_URL_BASE'] ||
       _proc.env['backend_url_base'] ||
       'http://localhost:3001',

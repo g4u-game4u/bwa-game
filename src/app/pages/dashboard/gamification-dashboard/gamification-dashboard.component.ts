@@ -1,6 +1,6 @@
 import { Component, OnInit, OnDestroy, HostListener, ChangeDetectionStrategy, ChangeDetectorRef, AfterViewInit } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
-import { Subject, forkJoin, of, firstValueFrom } from 'rxjs';
+import { Subject, forkJoin, of, firstValueFrom, from } from 'rxjs';
 import { takeUntil, switchMap, map } from 'rxjs/operators';
 
 import { PlayerService } from '@services/player.service';
@@ -975,7 +975,10 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     }
 
     forkJoin({
-      items: this.userActionDashboard.getActions(playerId),
+      items: from(this.userActionDashboard.fetchAllUserActionsForMonthViaSearch(
+        this.userActionDashboard.resolvePlayerKey(playerId),
+        this.selectedMonth
+      )),
       processo: this.actionLogService.getProcessMetrics(playerId, this.selectedMonth)
     })
       .pipe(takeUntil(this.destroy$))

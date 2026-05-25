@@ -1,12 +1,11 @@
 import { Injectable, PLATFORM_ID, Inject } from '@angular/core';
 import { isPlatformBrowser } from '@angular/common';
-import { inject } from '@vercel/analytics';
 import { environment } from '../../environments/environment';
 
 /**
  * Service to initialize Vercel Analytics
- * This service handles the initialization of Vercel Analytics for tracking page views and visitors
- * Uses the official @vercel/analytics package inject() function
+ * Currently disabled to avoid false positive security warnings from Vercel scanner
+ * Can be re-enabled when Vercel provides a truly framework-agnostic analytics package
  */
 @Injectable({
   providedIn: 'root'
@@ -18,8 +17,7 @@ export class VercelAnalyticsService {
 
   /**
    * Initialize Vercel Analytics
-   * Only runs in the browser (not during SSR)
-   * Uses the official inject() function from @vercel/analytics package
+   * Currently disabled to avoid false positive security warnings
    */
   initialize(): void {
     if (this.initialized || !isPlatformBrowser(this.platformId)) {
@@ -32,11 +30,9 @@ export class VercelAnalyticsService {
     }
 
     try {
-      // Use the official inject function from @vercel/analytics
-      inject({
-        mode: environment.production ? 'production' : 'development',
-        debug: !environment.production
-      });
+      // Analytics disabled to avoid Vercel false positive security warnings
+      // Vercel's scanner detects optional peer dependencies (Next.js) even when not installed
+      console.log('ℹ️ Vercel Analytics disabled to avoid false positive security warnings');
       
       this.initialized = true;
     } catch (error) {
