@@ -39,7 +39,10 @@ import {
   getManagementDashboardCachedRoleLabel,
   ManagementDashboardCachedRole
 } from '@utils/management-dashboard-role';
-import type { PlayerDashboardCachedParams } from '@model/game4u-api.model';
+import type {
+  PlayerDashboardCachedParams,
+  Game4uReportsFinishedDeliveryRow
+} from '@model/game4u-api.model';
 import { UserProfileService } from '@services/user-profile.service';
 import { UserProfile } from '@utils/user-profile';
 import { CompanyDisplay, CompanyKpiService } from '@services/company-kpi.service';
@@ -272,6 +275,61 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
 
   clientesAtendidosThisMonthCount: number | null = null;
   isLoadingClientesAtendidosCount = false;
+
+  // -----------------------------------------------------------------------------------------------
+  // Executive insights (mini dashboard)
+  // -----------------------------------------------------------------------------------------------
+  /**
+   * Insights agregados por título de processo (`delivery_title`) — origem:
+   * `GET /game/reports/{management/}finished/deliveries/cached`.
+   */
+  executiveInsightsTopProcesses: Array<{
+    deliveryTitle: string;
+    tasksTotal: number;
+    deliveriesCount: number;
+    onTimePct: number | null;
+    pct: number;
+  }> = [];
+
+  /**
+   * Ranking de jogadores no mês (top performers) — somatório de `tasks_total` por `user_email`.
+   * Não exposto quando o filtro está em um colaborador específico (cardinalidade = 1).
+   */
+  executiveInsightsTopPlayers: Array<{
+    email: string;
+    name: string;
+    initials: string;
+    tasksTotal: number;
+    clientsCount: number;
+    processesCount: number;
+    onTimePct: number | null;
+    pct: number;
+  }> = [];
+
+  /** Total de tarefas DONE/DELIVERED agregadas no mês a partir das linhas RAW (não usa fallback ao supervision/dashboard). */
+  executiveInsightsTotalTasks = 0;
+  /** Tarefas no prazo (somatório das linhas com `on_time_pct` ponderado por `tasks_total`). */
+  executiveInsightsOnTimeTasks = 0;
+  /** Total de jogadores distintos com pelo menos uma entrega no mês (`user_email`). */
+  executiveInsightsActivePlayers = 0;
+  /** Média de tarefas por jogador ativo no mês. */
+  executiveInsightsAvgTasksPerActivePlayer = 0;
+  /** Média de clientes únicos por jogador ativo no mês. */
+  executiveInsightsAvgClientsPerActivePlayer = 0;
+  /** Total de processos / entregas distintas no mês (linhas com `tasks_total > 0`). */
+  executiveInsightsTotalDeliveries = 0;
+  /** Total de processos / títulos únicos no mês. */
+  executiveInsightsDistinctProcesses = 0;
+  /** % de tarefas no prazo (média ponderada das linhas com `on_time_pct`). */
+  executiveInsightsOnTimePctOverall: number | null = null;
+
+  isLoadingExecutiveInsights = false;
+  hasExecutiveInsightsData = false;
+  hasExecutiveInsightsError = false;
+  /** Indica se o ranking de jogadores deve ser exibido (oculto no drill-down de colaborador único). */
+  showExecutiveInsightsPlayersRanking = false;
+  /** Geração de carga (evita race conditions com troca de mês/colaborador/equipa). */
+  private executiveInsightsLoadGen = 0;
 
   /** Cache de supervisão (`GET /game/reports/supervision/dashboard/cached`) indisponível para o mês. */
   teamSupervisionCacheMissing = false;
@@ -1408,7 +1466,11 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
         // Load carteira data first, then KPIs (which depend on carteira)
         await this.loadTeamCarteiraData(monthRange);
         await this.loadTeamKPIs();
-        
+
+        // Mini dashboard executivo (top processos / top performers / saúde do mês)
+        // — alimentado pelo cache `finished/deliveries/cached` por team_id.
+        void this.loadExecutiveInsights();
+
         // Update formatted sidebar data after KPIs are loaded (includes metas calculation)
         this.updateFormattedSidebarData();
         
@@ -1455,7 +1517,10 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       // Load carteira data first, then KPIs (which depend on carteira)
       await this.loadCollaboratorCarteiraData(collaboratorId, dateRange);
       await this.loadTeamKPIs(collaboratorId);
-      
+
+      // Mini dashboard executivo do colaborador (top processos / saúde no mês).
+      void this.loadExecutiveInsights();
+
       // Update formatted sidebar data after KPIs are loaded (includes metas calculation)
       this.updateFormattedSidebarData();
       
@@ -3554,6 +3619,311 @@ private calculateCollaboratorTotals(memberData: Array<{
     });
   }
 
+  // ============================================================================================
+  // EXECUTIVE INSIGHTS — mini dashboard com leitura agregada de
+  // `GET /game/reports/{management/}finished/deliveries/cached` (linhas RAW com `user_email`).
+  // ============================================================================================
+
+  /**
+   * Carrega o mini dashboard executivo com:
+   *  - Top processos finalizados no mês (somatório de `tasks_total` por `delivery_title`).
+   *  - Top performers (somatório de tarefas/clientes por `user_email`).
+   *  - Saúde do mês (% no prazo, ativos, médias).
+   *
+   * Usa apenas as 4 fontes pedidas: `management/dashboard/cached/overview`,
+   * `management/finished/deliveries/cached`, `supervision/dashboard/cached` e
+   * `finished/deliveries/cached` — sem chamar o action_log/aggregate.
+   */
+  private async loadExecutiveInsights(): Promise<void> {
+    const loadGen = ++this.executiveInsightsLoadGen;
+    this.isLoadingExecutiveInsights = true;
+    this.hasExecutiveInsightsData = false;
+    this.hasExecutiveInsightsError = false;
+    this.cdr.markForCheck();
+
+    try {
+      if (!this.playerService.usesGame4uWalletFromStats() || this.selectedMonth == null) {
+        this.resetExecutiveInsights();
+        return;
+      }
+
+      const month = this.selectedMonth;
+      const teamScopeId = this.getGame4uTeamScopeId() ?? '';
+
+      let scope:
+        | { teamId?: string; email?: string; isManagement?: boolean }
+        | null = null;
+      if (this.isManagementOverview) {
+        scope = { isManagement: true };
+        this.showExecutiveInsightsPlayersRanking = true;
+      } else if (this.selectedCollaborator) {
+        scope = { email: this.selectedCollaborator };
+        this.showExecutiveInsightsPlayersRanking = false;
+      } else if (teamScopeId) {
+        scope = { teamId: teamScopeId };
+        this.showExecutiveInsightsPlayersRanking = true;
+      }
+
+      if (!scope) {
+        this.resetExecutiveInsights();
+        return;
+      }
+
+      const rows = await firstValueFrom(
+        this.actionLogService
+          .getExecutiveDeliveriesAllPages(scope, month, 100)
+          .pipe(takeUntil(this.destroy$))
+      );
+
+      if (loadGen !== this.executiveInsightsLoadGen) {
+        return;
+      }
+
+      this.computeExecutiveInsightsFromRows(rows || []);
+    } catch (error) {
+      console.error('📊 Erro ao carregar insights executivos:', error);
+      if (loadGen === this.executiveInsightsLoadGen) {
+        this.resetExecutiveInsights();
+        this.hasExecutiveInsightsError = true;
+      }
+    } finally {
+      if (loadGen === this.executiveInsightsLoadGen) {
+        this.isLoadingExecutiveInsights = false;
+        this.cdr.markForCheck();
+      }
+    }
+  }
+
+  private resetExecutiveInsights(): void {
+    this.executiveInsightsTopProcesses = [];
+    this.executiveInsightsTopPlayers = [];
+    this.executiveInsightsTotalTasks = 0;
+    this.executiveInsightsOnTimeTasks = 0;
+    this.executiveInsightsActivePlayers = 0;
+    this.executiveInsightsAvgTasksPerActivePlayer = 0;
+    this.executiveInsightsAvgClientsPerActivePlayer = 0;
+    this.executiveInsightsTotalDeliveries = 0;
+    this.executiveInsightsDistinctProcesses = 0;
+    this.executiveInsightsOnTimePctOverall = null;
+    this.hasExecutiveInsightsData = false;
+  }
+
+  private computeExecutiveInsightsFromRows(rows: Game4uReportsFinishedDeliveryRow[]): void {
+    const safeRows = (rows || []).filter(r => r != null && Math.floor(Number(r.tasks_total) || 0) > 0);
+    if (safeRows.length === 0) {
+      this.resetExecutiveInsights();
+      return;
+    }
+
+    type ProcAcc = {
+      tasks: number;
+      deliveries: number;
+      onTimeWeighted: number;
+      tasksWithPct: number;
+    };
+    type PlayerAcc = {
+      tasks: number;
+      deliveries: number;
+      clients: Set<string>;
+      onTimeWeighted: number;
+      tasksWithPct: number;
+    };
+
+    const byProcess = new Map<string, ProcAcc>();
+    const byPlayer = new Map<string, PlayerAcc>();
+    const activePlayers = new Set<string>();
+    let totalTasks = 0;
+    let totalOnTimeTasks = 0;
+    let totalTasksWithPct = 0;
+
+    for (const row of safeRows) {
+      const tasks = Math.floor(Number(row.tasks_total) || 0);
+      if (tasks <= 0) {
+        continue;
+      }
+      totalTasks += tasks;
+
+      // tasks on time podem vir como `tasks_on_time` ou inferidos de `on_time_pct`
+      const tasksOnTimeExplicit = Math.floor(Number(row.tasks_on_time) || 0);
+      const otp = row.on_time_pct;
+      const hasOtp = otp != null && Number.isFinite(Number(otp));
+      if (tasksOnTimeExplicit > 0) {
+        totalOnTimeTasks += Math.min(tasksOnTimeExplicit, tasks);
+      } else if (hasOtp) {
+        totalOnTimeTasks += Math.round((Number(otp) / 100) * tasks);
+      }
+      if (hasOtp) {
+        totalTasksWithPct += tasks;
+      }
+
+      const title = (row.delivery_title || '').trim() || 'Sem título';
+      const pCur: ProcAcc = byProcess.get(title) ?? {
+        tasks: 0,
+        deliveries: 0,
+        onTimeWeighted: 0,
+        tasksWithPct: 0
+      };
+      pCur.tasks += tasks;
+      pCur.deliveries += 1;
+      if (hasOtp) {
+        pCur.onTimeWeighted += Number(otp) * tasks;
+        pCur.tasksWithPct += tasks;
+      }
+      byProcess.set(title, pCur);
+
+      const email = (row.user_email || '').trim().toLowerCase();
+      if (email) {
+        activePlayers.add(email);
+        const plCur: PlayerAcc = byPlayer.get(email) ?? {
+          tasks: 0,
+          deliveries: 0,
+          clients: new Set<string>(),
+          onTimeWeighted: 0,
+          tasksWithPct: 0
+        };
+        plCur.tasks += tasks;
+        plCur.deliveries += 1;
+        const clientKey = String(row.emp_id ?? row.delivery_id ?? title).trim();
+        if (clientKey) {
+          plCur.clients.add(clientKey);
+        }
+        if (hasOtp) {
+          plCur.onTimeWeighted += Number(otp) * tasks;
+          plCur.tasksWithPct += tasks;
+        }
+        byPlayer.set(email, plCur);
+      }
+    }
+
+    this.executiveInsightsTotalTasks = totalTasks;
+    this.executiveInsightsOnTimeTasks = totalOnTimeTasks;
+    this.executiveInsightsActivePlayers = activePlayers.size;
+    this.executiveInsightsTotalDeliveries = safeRows.length;
+    this.executiveInsightsDistinctProcesses = byProcess.size;
+    this.executiveInsightsAvgTasksPerActivePlayer =
+      activePlayers.size > 0 ? Math.round((totalTasks / activePlayers.size) * 10) / 10 : 0;
+
+    const sumClients = Array.from(byPlayer.values()).reduce((s, p) => s + p.clients.size, 0);
+    this.executiveInsightsAvgClientsPerActivePlayer =
+      activePlayers.size > 0 ? Math.round((sumClients / activePlayers.size) * 10) / 10 : 0;
+
+    this.executiveInsightsOnTimePctOverall =
+      totalTasksWithPct > 0
+        ? Math.round((totalOnTimeTasks / totalTasksWithPct) * 1000) / 10
+        : this.teamMonthOnTimeDeliveryPct;
+
+    const procArray = [...byProcess.entries()]
+      .map(([title, v]) => ({
+        deliveryTitle: title,
+        tasksTotal: v.tasks,
+        deliveriesCount: v.deliveries,
+        onTimePct:
+          v.tasksWithPct > 0 ? Math.round((v.onTimeWeighted / v.tasksWithPct) * 10) / 10 : null,
+        pct: totalTasks > 0 ? Math.round((v.tasks / totalTasks) * 1000) / 10 : 0
+      }))
+      .sort((a, b) => b.tasksTotal - a.tasksTotal);
+    this.executiveInsightsTopProcesses = procArray.slice(0, 6);
+
+    const totalPlayerTasks = Array.from(byPlayer.values()).reduce((s, p) => s + p.tasks, 0);
+    const playerArray = [...byPlayer.entries()]
+      .map(([email, v]) => {
+        const collab = this.collaborators.find(
+          c => c.userId?.toLowerCase() === email || c.email?.toLowerCase() === email
+        );
+        const formatted = this.formatCollaboratorName(email, collab?.name);
+        return {
+          email,
+          name: formatted,
+          initials: this.computeExecutiveInitials(formatted),
+          tasksTotal: v.tasks,
+          clientsCount: v.clients.size,
+          processesCount: v.deliveries,
+          onTimePct:
+            v.tasksWithPct > 0
+              ? Math.round((v.onTimeWeighted / v.tasksWithPct) * 10) / 10
+              : null,
+          pct: totalPlayerTasks > 0 ? Math.round((v.tasks / totalPlayerTasks) * 1000) / 10 : 0
+        };
+      })
+      .sort((a, b) => b.tasksTotal - a.tasksTotal);
+    this.executiveInsightsTopPlayers = playerArray.slice(0, 5);
+
+    this.hasExecutiveInsightsData = procArray.length > 0;
+  }
+
+  private computeExecutiveInitials(name: string): string {
+    const trimmed = (name || '').trim();
+    if (!trimmed) {
+      return '?';
+    }
+    const parts = trimmed.split(/\s+/).filter(Boolean);
+    if (parts.length === 1) {
+      return parts[0]!.slice(0, 2).toUpperCase();
+    }
+    const first = parts[0]![0] || '';
+    const last = parts[parts.length - 1]![0] || '';
+    return (first + last).toUpperCase();
+  }
+
+  /** Cor determinística (azul→roxo→verde) para a barra de top processos. */
+  getExecutiveProcessColor(idx: number): string {
+    const palette = ['#3b82f6', '#8b5cf6', '#22c55e', '#f59e0b', '#ec4899', '#06b6d4'];
+    return palette[idx % palette.length] || palette[0]!;
+  }
+
+  /** Classe CSS para o KPI de % no prazo, alinhado com paleta verde/amarelo/vermelho. */
+  getExecutiveOnTimeBadgeClass(pct: number | null | undefined): string {
+    if (pct == null || !Number.isFinite(pct)) {
+      return 'badge-neutral';
+    }
+    if (pct >= 90) {
+      return 'badge-success';
+    }
+    if (pct >= 70) {
+      return 'badge-warning';
+    }
+    return 'badge-danger';
+  }
+
+  /** Meta mensal de pontos do cache de supervisão (`month_goal_points`); `null` quando ausente. */
+  get executiveInsightsMonthlyGoalTarget(): number | null {
+    const goal = Math.floor(Number(this.teamSupervisionBundle?.monthlyGoalTarget) || 0);
+    return goal > 0 ? goal : null;
+  }
+
+  /** Pontos já entregues no mês (`month_points_done_delivered`) — espelho público de `activity.pontosDone`. */
+  get executiveInsightsMonthlyPointsDone(): number {
+    return Math.floor(Number(this.teamSupervisionBundle?.activity?.pontosDone) || 0);
+  }
+
+  /** % de evolução da meta de pontos do mês (0–100, capped). */
+  get executiveInsightsGoalProgressPct(): number {
+    const goal = this.executiveInsightsMonthlyGoalTarget ?? 0;
+    const done = this.executiveInsightsMonthlyPointsDone;
+    if (goal <= 0) {
+      return 0;
+    }
+    return Math.min(100, Math.round((done / goal) * 1000) / 10);
+  }
+
+  /** Total de tarefas pendentes do mês (cache `supervision/dashboard/cached`). */
+  get executiveInsightsPendingTasks(): number {
+    return Math.floor(Number(this.teamSupervisionBundle?.activity?.pendentes) || 0);
+  }
+
+  /** Tarefas finalizadas no mês conforme cache supervisão (preferido sobre soma das deliveries). */
+  get executiveInsightsFinishedTasksCached(): number {
+    return Math.floor(Number(this.teamSupervisionBundle?.activity?.finalizadas) || 0);
+  }
+
+  trackByExecutiveProcess(_idx: number, row: { deliveryTitle: string }): string {
+    return row?.deliveryTitle ?? String(_idx);
+  }
+
+  trackByExecutivePlayer(_idx: number, row: { email: string }): string {
+    return row?.email ?? String(_idx);
+  }
+
   /**
    * Handle team selection change event.
    * 
@@ -3674,6 +4044,10 @@ private calculateCollaboratorTotals(memberData: Array<{
 
       // Reaplica o pct do cache caso `loadParticipacaoClientesList` tenha re-sincronizado depois dos KPIs.
       this.syncEntregasPrazoKpiFromParticipacao();
+
+      // Mini dashboard executivo agregado da gestão (top processos / top performers globais).
+      void this.loadExecutiveInsights();
+
       this.updateFormattedSidebarData();
       this.updateTeamNameDisplay();
       this.lastRefresh = new Date();

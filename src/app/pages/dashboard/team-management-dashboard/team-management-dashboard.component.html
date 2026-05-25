@@ -450,6 +450,261 @@
                 </div>
               </c4u-card>
             </section>
+
+            <!--
+              Mini dashboard executivo: resumo gerencial do mês.
+              Origem: cache do back-end Game4U (
+                `GET /game/reports/management/dashboard/cached/overview`,
+                `GET /game/reports/management/finished/deliveries/cached`,
+                `GET /game/reports/supervision/dashboard/cached`,
+                `GET /game/reports/finished/deliveries/cached`
+              ). Não chama action_log/aggregate.
+            -->
+            <section
+              class="dashboard-section executive-insights-section"
+              [class.executive-insights-section--loading]="isLoadingExecutiveInsights"
+              [attr.aria-busy]="isLoadingExecutiveInsights ? 'true' : null"
+              aria-labelledby="executive-insights-title">
+              <div class="section-header">
+                <h3 id="executive-insights-title" class="section-title">
+                  <i class="ri-pie-chart-2-line section-title-icon" aria-hidden="true"></i>
+                  Insights executivos do mês
+                  <c4u-info-button
+                    [infoKey]="''"
+                    [customText]="'Resumo gerencial cruzando ' + (selectedCollaborator ? 'as entregas finalizadas pelo colaborador' : 'as entregas finalizadas pelo time') + ' no mês selecionado. Inclui top processos, jogador de destaque e indicadores de saúde — calculados a partir do cache do Game4U.'"
+                    position="bottom">
+                  </c4u-info-button>
+                </h3>
+              </div>
+
+              <c4u-card class="executive-insights-card">
+                <c4u-shimmer *ngIf="isLoadingExecutiveInsights"></c4u-shimmer>
+
+                <div *ngIf="!isLoadingExecutiveInsights && hasExecutiveInsightsData" class="executive-insights-body">
+                  <!-- KPI cards (row) -->
+                  <div class="executive-kpi-row" role="list" aria-label="Indicadores executivos do mês">
+                    <div class="executive-kpi" role="listitem">
+                      <div class="executive-kpi-icon executive-kpi-icon--tasks" aria-hidden="true">
+                        <i class="ri-checkbox-circle-line"></i>
+                      </div>
+                      <div class="executive-kpi-content">
+                        <span class="executive-kpi-value">
+                          {{ executiveInsightsTotalTasks | number:'1.0-0':'pt-BR' }}
+                        </span>
+                        <span class="executive-kpi-label">Tarefas finalizadas</span>
+                        <span
+                          *ngIf="executiveInsightsActivePlayers > 0 && !selectedCollaborator"
+                          class="executive-kpi-hint">
+                          ~{{ executiveInsightsAvgTasksPerActivePlayer | number:'1.0-1':'pt-BR' }} por pessoa ativa
+                        </span>
+                      </div>
+                    </div>
+
+                    <div class="executive-kpi" role="listitem">
+                      <div
+                        class="executive-kpi-icon executive-kpi-icon--ontime"
+                        [ngClass]="getExecutiveOnTimeBadgeClass(executiveInsightsOnTimePctOverall)"
+                        aria-hidden="true">
+                        <i class="ri-time-line"></i>
+                      </div>
+                      <div class="executive-kpi-content">
+                        <ng-container *ngIf="executiveInsightsOnTimePctOverall != null; else noOnTime">
+                          <span class="executive-kpi-value">
+                            {{ executiveInsightsOnTimePctOverall | number:'1.0-1':'pt-BR' }}%
+                          </span>
+                          <span class="executive-kpi-label">Tarefas no prazo</span>
+                          <span
+                            *ngIf="executiveInsightsOnTimeTasks > 0"
+                            class="executive-kpi-hint">
+                            {{ executiveInsightsOnTimeTasks | number:'1.0-0':'pt-BR' }} de
+                            {{ executiveInsightsTotalTasks | number:'1.0-0':'pt-BR' }}
+                          </span>
+                        </ng-container>
+                        <ng-template #noOnTime>
+                          <span class="executive-kpi-value executive-kpi-value--muted">n/a</span>
+                          <span class="executive-kpi-label">Tarefas no prazo</span>
+                        </ng-template>
+                      </div>
+                    </div>
+
+                    <div *ngIf="!selectedCollaborator" class="executive-kpi" role="listitem">
+                      <div class="executive-kpi-icon executive-kpi-icon--people" aria-hidden="true">
+                        <i class="ri-team-line"></i>
+                      </div>
+                      <div class="executive-kpi-content">
+                        <span class="executive-kpi-value">
+                          {{ executiveInsightsActivePlayers | number:'1.0-0':'pt-BR' }}
+                        </span>
+                        <span class="executive-kpi-label">Pessoas ativas no mês</span>
+                        <span
+                          *ngIf="executiveInsightsAvgClientsPerActivePlayer > 0"
+                          class="executive-kpi-hint">
+                          ~{{ executiveInsightsAvgClientsPerActivePlayer | number:'1.0-1':'pt-BR' }} clientes / pessoa
+                        </span>
+                      </div>
+                    </div>
+
+                    <div class="executive-kpi" role="listitem">
+                      <div class="executive-kpi-icon executive-kpi-icon--goal" aria-hidden="true">
+                        <i class="ri-flag-2-line"></i>
+                      </div>
+                      <div class="executive-kpi-content">
+                        <ng-container *ngIf="executiveInsightsMonthlyGoalTarget; else noGoal">
+                          <span class="executive-kpi-value">
+                            {{ executiveInsightsGoalProgressPct | number:'1.0-1':'pt-BR' }}%
+                          </span>
+                          <span class="executive-kpi-label">Da meta do mês</span>
+                          <span class="executive-kpi-hint">
+                            {{ executiveInsightsMonthlyPointsDone | number:'1.0-0':'pt-BR' }}
+                            / {{ executiveInsightsMonthlyGoalTarget | number:'1.0-0':'pt-BR' }} pts
+                          </span>
+                        </ng-container>
+                        <ng-template #noGoal>
+                          <span class="executive-kpi-value executive-kpi-value--muted">—</span>
+                          <span class="executive-kpi-label">Da meta do mês</span>
+                          <span class="executive-kpi-hint">Meta não definida</span>
+                        </ng-template>
+                      </div>
+                    </div>
+
+                    <div *ngIf="executiveInsightsPendingTasks > 0" class="executive-kpi" role="listitem">
+                      <div class="executive-kpi-icon executive-kpi-icon--pending" aria-hidden="true">
+                        <i class="ri-hourglass-line"></i>
+                      </div>
+                      <div class="executive-kpi-content">
+                        <span class="executive-kpi-value">
+                          {{ executiveInsightsPendingTasks | number:'1.0-0':'pt-BR' }}
+                        </span>
+                        <span class="executive-kpi-label">Tarefas pendentes</span>
+                        <span class="executive-kpi-hint">no mês selecionado</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Two columns: Top processos x Top performers -->
+                  <div class="executive-insights-grid">
+                    <div
+                      class="executive-block executive-block--processes"
+                      aria-labelledby="executive-processes-title">
+                      <div class="executive-block-header">
+                        <div class="executive-block-title">
+                          <i class="ri-stack-line" aria-hidden="true"></i>
+                          <h4 id="executive-processes-title">Top processos finalizados</h4>
+                        </div>
+                        <span class="executive-block-meta" *ngIf="executiveInsightsDistinctProcesses > 0">
+                          {{ executiveInsightsDistinctProcesses | number:'1.0-0':'pt-BR' }} tipos de processo
+                        </span>
+                      </div>
+
+                      <ul class="executive-process-list">
+                        <li
+                          *ngFor="let proc of executiveInsightsTopProcesses; let i = index; trackBy: trackByExecutiveProcess"
+                          class="executive-process-item">
+                          <div class="executive-process-rank" aria-hidden="true">
+                            {{ i + 1 }}
+                          </div>
+                          <div class="executive-process-info">
+                            <div class="executive-process-title-row">
+                              <span class="executive-process-title" [title]="proc.deliveryTitle">
+                                {{ proc.deliveryTitle }}
+                              </span>
+                              <span class="executive-process-tasks">
+                                {{ proc.tasksTotal | number:'1.0-0':'pt-BR' }}
+                                {{ proc.tasksTotal === 1 ? 'tarefa' : 'tarefas' }}
+                              </span>
+                            </div>
+                            <div class="executive-process-bar-wrap">
+                              <div
+                                class="executive-process-bar"
+                                [style.width.%]="proc.pct"
+                                [style.background-color]="getExecutiveProcessColor(i)"></div>
+                            </div>
+                            <div class="executive-process-meta">
+                              <span>{{ proc.pct | number:'1.0-1':'pt-BR' }}% do total</span>
+                              <span aria-hidden="true">·</span>
+                              <span>
+                                {{ proc.deliveriesCount | number:'1.0-0':'pt-BR' }}
+                                {{ proc.deliveriesCount === 1 ? 'cliente' : 'clientes' }}
+                              </span>
+                              <ng-container *ngIf="proc.onTimePct != null">
+                                <span aria-hidden="true">·</span>
+                                <span [ngClass]="getExecutiveOnTimeBadgeClass(proc.onTimePct)">
+                                  {{ proc.onTimePct | number:'1.0-1':'pt-BR' }}% no prazo
+                                </span>
+                              </ng-container>
+                            </div>
+                          </div>
+                        </li>
+                      </ul>
+                    </div>
+
+                    <div
+                      *ngIf="showExecutiveInsightsPlayersRanking && executiveInsightsTopPlayers.length > 0"
+                      class="executive-block executive-block--players"
+                      aria-labelledby="executive-players-title">
+                      <div class="executive-block-header">
+                        <div class="executive-block-title">
+                          <i class="ri-trophy-line" aria-hidden="true"></i>
+                          <h4 id="executive-players-title">Jogador de destaque do mês</h4>
+                        </div>
+                        <span class="executive-block-meta" *ngIf="executiveInsightsActivePlayers > 0">
+                          {{ executiveInsightsActivePlayers | number:'1.0-0':'pt-BR' }}
+                          {{ executiveInsightsActivePlayers === 1 ? 'pessoa ativa' : 'pessoas ativas' }}
+                        </span>
+                      </div>
+
+                      <ul class="executive-player-list">
+                        <li
+                          *ngFor="let player of executiveInsightsTopPlayers; let i = index; trackBy: trackByExecutivePlayer"
+                          class="executive-player-item"
+                          [class.executive-player-item--top]="i === 0">
+                          <div class="executive-player-rank" aria-hidden="true">
+                            <i *ngIf="i === 0" class="ri-medal-line"></i>
+                            <span *ngIf="i !== 0">{{ i + 1 }}</span>
+                          </div>
+                          <div class="executive-player-avatar" [attr.aria-label]="player.name">
+                            {{ player.initials }}
+                          </div>
+                          <div class="executive-player-info">
+                            <div class="executive-player-name-row">
+                              <span class="executive-player-name" [title]="player.email">
+                                {{ player.name }}
+                              </span>
+                              <span class="executive-player-tasks">
+                                {{ player.tasksTotal | number:'1.0-0':'pt-BR' }} tarefas
+                              </span>
+                            </div>
+                            <div class="executive-player-meta">
+                              <span>
+                                {{ player.clientsCount | number:'1.0-0':'pt-BR' }}
+                                {{ player.clientsCount === 1 ? 'cliente' : 'clientes' }}
+                              </span>
+                              <span aria-hidden="true">·</span>
+                              <span>{{ player.pct | number:'1.0-1':'pt-BR' }}% do time</span>
+                              <ng-container *ngIf="player.onTimePct != null">
+                                <span aria-hidden="true">·</span>
+                                <span [ngClass]="getExecutiveOnTimeBadgeClass(player.onTimePct)">
+                                  {{ player.onTimePct | number:'1.0-1':'pt-BR' }}% no prazo
+                                </span>
+                              </ng-container>
+                            </div>
+                          </div>
+                        </li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+
+                <div *ngIf="!isLoadingExecutiveInsights && !hasExecutiveInsightsData" class="empty-state">
+                  <p *ngIf="!hasExecutiveInsightsError">
+                    Sem dados suficientes neste mês para gerar os insights executivos.
+                  </p>
+                  <p *ngIf="hasExecutiveInsightsError">
+                    Não foi possível carregar os insights executivos. Tente novamente em instantes.
+                  </p>
+                </div>
+              </c4u-card>
+            </section>
           </div>
 
           <c4u-shimmer *ngIf="isLoadingGoals"></c4u-shimmer>

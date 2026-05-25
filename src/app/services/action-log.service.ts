@@ -22,6 +22,8 @@ import type {
   Game4uGoalMonthSummaryResponse,
   Game4uReportsOpenSummaryQuery,
   Game4uReportsTeamDailyFinishedStatsQuery,
+  Game4uReportsFinishedDeliveryRow,
+  Game4uReportsFinishedDeliveriesCachedPage,
   PlayerDashboardCachedResponse,
   PlayerDashboardCachedParams,
   SupervisionTeamDashboardCached,
@@ -3164,6 +3166,85 @@ export class ActionLogService {
       catchError(error => {
         console.error('Error fetching all finished deliveries/cached (participação):', error);
         return of({ items: [], offset: 0, limit: lim, fromCachedDeliveries: true });
+      })
+    );
+  }
+
+  /**
+   * Carrega TODAS as páginas de `finished/deliveries/cached` (ou variante de gestão) devolvendo
+   * as linhas RAW da API (com `user_email`, `tasks_total`, `tasks_on_time`, `on_time_pct`, etc.),
+   * sem o mapeamento para `PlayerParticipacaoDeliveryRow`. Usado pelos «Insights Executivos»
+   * do painel de gestão da equipa para correlacionar processos × jogadores × prazos.
+   *
+   * Escopo (precedência):
+   *  - `isManagement: true` → `GET /game/reports/management/finished/deliveries/cached` (sem `team_id`/`email`)
+   *  - `teamId` → `GET /game/reports/finished/deliveries/cached?team_id=`
+   *  - `email`  → `GET /game/reports/finished/deliveries/cached?email=`
+   */
+  getExecutiveDeliveriesAllPages(
+    scope: { teamId?: string | number | null; email?: string | null; isManagement?: boolean; userId?: string | null },
+    month: Date,
+    pageSize = 100
+  ): Observable<Game4uReportsFinishedDeliveryRow[]> {
+    const lim = Math.min(Math.max(Math.floor(pageSize), 1), 500);
+    if (!isGame4uDataEnabled() || !this.game4u.isConfigured() || month == null) {
+      return of([]);
+    }
+    const monthParam = this.toDashboardCachedMonthParam(month);
+    const teamId = this.normalizeGame4uTeamId(scope.teamId) ?? '';
+    const email = (scope.email ?? '').trim();
+    const userId = (scope.userId ?? '').trim();
+    const isManagement = !!scope.isManagement;
+
+    if (!isManagement && !teamId && !email) {
+      return of([]);
+    }
+
+    const fetchPage = (offset: number): Observable<Game4uReportsFinishedDeliveriesCachedPage> => {
+      if (isManagement) {
+        return this.game4u.getGameReportsManagementFinishedDeliveriesCached({
+          month: monthParam,
+          offset,
+          limit: lim,
+          ...(userId ? { user_id: userId } : {})
+        });
+      }
+      if (teamId) {
+        return this.game4u.getGameReportsFinishedDeliveriesCached({
+          team_id: teamId,
+          month: monthParam,
+          offset,
+          limit: lim
+        });
+      }
+      return this.game4u.getGameReportsFinishedDeliveriesCached({
+        email,
+        month: monthParam,
+        offset,
+        limit: lim
+      });
+    };
+
+    return fetchPage(0).pipe(
+      expand((page, index) => {
+        const received = page?.items?.length ?? 0;
+        const nextOff = (page?.offset ?? 0) + received;
+        if (
+          received === 0 ||
+          index >= ActionLogService.MAX_DELIVERIES_CACHED_PAGES - 1 ||
+          !hasMoreFinishedDeliveriesCachedPage(received, lim, nextOff, page?.total, page?.has_more)
+        ) {
+          return EMPTY;
+        }
+        return fetchPage(nextOff);
+      }),
+      reduce(
+        (acc: Game4uReportsFinishedDeliveryRow[], page) => acc.concat(page?.items || []),
+        [] as Game4uReportsFinishedDeliveryRow[]
+      ),
+      catchError(error => {
+        console.error('Error in getExecutiveDeliveriesAllPages:', error);
+        return of([] as Game4uReportsFinishedDeliveryRow[]);
       })
     );
   }
