@@ -10,8 +10,8 @@ export const environment = {
   client_id: process.env['CLIENT_ID'] || process.env['client_id'] || 'bwa',
   backend_url_base: process.env['BACKEND_URL_BASE'] || process.env['backend_url_base'] || '',
   g4u_api_base:
-    process.env.G4U_API_BASE ||
-    process.env.g4u_api_base ||
+    process.env['G4U_API_BASE'] ||
+    process.env['g4u_api_base'] ||
     process.env['BACKEND_URL_BASE'] ||
     process.env['backend_url_base'] ||
     '',
@@ -42,6 +42,11 @@ export const environment = {
     categoriasCodigos: process.env['PAINEL_CATEGORIAS'] || process.env['painel_categorias'] || '',
     categoriasDesc: process.env['PAINEL_CATEGORIAS_DESC'] || process.env['painel_categorias_desc'] || ''
   },
+
+  receitaConcedidaGoalTemplateId:
+    process.env['RECEITA_CONCEDIDA_GOAL_TEMPLATE_ID'] ||
+    process.env['receita_concedida_goal_template_id'] ||
+    '',
 
   /**
    * Supabase (projeto RevisaPrev). Variáveis: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_SECRET.

@@ -10,8 +10,8 @@ export const environment = {
   client_id: process.env['CLIENT_ID'] || process.env['client_id'] || 'bwa',
   backend_url_base: process.env['BACKEND_URL_BASE'] || process.env['backend_url_base'] || '',
   g4u_api_base:
-    process.env.G4U_API_BASE ||
-    process.env.g4u_api_base ||
+    process.env['G4U_API_BASE'] ||
+    process.env['g4u_api_base'] ||
     process.env['BACKEND_URL_BASE'] ||
     process.env['backend_url_base'] ||
     '',
