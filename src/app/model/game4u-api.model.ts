@@ -174,6 +174,19 @@ export interface Game4uReportsFinishedDeliveriesCachedQuery {
   limit?: number;
 }
 
+/**
+ * Query `GET /game/reports/management/finished/deliveries/cached` — agregado da gestão
+ * (GERENTE / DIRETOR / C_LEVEL); escopo vem do JWT (`user_role_team_month`) — sem `email`/`team_id`.
+ */
+export interface Game4uReportsManagementFinishedDeliveriesCachedQuery {
+  /** `YYYY-MM` ou `YYYY-MM-DD` */
+  month: string;
+  offset?: number;
+  limit?: number;
+  /** Só ADMIN/SERVICE: consultar outro gestor. */
+  user_id?: string;
+}
+
 /** Resposta paginada de `GET /game/reports/finished/deliveries/cached`. */
 export interface Game4uReportsFinishedDeliveriesCachedPage {
   refreshed_at?: string;
@@ -324,6 +337,48 @@ export interface SupervisionTeamDashboardCached {
 
 export interface SupervisionDashboardCachedListResponse {
   teams: SupervisionTeamDashboardCached[];
+}
+
+export type ManagementDashboardUserRole = 'GERENTE' | 'DIRETOR' | 'C_LEVEL';
+
+export interface ManagerTeamRef {
+  team_id: number;
+  team_name: string | null;
+}
+
+/** `GET /game/reports/management/dashboard/cached` — linha `manager_dashboard_report_cache`. */
+export interface ManagerDashboardCached
+  extends Omit<SupervisionTeamDashboardCached, 'team_id' | 'team_name' | 'players_count'> {
+  team_id?: number;
+  team_name?: string | null;
+  players_count: number;
+  user_id: string;
+  user_email: string;
+  user_role: ManagementDashboardUserRole;
+  teams_count: number;
+  team_ids: number[];
+  teams: ManagerTeamRef[];
+}
+
+export type TeamSupervisionCached = SupervisionTeamDashboardCached;
+
+export type OrganizationalTierCached = SupervisionTeamDashboardCached & {
+  management_tier: ManagementDashboardUserRole;
+  managers_count: number;
+  teams_count: number;
+  team_ids: number[];
+  teams: ManagerTeamRef[];
+};
+
+export interface ManagementDashboardOverviewResponse {
+  manager: ManagerDashboardCached;
+  teams: TeamSupervisionCached[];
+  organizational_tier: OrganizationalTierCached | null;
+}
+
+export interface Game4uReportsManagementCachedQuery {
+  month: string;
+  user_id?: string;
 }
 
 export interface Game4uReportsSupervisionCachedQuery {

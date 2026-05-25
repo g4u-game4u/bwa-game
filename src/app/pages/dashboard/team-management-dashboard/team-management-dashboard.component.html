@@ -25,8 +25,8 @@
           </c4u-team-selector>
         </div>
 
-        <!-- Collaborator Selector -->
-        <div class="sidebar-section">
+        <!-- Collaborator Selector — escondido no «Painel do Gerente / Diretor / C-Level» (sem time selecionado). -->
+        <div class="sidebar-section" *ngIf="!isManagementOverview">
           <label class="selector-label selector-label--with-count" for="collaborator-selector">
             <span>Colaborador</span>
             <span *ngIf="!isLoadingCollaborators" class="selector-label__count" aria-hidden="true">
@@ -363,7 +363,8 @@
               <c4u-shimmer *ngIf="isLoadingGoals"></c4u-shimmer>
             </section>
             
-            <!-- Clientes atendidos: lista única (CNPJs com participação no período via action_log agregado); sem abas Carteira/Participação. -->
+            <!-- Clientes atendidos: lista única (CNPJs com participação no período via action_log agregado).
+                 No painel agregado de gestão usa `GET /game/reports/management/finished/deliveries/cached`. -->
             <section
               class="dashboard-section carteira-section"
               [class.carteira-section--loading]="isLoadingCarteira"

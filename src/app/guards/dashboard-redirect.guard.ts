@@ -6,9 +6,10 @@ import { UserProfile } from '@utils/user-profile';
 
 /**
  * Guard service to redirect users to the appropriate dashboard based on their profile
- * 
+ *
  * Redirects:
- * - JOGADOR → /dashboard (gamification dashboard), except session roles ADMIN / GESTOR → team management
+ * - JOGADOR → /dashboard (gamification dashboard), except session roles ADMIN / GESTOR
+ *   ou papéis de gestão agregada (`GERENTE` / `DIRETOR` / `C_LEVEL`) → team management
  * - SUPERVISOR → /dashboard/supervisor
  * - GESTOR, DIRETOR → /dashboard/team-management (team management dashboard)
  */

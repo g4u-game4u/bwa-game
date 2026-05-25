@@ -31,9 +31,14 @@ import { PlayerService } from '@services/player.service';
 import {
   ActionLogService,
   SupervisionTeamDashboardCachedBundle,
-  PlayerParticipacaoDeliveriesPageResult
+  PlayerParticipacaoDeliveriesPageResult,
+  PlayerParticipacaoDeliveryRow
 } from '@services/action-log.service';
 import { hasMoreFinishedDeliveriesCachedPage } from '@services/game4u-game-mapper';
+import {
+  getManagementDashboardCachedRoleLabel,
+  ManagementDashboardCachedRole
+} from '@utils/management-dashboard-role';
 import type { PlayerDashboardCachedParams } from '@model/game4u-api.model';
 import { UserProfileService } from '@services/user-profile.service';
 import { UserProfile } from '@utils/user-profile';
@@ -82,10 +87,17 @@ import { ProgressListType } from '@modals/modal-progress-list/modal-progress-lis
   ]
 })
 export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
+  /** Id sintético usado no seletor para o «Painel do Gerente / Diretor / C-Level». */
+  static readonly MANAGEMENT_OVERVIEW_TEAM_ID = '__management_overview__';
+
   // State management
   selectedTeam: string = '';
   selectedTeamId: string = ''; // Funifier team ID (e.g., 'FkmdnFU')
   selectedCollaborator: string | null = null;
+  /** Papel agregado do utilizador (GERENTE / DIRETOR / C_LEVEL) ou `null`. */
+  managementRole: ManagementDashboardCachedRole | null = null;
+  /** Vista corrente no «Painel do Gerente / Diretor / C-Level» (sem time selecionado). */
+  isManagementOverview = false;
   // Initialize to February 2026 by default (similar to gamification-dashboard)
   // Calculate months ago from current date to February 2026
   selectedMonthsAgo: number = (() => {
@@ -462,14 +474,20 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       console.log('📅 Season + 👥 teams em paralelo…');
       await Promise.all([this.loadSeasonDates(), this.loadAvailableTeams()]);
       console.log('✅ Season dates + teams:', this.teams.length);
-      
-      // Select the first available team or previously selected team
+
       if (this.teams.length > 0) {
         const savedTeamId = localStorage.getItem('selectedTeamId');
-        const teamToSelect = savedTeamId && this.teams.find(t => t.id === savedTeamId) 
-          ? savedTeamId 
-          : this.teams[0].id;
-        
+        const hasManagementOverviewEntry = this.teams.some(
+          t => t.id === TeamManagementDashboardComponent.MANAGEMENT_OVERVIEW_TEAM_ID
+        );
+        // Papel agregado (GERENTE/DIRETOR/C-LEVEL): **sempre** abrir no «Painel do …»,
+        // ignorando `selectedTeamId` persistido — drill-down em equipa real é manual.
+        const teamToSelect = hasManagementOverviewEntry
+          ? TeamManagementDashboardComponent.MANAGEMENT_OVERVIEW_TEAM_ID
+          : savedTeamId && this.teams.some(t => t.id === savedTeamId)
+            ? savedTeamId
+            : this.teams[0].id;
+
         await this.onTeamChange(teamToSelect);
         console.log('✅ Initial team selected:', teamToSelect);
       } else {
@@ -564,10 +582,16 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
     return String(u?._id || u?.email || '').trim();
   }
 
-  /** `team_id` nas queries Game4U do painel (= time selecionado, id da API BWA). */
+  /**
+   * `team_id` nas queries Game4U do painel (= time selecionado, id da API BWA).
+   * No «Painel do Gerente / Diretor / C-Level» (id sintético), não há `team_id`.
+   */
   private getGame4uTeamScopeId(): string | undefined {
     const t = (this.selectedTeamId || '').trim();
-    return t !== '' ? t : undefined;
+    if (t === '' || t === TeamManagementDashboardComponent.MANAGEMENT_OVERVIEW_TEAM_ID) {
+      return undefined;
+    }
+    return t;
   }
 
   /**
@@ -1043,8 +1067,27 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
         }
       }
 
+      this.managementRole = this.actionLogService.getManagementDashboardCachedRole();
+      const hasManagementOverview =
+        this.managementRole != null && this.playerService.usesGame4uWalletFromStats();
+      if (hasManagementOverview) {
+        const label = getManagementDashboardCachedRoleLabel(this.managementRole!);
+        availableTeams = [
+          {
+            id: TeamManagementDashboardComponent.MANAGEMENT_OVERVIEW_TEAM_ID,
+            name: label,
+            memberCount: 0
+          },
+          ...availableTeams
+        ];
+        console.log('✅ Painel agregado disponível:', label);
+      }
+
       // Load member count for each team using aggregate queries
       const memberCountPromises = availableTeams.map(async (team) => {
+        if (team.id === TeamManagementDashboardComponent.MANAGEMENT_OVERVIEW_TEAM_ID) {
+          return team;
+        }
         try {
           const aggregatePayload = [
             {
@@ -1334,7 +1377,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
         console.log('👥 Loading team aggregated data');
         this.teamSupervisionBundle = null;
         if (this.playerService.usesGame4uWalletFromStats()) {
-          await this.loadTeamSupervisionFromCache();
+          await this.loadTeamDashboardFromCache();
         } else {
           this.teamSupervisionCacheMissing = false;
           this.teamDashboardRefreshedAt = null;
@@ -1656,6 +1699,66 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       this.isLoadingSidebar = false;
       this.isLoadingMonthlyPointsProgress = false;
       this.cdr.markForCheck();
+    }
+  }
+
+  /**
+   * Game4U: supervisão por equipa (GESTOR/SUPERVISOR ou drill-down do gestor numa equipa real)
+   * ou gestão agregada (GERENTE/DIRETOR/C_LEVEL no «Painel do …», sem `team_id`).
+   *
+   * Sempre que houver um `team_id` selecionado, usa `supervision/dashboard/cached?team_id=` para
+   * que a sidebar reflita os KPIs **daquela equipa**.
+   */
+  private async loadTeamDashboardFromCache(): Promise<void> {
+    if (this.isManagementOverview) {
+      await this.loadManagementOverviewFromCache();
+      return;
+    }
+    await this.loadTeamSupervisionFromCache();
+  }
+
+  /**
+   * `GET /game/reports/management/dashboard/cached/overview` — KPIs agregados do gestor.
+   */
+  private async loadManagementOverviewFromCache(): Promise<void> {
+    const month = this.selectedMonth;
+    this.teamSupervisionCacheMissing = false;
+    this.teamDashboardRefreshedAt = null;
+    this.teamDashboardCachedParams = null;
+    this.teamMonthOnTimeDeliveryPct = null;
+    this.teamSupervisionBundle = null;
+
+    if (month == null) {
+      return;
+    }
+
+    try {
+      const bundle = await firstValueFrom(
+        this.actionLogService
+          .getManagementDashboardCachedBundle(month)
+          .pipe(takeUntil(this.destroy$))
+      );
+      if (!bundle) {
+        this.teamSupervisionCacheMissing = true;
+        this.teamActivityMetrics = { pendentes: 0, emExecucao: 0, finalizadas: 0, pontos: 0 };
+        this.teamProcessMetrics = { pendentes: 0, incompletas: 0, finalizadas: 0 };
+        this.monthlyPointsGoalTarget = null;
+        this.clientesAtendidosThisMonthCount = null;
+        return;
+      }
+
+      this.teamSupervisionBundle = bundle;
+      this.applyTeamSupervisionBundle(bundle);
+      const refreshed = bundle.refreshedAt ? new Date(bundle.refreshedAt) : null;
+      this.teamDashboardRefreshedAt = refreshed && !Number.isNaN(refreshed.getTime()) ? refreshed : null;
+      this.teamDashboardCachedParams = bundle.params;
+      this.teamMonthOnTimeDeliveryPct = bundle.monthOnTimeDeliveryPct;
+      this.teamSupervisionCacheMissing = false;
+      this.isLoadingMonthlyPointsProgress = false;
+    } catch (error) {
+      console.error('Error loading management/dashboard/cached/overview:', error);
+      this.teamSupervisionCacheMissing = month != null;
+      this.teamMonthOnTimeDeliveryPct = null;
     }
   }
 
@@ -2781,7 +2884,7 @@ private calculateCollaboratorTotals(memberData: Array<{
       !!opts?.teamRange &&
       (this.selectedTeam || '').trim() !== '';
 
-    if (!useTeam && !playerId) {
+    if (!useTeam && !playerId && !this.isManagementOverview) {
       this.teamCarteiraClientes = [];
       this.isLoadingCarteira = false;
       this.cdr.markForCheck();
@@ -2792,6 +2895,17 @@ private calculateCollaboratorTotals(memberData: Array<{
 
     try {
       if (
+        this.isManagementOverview &&
+        this.playerService.usesGame4uWalletFromStats() &&
+        this.selectedMonth != null
+      ) {
+        if (this.teamSupervisionBundle && !this.teamSupervisionCacheMissing) {
+          this.clientesAtendidosThisMonthCount = this.teamSupervisionBundle.monthClientsServed;
+        } else {
+          this.clientesAtendidosThisMonthCount = null;
+        }
+        this.isLoadingClientesAtendidosCount = false;
+      } else if (
         useTeam &&
         this.playerService.usesGame4uWalletFromStats() &&
         this.selectedMonth != null &&
@@ -2830,6 +2944,52 @@ private calculateCollaboratorTotals(memberData: Array<{
       } else {
         this.clientesAtendidosThisMonthCount = null;
         this.isLoadingClientesAtendidosCount = false;
+      }
+
+      // Paginação «Painel do Gerente/Diretor/C-Level»: usa `management/finished/deliveries/cached`
+      // (sem `team_id`/`email`); escopo do gestor vem do JWT (`user_role_team_month`).
+      if (
+        this.isManagementOverview &&
+        this.playerService.usesGame4uWalletFromStats() &&
+        this.selectedMonth != null
+      ) {
+        const month = this.selectedMonth!;
+        const page = await firstValueFrom(
+          this.actionLogService
+            .getManagementFinishedDeliveriesParticipacaoPage(month, 0, this.participacaoPageLimit)
+            .pipe(takeUntil(this.destroy$))
+        );
+        this.useParticipacaoReportsPagination = true;
+        this.participacaoPagedPlayerId = null;
+        const apiReceived = page.apiRowCount ?? page.items?.length ?? 0;
+        this.participacaoNextOffset = (page.offset ?? 0) + apiReceived;
+        if (typeof page.total === 'number' && Number.isFinite(page.total)) {
+          this.participacaoTotal = page.total;
+        }
+        this.participacaoHasMore = hasMoreFinishedDeliveriesCachedPage(
+          apiReceived,
+          this.participacaoPageLimit,
+          this.participacaoNextOffset,
+          this.participacaoTotal,
+          page.has_more
+        );
+
+        const baseClientes = this.mapTeamParticipacaoDeliveryRowsToCompanyDisplay(page.items || []);
+        const uniqueBase = this.dedupeParticipacaoClientes(baseClientes);
+        uniqueBase.forEach(c => {
+          const status = this.cnpjStatusMap.get(c.cnpj);
+          if (status) {
+            c.status = status;
+          }
+        });
+        this.teamCarteiraClientes = uniqueBase;
+        this.isLoadingCarteira = false;
+        const skipGamificacaoKpi = !!page.fromCachedDeliveries;
+        this.isLoadingParticipacaoKpi = !skipGamificacaoKpi && uniqueBase.length > 0;
+        this.updateFormattedSidebarData();
+        this.syncEntregasPrazoKpiFromParticipacao();
+        this.cdr.markForCheck();
+        return;
       }
 
       // Paginação (`finished/deliveries/cached` + team_id): vista equipa agregada quando há month + scopeId
@@ -3088,18 +3248,24 @@ private calculateCollaboratorTotals(memberData: Array<{
           this.participacaoNextOffset,
           this.participacaoPageLimit
         )
-      : (() => {
-          const teamTid = this.getGame4uTeamScopeId();
-          if (!teamTid) {
-            return null;
-          }
-          return this.teamAggregateService.getTeamFinishedDeliveriesParticipacaoPage(
-            teamTid,
+      : this.isManagementOverview
+        ? this.actionLogService.getManagementFinishedDeliveriesParticipacaoPage(
             month,
             this.participacaoNextOffset,
             this.participacaoPageLimit
-          );
-        })();
+          )
+        : (() => {
+            const teamTid = this.getGame4uTeamScopeId();
+            if (!teamTid) {
+              return null;
+            }
+            return this.teamAggregateService.getTeamFinishedDeliveriesParticipacaoPage(
+              teamTid,
+              month,
+              this.participacaoNextOffset,
+              this.participacaoPageLimit
+            );
+          })();
 
     if (!page$) {
       this.isLoadingCarteiraMore = false;
@@ -3168,9 +3334,13 @@ private calculateCollaboratorTotals(memberData: Array<{
     void this.loadTeamCarteiraData(dateRange);
   }
 
-  /** Linha de `finished/deliveries/cached` (equipa) → `CompanyDisplay` com `porcEntregas` quando existir. */
+  /** Linha de `finished/deliveries/cached` (equipa ou jogador) → `CompanyDisplay` com `porcEntregas` quando existir. */
   private mapTeamParticipacaoDeliveryRowsToCompanyDisplay(
-    items: TeamFinishedDeliveriesPageResult['items']
+    items:
+      | TeamFinishedDeliveriesPageResult['items']
+      | PlayerParticipacaoDeliveryRow[]
+      | null
+      | undefined
   ): CompanyDisplay[] {
     return (items || []).map(i => ({
       cnpj: i.cnpj,
@@ -3406,52 +3576,105 @@ private calculateCollaboratorTotals(memberData: Array<{
   async onTeamChange(teamId: string): Promise<void> {
     try {
       console.log('🔄 Team changed to:', teamId);
-      
-      // Find the team in the teams array to get the name
+
       const team = this.teams.find(t => t.id === teamId);
       if (!team) {
         console.error('Team not found:', teamId);
         return;
       }
-      
-      // Check if team is actually changing
+
       const isTeamChanging = this.selectedTeamId !== teamId;
-      
-      // Set selected team ID and name
+      const isManagementOverview =
+        teamId === TeamManagementDashboardComponent.MANAGEMENT_OVERVIEW_TEAM_ID;
+
       this.selectedTeamId = teamId;
       this.selectedTeam = team.name;
-      this.displayTeamName = team.name; // Update display name
-      
-      // Reset collaborator filter when team changes
+      this.displayTeamName = team.name;
+      this.isManagementOverview = isManagementOverview;
+
       if (isTeamChanging) {
-        // Troca de time: o menu lateral deve indicar mudança de dados.
         this.sidebarLoadedOnce = false;
         this.isLoadingSidebar = true;
         this.selectedCollaborator = null;
       }
-      
-      // Save team selection to localStorage
+
       localStorage.setItem('selectedTeamId', teamId);
-      
-      // Load team members data first (this sets teamTotalPoints, etc.)
-      await this.loadTeamMembersData(teamId, this.calculateDateRange());
-      
-      // Then load all other team data
-      await this.loadTeamData();
-      
-      // After loading collaborators, validate current selection
-      if (this.selectedCollaborator) {
-        const collaboratorExists = this.collaborators.some(
-          c => c.userId === this.selectedCollaborator
-        );
-        if (!collaboratorExists) {
-          this.selectedCollaborator = null;
+
+      if (isManagementOverview) {
+        await this.loadManagementOverviewData();
+      } else {
+        await this.loadTeamMembersData(teamId, this.calculateDateRange());
+        await this.loadTeamData();
+
+        if (this.selectedCollaborator) {
+          const collaboratorExists = this.collaborators.some(
+            c => c.userId === this.selectedCollaborator
+          );
+          if (!collaboratorExists) {
+            this.selectedCollaborator = null;
+          }
         }
       }
-      
+
       this.cdr.markForCheck();
     } catch (error) {
       console.error('Error in onTeamChange:', error);
+    }
+  }
+
+  /**
+   * Carrega o «Painel do Gerente / Diretor / C-Level» a partir de
+   * `GET /game/reports/management/dashboard/cached/overview` (sem `team_id`).
+   *
+   * Não chama endpoints com `team_id` (supervisão, deliveries, team-stats, KPIs por time):
+   * apenas KPIs/progresso agregados do gestor.
+   */
+  private async loadManagementOverviewData(): Promise<void> {
+    try {
+      this.isLoadingSidebar = !this.sidebarLoadedOnce;
+      this.isLoadingGoals = true;
+      this.isLoadingMonthlyPointsProgress = true;
+      this.isLoadingKPIs = false;
+      this.isLoadingCarteira = true;
+      this.isLoadingCollaborators = false;
+
+      this.selectedCollaborator = null;
+      this.collaborators = [];
+      this.teamCarteiraClientes = [];
+      this.teamKPIs = [];
+      this.teamMembersData = [];
+      this.teamMemberIds = [];
+      this.teamTotalPoints = 0;
+      this.teamTotalTasks = 0;
+      this.teamTotalBlockedPoints = 0;
+      this.teamAveragePoints = 0;
+      this.clientesAtendidosThisMonthCount = null;
+      this.participacaoHasMore = false;
+      this.useParticipacaoReportsPagination = false;
+
+      this.cdr.markForCheck();
+
+      const monthRange = this.calculateDateRange();
+      const seasonRange = this.seasonDates;
+
+      await this.loadManagementOverviewFromCache();
+      await Promise.all([
+        this.loadSidebarData(seasonRange),
+        this.loadGoalsData(monthRange),
+        this.loadMonthlyPointsBreakdown(),
+        // «Clientes atendidos»: agregado da gestão via `management/finished/deliveries/cached` (sem team_id).
+        this.loadParticipacaoClientesList('')
+      ]);
+
+      this.updateFormattedSidebarData();
+      this.updateTeamNameDisplay();
+      this.lastRefresh = new Date();
+    } catch (error) {
+      console.error('Error loading management overview:', error);
+    } finally {
+      this.isLoadingGoals = false;
+      this.isLoadingMonthlyPointsProgress = false;
+      this.cdr.markForCheck();
     }
   }
 

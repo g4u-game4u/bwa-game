@@ -25,9 +25,16 @@ import type {
   PlayerDashboardCachedResponse,
   PlayerDashboardCachedParams,
   SupervisionTeamDashboardCached,
-  SupervisionDashboardCachedParams
+  SupervisionDashboardCachedParams,
+  ManagementDashboardOverviewResponse,
+  ManagerDashboardCached
 } from '@model/game4u-api.model';
 import { SessaoProvider } from '@providers/sessao/sessao.provider';
+import {
+  detectManagementDashboardCachedRole,
+  hasManagementDashboardCachedRole,
+  ManagementDashboardCachedRole
+} from '@utils/management-dashboard-role';
 import {
   computeGame4uDrPrazoMetaBoost,
   computeMonthlyPointsFromGame4uActions,
@@ -511,6 +518,10 @@ export class ActionLogService {
     string,
     CacheEntry<SupervisionTeamDashboardCached | null>
   >();
+  private game4uManagementDashboardOverviewCache = new Map<
+    string,
+    CacheEntry<ManagementDashboardOverviewResponse | null>
+  >();
 
   constructor(
     private backendApi: BackendApiService,
@@ -667,6 +678,100 @@ export class ActionLogService {
         };
       })
     );
+  }
+
+  /** Papéis JWT que usam `management/dashboard/cached` em vez de supervisão por `team_id`. */
+  usesManagementDashboardCachedRole(): boolean {
+    return hasManagementDashboardCachedRole(this.sessao.usuario?.roles);
+  }
+
+  /** Papel de gestão mais relevante do JWT (C_LEVEL > DIRETOR > GERENTE) ou `null` se não houver. */
+  getManagementDashboardCachedRole(): ManagementDashboardCachedRole | null {
+    return detectManagementDashboardCachedRole(this.sessao.usuario?.roles);
+  }
+
+  /**
+   * `GET /game/reports/management/dashboard/cached/overview` — painel agregado do gestor.
+   */
+  fetchManagementDashboardCachedOverview(
+    month?: Date,
+    userId?: string
+  ): Observable<ManagementDashboardOverviewResponse | null> {
+    if (!(isGame4uDataEnabled() && this.game4u.isConfigured())) {
+      return of(null);
+    }
+    const refMonth = this.resolveDashboardCachedMonth(month);
+    const monthParam = this.toDashboardCachedMonthParam(refMonth);
+    const uid = (userId ?? '').trim();
+    const cacheKey = `g4u_management_overview_${monthParam}_${uid}`;
+    const cached = this.getCachedData(
+      this.game4uManagementDashboardOverviewCache,
+      cacheKey,
+      this.GAME4U_CACHE_DURATION
+    );
+    if (cached) {
+      return cached;
+    }
+
+    const request$ = this.game4u
+      .getGameReportsManagementDashboardCachedOverview({
+        month: monthParam,
+        ...(uid ? { user_id: uid } : {})
+      })
+      .pipe(
+        catchError(err => {
+          if (err instanceof HttpErrorResponse && err.status === 404) {
+            return of(null);
+          }
+          console.error('Error fetching management/dashboard/cached/overview:', err);
+          return of(null);
+        }),
+        shareReplay({ bufferSize: 1, refCount: true, windowTime: this.GAME4U_CACHE_DURATION })
+      );
+    this.setCachedData(this.game4uManagementDashboardOverviewCache, cacheKey, request$);
+    return request$;
+  }
+
+  /**
+   * Bundle do painel de gestão (GERENTE / DIRETOR / C_LEVEL) — KPIs de `overview.manager`.
+   */
+  getManagementDashboardCachedBundle(
+    month?: Date,
+    userId?: string
+  ): Observable<SupervisionTeamDashboardCachedBundle | null> {
+    return this.fetchManagementDashboardCachedOverview(month, userId).pipe(
+      map(overview => {
+        if (!overview?.manager) {
+          return null;
+        }
+        return this.mapManagerDashboardCachedToBundle(overview.manager, month);
+      })
+    );
+  }
+
+  private mapManagerDashboardCachedToBundle(
+    manager: ManagerDashboardCached,
+    month?: Date
+  ): SupervisionTeamDashboardCachedBundle {
+    const { activity, processo } = this.mapPlayerDashboardCachedToProgressMetrics(manager, month);
+    const goal = Math.floor(Number(manager.month_goal_points) || 0);
+    const firstTeamId = manager.team_ids?.[0] ?? manager.teams?.[0]?.team_id ?? 0;
+    return {
+      refreshedAt: manager.refreshed_at,
+      teamId: Math.floor(Number(firstTeamId) || 0),
+      teamName: manager.teams?.[0]?.team_name ?? null,
+      playersCount: Math.floor(Number(manager.players_count) || 0),
+      params: manager.params,
+      activity,
+      processo,
+      monthlyGoalTarget: goal,
+      monthClientsServed: Math.floor(Number(manager.month_clients_served) || 0),
+      seasonWalletPoints: Math.floor(Number(manager.season_points_total) || 0),
+      seasonTasksFinished: Math.floor(Number(manager.season_tasks_finished_total) || 0),
+      seasonClientsTotal: Math.floor(Number(manager.season_clients_total) || 0),
+      monthOnTimeDeliveryPct: readMonthOnTimeDeliveryPct(manager),
+      refreshError: manager.refresh_error ?? null
+    };
   }
 
   private mapPlayerDashboardCachedToProgressMetrics(
@@ -1986,6 +2091,27 @@ export class ActionLogService {
       if (teamAgg && (teamAgg.team || '').trim() && month != null) {
         const teamKey = teamAgg.team.trim();
         const bwa = this.normalizeGame4uTeamId(teamAgg.bwaTeamId);
+        // Sem `team_id` BWA: para papéis de gestão agregada (GERENTE/DIRETOR/C_LEVEL), agregar via overview.
+        if (!bwa && this.usesManagementDashboardCachedRole()) {
+          return this.fetchManagementDashboardCachedOverview(month).pipe(
+            map(overview => {
+              if (!overview?.manager) {
+                return {
+                  activity: { pendentes: 0, emExecucao: 0, finalizadas: 0, pontos: 0 },
+                  processo: { pendentes: 0, incompletas: 0, finalizadas: 0 }
+                };
+              }
+              return this.mapPlayerDashboardCachedToProgressMetrics(overview.manager, month);
+            }),
+            catchError(err => {
+              console.error('getProgressMetrics (management/dashboard/cached/overview):', err);
+              return of({
+                activity: { pendentes: 0, emExecucao: 0, finalizadas: 0, pontos: 0 },
+                processo: { pendentes: 0, incompletas: 0, finalizadas: 0 }
+              });
+            })
+          );
+        }
         if (bwa) {
           return this.fetchSupervisionTeamDashboardCached(String(bwa), month).pipe(
             map(dash => {
@@ -2934,6 +3060,56 @@ export class ActionLogService {
   private static readonly MAX_DELIVERIES_CACHED_PAGES = 100;
 
   /**
+   * Game4U (mês definido): página de clientes atendidos agregada para o painel da gestão
+   * (`GET /game/reports/management/finished/deliveries/cached`). Sem `email`/`team_id`:
+   * o backend agrega todos os times do escopo do gestor no JWT.
+   *
+   * Devolve o mesmo shape de {@link getPlayerFinishedDeliveriesParticipacaoPage}.
+   */
+  getManagementFinishedDeliveriesParticipacaoPage(
+    month: Date | undefined,
+    offset: number,
+    limit: number,
+    userId?: string
+  ): Observable<PlayerParticipacaoDeliveriesPageResult> {
+    const off = Math.max(0, Math.floor(offset));
+    const lim = Math.min(Math.max(Math.floor(limit), 1), 500);
+    if (!isGame4uDataEnabled() || !this.game4u.isConfigured() || month == null) {
+      return of({ items: [], offset: off, limit: lim, fromCachedDeliveries: true });
+    }
+    const monthParam = this.toDashboardCachedMonthParam(month);
+    const uid = (userId ?? '').trim();
+    return this.game4u
+      .getGameReportsManagementFinishedDeliveriesCached({
+        month: monthParam,
+        offset: off,
+        limit: lim,
+        ...(uid ? { user_id: uid } : {})
+      })
+      .pipe(
+        map(page => {
+          const apiRows = page.items || [];
+          return {
+            items: mapGame4uFinishedDeliveryRowsToParticipacaoCnpjRows(apiRows, month),
+            apiRowCount: apiRows.length,
+            offset: page.offset ?? off,
+            limit: page.limit ?? lim,
+            ...(page.total != null ? { total: page.total } : {}),
+            ...(page.has_more != null ? { has_more: page.has_more } : {}),
+            fromCachedDeliveries: true
+          };
+        }),
+        catchError(error => {
+          console.error(
+            'Error fetching management/finished/deliveries/cached (participação):',
+            error
+          );
+          return of({ items: [], offset: off, limit: lim, fromCachedDeliveries: true });
+        })
+      );
+  }
+
+  /**
    * Todas as páginas de `finished/deliveries/cached` por email (sem `team_id` no endpoint).
    */
   getPlayerFinishedDeliveriesParticipacaoAllPages(
@@ -3325,6 +3501,7 @@ export class ActionLogService {
     this.game4uTeamDailyFinishedStatsCache.clear();
     this.game4uPlayerDashboardCachedCache.clear();
     this.game4uSupervisionDashboardCachedCache.clear();
+    this.game4uManagementDashboardOverviewCache.clear();
     this.teamMetricsCache.clear();
     this.teamCnpjCache.clear();
     this.teamPointsBreakdownCache.clear();

@@ -19,10 +19,13 @@ import {
   PlayerDashboardCachedResponse,
   SupervisionTeamDashboardCached,
   SupervisionDashboardCachedListResponse,
+  ManagementDashboardOverviewResponse,
+  Game4uReportsManagementCachedQuery,
   Game4uReportsSupervisionCachedQuery,
   Game4uReportsSupervisionCachedListQuery,
   Game4uReportsFinishedDeliveriesCachedQuery,
   Game4uReportsFinishedDeliveriesCachedPage,
+  Game4uReportsManagementFinishedDeliveriesCachedQuery,
   normalizeGameReportsFinishedDeliveriesCachedPagePayload,
   Game4uReportsFinishedQuery,
   Game4uReportsActionsByDeliveryQuery,
@@ -67,6 +70,10 @@ export class Game4uApiService {
     string,
     Observable<Game4uReportsFinishedDeliveriesCachedPage>
   >();
+  private readonly reportsManagementFinishedDeliveriesCachedCache = new Map<
+    string,
+    Observable<Game4uReportsFinishedDeliveriesCachedPage>
+  >();
   private readonly reportsSupervisionDashboardCachedCache = new Map<
     string,
     Observable<SupervisionTeamDashboardCached>
@@ -74,6 +81,10 @@ export class Game4uApiService {
   private readonly reportsSupervisionDashboardListCache = new Map<
     string,
     Observable<SupervisionDashboardCachedListResponse>
+  >();
+  private readonly reportsManagementDashboardOverviewCache = new Map<
+    string,
+    Observable<ManagementDashboardOverviewResponse>
   >();
   private readonly reportsOpenSummaryCache = new Map<string, Observable<Game4uReportsOpenSummary>>();
   private readonly reportsTeamDailyFinishedStatsCache = new Map<string, Observable<unknown>>();
@@ -214,8 +225,10 @@ export class Game4uApiService {
     this.reportsGoalMonthCache.clear();
     this.reportsDashboardCachedCache.clear();
     this.reportsFinishedDeliveriesCachedCache.clear();
+    this.reportsManagementFinishedDeliveriesCachedCache.clear();
     this.reportsSupervisionDashboardCachedCache.clear();
     this.reportsSupervisionDashboardListCache.clear();
+    this.reportsManagementDashboardOverviewCache.clear();
     this.reportsOpenSummaryCache.clear();
     this.reportsTeamDailyFinishedStatsCache.clear();
   }
@@ -474,6 +487,60 @@ export class Game4uApiService {
       }
       return this.http
         .get<unknown>(`${this.baseUrl}/game/reports/finished/deliveries/cached`, {
+          headers: this.headers(),
+          params
+        })
+        .pipe(
+          map(body => normalizeGameReportsFinishedDeliveriesCachedPagePayload(body, off, lim)),
+          catchError(err => {
+            if (err instanceof HttpErrorResponse && err.status === 404) {
+              return of({ offset: off, limit: lim, items: [] });
+            }
+            return throwError(() => err);
+          })
+        );
+    });
+  }
+
+  /**
+   * `GET /game/reports/management/finished/deliveries/cached` — lista paginada (mês) agregada para
+   * GERENTE / DIRETOR / C_LEVEL. Sem `email`/`team_id`: escopo do gestor vem do JWT
+   * (`user_role_team_month`); `user_id` é apenas para ADMIN/SERVICE consultar outro gestor.
+   */
+  getGameReportsManagementFinishedDeliveriesCached(
+    q: Game4uReportsManagementFinishedDeliveriesCachedQuery
+  ): Observable<Game4uReportsFinishedDeliveriesCachedPage> {
+    if (!this.isConfigured()) {
+      return throwError(
+        () =>
+          new Error(
+            '[Game4U] reports/management/finished/deliveries/cached: defina backend_url_base.'
+          )
+      );
+    }
+    const month = (q.month ?? '').trim();
+    if (!month) {
+      return throwError(
+        () =>
+          new Error(
+            '[Game4U] reports/management/finished/deliveries/cached: informe month (YYYY-MM).'
+          )
+      );
+    }
+    const uid = (q.user_id ?? '').trim();
+    const off = Math.max(0, Math.floor(q.offset ?? 0));
+    const lim = Math.min(Math.max(Math.floor(q.limit ?? 30), 1), 500);
+    const key = `rpt-mgmt-del-cached|${uid}|${month}|${off}|${lim}`;
+    return this.shareGame4uDedupe(key, this.reportsManagementFinishedDeliveriesCachedCache, () => {
+      let params = new HttpParams()
+        .set('month', month)
+        .set('offset', String(off))
+        .set('limit', String(lim));
+      if (uid) {
+        params = params.set('user_id', uid);
+      }
+      return this.http
+        .get<unknown>(`${this.baseUrl}/game/reports/management/finished/deliveries/cached`, {
           headers: this.headers(),
           params
         })
@@ -760,6 +827,44 @@ export class Game4uApiService {
       const params = new HttpParams().set('month', month);
       return this.http.get<SupervisionDashboardCachedListResponse>(
         `${this.baseUrl}/game/reports/supervision/dashboard/cached/list`,
+        {
+          headers: this.headers(),
+          params
+        }
+      );
+    });
+  }
+
+  /**
+   * `GET /game/reports/management/dashboard/cached/overview` — painel agregado do gestor (GERENTE / DIRETOR / C_LEVEL).
+   */
+  getGameReportsManagementDashboardCachedOverview(
+    q: Game4uReportsManagementCachedQuery
+  ): Observable<ManagementDashboardOverviewResponse> {
+    if (!this.isConfigured()) {
+      return throwError(
+        () =>
+          new Error('[Game4U] reports/management/dashboard/cached/overview: defina backend_url_base.')
+      );
+    }
+    const month = (q.month ?? '').trim();
+    if (!month) {
+      return throwError(
+        () =>
+          new Error(
+            '[Game4U] reports/management/dashboard/cached/overview: informe month (YYYY-MM).'
+          )
+      );
+    }
+    const uid = (q.user_id ?? '').trim();
+    const key = `management-overview|${month}|${uid}`;
+    return this.shareGame4uDedupe(key, this.reportsManagementDashboardOverviewCache, () => {
+      let params = new HttpParams().set('month', month);
+      if (uid) {
+        params = params.set('user_id', uid);
+      }
+      return this.http.get<ManagementDashboardOverviewResponse>(
+        `${this.baseUrl}/game/reports/management/dashboard/cached/overview`,
         {
           headers: this.headers(),
           params

@@ -284,6 +284,18 @@ describe('UserProfileService', () => {
       expect(service.canAccessTeamManagement()).toBe(true);
     });
 
+    it('canAccessTeamManagement should return true for GERENTE / DIRETOR / C_LEVEL JWT roles', () => {
+      for (const role of ['GERENTE', 'DIRETOR', 'C_LEVEL', 'C-LEVEL']) {
+        Object.defineProperty(mockSessaoProvider, 'usuario', {
+          value: { teams: [], roles: [role] },
+          configurable: true
+        });
+        expect(service.canAccessTeamManagement())
+          .withContext(`role=${role}`)
+          .toBe(true);
+      }
+    });
+
     it('canSeeAllTeams should return true only for DIRETOR', () => {
       Object.defineProperty(mockSessaoProvider, 'usuario', { 
         value: { teams: [defaultTeamCodes.diretor] } 
