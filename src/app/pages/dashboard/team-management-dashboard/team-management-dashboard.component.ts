@@ -3634,7 +3634,7 @@ private calculateCollaboratorTotals(memberData: Array<{
       this.isLoadingSidebar = !this.sidebarLoadedOnce;
       this.isLoadingGoals = true;
       this.isLoadingMonthlyPointsProgress = true;
-      this.isLoadingKPIs = false;
+      this.isLoadingKPIs = true;
       this.isLoadingCarteira = true;
       this.isLoadingCollaborators = false;
 
@@ -3657,15 +3657,23 @@ private calculateCollaboratorTotals(memberData: Array<{
       const monthRange = this.calculateDateRange();
       const seasonRange = this.seasonDates;
 
+      // Importante: `loadManagementOverviewFromCache` precisa terminar **antes** das outras tarefas
+      // para que `teamMonthOnTimeDeliveryPct` (= `manager.month_on_time_delivery_pct`) já esteja
+      // populado quando `loadTeamKPIs` rodar `syncEntregasPrazoKpiFromParticipacao`.
       await this.loadManagementOverviewFromCache();
       await Promise.all([
         this.loadSidebarData(seasonRange),
         this.loadGoalsData(monthRange),
         this.loadMonthlyPointsBreakdown(),
+        // KPI «Entregas no Prazo» (circular): scaffold via `kpiService.getPlayerKPIs` e em seguida
+        // `syncEntregasPrazoKpiFromParticipacao` aplica `manager.month_on_time_delivery_pct` do cache.
+        this.loadTeamKPIs(),
         // «Clientes atendidos»: agregado da gestão via `management/finished/deliveries/cached` (sem team_id).
         this.loadParticipacaoClientesList('')
       ]);
 
+      // Reaplica o pct do cache caso `loadParticipacaoClientesList` tenha re-sincronizado depois dos KPIs.
+      this.syncEntregasPrazoKpiFromParticipacao();
       this.updateFormattedSidebarData();
       this.updateTeamNameDisplay();
       this.lastRefresh = new Date();
