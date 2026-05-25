@@ -18,7 +18,10 @@ import {
   mapGame4uStatsToActivityMetrics,
   mapGame4uStatsToPointWallet,
   mergeGame4uDeliveryParticipation,
-  mergeGame4uTeamDeliveryRows
+  mergeGame4uTeamDeliveryRows,
+  mapGame4uFinishedDeliveryRowsToParticipacaoCnpjRows,
+  deliveryRowHasFinishedTaskInMonth,
+  hasMoreFinishedDeliveriesCachedPage
 } from './game4u-game-mapper';
 import type { Game4uDeliveryModel, Game4uUserActionModel } from '@model/game4u-api.model';
 
@@ -588,6 +591,55 @@ describe('game4u-game-mapper', () => {
       );
       expect(rows).toContain(jasmine.objectContaining({ cnpj: 'c1', processCount: 1 }));
       expect(rows).toContain(jasmine.objectContaining({ cnpj: 'c2', processCount: 0 }));
+    });
+  });
+
+  describe('deliveryRowHasFinishedTaskInMonth', () => {
+    it('returns true when tasks_total > 0', () => {
+      expect(deliveryRowHasFinishedTaskInMonth({ delivery_title: 'A', tasks_total: 1 })).toBe(true);
+    });
+
+    it('returns false when month counters are zero', () => {
+      expect(
+        deliveryRowHasFinishedTaskInMonth({ delivery_title: 'B', tasks_total: 0, tasks_on_time: 0 })
+      ).toBe(false);
+    });
+  });
+
+  describe('hasMoreFinishedDeliveriesCachedPage', () => {
+    it('uses total when known even if page is not full after client filter', () => {
+      expect(hasMoreFinishedDeliveriesCachedPage(10, 30, 10, 45)).toBe(true);
+      expect(hasMoreFinishedDeliveriesCachedPage(10, 30, 45, 45)).toBe(false);
+    });
+
+    it('uses full page heuristic when total is absent', () => {
+      expect(hasMoreFinishedDeliveriesCachedPage(30, 30, 30, undefined)).toBe(true);
+      expect(hasMoreFinishedDeliveriesCachedPage(5, 30, 5, undefined)).toBe(false);
+    });
+
+    it('respects explicit has_more from API', () => {
+      expect(hasMoreFinishedDeliveriesCachedPage(0, 30, 0, 0, true)).toBe(true);
+      expect(hasMoreFinishedDeliveriesCachedPage(30, 30, 30, 100, false)).toBe(false);
+    });
+
+    it('treats total equal to full page size as possibly incomplete', () => {
+      expect(hasMoreFinishedDeliveriesCachedPage(30, 30, 30, 30)).toBe(true);
+      expect(hasMoreFinishedDeliveriesCachedPage(12, 30, 12, 12)).toBe(false);
+    });
+  });
+
+  describe('mapGame4uFinishedDeliveryRowsToParticipacaoCnpjRows', () => {
+    it('omits deliveries without finished tasks in the selected month', () => {
+      const month = new Date(2026, 4, 1);
+      const rows = mapGame4uFinishedDeliveryRowsToParticipacaoCnpjRows(
+        [
+          { delivery_title: 'Com tarefa', emp_id: 1, tasks_total: 2, on_time_pct: 50 },
+          { delivery_title: 'Sem tarefa', emp_id: 2, tasks_total: 0, tasks_on_time: 0 }
+        ],
+        month
+      );
+      expect(rows.length).toBe(1);
+      expect(rows[0].delivery_title).toBe('Com tarefa');
     });
   });
 });

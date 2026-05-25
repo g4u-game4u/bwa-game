@@ -72,7 +72,7 @@ export interface CompanyDisplay {
   delivery_extra_cnpj?: string;
   /** Game4U: identificador da entrega na linha (EmpID/cruzamento gamificação); o modal não envia isto em `actions-by-delivery`. */
   deliveryId?: string;
-  /** Lista via `GET /game/reports/finished/deliveries`: tarefas no modal vêm de `actions-by-delivery` (filtro por `delivery_title`). */
+  /** Lista via `finished/deliveries` ou `finished/deliveries/cached`; modal usa `actions-by-delivery`. */
   loadTasksViaGameReports?: boolean;
   /** EmpID usado no mapa `byEmpId` da gamificação (ex.: extraído de `delivery_id` antes da competência). */
   gamificacaoEmpIdUsado?: string;

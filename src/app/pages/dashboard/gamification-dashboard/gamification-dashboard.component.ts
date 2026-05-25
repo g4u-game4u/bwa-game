@@ -8,7 +8,8 @@ import { PlayerService } from '@services/player.service';
 import { KPIService } from '@services/kpi.service';
 import { ToastService } from '@services/toast.service';
 import { PerformanceMonitorService } from '@services/performance-monitor.service';
-import { ActionLogService } from '@services/action-log.service';
+import { ActionLogService, type PlayerParticipacaoDeliveryRow } from '@services/action-log.service';
+import type { PlayerDashboardCachedParams } from '@model/game4u-api.model';
 import { CompanyKpiService } from '@services/company-kpi.service';
 import { CnpjLookupService } from '@services/cnpj-lookup.service';
 import { SessaoProvider } from '@providers/sessao/sessao.provider';
@@ -32,6 +33,7 @@ import {
   extractGamificacaoEmpIdFromDeliveryKey,
   extractEmpIdPrefixFromDeliveryIdFirstSegment
 } from '@services/gamificacao-delivery-empid.util';
+import { hasMoreFinishedDeliveriesCachedPage } from '@services/game4u-game-mapper';
 
 @Component({
   selector: 'app-gamification-dashboard',
@@ -123,9 +125,17 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   activityMetrics: ActivityMetrics | null = null;
   processMetrics: ProcessMetrics | null = null;
   monthlyPointsBreakdown: { bloqueados: number; desbloqueados: number } | null = null;
-  /** Meta do circular de pontos (`GET /game/reports/goal/month/summary`). */
+  /** Meta do circular de pontos (`month_goal_points` em `dashboard/cached`). */
   monthlyPointsGoalTarget: number | null = null;
   isLoadingMonthlyGoal = false;
+  /** Sem cache para o mês do filtro (HTTP 404). */
+  playerDashboardCacheMissing = false;
+  /** `refreshed_at` do cache denormalizado (quando disponível). */
+  dashboardRefreshedAt: Date | null = null;
+  /** Intervalos `season_*` / `month_*` devolvidos em `params` do cache. */
+  dashboardCachedParams: PlayerDashboardCachedParams | null = null;
+  /** % entregas no prazo do mês (`month_on_time_delivery_pct` em `dashboard/cached`). */
+  monthOnTimeDeliveryPct: number | null = null;
   
   // Company data
   companies: Company[] = [];
@@ -150,7 +160,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   isLoadingParticipacao = true;
   /** true enquanto GET /gamificação + cruzamento (enrichFromCnpjResp) ainda não aplicaram porcEntregas na lista. */
   isLoadingParticipacaoKpi = false;
-  /** Contador do título: Game4U `deliveries_count` de `/game/reports/finished/summary` (mês selecionado). */
+  /** Contador do título: Game4U `month_clients_served` em `dashboard/cached` (mês selecionado). */
   clientesAtendidosThisMonthCount: number | null = null;
   isLoadingClientesAtendidosCount = false;
   isLoadingParticipacaoMore = false;
@@ -319,8 +329,8 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   
   /**
    * Load all dashboard data asynchronously.
-   * Game4U: dados agregados vêm de `GET /game/reports/*` (ex.: `finished/summary`, `goal/month/summary`, `user-actions`);
-   * não se usa `GET /game/stats` nem `GET /game/actions` neste painel.
+   * Game4U: KPIs de resumo em `dashboard/cached`; lista de clientes em `finished/deliveries/cached`; drill-down ao vivo.
+   * Não se usa `GET /game/stats` nem `GET /game/actions` neste painel.
    */
   loadDashboardData(): void {
     // Force fresh data on every dashboard load
@@ -346,7 +356,11 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
       this.loadClientesData();
       this.loadParticipacaoData();
       this.loadKPIData();
-      this.loadProgressData();
+      if (this.playerService.usesGame4uWalletFromStats()) {
+        this.loadGamificationDashboardFromCache();
+      } else {
+        this.loadProgressData();
+      }
     });
   }
 
@@ -427,15 +441,13 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
         }
       });
     
-    // Game4U: `GET /game/reports/finished/summary` (temporada) alimenta carteira + sidebar (sem `/game/stats`/`/game/actions`).
+    // Game4U: `GET /game/reports/dashboard/cached` (`season_*`) alimenta carteira + sidebar.
     const usesGame4uWallet = this.playerService.usesGame4uWalletFromStats();
     if (usesGame4uWallet) {
       this.sidebarGame4uSnapshotPending = true;
       this.cdr.markForCheck();
       this.actionLogService
-        // Carteira/season sidebar devem refletir a campanha inteira (start/end de /campaign),
-        // não o mês do filtro do painel.
-        .getMonthlyGame4uPlayerDashboardData(playerId, undefined)
+        .getMonthlyGame4uPlayerDashboardData(playerId, this.selectedMonth ?? new Date())
         .pipe(takeUntil(this.destroy$))
         .subscribe({
           next: ({ wallet, sidebar }) => {
@@ -536,7 +548,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
    * Load additional season progress details:
    * - Tarefas finalizadas: Game4U = count `action_stats.done` (mesma chamada que `delivery_stats.total`);
    *   Funifier = action_log.
-   * - `deliveryStatsTotal`: Game4U `deliveries_count` no relatório `finished/summary` quando existir.
+   * - `deliveryStatsTotal`: Game4U `season_clients_total` em `dashboard/cached` quando existir.
    */
   private loadSeasonProgressDetails(): void {
     const playerId = this.getPlayerId();
@@ -702,8 +714,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
       this.useParticipacaoReportsPagination &&
       !this.isLoadingParticipacao &&
       !this.isLoadingParticipacaoMore &&
-      this.participacaoHasMore &&
-      this.participacaoClientes.length > 0
+      this.participacaoHasMore
     );
   }
 
@@ -735,36 +746,33 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
       .subscribe({
         next: async page => {
           try {
-            const appended = (page.items || []).map(i => ({
-              cnpj: i.cnpj,
-              cnpjId: i.cnpj,
-              actionCount: i.actionCount ?? 0,
-              processCount: 0,
-              delivery_title: i.delivery_title,
-              ...(i.deliveryId?.trim() ? { deliveryId: i.deliveryId.trim() } : {}),
-              loadTasksViaGameReports: true
-            })) as CompanyDisplay[];
+            const appended = (page.items || []).map(i => this.mapParticipacaoDeliveryRowToCompanyDisplay(i));
 
             const merged = this.dedupeParticipacaoClientes([...this.participacaoClientes, ...appended]);
             this.participacaoClientes = merged;
 
-            const received = page.items?.length ?? 0;
-            const total = page.total;
-            if (typeof total === 'number' && Number.isFinite(total)) {
-              this.participacaoTotal = total;
+            const apiReceived = page.apiRowCount ?? page.items?.length ?? 0;
+            if (typeof page.total === 'number' && Number.isFinite(page.total)) {
+              this.participacaoTotal = page.total;
             }
-            this.participacaoNextOffset += received;
-            const fullPage = received >= this.participacaoPageLimit;
-            const knownTotal = this.participacaoTotal;
-            this.participacaoHasMore =
-              fullPage && (knownTotal == null || this.participacaoNextOffset < knownTotal);
+            this.participacaoNextOffset = (page.offset ?? this.participacaoNextOffset) + apiReceived;
+            this.participacaoHasMore = hasMoreFinishedDeliveriesCachedPage(
+              apiReceived,
+              this.participacaoPageLimit,
+              this.participacaoNextOffset,
+              this.participacaoTotal,
+              page.has_more
+            );
 
             this.isLoadingParticipacaoKpi = merged.length > 0;
             this.syncClientesKpiWithTabs();
             this.cdr.markForCheck();
 
-            if (merged.length > 0) {
+            if (merged.length > 0 && !page.fromCachedDeliveries) {
               await this.applyParticipacaoPorcEntregasKpiAfterGamificacaoAsync(merged, loadGen);
+            } else if (merged.length > 0 && page.fromCachedDeliveries) {
+              this.isLoadingParticipacaoKpi = false;
+              this.syncClientesKpiWithTabs();
             }
           } catch (err) {
             console.error('📊 Falha ao aplicar KPI após carregar mais participação:', err);
@@ -787,28 +795,30 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
       .getPlayerFinishedDeliveriesParticipacaoPage(playerId, this.selectedMonth, 0, pageLimit)
       .pipe(
         switchMap(page => {
-          if (page.items?.length) {
+          if (page.fromCachedDeliveries || (page.items?.length ?? 0) > 0) {
             this.useParticipacaoReportsPagination = true;
-            const baseClientes: CompanyDisplay[] = page.items.map(i => ({
-              cnpj: i.cnpj,
-              cnpjId: i.cnpj,
-              actionCount: i.actionCount ?? 0,
-              processCount: 0,
-              delivery_title: i.delivery_title,
-              ...(i.deliveryId?.trim() ? { deliveryId: i.deliveryId.trim() } : {}),
-              loadTasksViaGameReports: true
-            }));
-            const received = page.items.length;
+            const baseClientes: CompanyDisplay[] = (page.items || []).map(i =>
+              this.mapParticipacaoDeliveryRowToCompanyDisplay(i)
+            );
+            const apiReceived = page.apiRowCount ?? page.items?.length ?? 0;
             if (typeof page.total === 'number' && Number.isFinite(page.total)) {
               this.participacaoTotal = page.total;
             }
-            this.participacaoNextOffset = received;
-            const fullPage = received >= pageLimit;
-            const knownTotal = this.participacaoTotal;
-            this.participacaoHasMore = fullPage && (knownTotal == null || this.participacaoNextOffset < knownTotal);
-            return of({ empids: [] as string[], baseClientes, skipKpi: false as const });
+            this.participacaoNextOffset = (page.offset ?? 0) + apiReceived;
+            this.participacaoHasMore = hasMoreFinishedDeliveriesCachedPage(
+              apiReceived,
+              pageLimit,
+              this.participacaoNextOffset,
+              this.participacaoTotal,
+              page.has_more
+            );
+            return of({
+              empids: [] as string[],
+              baseClientes,
+              skipKpi: !!page.fromCachedDeliveries
+            });
           }
-          // Fallback: comportamento legado (sem paginação / backend sem suporte)
+          // Fallback legado (equipa com `team_id` ou backend sem lista paginada)
           return this.actionLogService.getPlayerCnpjListWithCount(playerId, this.selectedMonth).pipe(
             switchMap(items => {
               const empids = items.map(i => i.cnpj).filter((c): c is string => !!c && String(c).trim().length > 0);
@@ -881,7 +891,11 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
           this.syncClientesKpiWithTabs();
           this.cdr.markForCheck();
 
-          if (!skipKpi && uniqueBase.length > 0) {
+          if (skipKpi) {
+            this.isLoadingParticipacaoKpi = false;
+            this.syncClientesKpiWithTabs();
+            this.cdr.markForCheck();
+          } else if (uniqueBase.length > 0) {
             void this.applyParticipacaoPorcEntregasKpiAfterGamificacaoAsync(uniqueBase, loadGen).catch(
               (err: unknown) => {
                 console.error('📊 Falha ao aplicar KPI de entregas (gamificação):', err);
@@ -977,6 +991,22 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
       deliveryKpi: keep.deliveryKpi ?? add.deliveryKpi,
       classificacao: keep.classificacao ?? add.classificacao,
       gamificacaoEmpIdUsado: keep.gamificacaoEmpIdUsado ?? add.gamificacaoEmpIdUsado
+    };
+  }
+
+  private mapParticipacaoDeliveryRowToCompanyDisplay(i: PlayerParticipacaoDeliveryRow): CompanyDisplay {
+    return {
+      cnpj: i.cnpj,
+      cnpjId: i.cnpj,
+      actionCount: i.actionCount ?? 0,
+      processCount: 0,
+      delivery_title: i.delivery_title,
+      ...(i.deliveryId?.trim() ? { deliveryId: i.deliveryId.trim() } : {}),
+      ...(i.porcEntregas != null
+        ? { porcEntregas: i.porcEntregas, entrega: i.entrega ?? i.porcEntregas }
+        : {}),
+      ...(i.gamificacaoEmpIdUsado != null ? { gamificacaoEmpIdUsado: String(i.gamificacaoEmpIdUsado) } : {}),
+      loadTasksViaGameReports: i.loadTasksViaGameReports ?? true
     };
   }
 
@@ -1108,12 +1138,19 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   }
 
   /**
-   * KPI "entregas-prazo": média das % (`porcEntregas`) dos clientes atendidos no mês/período do filtro,
-   * alinhada à lista de participação (só após gamificação quando aplicável).
+   * KPI "entregas-prazo": `month_on_time_delivery_pct` do cache (Game4U) ou média `porcEntregas` na lista.
    */
   private syncEntregasPrazoKpiFromParticipacao(): void {
     const idx = this.playerKPIs.findIndex(k => k.id === 'entregas-prazo');
-    if (idx === -1 || this.isLoadingParticipacao || this.isLoadingParticipacaoKpi) {
+    if (idx === -1) {
+      return;
+    }
+    const fromCache = this.getEntregasPrazoPercentFromDashboardCache();
+    if (fromCache !== null) {
+      this.applyEntregasPrazoKpiValue(idx, fromCache);
+      return;
+    }
+    if (this.isLoadingParticipacao || this.isLoadingParticipacaoKpi) {
       return;
     }
 
@@ -1135,6 +1172,11 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
       return;
     }
 
+    this.applyEntregasPrazoKpiValue(idx, avg);
+  }
+
+  private applyEntregasPrazoKpiValue(idx: number, avg: number): void {
+    const base = this.playerKPIs[idx];
     const target = base.target;
     const superTarget = base.superTarget ?? 100;
     const updated: KPIData = {
@@ -1148,6 +1190,19 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     if (this.seasonProgress) {
       this.updateMetasFromKPIs(this.playerKPIs);
     }
+    this.cdr.markForCheck();
+  }
+
+  /** % do circular «Entregas no Prazo» vindo de `dashboard/cached` (mês selecionado). */
+  private getEntregasPrazoPercentFromDashboardCache(): number | null {
+    if (
+      !this.playerService.usesGame4uWalletFromStats() ||
+      this.selectedMonth == null ||
+      this.monthOnTimeDeliveryPct == null
+    ) {
+      return null;
+    }
+    return this.monthOnTimeDeliveryPct;
   }
 
   private loadKPIData(): void {
@@ -1163,6 +1218,9 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
           console.log('📊 KPIs loaded:', kpis, `(${kpis?.length || 0} KPIs)`);
           this.playerKPIs = kpis || [];
           this.syncClientesKpiWithTabs();
+          if (this.playerService.usesGame4uWalletFromStats()) {
+            this.syncEntregasPrazoKpiFromParticipacao();
+          }
           this.isLoadingKPIs = false;
           
           // Always update metas if we have KPIs (even if empty, to show 0/0)
@@ -1218,7 +1276,94 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   }
   
   /**
-   * Load activity and macro progress data from action_log
+   * KPIs de resumo via `GET /game/reports/dashboard/cached` (substitui finished/open/goal month summary).
+   */
+  private loadGamificationDashboardFromCache(): void {
+    this.isLoadingProgress = true;
+    this.isLoadingMonthlyGoal = true;
+    this.monthlyPointsGoalTarget = null;
+    this.playerDashboardCacheMissing = false;
+    this.dashboardRefreshedAt = null;
+    this.dashboardCachedParams = null;
+    this.monthOnTimeDeliveryPct = null;
+
+    const usuario = this.sessaoProvider.usuario as { _id?: string; email?: string } | null;
+    const playerId: string = (usuario?._id || usuario?.email || '') as string;
+    if (!playerId) {
+      this.activityMetrics = { pendentes: 0, emExecucao: 0, finalizadas: 0, pontos: 0 };
+      this.processMetrics = { pendentes: 0, incompletas: 0, finalizadas: 0 };
+      this.isLoadingProgress = false;
+      this.isLoadingMonthlyGoal = false;
+      this.isLoadingClientesAtendidosCount = false;
+      this.cdr.markForCheck();
+      return;
+    }
+
+    const month = this.selectedMonth;
+    if (month != null) {
+      this.isLoadingClientesAtendidosCount = true;
+    } else {
+      this.clientesAtendidosThisMonthCount = null;
+      this.isLoadingClientesAtendidosCount = false;
+    }
+
+    this.actionLogService
+      .getGamificationDashboardCachedBundle(playerId, month ?? undefined)
+      .pipe(takeUntil(this.destroy$), takeUntil(this.monthChange$))
+      .subscribe({
+        next: bundle => {
+          if (!bundle) {
+            this.playerDashboardCacheMissing = month != null;
+            this.activityMetrics = { pendentes: 0, emExecucao: 0, finalizadas: 0, pontos: 0 };
+            this.processMetrics = { pendentes: 0, incompletas: 0, finalizadas: 0 };
+            this.monthlyPointsGoalTarget = null;
+            this.monthOnTimeDeliveryPct = null;
+            this.clientesAtendidosThisMonthCount = month != null ? null : this.clientesAtendidosThisMonthCount;
+          } else {
+            this.playerDashboardCacheMissing = false;
+            this.activityMetrics = bundle.activity;
+            this.processMetrics = bundle.processo;
+            const g = Math.floor(Number(bundle.monthlyGoalTarget) || 0);
+            this.monthlyPointsGoalTarget = g > 0 ? g : null;
+            this.monthOnTimeDeliveryPct =
+              month != null ? bundle.monthOnTimeDeliveryPct : null;
+            if (month != null) {
+              this.clientesAtendidosThisMonthCount = bundle.monthClientsServed;
+            }
+            const refreshed = new Date(bundle.refreshedAt);
+            this.dashboardRefreshedAt = Number.isFinite(refreshed.getTime()) ? refreshed : null;
+            this.dashboardCachedParams = bundle.params;
+            if (this.seasonDates && bundle.params?.season_start && bundle.params?.season_end) {
+              const ss = new Date(bundle.params.season_start);
+              const se = new Date(bundle.params.season_end);
+              if (Number.isFinite(ss.getTime()) && Number.isFinite(se.getTime())) {
+                this.seasonDates = { start: ss, end: se };
+              }
+            }
+          }
+          this.syncEntregasPrazoKpiFromParticipacao();
+          this.isLoadingProgress = false;
+          this.isLoadingMonthlyGoal = false;
+          this.isLoadingClientesAtendidosCount = false;
+          this.cdr.markForCheck();
+        },
+        error: error => {
+          console.error('📊 Failed to load dashboard/cached:', error);
+          this.playerDashboardCacheMissing = month != null;
+          this.activityMetrics = { pendentes: 0, emExecucao: 0, finalizadas: 0, pontos: 0 };
+          this.processMetrics = { pendentes: 0, incompletas: 0, finalizadas: 0 };
+          this.monthlyPointsGoalTarget = null;
+          this.monthOnTimeDeliveryPct = null;
+          this.isLoadingProgress = false;
+          this.isLoadingMonthlyGoal = false;
+          this.isLoadingClientesAtendidosCount = false;
+          this.cdr.markForCheck();
+        }
+      });
+  }
+
+  /**
+   * Load activity and macro progress data from action_log (Funifier / legado).
    */
   private loadProgressData(): void {
     this.isLoadingProgress = true;
@@ -1316,6 +1461,10 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     this.activityMetrics = null;
     this.processMetrics = null;
     this.monthlyPointsGoalTarget = null;
+    this.playerDashboardCacheMissing = false;
+    this.dashboardRefreshedAt = null;
+    this.dashboardCachedParams = null;
+    this.monthOnTimeDeliveryPct = null;
     this.playerKPIs = [];
 
     // Show loading states immediately
@@ -1329,8 +1478,12 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
 
     this.companyKpiService.prefetchGamificacaoSnapshot();
     this.loadKPIData();
-    this.loadProgressData();
-    this.loadClientesAtendidosCountFromFinishedSummary();
+    if (this.playerService.usesGame4uWalletFromStats()) {
+      this.loadGamificationDashboardFromCache();
+    } else {
+      this.loadProgressData();
+      this.loadClientesAtendidosCountFromFinishedSummary();
+    }
     this.loadParticipacaoData();
   }
 
@@ -1376,8 +1529,11 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   }
 
   retryClientesAtendidosThisMonth(): void {
-    // Recarrega contador (finished/summary) + lista (finished/deliveries / fallback)
-    this.loadClientesAtendidosCountFromFinishedSummary();
+    if (this.playerService.usesGame4uWalletFromStats()) {
+      this.loadGamificationDashboardFromCache();
+    } else {
+      this.loadClientesAtendidosCountFromFinishedSummary();
+    }
     this.loadParticipacaoData();
   }
 
@@ -1598,14 +1754,17 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   /**
    * For "Clientes na Carteira", use seasonProgress.clientes (action_log count)
    * to compare against KPI target in circular progress.
-   * For "Entregas no Prazo", use média de `porcEntregas` na lista «Clientes atendidos» quando disponível
-   * (GET `/gamificacao` + cruzamento); senão perfil (`extra.entrega`).
+   * For "Entregas no Prazo", usa `month_on_time_delivery_pct` (cache) ou média `porcEntregas` na lista.
    */
   getKpiCurrentValue(kpi: KPIData): number {
     if (kpi.id === 'numero-empresas') {
       return this.seasonProgress?.clientes ?? kpi.current;
     }
     if (kpi.id === 'entregas-prazo') {
+      const fromCache = this.getEntregasPrazoPercentFromDashboardCache();
+      if (fromCache !== null) {
+        return fromCache;
+      }
       const fromParticipacao = this.getEntregasPrazoPercentFromParticipacao();
       if (fromParticipacao !== null) {
         return fromParticipacao;
@@ -1634,10 +1793,15 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     return Math.round((values.reduce((a, b) => a + b, 0) / values.length) * 100) / 100;
   }
 
-  /** Circular «Entregas no Prazo»: aguarda cruzamento gamificação quando há clientes no mês. */
+  /** Circular «Entregas no Prazo»: aguarda gamificação só se não houver % no cache. */
   isEntregasPrazoCircularPending(kpi: KPIData): boolean {
+    if (kpi.id !== 'entregas-prazo') {
+      return false;
+    }
+    if (this.getEntregasPrazoPercentFromDashboardCache() !== null) {
+      return false;
+    }
     return (
-      kpi.id === 'entregas-prazo' &&
       !this.isLoadingParticipacao &&
       this.participacaoClientes.length > 0 &&
       this.isLoadingParticipacaoKpi
@@ -1650,6 +1814,9 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   getKpiCircularIsMissing(kpi: KPIData): boolean {
     if (kpi.id !== 'entregas-prazo') {
       return !!kpi.isMissing;
+    }
+    if (this.getEntregasPrazoPercentFromDashboardCache() !== null) {
+      return false;
     }
     if (this.isLoadingParticipacao || this.participacaoClientes.length === 0) {
       return !!kpi.isMissing;

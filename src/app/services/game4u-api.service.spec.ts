@@ -329,6 +329,335 @@ describe('Game4uApiService', () => {
     req.flush({ offset: 0, limit: 100, items: [] });
   });
 
+  it('getGameReportsDashboardCached builds email and month params', done => {
+    service
+      .getGameReportsDashboardCached({
+        email: 'player@bwa.global',
+        month: '2026-05'
+      })
+      .subscribe(res => {
+        expect(res.season_points_total).toBe(1840);
+        expect(res.month_goal_points).toBe(450);
+        done();
+      });
+    const req = httpMock.expectOne(
+      r =>
+        r.url === `${baseUrl}/game/reports/dashboard/cached` &&
+        r.params.get('email') === 'player@bwa.global' &&
+        r.params.get('month') === '2026-05'
+    );
+    req.flush({
+      refreshed_at: '2026-05-20T19:59:15.123Z',
+      params: {
+        cache_month: '2026-05-01',
+        season_start: '2026-03-01',
+        season_end: '2026-06-30',
+        month_start: '2026-05-01',
+        month_end: '2026-05-31'
+      },
+      season_points_total: 1840,
+      season_clients_total: 22,
+      season_tasks_finished_total: 95,
+      month_points_done_delivered: 320,
+      month_goal_points: 450,
+      month_pending_tasks_count: 12,
+      month_finished_tasks_count: 28,
+      month_clients_served: 8,
+      month_on_time_delivery_pct: 92.5,
+      refresh_error: null
+    });
+  });
+
+  it('getGameReportsSupervisionDashboardCached builds team_id and month params', done => {
+    service
+      .getGameReportsSupervisionDashboardCached({
+        team_id: '26',
+        month: '2026-05'
+      })
+      .subscribe(res => {
+        expect(res.team_id).toBe(26);
+        expect(res.team_name).toBe('Equipe Alpha');
+        expect(res.month_clients_served).toBe(8);
+        done();
+      });
+    const req = httpMock.expectOne(
+      r =>
+        r.url === `${baseUrl}/game/reports/supervision/dashboard/cached` &&
+        r.params.get('team_id') === '26' &&
+        r.params.get('month') === '2026-05'
+    );
+    req.flush({
+      refreshed_at: '2026-05-20T19:59:15.123Z',
+      team_id: 26,
+      team_name: 'Equipe Alpha',
+      players_count: 5,
+      params: {
+        cache_month: '2026-05-01',
+        season_start: '2026-03-01',
+        season_end: '2026-06-30',
+        month_start: '2026-05-01',
+        month_end: '2026-05-31'
+      },
+      season_points_total: 4200,
+      season_clients_total: 40,
+      season_tasks_finished_total: 180,
+      month_points_done_delivered: 900,
+      month_goal_points: 1200,
+      month_pending_tasks_count: 15,
+      month_finished_tasks_count: 55,
+      month_clients_served: 8,
+      month_on_time_delivery_pct: 88,
+      refresh_error: null
+    });
+  });
+
+  it('getGameReportsManagementDashboardCachedOverview builds month param', done => {
+    service
+      .getGameReportsManagementDashboardCachedOverview({ month: '2026-05' })
+      .subscribe(res => {
+        expect(res.manager.user_role).toBe('GERENTE');
+        expect(res.manager.month_clients_served).toBe(40);
+        expect(res.teams.length).toBe(1);
+        done();
+      });
+    const req = httpMock.expectOne(
+      r =>
+        r.url === `${baseUrl}/game/reports/management/dashboard/cached/overview` &&
+        r.params.get('month') === '2026-05'
+    );
+    req.flush({
+      manager: {
+        refreshed_at: '2026-05-20T18:00:00.000Z',
+        user_id: 'u1',
+        user_email: 'gerente@bwa.global',
+        user_role: 'GERENTE',
+        teams_count: 1,
+        team_ids: [37],
+        teams: [{ team_id: 37, team_name: 'Time Norte' }],
+        players_count: 12,
+        params: {
+          cache_month: '2026-05-01',
+          season_start: '2026-03-01',
+          season_end: '2026-06-30',
+          month_start: '2026-05-01',
+          month_end: '2026-05-31'
+        },
+        season_points_total: 4800,
+        season_clients_total: 120,
+        season_tasks_finished_total: 320,
+        month_points_done_delivered: 900,
+        month_goal_points: 1100,
+        month_pending_tasks_count: 45,
+        month_finished_tasks_count: 88,
+        month_clients_served: 40,
+        month_on_time_delivery_pct: 82.5,
+        refresh_error: null
+      },
+      teams: [
+        {
+          refreshed_at: '2026-05-20T18:00:00.000Z',
+          team_id: 37,
+          team_name: 'Time Norte',
+          players_count: 12,
+          params: {
+            cache_month: '2026-05-01',
+            season_start: '2026-03-01',
+            season_end: '2026-06-30',
+            month_start: '2026-05-01',
+            month_end: '2026-05-31'
+          },
+          season_points_total: 2400,
+          season_clients_total: 60,
+          season_tasks_finished_total: 160,
+          month_points_done_delivered: 450,
+          month_goal_points: 550,
+          month_pending_tasks_count: 22,
+          month_finished_tasks_count: 44,
+          month_clients_served: 20,
+          month_on_time_delivery_pct: 80,
+          refresh_error: null
+        }
+      ],
+      organizational_tier: null
+    });
+  });
+
+  it('getGameReportsSupervisionDashboardCachedList builds month param', done => {
+    service
+      .getGameReportsSupervisionDashboardCachedList({ month: '2026-05' })
+      .subscribe(res => {
+        expect(res.teams.length).toBe(1);
+        expect(res.teams[0].team_id).toBe(26);
+        done();
+      });
+    const req = httpMock.expectOne(
+      r =>
+        r.url === `${baseUrl}/game/reports/supervision/dashboard/cached/list` &&
+        r.params.get('month') === '2026-05'
+    );
+    req.flush({
+      teams: [
+        {
+          refreshed_at: '2026-05-20T19:59:15.123Z',
+          team_id: 26,
+          team_name: 'Equipe Alpha',
+          players_count: 5,
+          params: {
+            cache_month: '2026-05-01',
+            season_start: '2026-03-01',
+            season_end: '2026-06-30',
+            month_start: '2026-05-01',
+            month_end: '2026-05-31'
+          },
+          season_points_total: 4200,
+          season_clients_total: 40,
+          season_tasks_finished_total: 180,
+          month_points_done_delivered: 900,
+          month_goal_points: 1200,
+          month_pending_tasks_count: 15,
+          month_finished_tasks_count: 55,
+          month_clients_served: 8,
+          month_on_time_delivery_pct: 88,
+          refresh_error: null
+        }
+      ]
+    });
+  });
+
+  it('getGameReportsFinishedDeliveriesCached builds team_id, month and pagination', done => {
+    service
+      .getGameReportsFinishedDeliveriesCached({
+        team_id: '26',
+        month: '2026-05',
+        offset: 0,
+        limit: 50
+      })
+      .subscribe(res => {
+        expect(res.items[0].delivery_title).toBe('Cliente Equipa');
+        expect(res.items[0].on_time_pct).toBe(91);
+        expect(res.total).toBe(1);
+        done();
+      });
+    const req = httpMock.expectOne(
+      r =>
+        r.url === `${baseUrl}/game/reports/finished/deliveries/cached` &&
+        r.params.get('team_id') === '26' &&
+        r.params.get('month') === '2026-05' &&
+        r.params.get('offset') === '0' &&
+        r.params.get('limit') === '50' &&
+        r.params.get('email') == null
+    );
+    req.flush({
+      refreshed_at: '2026-05-20T12:00:00.000Z',
+      offset: 0,
+      limit: 50,
+      total: 1,
+      items: [{ delivery_title: 'Cliente Equipa', tasks_total: 3, on_time_pct: 91 }]
+    });
+  });
+
+  it('getGameReportsFinishedDeliveriesCached builds email, month and pagination', done => {
+    service
+      .getGameReportsFinishedDeliveriesCached({
+        email: 'player@bwa.global',
+        month: '2026-05',
+        offset: 0,
+        limit: 30
+      })
+      .subscribe(res => {
+        expect(res.items[0].delivery_title).toBe('Cliente A');
+        expect(res.items[0].on_time_pct).toBe(88);
+        expect(res.total).toBe(1);
+        done();
+      });
+    const req = httpMock.expectOne(
+      r =>
+        r.url === `${baseUrl}/game/reports/finished/deliveries/cached` &&
+        r.params.get('email') === 'player@bwa.global' &&
+        r.params.get('month') === '2026-05' &&
+        r.params.get('offset') === '0' &&
+        r.params.get('limit') === '30'
+    );
+    expect(req.request.params.has('finished_at_start')).toBe(false);
+    req.flush({
+      refreshed_at: '2026-05-20T12:00:00.000Z',
+      params: {
+        cache_month: '2026-05-01',
+        season_start: '2026-03-01',
+        season_end: '2026-06-30',
+        month_start: '2026-05-01',
+        month_end: '2026-05-31'
+      },
+      offset: 0,
+      limit: 30,
+      total: 1,
+      items: [
+        {
+          delivery_title: 'Cliente A',
+          emp_id: 41355,
+          on_time_pct: 88,
+          tasks_total: 10,
+          tasks_on_time: 8
+        },
+      ]
+    });
+  });
+
+  it('getGameReportsManagementFinishedDeliveriesCached builds month + pagination (no email/team_id)', done => {
+    service
+      .getGameReportsManagementFinishedDeliveriesCached({
+        month: '2026-05',
+        offset: 0,
+        limit: 30
+      })
+      .subscribe(res => {
+        expect(res.items[0].delivery_title).toBe('Cliente Manager');
+        expect(res.items[0].on_time_pct).toBe(82);
+        expect(res.total).toBe(1);
+        done();
+      });
+    const req = httpMock.expectOne(
+      r =>
+        r.url === `${baseUrl}/game/reports/management/finished/deliveries/cached` &&
+        r.params.get('month') === '2026-05' &&
+        r.params.get('offset') === '0' &&
+        r.params.get('limit') === '30' &&
+        r.params.get('email') == null &&
+        r.params.get('team_id') == null &&
+        r.params.get('user_id') == null
+    );
+    req.flush({
+      refreshed_at: '2026-05-20T12:00:00.000Z',
+      offset: 0,
+      limit: 30,
+      total: 1,
+      items: [
+        {
+          delivery_title: 'Cliente Manager',
+          on_time_pct: 82,
+          tasks_total: 12,
+          tasks_on_time: 10
+        }
+      ]
+    });
+  });
+
+  it('getGameReportsManagementFinishedDeliveriesCached forwards user_id (ADMIN/SERVICE)', done => {
+    service
+      .getGameReportsManagementFinishedDeliveriesCached({
+        month: '2026-05',
+        user_id: 'mgr-uuid-1'
+      })
+      .subscribe(() => done());
+    const req = httpMock.expectOne(
+      r =>
+        r.url === `${baseUrl}/game/reports/management/finished/deliveries/cached` &&
+        r.params.get('month') === '2026-05' &&
+        r.params.get('user_id') === 'mgr-uuid-1'
+    );
+    req.flush({ offset: 0, limit: 30, items: [] });
+  });
+
   it('getGameReportsGoalMonthSummary builds dt_prazo params', done => {
     service
       .getGameReportsGoalMonthSummary({

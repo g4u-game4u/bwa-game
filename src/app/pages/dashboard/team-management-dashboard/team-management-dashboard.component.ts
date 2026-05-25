@@ -13,7 +13,13 @@ import * as dayjs from 'dayjs';
 import { trigger, transition, style, animate } from '@angular/animations';
 
 // Services
-import { TeamAggregateService, TeamSeasonPoints, TeamProgressMetrics, Collaborator } from '@services/team-aggregate.service';
+import {
+  TeamAggregateService,
+  TeamSeasonPoints,
+  TeamProgressMetrics,
+  Collaborator,
+  TeamFinishedDeliveriesPageResult
+} from '@services/team-aggregate.service';
 import { GraphDataProcessorService } from '@services/graph-data-processor.service';
 import { SeasonDatesService } from '@services/season-dates.service';
 import { ToastService } from '@services/toast.service';
@@ -22,7 +28,18 @@ import { CacheManagerService } from '@services/cache-manager.service';
 import { BwaTeamApiService } from '@services/bwa-team-api.service';
 import { BackendApiService } from '@services/backend-api.service';
 import { PlayerService } from '@services/player.service';
-import { ActionLogService } from '@services/action-log.service';
+import {
+  ActionLogService,
+  SupervisionTeamDashboardCachedBundle,
+  PlayerParticipacaoDeliveriesPageResult,
+  PlayerParticipacaoDeliveryRow
+} from '@services/action-log.service';
+import { hasMoreFinishedDeliveriesCachedPage } from '@services/game4u-game-mapper';
+import {
+  getManagementDashboardCachedRoleLabel,
+  ManagementDashboardCachedRole
+} from '@utils/management-dashboard-role';
+import type { PlayerDashboardCachedParams } from '@model/game4u-api.model';
 import { UserProfileService } from '@services/user-profile.service';
 import { UserProfile } from '@utils/user-profile';
 import { CompanyDisplay, CompanyKpiService } from '@services/company-kpi.service';
@@ -70,10 +87,17 @@ import { ProgressListType } from '@modals/modal-progress-list/modal-progress-lis
   ]
 })
 export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
+  /** Id sintético usado no seletor para o «Painel do Gerente / Diretor / C-Level». */
+  static readonly MANAGEMENT_OVERVIEW_TEAM_ID = '__management_overview__';
+
   // State management
   selectedTeam: string = '';
   selectedTeamId: string = ''; // Funifier team ID (e.g., 'FkmdnFU')
   selectedCollaborator: string | null = null;
+  /** Papel agregado do utilizador (GERENTE / DIRETOR / C_LEVEL) ou `null`. */
+  managementRole: ManagementDashboardCachedRole | null = null;
+  /** Vista corrente no «Painel do Gerente / Diretor / C-Level» (sem time selecionado). */
+  isManagementOverview = false;
   // Initialize to February 2026 by default (similar to gamification-dashboard)
   // Calculate months ago from current date to February 2026
   selectedMonthsAgo: number = (() => {
@@ -104,7 +128,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
   isLoadingSidebar: boolean = false;
   isLoadingGoals: boolean = false;
   isLoadingProductivity: boolean = false;
-  /** Loading específico do circular «Pontos no mês» (depende de finished/summary + open/summary). */
+  /** Loading específico do circular «Pontos no mês» (cache supervisão ou dashboard/cached). */
   isLoadingMonthlyPointsProgress = false;
   /** Estado agregado: usado para desabilitar ações globais (ex.: refresh) sem travar a tela inteira. */
   get isAnyLoading(): boolean {
@@ -228,7 +252,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
     finalizadas: 0
   };
 
-  /** Meta do circular «Pontos no mês» (`/game/reports/goal/month/summary`) quando um colaborador está selecionado. */
+  /** Meta do circular «Pontos no mês» (`dashboard/cached` ou supervisão) quando um colaborador está selecionado. */
   monthlyPointsGoalTarget: number | null = null;
   
   // Company/Carteira data for team
@@ -249,11 +273,24 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
   clientesAtendidosThisMonthCount: number | null = null;
   isLoadingClientesAtendidosCount = false;
 
+  /** Cache de supervisão (`GET /game/reports/supervision/dashboard/cached`) indisponível para o mês. */
+  teamSupervisionCacheMissing = false;
+  /** `refreshed_at` do cache de supervisão (quando disponível). */
+  teamDashboardRefreshedAt: Date | null = null;
+  /** Intervalos `season_*` / `month_*` em `params` do cache de supervisão. */
+  teamDashboardCachedParams: PlayerDashboardCachedParams | null = null;
+  /** % entregas no prazo no mês (`month_on_time_delivery_pct`), 0–100. */
+  teamMonthOnTimeDeliveryPct: number | null = null;
+  /** Bundle aplicado na vista equipa agregada (evita re-fetch na mesma carga). */
+  private teamSupervisionBundle: SupervisionTeamDashboardCachedBundle | null = null;
+
   useParticipacaoReportsPagination = false;
   isLoadingCarteiraMore = false;
   participacaoHasMore = false;
   private participacaoNextOffset = 0;
   private participacaoTotal?: number;
+  /** Quando definido, «Carregar mais» usa `finished/deliveries/cached` por email (drill-down colaborador). */
+  private participacaoPagedPlayerId: string | null = null;
   private readonly participacaoPageLimit = 30;
   
   // Monthly points breakdown
@@ -437,14 +474,20 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       console.log('📅 Season + 👥 teams em paralelo…');
       await Promise.all([this.loadSeasonDates(), this.loadAvailableTeams()]);
       console.log('✅ Season dates + teams:', this.teams.length);
-      
-      // Select the first available team or previously selected team
+
       if (this.teams.length > 0) {
         const savedTeamId = localStorage.getItem('selectedTeamId');
-        const teamToSelect = savedTeamId && this.teams.find(t => t.id === savedTeamId) 
-          ? savedTeamId 
-          : this.teams[0].id;
-        
+        const hasManagementOverviewEntry = this.teams.some(
+          t => t.id === TeamManagementDashboardComponent.MANAGEMENT_OVERVIEW_TEAM_ID
+        );
+        // Papel agregado (GERENTE/DIRETOR/C-LEVEL): **sempre** abrir no «Painel do …»,
+        // ignorando `selectedTeamId` persistido — drill-down em equipa real é manual.
+        const teamToSelect = hasManagementOverviewEntry
+          ? TeamManagementDashboardComponent.MANAGEMENT_OVERVIEW_TEAM_ID
+          : savedTeamId && this.teams.some(t => t.id === savedTeamId)
+            ? savedTeamId
+            : this.teams[0].id;
+
         await this.onTeamChange(teamToSelect);
         console.log('✅ Initial team selected:', teamToSelect);
       } else {
@@ -539,10 +582,16 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
     return String(u?._id || u?.email || '').trim();
   }
 
-  /** `team_id` nas queries Game4U do painel (= time selecionado, id da API BWA). */
+  /**
+   * `team_id` nas queries Game4U do painel (= time selecionado, id da API BWA).
+   * No «Painel do Gerente / Diretor / C-Level» (id sintético), não há `team_id`.
+   */
   private getGame4uTeamScopeId(): string | undefined {
     const t = (this.selectedTeamId || '').trim();
-    return t !== '' ? t : undefined;
+    if (t === '' || t === TeamManagementDashboardComponent.MANAGEMENT_OVERVIEW_TEAM_ID) {
+      return undefined;
+    }
+    return t;
   }
 
   /**
@@ -1018,8 +1067,27 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
         }
       }
 
+      this.managementRole = this.actionLogService.getManagementDashboardCachedRole();
+      const hasManagementOverview =
+        this.managementRole != null && this.playerService.usesGame4uWalletFromStats();
+      if (hasManagementOverview) {
+        const label = getManagementDashboardCachedRoleLabel(this.managementRole!);
+        availableTeams = [
+          {
+            id: TeamManagementDashboardComponent.MANAGEMENT_OVERVIEW_TEAM_ID,
+            name: label,
+            memberCount: 0
+          },
+          ...availableTeams
+        ];
+        console.log('✅ Painel agregado disponível:', label);
+      }
+
       // Load member count for each team using aggregate queries
       const memberCountPromises = availableTeams.map(async (team) => {
+        if (team.id === TeamManagementDashboardComponent.MANAGEMENT_OVERVIEW_TEAM_ID) {
+          return team;
+        }
         try {
           const aggregatePayload = [
             {
@@ -1307,12 +1375,22 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       } else {
         // Otherwise, load team aggregated data
         console.log('👥 Loading team aggregated data');
+        this.teamSupervisionBundle = null;
+        if (this.playerService.usesGame4uWalletFromStats()) {
+          await this.loadTeamDashboardFromCache();
+        } else {
+          this.teamSupervisionCacheMissing = false;
+          this.teamDashboardRefreshedAt = null;
+          this.teamDashboardCachedParams = null;
+          this.teamMonthOnTimeDeliveryPct = null;
+        }
         // First, reload team members data to recalculate points for the selected month
         // This is important when the month changes, as points need to be recalculated
         await this.loadTeamMembersData(this.selectedTeamId, monthRange);
-        
-        // Then, load team activity and macro data (needed for sidebar aggregation)
-        await this.loadTeamActivityAndMacroData(monthRange);
+
+        if (!this.playerService.usesGame4uWalletFromStats() && !this.teamSupervisionBundle) {
+          await this.loadTeamActivityAndMacroData(monthRange);
+        }
         
         // Load data in parallel, but KPIs need carteira data first
         await Promise.all([
@@ -1499,54 +1577,34 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       } | null = null;
 
       if (this.playerService.usesGame4uWalletFromStats()) {
-        const goalPromise =
-          this.selectedMonth != null
-            ? firstValueFrom(
-                this.actionLogService
-                  .getMonthlyPointsGoalTarget(
-                    collaboratorId,
-                    this.selectedMonth,
-                    this.getGame4uTeamScopeId()
-                  )
-                  .pipe(takeUntil(this.destroy$))
-              ).catch((error: unknown) => {
-                console.error('Error loading monthly goal target (collaborator sidebar):', error);
-                return null;
-              })
-            : Promise.resolve(null);
-
-        let goalPts: number | null;
-        [snap, metrics, goalPts] = await Promise.all([
-          firstValueFrom(
-            this.actionLogService
-              .getMonthlyGame4uPlayerDashboardData(collaboratorId, undefined)
-              .pipe(takeUntil(this.destroy$))
-          ).catch((error: unknown) => {
-            console.error('Error loading Game4U collaborator sidebar snapshot:', error);
-            this.hasSidebarError = true;
-            this.sidebarErrorMessage = 'Erro ao carregar pontos da temporada';
-            return {
-              wallet: { moedas: 0, bloqueados: 0, desbloqueados: 0 },
-              sidebar: { tarefasFinalizadas: 0 }
-            };
-          }),
-          lastValueFrom(
-            this.actionLogService
-              .getProgressMetrics(collaboratorId, this.selectedMonth, {
-                gamificationDashboardReportsOnly: true,
-                teamId: this.getGame4uTeamScopeId()
-              })
-              .pipe(takeUntil(this.destroy$), last())
-          ).catch((error: unknown) => {
-            console.error('Error loading collaborator progress metrics:', error);
-            this.hasSidebarError = true;
-            this.sidebarErrorMessage = 'Erro ao carregar métricas de progresso';
-            return emptyMetrics;
-          }),
-          goalPromise
-        ]);
-        const g = goalPts != null ? Math.floor(Number(goalPts) || 0) : 0;
-        this.monthlyPointsGoalTarget = g > 0 ? g : null;
+        const bundle = await firstValueFrom(
+          this.actionLogService
+            .getGamificationDashboardCachedBundle(collaboratorId, this.selectedMonth)
+            .pipe(takeUntil(this.destroy$))
+        ).catch((error: unknown) => {
+          console.error('Error loading collaborator dashboard/cached:', error);
+          this.hasSidebarError = true;
+          this.sidebarErrorMessage = 'Erro ao carregar dados da barra lateral';
+          return null;
+        });
+        if (bundle) {
+          metrics = { activity: bundle.activity, processo: bundle.processo };
+          const g = Math.floor(Number(bundle.monthlyGoalTarget) || 0);
+          this.monthlyPointsGoalTarget = g > 0 ? g : null;
+          const pts = bundle.seasonWalletPoints;
+          snap = {
+            wallet: { moedas: 0, bloqueados: 0, desbloqueados: pts },
+            sidebar: {
+              tarefasFinalizadas: bundle.seasonTasksFinished,
+              ...(bundle.seasonClientsTotal > 0
+                ? { deliveryStatsTotal: bundle.seasonClientsTotal }
+                : {})
+            }
+          };
+        } else {
+          metrics = emptyMetrics;
+          this.monthlyPointsGoalTarget = null;
+        }
       } else {
         metrics = await lastValueFrom(
           this.actionLogService
@@ -1645,6 +1703,152 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
   }
 
   /**
+   * Game4U: supervisão por equipa (GESTOR/SUPERVISOR ou drill-down do gestor numa equipa real)
+   * ou gestão agregada (GERENTE/DIRETOR/C_LEVEL no «Painel do …», sem `team_id`).
+   *
+   * Sempre que houver um `team_id` selecionado, usa `supervision/dashboard/cached?team_id=` para
+   * que a sidebar reflita os KPIs **daquela equipa**.
+   */
+  private async loadTeamDashboardFromCache(): Promise<void> {
+    if (this.isManagementOverview) {
+      await this.loadManagementOverviewFromCache();
+      return;
+    }
+    await this.loadTeamSupervisionFromCache();
+  }
+
+  /**
+   * `GET /game/reports/management/dashboard/cached/overview` — KPIs agregados do gestor.
+   */
+  private async loadManagementOverviewFromCache(): Promise<void> {
+    const month = this.selectedMonth;
+    this.teamSupervisionCacheMissing = false;
+    this.teamDashboardRefreshedAt = null;
+    this.teamDashboardCachedParams = null;
+    this.teamMonthOnTimeDeliveryPct = null;
+    this.teamSupervisionBundle = null;
+
+    if (month == null) {
+      return;
+    }
+
+    try {
+      const bundle = await firstValueFrom(
+        this.actionLogService
+          .getManagementDashboardCachedBundle(month)
+          .pipe(takeUntil(this.destroy$))
+      );
+      if (!bundle) {
+        this.teamSupervisionCacheMissing = true;
+        this.teamActivityMetrics = { pendentes: 0, emExecucao: 0, finalizadas: 0, pontos: 0 };
+        this.teamProcessMetrics = { pendentes: 0, incompletas: 0, finalizadas: 0 };
+        this.monthlyPointsGoalTarget = null;
+        this.clientesAtendidosThisMonthCount = null;
+        return;
+      }
+
+      this.teamSupervisionBundle = bundle;
+      this.applyTeamSupervisionBundle(bundle);
+      const refreshed = bundle.refreshedAt ? new Date(bundle.refreshedAt) : null;
+      this.teamDashboardRefreshedAt = refreshed && !Number.isNaN(refreshed.getTime()) ? refreshed : null;
+      this.teamDashboardCachedParams = bundle.params;
+      this.teamMonthOnTimeDeliveryPct = bundle.monthOnTimeDeliveryPct;
+      this.teamSupervisionCacheMissing = false;
+      this.isLoadingMonthlyPointsProgress = false;
+    } catch (error) {
+      console.error('Error loading management/dashboard/cached/overview:', error);
+      this.teamSupervisionCacheMissing = month != null;
+      this.teamMonthOnTimeDeliveryPct = null;
+    }
+  }
+
+  /**
+   * Carrega `GET /game/reports/supervision/dashboard/cached` e aplica métricas da vista equipa agregada.
+   */
+  private async loadTeamSupervisionFromCache(): Promise<void> {
+    const scope = this.getGame4uTeamScopeId() ?? '';
+    const month = this.selectedMonth;
+    this.teamSupervisionCacheMissing = false;
+    this.teamDashboardRefreshedAt = null;
+    this.teamDashboardCachedParams = null;
+    this.teamMonthOnTimeDeliveryPct = null;
+    this.teamSupervisionBundle = null;
+
+    if (!scope || month == null) {
+      return;
+    }
+
+    try {
+      const bundle = await firstValueFrom(
+        this.actionLogService
+          .getSupervisionTeamDashboardCachedBundle(scope, month)
+          .pipe(takeUntil(this.destroy$))
+      );
+      if (!bundle) {
+        this.teamSupervisionCacheMissing = true;
+        this.teamActivityMetrics = { pendentes: 0, emExecucao: 0, finalizadas: 0, pontos: 0 };
+        this.teamProcessMetrics = { pendentes: 0, incompletas: 0, finalizadas: 0 };
+        this.monthlyPointsGoalTarget = null;
+        this.clientesAtendidosThisMonthCount = null;
+        return;
+      }
+
+      this.teamSupervisionBundle = bundle;
+      this.applyTeamSupervisionBundle(bundle);
+      const refreshed = bundle.refreshedAt ? new Date(bundle.refreshedAt) : null;
+      this.teamDashboardRefreshedAt = refreshed && !Number.isNaN(refreshed.getTime()) ? refreshed : null;
+      this.teamDashboardCachedParams = bundle.params;
+      this.teamMonthOnTimeDeliveryPct = bundle.monthOnTimeDeliveryPct;
+      this.teamSupervisionCacheMissing = false;
+      this.isLoadingMonthlyPointsProgress = false;
+    } catch (error) {
+      console.error('Error loading supervision/dashboard/cached:', error);
+      this.teamSupervisionCacheMissing = month != null;
+      this.teamMonthOnTimeDeliveryPct = null;
+    }
+  }
+
+  private applyTeamSupervisionBundle(bundle: SupervisionTeamDashboardCachedBundle): void {
+    this.teamActivityMetrics = {
+      pendentes: bundle.activity.pendentes,
+      emExecucao: bundle.activity.emExecucao,
+      finalizadas: bundle.activity.finalizadas,
+      pontos: Math.floor(bundle.activity.pontos),
+      ...(bundle.activity.pontosDone !== undefined && bundle.activity.pontosTodosStatus !== undefined
+        ? {
+            pontosDone: bundle.activity.pontosDone,
+            pontosTodosStatus: bundle.activity.pontosTodosStatus
+          }
+        : {})
+    };
+    this.teamProcessMetrics = {
+      pendentes: bundle.processo.pendentes,
+      incompletas: bundle.processo.incompletas,
+      finalizadas: bundle.processo.finalizadas
+    };
+    const g = Math.floor(Number(bundle.monthlyGoalTarget) || 0);
+    this.monthlyPointsGoalTarget = g > 0 ? g : null;
+    if (this.selectedMonth != null) {
+      this.clientesAtendidosThisMonthCount = bundle.monthClientsServed;
+      this.isLoadingClientesAtendidosCount = false;
+    }
+    const pts = bundle.seasonWalletPoints;
+    this.seasonPoints = {
+      total: pts,
+      bloqueados: 0,
+      desbloqueados: pts
+    };
+    if (bundle.seasonClientsTotal > 0) {
+      this.teamSidebarDeliveryStatsTotal = bundle.seasonClientsTotal;
+    }
+    this.progressMetrics = {
+      processosIncompletos: Math.floor(bundle.processo.incompletas),
+      atividadesFinalizadas: bundle.seasonTasksFinished,
+      processosFinalizados: Math.floor(bundle.processo.finalizadas)
+    };
+  }
+
+  /**
    * Load sidebar data (season points and progress metrics)
    */
   private async loadSidebarData(dateRange: { start: Date; end: Date }): Promise<void> {
@@ -1665,54 +1869,18 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
           this.cdr.markForCheck();
           return;
         }
-        const scope = this.getGame4uTeamScopeId() ?? '';
-        const monthForGoal = this.selectedMonth;
-        const goal$ =
-          scope && monthForGoal != null
-            ? this.actionLogService
-                .getMonthlyTeamGoalPointsTarget(scope, monthForGoal)
-                .pipe(takeUntil(this.destroy$))
-            : of(0);
-        const [snap, goalPts] = await Promise.all([
-          firstValueFrom(
-            this.actionLogService
-              .getMonthlyGame4uTeamDashboardData(scope)
-              .pipe(takeUntil(this.destroy$))
-          ).catch((error) => {
-            console.error('Error loading Game4U team sidebar snapshot:', error);
-            this.hasSidebarError = true;
-            this.sidebarErrorMessage = 'Erro ao carregar pontos da temporada';
-            return {
-              wallet: { moedas: 0, bloqueados: 0, desbloqueados: 0 },
-              pontosActionLog: 0,
-              sidebar: { tarefasFinalizadas: 0 }
-            };
-          }),
-          firstValueFrom(goal$).catch((error: unknown) => {
-            console.error('Error loading team goal/month summary (sidebar):', error);
-            return 0;
-          })
-        ]);
-        const g = Math.floor(Number(goalPts) || 0);
-        this.monthlyPointsGoalTarget = g > 0 ? g : null;
-        const w = snap.wallet;
-        this.seasonPoints = {
-          total: Math.floor(w.desbloqueados + w.bloqueados),
-          bloqueados: Math.floor(w.bloqueados),
-          desbloqueados: Math.floor(w.desbloqueados)
-        };
-        const dcTeam =
-          'deliveryStatsTotal' in snap.sidebar ? snap.sidebar.deliveryStatsTotal : undefined;
-        if (typeof dcTeam === 'number' && Number.isFinite(dcTeam)) {
-          this.teamSidebarDeliveryStatsTotal = Math.floor(dcTeam);
+        if (this.teamSupervisionBundle) {
+          this.applyTeamSupervisionBundle(this.teamSupervisionBundle);
+        } else {
+          this.teamSupervisionCacheMissing = this.selectedMonth != null;
+          this.monthlyPointsGoalTarget = null;
+          this.seasonPoints = { total: 0, bloqueados: 0, desbloqueados: 0 };
+          this.progressMetrics = {
+            processosIncompletos: 0,
+            atividadesFinalizadas: 0,
+            processosFinalizados: 0
+          };
         }
-        // Tarefas do menu lateral: `tasks_count` de `GET /game/reports/finished/summary` (equipa, `team_id`).
-        const tarefasReports = Math.floor(Number(snap.sidebar.tarefasFinalizadas) || 0);
-        this.progressMetrics = {
-          processosIncompletos: Math.floor(this.teamProcessMetrics.incompletas),
-          atividadesFinalizadas: tarefasReports,
-          processosFinalizados: Math.floor(this.teamProcessMetrics.finalizadas)
-        };
       } else {
         const [points, metrics] = await Promise.all([
           firstValueFrom(
@@ -2623,14 +2791,20 @@ private calculateCollaboratorTotals(memberData: Array<{
    */
   private async loadTeamActivityAndMacroData(_dateRange: { start: Date; end: Date }): Promise<void> {
     try {
+      if (this.playerService.usesGame4uWalletFromStats()) {
+        return;
+      }
       if (!this.selectedTeam) {
         console.warn('⚠️ Sem equipa selecionada para métricas agregadas Game4U');
+        return;
+      }
+      if (this.teamSupervisionBundle) {
         return;
       }
       this.isLoadingMonthlyPointsProgress = true;
       this.cdr.markForCheck();
       console.log(
-        '📊 Loading team panel progress (Game4U: reports finished/summary + open/summary com team_id BWA; sem team-actions / sem /game/stats)...'
+        '📊 Loading team panel progress (Game4U: supervision/dashboard/cached ou fallback team-stats)...'
       );
       const metrics = await lastValueFrom(
         this.actionLogService
@@ -2700,6 +2874,7 @@ private calculateCollaboratorTotals(memberData: Array<{
     this.participacaoHasMore = false;
     this.participacaoNextOffset = 0;
     this.participacaoTotal = undefined;
+    this.participacaoPagedPlayerId = null;
     this.useParticipacaoReportsPagination = false;
     const loadGen = ++this.participacaoKpiLoadGen;
     this.cdr.markForCheck();
@@ -2709,7 +2884,7 @@ private calculateCollaboratorTotals(memberData: Array<{
       !!opts?.teamRange &&
       (this.selectedTeam || '').trim() !== '';
 
-    if (!useTeam && !playerId) {
+    if (!useTeam && !playerId && !this.isManagementOverview) {
       this.teamCarteiraClientes = [];
       this.isLoadingCarteira = false;
       this.cdr.markForCheck();
@@ -2719,70 +2894,87 @@ private calculateCollaboratorTotals(memberData: Array<{
     const teamTid = this.getGame4uTeamScopeId();
 
     try {
-      // Count no título: `deliveries_count` de `GET /game/reports/finished/summary` no mês do filtro (equipa ou colaborador).
-      const countFromFinishedSummary =
+      if (
+        this.isManagementOverview &&
+        this.playerService.usesGame4uWalletFromStats() &&
+        this.selectedMonth != null
+      ) {
+        if (this.teamSupervisionBundle && !this.teamSupervisionCacheMissing) {
+          this.clientesAtendidosThisMonthCount = this.teamSupervisionBundle.monthClientsServed;
+        } else {
+          this.clientesAtendidosThisMonthCount = null;
+        }
+        this.isLoadingClientesAtendidosCount = false;
+      } else if (
+        useTeam &&
         this.playerService.usesGame4uWalletFromStats() &&
         this.selectedMonth != null &&
-        teamTid &&
-        (useTeam || (!useTeam && !!playerId));
-
-      if (countFromFinishedSummary) {
+        teamTid
+      ) {
+        if (this.teamSupervisionBundle && !this.teamSupervisionCacheMissing) {
+          this.clientesAtendidosThisMonthCount = this.teamSupervisionBundle.monthClientsServed;
+        } else {
+          this.clientesAtendidosThisMonthCount = null;
+        }
+        this.isLoadingClientesAtendidosCount = false;
+      } else if (
+        !useTeam &&
+        this.playerService.usesGame4uWalletFromStats() &&
+        this.selectedMonth != null &&
+        playerId
+      ) {
         this.isLoadingClientesAtendidosCount = true;
         this.cdr.markForCheck();
-        const month = this.selectedMonth!;
-        const deliveriesCount$ = useTeam
-          ? this.actionLogService.getTeamFinishedSummaryForMonth(teamTid, month).pipe(map(r => r.deliveriesCount))
-          : this.actionLogService.getPlayerFinishedSummaryDeliveriesCountForMonth(playerId, month, teamTid);
-
-        deliveriesCount$.pipe(takeUntil(this.destroy$)).subscribe({
-          next: deliveriesCount => {
-            this.clientesAtendidosThisMonthCount = Number.isFinite(deliveriesCount)
-              ? Math.floor(deliveriesCount)
-              : null;
-            this.isLoadingClientesAtendidosCount = false;
-            this.cdr.markForCheck();
-          },
-          error: err => {
-            console.error('📊 Failed to load finished/summary deliveries_count (clientes atendidos):', err);
-            this.clientesAtendidosThisMonthCount = null;
-            this.isLoadingClientesAtendidosCount = false;
-            this.cdr.markForCheck();
-          }
-        });
+        this.actionLogService
+          .getPlayerDashboardMonthClientsServedCount(playerId, this.selectedMonth)
+          .pipe(takeUntil(this.destroy$))
+          .subscribe({
+            next: count => {
+              this.clientesAtendidosThisMonthCount = Number.isFinite(count) ? Math.floor(count) : null;
+              this.isLoadingClientesAtendidosCount = false;
+              this.cdr.markForCheck();
+            },
+            error: err => {
+              console.error('📊 Failed to load dashboard/cached month_clients_served:', err);
+              this.clientesAtendidosThisMonthCount = null;
+              this.isLoadingClientesAtendidosCount = false;
+              this.cdr.markForCheck();
+            }
+          });
       } else {
         this.clientesAtendidosThisMonthCount = null;
         this.isLoadingClientesAtendidosCount = false;
       }
 
-      // Paginação (reports/finished/deliveries): só na vista equipa agregada (sem colaborador) quando há month + scopeId
-      if (useTeam && this.playerService.usesGame4uWalletFromStats() && this.selectedMonth != null && teamTid) {
+      // Paginação «Painel do Gerente/Diretor/C-Level»: usa `management/finished/deliveries/cached`
+      // (sem `team_id`/`email`); escopo do gestor vem do JWT (`user_role_team_month`).
+      if (
+        this.isManagementOverview &&
+        this.playerService.usesGame4uWalletFromStats() &&
+        this.selectedMonth != null
+      ) {
         const month = this.selectedMonth!;
         const page = await firstValueFrom(
-          this.teamAggregateService
-            .getTeamFinishedDeliveriesParticipacaoPage(teamTid, month, 0, this.participacaoPageLimit)
+          this.actionLogService
+            .getManagementFinishedDeliveriesParticipacaoPage(month, 0, this.participacaoPageLimit)
             .pipe(takeUntil(this.destroy$))
         );
         this.useParticipacaoReportsPagination = true;
-        const received = page.items?.length ?? 0;
-        this.participacaoNextOffset = received;
+        this.participacaoPagedPlayerId = null;
+        const apiReceived = page.apiRowCount ?? page.items?.length ?? 0;
+        this.participacaoNextOffset = (page.offset ?? 0) + apiReceived;
         if (typeof page.total === 'number' && Number.isFinite(page.total)) {
           this.participacaoTotal = page.total;
         }
-        const fullPage = received >= this.participacaoPageLimit;
-        const knownTotal = this.participacaoTotal;
-        this.participacaoHasMore =
-          fullPage && (knownTotal == null || this.participacaoNextOffset < knownTotal);
+        this.participacaoHasMore = hasMoreFinishedDeliveriesCachedPage(
+          apiReceived,
+          this.participacaoPageLimit,
+          this.participacaoNextOffset,
+          this.participacaoTotal,
+          page.has_more
+        );
 
-        const baseClientes: CompanyDisplay[] = (page.items || []).map(i => ({
-          cnpj: i.cnpj,
-          cnpjId: i.cnpj,
-          actionCount: (i as any).actionCount ?? 0,
-          processCount: 0,
-          delivery_title: (i as any).delivery_title,
-          ...(String((i as any).deliveryId ?? '').trim() ? { deliveryId: String((i as any).deliveryId).trim() } : {}),
-          loadTasksViaGameReports: true
-        }));
-
+        const baseClientes = this.mapTeamParticipacaoDeliveryRowsToCompanyDisplay(page.items || []);
         const uniqueBase = this.dedupeParticipacaoClientes(baseClientes);
         uniqueBase.forEach(c => {
           const status = this.cnpjStatusMap.get(c.cnpj);
@@ -2792,12 +2984,105 @@ private calculateCollaboratorTotals(memberData: Array<{
         });
         this.teamCarteiraClientes = uniqueBase;
         this.isLoadingCarteira = false;
-        this.isLoadingParticipacaoKpi = uniqueBase.length > 0;
+        const skipGamificacaoKpi = !!page.fromCachedDeliveries;
+        this.isLoadingParticipacaoKpi = !skipGamificacaoKpi && uniqueBase.length > 0;
+        this.updateFormattedSidebarData();
+        this.syncEntregasPrazoKpiFromParticipacao();
+        this.cdr.markForCheck();
+        return;
+      }
+
+      // Paginação (`finished/deliveries/cached` + team_id): vista equipa agregada quando há month + scopeId
+      if (useTeam && this.playerService.usesGame4uWalletFromStats() && this.selectedMonth != null && teamTid) {
+        const month = this.selectedMonth!;
+        const page = await firstValueFrom(
+          this.teamAggregateService
+            .getTeamFinishedDeliveriesParticipacaoPage(teamTid, month, 0, this.participacaoPageLimit)
+            .pipe(takeUntil(this.destroy$))
+        );
+        this.useParticipacaoReportsPagination = true;
+        const apiReceived = page.apiRowCount ?? page.items?.length ?? 0;
+        this.participacaoNextOffset = (page.offset ?? 0) + apiReceived;
+        if (typeof page.total === 'number' && Number.isFinite(page.total)) {
+          this.participacaoTotal = page.total;
+        }
+        this.participacaoHasMore = hasMoreFinishedDeliveriesCachedPage(
+          apiReceived,
+          this.participacaoPageLimit,
+          this.participacaoNextOffset,
+          this.participacaoTotal,
+          page.has_more
+        );
+
+        const baseClientes = this.mapTeamParticipacaoDeliveryRowsToCompanyDisplay(page.items || []);
+        const uniqueBase = this.dedupeParticipacaoClientes(baseClientes);
+        uniqueBase.forEach(c => {
+          const status = this.cnpjStatusMap.get(c.cnpj);
+          if (status) {
+            c.status = status;
+          }
+        });
+        this.teamCarteiraClientes = uniqueBase;
+        this.isLoadingCarteira = false;
+        const skipGamificacaoKpi = !!page.fromCachedDeliveries;
+        this.isLoadingParticipacaoKpi = !skipGamificacaoKpi && uniqueBase.length > 0;
         this.updateFormattedSidebarData();
         this.syncEntregasPrazoKpiFromParticipacao();
         this.cdr.markForCheck();
 
-        if (uniqueBase.length > 0) {
+        if (uniqueBase.length > 0 && !skipGamificacaoKpi) {
+          void this.applyParticipacaoPorcEntregasKpiAfterGamificacaoAsync(uniqueBase, loadGen).catch(
+            (err: unknown) => console.error('📊 Falha ao aplicar KPI de entregas (gamificação, painel equipa):', err)
+          );
+        }
+        return;
+      }
+
+      // Paginação por email (`finished/deliveries/cached`): drill-down de colaborador no painel equipa
+      if (
+        !useTeam &&
+        playerId &&
+        this.playerService.usesGame4uWalletFromStats() &&
+        this.selectedMonth != null
+      ) {
+        const month = this.selectedMonth!;
+        const page = await firstValueFrom(
+          this.actionLogService
+            .getPlayerFinishedDeliveriesParticipacaoPage(playerId, month, 0, this.participacaoPageLimit)
+            .pipe(takeUntil(this.destroy$))
+        );
+        this.useParticipacaoReportsPagination = true;
+        this.participacaoPagedPlayerId = playerId;
+        const apiReceived = page.apiRowCount ?? page.items?.length ?? 0;
+        this.participacaoNextOffset = (page.offset ?? 0) + apiReceived;
+        if (typeof page.total === 'number' && Number.isFinite(page.total)) {
+          this.participacaoTotal = page.total;
+        }
+        this.participacaoHasMore = hasMoreFinishedDeliveriesCachedPage(
+          apiReceived,
+          this.participacaoPageLimit,
+          this.participacaoNextOffset,
+          this.participacaoTotal,
+          page.has_more
+        );
+
+        const baseClientes = this.mapTeamParticipacaoDeliveryRowsToCompanyDisplay(page.items || []);
+        const uniqueBase = this.dedupeParticipacaoClientes(baseClientes);
+        uniqueBase.forEach(c => {
+          const status = this.cnpjStatusMap.get(c.cnpj);
+          if (status) {
+            c.status = status;
+          }
+        });
+        this.teamCarteiraClientes = uniqueBase;
+        this.isLoadingCarteira = false;
+        const skipGamificacaoKpi = !!page.fromCachedDeliveries;
+        this.isLoadingParticipacaoKpi = !skipGamificacaoKpi && uniqueBase.length > 0;
+        this.updateFormattedSidebarData();
+        this.syncEntregasPrazoKpiFromParticipacao();
+        this.cdr.markForCheck();
+
+        if (uniqueBase.length > 0 && !skipGamificacaoKpi) {
           void this.applyParticipacaoPorcEntregasKpiAfterGamificacaoAsync(uniqueBase, loadGen).catch(
             (err: unknown) => console.error('📊 Falha ao aplicar KPI de entregas (gamificação, painel equipa):', err)
           );
@@ -2933,8 +3218,7 @@ private calculateCollaboratorTotals(memberData: Array<{
       this.useParticipacaoReportsPagination &&
       !this.isLoadingCarteira &&
       !this.isLoadingCarteiraMore &&
-      this.participacaoHasMore &&
-      this.teamCarteiraClientes.length > 0
+      this.participacaoHasMore
     );
   }
 
@@ -2947,70 +3231,96 @@ private calculateCollaboratorTotals(memberData: Array<{
     ) {
       return;
     }
-    if (!this.selectedMonth || !this.getGame4uTeamScopeId()) {
+    if (!this.selectedMonth) {
       return;
     }
-    const teamTid = this.getGame4uTeamScopeId()!;
     const month = this.selectedMonth;
     this.isLoadingCarteiraMore = true;
     const loadGen = this.participacaoKpiLoadGen;
     this.cdr.markForCheck();
 
-    this.teamAggregateService
-      .getTeamFinishedDeliveriesParticipacaoPage(
-        teamTid,
-        month,
-        this.participacaoNextOffset,
-        this.participacaoPageLimit
-      )
-      .pipe(takeUntil(this.destroy$))
-      .subscribe({
-        next: async page => {
-          try {
-            const appended: CompanyDisplay[] = (page.items || []).map(i => ({
-              cnpj: i.cnpj,
-              cnpjId: i.cnpj,
-              actionCount: (i as any).actionCount ?? 0,
-              processCount: 0,
-              delivery_title: (i as any).delivery_title,
-              ...(String((i as any).deliveryId ?? '').trim() ? { deliveryId: String((i as any).deliveryId).trim() } : {}),
-              loadTasksViaGameReports: true
-            }));
-
-            const merged = this.dedupeParticipacaoClientes([...this.teamCarteiraClientes, ...appended]);
-            this.teamCarteiraClientes = merged;
-
-            const received = page.items?.length ?? 0;
-            if (typeof page.total === 'number' && Number.isFinite(page.total)) {
-              this.participacaoTotal = page.total;
+    const page$:
+      | Observable<TeamFinishedDeliveriesPageResult | PlayerParticipacaoDeliveriesPageResult>
+      | null = this.participacaoPagedPlayerId
+      ? this.actionLogService.getPlayerFinishedDeliveriesParticipacaoPage(
+          this.participacaoPagedPlayerId,
+          month,
+          this.participacaoNextOffset,
+          this.participacaoPageLimit
+        )
+      : this.isManagementOverview
+        ? this.actionLogService.getManagementFinishedDeliveriesParticipacaoPage(
+            month,
+            this.participacaoNextOffset,
+            this.participacaoPageLimit
+          )
+        : (() => {
+            const teamTid = this.getGame4uTeamScopeId();
+            if (!teamTid) {
+              return null;
             }
-            this.participacaoNextOffset += received;
-            const fullPage = received >= this.participacaoPageLimit;
-            const knownTotal = this.participacaoTotal;
-            this.participacaoHasMore =
-              fullPage && (knownTotal == null || this.participacaoNextOffset < knownTotal);
+            return this.teamAggregateService.getTeamFinishedDeliveriesParticipacaoPage(
+              teamTid,
+              month,
+              this.participacaoNextOffset,
+              this.participacaoPageLimit
+            );
+          })();
 
-            this.isLoadingParticipacaoKpi = merged.length > 0;
-            this.updateFormattedSidebarData();
+    if (!page$) {
+      this.isLoadingCarteiraMore = false;
+      this.cdr.markForCheck();
+      return;
+    }
+
+    page$.pipe(takeUntil(this.destroy$)).subscribe({
+      next: async (
+        page: TeamFinishedDeliveriesPageResult | PlayerParticipacaoDeliveriesPageResult
+      ) => {
+        try {
+          const appended = this.mapTeamParticipacaoDeliveryRowsToCompanyDisplay(page.items || []);
+          const merged = this.dedupeParticipacaoClientes([...this.teamCarteiraClientes, ...appended]);
+          this.teamCarteiraClientes = merged;
+
+          const apiReceived = page.apiRowCount ?? page.items?.length ?? 0;
+          if (typeof page.total === 'number' && Number.isFinite(page.total)) {
+            this.participacaoTotal = page.total;
+          }
+          this.participacaoNextOffset = (page.offset ?? this.participacaoNextOffset) + apiReceived;
+          this.participacaoHasMore = hasMoreFinishedDeliveriesCachedPage(
+            apiReceived,
+            this.participacaoPageLimit,
+            this.participacaoNextOffset,
+            this.participacaoTotal,
+            page.has_more
+          );
+
+          const skipGamificacaoKpi = !!page.fromCachedDeliveries;
+          this.isLoadingParticipacaoKpi = !skipGamificacaoKpi && merged.length > 0;
+          this.updateFormattedSidebarData();
+          this.syncEntregasPrazoKpiFromParticipacao();
+          this.cdr.markForCheck();
+
+          if (merged.length > 0 && !skipGamificacaoKpi) {
+            await this.applyParticipacaoPorcEntregasKpiAfterGamificacaoAsync(merged, loadGen);
+          } else if (merged.length > 0 && skipGamificacaoKpi) {
+            this.isLoadingParticipacaoKpi = false;
             this.syncEntregasPrazoKpiFromParticipacao();
             this.cdr.markForCheck();
-
-            if (merged.length > 0) {
-              await this.applyParticipacaoPorcEntregasKpiAfterGamificacaoAsync(merged, loadGen);
-            }
-          } catch (err) {
-            console.error('📊 Falha ao aplicar KPI após carregar mais participação (painel equipa):', err);
-          } finally {
-            this.isLoadingCarteiraMore = false;
-            this.cdr.markForCheck();
           }
-        },
-        error: err => {
-          console.error('📊 Failed to load more participação (painel equipa):', err);
+        } catch (err) {
+          console.error('📊 Falha ao aplicar KPI após carregar mais participação (painel equipa):', err);
+        } finally {
           this.isLoadingCarteiraMore = false;
           this.cdr.markForCheck();
         }
-      });
+      },
+      error: (err: unknown) => {
+        console.error('📊 Failed to load more participação (painel equipa):', err);
+        this.isLoadingCarteiraMore = false;
+        this.cdr.markForCheck();
+      }
+    });
   }
 
   retryClientesAtendidosThisMonth(): void {
@@ -3022,6 +3332,28 @@ private calculateCollaboratorTotals(memberData: Array<{
       return;
     }
     void this.loadTeamCarteiraData(dateRange);
+  }
+
+  /** Linha de `finished/deliveries/cached` (equipa ou jogador) → `CompanyDisplay` com `porcEntregas` quando existir. */
+  private mapTeamParticipacaoDeliveryRowsToCompanyDisplay(
+    items:
+      | TeamFinishedDeliveriesPageResult['items']
+      | PlayerParticipacaoDeliveryRow[]
+      | null
+      | undefined
+  ): CompanyDisplay[] {
+    return (items || []).map(i => ({
+      cnpj: i.cnpj,
+      cnpjId: i.cnpj,
+      actionCount: i.actionCount ?? 0,
+      processCount: 0,
+      delivery_title: i.delivery_title,
+      ...(i.deliveryId?.trim() ? { deliveryId: i.deliveryId.trim() } : {}),
+      ...(i.porcEntregas != null
+        ? { porcEntregas: i.porcEntregas, entrega: i.entrega ?? i.porcEntregas }
+        : {}),
+      loadTasksViaGameReports: i.loadTasksViaGameReports ?? true
+    }));
   }
 
   /** Alinhado a `gamification-dashboard.buildParticipacaoBaseClientes`. */
@@ -3244,52 +3576,113 @@ private calculateCollaboratorTotals(memberData: Array<{
   async onTeamChange(teamId: string): Promise<void> {
     try {
       console.log('🔄 Team changed to:', teamId);
-      
-      // Find the team in the teams array to get the name
+
       const team = this.teams.find(t => t.id === teamId);
       if (!team) {
         console.error('Team not found:', teamId);
         return;
       }
-      
-      // Check if team is actually changing
+
       const isTeamChanging = this.selectedTeamId !== teamId;
-      
-      // Set selected team ID and name
+      const isManagementOverview =
+        teamId === TeamManagementDashboardComponent.MANAGEMENT_OVERVIEW_TEAM_ID;
+
       this.selectedTeamId = teamId;
       this.selectedTeam = team.name;
-      this.displayTeamName = team.name; // Update display name
-      
-      // Reset collaborator filter when team changes
+      this.displayTeamName = team.name;
+      this.isManagementOverview = isManagementOverview;
+
       if (isTeamChanging) {
-        // Troca de time: o menu lateral deve indicar mudança de dados.
         this.sidebarLoadedOnce = false;
         this.isLoadingSidebar = true;
         this.selectedCollaborator = null;
       }
-      
-      // Save team selection to localStorage
+
       localStorage.setItem('selectedTeamId', teamId);
-      
-      // Load team members data first (this sets teamTotalPoints, etc.)
-      await this.loadTeamMembersData(teamId, this.calculateDateRange());
-      
-      // Then load all other team data
-      await this.loadTeamData();
-      
-      // After loading collaborators, validate current selection
-      if (this.selectedCollaborator) {
-        const collaboratorExists = this.collaborators.some(
-          c => c.userId === this.selectedCollaborator
-        );
-        if (!collaboratorExists) {
-          this.selectedCollaborator = null;
+
+      if (isManagementOverview) {
+        await this.loadManagementOverviewData();
+      } else {
+        await this.loadTeamMembersData(teamId, this.calculateDateRange());
+        await this.loadTeamData();
+
+        if (this.selectedCollaborator) {
+          const collaboratorExists = this.collaborators.some(
+            c => c.userId === this.selectedCollaborator
+          );
+          if (!collaboratorExists) {
+            this.selectedCollaborator = null;
+          }
         }
       }
-      
+
       this.cdr.markForCheck();
     } catch (error) {
       console.error('Error in onTeamChange:', error);
+    }
+  }
+
+  /**
+   * Carrega o «Painel do Gerente / Diretor / C-Level» a partir de
+   * `GET /game/reports/management/dashboard/cached/overview` (sem `team_id`).
+   *
+   * Não chama endpoints com `team_id` (supervisão, deliveries, team-stats, KPIs por time):
+   * apenas KPIs/progresso agregados do gestor.
+   */
+  private async loadManagementOverviewData(): Promise<void> {
+    try {
+      this.isLoadingSidebar = !this.sidebarLoadedOnce;
+      this.isLoadingGoals = true;
+      this.isLoadingMonthlyPointsProgress = true;
+      this.isLoadingKPIs = true;
+      this.isLoadingCarteira = true;
+      this.isLoadingCollaborators = false;
+
+      this.selectedCollaborator = null;
+      this.collaborators = [];
+      this.teamCarteiraClientes = [];
+      this.teamKPIs = [];
+      this.teamMembersData = [];
+      this.teamMemberIds = [];
+      this.teamTotalPoints = 0;
+      this.teamTotalTasks = 0;
+      this.teamTotalBlockedPoints = 0;
+      this.teamAveragePoints = 0;
+      this.clientesAtendidosThisMonthCount = null;
+      this.participacaoHasMore = false;
+      this.useParticipacaoReportsPagination = false;
+
+      this.cdr.markForCheck();
+
+      const monthRange = this.calculateDateRange();
+      const seasonRange = this.seasonDates;
+
+      // Importante: `loadManagementOverviewFromCache` precisa terminar **antes** das outras tarefas
+      // para que `teamMonthOnTimeDeliveryPct` (= `manager.month_on_time_delivery_pct`) já esteja
+      // populado quando `loadTeamKPIs` rodar `syncEntregasPrazoKpiFromParticipacao`.
+      await this.loadManagementOverviewFromCache();
+      await Promise.all([
+        this.loadSidebarData(seasonRange),
+        this.loadGoalsData(monthRange),
+        this.loadMonthlyPointsBreakdown(),
+        // KPI «Entregas no Prazo» (circular): scaffold via `kpiService.getPlayerKPIs` e em seguida
+        // `syncEntregasPrazoKpiFromParticipacao` aplica `manager.month_on_time_delivery_pct` do cache.
+        this.loadTeamKPIs(),
+        // «Clientes atendidos»: agregado da gestão via `management/finished/deliveries/cached` (sem team_id).
+        this.loadParticipacaoClientesList('')
+      ]);
+
+      // Reaplica o pct do cache caso `loadParticipacaoClientesList` tenha re-sincronizado depois dos KPIs.
+      this.syncEntregasPrazoKpiFromParticipacao();
+      this.updateFormattedSidebarData();
+      this.updateTeamNameDisplay();
+      this.lastRefresh = new Date();
+    } catch (error) {
+      console.error('Error loading management overview:', error);
+    } finally {
+      this.isLoadingGoals = false;
+      this.isLoadingMonthlyPointsProgress = false;
+      this.cdr.markForCheck();
     }
   }
 
@@ -3752,19 +4145,30 @@ private calculateCollaboratorTotals(memberData: Array<{
           this.cdr.markForCheck();
           return;
         }
-        const dr = this.calculateDateRange();
-        const members = this.collaborators.map(c => c.userId).filter(Boolean);
-        const breakdown = await firstValueFrom(
-          this.teamAggregateService
-            .getTeamMonthlyPointsBreakdown(this.getGame4uTeamHttpParam(), members, dr.start, dr.end)
-            .pipe(takeUntil(this.destroy$))
-        ).catch((error) => {
-          console.error('Error loading team monthly points breakdown (Game4U team-stats):', error);
-          return { bloqueados: 0, desbloqueados: 0 };
-        });
-
-        this.monthlyPointsBreakdown = breakdown;
-        console.log('✅ Monthly points breakdown (Game4U team aggregate):', this.monthlyPointsBreakdown);
+        if (this.playerService.usesGame4uWalletFromStats()) {
+          const pts =
+            this.teamSupervisionBundle != null
+              ? Math.floor(
+                  this.teamSupervisionBundle.activity.pontosDone ??
+                    this.teamSupervisionBundle.activity.pontos ??
+                    0
+                )
+              : 0;
+          this.monthlyPointsBreakdown = { bloqueados: 0, desbloqueados: pts };
+        } else {
+          const dr = this.calculateDateRange();
+          const members = this.collaborators.map(c => c.userId).filter(Boolean);
+          const breakdown = await firstValueFrom(
+            this.teamAggregateService
+              .getTeamMonthlyPointsBreakdown(this.getGame4uTeamHttpParam(), members, dr.start, dr.end)
+              .pipe(takeUntil(this.destroy$))
+          ).catch((error) => {
+            console.error('Error loading team monthly points breakdown:', error);
+            return { bloqueados: 0, desbloqueados: 0 };
+          });
+          this.monthlyPointsBreakdown = breakdown;
+        }
+        console.log('✅ Monthly points breakdown (team):', this.monthlyPointsBreakdown);
       }
       
       this.cdr.markForCheck();
@@ -4048,9 +4452,31 @@ private calculateCollaboratorTotals(memberData: Array<{
    * KPI «entregas-prazo»: média das % na lista «Clientes atendidos este mês» (após gamificação),
    * alinhado a `gamification-dashboard.syncEntregasPrazoKpiFromParticipacao`.
    */
+  private getEntregasPrazoPercentFromSupervisionCache(): number | null {
+    if (
+      !this.playerService.usesGame4uWalletFromStats() ||
+      this.selectedCollaborator != null ||
+      this.selectedMonth == null ||
+      this.teamMonthOnTimeDeliveryPct == null
+    ) {
+      return null;
+    }
+    return this.teamMonthOnTimeDeliveryPct;
+  }
+
   private syncEntregasPrazoKpiFromParticipacao(): void {
     const idx = this.teamKPIs.findIndex(k => k.id === 'entregas-prazo');
-    if (idx === -1 || this.isLoadingCarteira || this.isLoadingParticipacaoKpi) {
+    if (idx === -1) {
+      return;
+    }
+
+    const fromCache = this.getEntregasPrazoPercentFromSupervisionCache();
+    if (fromCache !== null) {
+      this.applyTeamEntregasPrazoKpiValue(idx, fromCache);
+      return;
+    }
+
+    if (this.isLoadingCarteira || this.isLoadingParticipacaoKpi) {
       return;
     }
 
@@ -4071,6 +4497,11 @@ private calculateCollaboratorTotals(memberData: Array<{
       return;
     }
 
+    this.applyTeamEntregasPrazoKpiValue(idx, avg);
+  }
+
+  private applyTeamEntregasPrazoKpiValue(idx: number, avg: number): void {
+    const base = this.teamKPIs[idx];
     const target = base.target;
     const superTarget = base.superTarget ?? 100;
     const updated: KPIData = {
@@ -4109,6 +4540,10 @@ private calculateCollaboratorTotals(memberData: Array<{
    */
   getKpiCurrentValue(kpi: KPIData): number {
     if (kpi.id === 'entregas-prazo') {
+      const fromCache = this.getEntregasPrazoPercentFromSupervisionCache();
+      if (fromCache !== null) {
+        return fromCache;
+      }
       const fromList = this.getEntregasPrazoPercentFromParticipacao();
       if (fromList !== null) {
         return fromList;
@@ -4117,20 +4552,28 @@ private calculateCollaboratorTotals(memberData: Array<{
     return kpi.current;
   }
 
-  /** Circular «Entregas no Prazo»: reticências enquanto cruza com GET gamificação. */
+  /** Circular «Entregas no Prazo»: aguarda gamificação só se não houver % no cache de supervisão. */
   isEntregasPrazoCircularPending(kpi: KPIData): boolean {
+    if (kpi.id !== 'entregas-prazo') {
+      return false;
+    }
+    if (this.getEntregasPrazoPercentFromSupervisionCache() !== null) {
+      return false;
+    }
     return (
-      kpi.id === 'entregas-prazo' &&
       !this.isLoadingCarteira &&
       this.teamCarteiraClientes.length > 0 &&
       this.isLoadingParticipacaoKpi
     );
   }
 
-  /** Estado «dado indisponível» do anel para entregas: deriva da lista, não só do perfil. */
+  /** Estado «dado indisponível» do anel para entregas: cache de supervisão ou lista de participação. */
   getKpiCircularIsMissing(kpi: KPIData): boolean {
     if (kpi.id !== 'entregas-prazo') {
       return !!kpi.isMissing;
+    }
+    if (this.getEntregasPrazoPercentFromSupervisionCache() !== null) {
+      return false;
     }
     if (this.isLoadingCarteira || this.teamCarteiraClientes.length === 0) {
       return !!kpi.isMissing;

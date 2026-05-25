@@ -789,17 +789,75 @@ export function mergeGame4uDeliveryParticipation(
   });
 }
 
-/** Participação a partir de `GET /game/reports/finished/deliveries` (equipa ou colaborador). */
+/** `delivery_id` tipo `EmpID-YYYY-MM-DD` para cruzamento com gamificação. */
+export function buildGame4uDeliveryIdFromEmpId(empId: string | number, month: Date): string {
+  const y = month.getFullYear();
+  const m = String(month.getMonth() + 1).padStart(2, '0');
+  return `${empId}-${y}-${m}-01`;
+}
+
+/**
+ * Cliente atendido no mês: delivery com pelo menos uma tarefa DONE/DELIVERED no mês (`dt_prazo`).
+ * No cache, `tasks_total` / `tasks_on_time` referem-se a esse mês; sem contadores, confia no filtro da API legada.
+ */
+export function deliveryRowHasFinishedTaskInMonth(row: Game4uReportsFinishedDeliveryRow): boolean {
+  const extra = row as unknown as Record<string, unknown>;
+  const hasMonthTaskCounters =
+    row.tasks_total != null ||
+    row.tasks_on_time != null ||
+    extra['tasks_finished'] != null ||
+    extra['month_tasks_finished'] != null ||
+    extra['finished_tasks_count'] != null;
+
+  if (!hasMonthTaskCounters) {
+    return true;
+  }
+
+  const total = Math.floor(Number(row.tasks_total) || 0);
+  const onTime = Math.floor(Number(row.tasks_on_time) || 0);
+  if (total > 0 || onTime > 0) {
+    return true;
+  }
+
+  for (const key of ['tasks_finished', 'month_tasks_finished', 'finished_tasks_count', 'tasks_done']) {
+    if (Math.floor(Number(extra[key]) || 0) > 0) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function readOnTimePctFromDeliveryRow(row: Game4uReportsFinishedDeliveryRow): number | null {
+  const raw = row.on_time_pct;
+  if (raw == null || (typeof raw === 'string' && String(raw).trim() === '')) {
+    return null;
+  }
+  let n = Number(raw);
+  if (!Number.isFinite(n)) {
+    return null;
+  }
+  if (n > 0 && n <= 1) {
+    n = n * 100;
+  }
+  return Math.min(100, Math.max(0, Math.round(n * 100) / 100));
+}
+
+/** Participação a partir de `GET /game/reports/finished/deliveries` ou `…/deliveries/cached`. */
 export function mapGame4uFinishedDeliveryRowsToParticipacaoCnpjRows(
-  rows: Game4uReportsFinishedDeliveryRow[]
+  rows: Game4uReportsFinishedDeliveryRow[],
+  month?: Date
 ): {
   cnpj: string;
   actionCount: number;
   processCount: number;
   delivery_title?: string;
   deliveryId?: string;
+  porcEntregas?: number;
+  entrega?: number;
   fromGameReportsDeliveries?: boolean;
+  fromCachedDeliveries?: boolean;
   loadTasksViaGameReports?: boolean;
+  gamificacaoEmpIdUsado?: string | number;
 }[] {
   const out: {
     cnpj: string;
@@ -807,29 +865,79 @@ export function mapGame4uFinishedDeliveryRowsToParticipacaoCnpjRows(
     processCount: number;
     delivery_title?: string;
     deliveryId?: string;
+    porcEntregas?: number;
+    entrega?: number;
     fromGameReportsDeliveries?: boolean;
+    fromCachedDeliveries?: boolean;
     loadTasksViaGameReports?: boolean;
+    gamificacaoEmpIdUsado?: string | number;
   }[] = [];
   const seen = new Set<string>();
+  const filterByMonthFinished = month != null;
   for (const row of rows || []) {
+    if (filterByMonthFinished && !deliveryRowHasFinishedTaskInMonth(row)) {
+      continue;
+    }
     const title = row.delivery_title?.trim() || '';
-    const did = row.delivery_id?.trim() || '';
+    let did = row.delivery_id?.trim() || '';
+    if (!did && row.emp_id != null && month != null) {
+      did = buildGame4uDeliveryIdFromEmpId(row.emp_id, month);
+    }
     const dedupeKey = did || title;
     if (!dedupeKey || seen.has(dedupeKey)) {
       continue;
     }
     seen.add(dedupeKey);
+    const pct = readOnTimePctFromDeliveryRow(row);
+    const hasCachedPct = pct != null;
     out.push({
       cnpj: did ? `g4u-rpt:${did}` : `g4u-rpt:${title}`,
-      actionCount: 0,
+      actionCount: Math.floor(Number(row.tasks_total) || 0),
       processCount: 1,
       delivery_title: title || undefined,
       ...(did ? { deliveryId: did } : {}),
+      ...(hasCachedPct ? { porcEntregas: pct, entrega: pct } : {}),
+      ...(row.emp_id != null ? { gamificacaoEmpIdUsado: row.emp_id } : {}),
       fromGameReportsDeliveries: true,
+      ...(hasCachedPct ? { fromCachedDeliveries: true } : {}),
       loadTasksViaGameReports: true
     });
   }
   return out;
+}
+
+/**
+ * Indica se deve pedir outra página de `finished/deliveries/cached`.
+ * Com `total` conhecido, usa `nextOffset < total` (não exige página “cheia” após filtro no cliente).
+ */
+export function hasMoreFinishedDeliveriesCachedPage(
+  received: number,
+  limit: number,
+  nextOffset: number,
+  total?: number,
+  explicitHasMore?: boolean
+): boolean {
+  if (explicitHasMore === false) {
+    return false;
+  }
+  if (explicitHasMore === true) {
+    return true;
+  }
+  const lim = Math.max(1, Math.floor(limit));
+  const rec = Math.max(0, Math.floor(received));
+  const next = Math.max(0, Math.floor(nextOffset));
+  if (typeof total === 'number' && Number.isFinite(total)) {
+    const tot = Math.floor(total);
+    if (next < tot) {
+      return true;
+    }
+    // Algumas respostas enviam `total` = tamanho da página atual; página cheia ainda pode ter mais dados.
+    if (rec >= lim && next >= tot) {
+      return true;
+    }
+    return false;
+  }
+  return rec >= lim;
 }
 
 /**

@@ -7,6 +7,7 @@ import {
   getAccessibleTeamIds,
   extractObserverTeamIdsFromSessionUser
 } from '@utils/user-profile';
+import { hasManagementDashboardCachedRole } from '@utils/management-dashboard-role';
 import { TeamCodeService } from './team-code.service';
 
 /**
@@ -45,10 +46,15 @@ export class UserProfileService {
   /**
    * Check if current user can access team management dashboard
    *
-   * @returns true if user has session role ADMIN or GESTOR (see ROLES_LIST), or profile is SUPERVISOR, GESTOR, or DIRETOR (team-based)
+   * @returns true if user has session role ADMIN / GESTOR (ROLES_LIST), papéis de gestão agregada
+   *   (`GERENTE` / `DIRETOR` / `C_LEVEL` — ver `manager-dashboard-cached-frontend.md`), ou perfil baseado
+   *   em equipa (SUPERVISOR, GESTOR, DIRETOR).
    */
   canAccessTeamManagement(): boolean {
     if (this.sessao.isAdmin() || this.sessao.isGerente()) {
+      return true;
+    }
+    if (hasManagementDashboardCachedRole(this.sessao.usuario?.roles)) {
       return true;
     }
     const profile = this.getCurrentUserProfile();
