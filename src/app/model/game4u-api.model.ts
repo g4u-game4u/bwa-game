@@ -441,6 +441,40 @@ export interface Game4uReportsTeamDailyFinishedStatRow {
   [key: string]: unknown;
 }
 
+/**
+ * Query para `GET /game/reports/team/daily-pending-stats` — agregado diário de tarefas
+ * pendentes (status default `PENDING` + `DOING`) cujo `due_date` (com fallback `extra.dt_prazo`)
+ * cai no intervalo `start..end`.
+ *
+ * Identidade: `team_id` (obrigatório). Use `team_id=__management_overview__` para a visão
+ * agregada de gestão (GERENTE / DIRETOR / C_LEVEL / ADMIN / SERVICE).
+ */
+export interface Game4uReportsTeamDailyPendingStatsQuery {
+  /** Escopo BWA / equipa, ou `__management_overview__` para visão agregada de gestão. */
+  team_id: string;
+  /** Início do intervalo (ISO 8601 `YYYY-MM-DD`). */
+  start: string;
+  /** Fim do intervalo (ISO 8601 `YYYY-MM-DD`). */
+  end: string;
+  /** Override opcional do filtro de status (default no backend: `PENDING` + `DOING`). */
+  status?: string[];
+  /** E-mail opcional do colaborador (drill-down). */
+  email?: string;
+}
+
+/**
+ * Linha normalizada de `GET /game/reports/team/daily-pending-stats`.
+ * Mesmo shape do daily-finished-stats; `points_sum` em geral será 0 (tarefas pendentes
+ * ainda não geraram pontos), e `tasks_count` é a contagem de tarefas com `due_date` no dia.
+ */
+export interface Game4uReportsTeamDailyPendingStatRow {
+  day: string;
+  email?: string;
+  tasks_count?: number;
+  points_sum?: number;
+  [key: string]: unknown;
+}
+
 export interface Game4uReportsActionsByDeliveryQuery extends Game4uReportsFinishedQuery {
   delivery_title: string;
 }

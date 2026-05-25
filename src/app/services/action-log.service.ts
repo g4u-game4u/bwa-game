@@ -22,6 +22,7 @@ import type {
   Game4uGoalMonthSummaryResponse,
   Game4uReportsOpenSummaryQuery,
   Game4uReportsTeamDailyFinishedStatsQuery,
+  Game4uReportsTeamDailyPendingStatsQuery,
   Game4uReportsFinishedDeliveryRow,
   Game4uReportsFinishedDeliveriesCachedPage,
   PlayerDashboardCachedResponse,
@@ -138,6 +139,18 @@ export interface TeamFinishedSummaryMonthResult {
 }
 
 export interface TeamDailyFinishedStatsRow {
+  day: string; // `YYYY-MM-DD`
+  email?: string;
+  tasksCount: number;
+  pointsSum: number;
+}
+
+/**
+ * Linha normalizada de `GET /game/reports/team/daily-pending-stats`.
+ * Mesmo shape de {@link TeamDailyFinishedStatsRow}; `pointsSum` em geral será 0 (tarefas
+ * pendentes ainda não geraram pontos), `tasksCount` é a contagem de tarefas com `due_date` no dia.
+ */
+export interface TeamDailyPendingStatsRow {
   day: string; // `YYYY-MM-DD`
   email?: string;
   tasksCount: number;
@@ -512,6 +525,7 @@ export class ActionLogService {
   >();
   private game4uTeamFinishedSummaryForMonthCache = new Map<string, CacheEntry<TeamFinishedSummaryMonthResult>>();
   private game4uTeamDailyFinishedStatsCache = new Map<string, CacheEntry<TeamDailyFinishedStatsRow[]>>();
+  private game4uTeamDailyPendingStatsCache = new Map<string, CacheEntry<TeamDailyPendingStatsRow[]>>();
   private game4uPlayerDashboardCachedCache = new Map<
     string,
     CacheEntry<PlayerDashboardCachedResponse | null>
@@ -1441,6 +1455,52 @@ export class ActionLogService {
     );
 
     this.setCachedData(this.game4uTeamDailyFinishedStatsCache, cacheKey, request$);
+    return request$;
+  }
+
+  /**
+   * Game4U (reports): daily stats de tarefas **pendentes** (`PENDING`+`DOING` por default)
+   * por equipa (e opcionalmente por colaborador), filtradas por `due_date` (com fallback para
+   * `extra.dt_prazo`). Usado pelo modal de tarefas pendentes do team-management quando o
+   * usuário é SUPERVISOR.
+   *
+   * Formato da resposta: idêntico ao `daily-finished-stats` (mesmo normalizador).
+   */
+  getReportTeamDailyPendingStats(
+    q: Game4uReportsTeamDailyPendingStatsQuery
+  ): Observable<TeamDailyPendingStatsRow[]> {
+    if (!(isGame4uDataEnabled() && this.game4u.isConfigured())) {
+      return throwError(
+        () => new Error('[ActionLog] getReportTeamDailyPendingStats: Game4U indisponível')
+      );
+    }
+    const tid = (q.team_id ?? '').trim();
+    if (!tid) {
+      return of([]);
+    }
+    const statusKey = Array.isArray(q.status) ? q.status.join(',') : '';
+    const cacheKey = `g4u_team_daily_pending_${tid}_${String(q.email ?? '')}_${String(q.start ?? '')}_${String(
+      q.end ?? ''
+    )}_${statusKey}`;
+    const cached = this.getCachedData(
+      this.game4uTeamDailyPendingStatsCache,
+      cacheKey,
+      this.GAME4U_CACHE_DURATION
+    );
+    if (cached) {
+      return cached;
+    }
+
+    const request$ = this.game4u.getGameReportsTeamDailyPendingStats(q).pipe(
+      map(rows => this.normalizeTeamDailyFinishedStatsRows(rows)),
+      catchError(err => {
+        console.error('Error in getReportTeamDailyPendingStats:', err);
+        return of([] as TeamDailyPendingStatsRow[]);
+      }),
+      shareReplay({ bufferSize: 1, refCount: true, windowTime: this.GAME4U_CACHE_DURATION })
+    );
+
+    this.setCachedData(this.game4uTeamDailyPendingStatsCache, cacheKey, request$);
     return request$;
   }
 
@@ -3580,6 +3640,7 @@ export class ActionLogService {
     this.game4uTeamDashboardSnapshotCache.clear();
     this.game4uTeamFinishedSummaryForMonthCache.clear();
     this.game4uTeamDailyFinishedStatsCache.clear();
+    this.game4uTeamDailyPendingStatsCache.clear();
     this.game4uPlayerDashboardCachedCache.clear();
     this.game4uSupervisionDashboardCachedCache.clear();
     this.game4uManagementDashboardOverviewCache.clear();

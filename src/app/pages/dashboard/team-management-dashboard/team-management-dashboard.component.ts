@@ -4580,6 +4580,17 @@ private calculateCollaboratorTotals(memberData: Array<{
   }
 
   /**
+   * Indica se o modal de tarefas pendentes deve buscar o gráfico através do endpoint
+   * `GET /game/reports/team/daily-pending-stats` (agregado diário com filtro por `due_date`).
+   *
+   * Aplica-se ao perfil **SUPERVISOR** — o gráfico do mês inteiro é resolvido com uma única
+   * chamada, sem depender da paginação de `GET /game/reports/user-actions` para alimentá-lo.
+   */
+  get useDailyPendingStatsApiForModal(): boolean {
+    return this.userProfileService.isSupervisor();
+  }
+
+  /**
    * Ator dos pedidos Game4U no seletor de mês: colaborador selecionado, senão o gestor (painel).
    */
   getTeamPlayerIdForMonthSelector(): string {

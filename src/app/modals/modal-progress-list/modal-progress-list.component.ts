@@ -2,7 +2,12 @@ import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetect
 import { trigger, transition, style, animate } from '@angular/animations';
 import { Subject, forkJoin, of, firstValueFrom } from 'rxjs';
 import { takeUntil, map, catchError } from 'rxjs/operators';
-import { ActionLogService, ActivityListItem, ProcessListItem } from '@services/action-log.service';
+import {
+  ActionLogService,
+  ActivityListItem,
+  ProcessListItem,
+  TeamDailyPendingStatsRow
+} from '@services/action-log.service';
 import type { Game4uUserActionStatus } from '@model/game4u-api.model';
 import { ChartDataset } from '@model/gamification-dashboard.model';
 import { CnpjLookupService } from '@services/cnpj-lookup.service';
@@ -43,6 +48,16 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
   @Input() teamId: string | null = null;
   @Input() listType: ProgressListType = 'atividades';
   @Input() month?: Date;
+  /**
+   * Quando o team-management dashboard é aberto por um SUPERVISOR, o modal de tarefas pendentes
+   * usa `GET /game/reports/team/daily-pending-stats` (agregado diário com contagens por `due_date`)
+   * para alimentar o gráfico de prazos do mês — em vez de reconstruí-lo a partir da página de
+   * `user-actions`. Isto garante que o gráfico reflete o mês inteiro mesmo antes de paginar.
+   *
+   * Se `team_id=__management_overview__` é passado em {@link teamId}, a mesma chamada cobre a
+   * visão consolidada de gestão (GERENTE/DIRETOR/C_LEVEL/ADMIN/SERVICE).
+   */
+  @Input() useDailyPendingStatsApi = false;
   @Output() closed = new EventEmitter<void>();
 
   private destroy$ = new Subject<void>();
@@ -386,6 +401,11 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
         this.isLoadingMore = false;
         this.activityReportsNextOffset = 0;
         this.activityReportsTotal = undefined;
+        // Supervisor / gestão: gráfico do mês inteiro via daily-pending-stats em paralelo
+        // à primeira página de tarefas individuais (que alimenta apenas a lista).
+        if (this.shouldUseDailyPendingStatsForChart) {
+          this.fetchDailyPendingStatsForChart();
+        }
         this.fetchActivityReportPage(true);
         return;
       }
@@ -584,7 +604,11 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
             await this.enrichCnpjNames(page.items.map(item => item.cnpj).filter(cnpj => cnpj));
           } finally {
             if (isFirstPage) {
-              this.isLoadingChart = false;
+              // Quando o gráfico vem de `daily-pending-stats` (supervisor/gestão), o estado
+              // de carregamento do gráfico é controlado por `fetchDailyPendingStatsForChart`.
+              if (!this.shouldUseDailyPendingStatsForChart) {
+                this.isLoadingChart = false;
+              }
               this.isLoading = false;
             } else {
               this.isLoadingMore = false;
@@ -602,6 +626,11 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
    */
   private applyChartFromActivityItems(items: ActivityListItem[]): void {
     if (this.listType === 'atividades-pendentes') {
+      // SUPERVISOR / visão de gestão: gráfico vem do agregado `daily-pending-stats` (cobre o
+      // mês inteiro). Não sobreescrever aqui — `fetchDailyPendingStatsForChart()` é responsável.
+      if (this.shouldUseDailyPendingStatsForChart) {
+        return;
+      }
       this.applyChartFromDtPrazoItems(items);
       return;
     }
@@ -678,6 +707,135 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
     }
     const d = new Date(Number(ymd[1]), Number(ymd[2]) - 1, Number(ymd[3]), 0, 0, 0, 0);
     return Number.isNaN(d.getTime()) ? null : d.getTime();
+  }
+
+  /**
+   * Quando deve usar `GET /game/reports/team/daily-pending-stats` (rota agregada do supervisor)
+   * em vez de reconstruir o gráfico a partir das páginas de `/game/reports/user-actions`.
+   *
+   * Requer:
+   *  - flag explícita {@link useDailyPendingStatsApi} (vem do team-management quando o usuário
+   *    é SUPERVISOR ou está em visão de gestão).
+   *  - modal de tarefas pendentes (`atividades-pendentes`).
+   *  - escopo `team_id` definido (inclui `__management_overview__`).
+   */
+  private get shouldUseDailyPendingStatsForChart(): boolean {
+    return (
+      this.useDailyPendingStatsApi &&
+      this.isPendingActivitiesModal &&
+      (this.teamId ?? '').trim().length > 0
+    );
+  }
+
+  /** `YYYY-MM-DD` para o primeiro / último dia do mês visível no painel. */
+  private monthRangeYmd(): { start: string; end: string } {
+    const target = this.month || new Date();
+    const y = target.getFullYear();
+    const m = target.getMonth();
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const start = `${y}-${pad(m + 1)}-01`;
+    const lastDay = new Date(y, m + 1, 0).getDate();
+    const end = `${y}-${pad(m + 1)}-${pad(lastDay)}`;
+    return { start, end };
+  }
+
+  /**
+   * Carrega `daily-pending-stats` para o supervisor e aplica o gráfico do modal de pendentes.
+   * O backend já filtra por `due_date` (com fallback `extra.dt_prazo`); o agregado cobre o
+   * mês inteiro independentemente da paginação da lista.
+   */
+  private fetchDailyPendingStatsForChart(): void {
+    const teamId = (this.teamId ?? '').trim();
+    if (!teamId) {
+      return;
+    }
+    const { start, end } = this.monthRangeYmd();
+    const email = (this.playerId ?? '').trim();
+
+    this.isLoadingChart = true;
+    this.cdr.markForCheck();
+
+    this.actionLogService
+      .getReportTeamDailyPendingStats({
+        team_id: teamId,
+        start,
+        end,
+        ...(email ? { email } : {})
+      })
+      .pipe(
+        takeUntil(this.destroy$),
+        catchError(error => {
+          console.error('Error loading daily-pending-stats for chart:', error);
+          return of([] as TeamDailyPendingStatsRow[]);
+        })
+      )
+      .subscribe(rows => {
+        this.applyChartFromDailyPendingStatsRows(rows);
+        this.isLoadingChart = false;
+        this.cdr.markForCheck();
+      });
+  }
+
+  /** Constrói o dataset do gráfico (eixo dia do mês) a partir das linhas do daily-pending-stats. */
+  private applyChartFromDailyPendingStatsRows(rows: TeamDailyPendingStatsRow[]): void {
+    const targetMonth = this.month || new Date();
+    const year = targetMonth.getFullYear();
+    const month = targetMonth.getMonth();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const today = new Date();
+    const isCurrentMonth = year === today.getFullYear() && month === today.getMonth();
+    const currentDay = isCurrentMonth ? today.getDate() : daysInMonth;
+
+    const dailyCounts: number[] = Array.from({ length: daysInMonth }, () => 0);
+    const targetEmail = (this.playerId ?? '').trim().toLowerCase();
+
+    for (const row of rows) {
+      if (targetEmail && (row.email ?? '').trim().toLowerCase() !== targetEmail) {
+        continue;
+      }
+      const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(row.day || '');
+      if (!m) {
+        continue;
+      }
+      const ry = Number(m[1]);
+      const rm = Number(m[2]) - 1;
+      const rd = Number(m[3]);
+      if (ry !== year || rm !== month) {
+        continue;
+      }
+      if (rd >= 1 && rd <= daysInMonth) {
+        dailyCounts[rd - 1] += Math.max(0, Math.floor(Number(row.tasksCount) || 0));
+      }
+    }
+
+    this.chartLabels = [...Array.from({ length: daysInMonth }, (_, i) => String(i + 1))];
+
+    const fillPending = (count: number, index: number, active: string, muted: string) => {
+      if (isCurrentMonth && index + 1 > currentDay) {
+        return 'rgba(255, 255, 255, 0.1)';
+      }
+      if (count > 0) {
+        return active;
+      }
+      return muted;
+    };
+
+    const bg = dailyCounts.map((count, index) =>
+      fillPending(count, index, 'rgba(251, 191, 36, 0.65)', 'rgba(255, 255, 255, 0.05)')
+    );
+    const border = dailyCounts.map((count, index) =>
+      fillPending(count, index, 'rgba(245, 158, 11, 1)', 'rgba(255, 255, 255, 0.1)')
+    );
+
+    this.chartDatasets = [
+      {
+        label: 'Por prazo',
+        data: [...dailyCounts],
+        backgroundColor: bg,
+        borderColor: border,
+        borderWidth: 1
+      }
+    ];
   }
 
   /** Barras = contagem de tarefas cujo `dt_prazo` cai em cada dia do mês visível. */
