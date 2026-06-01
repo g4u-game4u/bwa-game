@@ -909,6 +909,81 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
     return false;
   }
 
+  /**
+   * Heurística BWA: equipa marcada como «célula» (sub-equipe dentro do time-pai).
+   * Aceita `team_type`, `tipo`, flags `is_cell` / `celula` ou nome contendo «célula».
+   */
+  private isCellTeamRecord(team: Record<string, unknown>): boolean {
+    const flags = ['is_cell', 'isCell', 'celula', 'cell', 'is_celula', 'isCelula'];
+    for (const k of flags) {
+      const v = team[k];
+      if (v === true || v === 1 || v === '1') {
+        return true;
+      }
+    }
+    const typeKeys = ['team_type', 'teamType', 'tipo', 'type', 'kind'];
+    for (const k of typeKeys) {
+      const v = team[k];
+      if (typeof v === 'string' && /celula|célula|cell/i.test(v.trim())) {
+        return true;
+      }
+    }
+    const extra = team['extra'];
+    if (extra && typeof extra === 'object') {
+      if (this.isCellTeamRecord(extra as Record<string, unknown>)) {
+        return true;
+      }
+    }
+    const name = String(team['name'] ?? team['nome'] ?? team['descricao'] ?? '').trim();
+    return /célula|celula|\bcell\b/i.test(name);
+  }
+
+  /**
+   * LIDER_CELULA: restringe o seletor à célula (equipa em que é líder/observer), não ao time-pai.
+   */
+  private filterAvailableTeamsForLiderCelula(
+    availableTeams: Array<{ id: string; name: string; memberCount: number; game4uTeamId?: string }>,
+    allTeams: any[]
+  ): Array<{ id: string; name: string; memberCount: number; game4uTeamId?: string }> {
+    const rawById = new Map<string, Record<string, unknown>>();
+    for (const t of allTeams) {
+      if (!t || typeof t !== 'object') {
+        continue;
+      }
+      const id = (t as { _id?: unknown; id?: unknown })._id ?? (t as { id?: unknown }).id;
+      if (id != null && String(id).trim() !== '') {
+        rawById.set(String(id), t as Record<string, unknown>);
+      }
+    }
+
+    const leaderTeams = availableTeams.filter(t => {
+      const raw = rawById.get(t.id);
+      return raw != null && this.isCurrentUserLeaderOrObserverOnTeam(raw);
+    });
+    if (leaderTeams.length > 0) {
+      return leaderTeams;
+    }
+
+    const cellTagged = availableTeams.filter(t => {
+      const raw = rawById.get(t.id);
+      return raw != null && this.isCellTeamRecord(raw);
+    });
+    if (cellTagged.length > 0) {
+      return cellTagged;
+    }
+
+    if (availableTeams.length === 2) {
+      const withCounts = availableTeams.map(t => ({
+        team: t,
+        count: Math.max(0, Math.floor(Number(t.memberCount) || 0))
+      }));
+      withCounts.sort((a, b) => a.count - b.count);
+      return [withCounts[0].team];
+    }
+
+    return availableTeams.length > 0 ? [availableTeams[0]] : [];
+  }
+
   /** ADMIN na sessão (ROLES_LIST ou texto com "admin", case-insensitive). */
   private hasAdminSessionRole(): boolean {
     if (this.sessaoProvider.isAdmin()) {
@@ -1085,6 +1160,14 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
           });
 
         console.log('✅ Available teams for profile (intersect API):', profile, availableTeams.length);
+
+        if (profile === UserProfile.LIDER_CELULA && availableTeams.length > 0) {
+          const cellOnly = this.filterAvailableTeamsForLiderCelula(availableTeams, allTeams);
+          if (cellOnly.length > 0) {
+            availableTeams = cellOnly;
+            console.log('✅ LIDER_CELULA: escopo reduzido à célula:', availableTeams.length);
+          }
+        }
       }
 
       // API devolveu times mas os ids da sessão não batem com _id (ex.: nomes legíveis vs Funifier)
@@ -4583,11 +4666,11 @@ private calculateCollaboratorTotals(memberData: Array<{
    * Indica se o modal de tarefas pendentes deve buscar o gráfico através do endpoint
    * `GET /game/reports/team/daily-pending-stats` (agregado diário com filtro por `due_date`).
    *
-   * Aplica-se ao perfil **SUPERVISOR** — o gráfico do mês inteiro é resolvido com uma única
-   * chamada, sem depender da paginação de `GET /game/reports/user-actions` para alimentá-lo.
+   * Aplica-se a **SUPERVISOR** e **LIDER_CELULA** — o gráfico do mês inteiro é resolvido com uma
+   * única chamada, sem depender da paginação de `GET /game/reports/user-actions` para alimentá-lo.
    */
   get useDailyPendingStatsApiForModal(): boolean {
-    return this.userProfileService.isSupervisor();
+    return this.userProfileService.isSupervisor() || this.userProfileService.isLiderCelula();
   }
 
   /**

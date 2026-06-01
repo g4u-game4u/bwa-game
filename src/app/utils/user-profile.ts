@@ -1,14 +1,16 @@
 /**
  * User Profile Types
  * 
- * Defines the 4 user profile types and their access levels:
+ * Defines user profile types and their access levels:
  * - JOGADOR: Can only see their own dashboard
+ * - LIDER_CELULA: Team-management com visão consolidada da célula (sub-equipe)
  * - SUPERVISOR: Can see team-management dashboard, but only their own team
  * - GESTOR: Can see team-management dashboard, can see multiple teams in their management
  * - DIRETOR: Can see team-management dashboard, has admin view and can see all teams
  */
 export enum UserProfile {
   JOGADOR = 'JOGADOR',
+  LIDER_CELULA = 'LIDER_CELULA',
   SUPERVISOR = 'SUPERVISOR',
   GESTOR = 'GESTOR',
   DIRETOR = 'DIRETOR'
@@ -169,8 +171,12 @@ export function getUserOwnTeamId(
   profile: UserProfile,
   teamCodes?: TeamCodes
 ): string | null {
-  if (profile === UserProfile.JOGADOR || profile === UserProfile.DIRETOR) {
-    return null; // Jogador doesn't have a management team, Diretor can see all
+  if (
+    profile === UserProfile.JOGADOR ||
+    profile === UserProfile.DIRETOR ||
+    profile === UserProfile.LIDER_CELULA
+  ) {
+    return null; // Jogador / líder de célula: escopo via equipas da sessão; Diretor vê tudo
   }
 
   const codes = teamCodes || DEFAULT_TEAM_CODES;
@@ -230,6 +236,15 @@ export function getAccessibleTeamIds(
     const managedTeams = teamIds.filter(id => id !== codes.supervisor);
     console.log('👤 SUPERVISOR: managedTeams:', managedTeams);
     return managedTeams.length > 0 ? managedTeams : [];
+  }
+
+  if (profile === UserProfile.LIDER_CELULA) {
+    // Líder de célula: time-pai + célula na sessão — o painel filtra para a célula (líder/observer).
+    const cellScope = teamIds.filter(
+      id => id !== codes.supervisor && id !== codes.gestor && id !== codes.diretor
+    );
+    console.log('👤 LIDER_CELULA: team scope (sessão):', cellScope);
+    return cellScope;
   }
 
   if (profile === UserProfile.GESTOR) {

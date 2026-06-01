@@ -87,6 +87,16 @@ describe('UserProfileService', () => {
       expect(service.getCurrentUserProfile()).toBe(UserProfile.SUPERVISOR);
     });
 
+    it('should return LIDER_CELULA when session role is LIDER_CELULA without management teams', () => {
+      Object.defineProperty(mockSessaoProvider, 'usuario', {
+        value: {
+          teams: ['team-pai', 'team-celula-26'],
+          roles: ['LIDER_CELULA', 'ACCESS_PLAYER_PANEL']
+        }
+      });
+      expect(service.getCurrentUserProfile()).toBe(UserProfile.LIDER_CELULA);
+    });
+
     it('should call TeamCodeService.getTeamCodes()', () => {
       Object.defineProperty(mockSessaoProvider, 'usuario', { 
         value: { teams: ['some-team'] } 
@@ -296,6 +306,15 @@ describe('UserProfileService', () => {
       }
     });
 
+    it('canAccessTeamManagement should return true for LIDER_CELULA session role', () => {
+      Object.defineProperty(mockSessaoProvider, 'usuario', {
+        value: { teams: ['team-pai', 'team-celula'], roles: ['LIDER_CELULA'] },
+        configurable: true
+      });
+      expect(service.canAccessTeamManagement()).toBe(true);
+      expect(service.isLiderCelula()).toBe(true);
+    });
+
     it('canSeeAllTeams should return true only for DIRETOR', () => {
       Object.defineProperty(mockSessaoProvider, 'usuario', { 
         value: { teams: [defaultTeamCodes.diretor] } 
@@ -308,9 +327,14 @@ describe('UserProfileService', () => {
       expect(service.canSeeAllTeams()).toBe(false);
     });
 
-    it('canOnlySeeOwnTeam should return true only for SUPERVISOR', () => {
+    it('canOnlySeeOwnTeam should return true for SUPERVISOR and LIDER_CELULA', () => {
       Object.defineProperty(mockSessaoProvider, 'usuario', { 
         value: { teams: [defaultTeamCodes.supervisor] } 
+      });
+      expect(service.canOnlySeeOwnTeam()).toBe(true);
+
+      Object.defineProperty(mockSessaoProvider, 'usuario', {
+        value: { teams: ['team-pai', 'team-celula'], roles: ['LIDER_CELULA'] }
       });
       expect(service.canOnlySeeOwnTeam()).toBe(true);
 

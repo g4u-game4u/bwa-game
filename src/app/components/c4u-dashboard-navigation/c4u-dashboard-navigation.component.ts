@@ -38,6 +38,11 @@ export class C4uDashboardNavigationComponent implements OnInit {
       route: '/dashboard/supervisor',
       icon: 'ri-user-star-line',
       requiresRole: ROLES_LIST.ACCESS_TEAM_MANAGEMENT
+    },
+    {
+      label: 'Gestão da Célula',
+      route: '/dashboard/team-management',
+      icon: 'ri-group-line'
     }
   ];
   
@@ -96,16 +101,21 @@ export class C4uDashboardNavigationComponent implements OnInit {
   private filterAvailableDashboards(): void {
     const isJogador = this.userProfileService.isJogador();
     const isSupervisor = this.userProfileService.isSupervisor();
+    const isLiderCelula = this.userProfileService.isLiderCelula();
     
     this.availableDashboards = this.dashboards.filter(dashboard => {
-      // "Meu Painel" should only be shown to JOGADOR
+      // "Meu Painel" — jogador puro; líder de célula também pode ver o painel individual
       if (dashboard.route === '/dashboard' && dashboard.label === 'Meu Painel') {
-        return isJogador;
+        return isJogador || isLiderCelula;
       }
       
       // "Supervisor" should only be shown to SUPERVISOR users
       if (dashboard.label === 'Supervisor') {
         return isSupervisor;
+      }
+
+      if (dashboard.label === 'Gestão da Célula') {
+        return isLiderCelula;
       }
       
       // Dashboards with role requirement (e.g., "Gestão de Equipe")

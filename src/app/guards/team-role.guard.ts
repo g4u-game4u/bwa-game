@@ -5,7 +5,8 @@ import { UserProfileService } from '@services/user-profile.service';
 
 /**
  * Guard service to restrict access to team management dashboard
- * Users can access when they have session roles ADMIN or GESTOR (ROLES_LIST), or management profiles:
+ * Users can access when they have session roles ADMIN or GESTOR (ROLES_LIST), `LIDER_CELULA`, or management profiles:
+ * - LIDER_CELULA (visão consolidada da célula)
  * - SUPERVISOR (Fkmdmko - SUPERVISÃO)
  * - GESTOR (FkmdnFU - GESTAO)
  * - DIRETOR (FkmdhZ9 - DIREÇÃO)
