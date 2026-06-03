@@ -48,8 +48,10 @@ export interface FinishedTaskGroup {
 })
 export class ModalProgressListComponent implements OnInit, OnDestroy {
   @Input() playerId = '';
-  /** Quando definido (ex. painel de equipa Game4U), escopo `team_id` num único GET com o jogador em `playerId`. */
+  /** Quando definido (ex. painel de equipa Game4U), escopo `team_id` num único GET sem `email`. */
   @Input() teamId: string | null = null;
+  /** Vários times: um GET por `team_id` e concatenação no modal (painel multi-equipa). */
+  @Input() teamIds: string[] | null = null;
   @Input() listType: ProgressListType = 'atividades';
   @Input() month?: Date;
   /**
@@ -168,7 +170,7 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
 
   /** Painel de equipa (escopo `team_id`): coluna com o jogador da user-action (`user_email`). */
   get showActivityExecutorColumn(): boolean {
-    return (this.teamId ?? '').trim().length > 0;
+    return this.getTeamScopeIds().length > 0;
   }
 
   /**
@@ -345,32 +347,48 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
     return false;
   }
 
+  /** `team_id`(s) para `/game/reports/*` (prioriza {@link teamIds}). */
+  private getTeamScopeIds(): string[] {
+    const fromArray = (this.teamIds ?? [])
+      .map(id => String(id).trim())
+      .filter(id => id.length > 0);
+    if (fromArray.length > 0) {
+      return [...new Set(fromArray)];
+    }
+    const single = (this.teamId ?? '').trim();
+    return single ? [single] : [];
+  }
+
   /**
-   * Com `teamId`, um único jogador (gestor ou colaborador) + escopo equipa na API.
-   * Sem `teamId`, comportamento legado: vários IDs separados por vírgula (forkJoin).
+   * Com escopo de equipa, a API usa só `team_id` (sem `email`). Sem escopo, legado Funifier:
+   * vários IDs separados por vírgula (forkJoin).
    */
   private getPlayerIds(): string[] {
-    const scope = (this.teamId ?? '').trim();
-    /** Painel equipa sem colaborador: um pedido com `team_id` e sem `email` / `user`. */
-    if (scope && !(this.playerId || '').trim()) {
+    if (this.getTeamScopeIds().length > 0) {
       return [''];
     }
     if (!this.playerId) {
       return [];
     }
-    if (scope) {
-      const single = this.playerId.split(',')[0]?.trim() ?? '';
-      return single ? [single] : [];
-    }
     return this.playerId.split(',').map(id => id.trim()).filter(id => id.length > 0);
+  }
+
+  /** Filtro local quando um colaborador está selecionado no painel (não vai para a API). */
+  private filterActivityItemsByPlayerEmail(items: ActivityListItem[]): ActivityListItem[] {
+    const email = (this.playerId ?? '').trim().toLowerCase();
+    if (!email) {
+      return items;
+    }
+    return items.filter(item => (item.player ?? '').trim().toLowerCase() === email);
   }
 
   private loadData(): void {
     this.isLoading = true;
 
+    const teamScopeIds = this.getTeamScopeIds();
     const playerIds = this.getPlayerIds();
-    
-    if (playerIds.length === 0) {
+
+    if (teamScopeIds.length === 0 && playerIds.length === 0) {
       console.warn('No player IDs provided');
       this.activityItems = [];
       this.processoItems = [];
@@ -401,27 +419,37 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
       this.useActivityReportsPagination = false;
       this.activityHasMore = false;
 
-      const tid = (this.teamId ?? '').trim() || undefined;
-      const activityRequests = playerIds.map(playerId =>
-        this.actionLogService.getActivityList(
-          playerId,
-          this.month,
-          undefined,
-          reportStatuses,
-          tid
-        ).pipe(
-          catchError(error => {
-            console.error(`Error loading activity list for player ${playerId}:`, error);
-            return of([] as ActivityListItem[]);
-          })
-        )
-      );
+      const activityRequests =
+        teamScopeIds.length > 0
+          ? teamScopeIds.map(teamScopeId =>
+              this.actionLogService
+                .getActivityList('', this.month, undefined, reportStatuses, teamScopeId)
+                .pipe(
+                  catchError(error => {
+                    console.error(
+                      `Error loading activity list for team ${teamScopeId}:`,
+                      error
+                    );
+                    return of([] as ActivityListItem[]);
+                  })
+                )
+            )
+          : playerIds.map(playerId =>
+              this.actionLogService
+                .getActivityList(playerId, this.month, undefined, reportStatuses)
+                .pipe(
+                  catchError(error => {
+                    console.error(`Error loading activity list for player ${playerId}:`, error);
+                    return of([] as ActivityListItem[]);
+                  })
+                )
+            );
 
       forkJoin(activityRequests)
         .pipe(takeUntil(this.destroy$))
         .subscribe({
           next: async (results: ActivityListItem[][]) => {
-            this.activityItems = results.flat();
+            this.activityItems = this.filterActivityItemsByPlayerEmail(results.flat());
             this.sortActivityItems();
 
             if (!this.shouldUseDailyPendingStatsForChart) {
@@ -448,15 +476,24 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
         });
       return;
     } else if (this.isProcessList) {
-      const tid = (this.teamId ?? '').trim() || undefined;
-      const processRequests = playerIds.map(playerId =>
-        this.actionLogService.getProcessList(playerId, this.month, tid).pipe(
-          catchError(error => {
-            console.error(`Error loading process list for player ${playerId}:`, error);
-            return of([] as ProcessListItem[]);
-          })
-        )
-      );
+      const processRequests =
+        teamScopeIds.length > 0
+          ? teamScopeIds.map(teamScopeId =>
+              this.actionLogService.getProcessList('', this.month, teamScopeId).pipe(
+                catchError(error => {
+                  console.error(`Error loading process list for team ${teamScopeId}:`, error);
+                  return of([] as ProcessListItem[]);
+                })
+              )
+            )
+          : playerIds.map(playerId =>
+              this.actionLogService.getProcessList(playerId, this.month).pipe(
+                catchError(error => {
+                  console.error(`Error loading process list for player ${playerId}:`, error);
+                  return of([] as ProcessListItem[]);
+                })
+              )
+            );
 
       forkJoin(processRequests)
         .pipe(takeUntil(this.destroy$))
@@ -540,13 +577,14 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
   }
 
   private fetchActivityReportPage(isFirstPage: boolean): void {
+    const teamScopeIds = this.getTeamScopeIds();
     const playerIds = this.getPlayerIds();
     const playerId = playerIds[0];
     const reportStatuses: Game4uUserActionStatus[] =
       this.listType === 'atividades-pendentes'
         ? ['PENDING', 'DOING']
         : ['DONE', 'DELIVERED'];
-    const tid = (this.teamId ?? '').trim() || undefined;
+    const tid = teamScopeIds[0] ?? (((this.teamId ?? '').trim()) || undefined);
 
     if (!isFirstPage) {
       this.isLoadingMore = true;
@@ -577,10 +615,11 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
       .subscribe({
         next: async page => {
           try {
+            const pageItems = this.filterActivityItemsByPlayerEmail(page.items);
             if (isFirstPage) {
-              this.activityItems = [...page.items];
+              this.activityItems = [...pageItems];
             } else {
-              this.activityItems = [...this.activityItems, ...page.items];
+              this.activityItems = [...this.activityItems, ...pageItems];
             }
             if (page.total != null && Number.isFinite(page.total)) {
               this.activityReportsTotal = page.total;
@@ -717,7 +756,7 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
     return (
       this.useDailyPendingStatsApi &&
       this.isPendingActivitiesModal &&
-      (this.teamId ?? '').trim().length > 0
+      this.getTeamScopeIds().length > 0
     );
   }
 
@@ -739,32 +778,37 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
    * mês inteiro independentemente da paginação da lista.
    */
   private fetchDailyPendingStatsForChart(): void {
-    const teamId = (this.teamId ?? '').trim();
-    if (!teamId) {
+    const teamScopeIds = this.getTeamScopeIds();
+    if (teamScopeIds.length === 0) {
       return;
     }
     const { start, end } = this.monthRangeYmd();
-    const email = (this.playerId ?? '').trim();
 
     this.isLoadingChart = true;
     this.cdr.markForCheck();
 
-    this.actionLogService
-      .getReportTeamDailyPendingStats({
-        team_id: teamId,
-        start,
-        end,
-        ...(email ? { email } : {})
-      })
-      .pipe(
-        takeUntil(this.destroy$),
-        catchError(error => {
-          console.error('Error loading daily-pending-stats for chart:', error);
-          return of([] as TeamDailyPendingStatsRow[]);
+    const requests = teamScopeIds.map(teamScopeId =>
+      this.actionLogService
+        .getReportTeamDailyPendingStats({
+          team_id: teamScopeId,
+          start,
+          end
         })
-      )
-      .subscribe(rows => {
-        this.applyChartFromDailyPendingStatsRows(rows);
+        .pipe(
+          catchError(error => {
+            console.error(
+              `Error loading daily-pending-stats for team ${teamScopeId}:`,
+              error
+            );
+            return of([] as TeamDailyPendingStatsRow[]);
+          })
+        )
+    );
+
+    forkJoin(requests)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(rowGroups => {
+        this.applyChartFromDailyPendingStatsRows(rowGroups.flat());
         this.isLoadingChart = false;
         this.cdr.markForCheck();
       });

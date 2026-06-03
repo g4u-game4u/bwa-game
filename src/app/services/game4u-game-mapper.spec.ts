@@ -20,6 +20,9 @@ import {
   mergeGame4uDeliveryParticipation,
   mergeGame4uTeamDeliveryRows,
   mapGame4uFinishedDeliveryRowsToParticipacaoCnpjRows,
+  readGame4uUserActionTitle,
+  aggregateExecutiveTopProcessesFromUserActions,
+  deliveryRowCountsAsOnTime,
   deliveryRowHasFinishedTaskInMonth,
   hasMoreFinishedDeliveriesCachedPage,
   resolveGame4uFinishedPrazoStatus
@@ -644,6 +647,29 @@ describe('game4u-game-mapper', () => {
     });
   });
 
+  describe('deliveryRowCountsAsOnTime', () => {
+    it('returns true when tasks_on_time covers all tasks', () => {
+      expect(
+        deliveryRowCountsAsOnTime({ delivery_title: 'A', tasks_total: 3, tasks_on_time: 3 })
+      ).toBe(true);
+    });
+
+    it('returns true when on_time_pct is 100%', () => {
+      expect(deliveryRowCountsAsOnTime({ delivery_title: 'B', tasks_total: 2, on_time_pct: 100 })).toBe(
+        true
+      );
+    });
+
+    it('returns false when delivery is partially late', () => {
+      expect(
+        deliveryRowCountsAsOnTime({ delivery_title: 'C', tasks_total: 4, tasks_on_time: 2 })
+      ).toBe(false);
+      expect(deliveryRowCountsAsOnTime({ delivery_title: 'D', tasks_total: 2, on_time_pct: 80 })).toBe(
+        false
+      );
+    });
+  });
+
   describe('deliveryRowHasFinishedTaskInMonth', () => {
     it('returns true when tasks_total > 0', () => {
       expect(deliveryRowHasFinishedTaskInMonth({ delivery_title: 'A', tasks_total: 1 })).toBe(true);
@@ -675,6 +701,61 @@ describe('game4u-game-mapper', () => {
     it('treats total equal to full page size as possibly incomplete', () => {
       expect(hasMoreFinishedDeliveriesCachedPage(30, 30, 30, 30)).toBe(true);
       expect(hasMoreFinishedDeliveriesCachedPage(12, 30, 12, 12)).toBe(false);
+    });
+  });
+
+  describe('executive top processes from user-actions', () => {
+    it('readGame4uUserActionTitle prefers top-level title', () => {
+      expect(
+        readGame4uUserActionTitle({
+          id: '1',
+          points: 1,
+          status: 'DONE',
+          created_at: '2026-03-01',
+          title: 'DCTF Web',
+          action_title: 'Enviar guia',
+          delivery_title: 'Cliente X'
+        } as Game4uUserActionModel)
+      ).toBe('DCTF Web');
+    });
+
+    it('aggregateExecutiveTopProcessesFromUserActions groups by title and counts clients', () => {
+      const { top, distinctProcesses } = aggregateExecutiveTopProcessesFromUserActions([
+        {
+          id: '1',
+          points: 1,
+          status: 'DONE',
+          created_at: '2026-03-01',
+          title: 'Folha de pagamento',
+          integration_id: 'c1',
+          dt_prazo: '2026-03-10',
+          finished_at: '2026-03-05T12:00:00Z'
+        },
+        {
+          id: '2',
+          points: 1,
+          status: 'DELIVERED',
+          created_at: '2026-03-02',
+          title: 'Folha de pagamento',
+          integration_id: 'c2',
+          dt_prazo: '2026-03-10',
+          finished_at: '2026-03-06T12:00:00Z'
+        },
+        {
+          id: '3',
+          points: 1,
+          status: 'DONE',
+          created_at: '2026-03-03',
+          action_title: 'SPED Fiscal',
+          integration_id: 'c1',
+          dt_prazo: '2026-03-10',
+          finished_at: '2026-03-07T12:00:00Z'
+        }
+      ]);
+      expect(distinctProcesses).toBe(2);
+      expect(top[0].deliveryTitle).toBe('Folha de pagamento');
+      expect(top[0].tasksTotal).toBe(2);
+      expect(top[0].deliveriesCount).toBe(2);
     });
   });
 

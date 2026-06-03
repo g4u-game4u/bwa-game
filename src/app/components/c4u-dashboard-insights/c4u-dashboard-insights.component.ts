@@ -19,6 +19,8 @@ export class C4uDashboardInsightsComponent {
   @Input() loading = false;
   @Input() variant: DashboardInsightsVariant = 'player';
   @Input() scopeLabel = 'você';
+  /** Sem cabeçalho de secção nem card exterior (ex.: dentro de insights executivos). */
+  @Input() embedded = false;
 
   get hasData(): boolean {
     return !!this.insights && (this.insights.pendingTasks > 0 || this.insights.finishedTasks > 0);

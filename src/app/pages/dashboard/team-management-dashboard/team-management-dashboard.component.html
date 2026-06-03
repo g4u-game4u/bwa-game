@@ -362,95 +362,6 @@
               
               <c4u-shimmer *ngIf="isLoadingGoals"></c4u-shimmer>
             </section>
-            
-            <!-- Clientes atendidos: lista única (CNPJs com participação no período via action_log agregado).
-                 No painel agregado de gestão usa `GET /game/reports/management/finished/deliveries/cached`. -->
-            <section
-              class="dashboard-section carteira-section"
-              [class.carteira-section--loading]="isLoadingCarteira"
-              [attr.aria-busy]="isLoadingCarteira ? 'true' : null"
-              aria-labelledby="company-section-title">
-              <div class="section-header">
-                <h3 id="company-section-title" class="section-title">
-                  Clientes atendidos este mês
-                  <span *ngIf="!isLoadingClientesAtendidosCount" class="section-title-count" aria-hidden="true">
-                    ({{ clientesAtendidosThisMonthCount ?? teamCarteiraClientes.length }})
-                  </span>
-                  <c4u-info-button 
-                    [infoKey]="''"
-                    [customText]="'São os clientes para os quais a equipa ou o colaborador selecionado realizou alguma entrega ou obrigação neste mês na plataforma Acessórias. A lista segue o mês (ou período) selecionado no filtro do painel e as atividades contabilizadas pela competência das entregas no Game4U'"
-                    position="bottom">
-                  </c4u-info-button>
-                </h3>
-              </div>
-              
-              <c4u-card class="carteira-card">
-                <c4u-shimmer *ngIf="isLoadingCarteira"></c4u-shimmer>
-
-                <div *ngIf="!isLoadingCarteira && teamCarteiraClientes.length > 0" class="carteira-list">
-                  <div *ngFor="let cliente of teamCarteiraClientes" 
-                       class="carteira-item"
-                       (click)="openCompanyDetailModal(cliente)"
-                       role="article"
-                       style="cursor: pointer;"
-                       [title]="getClienteAtendidoTooltip(cliente)"
-                       (keydown.enter)="openCompanyDetailModal(cliente)"
-                       (keydown.space)="openCompanyDetailModal(cliente); $event.preventDefault()">
-                    <div class="carteira-item-info">
-                      <i class="ri-building-line"></i>
-                      <span class="carteira-cnpj">{{ getClienteAtendidoListTitle(cliente) }}</span>
-                      <span class="status-badge" *ngIf="getCompanyStatus(cliente.cnpj)" 
-                            [class.active]="isCompanyActive(cliente.cnpj)"
-                            [class.inactive]="!isCompanyActive(cliente.cnpj)">
-                        {{ getCompanyStatus(cliente.cnpj) }}
-                      </span>
-                    </div>
-                    <div class="carteira-item-meta">
-                      <span
-                        *ngIf="isLoadingParticipacaoKpi"
-                        class="carteira-entrega carteira-entrega--pending"
-                        aria-busy="true"
-                        title="A carregar percentual de entregas no prazo (gamificação)…">…</span>
-                      <span
-                        *ngIf="!isLoadingParticipacaoKpi"
-                        [ngClass]="listaEntregaPrazoClasses(cliente)">
-                        <ng-container *ngIf="getListaEntregaPercent(cliente) !== null; else entregaNaParticipacao">
-                          {{ getListaEntregaPercent(cliente)! | number:'1.0-2':'pt-BR' }}%
-                        </ng-container>
-                        <ng-template #entregaNaParticipacao>n/a</ng-template>
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                <div
-                  *ngIf="!isLoadingCarteira && (showParticipacaoLoadMoreButton || isLoadingCarteiraMore)"
-                  class="participacao-load-more-wrap">
-                  <button
-                    type="button"
-                    class="participacao-load-more-btn"
-                    [disabled]="isLoadingCarteiraMore"
-                    [attr.aria-busy]="isLoadingCarteiraMore"
-                    (click)="loadMoreParticipacao()">
-                    <i *ngIf="isLoadingCarteiraMore" class="ri-loader-4-line loading-icon" aria-hidden="true"></i>
-                    {{ isLoadingCarteiraMore ? 'A carregar…' : 'Carregar mais' }}
-                  </button>
-                </div>
-                
-                <div *ngIf="!isLoadingCarteira && teamCarteiraClientes.length === 0" class="empty-state">
-                  <p>Ainda não encontramos clientes atendidos neste mês. Volte novamente mais tarde.</p>
-                  <button
-                    type="button"
-                    class="empty-state-retry-btn"
-                    [disabled]="isLoadingCarteira"
-                    [attr.aria-busy]="isLoadingCarteira ? 'true' : null"
-                    (click)="retryClientesAtendidosThisMonth()">
-                    Tentar carregar novamente
-                  </button>
-                </div>
-              </c4u-card>
-            </section>
-
             <!--
               Mini dashboard executivo: resumo gerencial do mês.
               Origem: cache do back-end Game4U (
@@ -480,16 +391,72 @@
                   Insights executivos do mês
                   <c4u-info-button
                     [infoKey]="''"
-                    [customText]="'Resumo gerencial cruzando ' + (selectedCollaborator ? 'as entregas finalizadas pelo colaborador' : 'as entregas finalizadas pelo time') + ' no mês selecionado. Inclui top processos, jogador de destaque e indicadores de saúde — calculados a partir do cache do Game4U.'"
+                    [customText]="'Resumo gerencial cruzando ' + (selectedCollaborator ? 'as entregas finalizadas pelo colaborador' : 'as entregas finalizadas pelo time') + ' no mês selecionado. Alertas de prazo e multa, produtividade do time, top processos e jogadores — cache e user-actions Game4U.'"
                     position="bottom">
                   </c4u-info-button>
                 </h3>
               </div>
 
               <c4u-card class="executive-insights-card">
-                <c4u-shimmer *ngIf="isLoadingExecutiveInsights"></c4u-shimmer>
+                <div *ngIf="isLoadingExecutiveInsights" class="executive-insights-skeleton" role="status">
+                  <span class="executive-insights-sr-only">A carregar insights executivos do mês…</span>
+
+                  <c4u-dashboard-insights
+                    *ngIf="usesGame4uWalletFromStats"
+                    [embedded]="true"
+                    [insights]="null"
+                    [loading]="true"
+                    variant="team"
+                    [scopeLabel]="executiveActionInsightsScopeLabel">
+                  </c4u-dashboard-insights>
+
+                  <div class="executive-kpi-row">
+                    <div *ngFor="let _ of executiveSkeletonKpiSlots" class="executive-skeleton-kpi">
+                      <div class="executive-skeleton-bone executive-skeleton-kpi-icon"></div>
+                      <div class="executive-skeleton-kpi-content">
+                        <div class="executive-skeleton-bone executive-skeleton-kpi-value"></div>
+                        <div class="executive-skeleton-bone executive-skeleton-kpi-label"></div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="executive-insights-grid">
+                    <div class="executive-skeleton-block">
+                      <div class="executive-skeleton-bone executive-skeleton-block-title"></div>
+                      <div *ngFor="let _ of executiveSkeletonProcessSlots" class="executive-skeleton-process-row">
+                        <div class="executive-skeleton-bone executive-skeleton-process-rank"></div>
+                        <div class="executive-skeleton-process-body">
+                          <div class="executive-skeleton-bone executive-skeleton-process-line"></div>
+                          <div class="executive-skeleton-bone executive-skeleton-process-bar"></div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div class="executive-insights-players-column">
+                      <div *ngFor="let _ of executiveSkeletonPlayerBlocks" class="executive-skeleton-block">
+                        <div class="executive-skeleton-bone executive-skeleton-block-title"></div>
+                        <div *ngFor="let __ of executiveSkeletonPlayerSlots" class="executive-skeleton-player-row">
+                          <div class="executive-skeleton-bone executive-skeleton-player-avatar"></div>
+                          <div class="executive-skeleton-player-body">
+                            <div class="executive-skeleton-bone executive-skeleton-player-line"></div>
+                            <div class="executive-skeleton-bone executive-skeleton-player-line executive-skeleton-player-line--short"></div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
 
                 <div *ngIf="!isLoadingExecutiveInsights && hasExecutiveInsightsData" class="executive-insights-body">
+                  <c4u-dashboard-insights
+                    *ngIf="usesGame4uWalletFromStats"
+                    [embedded]="true"
+                    [insights]="executiveDashboardInsights"
+                    [loading]="false"
+                    variant="team"
+                    [scopeLabel]="executiveActionInsightsScopeLabel">
+                  </c4u-dashboard-insights>
+
                   <!-- KPI cards (row) -->
                   <div class="executive-kpi-row" role="list" aria-label="Indicadores executivos do mês">
                     <div class="executive-kpi" role="listitem">
@@ -648,58 +615,107 @@
                     </div>
 
                     <div
-                      *ngIf="showExecutiveInsightsPlayersRanking && executiveInsightsTopPlayers.length > 0"
-                      class="executive-block executive-block--players"
-                      aria-labelledby="executive-players-title">
-                      <div class="executive-block-header">
-                        <div class="executive-block-title">
-                          <i class="ri-trophy-line" aria-hidden="true"></i>
-                          <h4 id="executive-players-title">Jogador de destaque do mês</h4>
+                      *ngIf="showExecutiveInsightsPlayersRanking && (executiveInsightsTopPlayers.length > 0 || executiveInsightsAttentionPlayers.length > 0)"
+                      class="executive-insights-players-column">
+                      <div
+                        *ngIf="executiveInsightsTopPlayers.length > 0"
+                        class="executive-block executive-block--players"
+                        aria-labelledby="executive-players-title">
+                        <div class="executive-block-header">
+                          <div class="executive-block-title">
+                            <i class="ri-trophy-line" aria-hidden="true"></i>
+                            <h4 id="executive-players-title">Destaque do mês</h4>
+                          </div>
+                          <span class="executive-block-meta">Mais entregas no prazo</span>
                         </div>
-                        <span class="executive-block-meta" *ngIf="executiveInsightsActivePlayers > 0">
-                          {{ executiveInsightsActivePlayers | number:'1.0-0':'pt-BR' }}
-                          {{ executiveInsightsActivePlayers === 1 ? 'pessoa ativa' : 'pessoas ativas' }}
-                        </span>
+
+                        <ul class="executive-player-list">
+                          <li
+                            *ngFor="let player of executiveInsightsTopPlayers; let i = index; trackBy: trackByExecutivePlayer"
+                            class="executive-player-item"
+                            [class.executive-player-item--top]="i === 0">
+                            <div class="executive-player-rank" aria-hidden="true">
+                              <i *ngIf="i === 0" class="ri-medal-line"></i>
+                              <span *ngIf="i !== 0">{{ i + 1 }}</span>
+                            </div>
+                            <div class="executive-player-avatar" [attr.aria-label]="player.name">
+                              {{ player.initials }}
+                            </div>
+                            <div class="executive-player-info">
+                              <div class="executive-player-name-row">
+                                <span class="executive-player-name" [title]="player.email">
+                                  {{ player.name }}
+                                </span>
+                                <span class="executive-player-tasks executive-player-tasks--highlight">
+                                  {{ player.onTimeDeliveries | number:'1.0-0':'pt-BR' }}
+                                  {{ player.onTimeDeliveries === 1 ? 'entrega no prazo' : 'entregas no prazo' }}
+                                </span>
+                              </div>
+                              <div class="executive-player-meta">
+                                <span>
+                                  {{ player.deliveriesCount | number:'1.0-0':'pt-BR' }}
+                                  {{ player.deliveriesCount === 1 ? 'entrega' : 'entregas' }} no mês
+                                </span>
+                                <ng-container *ngIf="player.onTimeDeliveryPct != null">
+                                  <span aria-hidden="true">·</span>
+                                  <span [ngClass]="getExecutiveOnTimeBadgeClass(player.onTimeDeliveryPct)">
+                                    {{ player.onTimeDeliveryPct | number:'1.0-1':'pt-BR' }}% no prazo
+                                  </span>
+                                </ng-container>
+                              </div>
+                            </div>
+                          </li>
+                        </ul>
                       </div>
 
-                      <ul class="executive-player-list">
-                        <li
-                          *ngFor="let player of executiveInsightsTopPlayers; let i = index; trackBy: trackByExecutivePlayer"
-                          class="executive-player-item"
-                          [class.executive-player-item--top]="i === 0">
-                          <div class="executive-player-rank" aria-hidden="true">
-                            <i *ngIf="i === 0" class="ri-medal-line"></i>
-                            <span *ngIf="i !== 0">{{ i + 1 }}</span>
+                      <div
+                        *ngIf="executiveInsightsAttentionPlayers.length > 0"
+                        class="executive-block executive-block--players-attention"
+                        aria-labelledby="executive-attention-players-title">
+                        <div class="executive-block-header">
+                          <div class="executive-block-title">
+                            <i class="ri-error-warning-line" aria-hidden="true"></i>
+                            <h4 id="executive-attention-players-title">Jogadores que precisam de atenção</h4>
                           </div>
-                          <div class="executive-player-avatar" [attr.aria-label]="player.name">
-                            {{ player.initials }}
-                          </div>
-                          <div class="executive-player-info">
-                            <div class="executive-player-name-row">
-                              <span class="executive-player-name" [title]="player.email">
-                                {{ player.name }}
-                              </span>
-                              <span class="executive-player-tasks">
-                                {{ player.tasksTotal | number:'1.0-0':'pt-BR' }} tarefas
-                              </span>
+                          <span class="executive-block-meta">Menor % de entregas no prazo</span>
+                        </div>
+
+                        <ul class="executive-player-list">
+                          <li
+                            *ngFor="let player of executiveInsightsAttentionPlayers; let i = index; trackBy: trackByExecutiveAttentionPlayer"
+                            class="executive-player-item executive-player-item--attention">
+                            <div class="executive-player-rank executive-player-rank--attention" aria-hidden="true">
+                              {{ i + 1 }}
                             </div>
-                            <div class="executive-player-meta">
-                              <span>
-                                {{ player.clientsCount | number:'1.0-0':'pt-BR' }}
-                                {{ player.clientsCount === 1 ? 'cliente' : 'clientes' }}
-                              </span>
-                              <span aria-hidden="true">·</span>
-                              <span>{{ player.pct | number:'1.0-1':'pt-BR' }}% do time</span>
-                              <ng-container *ngIf="player.onTimePct != null">
-                                <span aria-hidden="true">·</span>
-                                <span [ngClass]="getExecutiveOnTimeBadgeClass(player.onTimePct)">
-                                  {{ player.onTimePct | number:'1.0-1':'pt-BR' }}% no prazo
+                            <div class="executive-player-avatar executive-player-avatar--attention" [attr.aria-label]="player.name">
+                              {{ player.initials }}
+                            </div>
+                            <div class="executive-player-info">
+                              <div class="executive-player-name-row">
+                                <span class="executive-player-name" [title]="player.email">
+                                  {{ player.name }}
                                 </span>
-                              </ng-container>
+                                <span class="executive-player-tasks executive-player-tasks--warn">
+                                  {{ player.onTimeDeliveries | number:'1.0-0':'pt-BR' }}
+                                  {{ player.onTimeDeliveries === 1 ? 'entrega no prazo' : 'entregas no prazo' }}
+                                </span>
+                              </div>
+                              <div class="executive-player-meta">
+                                <span>
+                                  {{ player.deliveriesCount | number:'1.0-0':'pt-BR' }}
+                                  {{ player.deliveriesCount === 1 ? 'entrega' : 'entregas' }} no mês
+                                </span>
+                                <ng-container *ngIf="player.onTimeDeliveryPct != null">
+                                  <span aria-hidden="true">·</span>
+                                  <span [ngClass]="getExecutiveOnTimeBadgeClass(player.onTimeDeliveryPct)">
+                                    {{ player.onTimeDeliveryPct | number:'1.0-1':'pt-BR' }}% no prazo
+                                  </span>
+                                </ng-container>
+                              </div>
                             </div>
-                          </div>
-                        </li>
-                      </ul>
+                          </li>
+                        </ul>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -714,6 +730,95 @@
                 </div>
               </c4u-card>
             </section>
+            
+            <!-- Clientes atendidos: lista única (CNPJs com participação no período via action_log agregado).
+                 No painel agregado de gestão usa `GET /game/reports/management/finished/deliveries/cached`. -->
+            <section
+              class="dashboard-section carteira-section"
+              [class.carteira-section--loading]="isLoadingCarteira"
+              [attr.aria-busy]="isLoadingCarteira ? 'true' : null"
+              aria-labelledby="company-section-title">
+              <div class="section-header">
+                <h3 id="company-section-title" class="section-title">
+                  Clientes atendidos este mês
+                  <span *ngIf="!isLoadingClientesAtendidosCount" class="section-title-count" aria-hidden="true">
+                    ({{ clientesAtendidosThisMonthCount ?? teamCarteiraClientes.length }})
+                  </span>
+                  <c4u-info-button 
+                    [infoKey]="''"
+                    [customText]="'São os clientes para os quais a equipa ou o colaborador selecionado realizou alguma entrega ou obrigação neste mês na plataforma Acessórias. A lista segue o mês (ou período) selecionado no filtro do painel e as atividades contabilizadas pela competência das entregas no Game4U'"
+                    position="bottom">
+                  </c4u-info-button>
+                </h3>
+              </div>
+              
+              <c4u-card class="carteira-card">
+                <c4u-shimmer *ngIf="isLoadingCarteira"></c4u-shimmer>
+
+                <div *ngIf="!isLoadingCarteira && teamCarteiraClientes.length > 0" class="carteira-list">
+                  <div *ngFor="let cliente of teamCarteiraClientes" 
+                       class="carteira-item"
+                       (click)="openCompanyDetailModal(cliente)"
+                       role="article"
+                       style="cursor: pointer;"
+                       [title]="getClienteAtendidoTooltip(cliente)"
+                       (keydown.enter)="openCompanyDetailModal(cliente)"
+                       (keydown.space)="openCompanyDetailModal(cliente); $event.preventDefault()">
+                    <div class="carteira-item-info">
+                      <i class="ri-building-line"></i>
+                      <span class="carteira-cnpj">{{ getClienteAtendidoListTitle(cliente) }}</span>
+                      <span class="status-badge" *ngIf="getCompanyStatus(cliente.cnpj)" 
+                            [class.active]="isCompanyActive(cliente.cnpj)"
+                            [class.inactive]="!isCompanyActive(cliente.cnpj)">
+                        {{ getCompanyStatus(cliente.cnpj) }}
+                      </span>
+                    </div>
+                    <div class="carteira-item-meta">
+                      <span
+                        *ngIf="isLoadingParticipacaoKpi"
+                        class="carteira-entrega carteira-entrega--pending"
+                        aria-busy="true"
+                        title="A carregar percentual de entregas no prazo (gamificação)…">…</span>
+                      <span
+                        *ngIf="!isLoadingParticipacaoKpi"
+                        [ngClass]="listaEntregaPrazoClasses(cliente)">
+                        <ng-container *ngIf="getListaEntregaPercent(cliente) !== null; else entregaNaParticipacao">
+                          {{ getListaEntregaPercent(cliente)! | number:'1.0-2':'pt-BR' }}%
+                        </ng-container>
+                        <ng-template #entregaNaParticipacao>n/a</ng-template>
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div
+                  *ngIf="!isLoadingCarteira && (showParticipacaoLoadMoreButton || isLoadingCarteiraMore)"
+                  class="participacao-load-more-wrap">
+                  <button
+                    type="button"
+                    class="participacao-load-more-btn"
+                    [disabled]="isLoadingCarteiraMore"
+                    [attr.aria-busy]="isLoadingCarteiraMore"
+                    (click)="loadMoreParticipacao()">
+                    <i *ngIf="isLoadingCarteiraMore" class="ri-loader-4-line loading-icon" aria-hidden="true"></i>
+                    {{ isLoadingCarteiraMore ? 'A carregar…' : 'Carregar mais' }}
+                  </button>
+                </div>
+                
+                <div *ngIf="!isLoadingCarteira && teamCarteiraClientes.length === 0" class="empty-state">
+                  <p>Ainda não encontramos clientes atendidos neste mês. Volte novamente mais tarde.</p>
+                  <button
+                    type="button"
+                    class="empty-state-retry-btn"
+                    [disabled]="isLoadingCarteira"
+                    [attr.aria-busy]="isLoadingCarteira ? 'true' : null"
+                    (click)="retryClientesAtendidosThisMonth()">
+                    Tentar carregar novamente
+                  </button>
+                </div>
+              </c4u-card>
+            </section>
+
           </div>
 
           <c4u-shimmer *ngIf="isLoadingGoals"></c4u-shimmer>
@@ -1056,6 +1161,7 @@
     *ngIf="isProgressModalOpen"
     [playerId]="progressModalPlayerId"
     [teamId]="progressModalTeamId"
+    [teamIds]="progressModalTeamIds"
     [listType]="progressModalType"
     [month]="selectedMonth"
     [useDailyPendingStatsApi]="useDailyPendingStatsApiForModal"

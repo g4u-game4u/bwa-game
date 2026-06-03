@@ -1,5 +1,9 @@
 import { ActivityListItem } from '@model/gamification-dashboard.model';
-import { computeDashboardInsightsFromActivityLists } from './dashboard-insights.service';
+import {
+  computeDashboardInsightsFromActivityLists,
+  mergeDashboardInsightsSnapshots
+} from './dashboard-insights.service';
+import { DASHBOARD_INSIGHTS_WEEKDAY_LABELS } from '@model/dashboard-insights.model';
 
 describe('computeDashboardInsightsFromActivityLists', () => {
   const today = new Date();
@@ -60,5 +64,24 @@ describe('computeDashboardInsightsFromActivityLists', () => {
     expect(snapshot.topActivity?.count).toBe(2);
     expect(snapshot.mostProductiveWeekday?.index).toBe(1);
     expect(snapshot.onTimeFinishedTasks).toBe(3);
+  });
+});
+
+describe('mergeDashboardInsightsSnapshots', () => {
+  it('sums counts and merges top activities across teams', () => {
+    const base = computeDashboardInsightsFromActivityLists(
+      [{ id: '1', title: 'Pend', points: 1, created: 0, risco_multa: true }],
+      []
+    );
+    const other = computeDashboardInsightsFromActivityLists(
+      [],
+      [{ id: '2', title: 'Emitir certidão', points: 1, created: Date.now(), dt_prazo: '2026-06-10' }]
+    );
+    const merged = mergeDashboardInsightsSnapshots([base, other]);
+    expect(merged?.fineRiskTasks).toBe(1);
+    expect(merged?.pendingTasks).toBe(1);
+    expect(merged?.finishedTasks).toBe(1);
+    expect(merged?.topActivity?.label).toBe('Emitir certidão');
+    expect(merged?.weekdayDistribution.length).toBe(DASHBOARD_INSIGHTS_WEEKDAY_LABELS.length);
   });
 });

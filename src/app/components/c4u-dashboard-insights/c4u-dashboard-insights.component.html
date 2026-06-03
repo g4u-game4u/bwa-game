@@ -1,9 +1,10 @@
 <section
   class="dashboard-insights"
+  [class.dashboard-insights--embedded]="embedded"
   [class.dashboard-insights--loading]="loading"
   [attr.aria-busy]="loading ? 'true' : null"
-  aria-labelledby="dashboard-insights-title">
-  <div class="section-header">
+  [attr.aria-labelledby]="embedded ? null : 'dashboard-insights-title'">
+  <div *ngIf="!embedded" class="section-header">
     <h3 id="dashboard-insights-title" class="section-title">
       <i class="ri-lightbulb-flash-line section-title-icon" aria-hidden="true"></i>
       {{ sectionTitle }}
@@ -11,7 +12,16 @@
     </h3>
   </div>
 
-  <c4u-card class="dashboard-insights-card">
+  <c4u-card *ngIf="!embedded" class="dashboard-insights-card">
+    <ng-container *ngTemplateOutlet="insightsContent"></ng-container>
+  </c4u-card>
+
+  <div *ngIf="embedded" class="dashboard-insights-embedded-wrap">
+    <ng-container *ngTemplateOutlet="insightsContent"></ng-container>
+  </div>
+</section>
+
+<ng-template #insightsContent>
     <div *ngIf="loading" class="dashboard-insights-skeleton" role="status">
       <span class="dashboard-insights-sr-only">A carregar insights do mês…</span>
 
@@ -233,5 +243,4 @@
       <i class="ri-inbox-line insights-empty-icon" aria-hidden="true"></i>
       <p>Sem dados suficientes para gerar insights neste mês.</p>
     </div>
-  </c4u-card>
-</section>
+</ng-template>

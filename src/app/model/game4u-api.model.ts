@@ -383,6 +383,19 @@ export interface Game4uReportsManagementCachedQuery {
   user_id?: string;
 }
 
+/** Query para `GET /game/reports/management/dashboard/cached/list`. */
+export interface Game4uReportsManagementCachedListQuery {
+  month: string;
+  /** Filtra gestores por camada (ex.: `GERENTE` para agrupar gerências). */
+  role?: ManagementDashboardUserRole;
+  user_id?: string;
+}
+
+/** Resposta de `GET /game/reports/management/dashboard/cached/list`. */
+export interface ManagementDashboardCachedListResponse {
+  managers: ManagerDashboardCached[];
+}
+
 export interface Game4uReportsSupervisionCachedQuery {
   team_id: string;
   month: string;

@@ -540,6 +540,9 @@ export class ActionLogService {
     string,
     CacheEntry<ManagementDashboardOverviewResponse | null>
   >();
+  private game4uManagementDashboardListCache = new Map<string, CacheEntry<ManagerDashboardCached[]>>();
+  /** Uma requisição `user-actions` por equipa/mês (insights operacionais + executivos). */
+  private game4uTeamUserActionsInsightsCache = new Map<string, CacheEntry<Game4uUserActionModel[]>>();
 
   constructor(
     private backendApi: BackendApiService,
@@ -751,6 +754,49 @@ export class ActionLogService {
   }
 
   /**
+   * `GET /game/reports/management/dashboard/cached/list` — gestores no escopo (ex.: `role=GERENTE` para gerências).
+   */
+  fetchManagementDashboardCachedList(
+    month?: Date,
+    role?: 'GERENTE' | 'DIRETOR' | 'C_LEVEL'
+  ): Observable<ManagerDashboardCached[]> {
+    if (!(isGame4uDataEnabled() && this.game4u.isConfigured())) {
+      return of([]);
+    }
+    const refMonth = this.resolveDashboardCachedMonth(month);
+    const monthParam = this.toDashboardCachedMonthParam(refMonth);
+    const roleKey = (role ?? '').trim();
+    const cacheKey = `g4u_management_list_${monthParam}_${roleKey}`;
+    const cached = this.getCachedData(
+      this.game4uManagementDashboardListCache,
+      cacheKey,
+      this.GAME4U_CACHE_DURATION
+    );
+    if (cached) {
+      return cached;
+    }
+
+    const request$ = this.game4u
+      .getGameReportsManagementDashboardCachedList({
+        month: monthParam,
+        ...(roleKey ? { role } : {})
+      })
+      .pipe(
+        map(res => (Array.isArray(res?.managers) ? res.managers : [])),
+        catchError(err => {
+          if (err instanceof HttpErrorResponse && err.status === 404) {
+            return of([]);
+          }
+          console.error('Error fetching management/dashboard/cached/list:', err);
+          return of([]);
+        }),
+        shareReplay({ bufferSize: 1, refCount: true, windowTime: this.GAME4U_CACHE_DURATION })
+      );
+    this.setCachedData(this.game4uManagementDashboardListCache, cacheKey, request$);
+    return request$;
+  }
+
+  /**
    * Bundle do painel de gestão (GERENTE / DIRETOR / C_LEVEL) — KPIs de `overview.manager`.
    */
   getManagementDashboardCachedBundle(
@@ -919,12 +965,148 @@ export class ActionLogService {
   }
 
   /**
-   * Todas as user-actions de `GET /game/reports/user-actions` num único pedido.
+   * Lista completa de `GET /game/reports/user-actions` (sem `offset`/`limit` na query; paginação só no cliente).
    */
   private fetchGameReportsUserActionsAllPages(
     base: Omit<Game4uReportsUserActionsQuery, 'offset' | 'limit'>
   ): Observable<Game4uUserActionModel[]> {
-    return this.game4u.getGameReportsUserActions(base).pipe(map(page => page.items));
+    return this.game4u.getGameReportsUserActions(base).pipe(
+      map(page => page.items),
+      catchError(err => {
+        console.error('Error fetching user-actions (Game4U):', err);
+        return of([] as Game4uUserActionModel[]);
+      })
+    );
+  }
+
+  /**
+   * Abertas: `PENDING`/`DOING` com intervalo `dt_prazo` do mês (1 pedido por equipa/email).
+   */
+  getTeamOpenUserActionsForInsightsMonth(
+    teamId: string | number | null | undefined,
+    month: Date,
+    email?: string | null
+  ): Observable<Game4uUserActionModel[]> {
+    return this.fetchTeamUserActionsForInsightsSlice(teamId, month, email, 'open');
+  }
+
+  /**
+   * Finalizadas: `DONE`/`DELIVERED` com intervalo `finished_at` do mês (1 pedido por equipa/email).
+   */
+  getTeamFinishedUserActionsForInsightsMonth(
+    teamId: string | number | null | undefined,
+    month: Date,
+    email?: string | null
+  ): Observable<Game4uUserActionModel[]> {
+    return this.fetchTeamUserActionsForInsightsSlice(teamId, month, email, 'finished');
+  }
+
+  /**
+   * Duas chamadas `GET /game/reports/user-actions` por equipa (ou email) e mês — abertas + finalizadas.
+   * Cache partilhado entre insights operacionais e executivos.
+   */
+  /**
+   * Aquece o cache de user-actions (abertas + finalizadas) usado pelos insights e pelo modal de progresso.
+   */
+  warmTeamUserActionsCacheForProgressModal(
+    teamIds: string[],
+    month: Date,
+    email?: string | null
+  ): void {
+    if (!isGame4uDataEnabled() || !this.game4u.isConfigured() || month == null) {
+      return;
+    }
+    const em = (email ?? '').trim();
+    if (em) {
+      this.getTeamOpenUserActionsForInsightsMonth(undefined, month, em).subscribe({ error: () => undefined });
+      this.getTeamFinishedUserActionsForInsightsMonth(undefined, month, em).subscribe({
+        error: () => undefined
+      });
+      return;
+    }
+    const ids = [...new Set(teamIds.map(id => this.normalizeGame4uTeamId(id) ?? '').filter(Boolean))];
+    for (const tid of ids) {
+      this.getTeamOpenUserActionsForInsightsMonth(tid, month).subscribe({ error: () => undefined });
+      this.getTeamFinishedUserActionsForInsightsMonth(tid, month).subscribe({ error: () => undefined });
+    }
+  }
+
+  getTeamUserActionsForInsightsMonth(
+    teamId: string | number | null | undefined,
+    month: Date,
+    email?: string | null
+  ): Observable<Game4uUserActionModel[]> {
+    if (!isGame4uDataEnabled() || !this.game4u.isConfigured() || month == null) {
+      return of([]);
+    }
+    const tid = this.normalizeGame4uTeamId(teamId) ?? '';
+    const em = (email ?? '').trim().toLowerCase();
+    if (!tid && !em) {
+      return of([]);
+    }
+    const monthKey = this.toDashboardCachedMonthParam(month);
+    const cacheKey = `insights-ua|${tid}|${em}|${monthKey}`;
+    const cached = this.getCachedData(this.game4uTeamUserActionsInsightsCache, cacheKey);
+    if (cached) {
+      return cached;
+    }
+
+    const request$ = forkJoin({
+      open: this.getTeamOpenUserActionsForInsightsMonth(teamId, month, email),
+      finished: this.getTeamFinishedUserActionsForInsightsMonth(teamId, month, email)
+    }).pipe(
+      map(({ open, finished }) => [...(open || []), ...(finished || [])]),
+      shareReplay(1)
+    );
+
+    this.setCachedData(this.game4uTeamUserActionsInsightsCache, cacheKey, request$);
+    return request$;
+  }
+
+  private fetchTeamUserActionsForInsightsSlice(
+    teamId: string | number | null | undefined,
+    month: Date,
+    email: string | null | undefined,
+    slice: 'open' | 'finished'
+  ): Observable<Game4uUserActionModel[]> {
+    if (!isGame4uDataEnabled() || !this.game4u.isConfigured() || month == null) {
+      return of([]);
+    }
+    const tid = this.normalizeGame4uTeamId(teamId) ?? '';
+    const em = (email ?? '').trim().toLowerCase();
+    if (!tid && !em) {
+      return of([]);
+    }
+    const monthKey = this.toDashboardCachedMonthParam(month);
+    const cacheKey = `insights-ua-${slice}|${tid}|${em}|${monthKey}`;
+    const cached = this.getCachedData(this.game4uTeamUserActionsInsightsCache, cacheKey);
+    if (cached) {
+      return cached;
+    }
+
+    const identity = {
+      ...(em ? { email: em } : {}),
+      ...(tid ? { team_id: tid } : {})
+    };
+
+    const request$ =
+      slice === 'open'
+        ? this.fetchGameReportsUserActionsAllPages({
+            ...identity,
+            status: ['PENDING', 'DOING'],
+            dt_prazo_start: this.game4u.toDtPrazoMonthRange(month).start,
+            dt_prazo_end: this.game4u.toDtPrazoMonthRange(month).end
+          })
+        : this.fetchGameReportsUserActionsAllPages({
+            ...identity,
+            status: ['DONE', 'DELIVERED'],
+            finished_at_start: this.game4u.toQueryRange(month).start,
+            finished_at_end: this.game4u.toQueryRange(month).end
+          });
+
+    const shared$ = request$.pipe(shareReplay(1));
+    this.setCachedData(this.game4uTeamUserActionsInsightsCache, cacheKey, shared$);
+    return shared$;
   }
 
   private mapGame4uUserActionModelToClienteItem(a: Game4uUserActionModel): ClienteActionItem {
@@ -2506,32 +2688,19 @@ export class ActionLogService {
         teamOnly ? this.game4u.toQueryRange(month) : { start: baseQ!.start, end: baseQ!.end };
 
       if (reportUserActionsStatuses?.length) {
-        const openOnly =
-          reportUserActionsStatuses.every(s => s === 'PENDING' || s === 'DOING');
-        const dtPrazoRange =
-          month != null
-            ? this.game4u.toDtPrazoMonthRange(month)
-            : finishedRange();
-        const emailPart = teamOnly ? {} : { email: baseQ!.user };
-        const pageQuery: Omit<Game4uReportsUserActionsQuery, 'offset' | 'limit'> = openOnly
-          ? {
-              ...emailPart,
-              status: reportUserActionsStatuses,
-              dt_prazo_start: dtPrazoRange.start,
-              dt_prazo_end: dtPrazoRange.end,
-              ...(tid ? { team_id: tid } : {})
-            }
-          : {
-              ...emailPart,
-              status: reportUserActionsStatuses,
-              finished_at_start: finishedRange().start,
-              finished_at_end: finishedRange().end,
-              ...(tid ? { team_id: tid } : {})
-            };
-        return this.fetchGameReportsUserActionsAllPages(pageQuery).pipe(
-          map(actions =>
-            mapGame4uActionsToActivityList(actions, month, openOnly ? { monthFilter: 'dtPrazo' } : undefined)
-          ),
+        const email = teamOnly ? undefined : baseQ!.user;
+        return this.fetchReportsUserActionsForActivityList(
+          tid,
+          month,
+          email,
+          reportUserActionsStatuses
+        ).pipe(
+          map(actions => {
+            const openOnly = reportUserActionsStatuses.every(s => s === 'PENDING' || s === 'DOING');
+            return mapGame4uActionsToActivityList(actions, month, {
+              monthFilter: openOnly ? 'dtPrazo' : 'none'
+            });
+          }),
           catchError(error => {
             console.error('Error fetching activity list (Game4U reports/user-actions):', error);
             return of([]);
@@ -2539,15 +2708,9 @@ export class ActionLogService {
         );
       }
       if (game4uActionStatus === 'DONE') {
-        const fr = finishedRange();
-        return this.fetchGameReportsUserActionsAllPages({
-          ...(teamOnly ? {} : { email: baseQ!.user }),
-          status: ['DONE', 'DELIVERED'],
-          finished_at_start: fr.start,
-          finished_at_end: fr.end,
-          ...(tid ? { team_id: tid } : {})
-        }).pipe(
-          map(actions => mapGame4uActionsToActivityList(actions, month)),
+        const email = teamOnly ? undefined : baseQ!.user;
+        return this.getTeamFinishedUserActionsForInsightsMonth(tid, month!, email).pipe(
+          map(actions => mapGame4uActionsToActivityList(actions, month, { monthFilter: 'none' })),
           catchError(error => {
             console.error('Error fetching activity list (Game4U reports/user-actions):', error);
             return of([]);
@@ -2628,40 +2791,18 @@ export class ActionLogService {
     const finishedRange = (): { start: string; end: string } =>
       teamOnly ? this.game4u.toQueryRange(month) : { start: baseQ!.start, end: baseQ!.end };
     const openOnly = reportUserActionsStatuses.every(s => s === 'PENDING' || s === 'DOING');
-    const dtPrazoRange =
-      month != null
-        ? this.game4u.toDtPrazoMonthRange(month)
-        : finishedRange();
-    const emailPart = teamOnly ? {} : { email: baseQ!.user };
-    const pageQuery: Game4uReportsUserActionsQuery = openOnly
-      ? {
-          ...emailPart,
-          status: reportUserActionsStatuses,
-          dt_prazo_start: dtPrazoRange.start,
-          dt_prazo_end: dtPrazoRange.end,
-          ...(tid ? { team_id: tid } : {})
-        }
-      : {
-          ...emailPart,
-          status: reportUserActionsStatuses,
-          finished_at_start: finishedRange().start,
-          finished_at_end: finishedRange().end,
-          ...(tid ? { team_id: tid } : {})
-        };
+    const email = teamOnly ? undefined : baseQ!.user;
 
-    return this.game4u.getGameReportsUserActions(pageQuery).pipe(
-      map(page => {
-        const allItems = mapGame4uActionsToActivityList(
-          page.items,
-          month,
-          openOnly ? { monthFilter: 'dtPrazo' } : undefined
-        );
-        const total = page.total ?? allItems.length;
+    return this.fetchReportsUserActionsForActivityList(tid, month, email, reportUserActionsStatuses).pipe(
+      map(actions => {
+        const allItems = mapGame4uActionsToActivityList(actions, month, {
+          monthFilter: openOnly ? 'dtPrazo' : 'none'
+        });
         return {
           items: allItems.slice(off, off + lim),
           offset: off,
           limit: lim,
-          total
+          total: allItems.length
         };
       }),
       catchError(error => {
@@ -2669,6 +2810,40 @@ export class ActionLogService {
         return of({ items: [], offset: off, limit: lim });
       })
     );
+  }
+
+  /**
+   * User-actions para listas do modal — reutiliza cache dos insights quando possível.
+   */
+  private fetchReportsUserActionsForActivityList(
+    teamId: string | undefined,
+    month: Date | undefined,
+    email: string | undefined,
+    reportUserActionsStatuses: Game4uUserActionStatus[]
+  ): Observable<Game4uUserActionModel[]> {
+    if (month == null) {
+      return of([]);
+    }
+    const openOnly = reportUserActionsStatuses.every(s => s === 'PENDING' || s === 'DOING');
+    const finishedOnly = reportUserActionsStatuses.every(s => s === 'DONE' || s === 'DELIVERED');
+    if (openOnly) {
+      return this.getTeamOpenUserActionsForInsightsMonth(teamId, month, email);
+    }
+    if (finishedOnly) {
+      return this.getTeamFinishedUserActionsForInsightsMonth(teamId, month, email);
+    }
+
+    const finishedRange = this.game4u.toQueryRange(month);
+    const identity = {
+      ...(email ? { email } : {}),
+      ...(teamId ? { team_id: teamId } : {})
+    };
+    return this.fetchGameReportsUserActionsAllPages({
+      ...identity,
+      status: reportUserActionsStatuses,
+      finished_at_start: finishedRange.start,
+      finished_at_end: finishedRange.end
+    });
   }
 
   /**
@@ -3220,6 +3395,38 @@ export class ActionLogService {
    *  - `teamId` → `GET /game/reports/finished/deliveries/cached?team_id=`
    *  - `email`  → `GET /game/reports/finished/deliveries/cached?email=`
    */
+  /** Finalizadas no mês — só o pedido `DONE`/`DELIVERED` (cache partilhado com insights). */
+  getExecutiveFinishedUserActions(
+    scope: {
+      teamId?: string | number | null;
+      teamIds?: Array<string | number>;
+      email?: string | null;
+    },
+    month: Date
+  ): Observable<Game4uUserActionModel[]> {
+    const email = (scope.email ?? '').trim();
+    if (email) {
+      return this.getTeamFinishedUserActionsForInsightsMonth(undefined, month, email);
+    }
+
+    const teamIds = [
+      ...new Set((scope.teamIds ?? []).map(id => this.normalizeGame4uTeamId(id) ?? '').filter(Boolean))
+    ];
+    if (teamIds.length === 0) {
+      const single = this.normalizeGame4uTeamId(scope.teamId) ?? '';
+      if (!single) {
+        return of([]);
+      }
+      return this.getTeamFinishedUserActionsForInsightsMonth(single, month);
+    }
+    if (teamIds.length === 1) {
+      return this.getTeamFinishedUserActionsForInsightsMonth(teamIds[0]!, month);
+    }
+    return forkJoin(
+      teamIds.map(tid => this.getTeamFinishedUserActionsForInsightsMonth(tid, month))
+    ).pipe(map(batches => batches.flat()));
+  }
+
   getExecutiveDeliveriesAllPages(
     scope: { teamId?: string | number | null; email?: string | null; isManagement?: boolean; userId?: string | null },
     month: Date,
@@ -3623,6 +3830,8 @@ export class ActionLogService {
     this.game4uPlayerDashboardCachedCache.clear();
     this.game4uSupervisionDashboardCachedCache.clear();
     this.game4uManagementDashboardOverviewCache.clear();
+    this.game4uManagementDashboardListCache.clear();
+    this.game4uTeamUserActionsInsightsCache.clear();
     this.teamMetricsCache.clear();
     this.teamCnpjCache.clear();
     this.teamPointsBreakdownCache.clear();

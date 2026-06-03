@@ -539,7 +539,7 @@ function filterGame4uActionsByDtPrazoCalendarMonth(
 }
 
 /** Modo de filtro por mês na lista de atividades do modal (Game4U). */
-export type ActivityListMonthFilterMode = 'listTimestamp' | 'dtPrazo';
+export type ActivityListMonthFilterMode = 'listTimestamp' | 'dtPrazo' | 'none';
 
 export function filterGame4uActionsByMonth(
   actions: Game4uUserActionModel[],
@@ -726,7 +726,7 @@ export function mapGame4uActionsToActivityList(
 ): ActivityListItem[] {
   const mode = opts?.monthFilter ?? 'listTimestamp';
   const scoped =
-    !month
+    !month || mode === 'none'
       ? actions
       : mode === 'dtPrazo'
         ? filterGame4uActionsByDtPrazoCalendarMonth(actions, month)
@@ -850,6 +850,110 @@ export function buildGame4uDeliveryIdFromEmpId(empId: string | number, month: Da
   return `${empId}-${y}-${m}-01`;
 }
 
+/** Título do processo/entrega em user-action (`attributes.delivery_title` ou topo). */
+export function readGame4uProcessTitleFromUserAction(a: Game4uUserActionModel): string {
+  const raw = a as Record<string, unknown>;
+  const attrs = raw['attributes'];
+  if (attrs != null && typeof attrs === 'object') {
+    const nested = (attrs as Record<string, unknown>)['delivery_title'];
+    if (typeof nested === 'string' && nested.trim()) {
+      return nested.trim();
+    }
+  }
+  const top = a.delivery_title;
+  if (typeof top === 'string' && top.trim()) {
+    return top.trim();
+  }
+  return '';
+}
+
+/** Título exibido da user-action (`title`, `action_title`, `attributes.acao`, …). */
+export function readGame4uUserActionTitle(a: Game4uUserActionModel): string {
+  const raw = a as Record<string, unknown>;
+  const top = raw['title'];
+  if (typeof top === 'string' && top.trim()) {
+    return top.trim();
+  }
+  const actionTitle = a.action_title;
+  if (typeof actionTitle === 'string' && actionTitle.trim()) {
+    return actionTitle.trim();
+  }
+  const attrs = raw['attributes'];
+  if (attrs != null && typeof attrs === 'object') {
+    const acao = (attrs as Record<string, unknown>)['acao'];
+    if (typeof acao === 'string' && acao.trim()) {
+      return acao.trim();
+    }
+  }
+  const processTitle = readGame4uProcessTitleFromUserAction(a);
+  if (processTitle) {
+    return processTitle;
+  }
+  return 'Sem título';
+}
+
+export interface ExecutiveTopProcessRow {
+  deliveryTitle: string;
+  tasksTotal: number;
+  deliveriesCount: number;
+  onTimePct: number | null;
+  pct: number;
+}
+
+/** Top processos finalizados agregados diretamente de `GET /game/reports/user-actions`. */
+export function aggregateExecutiveTopProcessesFromUserActions(
+  actions: Game4uUserActionModel[]
+): { top: ExecutiveTopProcessRow[]; distinctProcesses: number } {
+  type Acc = { tasks: number; clientKeys: Set<string>; onTime: number; late: number };
+  const byTitle = new Map<string, Acc>();
+
+  for (const a of actions || []) {
+    const st = a.status;
+    if (st !== 'DONE' && st !== 'DELIVERED' && st !== 'PAID') {
+      continue;
+    }
+    const title = readGame4uUserActionTitle(a);
+    const acc = byTitle.get(title) ?? { tasks: 0, clientKeys: new Set<string>(), onTime: 0, late: 0 };
+    acc.tasks += 1;
+
+    const clientKey = String(
+      a.integration_id ?? a.client_id ?? readGame4uExtraCnpj(a) ?? a.delivery_id ?? ''
+    ).trim();
+    if (clientKey) {
+      acc.clientKeys.add(clientKey);
+    }
+
+    const finishedMs = getGame4uUserActionFinishedOrFallbackMs(a);
+    const prazoStatus = resolveGame4uFinishedPrazoStatus(
+      typeof a.dt_prazo === 'string' ? a.dt_prazo : undefined,
+      finishedMs ?? undefined
+    );
+    if (prazoStatus === 'on_time') {
+      acc.onTime += 1;
+    } else if (prazoStatus === 'late') {
+      acc.late += 1;
+    }
+    byTitle.set(title, acc);
+  }
+
+  const totalTasks = [...byTitle.values()].reduce((s, v) => s + v.tasks, 0);
+  const top = [...byTitle.entries()]
+    .map(([deliveryTitle, v]) => {
+      const judged = v.onTime + v.late;
+      return {
+        deliveryTitle,
+        tasksTotal: v.tasks,
+        deliveriesCount: v.clientKeys.size,
+        onTimePct: judged > 0 ? Math.round((v.onTime / judged) * 1000) / 10 : null,
+        pct: totalTasks > 0 ? Math.round((v.tasks / totalTasks) * 1000) / 10 : 0
+      };
+    })
+    .sort((a, b) => b.tasksTotal - a.tasksTotal)
+    .slice(0, 6);
+
+  return { top, distinctProcesses: byTitle.size };
+}
+
 /**
  * Cliente atendido no mês: delivery com pelo menos uma tarefa DONE/DELIVERED no mês (`dt_prazo`).
  * No cache, `tasks_total` / `tasks_on_time` referem-se a esse mês; sem contadores, confia no filtro da API legada.
@@ -894,6 +998,23 @@ function readOnTimePctFromDeliveryRow(row: Game4uReportsFinishedDeliveryRow): nu
     n = n * 100;
   }
   return Math.min(100, Math.max(0, Math.round(n * 100) / 100));
+}
+
+/**
+ * Entrega (linha do cache) considerada no prazo: todas as tarefas do mês na entrega
+ * finalizadas no prazo (`tasks_on_time >= tasks_total`) ou `on_time_pct` = 100%.
+ */
+export function deliveryRowCountsAsOnTime(row: Game4uReportsFinishedDeliveryRow): boolean {
+  const total = Math.floor(Number(row.tasks_total) || 0);
+  if (total <= 0) {
+    return false;
+  }
+  const onTimeTasks = Math.floor(Number(row.tasks_on_time) || 0);
+  if (onTimeTasks > 0) {
+    return onTimeTasks >= total;
+  }
+  const pct = readOnTimePctFromDeliveryRow(row);
+  return pct != null && pct >= 100;
 }
 
 /** Participação a partir de `GET /game/reports/finished/deliveries` ou `…/deliveries/cached`. */

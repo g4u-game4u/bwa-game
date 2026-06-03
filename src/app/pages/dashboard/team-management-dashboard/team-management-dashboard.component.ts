@@ -2,7 +2,7 @@ import { Component, OnInit, OnDestroy, ChangeDetectionStrategy, ChangeDetectorRe
 import { DOCUMENT } from '@angular/common';
 import { Router } from '@angular/router';
 import { NgbModal } from '@ng-bootstrap/ng-bootstrap';
-import { Subject, of, firstValueFrom, lastValueFrom, Observable } from 'rxjs';
+import { Subject, of, firstValueFrom, lastValueFrom, Observable, forkJoin } from 'rxjs';
 import { takeUntil, finalize, map, take, mergeMap, last } from 'rxjs/operators';
 import { PONTOS_POR_ATIVIDADE_FINALIZADA_ACTION_LOG } from '@app/constants/pontos-por-atividade-action-log';
 import {
@@ -32,10 +32,19 @@ import {
   ActionLogService,
   SupervisionTeamDashboardCachedBundle,
   PlayerParticipacaoDeliveriesPageResult,
-  PlayerParticipacaoDeliveryRow
+  PlayerParticipacaoDeliveryRow,
+  TeamDailyFinishedStatsRow
 } from '@services/action-log.service';
-import { hasMoreFinishedDeliveriesCachedPage } from '@services/game4u-game-mapper';
-import { DashboardInsightsService } from '@services/dashboard-insights.service';
+import {
+  aggregateExecutiveTopProcessesFromUserActions,
+  deliveryRowCountsAsOnTime,
+  hasMoreFinishedDeliveriesCachedPage,
+  isGame4uUserActionFinalizedStatus
+} from '@services/game4u-game-mapper';
+import {
+  buildDashboardInsightsSnapshotFromUserActions,
+  DashboardInsightsService
+} from '@services/dashboard-insights.service';
 import { DashboardInsightsSnapshot } from '@model/dashboard-insights.model';
 import {
   getManagementDashboardCachedRoleLabel,
@@ -43,10 +52,19 @@ import {
 } from '@utils/management-dashboard-role';
 import type {
   PlayerDashboardCachedParams,
-  Game4uReportsFinishedDeliveryRow
+  Game4uReportsFinishedDeliveryRow,
+  Game4uUserActionModel
 } from '@model/game4u-api.model';
 import { UserProfileService } from '@services/user-profile.service';
 import { UserProfile } from '@utils/user-profile';
+import {
+  aggregateDailyFinishedStatsByDay,
+  aggregateDailyFinishedStatsByEmail,
+  dailyMapsFromDayAggregate,
+  formatGerenciaGroupLabel,
+  ProductivitySegmentationMode,
+  resolveProductivitySegmentationMode
+} from '@utils/productivity-segmentation';
 import { CompanyDisplay, CompanyKpiService } from '@services/company-kpi.service';
 import { KPIData } from '@app/model/gamification-dashboard.model';
 import { KPIService } from '@services/kpi.service';
@@ -58,6 +76,24 @@ import { GoalMetric } from '@components/c4u-goals-progress-tab/c4u-goals-progres
 import { GraphDataPoint, ActivityMetrics, ProcessMetrics, ChartDataset, PointWallet, SeasonProgress } from '@app/model/gamification-dashboard.model';
 import { ProgressCardType } from '@components/c4u-activity-progress/c4u-activity-progress.component';
 import { ProgressListType } from '@modals/modal-progress-list/modal-progress-list.component';
+
+/** Mínimo de entregas no mês para entrar na lista «precisam de atenção». */
+const EXECUTIVE_ATTENTION_MIN_DELIVERIES = 3;
+/** Abaixo deste % de entregas no prazo o jogador é elegível para atenção. */
+const EXECUTIVE_ATTENTION_MAX_ON_TIME_PCT = 90;
+
+/** Linha de ranking de jogador nos insights executivos (destaque / atenção). */
+export interface ExecutiveInsightsPlayerRank {
+  email: string;
+  name: string;
+  initials: string;
+  tasksTotal: number;
+  clientsCount: number;
+  deliveriesCount: number;
+  onTimeDeliveries: number;
+  onTimeDeliveryPct: number | null;
+  onTimePct: number | null;
+}
 
 /**
  * Team Management Dashboard Component
@@ -282,8 +318,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
   // Executive insights (mini dashboard)
   // -----------------------------------------------------------------------------------------------
   /**
-   * Insights agregados por título de processo (`delivery_title`) — origem:
-   * `GET /game/reports/{management/}finished/deliveries/cached`.
+   * Top processos: agregado por título de `GET /game/reports/user-actions` (campo `title` / `action_title`).
    */
   executiveInsightsTopProcesses: Array<{
     deliveryTitle: string;
@@ -293,20 +328,10 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
     pct: number;
   }> = [];
 
-  /**
-   * Ranking de jogadores no mês (top performers) — somatório de `tasks_total` por `user_email`.
-   * Não exposto quando o filtro está em um colaborador específico (cardinalidade = 1).
-   */
-  executiveInsightsTopPlayers: Array<{
-    email: string;
-    name: string;
-    initials: string;
-    tasksTotal: number;
-    clientsCount: number;
-    processesCount: number;
-    onTimePct: number | null;
-    pct: number;
-  }> = [];
+  /** Destaque do mês: mais entregas no prazo (`deliveryRowCountsAsOnTime`). */
+  executiveInsightsTopPlayers: ExecutiveInsightsPlayerRank[] = [];
+  /** Menor volume de entregas no prazo — precisam de atenção. */
+  executiveInsightsAttentionPlayers: ExecutiveInsightsPlayerRank[] = [];
 
   /** Total de tarefas DONE/DELIVERED agregadas no mês a partir das linhas RAW (não usa fallback ao supervision/dashboard). */
   executiveInsightsTotalTasks = 0;
@@ -325,9 +350,16 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
   /** % de tarefas no prazo (média ponderada das linhas com `on_time_pct`). */
   executiveInsightsOnTimePctOverall: number | null = null;
 
+  readonly executiveSkeletonKpiSlots = [0, 1, 2, 3, 4];
+  readonly executiveSkeletonProcessSlots = [0, 1, 2, 3];
+  readonly executiveSkeletonPlayerBlocks = [0, 1];
+  readonly executiveSkeletonPlayerSlots = [0, 1, 2];
+
   isLoadingExecutiveInsights = false;
   hasExecutiveInsightsData = false;
   hasExecutiveInsightsError = false;
+  /** Prazos, multa, dia produtivo etc. (user-actions) dentro dos insights executivos. */
+  executiveDashboardInsights: DashboardInsightsSnapshot | null = null;
   /** Indica se o ranking de jogadores deve ser exibido (oculto no drill-down de colaborador único). */
   showExecutiveInsightsPlayersRanking = false;
   /** Geração de carga (evita race conditions com troca de mês/colaborador/equipa). */
@@ -1562,6 +1594,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
         // — alimentado pelo cache `finished/deliveries/cached` por team_id.
         void this.loadExecutiveInsights();
         void this.loadOperationalInsights();
+        this.warmProgressModalUserActionsCache();
 
         // Update formatted sidebar data after KPIs are loaded (includes metas calculation)
         this.updateFormattedSidebarData();
@@ -1613,6 +1646,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       // Mini dashboard executivo do colaborador (top processos / saúde no mês).
       void this.loadExecutiveInsights();
       void this.loadOperationalInsights();
+      this.warmProgressModalUserActionsCache();
 
       // Update formatted sidebar data after KPIs are loaded (includes metas calculation)
       this.updateFormattedSidebarData();
@@ -2496,257 +2530,431 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
     }
   }
 
-  /**
-   * Load productivity graph data with one line per team member
-   * OPTIMIZED: Uses single aggregate query with $lookup to get all action logs for the team
-   */
-  private async loadProductivityData(dateRange: { start: Date; end: Date }): Promise<void> {
-    if (!this.productivityAnalysisTabEnabled) {
-      return;
-    }
-    try {
-      this.isLoadingProductivity = true;
-      this.hasProductivityError = false;
-      this.productivityErrorMessage = '';
-      
-      console.log('📈 Loading productivity data for team members (OPTIMIZED)...');
+  /** Modo de agrupamento dos gráficos de produtividade conforme papel do utilizador. */
+  private getProductivitySegmentationMode(): ProductivitySegmentationMode {
+    return resolveProductivitySegmentationMode({
+      isManagementOverview: this.isManagementOverview,
+      managementRole: this.managementRole,
+      userProfile: this.userProfileService.getCurrentUserProfile(),
+      isLiderCelula: this.userProfileService.isLiderCelula(),
+      isSupervisor: this.userProfileService.isSupervisor(),
+      sessionIsGerente: !!this.sessaoProvider.isGerente()
+    });
+  }
 
-      const startDate = dayjs(dateRange.start).startOf('day');
-      const endDate = dayjs(dateRange.end).endOf('day');
-
-      const teamTid = this.getGame4uReportTeamId();
-      if (!teamTid) {
-        // Sem escopo Game4U/BWA: não há como obter stats por equipa nesse endpoint.
-        this.graphData = [];
-        this.graphDatasets = [];
-        this.pointsGraphData = [];
-        this.pointsGraphDatasets = [];
-        this.activitiesByCollaboratorGraphData = [];
-        this.activitiesByCollaboratorDatasets = [];
-        this.activitiesByCollaboratorLabels = [];
-        this.pointsByCollaboratorGraphData = [];
-        this.pointsByCollaboratorDatasets = [];
-        this.pointsByCollaboratorLabels = [];
-        this.isLoadingProductivity = false;
-        return;
-      }
-
-      try {
-        const rows = await firstValueFrom(
-          this.actionLogService
-            .getReportTeamDailyFinishedStats({
-              team_id: teamTid,
-              start: startDate.toISOString(),
-              end: endDate.toISOString()
-            })
-            .pipe(takeUntil(this.destroy$))
-        );
-
-        // Process rows into per-member daily maps (activities + points) and/or agregado por dia (sem email)
-        const memberActivitiesMap = new Map<string, Map<string, number>>();
-        const memberPointsMap = new Map<string, Map<string, number>>();
-        const AGG_KEY = '__team_aggregate__';
-
-        rows.forEach(r => {
-          const day = String((r as any)?.day ?? '').trim();
-          if (!day) return;
-          const email = String((r as any)?.email ?? '').trim();
-          const cnt = Math.floor(Number((r as any)?.tasksCount ?? 0) || 0);
-          const pts = Math.floor(Number((r as any)?.pointsSum ?? 0) || 0);
-          const key = email || AGG_KEY;
-          if (!memberActivitiesMap.has(key)) memberActivitiesMap.set(key, new Map());
-          if (!memberPointsMap.has(key)) memberPointsMap.set(key, new Map());
-          const am = memberActivitiesMap.get(key)!;
-          const pm = memberPointsMap.get(key)!;
-          am.set(day, (am.get(day) || 0) + cnt);
-          pm.set(day, (pm.get(day) || 0) + pts);
-        });
-
-        const emailsFromApi = [...memberActivitiesMap.keys()].filter(k => k !== AGG_KEY);
-        const memberKeysOrdered =
-          emailsFromApi.length > 0
-            ? emailsFromApi
-            : memberActivitiesMap.has(AGG_KEY)
-              ? [AGG_KEY]
-              : [...this.teamMemberIds];
-
-        // Build member data from the aggregated results
-        const validMemberData: Array<{ 
-          memberId: string; 
-          memberName: string; 
-          activitiesDataPoints: GraphDataPoint[]; 
-          pointsDataPoints: GraphDataPoint[] 
-        }> = [];
-
-        memberKeysOrdered.forEach(memberId => {
-          const collaborator = this.collaborators.find(c => c.userId === memberId);
-          const memberName =
-            memberId === AGG_KEY
-              ? 'Equipe'
-              : this.formatCollaboratorName(memberId, collaborator?.name);
-
-          const activitiesMap = memberActivitiesMap.get(memberId) || new Map();
-          const pointsMap = memberPointsMap.get(memberId) || new Map();
-
-          const activitiesDataPoints: GraphDataPoint[] = [];
-          const pointsDataPoints: GraphDataPoint[] = [];
-
-          let currentDate = startDate;
-          while (currentDate.isBefore(endDate) || currentDate.isSame(endDate, 'day')) {
-            const dateStr = currentDate.format('YYYY-MM-DD');
-            const act = activitiesMap.get(dateStr) || 0;
-            const pts = pointsMap.get(dateStr);
-            activitiesDataPoints.push({
-              date: currentDate.toDate(),
-              value: act
-            });
-            pointsDataPoints.push({
-              date: currentDate.toDate(),
-              value:
-                typeof pts === 'number' && Number.isFinite(pts)
-                  ? Math.floor(pts)
-                  : Math.floor(act * PONTOS_POR_ATIVIDADE_FINALIZADA_ACTION_LOG)
-            });
-            currentDate = currentDate.add(1, 'day');
-          }
-
-          validMemberData.push({
-            memberId,
-            memberName,
-            activitiesDataPoints,
-            pointsDataPoints
-          });
-        });
-        
-        // Create multiple datasets (one per member) for activities and points
-        if (validMemberData.length > 0) {
-          // Generate date labels
-          // Trigger the same label computation path used by the chart component.
-          const dateLabels = this.graphDataProcessor.getDateLabels(this.selectedPeriod);
-          void dateLabels;
-          
-          // Create datasets for activities (one per member)
-          this.graphDatasets = validMemberData.map((memberData, index) => {
-            const colors = this.getColorForIndex(index);
-            return {
-              label: memberData.memberName,
-              data: memberData.activitiesDataPoints.map(point => point.value),
-              borderColor: colors.border,
-              backgroundColor: colors.background,
-              fill: false
-            };
-          });
-          
-          // Create datasets for points (one per member)
-          this.pointsGraphDatasets = validMemberData.map((memberData, index) => {
-            const colors = this.getColorForIndex(index);
-            return {
-              label: memberData.memberName,
-              data: memberData.pointsDataPoints.map(point => point.value),
-              borderColor: colors.border,
-              backgroundColor: colors.background,
-              fill: false
-            };
-          });
-          
-          // Also set graphData for backward compatibility (aggregated activities)
-          const aggregatedActivitiesMap = new Map<string, number>();
-          validMemberData.forEach(memberData => {
-            memberData.activitiesDataPoints.forEach(point => {
-              const dateStr = dayjs(point.date).format('YYYY-MM-DD');
-              aggregatedActivitiesMap.set(dateStr, (aggregatedActivitiesMap.get(dateStr) || 0) + point.value);
-            });
-          });
-          
-          // Aggregate points data
-          const aggregatedPointsMap = new Map<string, number>();
-          validMemberData.forEach(memberData => {
-            memberData.pointsDataPoints.forEach(point => {
-              const dateStr = dayjs(point.date).format('YYYY-MM-DD');
-              aggregatedPointsMap.set(dateStr, (aggregatedPointsMap.get(dateStr) || 0) + point.value);
-            });
-          });
-          
-          const aggregatedActivities: GraphDataPoint[] = [];
-          const aggregatedPoints: GraphDataPoint[] = [];
-          let currentDate = startDate;
-          while (currentDate.isBefore(endDate) || currentDate.isSame(endDate, 'day')) {
-            const dateStr = currentDate.format('YYYY-MM-DD');
-            aggregatedActivities.push({
-              date: currentDate.toDate(),
-              value: aggregatedActivitiesMap.get(dateStr) || 0
-            });
-            aggregatedPoints.push({
-              date: currentDate.toDate(),
-              value: Math.floor(aggregatedPointsMap.get(dateStr) || 0) // Round down points
-            });
-            currentDate = currentDate.add(1, 'day');
-          }
-          
-          this.graphData = aggregatedActivities;
-          this.pointsGraphData = aggregatedPoints;
-          
-          // Calculate totals by collaborator for bar charts
-          this.calculateCollaboratorTotals(validMemberData);
-
-          this.rebuildProductivityTables();
-          
-          console.log('✅ Productivity data loaded (OPTIMIZED):', {
-            members: validMemberData.length,
-            apiCalls: 1,
-            rows: rows.length
-          });
-        } else {
-          this.graphData = [];
-          this.graphDatasets = [];
-          this.pointsGraphData = [];
-          this.pointsGraphDatasets = [];
-          this.activitiesByCollaboratorGraphData = [];
-          this.activitiesByCollaboratorDatasets = [];
-          this.pointsByCollaboratorGraphData = [];
-          this.pointsByCollaboratorDatasets = [];
-        }
-        
-        this.hasProductivityError = false;
-        console.log('✅ Productivity data loaded for', validMemberData.length, 'members');
-        this.cdr.markForCheck();
-      } catch (error) {
-        console.error('Error loading productivity data:', error);
-      this.graphData = [];
-      this.graphDatasets = [];
-      this.pointsGraphData = [];
-      this.pointsGraphDatasets = [];
-      this.activitiesByCollaboratorGraphData = [];
-      this.activitiesByCollaboratorDatasets = [];
-      this.pointsByCollaboratorGraphData = [];
-      this.pointsByCollaboratorDatasets = [];
-      this.hasProductivityError = true;
-      this.productivityErrorMessage = 'Erro ao carregar dados de produtividade';
-      this.toastService.error('Erro ao carregar dados de produtividade');
-    } finally {
-      this.isLoadingProductivity = false;
-    }
-  } catch (error) {
-    console.error('Error in loadProductivityData:', error);
+  private clearProductivityCharts(): void {
     this.graphData = [];
     this.graphDatasets = [];
     this.pointsGraphData = [];
     this.pointsGraphDatasets = [];
     this.activitiesByCollaboratorGraphData = [];
     this.activitiesByCollaboratorDatasets = [];
+    this.activitiesByCollaboratorLabels = [];
     this.pointsByCollaboratorGraphData = [];
     this.pointsByCollaboratorDatasets = [];
-    this.hasProductivityError = true;
-    this.productivityErrorMessage = 'Erro ao carregar dados de produtividade';
-    this.toastService.error('Erro ao carregar dados de produtividade');
-    this.isLoadingProductivity = false;
+    this.pointsByCollaboratorLabels = [];
   }
-}
 
-/**
- * Calculate total activities and points by collaborator for bar charts
- */
-private calculateCollaboratorTotals(memberData: Array<{ 
+  private async fetchTeamDailyFinishedStatsRows(
+    teamId: string,
+    dateRange: { start: Date; end: Date }
+  ): Promise<TeamDailyFinishedStatsRow[]> {
+    const startDate = dayjs(dateRange.start).startOf('day');
+    const endDate = dayjs(dateRange.end).endOf('day');
+    return firstValueFrom(
+      this.actionLogService
+        .getReportTeamDailyFinishedStats({
+          team_id: teamId,
+          start: startDate.toISOString(),
+          end: endDate.toISOString()
+        })
+        .pipe(takeUntil(this.destroy$))
+    );
+  }
+
+  private resolveNumericTeamIdForStats(
+    teamId: number | string | null | undefined,
+    teamName?: string | null
+  ): string | undefined {
+    if (teamId != null) {
+      const s = String(teamId).trim();
+      if (s !== '') {
+        return s;
+      }
+    }
+    if (teamName) {
+      const match = this.teams.find(
+        t =>
+          t.name === teamName ||
+          t.id === String(teamId) ||
+          (t as Team & { game4uTeamId?: string }).game4uTeamId === String(teamId)
+      ) as (Team & { game4uTeamId?: string }) | undefined;
+      const g4u = match?.game4uTeamId?.trim();
+      if (g4u) {
+        return g4u;
+      }
+      if (match?.id) {
+        return String(match.id).trim() || undefined;
+      }
+    }
+    return undefined;
+  }
+
+  private buildProductivitySeriesFromMaps(
+    groups: Array<{
+      memberId: string;
+      memberName: string;
+      activitiesMap: Map<string, number>;
+      pointsMap: Map<string, number>;
+    }>,
+    dateRange: { start: Date; end: Date }
+  ): Array<{
+    memberId: string;
+    memberName: string;
+    activitiesDataPoints: GraphDataPoint[];
+    pointsDataPoints: GraphDataPoint[];
+  }> {
+    const startDate = dayjs(dateRange.start).startOf('day');
+    const endDate = dayjs(dateRange.end).endOf('day');
+    return groups.map(g => {
+      const activitiesDataPoints: GraphDataPoint[] = [];
+      const pointsDataPoints: GraphDataPoint[] = [];
+      let currentDate = startDate;
+      while (currentDate.isBefore(endDate) || currentDate.isSame(endDate, 'day')) {
+        const dateStr = currentDate.format('YYYY-MM-DD');
+        const act = g.activitiesMap.get(dateStr) || 0;
+        const pts = g.pointsMap.get(dateStr);
+        activitiesDataPoints.push({ date: currentDate.toDate(), value: act });
+        pointsDataPoints.push({
+          date: currentDate.toDate(),
+          value:
+            typeof pts === 'number' && Number.isFinite(pts)
+              ? Math.floor(pts)
+              : Math.floor(act * PONTOS_POR_ATIVIDADE_FINALIZADA_ACTION_LOG)
+        });
+        currentDate = currentDate.add(1, 'day');
+      }
+      return {
+        memberId: g.memberId,
+        memberName: g.memberName,
+        activitiesDataPoints,
+        pointsDataPoints
+      };
+    });
+  }
+
+  private applyProductivityMemberData(
+    validMemberData: Array<{
+      memberId: string;
+      memberName: string;
+      activitiesDataPoints: GraphDataPoint[];
+      pointsDataPoints: GraphDataPoint[];
+    }>,
+    meta?: { apiCalls?: number; rows?: number; mode?: ProductivitySegmentationMode }
+  ): void {
+    if (validMemberData.length === 0) {
+      this.clearProductivityCharts();
+      return;
+    }
+
+    const startDate = dayjs(validMemberData[0].activitiesDataPoints[0]?.date ?? new Date()).startOf('day');
+    void this.graphDataProcessor.getDateLabels(this.selectedPeriod);
+
+    this.graphDatasets = validMemberData.map((memberData, index) => {
+      const colors = this.getColorForIndex(index);
+      return {
+        label: memberData.memberName,
+        data: memberData.activitiesDataPoints.map(point => point.value),
+        borderColor: colors.border,
+        backgroundColor: colors.background,
+        fill: false
+      };
+    });
+
+    this.pointsGraphDatasets = validMemberData.map((memberData, index) => {
+      const colors = this.getColorForIndex(index);
+      return {
+        label: memberData.memberName,
+        data: memberData.pointsDataPoints.map(point => point.value),
+        borderColor: colors.border,
+        backgroundColor: colors.background,
+        fill: false
+      };
+    });
+
+    const aggregatedActivitiesMap = new Map<string, number>();
+    const aggregatedPointsMap = new Map<string, number>();
+    validMemberData.forEach(memberData => {
+      memberData.activitiesDataPoints.forEach(point => {
+        const dateStr = dayjs(point.date).format('YYYY-MM-DD');
+        aggregatedActivitiesMap.set(dateStr, (aggregatedActivitiesMap.get(dateStr) || 0) + point.value);
+      });
+      memberData.pointsDataPoints.forEach(point => {
+        const dateStr = dayjs(point.date).format('YYYY-MM-DD');
+        aggregatedPointsMap.set(dateStr, (aggregatedPointsMap.get(dateStr) || 0) + point.value);
+      });
+    });
+
+    const endDate = validMemberData[0].activitiesDataPoints.length
+      ? dayjs(validMemberData[0].activitiesDataPoints[validMemberData[0].activitiesDataPoints.length - 1].date)
+      : dayjs();
+    const length = validMemberData[0].activitiesDataPoints.length;
+    const rangeStart = length > 0 ? endDate.subtract(length - 1, 'day') : startDate;
+
+    const aggregatedActivities: GraphDataPoint[] = [];
+    const aggregatedPoints: GraphDataPoint[] = [];
+    let currentDate = rangeStart;
+    for (let i = 0; i < length; i++) {
+      const dateStr = currentDate.format('YYYY-MM-DD');
+      aggregatedActivities.push({
+        date: currentDate.toDate(),
+        value: aggregatedActivitiesMap.get(dateStr) || 0
+      });
+      aggregatedPoints.push({
+        date: currentDate.toDate(),
+        value: Math.floor(aggregatedPointsMap.get(dateStr) || 0)
+      });
+      currentDate = currentDate.add(1, 'day');
+    }
+
+    this.graphData = aggregatedActivities;
+    this.pointsGraphData = aggregatedPoints;
+    this.calculateCollaboratorTotals(validMemberData);
+    this.rebuildProductivityTables();
+
+    console.log('✅ Productivity data loaded:', {
+      mode: meta?.mode,
+      series: validMemberData.length,
+      apiCalls: meta?.apiCalls,
+      rows: meta?.rows
+    });
+  }
+
+  /** C_LEVEL / DIRETOR no painel agregado: uma série por gerência (gestor GERENTE). */
+  private async loadProductivityDataByGerencias(dateRange: { start: Date; end: Date }): Promise<void> {
+    const managers = await firstValueFrom(
+      this.actionLogService
+        .fetchManagementDashboardCachedList(this.selectedMonth, 'GERENTE')
+        .pipe(takeUntil(this.destroy$))
+    );
+
+    if (!managers?.length) {
+      console.warn('[Productivity] Sem gerências na listagem — fallback para supervisões.');
+      await this.loadProductivityDataBySupervisoes(dateRange);
+      return;
+    }
+
+    let apiCalls = 0;
+    let rowCount = 0;
+    const groups: Array<{
+      memberId: string;
+      memberName: string;
+      activitiesMap: Map<string, number>;
+      pointsMap: Map<string, number>;
+    }> = [];
+
+    for (const manager of managers) {
+      const teamIds = [
+        ...(manager.team_ids ?? []).map(id => String(id)),
+        ...(manager.teams ?? []).map(t => String(t.team_id))
+      ].filter((id, idx, arr) => id && arr.indexOf(id) === idx);
+
+      const mergedRows: TeamDailyFinishedStatsRow[] = [];
+      for (const tid of teamIds) {
+        const numericId = this.resolveNumericTeamIdForStats(tid);
+        if (!numericId) {
+          continue;
+        }
+        const rows = await this.fetchTeamDailyFinishedStatsRows(numericId, dateRange);
+        apiCalls++;
+        rowCount += rows.length;
+        mergedRows.push(...rows);
+      }
+
+      const byDay = aggregateDailyFinishedStatsByDay(mergedRows);
+      const { activitiesMap, pointsMap } = dailyMapsFromDayAggregate(byDay);
+      const label = formatGerenciaGroupLabel(manager.user_email);
+      groups.push({
+        memberId: manager.user_id || manager.user_email || label,
+        memberName: label,
+        activitiesMap,
+        pointsMap
+      });
+    }
+
+    const validMemberData = this.buildProductivitySeriesFromMaps(groups, dateRange);
+    this.applyProductivityMemberData(validMemberData, {
+      apiCalls,
+      rows: rowCount,
+      mode: 'gerencias'
+    });
+  }
+
+  /** GERENTE no painel agregado: uma série por supervisão (time no escopo). */
+  private async loadProductivityDataBySupervisoes(dateRange: { start: Date; end: Date }): Promise<void> {
+    const overview = await firstValueFrom(
+      this.actionLogService
+        .fetchManagementDashboardCachedOverview(this.selectedMonth)
+        .pipe(takeUntil(this.destroy$))
+    );
+    const supervisionTeams = overview?.teams ?? [];
+
+    if (!supervisionTeams.length) {
+      this.clearProductivityCharts();
+      return;
+    }
+
+    let apiCalls = 0;
+    let rowCount = 0;
+    const groups: Array<{
+      memberId: string;
+      memberName: string;
+      activitiesMap: Map<string, number>;
+      pointsMap: Map<string, number>;
+    }> = [];
+
+    for (const team of supervisionTeams) {
+      const numericId = this.resolveNumericTeamIdForStats(team.team_id, team.team_name);
+      if (!numericId) {
+        continue;
+      }
+      const rows = await this.fetchTeamDailyFinishedStatsRows(numericId, dateRange);
+      apiCalls++;
+      rowCount += rows.length;
+      const byDay = aggregateDailyFinishedStatsByDay(rows);
+      const { activitiesMap, pointsMap } = dailyMapsFromDayAggregate(byDay);
+      groups.push({
+        memberId: String(team.team_id),
+        memberName: (team.team_name ?? `Supervisão ${team.team_id}`).trim(),
+        activitiesMap,
+        pointsMap
+      });
+    }
+
+    const validMemberData = this.buildProductivitySeriesFromMaps(groups, dateRange);
+    this.applyProductivityMemberData(validMemberData, {
+      apiCalls,
+      rows: rowCount,
+      mode: 'supervisoes'
+    });
+  }
+
+  /** SUPERVISOR, drill-down em time, ou líder de célula: séries por jogador (célula filtrada). */
+  private async loadProductivityDataByPlayers(
+    dateRange: { start: Date; end: Date },
+    filterToCell: boolean
+  ): Promise<void> {
+    const teamTid = this.getGame4uReportTeamId();
+    if (!teamTid) {
+      this.clearProductivityCharts();
+      return;
+    }
+
+    const rows = await this.fetchTeamDailyFinishedStatsRows(teamTid, dateRange);
+    const byEmail = aggregateDailyFinishedStatsByEmail(rows);
+
+    const cellMemberSet = new Set(
+      [
+        ...this.collaborators.map(c => String(c.userId ?? '').trim().toLowerCase()),
+        ...this.teamMemberIds.map(id => String(id).trim().toLowerCase())
+      ].filter(Boolean)
+    );
+
+    const AGG_KEY = '__team_aggregate__';
+    const memberKeysOrdered = [...byEmail.keys()].filter(email => {
+      if (!filterToCell || cellMemberSet.size === 0) {
+        return true;
+      }
+      return cellMemberSet.has(email.trim().toLowerCase());
+    });
+
+    if (memberKeysOrdered.length === 0 && !filterToCell) {
+      const fallbackKeys =
+        this.teamMemberIds.length > 0 ? [...this.teamMemberIds] : [AGG_KEY];
+      for (const memberId of fallbackKeys) {
+        memberKeysOrdered.push(memberId === AGG_KEY ? AGG_KEY : memberId);
+      }
+    }
+
+    const groups = memberKeysOrdered.map(memberId => {
+      const collaborator = this.collaborators.find(
+        c => c.userId?.trim().toLowerCase() === memberId.trim().toLowerCase()
+      );
+      const dayMap = byEmail.get(memberId) ?? new Map();
+      const activitiesMap = new Map<string, number>();
+      const pointsMap = new Map<string, number>();
+      for (const [day, v] of dayMap) {
+        activitiesMap.set(day, v.tasks);
+        pointsMap.set(day, v.points);
+      }
+      return {
+        memberId,
+        memberName:
+          memberId === AGG_KEY
+            ? 'Equipe'
+            : this.formatCollaboratorName(memberId, collaborator?.name),
+        activitiesMap,
+        pointsMap
+      };
+    });
+
+    const validMemberData = this.buildProductivitySeriesFromMaps(groups, dateRange);
+    this.applyProductivityMemberData(validMemberData, {
+      apiCalls: 1,
+      rows: rows.length,
+      mode: filterToCell ? 'celula' : 'jogadores'
+    });
+  }
+
+  /**
+   * Carrega gráficos de produtividade com segmentação por papel:
+   * gerências (C_LEVEL/DIRETOR), supervisões (GERENTE), jogadores (SUPERVISOR) ou célula (LIDER_CELULA).
+   */
+  private async loadProductivityData(dateRange: { start: Date; end: Date }): Promise<void> {
+    if (!this.productivityAnalysisTabEnabled) {
+      return;
+    }
+
+    const mode = this.getProductivitySegmentationMode();
+    this.isLoadingProductivity = true;
+    this.hasProductivityError = false;
+    this.productivityErrorMessage = '';
+
+    console.log('📈 Loading productivity data…', { mode, managementOverview: this.isManagementOverview });
+
+    try {
+      switch (mode) {
+        case 'gerencias':
+          await this.loadProductivityDataByGerencias(dateRange);
+          break;
+        case 'supervisoes':
+          await this.loadProductivityDataBySupervisoes(dateRange);
+          break;
+        case 'celula':
+          await this.loadProductivityDataByPlayers(dateRange, true);
+          break;
+        case 'jogadores':
+        default:
+          await this.loadProductivityDataByPlayers(dateRange, false);
+          break;
+      }
+      this.hasProductivityError = false;
+      this.cdr.markForCheck();
+    } catch (error) {
+      console.error('Error loading productivity data:', error);
+      this.clearProductivityCharts();
+      this.hasProductivityError = true;
+      this.productivityErrorMessage = 'Erro ao carregar dados de produtividade';
+      this.toastService.error('Erro ao carregar dados de produtividade');
+    } finally {
+      this.isLoadingProductivity = false;
+    }
+  }
+
+  /**
+   * Calculate total activities and points by collaborator for bar charts
+   */
+  private calculateCollaboratorTotals(memberData: Array<{ 
   memberId: string; 
   memberName: string; 
   activitiesDataPoints: GraphDataPoint[]; 
@@ -3717,6 +3925,10 @@ private calculateCollaboratorTotals(memberData: Array<{
   // `GET /game/reports/{management/}finished/deliveries/cached` (linhas RAW com `user_email`).
   // ============================================================================================
 
+  get usesGame4uWalletFromStats(): boolean {
+    return this.playerService.usesGame4uWalletFromStats();
+  }
+
   get showOperationalInsights(): boolean {
     return (
       this.playerService.usesGame4uWalletFromStats() &&
@@ -3730,6 +3942,16 @@ private calculateCollaboratorTotals(memberData: Array<{
       return 'do colaborador selecionado';
     }
     return 'da equipa';
+  }
+
+  get executiveActionInsightsScopeLabel(): string {
+    if (this.selectedCollaborator) {
+      return 'do colaborador selecionado';
+    }
+    if (this.isManagementOverview) {
+      return 'da organização';
+    }
+    return 'do time';
   }
 
   /**
@@ -3749,18 +3971,15 @@ private calculateCollaboratorTotals(memberData: Array<{
     this.cdr.markForCheck();
 
     const month = this.selectedMonth;
-    const teamId = this.getGame4uTeamHttpParam() ?? undefined;
+    const teamIds = this.getInsightsScopeTeamIds();
     const playerId = this.selectedCollaborator?.trim() || '';
 
-    this.dashboardInsightsService
-      .getDashboardInsights(
-        {
-          month,
-          ...(teamId ? { team_id: teamId } : {}),
-          ...(this.selectedCollaborator ? { email: this.selectedCollaborator } : {})
-        },
-        playerId
-      )
+    const insights$ =
+      teamIds.length > 0
+        ? this.dashboardInsightsService.getDashboardInsightsForTeams(teamIds, { month }, playerId)
+        : this.dashboardInsightsService.getDashboardInsights({ month }, playerId);
+
+    insights$
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: snapshot => {
@@ -3784,7 +4003,7 @@ private calculateCollaboratorTotals(memberData: Array<{
 
   /**
    * Carrega o mini dashboard executivo com:
-   *  - Top processos finalizados no mês (somatório de `tasks_total` por `delivery_title`).
+   *  - Top processos finalizados no mês (somatório de `tasks_total` por título do processo em user-actions).
    *  - Top performers (somatório de tarefas/clientes por `user_email`).
    *  - Saúde do mês (% no prazo, ativos, médias).
    *
@@ -3827,17 +4046,30 @@ private calculateCollaboratorTotals(memberData: Array<{
         return;
       }
 
-      const rows = await firstValueFrom(
-        this.actionLogService
-          .getExecutiveDeliveriesAllPages(scope, month, 100)
-          .pipe(takeUntil(this.destroy$))
-      );
+      const [rows, allUserActions] = await Promise.all([
+        firstValueFrom(
+          this.actionLogService
+            .getExecutiveDeliveriesAllPages(scope, month, 100)
+            .pipe(takeUntil(this.destroy$))
+        ),
+        firstValueFrom(
+          this.loadExecutiveScopeUserActions(month).pipe(takeUntil(this.destroy$))
+        )
+      ]);
 
       if (loadGen !== this.executiveInsightsLoadGen) {
         return;
       }
 
-      this.computeExecutiveInsightsFromRows(rows || []);
+      this.executiveDashboardInsights = buildDashboardInsightsSnapshotFromUserActions(
+        allUserActions || [],
+        month
+      );
+      const finishedUserActions = (allUserActions || []).filter(a =>
+        isGame4uUserActionFinalizedStatus(a.status)
+      );
+      this.computeExecutiveInsightsFromRows(rows || [], finishedUserActions);
+      this.refreshExecutiveInsightsHasData();
     } catch (error) {
       console.error('📊 Erro ao carregar insights executivos:', error);
       if (loadGen === this.executiveInsightsLoadGen) {
@@ -3855,6 +4087,7 @@ private calculateCollaboratorTotals(memberData: Array<{
   private resetExecutiveInsights(): void {
     this.executiveInsightsTopProcesses = [];
     this.executiveInsightsTopPlayers = [];
+    this.executiveInsightsAttentionPlayers = [];
     this.executiveInsightsTotalTasks = 0;
     this.executiveInsightsOnTimeTasks = 0;
     this.executiveInsightsActivePlayers = 0;
@@ -3863,31 +4096,88 @@ private calculateCollaboratorTotals(memberData: Array<{
     this.executiveInsightsTotalDeliveries = 0;
     this.executiveInsightsDistinctProcesses = 0;
     this.executiveInsightsOnTimePctOverall = null;
+    this.executiveDashboardInsights = null;
     this.hasExecutiveInsightsData = false;
   }
 
-  private computeExecutiveInsightsFromRows(rows: Game4uReportsFinishedDeliveryRow[]): void {
+  /** Garante cache de user-actions (mesmo dos insights) para o modal de progresso. */
+  private warmProgressModalUserActionsCache(): void {
+    if (!this.playerService.usesGame4uWalletFromStats() || this.selectedMonth == null) {
+      return;
+    }
+    this.actionLogService.warmTeamUserActionsCacheForProgressModal(
+      this.progressModalTeamIds,
+      this.selectedMonth,
+      this.selectedCollaborator?.trim() || undefined
+    );
+  }
+
+  /** Duas requisições user-actions por equipa (abertas + finalizadas) ou por colaborador. */
+  private loadExecutiveScopeUserActions(month: Date): Observable<Game4uUserActionModel[]> {
+    const email = this.selectedCollaborator?.trim();
+    if (email) {
+      return this.actionLogService.getTeamUserActionsForInsightsMonth(undefined, month, email);
+    }
+    const teamIds = this.getInsightsScopeTeamIds();
+    if (teamIds.length === 0) {
+      const teamScopeId = this.getGame4uTeamScopeId();
+      if (!teamScopeId) {
+        return of([]);
+      }
+      return this.actionLogService.getTeamUserActionsForInsightsMonth(teamScopeId, month);
+    }
+    if (teamIds.length === 1) {
+      return this.actionLogService.getTeamUserActionsForInsightsMonth(teamIds[0]!, month);
+    }
+    return forkJoin(
+      teamIds.map(teamId =>
+        this.actionLogService.getTeamUserActionsForInsightsMonth(teamId, month)
+      )
+    ).pipe(map(batches => batches.flat()));
+  }
+
+  private refreshExecutiveInsightsHasData(): void {
+    const hasAction =
+      this.executiveDashboardInsights != null &&
+      (this.executiveDashboardInsights.pendingTasks > 0 ||
+        this.executiveDashboardInsights.finishedTasks > 0);
+    this.hasExecutiveInsightsData =
+      this.executiveInsightsTopProcesses.length > 0 ||
+      this.executiveInsightsTopPlayers.length > 0 ||
+      hasAction;
+  }
+
+  private computeExecutiveInsightsFromRows(
+    rows: Game4uReportsFinishedDeliveryRow[],
+    finishedUserActions: Game4uUserActionModel[] = []
+  ): void {
+    const processAgg = aggregateExecutiveTopProcessesFromUserActions(finishedUserActions);
+    this.executiveInsightsTopProcesses = processAgg.top;
+    this.executiveInsightsDistinctProcesses = processAgg.distinctProcesses;
+
     const safeRows = (rows || []).filter(r => r != null && Math.floor(Number(r.tasks_total) || 0) > 0);
     if (safeRows.length === 0) {
-      this.resetExecutiveInsights();
+      this.executiveInsightsTopPlayers = [];
+      this.executiveInsightsAttentionPlayers = [];
+      this.executiveInsightsTotalTasks = 0;
+      this.executiveInsightsOnTimeTasks = 0;
+      this.executiveInsightsActivePlayers = 0;
+      this.executiveInsightsAvgTasksPerActivePlayer = 0;
+      this.executiveInsightsAvgClientsPerActivePlayer = 0;
+      this.executiveInsightsTotalDeliveries = 0;
+      this.executiveInsightsOnTimePctOverall = null;
       return;
     }
 
-    type ProcAcc = {
-      tasks: number;
-      deliveries: number;
-      onTimeWeighted: number;
-      tasksWithPct: number;
-    };
     type PlayerAcc = {
       tasks: number;
       deliveries: number;
+      onTimeDeliveries: number;
       clients: Set<string>;
       onTimeWeighted: number;
       tasksWithPct: number;
     };
 
-    const byProcess = new Map<string, ProcAcc>();
     const byPlayer = new Map<string, PlayerAcc>();
     const activePlayers = new Set<string>();
     let totalTasks = 0;
@@ -3914,34 +4204,23 @@ private calculateCollaboratorTotals(memberData: Array<{
         totalTasksWithPct += tasks;
       }
 
-      const title = (row.delivery_title || '').trim() || 'Sem título';
-      const pCur: ProcAcc = byProcess.get(title) ?? {
-        tasks: 0,
-        deliveries: 0,
-        onTimeWeighted: 0,
-        tasksWithPct: 0
-      };
-      pCur.tasks += tasks;
-      pCur.deliveries += 1;
-      if (hasOtp) {
-        pCur.onTimeWeighted += Number(otp) * tasks;
-        pCur.tasksWithPct += tasks;
-      }
-      byProcess.set(title, pCur);
-
       const email = (row.user_email || '').trim().toLowerCase();
       if (email) {
         activePlayers.add(email);
         const plCur: PlayerAcc = byPlayer.get(email) ?? {
           tasks: 0,
           deliveries: 0,
+          onTimeDeliveries: 0,
           clients: new Set<string>(),
           onTimeWeighted: 0,
           tasksWithPct: 0
         };
         plCur.tasks += tasks;
         plCur.deliveries += 1;
-        const clientKey = String(row.emp_id ?? row.delivery_id ?? title).trim();
+        if (deliveryRowCountsAsOnTime(row)) {
+          plCur.onTimeDeliveries += 1;
+        }
+        const clientKey = String(row.emp_id ?? row.delivery_id ?? row.delivery_title ?? '').trim();
         if (clientKey) {
           plCur.clients.add(clientKey);
         }
@@ -3957,7 +4236,6 @@ private calculateCollaboratorTotals(memberData: Array<{
     this.executiveInsightsOnTimeTasks = totalOnTimeTasks;
     this.executiveInsightsActivePlayers = activePlayers.size;
     this.executiveInsightsTotalDeliveries = safeRows.length;
-    this.executiveInsightsDistinctProcesses = byProcess.size;
     this.executiveInsightsAvgTasksPerActivePlayer =
       activePlayers.size > 0 ? Math.round((totalTasks / activePlayers.size) * 10) / 10 : 0;
 
@@ -3970,43 +4248,76 @@ private calculateCollaboratorTotals(memberData: Array<{
         ? Math.round((totalOnTimeTasks / totalTasksWithPct) * 1000) / 10
         : this.teamMonthOnTimeDeliveryPct;
 
-    const procArray = [...byProcess.entries()]
-      .map(([title, v]) => ({
-        deliveryTitle: title,
+    const playerArray: ExecutiveInsightsPlayerRank[] = [...byPlayer.entries()].map(([email, v]) => {
+      const collab = this.collaborators.find(
+        c => c.userId?.toLowerCase() === email || c.email?.toLowerCase() === email
+      );
+      const formatted = this.formatCollaboratorName(email, collab?.name);
+      return {
+        email,
+        name: formatted,
+        initials: this.computeExecutiveInitials(formatted),
         tasksTotal: v.tasks,
+        clientsCount: v.clients.size,
         deliveriesCount: v.deliveries,
+        onTimeDeliveries: v.onTimeDeliveries,
+        onTimeDeliveryPct:
+          v.deliveries > 0
+            ? Math.round((v.onTimeDeliveries / v.deliveries) * 1000) / 10
+            : null,
         onTimePct:
-          v.tasksWithPct > 0 ? Math.round((v.onTimeWeighted / v.tasksWithPct) * 10) / 10 : null,
-        pct: totalTasks > 0 ? Math.round((v.tasks / totalTasks) * 1000) / 10 : 0
-      }))
-      .sort((a, b) => b.tasksTotal - a.tasksTotal);
-    this.executiveInsightsTopProcesses = procArray.slice(0, 6);
+          v.tasksWithPct > 0
+            ? Math.round((v.onTimeWeighted / v.tasksWithPct) * 10) / 10
+            : null
+      };
+    });
 
-    const totalPlayerTasks = Array.from(byPlayer.values()).reduce((s, p) => s + p.tasks, 0);
-    const playerArray = [...byPlayer.entries()]
-      .map(([email, v]) => {
-        const collab = this.collaborators.find(
-          c => c.userId?.toLowerCase() === email || c.email?.toLowerCase() === email
-        );
-        const formatted = this.formatCollaboratorName(email, collab?.name);
-        return {
-          email,
-          name: formatted,
-          initials: this.computeExecutiveInitials(formatted),
-          tasksTotal: v.tasks,
-          clientsCount: v.clients.size,
-          processesCount: v.deliveries,
-          onTimePct:
-            v.tasksWithPct > 0
-              ? Math.round((v.onTimeWeighted / v.tasksWithPct) * 10) / 10
-              : null,
-          pct: totalPlayerTasks > 0 ? Math.round((v.tasks / totalPlayerTasks) * 1000) / 10 : 0
-        };
-      })
-      .sort((a, b) => b.tasksTotal - a.tasksTotal);
-    this.executiveInsightsTopPlayers = playerArray.slice(0, 5);
+    const compareByOnTimeDeliveriesDesc = (
+      a: ExecutiveInsightsPlayerRank,
+      b: ExecutiveInsightsPlayerRank
+    ): number => {
+      if (b.onTimeDeliveries !== a.onTimeDeliveries) {
+        return b.onTimeDeliveries - a.onTimeDeliveries;
+      }
+      const pctA = a.onTimeDeliveryPct ?? -1;
+      const pctB = b.onTimeDeliveryPct ?? -1;
+      if (pctB !== pctA) {
+        return pctB - pctA;
+      }
+      return b.deliveriesCount - a.deliveriesCount;
+    };
 
-    this.hasExecutiveInsightsData = procArray.length > 0;
+    const compareNeedsAttention = (
+      a: ExecutiveInsightsPlayerRank,
+      b: ExecutiveInsightsPlayerRank
+    ): number => {
+      const pctA = a.onTimeDeliveryPct ?? 0;
+      const pctB = b.onTimeDeliveryPct ?? 0;
+      if (pctA !== pctB) {
+        return pctA - pctB;
+      }
+      const lateA = a.deliveriesCount - a.onTimeDeliveries;
+      const lateB = b.deliveriesCount - b.onTimeDeliveries;
+      if (lateB !== lateA) {
+        return lateB - lateA;
+      }
+      return b.deliveriesCount - a.deliveriesCount;
+    };
+
+    const isEligibleForAttention = (p: ExecutiveInsightsPlayerRank): boolean =>
+      p.deliveriesCount >= EXECUTIVE_ATTENTION_MIN_DELIVERIES &&
+      (p.onTimeDeliveryPct == null || p.onTimeDeliveryPct < EXECUTIVE_ATTENTION_MAX_ON_TIME_PCT);
+
+    const ranked = playerArray
+      .filter(p => p.deliveriesCount > 0)
+      .sort(compareByOnTimeDeliveriesDesc);
+    this.executiveInsightsTopPlayers = ranked.slice(0, 5);
+
+    const topEmails = new Set(ranked.slice(0, 5).map(p => p.email));
+    this.executiveInsightsAttentionPlayers = [...playerArray]
+      .filter(p => !topEmails.has(p.email) && isEligibleForAttention(p))
+      .sort(compareNeedsAttention)
+      .slice(0, 5);
   }
 
   private computeExecutiveInitials(name: string): string {
@@ -4079,6 +4390,10 @@ private calculateCollaboratorTotals(memberData: Array<{
   }
 
   trackByExecutivePlayer(_idx: number, row: { email: string }): string {
+    return row?.email ?? String(_idx);
+  }
+
+  trackByExecutiveAttentionPlayer(_idx: number, row: { email: string }): string {
     return row?.email ?? String(_idx);
   }
 
@@ -4712,29 +5027,95 @@ private calculateCollaboratorTotals(memberData: Array<{
   }
 
   /**
-   * Funifier / modais legados: todos os membros; Game4U usa `progressModalPlayerId` + `teamId`.
+   * Funifier / modais legados: todos os membros; Game4U usa `teamIds` (sem `email` na API).
    */
   get teamPlayerIdsForModal(): string {
     return this.teamMemberIds.join(',');
   }
 
   /**
-   * Jogador efetivo para modais Game4U: colaborador filtrado; senão, com escopo de equipa (`team_id`),
-   * string vazia para pedidos consolidados **sem** `email` (apenas `team_id`), não o e-mail do gestor.
+   * Id numérico Game4U para `team_id` em `/game/reports/user-actions` (por entrada do seletor).
+   */
+  private resolveGame4uTeamIdForPickerId(teamPickerId: string): string | undefined {
+    const tid = (teamPickerId || '').trim();
+    if (!tid || tid === TeamManagementDashboardComponent.MANAGEMENT_OVERVIEW_TEAM_ID) {
+      return undefined;
+    }
+    const entry = this.teams.find(t => t.id === tid) as (Team & { game4uTeamId?: string }) | undefined;
+    const fromPicker = entry?.game4uTeamId?.trim();
+    if (fromPicker && /^\d+$/.test(fromPicker)) {
+      return fromPicker;
+    }
+    if (/^\d+$/.test(tid)) {
+      return tid;
+    }
+    if (tid === (this.selectedTeamId || '').trim()) {
+      const report = this.getGame4uReportTeamId();
+      if (report?.trim()) {
+        return report.trim();
+      }
+      const http = this.getGame4uTeamHttpParam();
+      if (http && /^\d+$/.test(http)) {
+        return http;
+      }
+    }
+    return undefined;
+  }
+
+  /**
+   * Escopos `team_id` (Game4U) para insights, modal de tarefas, etc.
+   */
+  getInsightsScopeTeamIds(): string[] {
+    if (!this.playerService.usesGame4uWalletFromStats()) {
+      return [];
+    }
+    const selected = (this.selectedTeamId || '').trim();
+    const isOverview =
+      selected === '' || selected === TeamManagementDashboardComponent.MANAGEMENT_OVERVIEW_TEAM_ID;
+
+    if (!isOverview && selected) {
+      const one = this.resolveGame4uTeamIdForPickerId(selected);
+      return one ? [one] : selected ? [selected] : [];
+    }
+
+    const ids: string[] = [];
+    for (const t of this.teams) {
+      if (t.id === TeamManagementDashboardComponent.MANAGEMENT_OVERVIEW_TEAM_ID) {
+        continue;
+      }
+      const resolved = this.resolveGame4uTeamIdForPickerId(t.id);
+      if (resolved && !ids.includes(resolved)) {
+        ids.push(resolved);
+      }
+    }
+    return ids;
+  }
+
+  get progressModalTeamIds(): string[] {
+    return this.getInsightsScopeTeamIds();
+  }
+
+  /**
+   * Game4U: não enviar e-mail do gestor à API — só `team_id`(s). Com colaborador selecionado,
+   * o e-mail fica apenas para filtro local no modal.
    */
   get progressModalPlayerId(): string {
-    if (this.selectedCollaborator) {
+    if (this.selectedCollaborator?.trim()) {
       return this.selectedCollaborator.trim();
     }
-    if (this.progressModalTeamId) {
+    if (this.progressModalTeamIds.length > 0) {
       return '';
+    }
+    if (!this.playerService.usesGame4uWalletFromStats()) {
+      return this.teamPlayerIdsForModal;
     }
     return (this.getPanelPlayerId() || '').trim();
   }
 
+  /** Primeiro `team_id` (compat. com inputs legados do modal). */
   get progressModalTeamId(): string | null {
-    const t = this.getGame4uTeamScopeId();
-    return t != null && String(t).trim() !== '' ? String(t).trim() : null;
+    const ids = this.progressModalTeamIds;
+    return ids.length > 0 ? ids[0] : null;
   }
 
   /**
