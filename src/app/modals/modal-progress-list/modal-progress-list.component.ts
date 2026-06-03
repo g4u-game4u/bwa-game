@@ -9,6 +9,10 @@ import {
   TeamDailyPendingStatsRow
 } from '@services/action-log.service';
 import type { Game4uUserActionStatus } from '@model/game4u-api.model';
+import {
+  Game4uFinishedPrazoStatus,
+  resolveGame4uFinishedPrazoStatus
+} from '@services/game4u-game-mapper';
 import { ChartDataset } from '@model/gamification-dashboard.model';
 import { CnpjLookupService } from '@services/cnpj-lookup.service';
 
@@ -390,24 +394,8 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
             ? ['DONE', 'DELIVERED']
             : undefined;
 
-      const canPaginateReports =
-        !!reportStatuses?.length &&
-        playerIds.length === 1 &&
-        this.actionLogService.canPaginateGame4uActivityReports();
-
-      if (canPaginateReports) {
-        this.useActivityReportsPagination = true;
-        this.activityHasMore = false;
-        this.isLoadingMore = false;
-        this.activityReportsNextOffset = 0;
-        this.activityReportsTotal = undefined;
-        // Supervisor / gestão: gráfico do mês inteiro via daily-pending-stats em paralelo
-        // à primeira página de tarefas individuais (que alimenta apenas a lista).
-        if (this.shouldUseDailyPendingStatsForChart) {
-          this.fetchDailyPendingStatsForChart();
-        }
-        this.fetchActivityReportPage(true);
-        return;
+      if (this.shouldUseDailyPendingStatsForChart) {
+        this.fetchDailyPendingStatsForChart();
       }
 
       this.useActivityReportsPagination = false;
@@ -436,23 +424,29 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
             this.activityItems = results.flat();
             this.sortActivityItems();
 
-            this.applyChartFromActivityItems(this.activityItems);
+            if (!this.shouldUseDailyPendingStatsForChart) {
+              this.applyChartFromActivityItems(this.activityItems);
+            }
 
-            await this.enrichCnpjNames(this.activityItems.map(item => item.cnpj).filter(cnpj => cnpj));
-
-            this.isLoadingChart = false;
+            await this.enrichCnpjNames(
+              this.activityItems.map(item => item.cnpj).filter(cnpj => cnpj)
+            );
             this.isLoading = false;
+            if (!this.shouldUseDailyPendingStatsForChart) {
+              this.isLoadingChart = false;
+            }
             this.cdr.markForCheck();
           },
-          error: (err: Error) => {
-            console.error('Error loading activity lists:', err);
+          error: () => {
             this.activityItems = [];
-            this.applyChartFromActivityItems([]);
-            this.isLoadingChart = false;
             this.isLoading = false;
+            if (!this.shouldUseDailyPendingStatsForChart) {
+              this.isLoadingChart = false;
+            }
             this.cdr.markForCheck();
           }
         });
+      return;
     } else if (this.isProcessList) {
       const tid = (this.teamId ?? '').trim() || undefined;
       const processRequests = playerIds.map(playerId =>
@@ -973,6 +967,19 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
     const now = new Date();
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0).getTime();
     return ms < todayStart;
+  }
+
+  /** Entrega com potencial de multa (`risco_multa` de `/game/reports/user-actions`). */
+  hasRiscoMulta(item: ActivityListItem): boolean {
+    return item.risco_multa === true;
+  }
+
+  /** Entrega finalizada: compara data de conclusão com o prazo. */
+  getFinishedPrazoStatus(item: ActivityListItem): Game4uFinishedPrazoStatus {
+    if (this.isPendingActivitiesModal) {
+      return 'unknown';
+    }
+    return resolveGame4uFinishedPrazoStatus(item.dt_prazo, item.created);
   }
 
   /**

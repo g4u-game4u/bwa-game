@@ -107,6 +107,8 @@ export interface Game4uUserActionModel {
   dismissed?: boolean;
   /** Prazo (`YYYY-MM-DD`) em relatórios como `/game/reports/user-actions`. */
   dt_prazo?: string;
+  /** Indica se a entrega pode gerar multa (relatórios user-actions). */
+  risco_multa?: boolean;
   [key: string]: unknown;
 }
 

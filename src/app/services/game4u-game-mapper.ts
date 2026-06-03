@@ -241,6 +241,58 @@ function asString(v: unknown): string {
   return String(v);
 }
 
+/** Normaliza `risco_multa` de `/game/reports/user-actions` para booleano de UI. */
+export function parseGame4uRiscoMulta(value: unknown): boolean {
+  if (value === true || value === 1) {
+    return true;
+  }
+  if (typeof value === 'string') {
+    const s = value.trim().toLowerCase();
+    return s === 'true' || s === '1' || s === 'sim' || s === 'yes';
+  }
+  return false;
+}
+
+export type Game4uFinishedPrazoStatus = 'on_time' | 'late' | 'unknown';
+
+/** Converte `dt_prazo` (`YYYY-MM-DD`) para início do dia no calendário local. */
+export function parseGame4uDtPrazoToLocalDayStartMs(dt?: string): number | null {
+  if (!dt?.trim()) {
+    return null;
+  }
+  const ymd = /^(\d{4})-(\d{2})-(\d{2})/.exec(dt.trim());
+  if (!ymd) {
+    return null;
+  }
+  const d = new Date(Number(ymd[1]), Number(ymd[2]) - 1, Number(ymd[3]), 0, 0, 0, 0);
+  return Number.isNaN(d.getTime()) ? null : d.getTime();
+}
+
+/**
+ * Compara a data de finalização com o prazo da entrega/tarefa.
+ * Finalização no mesmo dia do prazo ou antes = `on_time`; depois = `late`.
+ */
+export function resolveGame4uFinishedPrazoStatus(
+  dtPrazo?: string,
+  finishedAtMs?: number
+): Game4uFinishedPrazoStatus {
+  const prazoMs = parseGame4uDtPrazoToLocalDayStartMs(dtPrazo);
+  if (prazoMs == null || finishedAtMs == null || !Number.isFinite(finishedAtMs) || finishedAtMs <= 0) {
+    return 'unknown';
+  }
+  const finished = new Date(finishedAtMs);
+  const finishedDayMs = new Date(
+    finished.getFullYear(),
+    finished.getMonth(),
+    finished.getDate(),
+    0,
+    0,
+    0,
+    0
+  ).getTime();
+  return finishedDayMs <= prazoMs ? 'on_time' : 'late';
+}
+
 /** User-action finalizada (participação / “tarefas concluídas” ao nível de linha). */
 export function isGame4uUserActionFinalizedStatus(status: unknown): boolean {
   const s = String(status ?? '').trim().toUpperCase();
@@ -682,11 +734,13 @@ export function mapGame4uActionsToActivityList(
   return scoped.map(a => {
     const dp =
       typeof a.dt_prazo === 'string' && a.dt_prazo.trim() ? a.dt_prazo.trim() : undefined;
+    const riscoMulta = parseGame4uRiscoMulta(a.risco_multa);
     return {
       id: a.id,
       title: (a.action_title as string) || 'Ação',
       delivery_title: (a.delivery_title as string) || undefined,
       ...(dp ? { dt_prazo: dp } : {}),
+      ...(riscoMulta ? { risco_multa: true } : {}),
       points: Math.floor(Number(a.points) || PONTOS_POR_ATIVIDADE_FINALIZADA_ACTION_LOG),
       created: game4uUserActionListTimestampMs(a),
       player: asString(a.user_email),

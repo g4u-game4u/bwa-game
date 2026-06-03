@@ -136,6 +136,8 @@ export interface ActivityListItem {
   delivery_title?: string;
   /** Prazo da tarefa (`YYYY-MM-DD`), ex.: `GET /game/reports/user-actions`. */
   dt_prazo?: string;
+  /** Indica se a entrega pode gerar multa (`risco_multa` em `/game/reports/user-actions`). */
+  risco_multa?: boolean;
   points: number;
   created: number;
   player?: string;

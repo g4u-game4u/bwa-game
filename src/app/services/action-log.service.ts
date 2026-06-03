@@ -125,7 +125,7 @@ export interface ActionLogEntry {
 
 export type { ActivityListItem, ProcessListItem } from '@model/gamification-dashboard.model';
 
-/** Uma página de `GET /game/reports/user-actions` para modais com «Carregar mais». */
+/** Resultado de `GET /game/reports/user-actions` (lista completa; paginação local opcional). */
 export interface ActivityListReportsPageResult {
   items: ActivityListItem[];
   offset: number;
@@ -238,6 +238,8 @@ export interface ClienteActionItem {
   title: string; // attributes.acao
   player: string; // userId (email do executor)
   created: number; // timestamp
+  /** Prazo da tarefa (`YYYY-MM-DD`), ex.: relatórios Game4U. */
+  dt_prazo?: string;
   status?: 'finalizado' | 'pendente' | 'dispensado'; // Status da tarefa
   /** Processo (delivery_title) quando vem do action_log */
   processTitle?: string;
@@ -917,40 +919,12 @@ export class ActionLogService {
   }
 
   /**
-   * Agrega todas as páginas de `GET /game/reports/user-actions` (até 500 itens por pedido).
-   * Usa `total` na resposta, quando vier, para não pedir páginas em excesso.
+   * Todas as user-actions de `GET /game/reports/user-actions` num único pedido.
    */
   private fetchGameReportsUserActionsAllPages(
     base: Omit<Game4uReportsUserActionsQuery, 'offset' | 'limit'>
   ): Observable<Game4uUserActionModel[]> {
-    const pageSize = 500;
-    /** Próximo offset pedido ao servidor (a resposta pode omitir `offset` ou vir sempre 0). */
-    let nextRequestOffset = 0;
-    let accumulatedItems = 0;
-    return this.game4u.getGameReportsUserActions({ ...base, offset: 0, limit: pageSize }).pipe(
-      expand(page => {
-        accumulatedItems += page.items.length;
-        const total = page.total;
-        if (
-          typeof total === 'number' &&
-          Number.isFinite(total) &&
-          total > 0 &&
-          accumulatedItems >= total
-        ) {
-          return EMPTY;
-        }
-        if (!page.items.length || page.items.length < pageSize) {
-          return EMPTY;
-        }
-        nextRequestOffset += page.items.length;
-        return this.game4u.getGameReportsUserActions({
-          ...base,
-          offset: nextRequestOffset,
-          limit: pageSize
-        });
-      }),
-      reduce((acc, page) => acc.concat(page.items), [] as Game4uUserActionModel[])
-    );
+    return this.game4u.getGameReportsUserActions(base).pipe(map(page => page.items));
   }
 
   private mapGame4uUserActionModelToClienteItem(a: Game4uUserActionModel): ClienteActionItem {
@@ -971,11 +945,14 @@ export class ActionLogService {
         : pts != null && String(pts).trim() !== ''
           ? Number(pts)
           : undefined;
+    const dp =
+      typeof a.dt_prazo === 'string' && a.dt_prazo.trim() ? a.dt_prazo.trim() : undefined;
     return {
       id,
       title: titleRaw || 'Ação',
       player: String(a.user_email ?? ''),
       created,
+      ...(dp ? { dt_prazo: dp } : {}),
       processTitle: (typeof a.delivery_title === 'string' && a.delivery_title.trim()) || undefined,
       status:
         mapGame4uStatusToClienteTaskStatus(a.status) ??
@@ -1741,23 +1718,25 @@ export class ActionLogService {
         return of({ items: [], total: 0 });
       }
       const rng = this.game4u.toQueryRange(month);
-      const offset = page?.offset ?? 0;
-      const limit = page?.limit ?? 25;
       return this.game4u
         .getGameReportsFinishedActionsByDelivery({
           ...(email ? { email } : {}),
           finished_at_start: rng.start,
           finished_at_end: rng.end,
           delivery_title: title,
-          offset,
-          limit,
           ...teamExtras
         })
         .pipe(
-          map(p => ({
-            items: (p.items || []).map(a => this.mapGame4uUserActionModelToClienteItem(a)),
-            total: p.total
-          })),
+          map(p => {
+            const allItems = (p.items || []).map(a => this.mapGame4uUserActionModelToClienteItem(a));
+            const offset = page?.offset ?? 0;
+            const limit = page?.limit ?? allItems.length;
+            const slice = allItems.slice(offset, offset + limit);
+            return {
+              items: slice,
+              total: p.total ?? allItems.length
+            };
+          }),
           catchError(err => {
             console.error('Error fetching actions-by-delivery (modal):', err);
             return of({ items: [], total: 0 });
@@ -2619,7 +2598,7 @@ export class ActionLogService {
   }
 
   /**
-   * Uma página de tarefas via `GET /game/reports/user-actions` (offset/limit; máx. 500).
+   * Lista de tarefas via `GET /game/reports/user-actions` (resposta completa; paginação local opcional).
    * Mesmos filtros que {@link getActivityList} com `reportUserActionsStatuses` definido.
    */
   getActivityListReportsPage(
@@ -2660,31 +2639,31 @@ export class ActionLogService {
           status: reportUserActionsStatuses,
           dt_prazo_start: dtPrazoRange.start,
           dt_prazo_end: dtPrazoRange.end,
-          ...(tid ? { team_id: tid } : {}),
-          offset: off,
-          limit: lim
+          ...(tid ? { team_id: tid } : {})
         }
       : {
           ...emailPart,
           status: reportUserActionsStatuses,
           finished_at_start: finishedRange().start,
           finished_at_end: finishedRange().end,
-          ...(tid ? { team_id: tid } : {}),
-          offset: off,
-          limit: lim
+          ...(tid ? { team_id: tid } : {})
         };
 
     return this.game4u.getGameReportsUserActions(pageQuery).pipe(
-      map(page => ({
-        items: mapGame4uActionsToActivityList(
+      map(page => {
+        const allItems = mapGame4uActionsToActivityList(
           page.items,
           month,
           openOnly ? { monthFilter: 'dtPrazo' } : undefined
-        ),
-        offset: page.offset,
-        limit: page.limit,
-        ...(page.total != null && Number.isFinite(page.total) ? { total: page.total } : {})
-      })),
+        );
+        const total = page.total ?? allItems.length;
+        return {
+          items: allItems.slice(off, off + lim),
+          offset: off,
+          limit: lim,
+          total
+        };
+      }),
       catchError(error => {
         console.error('Error fetching activity list page (Game4U reports/user-actions):', error);
         return of({ items: [], offset: off, limit: lim });

@@ -318,7 +318,7 @@ export class Game4uApiService {
 
   private reportsActionsByDeliveryKey(q: Game4uReportsActionsByDeliveryQuery): string {
     const st = (q.status ?? []).join(',');
-    return `rpt-act|${this.reportIdentitySegment(q)}|${q.finished_at_start}|${q.finished_at_end}|${q.delivery_title}|${q.offset ?? 0}|${q.limit ?? 500}|${st}|${q.team_id ?? ''}`;
+    return `rpt-act|${this.reportIdentitySegment(q)}|${q.finished_at_start}|${q.finished_at_end}|${q.delivery_title}|${st}|${q.team_id ?? ''}`;
   }
 
   private reportsGoalMonthKey(q: Game4uReportsGoalMonthQuery): string {
@@ -644,7 +644,7 @@ export class Game4uApiService {
   }
 
   /**
-   * `GET /game/reports/finished/actions-by-delivery` (paginado).
+   * `GET /game/reports/finished/actions-by-delivery`.
    */
   getGameReportsFinishedActionsByDelivery(
     q: Game4uReportsActionsByDeliveryQuery
@@ -666,10 +666,7 @@ export class Game4uApiService {
     }
     const key = this.reportsActionsByDeliveryKey(q);
     return this.shareGame4uDedupe(key, this.reportsActionsByDeliveryCache, () => {
-      let params = this.appendReportParams(new HttpParams(), q).set('delivery_title', q.delivery_title);
-      const off = q.offset ?? 0;
-      const lim = Math.min(q.limit ?? 500, 500);
-      params = params.set('offset', String(off)).set('limit', String(lim));
+      const params = this.appendReportParams(new HttpParams(), q).set('delivery_title', q.delivery_title);
       return this.http
         .get<unknown>(`${this.baseUrl}/game/reports/finished/actions-by-delivery`, {
           headers: this.headers(),
@@ -680,7 +677,7 @@ export class Game4uApiService {
   }
 
   /**
-   * `GET /game/reports/user-actions` (paginado, `offset`/`limit` máx. 500).
+   * `GET /game/reports/user-actions`.
    * Pares opcionais (um por pedido): `finished_at_*`, `dt_prazo_*`, `created_at_*` — par incompleto ou mais de um par → erro.
    */
   getGameReportsUserActions(q: Game4uReportsUserActionsQuery): Observable<Game4uReportsUserActionsPage> {
@@ -745,9 +742,6 @@ export class Game4uApiService {
       params = params.set('created_at_start', cs).set('created_at_end', ce);
     }
 
-    const off = q.offset ?? 0;
-    const lim = Math.min(q.limit ?? 500, 500);
-    params = params.set('offset', String(off)).set('limit', String(lim));
     params = this.withOptionalTeamId(params, q.team_id);
     return this.http
       .get<unknown>(`${this.baseUrl}/game/reports/user-actions`, {

@@ -109,7 +109,17 @@
                   <div class="task-group-rows">
                     <div *ngFor="let item of grp.items" class="task-row task-row--nested">
                       <div class="task-col-delivery">
-                        <span class="task-delivery">{{ getActivityClientDisplay(item) }}</span>
+                        <div class="task-delivery-cell">
+                          <span class="task-delivery">{{ getActivityClientDisplay(item) }}</span>
+                          <span
+                            *ngIf="hasRiscoMulta(item)"
+                            class="task-risco-multa-badge"
+                            role="status"
+                            aria-label="Entrega com risco de multa">
+                            <i class="ri-alert-line" aria-hidden="true"></i>
+                            <span>Risco de multa</span>
+                          </span>
+                        </div>
                       </div>
                       <div *ngIf="showActivityExecutorColumn" class="task-col-executor">
                         <span class="task-executor" [title]="item.player || ''">{{ formatEmailToName(item.player) }}</span>
@@ -128,7 +138,25 @@
                         </div>
                       </div>
                       <div *ngIf="!isPendingActivitiesModal" class="task-col-date">
-                        <span class="task-date">{{ formatDateOnly(item.created) }}</span>
+                        <div class="task-date-cell">
+                          <span class="task-date">{{ formatDateOnly(item.created) }}</span>
+                          <span
+                            *ngIf="getFinishedPrazoStatus(item) === 'late'"
+                            class="task-finished-late-badge"
+                            role="status"
+                            [attr.aria-label]="'Finalizada fora do prazo (' + formatDtPrazo(item.dt_prazo) + ')'">
+                            <i class="ri-error-warning-line" aria-hidden="true"></i>
+                            <span>Fora do prazo</span>
+                          </span>
+                          <span
+                            *ngIf="getFinishedPrazoStatus(item) === 'on_time'"
+                            class="task-finished-ontime-badge"
+                            role="status"
+                            [attr.aria-label]="'Finalizada no prazo (' + formatDtPrazo(item.dt_prazo) + ')'">
+                            <i class="ri-checkbox-circle-line" aria-hidden="true"></i>
+                            <span>No prazo</span>
+                          </span>
+                        </div>
                       </div>
                     </div>
                   </div>

@@ -369,6 +369,67 @@
   min-width: 0;
 }
 
+.task-delivery-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  min-width: 0;
+}
+
+.task-risco-multa-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: #fca5a5;
+
+  i {
+    font-size: 14px;
+    color: #ef4444;
+  }
+}
+
+.task-date-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  min-width: 0;
+}
+
+.task-finished-late-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: #fb923c;
+
+  i {
+    font-size: 14px;
+    color: #f97316;
+  }
+}
+
+.task-finished-ontime-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: #86efac;
+
+  i {
+    font-size: 14px;
+    color: #22c55e;
+  }
+}
+
 .task-prazo-overdue-badge {
   display: inline-flex;
   align-items: center;
