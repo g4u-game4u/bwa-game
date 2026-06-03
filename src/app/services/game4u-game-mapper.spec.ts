@@ -415,7 +415,7 @@ describe('game4u-game-mapper', () => {
           status: 'DONE',
           created_at: '2024-06-11T10:00:00.000Z',
           finished_at: '2024-06-12T10:00:00.000Z',
-          risco_multa: 'false'
+          risco_multa: false
         }
       ];
       const list = mapGame4uActionsToActivityList(actions, month, { monthFilter: 'dtPrazo' });

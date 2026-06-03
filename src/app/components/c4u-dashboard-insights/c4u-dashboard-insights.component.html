@@ -1,0 +1,237 @@
+<section
+  class="dashboard-insights"
+  [class.dashboard-insights--loading]="loading"
+  [attr.aria-busy]="loading ? 'true' : null"
+  aria-labelledby="dashboard-insights-title">
+  <div class="section-header">
+    <h3 id="dashboard-insights-title" class="section-title">
+      <i class="ri-lightbulb-flash-line section-title-icon" aria-hidden="true"></i>
+      {{ sectionTitle }}
+      <c4u-info-button [infoKey]="''" [customText]="infoText" position="bottom"></c4u-info-button>
+    </h3>
+  </div>
+
+  <c4u-card class="dashboard-insights-card">
+    <div *ngIf="loading" class="dashboard-insights-skeleton" role="status">
+      <span class="dashboard-insights-sr-only">A carregar insights do mês…</span>
+
+      <div class="insights-alert-row">
+        <div *ngFor="let _ of skeletonAlerts" class="insights-skeleton-alert">
+          <div class="insights-skeleton-bone insights-skeleton-alert-icon"></div>
+          <div class="insights-skeleton-alert-content">
+            <div class="insights-skeleton-bone insights-skeleton-alert-value"></div>
+            <div class="insights-skeleton-bone insights-skeleton-alert-label"></div>
+            <div class="insights-skeleton-bone insights-skeleton-alert-hint"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="insights-grid">
+        <div class="insights-skeleton-block">
+          <div class="insights-skeleton-bone insights-skeleton-block-title"></div>
+          <div class="insights-skeleton-bone insights-skeleton-highlight-title"></div>
+          <div class="insights-skeleton-bone insights-skeleton-highlight-meta"></div>
+          <div class="insights-skeleton-ranked">
+            <div *ngFor="let _ of skeletonRankedRows" class="insights-skeleton-ranked-row">
+              <div class="insights-skeleton-bone insights-skeleton-ranked-label"></div>
+              <div class="insights-skeleton-bone insights-skeleton-ranked-count"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="insights-skeleton-block">
+          <div class="insights-skeleton-bone insights-skeleton-block-title"></div>
+          <div class="insights-skeleton-bone insights-skeleton-highlight-title"></div>
+          <div class="insights-skeleton-bone insights-skeleton-highlight-meta"></div>
+          <div class="insights-skeleton-weekday-chart">
+            <div
+              *ngFor="let height of skeletonWeekdayBarHeights; trackBy: trackByIndex"
+              class="insights-skeleton-weekday-bar-wrap">
+              <div class="insights-skeleton-weekday-bar-track">
+                <div
+                  class="insights-skeleton-bone insights-skeleton-weekday-bar-fill"
+                  [style.height.px]="height">
+                </div>
+              </div>
+              <div class="insights-skeleton-bone insights-skeleton-weekday-label"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="insights-skeleton-block">
+          <div class="insights-skeleton-bone insights-skeleton-block-title"></div>
+          <div class="insights-skeleton-summary">
+            <div *ngFor="let _ of skeletonSummaryRows" class="insights-skeleton-summary-row">
+              <div class="insights-skeleton-bone insights-skeleton-summary-label"></div>
+              <div class="insights-skeleton-bone insights-skeleton-summary-value"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div *ngIf="!loading && hasData" class="dashboard-insights-body">
+      <!-- Alertas de atenção -->
+      <div class="insights-alert-row" role="list" aria-label="Alertas de atenção">
+        <div
+          class="insights-alert insights-alert--urgent"
+          [class.insights-alert--muted]="insights!.fineRiskTasks === 0"
+          role="listitem">
+          <div class="insights-alert-icon" aria-hidden="true">
+            <i class="ri-alarm-warning-line"></i>
+          </div>
+          <div class="insights-alert-content">
+            <span class="insights-alert-value">{{ insights!.fineRiskTasks | number:'1.0-0':'pt-BR' }}</span>
+            <span class="insights-alert-label">Risco de multa</span>
+            <span class="insights-alert-hint">
+              <ng-container *ngIf="insights!.fineRiskTasks > 0; else noFineRisk">
+                {{ insights!.fineRiskDeliveries | number:'1.0-0':'pt-BR' }}
+                {{ insights!.fineRiskDeliveries === 1 ? 'entrega precisa' : 'entregas precisam' }} de atenção urgente
+              </ng-container>
+              <ng-template #noFineRisk>Nenhuma tarefa com risco de multa</ng-template>
+            </span>
+          </div>
+        </div>
+
+        <div
+          class="insights-alert insights-alert--warning"
+          [class.insights-alert--muted]="insights!.dueSoonTasks === 0"
+          role="listitem">
+          <div class="insights-alert-icon" aria-hidden="true">
+            <i class="ri-timer-flash-line"></i>
+          </div>
+          <div class="insights-alert-content">
+            <span class="insights-alert-value">{{ insights!.dueSoonTasks | number:'1.0-0':'pt-BR' }}</span>
+            <span class="insights-alert-label">Próximas do vencimento</span>
+            <span class="insights-alert-hint">
+              Prazo nos próximos {{ insights!.dueSoonDays }} dias
+            </span>
+          </div>
+        </div>
+
+        <div
+          class="insights-alert insights-alert--overdue"
+          [class.insights-alert--muted]="insights!.overduePendingTasks === 0"
+          role="listitem">
+          <div class="insights-alert-icon" aria-hidden="true">
+            <i class="ri-error-warning-line"></i>
+          </div>
+          <div class="insights-alert-content">
+            <span class="insights-alert-value">{{ insights!.overduePendingTasks | number:'1.0-0':'pt-BR' }}</span>
+            <span class="insights-alert-label">Pendentes atrasadas</span>
+            <span class="insights-alert-hint">Prazo já vencido</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Produtividade -->
+      <div class="insights-grid">
+        <div class="insights-block">
+          <div class="insights-block-header">
+            <h4 class="insights-block-title">
+              <i class="ri-star-line" aria-hidden="true"></i>
+              Atividade mais realizada
+            </h4>
+          </div>
+          <ng-container *ngIf="insights!.topActivity; else noTopActivity">
+            <p class="insights-highlight-title">{{ insights!.topActivity!.label }}</p>
+            <p class="insights-highlight-meta">
+              {{ insights!.topActivity!.count | number:'1.0-0':'pt-BR' }}
+              {{ insights!.topActivity!.count === 1 ? 'finalização' : 'finalizações' }} no mês
+            </p>
+            <ul *ngIf="insights!.topActivities.length > 1" class="insights-ranked-list">
+              <li
+                *ngFor="let act of insights!.topActivities | slice:1:4; trackBy: trackByKey"
+                class="insights-ranked-item">
+                <span class="insights-ranked-label">{{ act.label }}</span>
+                <span class="insights-ranked-count">{{ act.count }}</span>
+              </li>
+            </ul>
+          </ng-container>
+          <ng-template #noTopActivity>
+            <p class="insights-empty-copy">Sem finalizações registradas neste mês.</p>
+          </ng-template>
+        </div>
+
+        <div class="insights-block">
+          <div class="insights-block-header">
+            <h4 class="insights-block-title">
+              <i class="ri-calendar-check-line" aria-hidden="true"></i>
+              Dia mais produtivo
+            </h4>
+          </div>
+          <ng-container *ngIf="insights!.mostProductiveWeekday; else noWeekday">
+            <p class="insights-highlight-title">{{ insights!.mostProductiveWeekday!.label }}</p>
+            <p class="insights-highlight-meta">
+              {{ insights!.mostProductiveWeekday!.count | number:'1.0-0':'pt-BR' }}
+              {{ insights!.mostProductiveWeekday!.count === 1 ? 'entrega finalizada' : 'entregas finalizadas' }}
+            </p>
+          </ng-container>
+          <ng-template #noWeekday>
+            <p class="insights-empty-copy">Sem padrão de produtividade neste mês.</p>
+          </ng-template>
+
+          <div
+            class="insights-weekday-chart"
+            role="img"
+            [attr.aria-label]="weekdayChartAriaLabel">
+            <div
+              *ngFor="let day of insights!.weekdayDistribution; trackBy: trackByIndex"
+              class="insights-weekday-bar-wrap">
+              <div class="insights-weekday-bar-track">
+                <div
+                  class="insights-weekday-bar-fill"
+                  [class.insights-weekday-bar-fill--peak]="isPeakWeekday(day)"
+                  [class.insights-weekday-bar-fill--empty]="day.count === 0"
+                  [style.height]="weekdayBarHeight(day.count)"
+                  [title]="weekdayBarTitle(day)">
+                </div>
+              </div>
+              <span
+                class="insights-weekday-label"
+                [class.insights-weekday-label--peak]="isPeakWeekday(day)">
+                {{ day.shortLabel }}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div class="insights-block">
+          <div class="insights-block-header">
+            <h4 class="insights-block-title">
+              <i class="ri-pulse-line" aria-hidden="true"></i>
+              Resumo do mês
+            </h4>
+          </div>
+          <ul class="insights-summary-list">
+            <li>
+              <span class="insights-summary-label">Finalizadas</span>
+              <span class="insights-summary-value">{{ insights!.finishedTasks | number:'1.0-0':'pt-BR' }}</span>
+            </li>
+            <li>
+              <span class="insights-summary-label">No prazo</span>
+              <span class="insights-summary-value insights-summary-value--ok">
+                {{ insights!.onTimeFinishedTasks | number:'1.0-0':'pt-BR' }}
+              </span>
+            </li>
+            <li>
+              <span class="insights-summary-label">Fora do prazo</span>
+              <span class="insights-summary-value insights-summary-value--warn">
+                {{ insights!.lateFinishedTasks | number:'1.0-0':'pt-BR' }}
+              </span>
+            </li>
+            <li>
+              <span class="insights-summary-label">Pendentes abertas</span>
+              <span class="insights-summary-value">{{ insights!.pendingTasks | number:'1.0-0':'pt-BR' }}</span>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div *ngIf="!loading && !hasData" class="insights-empty-state" role="status">
+      <i class="ri-inbox-line insights-empty-icon" aria-hidden="true"></i>
+      <p>Sem dados suficientes para gerar insights neste mês.</p>
+    </div>
+  </c4u-card>
+</section>

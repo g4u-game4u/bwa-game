@@ -35,6 +35,8 @@ import {
   PlayerParticipacaoDeliveryRow
 } from '@services/action-log.service';
 import { hasMoreFinishedDeliveriesCachedPage } from '@services/game4u-game-mapper';
+import { DashboardInsightsService } from '@services/dashboard-insights.service';
+import { DashboardInsightsSnapshot } from '@model/dashboard-insights.model';
 import {
   getManagementDashboardCachedRoleLabel,
   ManagementDashboardCachedRole
@@ -331,6 +333,11 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
   /** Geração de carga (evita race conditions com troca de mês/colaborador/equipa). */
   private executiveInsightsLoadGen = 0;
 
+  /** Insights operacionais (user-actions: prazos, multa, produtividade). */
+  dashboardInsights: DashboardInsightsSnapshot | null = null;
+  isLoadingDashboardInsights = false;
+  private dashboardInsightsLoadGen = 0;
+
   /** Cache de supervisão (`GET /game/reports/supervision/dashboard/cached`) indisponível para o mês. */
   teamSupervisionCacheMissing = false;
   /** `refreshed_at` do cache de supervisão (quando disponível). */
@@ -432,6 +439,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
     private companyKpiService: CompanyKpiService,
     private kpiService: KPIService,
     private cnpjLookupService: CnpjLookupService,
+    private dashboardInsightsService: DashboardInsightsService,
     private router: Router,
     private cdr: ChangeDetectorRef,
     private renderer: Renderer2,
@@ -1553,6 +1561,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
         // Mini dashboard executivo (top processos / top performers / saúde do mês)
         // — alimentado pelo cache `finished/deliveries/cached` por team_id.
         void this.loadExecutiveInsights();
+        void this.loadOperationalInsights();
 
         // Update formatted sidebar data after KPIs are loaded (includes metas calculation)
         this.updateFormattedSidebarData();
@@ -1603,6 +1612,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
 
       // Mini dashboard executivo do colaborador (top processos / saúde no mês).
       void this.loadExecutiveInsights();
+      void this.loadOperationalInsights();
 
       // Update formatted sidebar data after KPIs are loaded (includes metas calculation)
       this.updateFormattedSidebarData();
@@ -3706,6 +3716,71 @@ private calculateCollaboratorTotals(memberData: Array<{
   // EXECUTIVE INSIGHTS — mini dashboard com leitura agregada de
   // `GET /game/reports/{management/}finished/deliveries/cached` (linhas RAW com `user_email`).
   // ============================================================================================
+
+  get showOperationalInsights(): boolean {
+    return (
+      this.playerService.usesGame4uWalletFromStats() &&
+      !this.isManagementOverview &&
+      (!!this.selectedCollaborator || !!this.getGame4uTeamHttpParam())
+    );
+  }
+
+  get operationalInsightsScopeLabel(): string {
+    if (this.selectedCollaborator) {
+      return 'do colaborador selecionado';
+    }
+    return 'da equipa';
+  }
+
+  /**
+   * Insights operacionais via user-actions (client-side; futuro `GET …/dashboard/insights`).
+   */
+  private loadOperationalInsights(): void {
+    if (!this.showOperationalInsights || this.selectedMonth == null) {
+      this.dashboardInsights = null;
+      this.isLoadingDashboardInsights = false;
+      this.cdr.markForCheck();
+      return;
+    }
+
+    const loadGen = ++this.dashboardInsightsLoadGen;
+    this.isLoadingDashboardInsights = true;
+    this.dashboardInsights = null;
+    this.cdr.markForCheck();
+
+    const month = this.selectedMonth;
+    const teamId = this.getGame4uTeamHttpParam() ?? undefined;
+    const playerId = this.selectedCollaborator?.trim() || '';
+
+    this.dashboardInsightsService
+      .getDashboardInsights(
+        {
+          month,
+          ...(teamId ? { team_id: teamId } : {}),
+          ...(this.selectedCollaborator ? { email: this.selectedCollaborator } : {})
+        },
+        playerId
+      )
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: snapshot => {
+          if (loadGen !== this.dashboardInsightsLoadGen) {
+            return;
+          }
+          this.dashboardInsights = snapshot;
+          this.isLoadingDashboardInsights = false;
+          this.cdr.markForCheck();
+        },
+        error: err => {
+          console.error('Failed to load operational insights:', err);
+          if (loadGen === this.dashboardInsightsLoadGen) {
+            this.dashboardInsights = null;
+            this.isLoadingDashboardInsights = false;
+            this.cdr.markForCheck();
+          }
+        }
+      });
+  }
 
   /**
    * Carrega o mini dashboard executivo com:

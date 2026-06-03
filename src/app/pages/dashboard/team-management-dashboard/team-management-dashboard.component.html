@@ -460,6 +460,15 @@
                 `GET /game/reports/finished/deliveries/cached`
               ). Não chama action_log/aggregate.
             -->
+            <c4u-dashboard-insights
+              *ngIf="showOperationalInsights"
+              class="dashboard-section"
+              [insights]="dashboardInsights"
+              [loading]="isLoadingDashboardInsights"
+              variant="team"
+              [scopeLabel]="operationalInsightsScopeLabel">
+            </c4u-dashboard-insights>
+
             <section
               class="dashboard-section executive-insights-section"
               [class.executive-insights-section--loading]="isLoadingExecutiveInsights"
