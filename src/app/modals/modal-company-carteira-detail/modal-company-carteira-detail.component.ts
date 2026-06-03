@@ -8,6 +8,10 @@ import { KPIService } from '@services/kpi.service';
 import { KPIData } from '@model/gamification-dashboard.model';
 import { CnpjLookupService } from '@services/cnpj-lookup.service';
 import { firstValueFrom } from 'rxjs';
+import {
+  Game4uFinishedPrazoStatus,
+  resolveGame4uFinishedPrazoStatus
+} from '@services/game4u-game-mapper';
 
 @Component({
   selector: 'modal-company-carteira-detail',
@@ -30,9 +34,10 @@ export class ModalCompanyCarteiraDetailComponent implements OnInit, OnDestroy {
   isLoadingTasks = false;
   companyKPIs: KPIData[] = [];
   tasks: ClienteActionItem[] = [];
-  /** Total no servidor (GET actions-by-delivery paginado). */
+  /** Total no servidor (GET actions-by-delivery). */
   tasksTotal = 0;
   tasksOffset = 0;
+  private allParticipationTasks: ClienteActionItem[] = [];
   readonly tasksPageSizeFinishedReports = 25;
   cnpjNameMap = new Map<string, string>(); // Map of original CNPJ → clean empresa name
   companyStatus = ''; // Company status from empid_cnpj__c (e.g. "Ativa")
@@ -140,6 +145,7 @@ export class ModalCompanyCarteiraDetailComponent implements OnInit, OnDestroy {
     this.isLoadingTasks = true;
     this.tasksTotal = 0;
     this.tasksOffset = 0;
+    this.allParticipationTasks = [];
     this.cdr.markForCheck();
 
     const uid = this.actionLogUserId?.trim() || undefined;
@@ -274,6 +280,10 @@ export class ModalCompanyCarteiraDetailComponent implements OnInit, OnDestroy {
     if (resetOffset) {
       this.tasksOffset = 0;
     }
+    if (this.allParticipationTasks.length > 0 && !resetOffset) {
+      this.applyParticipationTasksPageSlice();
+      return;
+    }
     this.isLoadingTasks = true;
     this.cdr.markForCheck();
     this.actionLogService
@@ -287,25 +297,33 @@ export class ModalCompanyCarteiraDetailComponent implements OnInit, OnDestroy {
           loadTasksViaGameReports: true
         },
         this.month,
-        { offset: this.tasksOffset, limit: this.tasksPageSizeFinishedReports },
+        undefined,
         tid
       )
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: page => {
-          this.tasks = page.items;
-          this.tasksTotal = page.total;
+          this.allParticipationTasks = page.items;
+          this.tasksTotal = page.total ?? page.items.length;
+          this.applyParticipationTasksPageSlice();
           this.isLoadingTasks = false;
           this.cdr.markForCheck();
         },
         error: (err: unknown) => {
           console.error('Error loading tasks (reports page):', err);
+          this.allParticipationTasks = [];
           this.tasks = [];
           this.tasksTotal = 0;
           this.isLoadingTasks = false;
           this.cdr.markForCheck();
         }
       });
+  }
+
+  private applyParticipationTasksPageSlice(): void {
+    const from = this.tasksOffset;
+    const to = from + this.tasksPageSizeFinishedReports;
+    this.tasks = this.allParticipationTasks.slice(from, to);
   }
 
   get tasksPaginationLabel(): string {
@@ -331,13 +349,15 @@ export class ModalCompanyCarteiraDetailComponent implements OnInit, OnDestroy {
   goTasksPrevPage(): void {
     if (!this.tasksCanGoPrev) return;
     this.tasksOffset = Math.max(0, this.tasksOffset - this.tasksPageSizeFinishedReports);
-    this.fetchParticipationModalTasksPage(false);
+    this.applyParticipationTasksPageSlice();
+    this.cdr.markForCheck();
   }
 
   goTasksNextPage(): void {
     if (!this.tasksCanGoNext) return;
     this.tasksOffset += this.tasksPageSizeFinishedReports;
-    this.fetchParticipationModalTasksPage(false);
+    this.applyParticipationTasksPageSlice();
+    this.cdr.markForCheck();
   }
 
   getCompanyDisplayName(cnpj: string): string {
@@ -374,10 +394,31 @@ export class ModalCompanyCarteiraDetailComponent implements OnInit, OnDestroy {
     return date.toLocaleDateString('pt-BR', {
       day: '2-digit',
       month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
+      year: 'numeric'
     });
+  }
+
+  formatDtPrazo(dt?: string): string {
+    if (!dt?.trim()) {
+      return '—';
+    }
+    const ymd = /^(\d{4})-(\d{2})-(\d{2})/.exec(dt.trim());
+    if (ymd) {
+      return `${ymd[3]}/${ymd[2]}/${ymd[1]}`;
+    }
+    const t = Date.parse(dt.trim());
+    if (!Number.isNaN(t)) {
+      return new Date(t).toLocaleDateString('pt-BR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric'
+      });
+    }
+    return dt.trim();
+  }
+
+  getFinishedPrazoStatus(task: ClienteActionItem): Game4uFinishedPrazoStatus {
+    return resolveGame4uFinishedPrazoStatus(task.dt_prazo, task.created);
   }
 
   getStatusLabel(status?: string): string {

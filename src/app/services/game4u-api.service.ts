@@ -20,7 +20,9 @@ import {
   SupervisionTeamDashboardCached,
   SupervisionDashboardCachedListResponse,
   ManagementDashboardOverviewResponse,
+  ManagementDashboardCachedListResponse,
   Game4uReportsManagementCachedQuery,
+  Game4uReportsManagementCachedListQuery,
   Game4uReportsSupervisionCachedQuery,
   Game4uReportsSupervisionCachedListQuery,
   Game4uReportsFinishedDeliveriesCachedQuery,
@@ -39,7 +41,8 @@ import {
   Game4uReportsUserActionsQuery,
   Game4uReportsUserActionsPage,
   normalizeGameReportsUserActionsResponse,
-  Game4uReportsTeamDailyFinishedStatsQuery
+  Game4uReportsTeamDailyFinishedStatsQuery,
+  Game4uReportsTeamDailyPendingStatsQuery
 } from '@model/game4u-api.model';
 import { Game4uSupabaseFallbackService } from './game4u-supabase-fallback.service';
 import { SeasonDatesService } from './season-dates.service';
@@ -86,8 +89,13 @@ export class Game4uApiService {
     string,
     Observable<ManagementDashboardOverviewResponse>
   >();
+  private readonly reportsManagementDashboardListCache = new Map<
+    string,
+    Observable<ManagementDashboardCachedListResponse>
+  >();
   private readonly reportsOpenSummaryCache = new Map<string, Observable<Game4uReportsOpenSummary>>();
   private readonly reportsTeamDailyFinishedStatsCache = new Map<string, Observable<unknown>>();
+  private readonly reportsTeamDailyPendingStatsCache = new Map<string, Observable<unknown>>();
 
   constructor(
     private http: HttpClient,
@@ -229,8 +237,10 @@ export class Game4uApiService {
     this.reportsSupervisionDashboardCachedCache.clear();
     this.reportsSupervisionDashboardListCache.clear();
     this.reportsManagementDashboardOverviewCache.clear();
+    this.reportsManagementDashboardListCache.clear();
     this.reportsOpenSummaryCache.clear();
     this.reportsTeamDailyFinishedStatsCache.clear();
+    this.reportsTeamDailyPendingStatsCache.clear();
   }
 
   /** GET `/game/*` com partilha entre várias subscrições (evita N× a mesma chamada). */
@@ -315,7 +325,7 @@ export class Game4uApiService {
 
   private reportsActionsByDeliveryKey(q: Game4uReportsActionsByDeliveryQuery): string {
     const st = (q.status ?? []).join(',');
-    return `rpt-act|${this.reportIdentitySegment(q)}|${q.finished_at_start}|${q.finished_at_end}|${q.delivery_title}|${q.offset ?? 0}|${q.limit ?? 500}|${st}|${q.team_id ?? ''}`;
+    return `rpt-act|${this.reportIdentitySegment(q)}|${q.finished_at_start}|${q.finished_at_end}|${q.delivery_title}|${st}|${q.team_id ?? ''}`;
   }
 
   private reportsGoalMonthKey(q: Game4uReportsGoalMonthQuery): string {
@@ -328,6 +338,25 @@ export class Game4uApiService {
 
   private reportsTeamDailyFinishedStatsKey(q: Game4uReportsTeamDailyFinishedStatsQuery): string {
     return `rpt-team-daily|${this.reportIdentitySegment(q)}|${q.start}|${q.end}|${q.team_id ?? ''}`;
+  }
+
+  private reportsTeamDailyPendingStatsKey(q: Game4uReportsTeamDailyPendingStatsQuery): string {
+    const st = (q.status ?? []).join(',');
+    return `rpt-team-daily-pending|${this.reportIdentitySegment(q)}|${q.start}|${q.end}|${q.team_id ?? ''}|${st}`;
+  }
+
+  private appendTeamDailyPendingStatsParams(
+    base: HttpParams,
+    q: Game4uReportsTeamDailyPendingStatsQuery
+  ): HttpParams {
+    let p = base.set('start', q.start).set('end', q.end);
+    if (this.shouldIncludeEmailQueryParam(q.email)) {
+      p = p.set('email', (q.email ?? '').trim());
+    }
+    for (const s of q.status ?? []) {
+      p = p.append('status', s);
+    }
+    return this.withOptionalTeamId(p, q.team_id);
   }
 
   private appendTeamDailyFinishedStatsParams(
@@ -622,7 +651,7 @@ export class Game4uApiService {
   }
 
   /**
-   * `GET /game/reports/finished/actions-by-delivery` (paginado).
+   * `GET /game/reports/finished/actions-by-delivery`.
    */
   getGameReportsFinishedActionsByDelivery(
     q: Game4uReportsActionsByDeliveryQuery
@@ -644,10 +673,7 @@ export class Game4uApiService {
     }
     const key = this.reportsActionsByDeliveryKey(q);
     return this.shareGame4uDedupe(key, this.reportsActionsByDeliveryCache, () => {
-      let params = this.appendReportParams(new HttpParams(), q).set('delivery_title', q.delivery_title);
-      const off = q.offset ?? 0;
-      const lim = Math.min(q.limit ?? 500, 500);
-      params = params.set('offset', String(off)).set('limit', String(lim));
+      const params = this.appendReportParams(new HttpParams(), q).set('delivery_title', q.delivery_title);
       return this.http
         .get<unknown>(`${this.baseUrl}/game/reports/finished/actions-by-delivery`, {
           headers: this.headers(),
@@ -658,7 +684,7 @@ export class Game4uApiService {
   }
 
   /**
-   * `GET /game/reports/user-actions` (paginado, `offset`/`limit` máx. 500).
+   * `GET /game/reports/user-actions`.
    * Pares opcionais (um por pedido): `finished_at_*`, `dt_prazo_*`, `created_at_*` — par incompleto ou mais de um par → erro.
    */
   getGameReportsUserActions(q: Game4uReportsUserActionsQuery): Observable<Game4uReportsUserActionsPage> {
@@ -723,9 +749,6 @@ export class Game4uApiService {
       params = params.set('created_at_start', cs).set('created_at_end', ce);
     }
 
-    const off = q.offset ?? 0;
-    const lim = Math.min(q.limit ?? 500, 500);
-    params = params.set('offset', String(off)).set('limit', String(lim));
     params = this.withOptionalTeamId(params, q.team_id);
     return this.http
       .get<unknown>(`${this.baseUrl}/game/reports/user-actions`, {
@@ -838,6 +861,46 @@ export class Game4uApiService {
   /**
    * `GET /game/reports/management/dashboard/cached/overview` — painel agregado do gestor (GERENTE / DIRETOR / C_LEVEL).
    */
+  /**
+   * `GET /game/reports/management/dashboard/cached/list` — gestores no escopo do JWT (ex.: gerências para DIRETOR/C_LEVEL).
+   */
+  getGameReportsManagementDashboardCachedList(
+    q: Game4uReportsManagementCachedListQuery
+  ): Observable<ManagementDashboardCachedListResponse> {
+    if (!this.isConfigured()) {
+      return throwError(
+        () =>
+          new Error('[Game4U] reports/management/dashboard/cached/list: defina backend_url_base.')
+      );
+    }
+    const month = (q.month ?? '').trim();
+    if (!month) {
+      return throwError(
+        () =>
+          new Error('[Game4U] reports/management/dashboard/cached/list: informe month (YYYY-MM).')
+      );
+    }
+    const role = (q.role ?? '').trim();
+    const uid = (q.user_id ?? '').trim();
+    const key = `management-list|${month}|${role}|${uid}`;
+    return this.shareGame4uDedupe(key, this.reportsManagementDashboardListCache, () => {
+      let params = new HttpParams().set('month', month);
+      if (role) {
+        params = params.set('role', role);
+      }
+      if (uid) {
+        params = params.set('user_id', uid);
+      }
+      return this.http.get<ManagementDashboardCachedListResponse>(
+        `${this.baseUrl}/game/reports/management/dashboard/cached/list`,
+        {
+          headers: this.headers(),
+          params
+        }
+      );
+    });
+  }
+
   getGameReportsManagementDashboardCachedOverview(
     q: Game4uReportsManagementCachedQuery
   ): Observable<ManagementDashboardOverviewResponse> {
@@ -930,6 +993,40 @@ export class Game4uApiService {
       const params = this.appendTeamDailyFinishedStatsParams(new HttpParams(), q);
       return this.http.get<unknown>(
         `${this.baseUrl}/game/reports/team/daily-finished-stats`,
+        {
+          headers: this.headers(),
+          params
+        }
+      );
+    });
+  }
+
+  /**
+   * `GET /game/reports/team/daily-pending-stats`
+   *
+   * Agregado diário de tarefas pendentes (status default `PENDING` + `DOING`) cujo `due_date`
+   * — com fallback para `extra.dt_prazo` — cai no intervalo `start..end`.
+   *
+   * Use `team_id=__management_overview__` para a visão de gestão (GERENTE/DIRETOR/C_LEVEL/ADMIN/SERVICE).
+   */
+  getGameReportsTeamDailyPendingStats(
+    q: Game4uReportsTeamDailyPendingStatsQuery
+  ): Observable<unknown> {
+    if (!this.isConfigured()) {
+      return throwError(
+        () => new Error('[Game4U] reports/team/daily-pending-stats: defina backend_url_base.')
+      );
+    }
+    if (!this.hasReportsIdentity(q)) {
+      return throwError(
+        () => new Error('[Game4U] reports/team/daily-pending-stats: informe email ou team_id.')
+      );
+    }
+    const key = this.reportsTeamDailyPendingStatsKey(q);
+    return this.shareGame4uDedupe(key, this.reportsTeamDailyPendingStatsCache, () => {
+      const params = this.appendTeamDailyPendingStatsParams(new HttpParams(), q);
+      return this.http.get<unknown>(
+        `${this.baseUrl}/game/reports/team/daily-pending-stats`,
         {
           headers: this.headers(),
           params

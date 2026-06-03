@@ -20,8 +20,12 @@ import {
   mergeGame4uDeliveryParticipation,
   mergeGame4uTeamDeliveryRows,
   mapGame4uFinishedDeliveryRowsToParticipacaoCnpjRows,
+  readGame4uUserActionTitle,
+  aggregateExecutiveTopProcessesFromUserActions,
+  deliveryRowCountsAsOnTime,
   deliveryRowHasFinishedTaskInMonth,
-  hasMoreFinishedDeliveriesCachedPage
+  hasMoreFinishedDeliveriesCachedPage,
+  resolveGame4uFinishedPrazoStatus
 } from './game4u-game-mapper';
 import type { Game4uDeliveryModel, Game4uUserActionModel } from '@model/game4u-api.model';
 
@@ -397,6 +401,31 @@ describe('game4u-game-mapper', () => {
       expect(list[0].dt_prazo).toBe('2024-06-20');
     });
 
+    it('maps risco_multa from reports/user-actions payload', () => {
+      const month = new Date(2024, 5, 1);
+      const actions: Game4uUserActionModel[] = [
+        {
+          id: '1',
+          points: 1,
+          status: 'PENDING',
+          created_at: '2024-06-10T10:00:00.000Z',
+          dt_prazo: '2024-06-20',
+          risco_multa: true
+        },
+        {
+          id: '2',
+          points: 1,
+          status: 'DONE',
+          created_at: '2024-06-11T10:00:00.000Z',
+          finished_at: '2024-06-12T10:00:00.000Z',
+          risco_multa: false
+        }
+      ];
+      const list = mapGame4uActionsToActivityList(actions, month, { monthFilter: 'dtPrazo' });
+      expect(list.find(i => i.id === '1')?.risco_multa).toBe(true);
+      expect(list.find(i => i.id === '2')?.risco_multa).toBeUndefined();
+    });
+
     it('monthFilter dtPrazo keeps pending rows whose created_at is outside month but dt_prazo is inside', () => {
       const month = new Date(2024, 5, 1);
       const actions: Game4uUserActionModel[] = [
@@ -410,6 +439,30 @@ describe('game4u-game-mapper', () => {
       ];
       expect(mapGame4uActionsToActivityList(actions, month).length).toBe(0);
       expect(mapGame4uActionsToActivityList(actions, month, { monthFilter: 'dtPrazo' }).length).toBe(1);
+    });
+  });
+
+  describe('resolveGame4uFinishedPrazoStatus', () => {
+    it('returns on_time when finished on the deadline day', () => {
+      const prazo = '2026-05-29';
+      const finishedMs = new Date(2026, 4, 29, 15, 30, 0, 0).getTime();
+      expect(resolveGame4uFinishedPrazoStatus(prazo, finishedMs)).toBe('on_time');
+    });
+
+    it('returns on_time when finished before the deadline day', () => {
+      const prazo = '2026-05-29';
+      const finishedMs = new Date(2026, 4, 28, 23, 59, 0, 0).getTime();
+      expect(resolveGame4uFinishedPrazoStatus(prazo, finishedMs)).toBe('on_time');
+    });
+
+    it('returns late when finished after the deadline day', () => {
+      const prazo = '2026-05-29';
+      const finishedMs = new Date(2026, 4, 30, 0, 0, 0, 0).getTime();
+      expect(resolveGame4uFinishedPrazoStatus(prazo, finishedMs)).toBe('late');
+    });
+
+    it('returns unknown when prazo is missing', () => {
+      expect(resolveGame4uFinishedPrazoStatus(undefined, Date.now())).toBe('unknown');
     });
   });
 
@@ -594,6 +647,29 @@ describe('game4u-game-mapper', () => {
     });
   });
 
+  describe('deliveryRowCountsAsOnTime', () => {
+    it('returns true when tasks_on_time covers all tasks', () => {
+      expect(
+        deliveryRowCountsAsOnTime({ delivery_title: 'A', tasks_total: 3, tasks_on_time: 3 })
+      ).toBe(true);
+    });
+
+    it('returns true when on_time_pct is 100%', () => {
+      expect(deliveryRowCountsAsOnTime({ delivery_title: 'B', tasks_total: 2, on_time_pct: 100 })).toBe(
+        true
+      );
+    });
+
+    it('returns false when delivery is partially late', () => {
+      expect(
+        deliveryRowCountsAsOnTime({ delivery_title: 'C', tasks_total: 4, tasks_on_time: 2 })
+      ).toBe(false);
+      expect(deliveryRowCountsAsOnTime({ delivery_title: 'D', tasks_total: 2, on_time_pct: 80 })).toBe(
+        false
+      );
+    });
+  });
+
   describe('deliveryRowHasFinishedTaskInMonth', () => {
     it('returns true when tasks_total > 0', () => {
       expect(deliveryRowHasFinishedTaskInMonth({ delivery_title: 'A', tasks_total: 1 })).toBe(true);
@@ -625,6 +701,61 @@ describe('game4u-game-mapper', () => {
     it('treats total equal to full page size as possibly incomplete', () => {
       expect(hasMoreFinishedDeliveriesCachedPage(30, 30, 30, 30)).toBe(true);
       expect(hasMoreFinishedDeliveriesCachedPage(12, 30, 12, 12)).toBe(false);
+    });
+  });
+
+  describe('executive top processes from user-actions', () => {
+    it('readGame4uUserActionTitle prefers top-level title', () => {
+      expect(
+        readGame4uUserActionTitle({
+          id: '1',
+          points: 1,
+          status: 'DONE',
+          created_at: '2026-03-01',
+          title: 'DCTF Web',
+          action_title: 'Enviar guia',
+          delivery_title: 'Cliente X'
+        } as Game4uUserActionModel)
+      ).toBe('DCTF Web');
+    });
+
+    it('aggregateExecutiveTopProcessesFromUserActions groups by title and counts clients', () => {
+      const { top, distinctProcesses } = aggregateExecutiveTopProcessesFromUserActions([
+        {
+          id: '1',
+          points: 1,
+          status: 'DONE',
+          created_at: '2026-03-01',
+          title: 'Folha de pagamento',
+          integration_id: 'c1',
+          dt_prazo: '2026-03-10',
+          finished_at: '2026-03-05T12:00:00Z'
+        },
+        {
+          id: '2',
+          points: 1,
+          status: 'DELIVERED',
+          created_at: '2026-03-02',
+          title: 'Folha de pagamento',
+          integration_id: 'c2',
+          dt_prazo: '2026-03-10',
+          finished_at: '2026-03-06T12:00:00Z'
+        },
+        {
+          id: '3',
+          points: 1,
+          status: 'DONE',
+          created_at: '2026-03-03',
+          action_title: 'SPED Fiscal',
+          integration_id: 'c1',
+          dt_prazo: '2026-03-10',
+          finished_at: '2026-03-07T12:00:00Z'
+        }
+      ]);
+      expect(distinctProcesses).toBe(2);
+      expect(top[0].deliveryTitle).toBe('Folha de pagamento');
+      expect(top[0].tasksTotal).toBe(2);
+      expect(top[0].deliveriesCount).toBe(2);
     });
   });
 

@@ -11,7 +11,7 @@ import { UserProfile } from '@utils/user-profile';
  * - JOGADOR → /dashboard (gamification dashboard), except session roles ADMIN / GESTOR
  *   ou papéis de gestão agregada (`GERENTE` / `DIRETOR` / `C_LEVEL`) → team management
  * - SUPERVISOR → /dashboard/supervisor
- * - GESTOR, DIRETOR → /dashboard/team-management (team management dashboard)
+ * - LIDER_CELULA, GESTOR, DIRETOR → /dashboard/team-management (team management dashboard)
  */
 @Injectable({
   providedIn: 'root'
@@ -81,6 +81,17 @@ export class DashboardRedirectGuardService {
         // SUPERVISOR → supervisor dashboard (cards view)
         if (!isSupervisorUrl) {
           await this.router.navigate(['/dashboard/supervisor']);
+          return false;
+        }
+        return true;
+
+      case UserProfile.LIDER_CELULA:
+        // Líder de célula → painel de gestão (visão consolidada da célula)
+        if (currentUrl === '/dashboard' || currentUrl.startsWith('/dashboard?')) {
+          return true;
+        }
+        if (!isOnTeamManagement) {
+          await this.router.navigate(['/dashboard/team-management']);
           return false;
         }
         return true;

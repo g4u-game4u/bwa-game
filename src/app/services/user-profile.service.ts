@@ -8,6 +8,7 @@ import {
   extractObserverTeamIdsFromSessionUser
 } from '@utils/user-profile';
 import { hasManagementDashboardCachedRole } from '@utils/management-dashboard-role';
+import { hasLiderCelulaRole } from '@utils/lider-celula-role';
 import { TeamCodeService } from './team-code.service';
 
 /**
@@ -40,7 +41,14 @@ export class UserProfileService {
     if (!user) {
       return UserProfile.JOGADOR;
     }
-    return determineUserProfile(user.teams, this.teamCodeService.getTeamCodes());
+    const fromTeams = determineUserProfile(user.teams, this.teamCodeService.getTeamCodes());
+    if (fromTeams !== UserProfile.JOGADOR) {
+      return fromTeams;
+    }
+    if (hasLiderCelulaRole(user.roles)) {
+      return UserProfile.LIDER_CELULA;
+    }
+    return UserProfile.JOGADOR;
   }
 
   /**
@@ -55,6 +63,9 @@ export class UserProfileService {
       return true;
     }
     if (hasManagementDashboardCachedRole(this.sessao.usuario?.roles)) {
+      return true;
+    }
+    if (hasLiderCelulaRole(this.sessao.usuario?.roles)) {
       return true;
     }
     const profile = this.getCurrentUserProfile();
@@ -124,7 +135,8 @@ export class UserProfileService {
    * @returns true if user is SUPERVISOR
    */
   canOnlySeeOwnTeam(): boolean {
-    return this.getCurrentUserProfile() === UserProfile.SUPERVISOR;
+    const profile = this.getCurrentUserProfile();
+    return profile === UserProfile.SUPERVISOR || profile === UserProfile.LIDER_CELULA;
   }
 
   /**
@@ -144,6 +156,13 @@ export class UserProfileService {
    */
   isSupervisor(): boolean {
     return this.getCurrentUserProfile() === UserProfile.SUPERVISOR;
+  }
+
+  /**
+   * Check if current user is a LIDER_CELULA (papel de sessão `LIDER_CELULA`).
+   */
+  isLiderCelula(): boolean {
+    return this.getCurrentUserProfile() === UserProfile.LIDER_CELULA;
   }
 
   /**

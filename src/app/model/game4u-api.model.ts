@@ -107,6 +107,8 @@ export interface Game4uUserActionModel {
   dismissed?: boolean;
   /** Prazo (`YYYY-MM-DD`) em relatórios como `/game/reports/user-actions`. */
   dt_prazo?: string;
+  /** Indica se a entrega pode gerar multa (relatórios user-actions). */
+  risco_multa?: boolean;
   [key: string]: unknown;
 }
 
@@ -381,6 +383,19 @@ export interface Game4uReportsManagementCachedQuery {
   user_id?: string;
 }
 
+/** Query para `GET /game/reports/management/dashboard/cached/list`. */
+export interface Game4uReportsManagementCachedListQuery {
+  month: string;
+  /** Filtra gestores por camada (ex.: `GERENTE` para agrupar gerências). */
+  role?: ManagementDashboardUserRole;
+  user_id?: string;
+}
+
+/** Resposta de `GET /game/reports/management/dashboard/cached/list`. */
+export interface ManagementDashboardCachedListResponse {
+  managers: ManagerDashboardCached[];
+}
+
 export interface Game4uReportsSupervisionCachedQuery {
   team_id: string;
   month: string;
@@ -437,6 +452,40 @@ export interface Game4uReportsTeamDailyFinishedStatRow {
   /** Total de tarefas/ações finalizadas no dia. */
   tasks_count?: number;
   /** Soma de pontos no dia. */
+  points_sum?: number;
+  [key: string]: unknown;
+}
+
+/**
+ * Query para `GET /game/reports/team/daily-pending-stats` — agregado diário de tarefas
+ * pendentes (status default `PENDING` + `DOING`) cujo `due_date` (com fallback `extra.dt_prazo`)
+ * cai no intervalo `start..end`.
+ *
+ * Identidade: `team_id` (obrigatório). Use `team_id=__management_overview__` para a visão
+ * agregada de gestão (GERENTE / DIRETOR / C_LEVEL / ADMIN / SERVICE).
+ */
+export interface Game4uReportsTeamDailyPendingStatsQuery {
+  /** Escopo BWA / equipa, ou `__management_overview__` para visão agregada de gestão. */
+  team_id: string;
+  /** Início do intervalo (ISO 8601 `YYYY-MM-DD`). */
+  start: string;
+  /** Fim do intervalo (ISO 8601 `YYYY-MM-DD`). */
+  end: string;
+  /** Override opcional do filtro de status (default no backend: `PENDING` + `DOING`). */
+  status?: string[];
+  /** E-mail opcional do colaborador (drill-down). */
+  email?: string;
+}
+
+/**
+ * Linha normalizada de `GET /game/reports/team/daily-pending-stats`.
+ * Mesmo shape do daily-finished-stats; `points_sum` em geral será 0 (tarefas pendentes
+ * ainda não geraram pontos), e `tasks_count` é a contagem de tarefas com `due_date` no dia.
+ */
+export interface Game4uReportsTeamDailyPendingStatRow {
+  day: string;
+  email?: string;
+  tasks_count?: number;
   points_sum?: number;
   [key: string]: unknown;
 }

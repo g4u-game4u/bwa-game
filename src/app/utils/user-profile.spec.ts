@@ -424,6 +424,18 @@ describe('User Profile Utility', () => {
     });
   });
 
+  describe('getAccessibleTeamIds() - LIDER_CELULA', () => {
+    it('should return operational teams excluding management meta codes', () => {
+      const teams = ['team-pai', 'team-celula-26', DEFAULT_CODES.supervisor];
+      const accessible = getAccessibleTeamIds(teams, UserProfile.LIDER_CELULA);
+      expect(accessible).toEqual(['team-pai', 'team-celula-26']);
+    });
+
+    it('should return null own team id for LIDER_CELULA', () => {
+      expect(getUserOwnTeamId(['team-pai', 'team-celula'], UserProfile.LIDER_CELULA)).toBeNull();
+    });
+  });
+
   describe('getAccessibleTeamIds() - GESTOR Filtering', () => {
     it('should return managed teams excluding gestor code', () => {
       const teams = [DEFAULT_CODES.gestor, 'team_A', 'team_B'];

@@ -34,6 +34,8 @@ import {
   extractEmpIdPrefixFromDeliveryIdFirstSegment
 } from '@services/gamificacao-delivery-empid.util';
 import { hasMoreFinishedDeliveriesCachedPage } from '@services/game4u-game-mapper';
+import { DashboardInsightsService } from '@services/dashboard-insights.service';
+import { DashboardInsightsSnapshot } from '@model/dashboard-insights.model';
 
 @Component({
   selector: 'app-gamification-dashboard',
@@ -102,6 +104,11 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     return this.sidebarSeasonDetailsPending;
   }
 
+  /** Exposto ao template (Game4U vs Funifier). */
+  get usesGame4uWalletFromStats(): boolean {
+    return this.playerService.usesGame4uWalletFromStats();
+  }
+
   get sessionPlayerName(): string {
     const u = this.sessaoProvider.usuario as
       | { full_name?: string; name?: string; email?: string }
@@ -136,6 +143,11 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   dashboardCachedParams: PlayerDashboardCachedParams | null = null;
   /** % entregas no prazo do mês (`month_on_time_delivery_pct` em `dashboard/cached`). */
   monthOnTimeDeliveryPct: number | null = null;
+
+  /** Insights operacionais (user-actions do mês). */
+  dashboardInsights: DashboardInsightsSnapshot | null = null;
+  isLoadingDashboardInsights = false;
+  private dashboardInsightsLoadGen = 0;
   
   // Company data
   companies: Company[] = [];
@@ -223,6 +235,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     private sessaoProvider: SessaoProvider,
     private cacheManagerService: CacheManagerService,
     private seasonDatesService: SeasonDatesService,
+    private dashboardInsightsService: DashboardInsightsService,
     private route: ActivatedRoute,
     private router: Router,
     private ngbModal: NgbModal
@@ -1485,6 +1498,50 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
       this.loadClientesAtendidosCountFromFinishedSummary();
     }
     this.loadParticipacaoData();
+    if (this.playerService.usesGame4uWalletFromStats()) {
+      this.loadDashboardInsights();
+    } else {
+      this.dashboardInsights = null;
+      this.isLoadingDashboardInsights = false;
+    }
+  }
+
+  private loadDashboardInsights(): void {
+    const month = this.selectedMonth;
+    const playerId = this.getPlayerId();
+    if (!month || !playerId) {
+      this.dashboardInsights = null;
+      this.isLoadingDashboardInsights = false;
+      this.cdr.markForCheck();
+      return;
+    }
+
+    const loadGen = ++this.dashboardInsightsLoadGen;
+    this.isLoadingDashboardInsights = true;
+    this.dashboardInsights = null;
+    this.cdr.markForCheck();
+
+    this.dashboardInsightsService
+      .getDashboardInsights({ month }, playerId)
+      .pipe(takeUntil(this.destroy$), takeUntil(this.monthChange$))
+      .subscribe({
+        next: snapshot => {
+          if (loadGen !== this.dashboardInsightsLoadGen) {
+            return;
+          }
+          this.dashboardInsights = snapshot;
+          this.isLoadingDashboardInsights = false;
+          this.cdr.markForCheck();
+        },
+        error: err => {
+          console.error('Failed to load dashboard insights:', err);
+          if (loadGen === this.dashboardInsightsLoadGen) {
+            this.dashboardInsights = null;
+            this.isLoadingDashboardInsights = false;
+            this.cdr.markForCheck();
+          }
+        }
+      });
   }
 
   private loadClientesAtendidosCountFromFinishedSummary(): void {

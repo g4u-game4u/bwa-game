@@ -281,6 +281,14 @@
       
       <c4u-shimmer *ngIf="isLoadingProgress"></c4u-shimmer>
     </section>
+
+    <c4u-dashboard-insights
+      *ngIf="usesGame4uWalletFromStats"
+      class="dashboard-section"
+      [insights]="dashboardInsights"
+      [loading]="isLoadingDashboardInsights"
+      variant="player">
+    </c4u-dashboard-insights>
     
     <!-- Clientes atendidos este mês: lista de participação (período do filtro); abas Carteira/Participação comentadas. -->
     <section class="dashboard-section carteira-section" aria-labelledby="company-section-title">

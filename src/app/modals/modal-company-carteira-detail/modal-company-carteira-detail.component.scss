@@ -182,9 +182,47 @@
         }
 
         .task-col-date {
+          .task-date-cell {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 6px;
+            min-width: 0;
+          }
+
           .task-date {
             color: $text-secondary;
             font-size: 0.875rem;
+          }
+
+          .task-finished-late-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 0.6875rem;
+            font-weight: 600;
+            letter-spacing: 0.02em;
+            color: #fb923c;
+
+            i {
+              font-size: 14px;
+              color: #f97316;
+            }
+          }
+
+          .task-finished-ontime-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 0.6875rem;
+            font-weight: 600;
+            letter-spacing: 0.02em;
+            color: #86efac;
+
+            i {
+              font-size: 14px;
+              color: #22c55e;
+            }
           }
         }
       }

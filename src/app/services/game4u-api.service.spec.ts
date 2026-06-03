@@ -233,7 +233,7 @@ describe('Game4uApiService', () => {
     req.flush([{ delivery_id: '41355-2026-03-01', delivery_title: 'Empresa X' }]);
   });
 
-  it('getGameReportsFinishedActionsByDelivery passes delivery_title and pagination', done => {
+  it('getGameReportsFinishedActionsByDelivery passes delivery_title without pagination params', done => {
     service
       .getGameReportsFinishedActionsByDelivery({
         email: 'u@example.com',
@@ -252,8 +252,8 @@ describe('Game4uApiService', () => {
     const req = httpMock.expectOne(r => r.url === `${baseUrl}/game/reports/finished/actions-by-delivery`);
     expect(req.request.params.get('delivery_title')).toBe('Cliente X');
     expect(req.request.params.get('delivery_id')).toBeNull();
-    expect(req.request.params.get('offset')).toBe('0');
-    expect(req.request.params.get('limit')).toBe('10');
+    expect(req.request.params.get('offset')).toBeNull();
+    expect(req.request.params.get('limit')).toBeNull();
     req.flush({
       items: [{ id: 'a1', points: 1, status: 'DONE', created_at: '2026-04-02T00:00:00.000Z' }],
       total: 42
@@ -279,7 +279,7 @@ describe('Game4uApiService', () => {
     req.flush([{ id: 'x', points: 0, status: 'DONE', created_at: '2026-04-02T00:00:00.000Z' }]);
   });
 
-  it('getGameReportsUserActions passes email, status list, finished_at pair, pagination', done => {
+  it('getGameReportsUserActions passes email, status list, finished_at pair without pagination params', done => {
     service
       .getGameReportsUserActions({
         email: 'u@example.com',
@@ -301,8 +301,8 @@ describe('Game4uApiService', () => {
     expect(req.request.params.getAll('status')).toEqual(['DONE', 'DELIVERED']);
     expect(req.request.params.get('finished_at_start')).toBe('2026-04-01T00:00:00.000Z');
     expect(req.request.params.get('finished_at_end')).toBe('2026-04-30T23:59:59.999Z');
-    expect(req.request.params.get('offset')).toBe('0');
-    expect(req.request.params.get('limit')).toBe('25');
+    expect(req.request.params.get('offset')).toBeNull();
+    expect(req.request.params.get('limit')).toBeNull();
     expect(req.request.headers.get('client_id')).toBeTruthy();
     req.flush({
       offset: 0,
