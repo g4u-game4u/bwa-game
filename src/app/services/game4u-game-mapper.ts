@@ -253,6 +253,36 @@ export function parseGame4uRiscoMulta(value: unknown): boolean {
   return false;
 }
 
+/** `extra.status_api` da assessoria em user-actions (relatórios Game4U). */
+export function readGame4uExtraStatusApi(a: Game4uUserActionModel): string | null {
+  const raw = a as Record<string, unknown>;
+  const ex = readGame4uExtraRecord(a);
+  const candidates: unknown[] = [
+    ex?.['status_api'],
+    ex?.['statusApi'],
+    raw['status_api'],
+    raw['statusApi']
+  ];
+  for (const v of candidates) {
+    if (v == null || v === '') {
+      continue;
+    }
+    const s = String(v).trim();
+    if (s) {
+      return s;
+    }
+  }
+  return null;
+}
+
+/** Atraso justificado quando o status da assessoria contém «justif» (ex.: «Pend. justificada»). */
+export function parseGame4uAtrasoJustificado(statusApi: unknown): boolean {
+  if (statusApi == null || statusApi === '') {
+    return false;
+  }
+  return String(statusApi).toLowerCase().includes('justif');
+}
+
 export type Game4uFinishedPrazoStatus = 'on_time' | 'late' | 'unknown';
 
 /** Converte `dt_prazo` (`YYYY-MM-DD`) para início do dia no calendário local. */
@@ -605,6 +635,16 @@ function readGame4uExtraRecord(a: Game4uUserActionModel): Record<string, unknown
   if (ex && typeof ex === 'object' && !Array.isArray(ex)) {
     return ex as Record<string, unknown>;
   }
+  if (typeof ex === 'string' && ex.trim()) {
+    try {
+      const parsed: unknown = JSON.parse(ex);
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        return parsed as Record<string, unknown>;
+      }
+    } catch {
+      // extra não é JSON — ignorar
+    }
+  }
   return null;
 }
 
@@ -735,12 +775,14 @@ export function mapGame4uActionsToActivityList(
     const dp =
       typeof a.dt_prazo === 'string' && a.dt_prazo.trim() ? a.dt_prazo.trim() : undefined;
     const riscoMulta = parseGame4uRiscoMulta(a.risco_multa);
+    const atrasoJustificado = parseGame4uAtrasoJustificado(readGame4uExtraStatusApi(a));
     return {
       id: a.id,
       title: (a.action_title as string) || 'Ação',
       delivery_title: (a.delivery_title as string) || undefined,
       ...(dp ? { dt_prazo: dp } : {}),
       ...(riscoMulta ? { risco_multa: true } : {}),
+      ...(atrasoJustificado ? { atraso_justificado: true } : {}),
       points: Math.floor(Number(a.points) || PONTOS_POR_ATIVIDADE_FINALIZADA_ACTION_LOG),
       created: game4uUserActionListTimestampMs(a),
       player: asString(a.user_email),

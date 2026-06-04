@@ -1018,6 +1018,25 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
     return item.risco_multa === true;
   }
 
+  /** Atraso justificado na assessoria (`extra.status_api` com «justif», ex. «Pend. justificada»). */
+  hasAtrasoJustificado(item: ActivityListItem): boolean {
+    return item.atraso_justificado === true;
+  }
+
+  /** Tarefa pendente atrasada com risco de multa (badge no acordeão e na linha). */
+  isPendingOverdueWithRiscoMulta(item: ActivityListItem): boolean {
+    return (
+      this.isPendingActivitiesModal &&
+      this.isPendingTaskOverdue(item.dt_prazo) &&
+      this.hasRiscoMulta(item)
+    );
+  }
+
+  /** Alguma ocorrência do grupo exige alerta no header do acordeão (pendentes). */
+  hasGroupPendingOverdueWithRiscoMulta(grp: FinishedTaskGroup): boolean {
+    return grp.items.some(item => this.isPendingOverdueWithRiscoMulta(item));
+  }
+
   /** Entrega finalizada: compara data de conclusão com o prazo. */
   getFinishedPrazoStatus(item: ActivityListItem): Game4uFinishedPrazoStatus {
     if (this.isPendingActivitiesModal) {
