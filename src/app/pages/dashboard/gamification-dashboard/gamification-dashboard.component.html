@@ -174,15 +174,13 @@
         [showTodaTemporadaButton]="false"
         (onSelectedMonth)="onMonthChange($event)">
       </c4u-seletor-mes>
-      <button 
-        class="refresh-button"
-        (click)="refreshData()"
-        [disabled]="isLoading"
-        [attr.aria-label]="isLoading ? 'Atualizando dados...' : 'Atualizar dados do painel'"
-        title="Atualizar dados">
-        <i class="ri-refresh-line" [class.spinning]="isLoading" aria-hidden="true"></i>
-        <span class="refresh-time" *ngIf="lastRefreshTime">{{ formattedRefreshTime }}</span>
-      </button>
+      <span
+        class="refresh-time"
+        *ngIf="dashboardRefreshedAt && !playerDashboardCacheMissing"
+        role="status">
+        <span class="refresh-time__line">{{ dashboardSyncLabel }}</span>
+        <span class="refresh-time__line">em {{ dashboardRefreshedAt | date:'dd/MM/yyyy HH:mm' }}</span>
+      </span>
       <button 
         class="logout-button"
         (click)="logout()"
@@ -265,12 +263,6 @@
         role="status">
         Dados deste mês ainda não estão disponíveis. Tente outro período ou aguarde a atualização do painel.
       </p>
-      <p
-        *ngIf="dashboardRefreshedAt && !playerDashboardCacheMissing"
-        class="dashboard-cache-refreshed"
-        aria-hidden="true">
-        Atualizado em {{ dashboardRefreshedAt | date:'dd/MM/yyyy HH:mm' }}
-      </p>
       
       <c4u-activity-progress
         *ngIf="!isLoadingProgress && activityMetrics && processMetrics"
@@ -300,7 +292,7 @@
           </span>
           <c4u-info-button 
             [infoKey]="''"
-            [customText]="'São os clientes para os quais você realizou alguma entrega ou obrigação neste mês na plataforma Acessórias. A lista segue o mês (ou período) selecionado no filtro do painel e as atividades contabilizadas pela competência das entregas no Game4U'"
+            [customText]="'São os clientes para os quais você realizou alguma entrega neste mês na plataforma Acessórias. A lista segue o mês (ou período) selecionado no filtro do painel e as atividades contabilizadas pela competência das entregas no Game4U'"
             position="bottom">
           </c4u-info-button>
         </h3>

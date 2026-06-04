@@ -80,6 +80,11 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   playerStatus: PlayerStatus | null = null;
   pointWallet: PointWallet | null = null;
   seasonProgress: SeasonProgress | null = null;
+  /** Snapshot Game4U recebido antes de `getSeasonProgress` — aplicado quando o shell existir. */
+  private pendingGame4uSidebarStats: {
+    tarefasFinalizadas: number;
+    deliveryStatsTotal?: number;
+  } | null = null;
 
   /**
    * Reticências nos valores da carteira (pontos / moedas).
@@ -139,6 +144,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   playerDashboardCacheMissing = false;
   /** `refreshed_at` do cache denormalizado (quando disponível). */
   dashboardRefreshedAt: Date | null = null;
+  readonly dashboardSyncLabel = 'Sincronizado com Acessórias';
   /** Intervalos `season_*` / `month_*` devolvidos em `params` do cache. */
   dashboardCachedParams: PlayerDashboardCachedParams | null = null;
   /** % entregas no prazo do mês (`month_on_time_delivery_pct` em `dashboard/cached`). */
@@ -420,6 +426,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
    * Load player status, points, and season progress
    */
   private loadPlayerData(): void {
+    this.pendingGame4uSidebarStats = null;
     this.isLoadingPlayer = true;
     this.cdr.markForCheck();
     
@@ -469,15 +476,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
               ...wallet,
               desbloqueados: wallet.desbloqueados
             };
-            if (this.seasonProgress) {
-              const base = { ...this.seasonProgress, tarefasFinalizadas: sidebar.tarefasFinalizadas };
-              if (sidebar.deliveryStatsTotal !== undefined) {
-                (base as SeasonProgress).deliveryStatsTotal = sidebar.deliveryStatsTotal;
-              } else {
-                delete (base as SeasonProgress & { deliveryStatsTotal?: number }).deliveryStatsTotal;
-              }
-              this.seasonProgress = base;
-            }
+            this.mergeGame4uSidebarIntoSeasonProgress(sidebar);
             this.cdr.markForCheck();
           },
           error: (error: unknown) => {
@@ -535,6 +534,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
       .subscribe({
         next: (progress) => {
           this.seasonProgress = progress;
+          this.flushPendingGame4uSidebarIntoSeasonProgress();
           this.cdr.markForCheck();
           if (!this.playerService.usesGame4uWalletFromStats()) {
             this.loadSeasonProgressDetails();
@@ -557,6 +557,32 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
       });
   }
   
+  private mergeGame4uSidebarIntoSeasonProgress(sidebar: {
+    tarefasFinalizadas: number;
+    deliveryStatsTotal?: number;
+  }): void {
+    if (!this.seasonProgress) {
+      this.pendingGame4uSidebarStats = sidebar;
+      return;
+    }
+    const base = { ...this.seasonProgress, tarefasFinalizadas: sidebar.tarefasFinalizadas };
+    if (sidebar.deliveryStatsTotal !== undefined) {
+      (base as SeasonProgress).deliveryStatsTotal = sidebar.deliveryStatsTotal;
+    } else {
+      delete (base as SeasonProgress & { deliveryStatsTotal?: number }).deliveryStatsTotal;
+    }
+    this.seasonProgress = base;
+  }
+
+  private flushPendingGame4uSidebarIntoSeasonProgress(): void {
+    if (!this.pendingGame4uSidebarStats) {
+      return;
+    }
+    const pending = this.pendingGame4uSidebarStats;
+    this.pendingGame4uSidebarStats = null;
+    this.mergeGame4uSidebarIntoSeasonProgress(pending);
+  }
+
   /**
    * Load additional season progress details:
    * - Tarefas finalizadas: Game4U = count `action_stats.done` (mesma chamada que `delivery_stats.total`);

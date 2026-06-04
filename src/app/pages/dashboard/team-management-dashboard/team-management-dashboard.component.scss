@@ -215,6 +215,44 @@
     }
     
     // Sidebar toggle button - subtle button at the end of sidebar
+    .sidebar-faq-button {
+      cursor: pointer;
+      width: 100%;
+      padding: $spacing-sm $spacing-md;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      outline: none;
+      background: rgba(255, 255, 255, 0.06);
+      border-radius: $border-radius-sm;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: $spacing-xs;
+      transition: all 0.2s ease;
+      color: $text-secondary;
+      font-size: $font-size-small;
+      font-weight: $font-weight-medium;
+
+      .sidebar-faq-icon {
+        font-size: 18px;
+        color: $primary-electric-blue;
+      }
+
+      &:hover {
+        background: rgba($primary-electric-blue, 0.12);
+        border-color: rgba($primary-electric-blue, 0.35);
+        color: $text-primary;
+      }
+
+      &:focus-visible {
+        outline: 2px solid $primary-electric-blue;
+        outline-offset: 2px;
+      }
+
+      @include mobile-only {
+        display: none;
+      }
+    }
+
     .sidebar-toggle {
       cursor: pointer;
       width: 100%;
@@ -263,6 +301,24 @@
       }
     }
     
+    .compact-faq {
+      cursor: pointer;
+
+      .compact-icon {
+        color: $primary-electric-blue;
+        font-size: 22px;
+      }
+
+      &:hover {
+        background: rgba($primary-electric-blue, 0.12);
+      }
+
+      &:focus-visible {
+        outline: 2px solid $primary-electric-blue;
+        outline-offset: 2px;
+      }
+    }
+
     // Compact toggle button in collapsed sidebar
     .compact-toggle {
       margin-top: auto;
@@ -680,44 +736,25 @@
         flex: 0 0 auto;
       }
       
-      .refresh-button {
+      .refresh-time {
         position: absolute;
-        right: 120px; // Increased from 80px to add more spacing between buttons
+        right: 88px;
         top: 50%;
         transform: translateY(-50%);
         display: flex;
-        align-items: center;
-        gap: $spacing-xs;
-        padding: 8px 16px;
-        background: transparent;
-        border: 1px solid $border-color;
-        border-radius: $border-radius-sm;
+        flex-direction: column;
+        align-items: flex-end;
+        font-size: 0.7rem;
         color: $text-secondary;
-        cursor: pointer;
-        transition: all 0.2s ease;
-        white-space: nowrap;
-        
-        &:hover:not(:disabled) {
-          background: rgba($primary-electric-blue, 0.1);
-          border-color: $primary-electric-blue;
-          color: $primary-electric-blue;
-        }
-        
-        &:disabled {
-          opacity: 0.5;
-          cursor: not-allowed;
-        }
-        
-        i {
-          font-size: 1rem;
-          
-          &.spinning {
-            animation: spin 1s linear infinite;
-          }
-        }
-        
-        .refresh-time {
-          font-size: $font-size-small;
+        opacity: 0.75;
+        cursor: default;
+        user-select: none;
+        text-align: right;
+
+        &__line {
+          display: block;
+          white-space: nowrap;
+          line-height: 1.15;
         }
       }
 
@@ -758,11 +795,12 @@
         flex-direction: column;
         align-items: center;
         
-        .refresh-button {
+        .refresh-time {
           position: static;
           transform: none;
-          margin-top: $spacing-sm;
-          margin-right: $spacing-sm;
+          margin-top: $spacing-xs;
+          align-items: center;
+          text-align: center;
         }
 
         .logout-button {

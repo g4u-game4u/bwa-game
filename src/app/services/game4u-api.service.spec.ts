@@ -127,6 +127,16 @@ describe('Game4uApiService', () => {
     expect(r.end).toBe('2026-05-01');
   });
 
+  it('toDtPrazoMonthRangeForUserActions returns first and last day of month', () => {
+    const april = service.toDtPrazoMonthRangeForUserActions(new Date(2026, 3, 15));
+    expect(april.start).toBe('2026-04-01');
+    expect(april.end).toBe('2026-04-30');
+
+    const february = service.toDtPrazoMonthRangeForUserActions(new Date(2024, 1, 10));
+    expect(february.start).toBe('2024-02-01');
+    expect(february.end).toBe('2024-02-29');
+  });
+
   it('getGameReportsFinishedSummary builds email and finished_at params', done => {
     service
       .getGameReportsFinishedSummary({

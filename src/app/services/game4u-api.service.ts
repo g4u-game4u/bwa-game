@@ -313,6 +313,19 @@ export class Game4uApiService {
     return { start, end };
   }
 
+  /**
+   * Intervalo `dt_prazo_*` para `GET /game/reports/user-actions` (fim = último dia do mês vigente).
+   */
+  toDtPrazoMonthRangeForUserActions(month: Date): { start: string; end: string } {
+    const y = month.getFullYear();
+    const m = month.getMonth();
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const start = `${y}-${pad(m + 1)}-01`;
+    const lastDay = new Date(y, m + 1, 0).getDate();
+    const end = `${y}-${pad(m + 1)}-${pad(lastDay)}`;
+    return { start, end };
+  }
+
   private reportsFinishedSummaryKey(q: Game4uReportsFinishedQuery): string {
     const st = (q.status ?? []).join(',');
     return `rpt-sum|${this.reportIdentitySegment(q)}|${q.finished_at_start}|${q.finished_at_end}|${st}|${q.team_id ?? ''}`;

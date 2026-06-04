@@ -9,12 +9,183 @@
   padding-right: 0.25rem;
 }
 
+.faq-intro {
+  margin: 0 0 1rem;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.65);
+}
+
+.faq-section-title {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0 0 0.65rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.55);
+
+  i {
+    font-size: 0.95rem;
+    color: rgba(255, 255, 255, 0.45);
+  }
+}
+
+.faq-resources {
+  margin-bottom: 1.15rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.faq-resources-list,
+.faq-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.faq-resources-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.faq-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.faq-resource-link {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.6rem 0.7rem;
+  border-radius: 8px;
+  color: inherit;
+  text-decoration: none;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  transition: background 0.15s ease, border-color 0.15s ease;
+
+  &:hover,
+  &:focus-visible {
+    background: rgba(255, 255, 255, 0.07);
+    border-color: rgba(255, 255, 255, 0.18);
+    outline: none;
+  }
+}
+
+.faq-resource-badge,
+.faq-card-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 8px;
+  font-size: 1rem;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.faq-resource-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.12rem;
+}
+
+.faq-resource-label {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.faq-resource-description {
+  font-size: 0.8rem;
+  line-height: 1.4;
+  color: rgba(255, 255, 255, 0.58);
+}
+
+.faq-resource-action {
+  flex-shrink: 0;
+  font-size: 0.95rem;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.faq-card {
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-left: 2px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.03);
+  transition: border-color 0.15s ease;
+
+  &--open {
+    border-color: rgba(255, 255, 255, 0.16);
+  }
+}
+
+.faq-card-header {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  width: 100%;
+  padding: 0.6rem 0.7rem;
+  border: none;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s ease;
+
+  &:hover,
+  &:focus-visible {
+    background: rgba(255, 255, 255, 0.05);
+    outline: none;
+  }
+}
+
+.faq-card-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+  line-height: 1.35;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.faq-card-chevron {
+  flex-shrink: 0;
+  color: rgba(255, 255, 255, 0.45);
+
+  i {
+    font-size: 1.15rem;
+    transition: transform 0.15s ease;
+  }
+}
+
+.faq-card-chevron--open {
+  transform: rotate(180deg);
+}
+
+.faq-card-body {
+  padding: 0 0.7rem 0.7rem 3.35rem;
+}
+
 .faq-answer {
   margin: 0;
-  font-size: 0.95rem;
-  line-height: 1.5;
-  color: rgba(255, 255, 255, 0.85);
+  padding: 0.55rem 0.65rem;
+  border-radius: 6px;
+  font-size: 0.88rem;
+  line-height: 1.55;
+  color: rgba(255, 255, 255, 0.78);
   white-space: pre-line;
+  background: rgba(0, 0, 0, 0.12);
 }
 
 .faq-empty {
@@ -25,3 +196,31 @@
   text-align: center;
   padding: 1.5rem 0.5rem;
 }
+
+// Accent discreto no ícone e na borda esquerda do card
+@mixin faq-theme($name, $accent) {
+  .faq-theme--#{$name} {
+    .faq-resource-badge,
+    .faq-card-badge {
+      color: $accent;
+    }
+
+    &.faq-card {
+      border-left-color: rgba($accent, 0.45);
+    }
+
+    &.faq-card--open {
+      border-left-color: rgba($accent, 0.65);
+    }
+  }
+}
+
+@include faq-theme('violet', #a78bfa);
+@include faq-theme('gold', #d4a574);
+@include faq-theme('emerald', #6ee7b7);
+@include faq-theme('cyan', #67e8f9);
+@include faq-theme('amber', #fdba74);
+@include faq-theme('rose', #fda4af);
+@include faq-theme('sky', #7dd3fc);
+@include faq-theme('lime', #bef264);
+@include faq-theme('fuchsia', #e879f9);
