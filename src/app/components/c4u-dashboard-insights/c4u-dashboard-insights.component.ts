@@ -32,9 +32,9 @@ export class C4uDashboardInsightsComponent {
 
   get infoText(): string {
     if (this.variant === 'player') {
-      return 'Resumo inteligente das suas tarefas no mês selecionado: produtividade, prazos e alertas de atenção. Calculado a partir das user-actions do Game4U; no futuro estes dados poderão vir pré-agregados do servidor.';
+      return 'Resumo inteligente das suas tarefas no mês selecionado: produtividade, prazos e alertas de atenção';
     }
-    return `Resumo operacional de ${this.scopeLabel} no mês: tarefas urgentes, produtividade e padrões de entrega. Calculado a partir das user-actions do Game4U.`;
+    return `Resumo operacional de ${this.scopeLabel} no mês: tarefas urgentes, produtividade e padrões de entrega`;
   }
 
   get weekdayMaxCount(): number {

@@ -5,6 +5,7 @@ import { NgbModal } from '@ng-bootstrap/ng-bootstrap';
 import { Subject, of, firstValueFrom, lastValueFrom, Observable, forkJoin } from 'rxjs';
 import { takeUntil, finalize, map, take, mergeMap, last } from 'rxjs/operators';
 import { PONTOS_POR_ATIVIDADE_FINALIZADA_ACTION_LOG } from '@app/constants/pontos-por-atividade-action-log';
+import { ModalTeamManagementFaqComponent } from '@modals/modal-team-management-faq/modal-team-management-faq.component';
 import {
   extractGamificacaoEmpIdFromDeliveryKey,
   extractEmpIdPrefixFromDeliveryIdFirstSegment
@@ -41,10 +42,7 @@ import {
   hasMoreFinishedDeliveriesCachedPage,
   isGame4uUserActionFinalizedStatus
 } from '@services/game4u-game-mapper';
-import {
-  buildDashboardInsightsSnapshotFromUserActions,
-  DashboardInsightsService
-} from '@services/dashboard-insights.service';
+import { buildDashboardInsightsSnapshotFromUserActions } from '@services/dashboard-insights.service';
 import { DashboardInsightsSnapshot } from '@model/dashboard-insights.model';
 import {
   getManagementDashboardCachedRoleLabel,
@@ -365,15 +363,11 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
   /** Geração de carga (evita race conditions com troca de mês/colaborador/equipa). */
   private executiveInsightsLoadGen = 0;
 
-  /** Insights operacionais (user-actions: prazos, multa, produtividade). */
-  dashboardInsights: DashboardInsightsSnapshot | null = null;
-  isLoadingDashboardInsights = false;
-  private dashboardInsightsLoadGen = 0;
-
   /** Cache de supervisão (`GET /game/reports/supervision/dashboard/cached`) indisponível para o mês. */
   teamSupervisionCacheMissing = false;
   /** `refreshed_at` do cache de supervisão (quando disponível). */
   teamDashboardRefreshedAt: Date | null = null;
+  readonly dashboardSyncLabel = 'Sincronizado com Acessórias';
   /** Intervalos `season_*` / `month_*` em `params` do cache de supervisão. */
   teamDashboardCachedParams: PlayerDashboardCachedParams | null = null;
   /** % entregas no prazo no mês (`month_on_time_delivery_pct`), 0–100. */
@@ -471,7 +465,6 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
     private companyKpiService: CompanyKpiService,
     private kpiService: KPIService,
     private cnpjLookupService: CnpjLookupService,
-    private dashboardInsightsService: DashboardInsightsService,
     private router: Router,
     private cdr: ChangeDetectorRef,
     private renderer: Renderer2,
@@ -1593,7 +1586,6 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
         // Mini dashboard executivo (top processos / top performers / saúde do mês)
         // — alimentado pelo cache `finished/deliveries/cached` por team_id.
         void this.loadExecutiveInsights();
-        void this.loadOperationalInsights();
         this.warmProgressModalUserActionsCache();
 
         // Update formatted sidebar data after KPIs are loaded (includes metas calculation)
@@ -1645,7 +1637,6 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
 
       // Mini dashboard executivo do colaborador (top processos / saúde no mês).
       void this.loadExecutiveInsights();
-      void this.loadOperationalInsights();
       this.warmProgressModalUserActionsCache();
 
       // Update formatted sidebar data after KPIs are loaded (includes metas calculation)
@@ -3929,21 +3920,6 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
     return this.playerService.usesGame4uWalletFromStats();
   }
 
-  get showOperationalInsights(): boolean {
-    return (
-      this.playerService.usesGame4uWalletFromStats() &&
-      !this.isManagementOverview &&
-      (!!this.selectedCollaborator || !!this.getGame4uTeamHttpParam())
-    );
-  }
-
-  get operationalInsightsScopeLabel(): string {
-    if (this.selectedCollaborator) {
-      return 'do colaborador selecionado';
-    }
-    return 'da equipa';
-  }
-
   get executiveActionInsightsScopeLabel(): string {
     if (this.selectedCollaborator) {
       return 'do colaborador selecionado';
@@ -3952,53 +3928,6 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       return 'da organização';
     }
     return 'do time';
-  }
-
-  /**
-   * Insights operacionais via user-actions (client-side; futuro `GET …/dashboard/insights`).
-   */
-  private loadOperationalInsights(): void {
-    if (!this.showOperationalInsights || this.selectedMonth == null) {
-      this.dashboardInsights = null;
-      this.isLoadingDashboardInsights = false;
-      this.cdr.markForCheck();
-      return;
-    }
-
-    const loadGen = ++this.dashboardInsightsLoadGen;
-    this.isLoadingDashboardInsights = true;
-    this.dashboardInsights = null;
-    this.cdr.markForCheck();
-
-    const month = this.selectedMonth;
-    const teamIds = this.getInsightsScopeTeamIds();
-    const playerId = this.selectedCollaborator?.trim() || '';
-
-    const insights$ =
-      teamIds.length > 0
-        ? this.dashboardInsightsService.getDashboardInsightsForTeams(teamIds, { month }, playerId)
-        : this.dashboardInsightsService.getDashboardInsights({ month }, playerId);
-
-    insights$
-      .pipe(takeUntil(this.destroy$))
-      .subscribe({
-        next: snapshot => {
-          if (loadGen !== this.dashboardInsightsLoadGen) {
-            return;
-          }
-          this.dashboardInsights = snapshot;
-          this.isLoadingDashboardInsights = false;
-          this.cdr.markForCheck();
-        },
-        error: err => {
-          console.error('Failed to load operational insights:', err);
-          if (loadGen === this.dashboardInsightsLoadGen) {
-            this.dashboardInsights = null;
-            this.isLoadingDashboardInsights = false;
-            this.cdr.markForCheck();
-          }
-        }
-      });
   }
 
   /**
@@ -5137,6 +5066,13 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       return this.selectedCollaborator;
     }
     return this.getPanelPlayerId() || '';
+  }
+
+  /**
+   * Abre o modal de perguntas frequentes do painel de gestão.
+   */
+  abrirModalFaq(): void {
+    this.ngbModal.open(ModalTeamManagementFaqComponent, { size: 'lg', scrollable: true });
   }
 
   /**

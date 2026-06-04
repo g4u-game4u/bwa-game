@@ -1,37 +1,8 @@
 <c4u-modal modalTitle="Perguntas frequentes">
   <div class="faq-body" flex direction="column" flexItem="1" scroll>
     <p class="faq-intro">
-      Orientações sobre o painel, metas e pontuação.
+      Orientações sobre navegação entre equipes, filtros e uso dos insights de gestão.
     </p>
-
-    <section *ngIf="resourceLinks.length > 0" class="faq-resources" aria-labelledby="faq-resources-title">
-      <h4 id="faq-resources-title" class="faq-section-title">
-        <i class="ri-book-open-line" aria-hidden="true"></i>
-        Materiais oficiais
-      </h4>
-      <ul class="faq-resources-list">
-        <li *ngFor="let link of resourceLinks; trackBy: trackByIndex" class="faq-resource-item">
-          <a
-            class="faq-resource-link"
-            [ngClass]="'faq-theme--' + link.theme"
-            [href]="link.url"
-            target="_blank"
-            rel="noopener noreferrer"
-            [attr.aria-label]="link.label + ' (abre em nova aba)'">
-            <span class="faq-resource-badge" aria-hidden="true">
-              <i [class]="link.icon"></i>
-            </span>
-            <span class="faq-resource-text">
-              <span class="faq-resource-label">{{ link.label }}</span>
-              <span class="faq-resource-description">{{ link.description }}</span>
-            </span>
-            <span class="faq-resource-action" aria-hidden="true">
-              <i class="ri-external-link-line"></i>
-            </span>
-          </a>
-        </li>
-      </ul>
-    </section>
 
     <section *ngIf="faqItems.length > 0" class="faq-list-section" aria-labelledby="faq-list-title">
       <h4 id="faq-list-title" class="faq-section-title">

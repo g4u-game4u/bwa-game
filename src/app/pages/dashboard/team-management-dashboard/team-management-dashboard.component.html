@@ -137,6 +137,17 @@
         </div>
         -->
         
+        <div class="sidebar-section">
+          <button
+            type="button"
+            class="sidebar-faq-button"
+            (click)="abrirModalFaq()"
+            aria-label="Abrir perguntas frequentes">
+            <i class="ri-question-line sidebar-faq-icon" aria-hidden="true"></i>
+            <span>Perguntas frequentes</span>
+          </button>
+        </div>
+
         <!-- Sidebar Toggle Button - At the end of sidebar content -->
         <div class="sidebar-section sidebar-toggle-section">
           <button class="sidebar-toggle" (click)="toggleSidebar()" [attr.aria-label]="sidebarCollapsed ? 'Expandir menu' : 'Recolher menu'">
@@ -196,6 +207,18 @@
         </div>
         
         <!-- Sidebar Toggle Button - Compact View -->
+        <div
+          class="compact-item compact-faq"
+          (click)="abrirModalFaq()"
+          role="button"
+          tabindex="0"
+          aria-label="Abrir perguntas frequentes"
+          title="Perguntas frequentes"
+          (keydown.enter)="abrirModalFaq()"
+          (keydown.space)="abrirModalFaq(); $event.preventDefault()">
+          <i class="ri-question-line compact-icon"></i>
+        </div>
+
         <div class="compact-item compact-toggle" (click)="toggleSidebar()" role="button" tabindex="0" aria-label="Expandir menu" (keydown.enter)="toggleSidebar()" (keydown.space)="toggleSidebar(); $event.preventDefault()">
           <i class="ri-arrow-right-line compact-icon"></i>
         </div>
@@ -214,15 +237,13 @@
         [showTodaTemporadaButton]="false"
         (onSelectedMonth)="onMonthChange($event)">
       </c4u-seletor-mes>
-      <button 
-        class="refresh-button"
-        (click)="refreshData()"
-        [disabled]="isAnyLoading"
-        [attr.aria-label]="isAnyLoading ? 'Atualizando dados...' : 'Atualizar dados do dashboard'"
-        title="Atualizar dados">
-        <i class="ri-refresh-line" [class.spinning]="isAnyLoading" aria-hidden="true"></i>
-        <span class="refresh-time" *ngIf="lastRefresh">{{ getLastRefreshTime() }}</span>
-      </button>
+      <span
+        class="refresh-time"
+        *ngIf="teamDashboardRefreshedAt && !teamSupervisionCacheMissing"
+        role="status">
+        <span class="refresh-time__line">{{ dashboardSyncLabel }}</span>
+        <span class="refresh-time__line">em {{ teamDashboardRefreshedAt | date:'dd/MM/yyyy HH:mm' }}</span>
+      </span>
       <button 
         class="logout-button"
         (click)="logout()"
@@ -362,24 +383,6 @@
               
               <c4u-shimmer *ngIf="isLoadingGoals"></c4u-shimmer>
             </section>
-            <!--
-              Mini dashboard executivo: resumo gerencial do mês.
-              Origem: cache do back-end Game4U (
-                `GET /game/reports/management/dashboard/cached/overview`,
-                `GET /game/reports/management/finished/deliveries/cached`,
-                `GET /game/reports/supervision/dashboard/cached`,
-                `GET /game/reports/finished/deliveries/cached`
-              ). Não chama action_log/aggregate.
-            -->
-            <c4u-dashboard-insights
-              *ngIf="showOperationalInsights"
-              class="dashboard-section"
-              [insights]="dashboardInsights"
-              [loading]="isLoadingDashboardInsights"
-              variant="team"
-              [scopeLabel]="operationalInsightsScopeLabel">
-            </c4u-dashboard-insights>
-
             <section
               class="dashboard-section executive-insights-section"
               [class.executive-insights-section--loading]="isLoadingExecutiveInsights"
@@ -746,7 +749,7 @@
                   </span>
                   <c4u-info-button 
                     [infoKey]="''"
-                    [customText]="'São os clientes para os quais a equipa ou o colaborador selecionado realizou alguma entrega ou obrigação neste mês na plataforma Acessórias. A lista segue o mês (ou período) selecionado no filtro do painel e as atividades contabilizadas pela competência das entregas no Game4U'"
+                    [customText]="'São os clientes para os quais a equipe ou o colaborador selecionado realizou alguma entrega neste mês na plataforma Acessórias. A lista segue o mês (ou período) selecionado no filtro do painel e as atividades contabilizadas pela competência das entregas no Game4U'"
                     position="bottom">
                   </c4u-info-button>
                 </h3>

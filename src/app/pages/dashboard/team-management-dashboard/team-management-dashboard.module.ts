@@ -28,6 +28,7 @@ import { ModalProgressListModule } from '@modals/modal-progress-list/modal-progr
 import { ModalCarteiraModule } from '@modals/modal-carteira/modal-carteira.module';
 import { ModalCompanyCarteiraDetailModule } from '@modals/modal-company-carteira-detail/modal-company-carteira-detail.module';
 import { C4uDashboardInsightsModule } from '@components/c4u-dashboard-insights/c4u-dashboard-insights.module';
+import { ModalTeamManagementFaqModule } from '@modals/modal-team-management-faq/modal-team-management-faq.module';
 import { NgbModule } from '@ng-bootstrap/ng-bootstrap';
 
 // Shared modules
@@ -73,6 +74,7 @@ const routes: Routes = [
     ModalCarteiraModule,
     ModalCompanyCarteiraDetailModule,
     C4uDashboardInsightsModule,
+    ModalTeamManagementFaqModule,
     NgbModule
   ]
 })

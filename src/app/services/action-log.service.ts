@@ -1094,8 +1094,8 @@ export class ActionLogService {
         ? this.fetchGameReportsUserActionsAllPages({
             ...identity,
             status: ['PENDING', 'DOING'],
-            dt_prazo_start: this.game4u.toDtPrazoMonthRange(month).start,
-            dt_prazo_end: this.game4u.toDtPrazoMonthRange(month).end
+            dt_prazo_start: this.game4u.toDtPrazoMonthRangeForUserActions(month).start,
+            dt_prazo_end: this.game4u.toDtPrazoMonthRangeForUserActions(month).end
           })
         : this.fetchGameReportsUserActionsAllPages({
             ...identity,
@@ -1471,10 +1471,7 @@ export class ActionLogService {
         return {
           wallet,
           pontosActionLog: pts,
-          sidebar:
-            deliveries > 0
-              ? { tarefasFinalizadas: tasks, deliveryStatsTotal: deliveries }
-              : { tarefasFinalizadas: tasks }
+          sidebar: { tarefasFinalizadas: tasks, deliveryStatsTotal: deliveries }
         };
       }),
       catchError(error => {
@@ -1529,10 +1526,7 @@ export class ActionLogService {
         return {
           wallet,
           pontosActionLog: pts,
-          sidebar:
-            deliveries > 0
-              ? { tarefasFinalizadas: tasks, deliveryStatsTotal: deliveries }
-              : { tarefasFinalizadas: tasks }
+          sidebar: { tarefasFinalizadas: tasks, deliveryStatsTotal: deliveries }
         };
       })
     );
