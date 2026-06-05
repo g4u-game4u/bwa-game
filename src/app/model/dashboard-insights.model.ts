@@ -39,6 +39,8 @@ export interface DashboardInsightsSnapshot {
   fineRiskDeliveries: number;
   onTimeFinishedTasks: number;
   lateFinishedTasks: number;
+  /** Entregas com atraso justificado (`extra.status_api` com «justif»); fora de no prazo / fora do prazo. */
+  justifiedTasks: number;
   topActivity: DashboardInsightsRankedItem | null;
   topActivities: DashboardInsightsRankedItem[];
   mostProductiveWeekday: DashboardInsightsWeekdayStat | null;

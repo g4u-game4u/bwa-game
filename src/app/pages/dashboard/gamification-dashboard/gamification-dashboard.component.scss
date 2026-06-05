@@ -612,6 +612,10 @@
   
   // Carteira section with card background
   .carteira-section {
+    &.carteira-section--loading .carteira-card {
+      min-height: 160px;
+    }
+
     .clientes-tabs {
       display: flex;
       gap: $spacing-xs;

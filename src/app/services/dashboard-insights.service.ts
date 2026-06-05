@@ -75,7 +75,13 @@ export function computeDashboardInsightsFromActivityLists(
   let fineRiskTasks = 0;
   const fineRiskDeliveryKeys = new Set<string>();
 
+  let justifiedTasks = 0;
+
   for (const item of pending) {
+    if (item.atraso_justificado === true) {
+      justifiedTasks++;
+      continue;
+    }
     const prazoMs = parseGame4uDtPrazoToLocalDayStartMs(item.dt_prazo);
     if (prazoMs != null) {
       if (prazoMs < todayStart) {
@@ -96,11 +102,15 @@ export function computeDashboardInsightsFromActivityLists(
   const weekdayCounts = new Array(7).fill(0);
 
   for (const item of finished) {
-    const status = resolveGame4uFinishedPrazoStatus(item.dt_prazo, item.created);
-    if (status === 'on_time') {
-      onTimeFinishedTasks++;
-    } else if (status === 'late') {
-      lateFinishedTasks++;
+    if (item.atraso_justificado === true) {
+      justifiedTasks++;
+    } else {
+      const status = resolveGame4uFinishedPrazoStatus(item.dt_prazo, item.created);
+      if (status === 'on_time') {
+        onTimeFinishedTasks++;
+      } else if (status === 'late') {
+        lateFinishedTasks++;
+      }
     }
 
     const title = (item.title || 'Sem título').trim();
@@ -149,6 +159,7 @@ export function computeDashboardInsightsFromActivityLists(
     fineRiskDeliveries: fineRiskDeliveryKeys.size,
     onTimeFinishedTasks,
     lateFinishedTasks,
+    justifiedTasks,
     topActivity: topActivities[0] ?? null,
     topActivities,
     mostProductiveWeekday,
@@ -176,6 +187,7 @@ export function mergeDashboardInsightsSnapshots(
   let fineRiskDeliveries = 0;
   let onTimeFinishedTasks = 0;
   let lateFinishedTasks = 0;
+  let justifiedTasks = 0;
   let pendingTasks = 0;
   let finishedTasks = 0;
   const dueSoonDays = valid[0]!.dueSoonDays;
@@ -187,6 +199,7 @@ export function mergeDashboardInsightsSnapshots(
     fineRiskDeliveries += snap.fineRiskDeliveries;
     onTimeFinishedTasks += snap.onTimeFinishedTasks;
     lateFinishedTasks += snap.lateFinishedTasks;
+    justifiedTasks += snap.justifiedTasks;
     pendingTasks += snap.pendingTasks;
     finishedTasks += snap.finishedTasks;
 
@@ -236,6 +249,7 @@ export function mergeDashboardInsightsSnapshots(
     fineRiskDeliveries,
     onTimeFinishedTasks,
     lateFinishedTasks,
+    justifiedTasks,
     topActivity: topActivities[0] ?? null,
     topActivities,
     mostProductiveWeekday,

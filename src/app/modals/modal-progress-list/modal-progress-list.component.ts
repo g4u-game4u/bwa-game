@@ -1018,7 +1018,7 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
     return item.risco_multa === true;
   }
 
-  /** Atraso justificado na assessoria (`extra.status_api` com «justif», ex. «Pend. justificada»). */
+  /** Entrega justificada (`extra.status_api` com «justif», ex. «Pend. justificada»). */
   hasAtrasoJustificado(item: ActivityListItem): boolean {
     return item.atraso_justificado === true;
   }

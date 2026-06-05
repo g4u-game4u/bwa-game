@@ -275,12 +275,171 @@ export function readGame4uExtraStatusApi(a: Game4uUserActionModel): string | nul
   return null;
 }
 
-/** Atraso justificado quando o status da assessoria contém «justif» (ex.: «Pend. justificada»). */
+/** Entrega justificada quando o status da assessoria contém «justif» (ex.: «Pend. justificada»). */
 export function parseGame4uAtrasoJustificado(statusApi: unknown): boolean {
   if (statusApi == null || statusApi === '') {
     return false;
   }
   return String(statusApi).toLowerCase().includes('justif');
+}
+
+export function isGame4uUserActionJustified(a: Game4uUserActionModel): boolean {
+  return parseGame4uAtrasoJustificado(readGame4uExtraStatusApi(a));
+}
+
+/** Chave de correlação entre linhas de `finished/deliveries/cached` e user-actions. */
+export function executiveDeliveryDistinctKey(parts: {
+  emp_id?: string | number | null;
+  delivery_id?: string | null;
+  delivery_title?: string | null;
+}): string {
+  return String(parts.emp_id ?? parts.delivery_id ?? parts.delivery_title ?? '').trim();
+}
+
+/** `status_api` em linhas de `finished/deliveries/cached` (quando presente). */
+export function readGame4uDeliveryRowStatusApi(row: Game4uReportsFinishedDeliveryRow): string | null {
+  const raw = row as unknown as Record<string, unknown>;
+  const extra = row.extra ?? (
+    raw['extra'] != null && typeof raw['extra'] === 'object'
+      ? (raw['extra'] as Record<string, unknown>)
+      : null
+  );
+  const candidates: unknown[] = [
+    extra?.['status_api'],
+    extra?.['statusApi'],
+    raw['status_api'],
+    raw['statusApi']
+  ];
+  for (const v of candidates) {
+    if (v == null || v === '') {
+      continue;
+    }
+    const s = String(v).trim();
+    if (s) {
+      return s;
+    }
+  }
+  return null;
+}
+
+/** Índice de entregas justificadas (`extra.status_api` com «justif») para cruzar user-actions × deliveries. */
+export interface ExecutiveJustifiedDeliveryLookup {
+  keys: Set<string>;
+  deliveryIds: Set<string>;
+}
+
+function addExecutiveJustifiedLookupKey(keys: Set<string>, raw: unknown): void {
+  const key = String(raw ?? '').trim();
+  if (key) {
+    keys.add(key);
+  }
+}
+
+/** Monta índice a partir de user-actions finalizadas com `extra.status_api` contendo «justif». */
+export function buildExecutiveJustifiedDeliveryLookup(
+  actions: Game4uUserActionModel[]
+): ExecutiveJustifiedDeliveryLookup {
+  const keys = new Set<string>();
+  const deliveryIds = new Set<string>();
+
+  for (const a of actions || []) {
+    if (!isGame4uUserActionFinalizedStatus(a.status) || !isGame4uUserActionJustified(a)) {
+      continue;
+    }
+
+    const did = String(a.delivery_id ?? '').trim();
+    if (did) {
+      deliveryIds.add(did);
+      addExecutiveJustifiedLookupKey(keys, did);
+      const empPrefix = did.split('-')[0]?.trim();
+      if (empPrefix) {
+        addExecutiveJustifiedLookupKey(keys, empPrefix);
+      }
+    }
+
+    addExecutiveJustifiedLookupKey(keys, a.integration_id);
+    addExecutiveJustifiedLookupKey(keys, a.client_id);
+    addExecutiveJustifiedLookupKey(keys, readGame4uExtraCnpj(a));
+    addExecutiveJustifiedLookupKey(keys, readGame4uUserActionTitle(a));
+    addExecutiveJustifiedLookupKey(keys, readGame4uProcessTitleFromUserAction(a));
+    const empId =
+      typeof a.integration_id === 'string' || typeof a.integration_id === 'number'
+        ? a.integration_id
+        : typeof a.client_id === 'string' || typeof a.client_id === 'number'
+          ? a.client_id
+          : undefined;
+    addExecutiveJustifiedLookupKey(
+      keys,
+      executiveDeliveryDistinctKey({
+        emp_id: empId,
+        delivery_id: did,
+        delivery_title: readGame4uUserActionTitle(a)
+      })
+    );
+  }
+
+  return { keys, deliveryIds };
+}
+
+/** Conta tarefas finalizadas excluindo as justificadas via `extra.status_api`. */
+export function countExecutiveFinishedTasksFromUserActions(
+  actions: Game4uUserActionModel[]
+): { total: number; justified: number; judged: number } {
+  let total = 0;
+  let justified = 0;
+  for (const a of actions || []) {
+    if (!isGame4uUserActionFinalizedStatus(a.status)) {
+      continue;
+    }
+    total += 1;
+    if (isGame4uUserActionJustified(a)) {
+      justified += 1;
+    }
+  }
+  return { total, justified, judged: total - justified };
+}
+
+export function isGame4uDeliveryRowJustified(
+  row: Game4uReportsFinishedDeliveryRow,
+  lookup?: ExecutiveJustifiedDeliveryLookup
+): boolean {
+  if (parseGame4uAtrasoJustificado(readGame4uDeliveryRowStatusApi(row))) {
+    return true;
+  }
+  if (!lookup) {
+    return false;
+  }
+
+  const did = (row.delivery_id ?? '').trim();
+  if (did && lookup.deliveryIds.has(did)) {
+    return true;
+  }
+
+  const distinctKey = executiveDeliveryDistinctKey(row);
+  if (distinctKey && lookup.keys.has(distinctKey)) {
+    return true;
+  }
+
+  if (row.emp_id != null) {
+    const emp = String(row.emp_id).trim();
+    if (emp && lookup.keys.has(emp)) {
+      return true;
+    }
+  }
+
+  const title = (row.delivery_title ?? '').trim();
+  if (title && lookup.keys.has(title)) {
+    return true;
+  }
+
+  return false;
+}
+
+/** @deprecated Preferir {@link buildExecutiveJustifiedDeliveryLookup}. */
+export function buildJustifiedDeliveryKeysFromUserActions(
+  actions: Game4uUserActionModel[]
+): Set<string> {
+  return buildExecutiveJustifiedDeliveryLookup(actions).keys;
 }
 
 export type Game4uFinishedPrazoStatus = 'on_time' | 'late' | 'unknown';
@@ -965,15 +1124,17 @@ export function aggregateExecutiveTopProcessesFromUserActions(
       acc.clientKeys.add(clientKey);
     }
 
-    const finishedMs = getGame4uUserActionFinishedOrFallbackMs(a);
-    const prazoStatus = resolveGame4uFinishedPrazoStatus(
-      typeof a.dt_prazo === 'string' ? a.dt_prazo : undefined,
-      finishedMs ?? undefined
-    );
-    if (prazoStatus === 'on_time') {
-      acc.onTime += 1;
-    } else if (prazoStatus === 'late') {
-      acc.late += 1;
+    if (!isGame4uUserActionJustified(a)) {
+      const finishedMs = getGame4uUserActionFinishedOrFallbackMs(a);
+      const prazoStatus = resolveGame4uFinishedPrazoStatus(
+        typeof a.dt_prazo === 'string' ? a.dt_prazo : undefined,
+        finishedMs ?? undefined
+      );
+      if (prazoStatus === 'on_time') {
+        acc.onTime += 1;
+      } else if (prazoStatus === 'late') {
+        acc.late += 1;
+      }
     }
     byTitle.set(title, acc);
   }
@@ -994,6 +1155,150 @@ export function aggregateExecutiveTopProcessesFromUserActions(
     .slice(0, 6);
 
   return { top, distinctProcesses: byTitle.size };
+}
+
+/** Métricas agregadas de entregas finalizadas para ranking executivo (jogador ou equipa). */
+export interface ExecutiveDeliveryRankingAgg {
+  tasksTotal: number;
+  deliveriesCount: number;
+  judgedDeliveriesCount: number;
+  onTimeDeliveries: number;
+  clientsCount: number;
+  onTimeDeliveryPct: number | null;
+  onTimePct: number | null;
+}
+
+/** Agrega linhas de `finished/deliveries/cached` num único candidato a ranking. */
+export function aggregateExecutiveDeliveryRowsForRanking(
+  rows: Game4uReportsFinishedDeliveryRow[],
+  options?: { justifiedLookup?: ExecutiveJustifiedDeliveryLookup }
+): ExecutiveDeliveryRankingAgg {
+  const safeRows = (rows || []).filter(r => r != null && Math.floor(Number(r.tasks_total) || 0) > 0);
+  const clients = new Set<string>();
+  let tasksTotal = 0;
+  let deliveriesCount = 0;
+  let judgedDeliveriesCount = 0;
+  let onTimeDeliveries = 0;
+  let onTimeWeighted = 0;
+  let tasksWithPct = 0;
+
+  for (const row of safeRows) {
+    const tasks = Math.floor(Number(row.tasks_total) || 0);
+    if (tasks <= 0) {
+      continue;
+    }
+    const justified = isGame4uDeliveryRowJustified(row, options?.justifiedLookup);
+    tasksTotal += tasks;
+    deliveriesCount += 1;
+    const clientKey = executiveDeliveryDistinctKey(row);
+    if (clientKey) {
+      clients.add(clientKey);
+    }
+    if (justified) {
+      continue;
+    }
+    judgedDeliveriesCount += 1;
+    if (deliveryRowCountsAsOnTime(row)) {
+      onTimeDeliveries += 1;
+    }
+    const otp = row.on_time_pct;
+    if (otp != null && Number.isFinite(Number(otp))) {
+      onTimeWeighted += Number(otp) * tasks;
+      tasksWithPct += tasks;
+    }
+  }
+
+  return {
+    tasksTotal,
+    deliveriesCount,
+    judgedDeliveriesCount,
+    onTimeDeliveries,
+    clientsCount: clients.size,
+    onTimeDeliveryPct:
+      judgedDeliveriesCount > 0
+        ? Math.round((onTimeDeliveries / judgedDeliveriesCount) * 1000) / 10
+        : null,
+    onTimePct:
+      tasksWithPct > 0 ? Math.round((onTimeWeighted / tasksWithPct) * 10) / 10 : null
+  };
+}
+
+/** Candidato ao ranking executivo de jogadores (destaque / atenção). */
+export interface ExecutivePlayerRankCandidate {
+  email: string;
+  deliveriesCount: number;
+  onTimeDeliveries: number;
+  onTimeDeliveryPct: number | null;
+  /** Entregas elegíveis para métricas de prazo (exclui justificadas). */
+  judgedDeliveriesCount?: number;
+}
+
+export interface PartitionExecutivePlayerRankingsOptions {
+  minDeliveriesForAttention?: number;
+  maxOnTimePctForAttention?: number;
+  topCount?: number;
+  attentionCount?: number;
+}
+
+/**
+ * Separa destaques (mais entregas no prazo) e jogadores que precisam de atenção (menor % no prazo).
+ * Quem entra na lista de atenção não aparece no ranking de destaques.
+ */
+export function partitionExecutivePlayerRankings<T extends ExecutivePlayerRankCandidate>(
+  playerArray: T[],
+  options: PartitionExecutivePlayerRankingsOptions = {}
+): { top: T[]; attention: T[] } {
+  const minDeliveries = options.minDeliveriesForAttention ?? 3;
+  const maxOnTimePct = options.maxOnTimePctForAttention ?? 90;
+  const topCount = options.topCount ?? 5;
+  const attentionCount = options.attentionCount ?? 5;
+
+  const judgedDeliveries = (p: T): number => p.judgedDeliveriesCount ?? p.deliveriesCount;
+
+  const compareByOnTimeDeliveriesDesc = (a: T, b: T): number => {
+    if (b.onTimeDeliveries !== a.onTimeDeliveries) {
+      return b.onTimeDeliveries - a.onTimeDeliveries;
+    }
+    const pctA = a.onTimeDeliveryPct ?? -1;
+    const pctB = b.onTimeDeliveryPct ?? -1;
+    if (pctB !== pctA) {
+      return pctB - pctA;
+    }
+    return judgedDeliveries(b) - judgedDeliveries(a);
+  };
+
+  const compareNeedsAttention = (a: T, b: T): number => {
+    const pctA = a.onTimeDeliveryPct ?? 0;
+    const pctB = b.onTimeDeliveryPct ?? 0;
+    if (pctA !== pctB) {
+      return pctA - pctB;
+    }
+    const lateA = judgedDeliveries(a) - a.onTimeDeliveries;
+    const lateB = judgedDeliveries(b) - b.onTimeDeliveries;
+    if (lateB !== lateA) {
+      return lateB - lateA;
+    }
+    return judgedDeliveries(b) - judgedDeliveries(a);
+  };
+
+  const isEligibleForAttention = (p: T): boolean =>
+    judgedDeliveries(p) >= minDeliveries &&
+    p.onTimeDeliveryPct != null &&
+    p.onTimeDeliveryPct < maxOnTimePct;
+
+  const attention = [...playerArray]
+    .filter(isEligibleForAttention)
+    .sort(compareNeedsAttention)
+    .slice(0, attentionCount);
+
+  const attentionEmails = new Set(attention.map(p => p.email));
+
+  const top = playerArray
+    .filter(p => judgedDeliveries(p) > 0 && !attentionEmails.has(p.email))
+    .sort(compareByOnTimeDeliveriesDesc)
+    .slice(0, topCount);
+
+  return { top, attention };
 }
 
 /**

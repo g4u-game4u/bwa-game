@@ -2331,6 +2331,17 @@
         &--attention {
           background: linear-gradient(135deg, #ea580c, #f97316);
         }
+
+        &--team {
+          border-radius: $border-radius-sm;
+          background: rgba($primary-electric-blue, 0.2);
+          color: $primary-electric-blue;
+
+          i {
+            font-size: 1.1rem;
+            line-height: 1;
+          }
+        }
       }
 
       .executive-player-info {

@@ -231,6 +231,12 @@
               </span>
             </li>
             <li>
+              <span class="insights-summary-label">Justificadas</span>
+              <span class="insights-summary-value insights-summary-value--justified">
+                {{ insights!.justifiedTasks | number:'1.0-0':'pt-BR' }}
+              </span>
+            </li>
+            <li>
               <span class="insights-summary-label">Pendentes abertas</span>
               <span class="insights-summary-value">{{ insights!.pendingTasks | number:'1.0-0':'pt-BR' }}</span>
             </li>

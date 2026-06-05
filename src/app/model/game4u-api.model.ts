@@ -159,6 +159,8 @@ export interface Game4uReportsFinishedDeliveryRow {
   delivery_id?: string;
   emp_id?: string | number;
   user_email?: string;
+  /** Metadados da assessoria (ex.: `status_api` com «justif» para entrega justificada). */
+  extra?: Record<string, unknown>;
   /** % no prazo no mês (0–100), quando vem de `finished/deliveries/cached`. */
   on_time_pct?: number | null;
   /** Tarefas DONE/DELIVERED no mês (`dt_prazo`) nesta entrega; lista só inclui linhas com valor > 0. */
@@ -199,6 +201,23 @@ export interface Game4uReportsFinishedDeliveriesCachedPage {
   total?: number;
   /** Quando presente, indica se há mais páginas além desta resposta. */
   has_more?: boolean;
+}
+
+function normalizeDeliveryRowExtraField(raw: unknown): Record<string, unknown> | undefined {
+  if (raw != null && typeof raw === 'object' && !Array.isArray(raw)) {
+    return raw as Record<string, unknown>;
+  }
+  if (typeof raw === 'string' && raw.trim()) {
+    try {
+      const parsed: unknown = JSON.parse(raw);
+      if (parsed != null && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        return parsed as Record<string, unknown>;
+      }
+    } catch {
+      // extra não é JSON — ignorar
+    }
+  }
+  return undefined;
 }
 
 function pickFirstNonEmptyString(obj: Record<string, unknown>, keys: string[]): string | undefined {
@@ -259,11 +278,13 @@ export function normalizeGameReportsFinishedDeliveriesPayload(body: unknown): Ga
       const user_email = pickFirstNonEmptyString(o, ['user_email', 'userEmail']);
       const tasks_total = Number(o['tasks_total'] ?? o['tasksTotal']);
       const tasks_on_time = Number(o['tasks_on_time'] ?? o['tasksOnTime']);
+      const extra = normalizeDeliveryRowExtraField(o['extra']);
       out.push({
         delivery_title,
         ...(delivery_id ? { delivery_id } : {}),
         ...(emp_id !== undefined ? { emp_id } : {}),
         ...(user_email ? { user_email } : {}),
+        ...(extra ? { extra } : {}),
         ...(on_time_pct != null ? { on_time_pct } : {}),
         ...(Number.isFinite(tasks_total) ? { tasks_total: Math.floor(tasks_total) } : {}),
         ...(Number.isFinite(tasks_on_time) ? { tasks_on_time: Math.floor(tasks_on_time) } : {})

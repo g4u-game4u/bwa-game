@@ -21,7 +21,12 @@ import {
   mergeGame4uTeamDeliveryRows,
   mapGame4uFinishedDeliveryRowsToParticipacaoCnpjRows,
   readGame4uUserActionTitle,
+  aggregateExecutiveDeliveryRowsForRanking,
   aggregateExecutiveTopProcessesFromUserActions,
+  buildJustifiedDeliveryKeysFromUserActions,
+  countExecutiveFinishedTasksFromUserActions,
+  isGame4uDeliveryRowJustified,
+  partitionExecutivePlayerRankings,
   deliveryRowCountsAsOnTime,
   deliveryRowHasFinishedTaskInMonth,
   hasMoreFinishedDeliveriesCachedPage,
@@ -790,6 +795,126 @@ describe('game4u-game-mapper', () => {
       expect(top[0].deliveryTitle).toBe('Folha de pagamento');
       expect(top[0].tasksTotal).toBe(2);
       expect(top[0].deliveriesCount).toBe(2);
+    });
+
+    it('aggregateExecutiveDeliveryRowsForRanking sums deliveries and on-time pct', () => {
+      const agg = aggregateExecutiveDeliveryRowsForRanking([
+        { delivery_title: 'A', tasks_total: 2, tasks_on_time: 2, emp_id: 1 },
+        { delivery_title: 'B', tasks_total: 1, on_time_pct: 80, emp_id: 2 },
+        { delivery_title: 'C', tasks_total: 0, emp_id: 3 }
+      ]);
+
+      expect(agg.deliveriesCount).toBe(2);
+      expect(agg.judgedDeliveriesCount).toBe(2);
+      expect(agg.onTimeDeliveries).toBe(1);
+      expect(agg.clientsCount).toBe(2);
+      expect(agg.onTimeDeliveryPct).toBe(50);
+    });
+
+    it('aggregateExecutiveDeliveryRowsForRanking ignores justified rows in deadline metrics', () => {
+      const justifiedLookup = { keys: new Set(['2']), deliveryIds: new Set<string>() };
+      const agg = aggregateExecutiveDeliveryRowsForRanking(
+        [
+          { delivery_title: 'A', tasks_total: 2, tasks_on_time: 2, emp_id: 1 },
+          { delivery_title: 'B', tasks_total: 1, on_time_pct: 0, emp_id: 2 }
+        ],
+        { justifiedLookup }
+      );
+
+      expect(agg.deliveriesCount).toBe(2);
+      expect(agg.judgedDeliveriesCount).toBe(1);
+      expect(agg.onTimeDeliveries).toBe(1);
+      expect(agg.onTimeDeliveryPct).toBe(100);
+      expect(isGame4uDeliveryRowJustified({ delivery_title: 'B', emp_id: 2 }, justifiedLookup)).toBe(
+        true
+      );
+    });
+
+    it('isGame4uDeliveryRowJustified detects extra.status_api with justif on delivery row', () => {
+      expect(
+        isGame4uDeliveryRowJustified({
+          delivery_title: 'Cliente X',
+          emp_id: 99,
+          extra: { status_api: 'Pend. justificada' }
+        })
+      ).toBe(true);
+    });
+
+    it('countExecutiveFinishedTasksFromUserActions excludes justified actions', () => {
+      const counts = countExecutiveFinishedTasksFromUserActions([
+        { id: '1', points: 1, status: 'DONE', created_at: '2026-03-01', extra: { status_api: 'Pend. justificada' } },
+        { id: '2', points: 1, status: 'DONE', created_at: '2026-03-02' },
+        { id: '3', points: 1, status: 'PENDING', created_at: '2026-03-03' }
+      ]);
+
+      expect(counts).toEqual({ total: 2, justified: 1, judged: 1 });
+    });
+
+    it('aggregateExecutiveTopProcessesFromUserActions excludes justified from on-time pct', () => {
+      const { top } = aggregateExecutiveTopProcessesFromUserActions([
+        {
+          id: '1',
+          points: 1,
+          status: 'DONE',
+          created_at: '2026-03-01',
+          title: 'Processo X',
+          integration_id: 'c1',
+          dt_prazo: '2020-01-01',
+          finished_at: '2026-03-05T12:00:00Z',
+          extra: { status_api: 'Pend. justificada' }
+        },
+        {
+          id: '2',
+          points: 1,
+          status: 'DONE',
+          created_at: '2026-03-02',
+          title: 'Processo X',
+          integration_id: 'c2',
+          dt_prazo: '2099-01-01',
+          finished_at: '2026-03-06T12:00:00Z'
+        }
+      ]);
+
+      expect(top[0].tasksTotal).toBe(2);
+      expect(top[0].onTimePct).toBe(100);
+      expect(buildJustifiedDeliveryKeysFromUserActions([{ id: '1', points: 1, status: 'DONE', created_at: '2026-03-01', extra: { status_api: 'Justificado' }, delivery_id: 'd1' }])).toEqual(
+        new Set(['d1'])
+      );
+    });
+
+    it('partitionExecutivePlayerRankings keeps attention players out of top highlights', () => {
+      const players = [
+        { email: 'a@x.com', deliveriesCount: 5, onTimeDeliveries: 4, onTimeDeliveryPct: 80 },
+        { email: 'b@x.com', deliveriesCount: 4, onTimeDeliveries: 3, onTimeDeliveryPct: 75 },
+        { email: 'c@x.com', deliveriesCount: 3, onTimeDeliveries: 2, onTimeDeliveryPct: 66.7 }
+      ];
+
+      const { top, attention } = partitionExecutivePlayerRankings(players);
+
+      expect(attention.map(p => p.email)).toEqual(['c@x.com', 'b@x.com', 'a@x.com']);
+      expect(top).toEqual([]);
+    });
+
+    it('partitionExecutivePlayerRankings excludes null pct and justified-only volumes from attention', () => {
+      const { attention } = partitionExecutivePlayerRankings([
+        { email: 'null@x.com', deliveriesCount: 5, judgedDeliveriesCount: 5, onTimeDeliveries: 2, onTimeDeliveryPct: null },
+        { email: 'low@x.com', deliveriesCount: 4, judgedDeliveriesCount: 4, onTimeDeliveries: 2, onTimeDeliveryPct: 50 }
+      ]);
+
+      expect(attention.map(p => p.email)).toEqual(['low@x.com']);
+    });
+
+    it('partitionExecutivePlayerRankings lists only non-attention players in top highlights', () => {
+      const players = [
+        { email: 'star@x.com', deliveriesCount: 10, onTimeDeliveries: 10, onTimeDeliveryPct: 100 },
+        { email: 'risk@x.com', deliveriesCount: 8, onTimeDeliveries: 4, onTimeDeliveryPct: 50 },
+        { email: 'mid@x.com', deliveriesCount: 6, onTimeDeliveries: 5, onTimeDeliveryPct: 83.3 }
+      ];
+
+      const { top, attention } = partitionExecutivePlayerRankings(players);
+
+      expect(attention.map(p => p.email)).toEqual(['risk@x.com', 'mid@x.com']);
+      expect(top.map(p => p.email)).toEqual(['star@x.com']);
     });
   });
 

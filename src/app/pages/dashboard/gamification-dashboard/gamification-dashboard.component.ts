@@ -2116,7 +2116,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
 
     const { current, target } = this.monthlyPointsProgressData;
     if (target > 0) {
-      parts.push(Math.min(100, Math.round((current / target) * 100)));
+      parts.push(Math.min(100, Math.floor((current / target) * 100)));
     }
 
     const entregasKpi = (this.playerKPIs ?? []).find(k => k.id === 'entregas-prazo');
@@ -2127,19 +2127,19 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     if (parts.length === 0) {
       return 0;
     }
-    return Math.round(parts.reduce((sum, p) => sum + p, 0) / parts.length);
+    return Math.floor(parts.reduce((sum, p) => sum + p, 0) / parts.length);
   }
 
   /** % de conclusão da meta de um KPI (mesma lógica de `c4u-kpi-circular-progress`). */
   private getKpiGoalPercent(kpi: KPIData): number {
     const current = this.getKpiCurrentValue(kpi);
     if (kpi.unit === '%') {
-      return Math.min(Math.round(current), 100);
+      return Math.min(Math.floor(current), 100);
     }
     if (!kpi.target || kpi.target === 0) {
       return 0;
     }
-    return Math.min(100, Math.round((current / kpi.target) * 100));
+    return Math.min(100, Math.floor((current / kpi.target) * 100));
   }
   
   /**

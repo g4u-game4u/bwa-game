@@ -25,6 +25,7 @@ import { ModalCarteiraModule } from '@modals/modal-carteira/modal-carteira.modul
 import { ModalCompanyCarteiraDetailModule } from '@modals/modal-company-carteira-detail/modal-company-carteira-detail.module';
 import { ModalSeasonFaqModule } from '@modals/modal-season-faq/modal-season-faq.module';
 import { C4uDashboardInsightsModule } from '@components/c4u-dashboard-insights/c4u-dashboard-insights.module';
+import { C4uDashboardGoalsSkeletonModule } from '@components/c4u-dashboard-goals-skeleton/c4u-dashboard-goals-skeleton.module';
 import { NgbModule } from '@ng-bootstrap/ng-bootstrap';
 
 const routes: Routes = [
@@ -62,6 +63,7 @@ const routes: Routes = [
     ModalCompanyCarteiraDetailModule,
     ModalSeasonFaqModule,
     C4uDashboardInsightsModule,
+    C4uDashboardGoalsSkeletonModule,
     NgbModule,
   ],
   exports: [

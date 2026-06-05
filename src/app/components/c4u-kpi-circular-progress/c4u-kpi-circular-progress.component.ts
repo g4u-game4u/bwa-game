@@ -41,14 +41,14 @@ export class C4uKpiCircularProgressComponent {
     // For percentage KPIs (like "Entregas no Prazo"), use the raw value as the percentage
     // capped at 100 for the progress bar visual
     if (this.unit === '%') {
-      return Math.min(Math.round(this.current), 100);
+      return Math.min(Math.floor(this.current), 100);
     }
     
     // For count-based KPIs, calculate goal completion percentage
     if (this.target === 0) {
       return 0;
     }
-    return Math.round((this.current / this.target) * 100);
+    return Math.floor((this.current / this.target) * 100);
   }
 
   get progressColor(): 'green' | 'blue' | 'purple' | 'gold' | 'red' | 'gray' {
@@ -83,6 +83,13 @@ export class C4uKpiCircularProgressComponent {
     return this.colorPalette[this.colorIndex % this.colorPalette.length];
   }
 
+  private formatPtBr(value: number, maxFractionDigits = 0): string {
+    return new Intl.NumberFormat('pt-BR', {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: maxFractionDigits
+    }).format(value);
+  }
+
   /**
    * Get display value
    * For percentage-based KPIs (unit === '%'), show the raw value directly
@@ -99,15 +106,15 @@ export class C4uKpiCircularProgressComponent {
     // For percentage KPIs (like "Entregas no Prazo"), show the raw value with %
     if (this.unit === '%') {
       const n = Math.round(this.current * 100) / 100;
-      const text = Number.isInteger(n) ? String(n) : n.toFixed(2).replace(/\.?0+$/, '');
-      return `${text}%`;
+      const fractionDigits = Number.isInteger(n) ? 0 : 2;
+      return `${this.formatPtBr(n, fractionDigits)}%`;
     }
     
     // For count-based KPIs (like "Clientes na Carteira"), show the raw count
     if (this.unit === 'pts') {
-      return `${Math.round(this.current)} pts`;
+      return `${this.formatPtBr(Math.round(this.current))} pts`;
     }
-    return `${Math.round(this.current)}`;
+    return this.formatPtBr(Math.round(this.current));
   }
 
   /**
@@ -115,10 +122,15 @@ export class C4uKpiCircularProgressComponent {
    * This replaces the old displayValue that showed current value
    */
   get targetDisplayValue(): string {
-    if (this.unit) {
-      return `Meta: ${this.target} ${this.unit}`;
+    if (this.unit === '%') {
+      const n = Math.round(this.target * 100) / 100;
+      const fractionDigits = Number.isInteger(n) ? 0 : 2;
+      return `Meta: ${this.formatPtBr(n, fractionDigits)} ${this.unit}`;
     }
-    return `Meta: ${this.target}`;
+    if (this.unit) {
+      return `Meta: ${this.formatPtBr(this.target)} ${this.unit}`;
+    }
+    return `Meta: ${this.formatPtBr(this.target)}`;
   }
 
   /**

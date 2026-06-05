@@ -65,6 +65,77 @@ describe('computeDashboardInsightsFromActivityLists', () => {
     expect(snapshot.mostProductiveWeekday?.index).toBe(1);
     expect(snapshot.onTimeFinishedTasks).toBe(3);
   });
+
+  it('counts justified tasks separately from on-time and late finished', () => {
+    const finished: ActivityListItem[] = [
+      {
+        id: '1',
+        title: 'No prazo',
+        points: 1,
+        created: Date.now(),
+        dt_prazo: '2099-01-01'
+      },
+      {
+        id: '2',
+        title: 'Atrasada',
+        points: 1,
+        created: Date.now(),
+        dt_prazo: '2020-01-01'
+      },
+      {
+        id: '3',
+        title: 'Justificada',
+        points: 1,
+        created: Date.now(),
+        dt_prazo: '2020-01-01',
+        atraso_justificado: true
+      }
+    ];
+    const pending: ActivityListItem[] = [
+      {
+        id: '4',
+        title: 'Pend. justificada',
+        points: 1,
+        created: 0,
+        dt_prazo: yesterdayYmd,
+        atraso_justificado: true
+      }
+    ];
+
+    const snapshot = computeDashboardInsightsFromActivityLists(pending, finished);
+
+    expect(snapshot.justifiedTasks).toBe(2);
+    expect(snapshot.onTimeFinishedTasks).toBe(1);
+    expect(snapshot.lateFinishedTasks).toBe(1);
+    expect(snapshot.finishedTasks).toBe(3);
+    expect(snapshot.pendingTasks).toBe(1);
+  });
+
+  it('excludes justified pending tasks from overdue and due soon alerts', () => {
+    const pending: ActivityListItem[] = [
+      {
+        id: '1',
+        title: 'Justificada atrasada',
+        points: 1,
+        created: 0,
+        dt_prazo: yesterdayYmd,
+        atraso_justificado: true
+      },
+      {
+        id: '2',
+        title: 'Atrasada real',
+        points: 1,
+        created: 0,
+        dt_prazo: yesterdayYmd
+      }
+    ];
+
+    const snapshot = computeDashboardInsightsFromActivityLists(pending, []);
+
+    expect(snapshot.justifiedTasks).toBe(1);
+    expect(snapshot.overduePendingTasks).toBe(1);
+    expect(snapshot.pendingTasks).toBe(2);
+  });
 });
 
 describe('mergeDashboardInsightsSnapshots', () => {

@@ -12,7 +12,7 @@ export type DashboardInsightsVariant = 'player' | 'team';
 export class C4uDashboardInsightsComponent {
   readonly skeletonAlerts = [0, 1, 2];
   readonly skeletonRankedRows = [0, 1, 2];
-  readonly skeletonSummaryRows = [0, 1, 2, 3];
+  readonly skeletonSummaryRows = [0, 1, 2, 3, 4];
   readonly skeletonWeekdayBarHeights = [28, 44, 18, 52, 36, 22, 48];
 
   @Input() insights: DashboardInsightsSnapshot | null = null;
