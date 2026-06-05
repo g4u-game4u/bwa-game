@@ -1,23 +1,42 @@
 <div class="season-level">
-  <div class="level-badge" [ngClass]="levelColorClass">
-    <!-- Circular progress indicator based on KPI average -->
-    <svg viewBox="0 0 36 36" class="circular-progress">
-      <path class="circle-bg"
-        d="M18 2.0845
-          a 15.9155 15.9155 0 0 1 0 31.831
-          a 15.9155 15.9155 0 0 1 0 -31.831"
-      />
-      <path class="circle"
-        [attr.stroke-dasharray]="progressDasharray"
-        d="M18 2.0845
-          a 15.9155 15.9155 0 0 1 0 31.831
-          a 15.9155 15.9155 0 0 1 0 -31.831"
-      />
-    </svg>
-    <!-- <span class="level-number">{{ kpiAveragePercent | number:'1.0-0' }}</span> -->
+  <div class="level-badge-wrap">
+    <div class="level-badge" [ngClass]="levelColorClass">
+      <svg viewBox="0 0 36 36" class="circular-progress" aria-hidden="true">
+        <defs>
+          <linearGradient id="seasonLevelGold" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#956f0e"></stop>
+            <stop offset="50%" stop-color="#dbcaa0"></stop>
+            <stop offset="100%" stop-color="#956f0e"></stop>
+          </linearGradient>
+        </defs>
+        <path class="circle-bg"
+          d="M18 2.0845
+            a 15.9155 15.9155 0 0 1 0 31.831
+            a 15.9155 15.9155 0 0 1 0 -31.831"
+        />
+        <path class="circle"
+          [attr.stroke]="circleStroke"
+          [attr.stroke-dasharray]="progressDasharray"
+          d="M18 2.0845
+            a 15.9155 15.9155 0 0 1 0 31.831
+            a 15.9155 15.9155 0 0 1 0 -31.831"
+        />
+      </svg>
+      <span class="level-number" [class.level-number--gold]="clampedPercent >= 100">
+        {{ kpiAveragePercent | number:'1.0-0' }}%
+      </span>
+    </div>
+    <div class="level-badge-info">
+      <c4u-info-button
+        infoKey="media-metas-jogador"
+        tooltipAnchor="cursor"
+        position="bottom">
+      </c4u-info-button>
+    </div>
   </div>
   <div class="player-info">
     <h3 class="player-name">{{ playerName }}</h3>
+    <p class="player-team" *ngIf="teamName">{{ teamName }}</p>
     <p class="player-metadata" *ngIf="metadata.area || metadata.time || metadata.squad">
       <span *ngIf="metadata.area">{{ metadata.area }}</span>
       <span *ngIf="metadata.area && metadata.time"> / </span>

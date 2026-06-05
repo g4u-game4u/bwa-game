@@ -119,9 +119,9 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
   get modalTitle(): string {
     switch (this.listType) {
       case 'atividades':
-        return 'Tarefas Finalizadas';
+        return 'Entregas Finalizadas';
       case 'atividades-pendentes':
-        return 'Tarefas Pendentes';
+        return 'Entregas Pendentes';
       case 'pontos':
         return 'Pontos Obtidos';
       case 'processos-pendentes':
@@ -182,14 +182,14 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
       (this.listType === 'atividades-pendentes' || this.listType === 'atividades')
     ) {
       return this.listType === 'atividades-pendentes'
-        ? 'Carregando primeira página de tarefas pendentes…'
-        : 'Carregando primeira página de tarefas finalizadas…';
+        ? 'Carregando primeira página de entregas pendentes…'
+        : 'Carregando primeira página de entregas finalizadas…';
     }
     switch (this.listType) {
       case 'atividades-pendentes':
-        return 'Carregando tarefas pendentes e gráfico…';
+        return 'Carregando entregas pendentes e gráfico…';
       case 'atividades':
-        return 'Carregando tarefas finalizadas e gráfico…';
+        return 'Carregando entregas finalizadas e gráfico…';
       case 'pontos':
         return 'Carregando pontos…';
       default:
@@ -199,8 +199,8 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
 
   get chartSectionTitle(): string {
     return this.isPendingActivitiesModal
-      ? 'Tarefas por dia de prazo no mês'
-      : 'Volume de Tarefas por Dia';
+      ? 'Entregas por dia de prazo no mês'
+      : 'Volume de Entregas por Dia';
   }
 
   get isProcessList(): boolean {
@@ -715,7 +715,7 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
 
     this.chartDatasets = [
       {
-        label: 'Tarefas',
+        label: 'Entregas',
         data: [...newDailyCounts],
         backgroundColor: backgroundColorArray,
         borderColor: borderColorArray,

@@ -1,7 +1,8 @@
 <div 
   class="info-button-wrapper" 
   #buttonWrapper
-  (mouseenter)="onMouseEnter()" 
+  (mouseenter)="onMouseEnter($event)" 
+  (mousemove)="onMouseMove($event)"
   (mouseleave)="onMouseLeave()" 
   (click)="onClick($event)">
   <button 
@@ -16,7 +17,11 @@
   <div 
     *ngIf="showTooltip && helpText"
     class="info-tooltip"
-    [class]="'tooltip-' + computedPosition"
+    [ngClass]="[
+      'tooltip-' + computedPosition,
+      align === 'end' ? 'tooltip-align-end' : '',
+      align === 'start' ? 'tooltip-align-start' : ''
+    ]"
     [id]="'tooltip-' + infoKey"
     [ngStyle]="tooltipStyle"
     role="tooltip">

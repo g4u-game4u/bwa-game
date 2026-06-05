@@ -7,6 +7,8 @@ export interface PlayerStatus {
   seasonLevel: number;
   levelName?: string;
   percentCompleted?: number;
+  /** Nome do time (`team_name` em `/auth/user`). */
+  teamName?: string | null;
   metadata: PlayerMetadata;
   created: number;
   updated: number;

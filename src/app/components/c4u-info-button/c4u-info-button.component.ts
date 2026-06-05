@@ -10,15 +10,23 @@ import { Subscription } from 'rxjs';
 export class C4uInfoButtonComponent implements OnInit, OnDestroy, OnChanges {
   @Input() infoKey: string = '';
   @Input() customText: string = ''; // Optional custom text that overrides help-texts
-  @Input() position: 'top' | 'bottom' | 'left' | 'right' = 'bottom'; // Changed default to 'bottom'
+  @Input() position: 'top' | 'bottom' | 'left' | 'right' = 'bottom';
+  /** Alinhamento do tooltip em relação ao botão (`start` / `end` nos eixos secundários). */
+  @Input() align: 'center' | 'start' | 'end' = 'center';
+  @Input() tooltipGap = 4;
+  /** Segue o ponteiro; respeita `position` (ex.: `bottom` = abaixo do cursor, como `top` acima do botão). */
+  @Input() tooltipAnchor: 'button' | 'cursor' = 'button';
   @ViewChild('buttonWrapper', { static: false }) buttonWrapper?: ElementRef;
   @ViewChild('infoButton', { static: false }) infoButton?: ElementRef;
   
   helpText: string = '';
   showTooltip: boolean = false;
-  computedPosition: 'top' | 'bottom' | 'left' | 'right' = 'bottom'; // Default: always show below
+  computedPosition: 'top' | 'bottom' | 'left' | 'right' = 'bottom';
   tooltipStyle: { [key: string]: string } = {};
   private subscription?: Subscription;
+  private pointerX = 0;
+  private pointerY = 0;
+  private readonly TOOLTIP_ESTIMATED_WIDTH = 280;
 
   constructor(private helpTextsService: HelpTextsService) {}
 
@@ -65,13 +73,27 @@ export class C4uInfoButtonComponent implements OnInit, OnDestroy, OnChanges {
       });
   }
 
-  onMouseEnter(): void {
+  onMouseEnter(event: MouseEvent): void {
+    this.updatePointer(event);
     this.calculatePosition();
     this.showTooltip = true;
   }
 
+  onMouseMove(event: MouseEvent): void {
+    if (!this.showTooltip || this.tooltipAnchor !== 'cursor') {
+      return;
+    }
+    this.updatePointer(event);
+    this.calculatePosition();
+  }
+
   onMouseLeave(): void {
     this.showTooltip = false;
+  }
+
+  private updatePointer(event: MouseEvent): void {
+    this.pointerX = event.clientX;
+    this.pointerY = event.clientY;
   }
 
   onClick(event: Event): void {
@@ -84,6 +106,16 @@ export class C4uInfoButtonComponent implements OnInit, OnDestroy, OnChanges {
    * Uses fixed positioning to avoid being clipped by parent overflow
    */
   private calculatePosition(): void {
+    const baseStyle: { [key: string]: string } = {
+      position: 'fixed',
+      zIndex: '999999'
+    };
+
+    if (this.tooltipAnchor === 'cursor') {
+      this.tooltipStyle = this.buildCursorAnchoredStyle(baseStyle);
+      return;
+    }
+
     // Prefer using the button element itself for more accurate positioning
     const targetElement = this.infoButton?.nativeElement || this.buttonWrapper?.nativeElement;
     
@@ -99,98 +131,180 @@ export class C4uInfoButtonComponent implements OnInit, OnDestroy, OnChanges {
     const rect = targetElement.getBoundingClientRect();
     const viewportHeight = window.innerHeight;
     const viewportWidth = window.innerWidth;
-    const TOOLTIP_GAP = 4; // Reduced gap between button and tooltip for closer positioning
-    const MIN_SPACE = 250; // Minimum space needed to show tooltip
-    
-    // Use fixed positioning to escape parent overflow constraints
-    const baseStyle: { [key: string]: string } = {
-      position: 'fixed',
-      zIndex: '999999' // Higher than modals (9999) to ensure tooltip appears on top
-    };
-    
-    // Determine position based on input position and available space
+    const gap = this.tooltipGap;
+    const MIN_SPACE = 120;
+
     if (this.position === 'top' || this.position === 'bottom') {
-      // For top/bottom, check vertical space
       const spaceBelow = viewportHeight - rect.bottom;
-      const spaceAbove = rect.top;
-      
-      if (this.position === 'bottom' && spaceBelow >= MIN_SPACE) {
-        // Show below
-        this.computedPosition = 'bottom';
+      const showBelow = this.position === 'bottom' && spaceBelow >= MIN_SPACE;
+      const showAbove = this.position === 'top' || !showBelow;
+      this.computedPosition = showAbove ? 'top' : 'bottom';
+
+      const horizontal = this.getHorizontalPlacement(rect);
+      if (showAbove) {
         this.tooltipStyle = {
           ...baseStyle,
-          top: `${rect.bottom + TOOLTIP_GAP}px`,
-          left: `${rect.left + (rect.width / 2)}px`,
-          transform: 'translateX(-50%)'
-        };
-      } else if (this.position === 'top' || spaceBelow < MIN_SPACE) {
-        // Show above - position directly on top of the button
-        this.computedPosition = 'top';
-        // Position tooltip directly above the button center
-        const buttonCenterX = rect.left + (rect.width / 2);
-        // Position tooltip so the arrow (6px) touches the button
-        // The transform translate(-50%, -100%) moves the tooltip up by its full height
-        // So we position at rect.top, and the arrow (at bottom of tooltip) will be at rect.top
-        // The arrow has margin-top: -1px, so it will slightly overlap the button
-        this.tooltipStyle = {
-          ...baseStyle,
-          top: `${rect.top}px`, // Position at button top, arrow will touch button
-          left: `${buttonCenterX}px`,
-          transform: 'translate(-50%, -100%)'
+          top: `${rect.top - gap}px`,
+          left: horizontal.left,
+          transform: horizontal.transformAbove
         };
       } else {
-        // Fallback to bottom
-        this.computedPosition = 'bottom';
         this.tooltipStyle = {
           ...baseStyle,
-          top: `${rect.bottom + TOOLTIP_GAP}px`,
-          left: `${rect.left + (rect.width / 2)}px`,
-          transform: 'translateX(-50%)'
+          top: `${rect.bottom + gap}px`,
+          left: horizontal.left,
+          transform: horizontal.transformBelow
         };
       }
-    } else if (this.position === 'left' || this.position === 'right') {
-      // For left/right, check horizontal space
+      return;
+    }
+
+    if (this.position === 'left' || this.position === 'right') {
       const spaceRight = viewportWidth - rect.right;
-      const spaceLeft = rect.left;
-      
-      if (this.position === 'right' && spaceRight >= MIN_SPACE) {
-        // Show to the right
-        this.computedPosition = 'right';
+      const showRight = this.position === 'right' && spaceRight >= MIN_SPACE;
+      const showLeft = this.position === 'left' || !showRight;
+      this.computedPosition = showLeft ? 'left' : 'right';
+
+      const vertical = this.getVerticalPlacement(rect);
+      if (showLeft) {
         this.tooltipStyle = {
           ...baseStyle,
-          left: `${rect.right + TOOLTIP_GAP}px`,
-          top: `${rect.top + (rect.height / 2)}px`,
-          transform: 'translateY(-50%)'
-        };
-      } else if (this.position === 'left' || spaceRight < MIN_SPACE) {
-        // Show to the left
-        this.computedPosition = 'left';
-        this.tooltipStyle = {
-          ...baseStyle,
-          left: `${rect.left - TOOLTIP_GAP}px`,
-          top: `${rect.top + (rect.height / 2)}px`,
-          transform: 'translate(-100%, -50%)'
+          left: `${rect.left - gap}px`,
+          top: vertical.top,
+          transform: vertical.transformLeft
         };
       } else {
-        // Fallback to right
-        this.computedPosition = 'right';
         this.tooltipStyle = {
           ...baseStyle,
-          left: `${rect.right + TOOLTIP_GAP}px`,
-          top: `${rect.top + (rect.height / 2)}px`,
-          transform: 'translateY(-50%)'
+          left: `${rect.right + gap}px`,
+          top: vertical.top,
+          transform: vertical.transformRight
         };
       }
-    } else {
-      // Default to bottom
-      this.computedPosition = 'bottom';
-      this.tooltipStyle = {
+      return;
+    }
+
+    const horizontal = this.getHorizontalPlacement(rect);
+    this.computedPosition = 'bottom';
+    this.tooltipStyle = {
+      ...baseStyle,
+      top: `${rect.bottom + gap}px`,
+      left: horizontal.left,
+      transform: horizontal.transformBelow
+    };
+  }
+
+  /**
+   * Mesmo layout dos botões da sidebar (`position="top"` centrado no botão),
+   * mas ancorado no cursor — ex.: `position="bottom"` abre abaixo do ponteiro.
+   */
+  private buildCursorAnchoredStyle(
+    baseStyle: { [key: string]: string }
+  ): { [key: string]: string } {
+    const gap = this.tooltipGap;
+    const centerX = this.clampCursorCenterX(this.pointerX);
+
+    if (this.position === 'top') {
+      this.computedPosition = 'top';
+      return {
         ...baseStyle,
-        top: `${rect.bottom + TOOLTIP_GAP}px`,
-        left: `${rect.left + (rect.width / 2)}px`,
-        transform: 'translateX(-50%)'
+        top: `${this.pointerY - gap}px`,
+        left: `${centerX}px`,
+        transform: 'translate(-50%, -100%)'
       };
     }
+
+    if (this.position === 'left') {
+      this.computedPosition = 'left';
+      return {
+        ...baseStyle,
+        left: `${this.pointerX - gap}px`,
+        top: `${this.pointerY}px`,
+        transform: 'translate(-100%, -50%)'
+      };
+    }
+
+    if (this.position === 'right') {
+      this.computedPosition = 'right';
+      return {
+        ...baseStyle,
+        left: `${this.pointerX + gap}px`,
+        top: `${this.pointerY}px`,
+        transform: 'translateY(-50%)'
+      };
+    }
+
+    this.computedPosition = 'bottom';
+    return {
+      ...baseStyle,
+      top: `${this.pointerY + gap}px`,
+      left: `${centerX}px`,
+      transform: 'translateX(-50%)'
+    };
+  }
+
+  private clampCursorCenterX(centerX: number): number {
+    const edge = 8;
+    const half = this.TOOLTIP_ESTIMATED_WIDTH / 2;
+    return Math.max(edge + half, Math.min(window.innerWidth - edge - half, centerX));
+  }
+
+  private getHorizontalPlacement(rect: DOMRect): {
+    left: string;
+    transformBelow: string;
+    transformAbove: string;
+  } {
+    const centerX = rect.left + rect.width / 2;
+    if (this.align === 'start') {
+      return {
+        left: `${rect.left}px`,
+        transformBelow: 'none',
+        transformAbove: 'translateY(-100%)'
+      };
+    }
+    if (this.align === 'end') {
+      const edge = 8;
+      const preferredWidth = 280;
+      const maxWidth = Math.min(preferredWidth, rect.right - edge);
+      const left = Math.max(edge, rect.right - maxWidth);
+      return {
+        left: `${left}px`,
+        transformBelow: 'none',
+        transformAbove: 'translateY(-100%)'
+      };
+    }
+    return {
+      left: `${centerX}px`,
+      transformBelow: 'translateX(-50%)',
+      transformAbove: 'translate(-50%, -100%)'
+    };
+  }
+
+  private getVerticalPlacement(rect: DOMRect): {
+    top: string;
+    transformLeft: string;
+    transformRight: string;
+  } {
+    const centerY = rect.top + rect.height / 2;
+    if (this.align === 'start') {
+      return {
+        top: `${rect.top}px`,
+        transformLeft: 'translate(-100%, 0)',
+        transformRight: 'none'
+      };
+    }
+    if (this.align === 'end') {
+      return {
+        top: `${rect.bottom}px`,
+        transformLeft: 'translate(-100%, -100%)',
+        transformRight: 'translateY(-100%)'
+      };
+    }
+    return {
+      top: `${centerY}px`,
+      transformLeft: 'translate(-100%, -50%)',
+      transformRight: 'translateY(-50%)'
+    };
   }
 
 }

@@ -1,6 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { HttpClientTestingModule } from '@angular/common/http/testing';
 import { C4uSeasonLevelComponent } from './c4u-season-level.component';
-import { PlayerMetadata } from '@model/gamification-dashboard.model';
+import { C4uInfoButtonModule } from '../c4u-info-button/c4u-info-button.module';
 
 describe('C4uSeasonLevelComponent', () => {
   let component: C4uSeasonLevelComponent;
@@ -8,7 +9,8 @@ describe('C4uSeasonLevelComponent', () => {
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      declarations: [C4uSeasonLevelComponent]
+      declarations: [C4uSeasonLevelComponent],
+      imports: [C4uInfoButtonModule, HttpClientTestingModule]
     }).compileComponents();
 
     fixture = TestBed.createComponent(C4uSeasonLevelComponent);
@@ -19,13 +21,13 @@ describe('C4uSeasonLevelComponent', () => {
     expect(component).toBeTruthy();
   });
 
-  it('should render the season level number', () => {
-    component.level = 5;
+  it('should render the average goals percentage in the circle', () => {
+    component.kpiAveragePercent = 72;
     fixture.detectChanges();
 
     const compiled = fixture.nativeElement as HTMLElement;
     const levelNumber = compiled.querySelector('.level-number');
-    expect(levelNumber?.textContent?.trim()).toBe('5');
+    expect(levelNumber?.textContent?.trim()).toBe('72%');
   });
 
   it('should render the player name', () => {
@@ -35,6 +37,25 @@ describe('C4uSeasonLevelComponent', () => {
     const compiled = fixture.nativeElement as HTMLElement;
     const playerName = compiled.querySelector('.player-name');
     expect(playerName?.textContent?.trim()).toBe('João Silva');
+  });
+
+  it('should render team name below player name', () => {
+    component.playerName = 'João Silva';
+    component.teamName = 'Time Norte';
+    fixture.detectChanges();
+
+    const compiled = fixture.nativeElement as HTMLElement;
+    const team = compiled.querySelector('.player-team');
+    expect(team?.textContent?.trim()).toBe('Time Norte');
+  });
+
+  it('should not render team paragraph when team name is empty', () => {
+    component.playerName = 'João Silva';
+    component.teamName = '';
+    fixture.detectChanges();
+
+    const compiled = fixture.nativeElement as HTMLElement;
+    expect(compiled.querySelector('.player-team')).toBeNull();
   });
 
   it('should render player metadata with all fields', () => {
@@ -85,16 +106,33 @@ describe('C4uSeasonLevelComponent', () => {
     const levelNumber = compiled.querySelector('.level-number');
     const playerName = compiled.querySelector('.player-name');
 
-    expect(levelNumber?.textContent?.trim()).toBe('0');
+    expect(levelNumber?.textContent?.trim()).toBe('0%');
     expect(playerName?.textContent?.trim()).toBe('');
   });
 
-  it('should handle large level numbers', () => {
-    component.level = 999;
-    fixture.detectChanges();
+  it('should cap progress dasharray at 100', () => {
+    component.kpiAveragePercent = 150;
+    expect(component.progressDasharray).toBe('100, 100');
+  });
 
+  it('should render info button above the circular progress', () => {
+    fixture.detectChanges();
     const compiled = fixture.nativeElement as HTMLElement;
-    const levelNumber = compiled.querySelector('.level-number');
-    expect(levelNumber?.textContent?.trim()).toBe('999');
+    expect(compiled.querySelector('c4u-info-button')).toBeTruthy();
+  });
+
+  it('should use gold stroke at 100%', () => {
+    component.kpiAveragePercent = 100;
+    expect(component.circleStroke).toBe('url(#seasonLevelGold)');
+    expect(component.levelColorClass).toBe('level-gold');
+  });
+
+  it('should interpolate stroke color between red and green', () => {
+    component.kpiAveragePercent = 0;
+    expect(component.circleStroke).toBe('rgb(197, 102, 133)');
+    component.kpiAveragePercent = 50;
+    expect(component.circleStroke).toBe('rgb(126, 153, 100)');
+    component.kpiAveragePercent = 100;
+    expect(component.circleStroke).toBe('url(#seasonLevelGold)');
   });
 });

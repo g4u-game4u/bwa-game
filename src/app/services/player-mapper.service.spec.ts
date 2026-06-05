@@ -184,5 +184,16 @@ describe('PlayerMapper', () => {
       expect(result.name).toBe('maria.santos');
       expect(result.email).toBe('maria.santos@empresa.com');
     });
+
+    it('should map team_name from /auth/user', () => {
+      const apiResponse = {
+        _id: 'player789',
+        full_name: 'Maria Costa',
+        email: 'maria@example.com',
+        team_name: 'Equipe Alpha'
+      };
+      const result = mapper.toPlayerStatus(apiResponse);
+      expect(result.teamName).toBe('Equipe Alpha');
+    });
   });
 });

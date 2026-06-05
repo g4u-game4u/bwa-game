@@ -37,25 +37,25 @@
 
       <!-- Tasks Section -->
       <div class="tasks-section">
-        <h3 class="section-title">Tarefas</h3>
+        <h3 class="section-title">Entregas</h3>
         
         <!-- Loading Tasks -->
         <div *ngIf="isLoadingTasks" class="loading-tasks">
           <i class="ri-loader-4-line loading-icon"></i>
-          <span>Carregando tarefas...</span>
+          <span>Carregando entregas...</span>
         </div>
 
         <!-- Tasks List -->
         <div *ngIf="!isLoadingTasks" class="tasks-list">
           <div *ngIf="tasks.length === 0" class="empty-state">
             <i class="ri-file-list-line empty-icon"></i>
-            <span>Nenhuma tarefa encontrada</span>
+            <span>Nenhuma entrega encontrada</span>
           </div>
 
           <div *ngIf="tasks.length > 0" class="tasks-table">
             <div class="task-header">
               <div class="task-col-process">Cliente</div>
-              <div class="task-col-title">Tarefa</div>
+              <div class="task-col-title">Entrega</div>
               <div class="task-col-executor">Executor</div>
               <div class="task-col-date">Data</div>
             </div>

@@ -84,7 +84,7 @@ export class ModalSeasonFaqComponent {
       theme: 'emerald',
       body:
         'É a referência de volume que a operação espera para o mês filtrado.\n' +
-        'Contam as tarefas finalizadas por você, com o peso de cada entrega conforme as regras do game.\n' +
+        'Contam as entregas finalizadas por você, com o peso de cada entrega conforme as regras do game.\n' +
         'Compare o realizado com a meta na barra de progresso em Minhas Metas.',
     },
     {
@@ -101,8 +101,8 @@ export class ModalSeasonFaqComponent {
       icon: 'ri-bar-chart-grouped-line',
       theme: 'amber',
       body:
-        'Em Pendentes, clique para ver os tipos de tarefa em aberto, o volume por dia de prazo no mês e, ao selecionar um tipo, a lista de empresas com prazos.\n' +
-        'Tarefas com risco de multa aparecem destacadas abaixo do nome da empresa.\n' +
+        'Em Pendentes, clique para ver os tipos de entrega em aberto, o volume por dia de prazo no mês e, ao selecionar um tipo, a lista de empresas com prazos.\n' +
+        'Entregas com risco de multa aparecem destacadas abaixo do nome da empresa.\n' +
         'Em Finalizados, você acessa as entregas já concluídas no período.',
     },
     {
@@ -110,7 +110,7 @@ export class ModalSeasonFaqComponent {
       icon: 'ri-lightbulb-flash-line',
       theme: 'rose',
       body:
-        'Resumo inteligente das suas tarefas no mês: produtividade, prazos e alertas (risco de multa, vencimento próximo, pendentes atrasadas).\n' +
+        'Resumo inteligente das suas entregas no mês: produtividade, prazos e alertas (risco de multa, vencimento próximo, pendentes atrasadas).\n' +
         'Mostra também atividade mais realizada, dia mais produtivo e totais de finalizadas, no prazo, fora do prazo e pendentes abertas.',
     },
     {
@@ -119,7 +119,7 @@ export class ModalSeasonFaqComponent {
       theme: 'sky',
       body:
         'Clientes para os quais você finalizou entregas no Acessórias no período filtrado.\n' +
-        'Ao clicar em uma empresa, você vê as tarefas realizadas, quem finalizou e a data de entrega, útil para monitorar a carteira por cliente.',
+        'Ao clicar em uma empresa, você vê as entregas realizadas, quem finalizou e a data de entrega, útil para monitorar a carteira por cliente.',
     },
     {
       title: 'Preciso de ajuda ou tenho dúvidas sobre regras?',
@@ -134,7 +134,7 @@ export class ModalSeasonFaqComponent {
       icon: 'ri-rocket-2-line',
       theme: 'fuchsia',
       body:
-        'Priorize alertas de risco de multa e tarefas próximas do vencimento em Pendentes e Insights.\n' +
+        'Priorize alertas de risco de multa e entregas próximas do vencimento em Pendentes e Insights.\n' +
         'Equilibre meta de pontos, entregas no prazo e cobertura de clientes.\n' +
         'Aproveite bônus (entrega antecipada, onboarding, churn) e evite penalidades por atraso. Cada dia conta na tabela oficial de -10% a -100%.',
     },

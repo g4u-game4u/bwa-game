@@ -19,6 +19,7 @@
             <c4u-season-level
               [level]="playerStatus.seasonLevel"
               [playerName]="playerStatus.name"
+              [teamName]="playerStatus.teamName || ''"
               [metadata]="playerStatus.metadata"
               [kpiAveragePercent]="kpiAveragePercent">
             </c4u-season-level>
@@ -29,8 +30,9 @@
               *ngIf="sessionPlayerName"
               [level]="0"
               [playerName]="sessionPlayerName"
+              [teamName]="sessionTeamName"
               [metadata]="{ area: '', time: '', squad: '' }"
-              [kpiAveragePercent]="0">
+              [kpiAveragePercent]="kpiAveragePercent">
             </c4u-season-level>
           </ng-template>
           

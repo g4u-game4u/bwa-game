@@ -36,6 +36,17 @@ export class PlayerMapper {
     return '';
   }
 
+  private resolveTeamName(api: any): string {
+    if (!api || typeof api !== 'object') {
+      return '';
+    }
+    const raw = api.team_name ?? api.teamName;
+    if (typeof raw === 'string' && raw.trim()) {
+      return raw.trim();
+    }
+    return '';
+  }
+
   private resolveEmail(api: any): string {
     if (!api || typeof api !== 'object') {
       return '';
@@ -88,6 +99,7 @@ export class PlayerMapper {
       seasonLevel,
       levelName: nextLevel.level || '',
       percentCompleted: levelProgress.percent_completed || 0,
+      teamName: this.resolveTeamName(apiResponse) || null,
       metadata: this.extractMetadata(apiResponse),
       created: apiResponse.created || Date.now(),
       updated: apiResponse.updated || Date.now()

@@ -15,6 +15,7 @@ export interface MockPlayerStatus {
   email: string;
   level: number;
   seasonLevel: number;
+  teamName?: string | null;
   metadata: {
     area: string;
     time: string;
@@ -31,6 +32,7 @@ export function createMockPlayerStatus(overrides?: Partial<MockPlayerStatus>): M
     email: 'joao.silva@example.com',
     level: 5,
     seasonLevel: 3,
+    teamName: 'Time Alpha',
     metadata: {
       area: 'Vendas',
       time: 'Time Alpha',

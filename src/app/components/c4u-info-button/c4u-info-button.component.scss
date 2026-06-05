@@ -54,7 +54,8 @@
   line-height: 1.5;
   color: #e0e0e0;
   pointer-events: none;
-  animation: fadeIn 0.2s ease;
+  // Só opacidade — animação com transform quebrava o posicionamento inline (translateX/-100%).
+  animation: tooltipFadeIn 0.2s ease;
   // Better text wrapping
   word-wrap: break-word;
   overflow-wrap: break-word;
@@ -79,7 +80,6 @@
   }
   
   &.tooltip-bottom {
-    // Position set via inline styles
     &::after {
       content: '';
       position: absolute;
@@ -88,7 +88,18 @@
       transform: translateX(-50%);
       border: 6px solid transparent;
       border-bottom-color: rgba(30, 30, 30, 0.95);
-      margin-bottom: -1px; // Slight overlap for better visual connection
+      margin-bottom: -1px;
+    }
+
+    &.tooltip-align-end::after {
+      left: auto;
+      right: 8px;
+      transform: none;
+    }
+
+    &.tooltip-align-start::after {
+      left: 8px;
+      transform: none;
     }
   }
   
@@ -119,14 +130,12 @@
   }
 }
 
-@keyframes fadeIn {
+@keyframes tooltipFadeIn {
   from {
     opacity: 0;
-    transform: translateY(-4px);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
   }
 }
 
