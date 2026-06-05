@@ -494,11 +494,11 @@
                           </span>
                           <span class="executive-kpi-label">Entregas no prazo</span>
                           <span
-                            *ngIf="executiveInsightsJudgedDeliveries > 0"
+                            *ngIf="executiveInsightsJudgedPrazoTasks > 0"
                             class="executive-kpi-hint">
-                            {{ executiveInsightsOnTimeDeliveries | number:'1.0-0':'pt-BR' }} de
-                            {{ executiveInsightsJudgedDeliveries | number:'1.0-0':'pt-BR' }}
-                            {{ executiveInsightsJudgedDeliveries === 1 ? 'entrega' : 'entregas' }}
+                            {{ executiveInsightsOnTimeTasks | number:'1.0-0':'pt-BR' }} de
+                            {{ executiveInsightsJudgedPrazoTasks | number:'1.0-0':'pt-BR' }}
+                            {{ executiveInsightsJudgedPrazoTasks === 1 ? 'tarefa' : 'tarefas' }}
                           </span>
                         </ng-container>
                         <ng-template #noOnTime>
@@ -513,51 +513,22 @@
                         <i class="ri-team-line"></i>
                       </div>
                       <div class="executive-kpi-content">
-                        <span class="executive-kpi-value">
-                          {{ executiveInsightsActivePlayers | number:'1.0-0':'pt-BR' }}
-                        </span>
-                        <span class="executive-kpi-label">Pessoas ativas no mês</span>
-                        <span
-                          *ngIf="executiveInsightsAvgClientsPerActivePlayer > 0"
-                          class="executive-kpi-hint">
-                          ~{{ executiveInsightsAvgClientsPerActivePlayer | number:'1.0-1':'pt-BR' }} clientes / pessoa
-                        </span>
-                      </div>
-                    </div>
-
-                    <div class="executive-kpi" role="listitem">
-                      <div class="executive-kpi-icon executive-kpi-icon--goal" aria-hidden="true">
-                        <i class="ri-flag-2-line"></i>
-                      </div>
-                      <div class="executive-kpi-content">
-                        <ng-container *ngIf="executiveInsightsMonthlyGoalTarget; else noGoal">
+                        <ng-container *ngIf="executiveInsightsAvgClientsPerActivePlayer > 0; else noClientsAvg">
                           <span class="executive-kpi-value">
-                            {{ executiveInsightsGoalProgressPct | number:'1.0-1':'pt-BR' }}%
+                            {{ executiveInsightsAvgClientsPerActivePlayer | number:'1.0-1':'pt-BR' }}
                           </span>
-                          <span class="executive-kpi-label">Da meta do mês</span>
-                          <span class="executive-kpi-hint">
-                            {{ executiveInsightsMonthlyPointsDone | number:'1.0-0':'pt-BR' }}
-                            / {{ executiveInsightsMonthlyGoalTarget | number:'1.0-0':'pt-BR' }} pts
-                          </span>
+                          <span class="executive-kpi-label">Clientes atendidos por pessoa</span>
                         </ng-container>
-                        <ng-template #noGoal>
-                          <span class="executive-kpi-value executive-kpi-value--muted">—</span>
-                          <span class="executive-kpi-label">Da meta do mês</span>
-                          <span class="executive-kpi-hint">Meta não definida</span>
+                        <ng-template #noClientsAvg>
+                          <span class="executive-kpi-value executive-kpi-value--muted">n/a</span>
+                          <span class="executive-kpi-label">Clientes atendidos por pessoa</span>
                         </ng-template>
-                      </div>
-                    </div>
-
-                    <div *ngIf="executiveInsightsPendingTasks > 0" class="executive-kpi" role="listitem">
-                      <div class="executive-kpi-icon executive-kpi-icon--pending" aria-hidden="true">
-                        <i class="ri-hourglass-line"></i>
-                      </div>
-                      <div class="executive-kpi-content">
-                        <span class="executive-kpi-value">
-                          {{ executiveInsightsPendingTasks | number:'1.0-0':'pt-BR' }}
+                        <span
+                          *ngIf="executiveInsightsActivePlayers > 0"
+                          class="executive-kpi-hint">
+                          {{ executiveInsightsActivePlayers | number:'1.0-0':'pt-BR' }}
+                          {{ executiveInsightsActivePlayers === 1 ? 'pessoa ativa' : 'pessoas ativas' }} no mês
                         </span>
-                        <span class="executive-kpi-label">Entregas pendentes</span>
-                        <span class="executive-kpi-hint">no mês selecionado</span>
                       </div>
                     </div>
                   </div>

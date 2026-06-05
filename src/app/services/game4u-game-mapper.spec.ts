@@ -25,6 +25,7 @@ import {
   aggregateExecutiveTopProcessesFromUserActions,
   buildJustifiedDeliveryKeysFromUserActions,
   countExecutiveFinishedTasksFromUserActions,
+  countExecutiveOnTimeTasksFromUserActions,
   isGame4uDeliveryRowJustified,
   partitionExecutivePlayerRankings,
   deliveryRowCountsAsOnTime,
@@ -848,6 +849,38 @@ describe('game4u-game-mapper', () => {
       ]);
 
       expect(counts).toEqual({ total: 2, justified: 1, judged: 1 });
+    });
+
+    it('countExecutiveOnTimeTasksFromUserActions mirrors resumo do mês prazo rules', () => {
+      const counts = countExecutiveOnTimeTasksFromUserActions([
+        {
+          id: '1',
+          points: 1,
+          status: 'DONE',
+          created_at: '2026-03-01',
+          dt_prazo: '2026-03-10',
+          finished_at: '2026-03-05T12:00:00Z',
+          extra: { status_api: 'Pend. justificada' }
+        },
+        {
+          id: '2',
+          points: 1,
+          status: 'DONE',
+          created_at: '2026-03-02',
+          dt_prazo: '2026-03-10',
+          finished_at: '2026-03-06T12:00:00Z'
+        },
+        {
+          id: '3',
+          points: 1,
+          status: 'DONE',
+          created_at: '2026-03-03',
+          dt_prazo: '2026-03-01',
+          finished_at: '2026-03-08T12:00:00Z'
+        }
+      ]);
+
+      expect(counts).toEqual({ onTime: 1, late: 1, justified: 1, judged: 2 });
     });
 
     it('aggregateExecutiveTopProcessesFromUserActions excludes justified from on-time pct', () => {

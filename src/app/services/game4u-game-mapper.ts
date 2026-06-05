@@ -399,6 +399,33 @@ export function countExecutiveFinishedTasksFromUserActions(
   return { total, justified, judged: total - justified };
 }
 
+/**
+ * Conta tarefas no prazo / fora do prazo com a mesma regra do Resumo do mês
+ * (`mapGame4uActionsToActivityList` + `resolveGame4uFinishedPrazoStatus`).
+ */
+export function countExecutiveOnTimeTasksFromUserActions(
+  actions: Game4uUserActionModel[]
+): { onTime: number; late: number; justified: number; judged: number } {
+  const finished = (actions || []).filter(a => isGame4uUserActionFinalizedStatus(a.status));
+  const items = mapGame4uActionsToActivityList(finished, undefined, { monthFilter: 'none' });
+  let onTime = 0;
+  let late = 0;
+  let justified = 0;
+  for (const item of items) {
+    if (item.atraso_justificado === true) {
+      justified += 1;
+      continue;
+    }
+    const status = resolveGame4uFinishedPrazoStatus(item.dt_prazo, item.created);
+    if (status === 'on_time') {
+      onTime += 1;
+    } else if (status === 'late') {
+      late += 1;
+    }
+  }
+  return { onTime, late, justified, judged: onTime + late };
+}
+
 export function isGame4uDeliveryRowJustified(
   row: Game4uReportsFinishedDeliveryRow,
   lookup?: ExecutiveJustifiedDeliveryLookup

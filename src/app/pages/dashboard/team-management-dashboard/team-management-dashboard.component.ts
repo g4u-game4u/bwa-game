@@ -41,6 +41,7 @@ import {
   aggregateExecutiveTopProcessesFromUserActions,
   buildExecutiveJustifiedDeliveryLookup,
   countExecutiveFinishedTasksFromUserActions,
+  countExecutiveOnTimeTasksFromUserActions,
   deliveryRowCountsAsOnTime,
   hasMoreFinishedDeliveriesCachedPage,
   isGame4uDeliveryRowJustified,
@@ -344,6 +345,8 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
   executiveInsightsOnTimeTasks = 0;
   /** Tarefas elegíveis para métrica de prazo (exclui justificadas). */
   executiveInsightsJudgedTasks = 0;
+  /** Tarefas com prazo avaliável (no prazo + fora do prazo), alinhado ao Resumo do mês. */
+  executiveInsightsJudgedPrazoTasks = 0;
   /** Entregas elegíveis para métrica de prazo (exclui justificadas). */
   executiveInsightsJudgedDeliveries = 0;
   /** Entregas no prazo entre as elegíveis (exclui justificadas). */
@@ -361,7 +364,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
   /** % de tarefas no prazo (média ponderada das linhas com `on_time_pct`). */
   executiveInsightsOnTimePctOverall: number | null = null;
 
-  readonly executiveSkeletonKpiSlots = [0, 1, 2, 3, 4];
+  readonly executiveSkeletonKpiSlots = [0, 1, 2];
   readonly executiveSkeletonProcessSlots = [0, 1, 2, 3];
   readonly executiveSkeletonPlayerBlocks = [0, 1];
   readonly executiveSkeletonPlayerSlots = [0, 1, 2];
@@ -4050,6 +4053,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
     this.executiveInsightsTotalTasks = 0;
     this.executiveInsightsOnTimeTasks = 0;
     this.executiveInsightsJudgedTasks = 0;
+    this.executiveInsightsJudgedPrazoTasks = 0;
     this.executiveInsightsJudgedDeliveries = 0;
     this.executiveInsightsOnTimeDeliveries = 0;
     this.executiveInsightsActivePlayers = 0;
@@ -4205,6 +4209,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       this.executiveInsightsTotalTasks = 0;
       this.executiveInsightsOnTimeTasks = 0;
       this.executiveInsightsJudgedTasks = 0;
+      this.executiveInsightsJudgedPrazoTasks = 0;
       this.executiveInsightsJudgedDeliveries = 0;
       this.executiveInsightsOnTimeDeliveries = 0;
       this.executiveInsightsActivePlayers = 0;
@@ -4217,6 +4222,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
 
     const justifiedLookup = buildExecutiveJustifiedDeliveryLookup(finishedUserActions);
     const taskCounts = countExecutiveFinishedTasksFromUserActions(finishedUserActions);
+    const prazoTaskCounts = countExecutiveOnTimeTasksFromUserActions(finishedUserActions);
 
     type PlayerAcc = {
       tasks: number;
@@ -4232,7 +4238,6 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
     const byPlayer = new Map<string, PlayerAcc>();
     const activePlayers = new Set<string>();
     let totalJudgedTasks = 0;
-    let totalOnTimeTasks = 0;
     let totalJudgedDeliveries = 0;
     let totalOnTimeDeliveries = 0;
 
@@ -4248,14 +4253,6 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
         totalJudgedDeliveries += 1;
         if (deliveryRowCountsAsOnTime(row)) {
           totalOnTimeDeliveries += 1;
-        }
-        const tasksOnTimeExplicit = Math.floor(Number(row.tasks_on_time) || 0);
-        const otp = row.on_time_pct;
-        const hasOtp = otp != null && Number.isFinite(Number(otp));
-        if (tasksOnTimeExplicit > 0) {
-          totalOnTimeTasks += Math.min(tasksOnTimeExplicit, tasks);
-        } else if (hasOtp) {
-          totalOnTimeTasks += Math.round((Number(otp) / 100) * tasks);
         }
       }
 
@@ -4298,7 +4295,8 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
     const judgedTasksForKpi = taskCounts.total > 0 ? judgedTasksFromActions : totalJudgedTasks;
     this.executiveInsightsTotalTasks = judgedTasksForKpi;
     this.executiveInsightsJudgedTasks = judgedTasksForKpi;
-    this.executiveInsightsOnTimeTasks = totalOnTimeTasks;
+    this.executiveInsightsJudgedPrazoTasks = prazoTaskCounts.judged;
+    this.executiveInsightsOnTimeTasks = prazoTaskCounts.onTime;
     this.executiveInsightsJudgedDeliveries = totalJudgedDeliveries;
     this.executiveInsightsOnTimeDeliveries = totalOnTimeDeliveries;
     this.executiveInsightsActivePlayers = activePlayers.size;
@@ -4329,11 +4327,9 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       activePlayers.size > 0 ? Math.round((sumClients / activePlayers.size) * 10) / 10 : 0;
 
     this.executiveInsightsOnTimePctOverall =
-      totalJudgedDeliveries > 0
-        ? Math.round((totalOnTimeDeliveries / totalJudgedDeliveries) * 1000) / 10
-        : totalJudgedTasks > 0
-          ? Math.round((totalOnTimeTasks / totalJudgedTasks) * 1000) / 10
-          : null;
+      prazoTaskCounts.judged > 0
+        ? Math.round((prazoTaskCounts.onTime / prazoTaskCounts.judged) * 1000) / 10
+        : null;
 
     const playerArray: ExecutiveInsightsPlayerRank[] = [...byPlayer.entries()].map(([email, v]) => {
       const collab = this.collaborators.find(
@@ -4403,37 +4399,6 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       return 'badge-warning';
     }
     return 'badge-danger';
-  }
-
-  /** Meta mensal de pontos do cache de supervisão (`month_goal_points`); `null` quando ausente. */
-  get executiveInsightsMonthlyGoalTarget(): number | null {
-    const goal = Math.floor(Number(this.teamSupervisionBundle?.monthlyGoalTarget) || 0);
-    return goal > 0 ? goal : null;
-  }
-
-  /** Pontos já entregues no mês (`month_points_done_delivered`) — espelho público de `activity.pontosDone`. */
-  get executiveInsightsMonthlyPointsDone(): number {
-    return Math.floor(Number(this.teamSupervisionBundle?.activity?.pontosDone) || 0);
-  }
-
-  /** % de evolução da meta de pontos do mês (0–100, capped). */
-  get executiveInsightsGoalProgressPct(): number {
-    const goal = this.executiveInsightsMonthlyGoalTarget ?? 0;
-    const done = this.executiveInsightsMonthlyPointsDone;
-    if (goal <= 0) {
-      return 0;
-    }
-    return Math.min(100, Math.round((done / goal) * 1000) / 10);
-  }
-
-  /** Total de tarefas pendentes do mês (cache `supervision/dashboard/cached`). */
-  get executiveInsightsPendingTasks(): number {
-    return Math.floor(Number(this.teamSupervisionBundle?.activity?.pendentes) || 0);
-  }
-
-  /** Tarefas finalizadas no mês conforme cache supervisão (preferido sobre soma das deliveries). */
-  get executiveInsightsFinishedTasksCached(): number {
-    return Math.floor(Number(this.teamSupervisionBundle?.activity?.finalizadas) || 0);
   }
 
   trackByExecutiveProcess(_idx: number, row: { deliveryTitle: string }): string {
