@@ -32,9 +32,9 @@ export class C4uDashboardInsightsComponent {
 
   get infoText(): string {
     if (this.variant === 'player') {
-      return 'Resumo inteligente das suas tarefas no mês selecionado: produtividade, prazos e alertas de atenção';
+      return 'Resumo inteligente das suas entregas no mês selecionado: produtividade, prazos e alertas de atenção';
     }
-    return `Resumo operacional de ${this.scopeLabel} no mês: tarefas urgentes, produtividade e padrões de entrega`;
+    return `Resumo operacional de ${this.scopeLabel} no mês: entregas urgentes, produtividade e padrões de entrega`;
   }
 
   get weekdayMaxCount(): number {

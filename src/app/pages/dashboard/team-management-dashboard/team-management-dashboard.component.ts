@@ -193,7 +193,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
   private loadingMessageIdx = 0;
   private readonly loadingMessages: Array<{ title: string; subtitle: string }> = [
     { title: 'Carregando o painel…', subtitle: 'Somando pontos e alinhando metas.' },
-    { title: 'Puxando dados do time…', subtitle: 'Conferindo tarefas finalizadas e pendências.' },
+    { title: 'Puxando dados do time…', subtitle: 'Conferindo entregas finalizadas e pendências.' },
     { title: 'Preparando o placar…', subtitle: 'Organizando clientes atendidos e KPIs.' },
     { title: 'Quase lá…', subtitle: 'Ajustando o filtro do mês e consolidando a equipe.' }
   ];

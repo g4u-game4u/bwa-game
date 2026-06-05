@@ -9,6 +9,7 @@ export interface Usuario {
   deactivated_at?: string | null;
   roles: string[];
   team_id?: number;
+  team_name?: string | null;
   extra?: Record<string, any>;  // Funifier extra data
   pointCategories?: Record<string, number>;  // Funifier points
   teams?: string[] | Array<{         // Funifier teams array - can be array of strings or objects

@@ -127,6 +127,12 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     if (email) return email;
     return '';
   }
+
+  get sessionTeamName(): string {
+    const u = this.sessaoProvider.usuario as { team_name?: string | null } | null | undefined;
+    const teamName = (u?.team_name || '').trim();
+    return teamName;
+  }
   
   // KPI data
   playerKPIs: KPIData[] = [];
@@ -1695,7 +1701,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
       case 'atividades-pendentes':
         this.progressModalType = 'atividades-pendentes';
         this.isProgressModalOpen = true;
-        this.announceToScreenReader('Abrindo lista de tarefas pendentes');
+        this.announceToScreenReader('Abrindo lista de entregas pendentes');
         break;
       case 'atividades-pontos':
         this.progressModalType = 'pontos';
@@ -2103,23 +2109,37 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   }
   
   /**
-   * Calculate the average KPI percentage across all player KPIs based on super goals
-   * Super goal = 100%, 0 = 0%. This is used for the level indicator in the sidebar
+   * Média da % de conclusão de «Pontos no mês» e «Entregas no prazo» (sidebar do jogador).
    */
   get kpiAveragePercent(): number {
-    if (!this.playerKPIs || this.playerKPIs.length === 0) {
+    const parts: number[] = [];
+
+    const { current, target } = this.monthlyPointsProgressData;
+    if (target > 0) {
+      parts.push(Math.min(100, Math.round((current / target) * 100)));
+    }
+
+    const entregasKpi = (this.playerKPIs ?? []).find(k => k.id === 'entregas-prazo');
+    if (entregasKpi) {
+      parts.push(this.getKpiGoalPercent(entregasKpi));
+    }
+
+    if (parts.length === 0) {
       return 0;
     }
-    
-    const totalPercent = this.playerKPIs.reduce((sum, kpi) => {
-      // Calculate percentage based on super goal (super goal = 100%)
-      const superGoal = kpi.superTarget || kpi.target;
-      const current = this.getKpiCurrentValue(kpi);
-      const percent = superGoal > 0 ? (current / superGoal) * 100 : 0;
-      return sum + Math.min(100, percent); // Cap at 100%
-    }, 0);
-    
-    return Math.round(totalPercent / this.playerKPIs.length);
+    return Math.round(parts.reduce((sum, p) => sum + p, 0) / parts.length);
+  }
+
+  /** % de conclusão da meta de um KPI (mesma lógica de `c4u-kpi-circular-progress`). */
+  private getKpiGoalPercent(kpi: KPIData): number {
+    const current = this.getKpiCurrentValue(kpi);
+    if (kpi.unit === '%') {
+      return Math.min(Math.round(current), 100);
+    }
+    if (!kpi.target || kpi.target === 0) {
+      return 0;
+    }
+    return Math.min(100, Math.round((current / kpi.target) * 100));
   }
   
   /**

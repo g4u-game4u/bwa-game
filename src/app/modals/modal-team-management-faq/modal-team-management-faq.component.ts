@@ -85,7 +85,7 @@ export class ModalTeamManagementFaqComponent {
       icon: 'ri-pulse-line',
       theme: 'rose',
       body:
-        'Resumo do time ou colaborador selecionado no mês: alertas de risco de multa, tarefas próximas do vencimento e pendentes atrasadas.\n' +
+        'Resumo do time ou colaborador selecionado no mês: alertas de risco de multa, entregas próximas do vencimento e pendentes atrasadas.\n' +
         'Também mostra atividade mais realizada, dia mais produtivo e totais de finalizadas, no prazo, fora do prazo e pendentes abertas.\n' +
         'Use no dia a dia para priorizar o que exige ação imediata antes de discutir volume de pontos.',
     },
@@ -94,7 +94,7 @@ export class ModalTeamManagementFaqComponent {
       icon: 'ri-pie-chart-2-line',
       theme: 'fuchsia',
       body:
-        'Visão gerencial: tarefas finalizadas, percentual no prazo, pessoas ativas, progresso da meta e pendentes.\n' +
+        'Visão gerencial: entregas finalizadas, percentual no prazo, pessoas ativas, progresso da meta e pendentes.\n' +
         'Inclui ranking de processos mais finalizados, destaques do mês (mais entregas no prazo) e jogadores que precisam de atenção (menor % no prazo).\n' +
         'Sem colaborador selecionado, reflete o time inteiro; com colaborador, foca na performance individual.',
     },
@@ -115,7 +115,7 @@ export class ModalTeamManagementFaqComponent {
       theme: 'sky',
       body:
         'Clique nos cards de atividades ou processos em Progresso da equipe para abrir a lista de entregas do período.\n' +
-        'Em Clientes atendidos este mês, cada linha mostra participação no mês; clique para ver tarefas, responsáveis e status de prazo.\n' +
+        'Em Clientes atendidos este mês, cada linha mostra participação no mês; clique para ver entregas, responsáveis e status de prazo.\n' +
         'Com colaborador selecionado, os drill-downs refletem somente as entregas daquela pessoa.',
     },
     {

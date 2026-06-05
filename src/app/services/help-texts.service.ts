@@ -17,8 +17,9 @@ export class HelpTextsService {
     'empresas-na-carteira': 'Número total de clientes na sua carteira. Este valor representa a quantidade de clientes únicos que você atende. O atingimento desta meta aplica bônus na conversão de pontos desbloqueados em moedas.', // Deprecated: use clientes-na-carteira
     'entregas-no-prazo': 'Este percentual inclui entregas no prazo feitas por você e por outras pessoas que atenderam cada cliente. Valores acima de 90% indicam bom resultado. O atingimento desta meta aplica bônus ou penalidades na conversão de pontos desbloqueados em moedas.',
     'bloqueados': 'Pontos que ainda não foram desbloqueados e não podem ser utilizados. Eles serão liberados conforme você atinge determinadas metas.',
+    'pontos': 'Pontos que foram desbloqueados indicam valor entregue aos clientes. Estes pontos são concernentes a entregas 100% finalizadas ou justificadas.',
     'desbloqueados': 'Pontos que foram desbloqueados e estão disponíveis para uso. Estes pontos são concernentes a processos 100% finalizados. Você pode utilizá-los para trocar por recompensas. A conversão destes pontos em moedas é afetada pelo desempenho nos KPIs, podendo receber bônus ou penalidades.',
-    'moedas': 'Moedas acumuladas que podem ser trocadas por recompensas. Quanto mais moedas você acumula, mais opções de recompensas você terá. A quantidade de moedas obtidas na conversão de pontos desbloqueados varia conforme o desempenho nos KPIs.',
+    'moedas': 'Moedas acumuladas que podem ser trocadas por recompensas. Disponível em breve.',
     'metas': 'Número de metas atingidas em relação ao total de metas disponíveis. Atingir todas as metas garante bônus extras.',
     'clientes': 'Quantidade total de clientes únicos na sua carteira. Este número é calculado com base nos CNPJs únicos dos clientes que você atendeu.',
     'tarefas-finalizadas': 'Número total de tarefas concluídas durante a temporada. Cada tarefa finalizada contribui para o seu progresso geral.',

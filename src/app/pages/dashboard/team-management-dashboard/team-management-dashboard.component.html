@@ -470,7 +470,7 @@
                         <span class="executive-kpi-value">
                           {{ executiveInsightsTotalTasks | number:'1.0-0':'pt-BR' }}
                         </span>
-                        <span class="executive-kpi-label">Tarefas finalizadas</span>
+                        <span class="executive-kpi-label">Entregas finalizadas</span>
                         <span
                           *ngIf="executiveInsightsActivePlayers > 0 && !selectedCollaborator"
                           class="executive-kpi-hint">
@@ -491,7 +491,7 @@
                           <span class="executive-kpi-value">
                             {{ executiveInsightsOnTimePctOverall | number:'1.0-1':'pt-BR' }}%
                           </span>
-                          <span class="executive-kpi-label">Tarefas no prazo</span>
+                          <span class="executive-kpi-label">Entregas no prazo</span>
                           <span
                             *ngIf="executiveInsightsOnTimeTasks > 0"
                             class="executive-kpi-hint">
@@ -501,7 +501,7 @@
                         </ng-container>
                         <ng-template #noOnTime>
                           <span class="executive-kpi-value executive-kpi-value--muted">n/a</span>
-                          <span class="executive-kpi-label">Tarefas no prazo</span>
+                          <span class="executive-kpi-label">Entregas no prazo</span>
                         </ng-template>
                       </div>
                     </div>
@@ -554,7 +554,7 @@
                         <span class="executive-kpi-value">
                           {{ executiveInsightsPendingTasks | number:'1.0-0':'pt-BR' }}
                         </span>
-                        <span class="executive-kpi-label">Tarefas pendentes</span>
+                        <span class="executive-kpi-label">Entregas pendentes</span>
                         <span class="executive-kpi-hint">no mês selecionado</span>
                       </div>
                     </div>
@@ -589,7 +589,7 @@
                               </span>
                               <span class="executive-process-tasks">
                                 {{ proc.tasksTotal | number:'1.0-0':'pt-BR' }}
-                                {{ proc.tasksTotal === 1 ? 'tarefa' : 'tarefas' }}
+                                {{ proc.tasksTotal === 1 ? 'entrega' : 'entregas' }}
                               </span>
                             </div>
                             <div class="executive-process-bar-wrap">

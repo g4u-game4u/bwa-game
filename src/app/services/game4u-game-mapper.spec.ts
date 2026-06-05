@@ -426,6 +426,40 @@ describe('game4u-game-mapper', () => {
       expect(list.find(i => i.id === '2')?.risco_multa).toBeUndefined();
     });
 
+    it('maps atraso_justificado when extra.status_api contains justif (case-insensitive)', () => {
+      const month = new Date(2024, 5, 1);
+      const actions: Game4uUserActionModel[] = [
+        {
+          id: 'just',
+          points: 1,
+          status: 'DONE',
+          created_at: '2024-06-10T10:00:00.000Z',
+          finished_at: '2024-06-15T12:00:00.000Z',
+          extra: { status_api: 'Pend. justificada' }
+        },
+        {
+          id: 'caps',
+          points: 1,
+          status: 'DONE',
+          created_at: '2024-06-10T11:00:00.000Z',
+          finished_at: '2024-06-15T13:00:00.000Z',
+          extra: { status_api: 'Justificado' }
+        },
+        {
+          id: 'ok',
+          points: 1,
+          status: 'DONE',
+          created_at: '2024-06-11T10:00:00.000Z',
+          finished_at: '2024-06-12T10:00:00.000Z',
+          extra: { status_api: 'No prazo' }
+        }
+      ];
+      const list = mapGame4uActionsToActivityList(actions, month);
+      expect(list.find(i => i.id === 'just')?.atraso_justificado).toBe(true);
+      expect(list.find(i => i.id === 'caps')?.atraso_justificado).toBe(true);
+      expect(list.find(i => i.id === 'ok')?.atraso_justificado).toBeUndefined();
+    });
+
     it('monthFilter dtPrazo keeps pending rows whose created_at is outside month but dt_prazo is inside', () => {
       const month = new Date(2024, 5, 1);
       const actions: Game4uUserActionModel[] = [

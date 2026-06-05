@@ -98,7 +98,7 @@ describe('C4uSeasonProgressComponent', () => {
     const compiled = fixture.nativeElement as HTMLElement;
     const metricLabels = compiled.querySelectorAll('.label');
 
-    expect(metricLabels[0]?.textContent?.trim()).toBe('Tarefas Finalizadas');
+    expect(metricLabels[0]?.textContent?.trim()).toBe('Entregas Finalizadas');
   });
 
   it('should label clientes atendidos before tarefas when deliveryStatsTotal is set', () => {
@@ -118,7 +118,7 @@ describe('C4uSeasonProgressComponent', () => {
     const metricLabels = compiled.querySelectorAll('.label');
 
     expect(metricLabels[0]?.textContent?.trim()).toBe('Clientes atendidos');
-    expect(metricLabels[1]?.textContent?.trim()).toBe('Tarefas Finalizadas');
+    expect(metricLabels[1]?.textContent?.trim()).toBe('Entregas Finalizadas');
   });
 
   it('should display progress title', () => {
