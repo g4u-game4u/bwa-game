@@ -1,10 +1,13 @@
-import { Component, Input, ChangeDetectionStrategy } from '@angular/core';
+import { Component, Input, Output, EventEmitter, ChangeDetectionStrategy } from '@angular/core';
 import {
   DashboardInsightPreset,
+  DashboardInsightsAlertFocus,
   DashboardInsightsAudience,
-  DashboardInsightsSnapshot
+  DashboardInsightsSnapshot,
+  GAME4U_INSIGHTS_MASCOT_URL
 } from '@model/dashboard-insights.model';
 import { buildDashboardInsightPresets } from '@services/dashboard-insights.service';
+import { FeaturesService } from '@services/features.service';
 
 export type DashboardInsightsVariant = 'player' | 'team';
 
@@ -15,6 +18,7 @@ export type DashboardInsightsVariant = 'player' | 'team';
   changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class C4uDashboardInsightsComponent {
+  constructor(private readonly featuresService: FeaturesService) {}
   readonly skeletonAlerts = [0, 1, 2];
   readonly skeletonPresetSlots = [0, 1];
   readonly skeletonRankedRows = [0, 1, 2];
@@ -30,11 +34,18 @@ export class C4uDashboardInsightsComponent {
   /** Sem cabeçalho de secção nem card exterior (ex.: dentro de insights executivos). */
   @Input() embedded = false;
 
+  /** Clique num card de alerta com itens (ex.: abrir entregas com risco de multa). */
+  @Output() alertClicked = new EventEmitter<DashboardInsightsAlertFocus>();
+
   get insightPresets(): DashboardInsightPreset[] {
     return buildDashboardInsightPresets(this.insights, {
       audience: this.audience,
       scopeLabel: this.variant === 'player' ? 'você' : this.scopeLabel
     });
+  }
+
+  get mascotImageUrl(): string {
+    return this.featuresService.getMascotImageUrl()?.trim() || GAME4U_INSIGHTS_MASCOT_URL;
   }
 
   get hasData(): boolean {
@@ -90,5 +101,35 @@ export class C4uDashboardInsightsComponent {
 
   trackByKey(_index: number, item: { key: string }): string {
     return item.key;
+  }
+
+  isAlertActionable(focus: DashboardInsightsAlertFocus): boolean {
+    if (!this.insights) {
+      return false;
+    }
+    switch (focus) {
+      case 'fine-risk':
+        return this.insights.fineRiskTasks > 0;
+      case 'overdue-pending':
+        return this.insights.overduePendingTasks > 0;
+      case 'due-soon':
+        return this.insights.dueSoonTasks > 0;
+      default:
+        return false;
+    }
+  }
+
+  onAlertClick(focus: DashboardInsightsAlertFocus): void {
+    if (!this.isAlertActionable(focus)) {
+      return;
+    }
+    this.alertClicked.emit(focus);
+  }
+
+  onAlertKeydown(event: KeyboardEvent, focus: DashboardInsightsAlertFocus): void {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      this.onAlertClick(focus);
+    }
   }
 }

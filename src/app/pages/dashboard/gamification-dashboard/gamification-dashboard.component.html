@@ -282,7 +282,8 @@
       class="dashboard-section"
       [insights]="dashboardInsights"
       [loading]="isLoadingDashboardInsights"
-      variant="player">
+      variant="player"
+      (alertClicked)="onInsightsAlertClicked($event)">
     </c4u-dashboard-insights>
     
     <!-- Clientes atendidos este mês: lista de participação (período do filtro); abas Carteira/Participação comentadas. -->
@@ -398,6 +399,7 @@
     [playerId]="currentPlayerId"
     [listType]="progressModalType"
     [month]="selectedMonth"
+    [activityFocusFilter]="progressModalActivityFocusFilter"
     (closed)="onProgressModalClosed()">
   </modal-progress-list>
   

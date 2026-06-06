@@ -460,7 +460,8 @@
                     [loading]="false"
                     variant="team"
                     [scopeLabel]="executiveActionInsightsScopeLabel"
-                    [audience]="executiveInsightsAudience">
+                    [audience]="executiveInsightsAudience"
+                    (alertClicked)="onExecutiveInsightsAlertClicked($event)">
                   </c4u-dashboard-insights>
 
                   <!-- KPI cards (row) -->
@@ -1174,6 +1175,7 @@
     [listType]="progressModalType"
     [month]="selectedMonth"
     [useDailyPendingStatsApi]="useDailyPendingStatsApiForModal"
+    [activityFocusFilter]="progressModalActivityFocusFilter"
     (closed)="onProgressModalClosed()">
   </modal-progress-list>
   

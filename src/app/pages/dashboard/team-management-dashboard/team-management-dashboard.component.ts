@@ -53,7 +53,11 @@ import {
   partitionExecutivePlayerRankings
 } from '@services/game4u-game-mapper';
 import { buildDashboardInsightsSnapshotFromUserActions } from '@services/dashboard-insights.service';
-import { DashboardInsightsSnapshot, DashboardInsightsAudience } from '@model/dashboard-insights.model';
+import {
+  DashboardInsightsSnapshot,
+  DashboardInsightsAlertFocus,
+  DashboardInsightsAudience
+} from '@model/dashboard-insights.model';
 import {
   getManagementDashboardCachedRoleLabel,
   ManagementDashboardCachedRole
@@ -416,6 +420,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
   // Modal states
   isProgressModalOpen: boolean = false;
   progressModalType: ProgressListType = 'atividades';
+  progressModalActivityFocusFilter: DashboardInsightsAlertFocus | null = null;
   isCarteiraModalOpen: boolean = false;
   
   // Refresh tracking
@@ -5075,6 +5080,14 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
    */
   onProgressModalClosed(): void {
     this.isProgressModalOpen = false;
+    this.progressModalActivityFocusFilter = null;
+  }
+
+  onExecutiveInsightsAlertClicked(focus: DashboardInsightsAlertFocus): void {
+    this.progressModalType = 'atividades-pendentes';
+    this.progressModalActivityFocusFilter = focus;
+    this.isProgressModalOpen = true;
+    this.cdr.markForCheck();
   }
 
   /**

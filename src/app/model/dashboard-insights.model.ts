@@ -31,6 +31,9 @@ export type DashboardInsightsAudience = 'player' | 'supervisor' | 'gerente' | 'd
 
 export type DashboardInsightPresetTone = 'urgent' | 'warning' | 'success' | 'info';
 
+/** Foco ao abrir a lista de entregas a partir de um card de alerta nos insights. */
+export type DashboardInsightsAlertFocus = 'fine-risk' | 'overdue-pending' | 'due-soon';
+
 export interface DashboardInsightPreset {
   tone: DashboardInsightPresetTone;
   title: string;
@@ -59,6 +62,10 @@ export interface DashboardInsightsSnapshot {
 }
 
 export const DASHBOARD_INSIGHTS_DUE_SOON_DAYS = 3;
+
+/** Mascote Game4U nas recomendações de insights (fallback se `mascot_img_url` não estiver configurado). */
+export const GAME4U_INSIGHTS_MASCOT_URL =
+  'https://zarptqqopvuwognexpon.supabase.co/storage/v1/object/public/public_assets/mascots/robot_head.png';
 
 export const DASHBOARD_INSIGHTS_WEEKDAY_LABELS: readonly { label: string; shortLabel: string }[] = [
   { label: 'Domingo', shortLabel: 'Dom' },

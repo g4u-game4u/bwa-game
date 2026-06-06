@@ -14,6 +14,7 @@ import {
   resolveGame4uFinishedPrazoStatus
 } from '@services/game4u-game-mapper';
 import { ChartDataset } from '@model/gamification-dashboard.model';
+import { DASHBOARD_INSIGHTS_DUE_SOON_DAYS, DashboardInsightsAlertFocus } from '@model/dashboard-insights.model';
 import { CnpjLookupService } from '@services/cnpj-lookup.service';
 
 export type ProgressListType =
@@ -64,6 +65,8 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
    * visão consolidada de gestão (GERENTE/DIRETOR/C_LEVEL/ADMIN/SERVICE).
    */
   @Input() useDailyPendingStatsApi = false;
+  /** Filtro opcional ao abrir a partir dos cards de alerta nos insights. */
+  @Input() activityFocusFilter: DashboardInsightsAlertFocus | null = null;
   @Output() closed = new EventEmitter<void>();
 
   private destroy$ = new Subject<void>();
@@ -117,6 +120,15 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
   }
 
   get modalTitle(): string {
+    if (this.activityFocusFilter === 'fine-risk') {
+      return 'Entregas com risco de multa';
+    }
+    if (this.activityFocusFilter === 'overdue-pending') {
+      return 'Entregas pendentes atrasadas';
+    }
+    if (this.activityFocusFilter === 'due-soon') {
+      return 'Entregas próximas do vencimento';
+    }
     switch (this.listType) {
       case 'atividades':
         return 'Entregas Finalizadas';
@@ -134,6 +146,15 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
   }
 
   get modalIcon(): string {
+    if (this.activityFocusFilter === 'fine-risk') {
+      return 'ri-alarm-warning-line';
+    }
+    if (this.activityFocusFilter === 'due-soon') {
+      return 'ri-timer-flash-line';
+    }
+    if (this.activityFocusFilter === 'overdue-pending') {
+      return 'ri-error-warning-line';
+    }
     switch (this.listType) {
       case 'atividades':
         return 'ri-checkbox-circle-line'; // Round checkbox icon for finished tasks
@@ -166,6 +187,22 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
   /** Modal «Tarefas Pendentes»: sem coluna de finalização; gráfico por prazo. */
   get isPendingActivitiesModal(): boolean {
     return this.listType === 'atividades-pendentes';
+  }
+
+  get activityListEmptyMessage(): string {
+    if (this.activitySearchQuery.trim()) {
+      return 'Nenhuma entrega corresponde à busca';
+    }
+    switch (this.activityFocusFilter) {
+      case 'fine-risk':
+        return 'Nenhuma entrega com risco de multa encontrada';
+      case 'due-soon':
+        return 'Nenhuma entrega com prazo próximo encontrada';
+      case 'overdue-pending':
+        return 'Nenhuma entrega pendente atrasada encontrada';
+      default:
+        return 'Nenhuma entrega encontrada';
+    }
   }
 
   /** Painel de equipa (escopo `team_id`): coluna com o jogador da user-action (`user_email`). */
@@ -211,14 +248,18 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
    * Linhas exibidas na tabela: com filtro em «Tarefas finalizadas», lista completa nos demais tipos.
    */
   get displayedActivityItems(): ActivityListItem[] {
+    let items = this.activityItems;
+    if (this.activityFocusFilter && this.isPendingActivitiesModal) {
+      items = items.filter(item => this.matchesActivityFocusFilter(item));
+    }
     if (!this.isGroupedTasksModal) {
-      return this.activityItems;
+      return items;
     }
     const q = this.activitySearchQuery.trim().toLowerCase();
     if (!q) {
-      return this.activityItems;
+      return items;
     }
-    return this.activityItems.filter(item => this.activityMatchesSearch(item, q));
+    return items.filter(item => this.activityMatchesSearch(item, q));
   }
 
   /**
@@ -463,6 +504,7 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
             if (!this.shouldUseDailyPendingStatsForChart) {
               this.isLoadingChart = false;
             }
+            this.afterActivityListLoaded();
             this.cdr.markForCheck();
           },
           error: () => {
@@ -645,6 +687,9 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
               this.isLoading = false;
             } else {
               this.isLoadingMore = false;
+            }
+            if (isFirstPage) {
+              this.afterActivityListLoaded();
             }
             this.cdr.markForCheck();
           }
@@ -1011,6 +1056,52 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
     const now = new Date();
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0).getTime();
     return ms < todayStart;
+  }
+
+  /** Tarefas pendentes: prazo nos próximos N dias (mesma regra dos insights). */
+  isPendingTaskDueSoon(dt_prazo?: string, dueSoonDays = DASHBOARD_INSIGHTS_DUE_SOON_DAYS): boolean {
+    const ms = this.dtPrazoToLocalDayStartMs(dt_prazo);
+    if (ms == null) {
+      return false;
+    }
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0).getTime();
+    const dueSoonEnd = this.addDaysToDayStartMs(todayStart, dueSoonDays);
+    return ms >= todayStart && ms <= dueSoonEnd;
+  }
+
+  private addDaysToDayStartMs(dayStartMs: number, days: number): number {
+    const d = new Date(dayStartMs);
+    d.setDate(d.getDate() + days);
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0).getTime();
+  }
+
+  private matchesActivityFocusFilter(item: ActivityListItem): boolean {
+    if (this.hasAtrasoJustificado(item)) {
+      return false;
+    }
+    switch (this.activityFocusFilter) {
+      case 'fine-risk':
+        return this.hasRiscoMulta(item);
+      case 'overdue-pending':
+        return this.isPendingTaskOverdue(item.dt_prazo);
+      case 'due-soon':
+        return this.isPendingTaskDueSoon(item.dt_prazo);
+      default:
+        return true;
+    }
+  }
+
+  private expandAllFinishedTaskGroups(): void {
+    for (const group of this.finishedTaskGroups) {
+      this.expandedFinishedTaskGroups.add(group.groupKey);
+    }
+  }
+
+  private afterActivityListLoaded(): void {
+    if (this.activityFocusFilter && this.isGroupedTasksModal) {
+      this.expandAllFinishedTaskGroups();
+    }
   }
 
   /** Entrega com potencial de multa (`risco_multa` de `/game/reports/user-actions`). */

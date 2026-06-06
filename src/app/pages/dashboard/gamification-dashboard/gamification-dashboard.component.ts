@@ -35,7 +35,7 @@ import {
 } from '@services/gamificacao-delivery-empid.util';
 import { hasMoreFinishedDeliveriesCachedPage } from '@services/game4u-game-mapper';
 import { DashboardInsightsService } from '@services/dashboard-insights.service';
-import { DashboardInsightsSnapshot } from '@model/dashboard-insights.model';
+import { DashboardInsightsSnapshot, DashboardInsightsAlertFocus } from '@model/dashboard-insights.model';
 
 @Component({
   selector: 'app-gamification-dashboard',
@@ -208,6 +208,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   // Progress list modal state
   isProgressModalOpen = false;
   progressModalType: ProgressListType = 'atividades';
+  progressModalActivityFocusFilter: DashboardInsightsAlertFocus | null = null;
   
   // Carteira modal state
   isCarteiraModalOpen = false;
@@ -1726,6 +1727,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
    */
   onProgressModalClosed(): void {
     this.isProgressModalOpen = false;
+    this.progressModalActivityFocusFilter = null;
     this.announceToScreenReader('Modal de progresso fechado');
     
     if (this.focusedElementBeforeModal) {
@@ -1736,6 +1738,21 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     }
   }
   
+  onInsightsAlertClicked(focus: DashboardInsightsAlertFocus): void {
+    this.focusedElementBeforeModal = document.activeElement as HTMLElement;
+    this.progressModalType = 'atividades-pendentes';
+    this.progressModalActivityFocusFilter = focus;
+    this.isProgressModalOpen = true;
+
+    const labels: Record<DashboardInsightsAlertFocus, string> = {
+      'fine-risk': 'Abrindo entregas com risco de multa',
+      'overdue-pending': 'Abrindo entregas pendentes atrasadas',
+      'due-soon': 'Abrindo entregas próximas do vencimento'
+    };
+    this.announceToScreenReader(labels[focus]);
+    this.cdr.markForCheck();
+  }
+
   /**
    * Open carteira modal
    */
