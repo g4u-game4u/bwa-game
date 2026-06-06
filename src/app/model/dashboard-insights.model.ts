@@ -26,6 +26,17 @@ export interface DashboardInsightsWeekdayStat {
  * Hoje calculado no cliente a partir de `/game/reports/user-actions`;
  * no futuro o backend pode devolver o mesmo shape em `GET …/dashboard/insights`.
  */
+/** Público-alvo das recomendações contextuais entre alertas e produtividade. */
+export type DashboardInsightsAudience = 'player' | 'supervisor' | 'gerente' | 'diretor' | 'c_level';
+
+export type DashboardInsightPresetTone = 'urgent' | 'warning' | 'success' | 'info';
+
+export interface DashboardInsightPreset {
+  tone: DashboardInsightPresetTone;
+  title: string;
+  message: string;
+}
+
 export interface DashboardInsightsSnapshot {
   source: 'client' | 'server';
   computedAt: string;

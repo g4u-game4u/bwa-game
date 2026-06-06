@@ -1,5 +1,10 @@
 import { Component, Input, ChangeDetectionStrategy } from '@angular/core';
-import { DashboardInsightsSnapshot } from '@model/dashboard-insights.model';
+import {
+  DashboardInsightPreset,
+  DashboardInsightsAudience,
+  DashboardInsightsSnapshot
+} from '@model/dashboard-insights.model';
+import { buildDashboardInsightPresets } from '@services/dashboard-insights.service';
 
 export type DashboardInsightsVariant = 'player' | 'team';
 
@@ -11,6 +16,7 @@ export type DashboardInsightsVariant = 'player' | 'team';
 })
 export class C4uDashboardInsightsComponent {
   readonly skeletonAlerts = [0, 1, 2];
+  readonly skeletonPresetSlots = [0, 1];
   readonly skeletonRankedRows = [0, 1, 2];
   readonly skeletonSummaryRows = [0, 1, 2, 3, 4];
   readonly skeletonWeekdayBarHeights = [28, 44, 18, 52, 36, 22, 48];
@@ -19,8 +25,17 @@ export class C4uDashboardInsightsComponent {
   @Input() loading = false;
   @Input() variant: DashboardInsightsVariant = 'player';
   @Input() scopeLabel = 'você';
+  /** Perfil de quem visualiza o painel (define tom das recomendações). */
+  @Input() audience: DashboardInsightsAudience = 'player';
   /** Sem cabeçalho de secção nem card exterior (ex.: dentro de insights executivos). */
   @Input() embedded = false;
+
+  get insightPresets(): DashboardInsightPreset[] {
+    return buildDashboardInsightPresets(this.insights, {
+      audience: this.audience,
+      scopeLabel: this.variant === 'player' ? 'você' : this.scopeLabel
+    });
+  }
 
   get hasData(): boolean {
     return !!this.insights && (this.insights.pendingTasks > 0 || this.insights.finishedTasks > 0);

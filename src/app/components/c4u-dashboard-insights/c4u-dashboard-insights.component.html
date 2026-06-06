@@ -36,6 +36,17 @@
         </div>
       </div>
 
+      <div class="insights-skeleton-presets">
+        <div *ngFor="let _ of skeletonPresetSlots" class="insights-skeleton-preset">
+          <div class="insights-skeleton-bone insights-skeleton-preset-icon"></div>
+          <div class="insights-skeleton-preset-body">
+            <div class="insights-skeleton-bone insights-skeleton-preset-title"></div>
+            <div class="insights-skeleton-bone insights-skeleton-preset-line"></div>
+            <div class="insights-skeleton-bone insights-skeleton-preset-line insights-skeleton-preset-line--short"></div>
+          </div>
+        </div>
+      </div>
+
       <div class="insights-grid">
         <div class="insights-skeleton-block">
           <div class="insights-skeleton-bone insights-skeleton-block-title"></div>
@@ -130,6 +141,31 @@
             <span class="insights-alert-value">{{ insights!.overduePendingTasks | number:'1.0-0':'pt-BR' }}</span>
             <span class="insights-alert-label">Pendentes atrasadas</span>
             <span class="insights-alert-hint">Prazo já vencido</span>
+          </div>
+        </div>
+      </div>
+
+      <div
+        *ngIf="insightPresets.length > 0"
+        class="insights-presets"
+        role="list"
+        aria-label="Recomendações do mês">
+        <div
+          *ngFor="let preset of insightPresets"
+          class="insights-preset insights-preset--{{ preset.tone }}"
+          role="listitem">
+          <i
+            class="insights-preset-icon"
+            [ngClass]="{
+              'ri-alarm-warning-line': preset.tone === 'urgent',
+              'ri-lightbulb-flash-line': preset.tone === 'warning',
+              'ri-shield-check-line': preset.tone === 'success',
+              'ri-information-line': preset.tone === 'info'
+            }"
+            aria-hidden="true"></i>
+          <div class="insights-preset-body">
+            <span class="insights-preset-title">{{ preset.title }}</span>
+            <p class="insights-preset-message">{{ preset.message }}</p>
           </div>
         </div>
       </div>

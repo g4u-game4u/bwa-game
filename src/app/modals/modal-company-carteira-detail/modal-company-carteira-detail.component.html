@@ -53,15 +53,100 @@
           </div>
 
           <div *ngIf="tasks.length > 0" class="tasks-table">
+            <div
+              *ngIf="companyInsights as ins"
+              class="company-insights-panel"
+              role="region"
+              aria-label="Insights do cliente">
+              <div class="company-insights-metrics" role="list" aria-label="Indicadores do cliente">
+                <div
+                  class="company-insights-metric company-insights-metric--urgent"
+                  [class.company-insights-metric--muted]="ins.fineRiskTasks === 0"
+                  role="listitem">
+                  <i class="ri-alarm-warning-line" aria-hidden="true"></i>
+                  <div class="company-insights-metric-body">
+                    <span class="company-insights-metric-value">{{ ins.fineRiskTasks }}</span>
+                    <span class="company-insights-metric-label">Risco de multa</span>
+                  </div>
+                </div>
+                <div
+                  class="company-insights-metric company-insights-metric--warn"
+                  [class.company-insights-metric--muted]="ins.lateTasks === 0"
+                  role="listitem">
+                  <i class="ri-error-warning-line" aria-hidden="true"></i>
+                  <div class="company-insights-metric-body">
+                    <span class="company-insights-metric-value">{{ ins.lateTasks }}</span>
+                    <span class="company-insights-metric-label">Fora do prazo</span>
+                  </div>
+                </div>
+                <div
+                  class="company-insights-metric company-insights-metric--ok"
+                  [class.company-insights-metric--muted]="ins.onTimeTasks === 0"
+                  role="listitem">
+                  <i class="ri-checkbox-circle-line" aria-hidden="true"></i>
+                  <div class="company-insights-metric-body">
+                    <span class="company-insights-metric-value">
+                      {{ ins.onTimePct != null ? ins.onTimePct + '%' : ins.onTimeTasks }}
+                    </span>
+                    <span class="company-insights-metric-label">
+                      {{ ins.onTimePct != null ? 'No prazo' : 'No prazo (qtd.)' }}
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <p
+                *ngIf="ins.justifiedTasks > 0"
+                class="company-insights-disclaimer"
+                role="note">
+                <i class="ri-information-line" aria-hidden="true"></i>
+                <span>{{ justifiedDeliveriesDisclaimer }}</span>
+              </p>
+              <div
+                *ngIf="ins.presets.length > 0"
+                class="company-insights-presets"
+                role="list"
+                aria-label="Recomendações">
+                <div
+                  *ngFor="let preset of ins.presets"
+                  class="company-insight-preset company-insight-preset--{{ preset.tone }}"
+                  role="listitem">
+                  <i
+                    class="company-insight-preset-icon"
+                    [ngClass]="{
+                      'ri-alarm-warning-line': preset.tone === 'urgent',
+                      'ri-lightbulb-flash-line': preset.tone === 'warning',
+                      'ri-shield-check-line': preset.tone === 'success',
+                      'ri-information-line': preset.tone === 'info'
+                    }"
+                    aria-hidden="true"></i>
+                  <div class="company-insight-preset-body">
+                    <span class="company-insight-preset-title">{{ preset.title }}</span>
+                    <p class="company-insight-preset-message">{{ preset.message }}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <div class="task-header">
               <div class="task-col-process">Cliente</div>
               <div class="task-col-title">Entrega</div>
               <div class="task-col-executor">Executor</div>
-              <div class="task-col-date">Data</div>
+              <div class="task-col-prazo">Prazo</div>
+              <div class="task-col-date">Data de Finalização</div>
             </div>
             <div *ngFor="let task of tasks" class="task-row">
               <div class="task-col-process">
-                <span class="task-process">{{ task.processTitle || '—' }}</span>
+                <div class="task-process-cell">
+                  <span class="task-process">{{ task.processTitle || '—' }}</span>
+                  <span
+                    *ngIf="hasRiscoMulta(task)"
+                    class="task-risco-multa-badge"
+                    role="status"
+                    aria-label="Entrega com risco de multa">
+                    <i class="ri-alert-line" aria-hidden="true"></i>
+                    <span>Risco de multa</span>
+                  </span>
+                </div>
               </div>
               <div class="task-col-title">
                 <span class="task-title">{{ task.title }}</span>
@@ -69,9 +154,22 @@
               <div class="task-col-executor">
                 <span class="task-executor">{{ formatEmailToName(task.player) }}</span>
               </div>
+              <div class="task-col-prazo">
+                <div class="task-prazo-cell">
+                  <span class="task-prazo">{{ formatDtPrazo(task.dt_prazo) }}</span>
+                  <span
+                    *ngIf="hasAtrasoJustificado(task)"
+                    class="task-atraso-justificado-badge"
+                    role="status"
+                    aria-label="Entrega justificada">
+                    <i class="ri-shield-check-line" aria-hidden="true"></i>
+                    <span>Entrega justificada</span>
+                  </span>
+                </div>
+              </div>
               <div class="task-col-date">
                 <div class="task-date-cell">
-                  <span class="task-date">{{ formatDate(task.created) }}</span>
+                  <span class="task-date">{{ formatDate(getTaskFinishedTimestamp(task)) }}</span>
                   <span
                     *ngIf="getFinishedPrazoStatus(task) === 'late'"
                     class="task-finished-late-badge"

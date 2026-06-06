@@ -86,6 +86,16 @@ export interface Game4uUserActionStatsResponse {
   cancelled_actions_count?: number;
 }
 
+/** Hierarquia organizacional em `GET /game/reports/user-actions` (campo `hierarchy`). */
+export interface Game4uUserActionHierarchy {
+  diretor_email?: string | null;
+  diretor_name?: string | null;
+  gerente_email?: string | null;
+  gerente_name?: string | null;
+  team_id?: number | string | null;
+  team_name?: string | null;
+}
+
 /** Campos podem vir como string ou objeto na API real — tratamos nos mappers. */
 export interface Game4uUserActionModel {
   id: string;
@@ -109,6 +119,8 @@ export interface Game4uUserActionModel {
   dt_prazo?: string;
   /** Indica se a entrega pode gerar multa (relatórios user-actions). */
   risco_multa?: boolean;
+  /** Gestor, diretor e equipa associados à tarefa (painel agregado). */
+  hierarchy?: Game4uUserActionHierarchy | null;
   [key: string]: unknown;
 }
 

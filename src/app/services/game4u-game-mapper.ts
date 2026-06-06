@@ -11,6 +11,7 @@ import {
   Game4uDeliveryModel,
   Game4uReportsFinishedDeliveryRow,
   Game4uReportsFinishedSummary,
+  Game4uUserActionHierarchy,
   Game4uUserActionModel,
   Game4uUserActionStatsResponse,
   Game4uUserActionStatus
@@ -287,6 +288,39 @@ export function isGame4uUserActionJustified(a: Game4uUserActionModel): boolean {
   return parseGame4uAtrasoJustificado(readGame4uExtraStatusApi(a));
 }
 
+/** Prazo da tarefa: raiz `dt_prazo` ou `extra.dt_prazo` / `extra.dr_prazo` (`YYYY-MM-DD`). */
+export function readGame4uUserActionDtPrazo(a: Game4uUserActionModel): string | undefined {
+  const top = typeof a.dt_prazo === 'string' && a.dt_prazo.trim() ? a.dt_prazo.trim() : '';
+  if (top) {
+    const ymd = /^(\d{4})-(\d{2})-(\d{2})/.exec(top);
+    return ymd ? top.slice(0, 10) : top;
+  }
+  const ex = readGame4uExtraRecord(a);
+  if (!ex) {
+    return undefined;
+  }
+  const raw = ex['dt_prazo'] ?? ex['dr_prazo'];
+  if (raw == null || raw === '') {
+    return undefined;
+  }
+  if (typeof raw === 'string') {
+    const s = raw.trim();
+    const ymd = /^(\d{4})-(\d{2})-(\d{2})/.exec(s);
+    if (ymd) {
+      return s.slice(0, 10);
+    }
+  }
+  const ms = parseExtraDrPrazoToUtcMs(raw);
+  if (ms == null) {
+    return undefined;
+  }
+  const d = new Date(ms);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 /** Chave de correlação entre linhas de `finished/deliveries/cached` e user-actions. */
 export function executiveDeliveryDistinctKey(parts: {
   emp_id?: string | number | null;
@@ -426,6 +460,153 @@ export function countExecutiveOnTimeTasksFromUserActions(
   return { onTime, late, justified, judged: onTime + late };
 }
 
+/** Métricas de entregas (user-actions) no prazo por jogador ou segmento. */
+export interface ExecutivePlayerRankingAgg {
+  tasksTotal: number;
+  judgedTasks: number;
+  deliveriesCount: number;
+  judgedDeliveriesCount: number;
+  onTimeDeliveries: number;
+  clientsCount: number;
+}
+
+function readExecutiveUserActionClientKey(action: Game4uUserActionModel): string {
+  return String(
+    action.integration_id ?? action.client_id ?? readGame4uExtraCnpj(action) ?? ''
+  ).trim();
+}
+
+/** Agrega entregas (user-actions finalizadas) e no prazo por action (`dt_prazo` × `finished_at`). */
+export function aggregateExecutiveDeliveryOnTimeFromUserActions(
+  actions: Game4uUserActionModel[]
+): ExecutivePlayerRankingAgg {
+  const clientKeys = new Set<string>();
+  let deliveriesCount = 0;
+  let judgedDeliveriesCount = 0;
+  let onTimeDeliveries = 0;
+
+  for (const action of actions || []) {
+    if (!isGame4uUserActionFinalizedStatus(action.status)) {
+      continue;
+    }
+
+    deliveriesCount += 1;
+    const clientKey = readExecutiveUserActionClientKey(action);
+    if (clientKey) {
+      clientKeys.add(clientKey);
+    }
+
+    if (isGame4uUserActionJustified(action)) {
+      continue;
+    }
+
+    judgedDeliveriesCount += 1;
+    const finishedMs = getGame4uUserActionFinishedOrFallbackMs(action);
+    const prazoStatus = resolveGame4uFinishedPrazoStatus(
+      typeof action.dt_prazo === 'string' ? action.dt_prazo : undefined,
+      finishedMs ?? undefined
+    );
+    if (prazoStatus === 'on_time') {
+      onTimeDeliveries += 1;
+    }
+  }
+
+  return {
+    tasksTotal: deliveriesCount,
+    judgedTasks: judgedDeliveriesCount,
+    deliveriesCount,
+    judgedDeliveriesCount,
+    onTimeDeliveries,
+    clientsCount: clientKeys.size
+  };
+}
+
+function findExecutiveUserActionsForDeliveryRow(
+  row: Game4uReportsFinishedDeliveryRow,
+  actions: Game4uUserActionModel[]
+): Game4uUserActionModel[] {
+  return (actions || []).filter(
+    action =>
+      isGame4uUserActionFinalizedStatus(action.status) &&
+      game4uUserActionMatchesDeliveryRow(action, row)
+  );
+}
+
+/**
+ * Entrega no prazo quando todas as user-actions elegíveis da linha
+ * estão no prazo (`dt_prazo` × `finished_at`). Fallback: cache da linha.
+ */
+export function isExecutiveDeliveryRowOnTimeFromUserActions(
+  row: Game4uReportsFinishedDeliveryRow,
+  actions: Game4uUserActionModel[],
+  justifiedLookup?: ExecutiveJustifiedDeliveryLookup
+): boolean {
+  if (isGame4uDeliveryRowJustified(row, justifiedLookup)) {
+    return false;
+  }
+
+  const matched = findExecutiveUserActionsForDeliveryRow(row, actions).filter(
+    action => !isGame4uUserActionJustified(action)
+  );
+  if (matched.length === 0) {
+    return deliveryRowCountsAsOnTime(row);
+  }
+
+  let onTime = 0;
+  let late = 0;
+  let unknown = 0;
+  for (const action of matched) {
+    const finishedMs = getGame4uUserActionFinishedOrFallbackMs(action);
+    const status = resolveGame4uFinishedPrazoStatus(
+      typeof action.dt_prazo === 'string' ? action.dt_prazo : undefined,
+      finishedMs ?? undefined
+    );
+    if (status === 'on_time') {
+      onTime += 1;
+    } else if (status === 'late') {
+      late += 1;
+    } else {
+      unknown += 1;
+    }
+  }
+
+  return late === 0 && unknown === 0 && onTime > 0 && onTime === matched.length;
+}
+
+/** Ranking por jogador: cada user-action finalizada conta como 1 entrega. */
+export function aggregateExecutivePlayerRankingsFromUserActions(
+  actions: Game4uUserActionModel[]
+): Map<string, ExecutivePlayerRankingAgg> {
+  const byEmail = new Map<string, Game4uUserActionModel[]>();
+
+  for (const action of actions || []) {
+    if (!isGame4uUserActionFinalizedStatus(action.status)) {
+      continue;
+    }
+    const email = String(action.user_email ?? '').trim().toLowerCase();
+    if (!email) {
+      continue;
+    }
+    const bucket = byEmail.get(email) ?? [];
+    bucket.push(action);
+    byEmail.set(email, bucket);
+  }
+
+  const result = new Map<string, ExecutivePlayerRankingAgg>();
+  for (const [email, playerActions] of byEmail) {
+    result.set(email, aggregateExecutiveDeliveryOnTimeFromUserActions(playerActions));
+  }
+  return result;
+}
+
+/** Agregação de equipa/segmento a partir de user-actions finalizadas do escopo. */
+export function aggregateExecutiveTeamRankingFromUserActions(
+  actions: Game4uUserActionModel[]
+): ExecutivePlayerRankingAgg {
+  const finishedActions = (actions || []).filter(a => isGame4uUserActionFinalizedStatus(a.status));
+  return aggregateExecutiveDeliveryOnTimeFromUserActions(finishedActions);
+}
+
 export function isGame4uDeliveryRowJustified(
   row: Game4uReportsFinishedDeliveryRow,
   lookup?: ExecutiveJustifiedDeliveryLookup
@@ -507,6 +688,164 @@ export function resolveGame4uFinishedPrazoStatus(
     0
   ).getTime();
   return finishedDayMs <= prazoMs ? 'on_time' : 'late';
+}
+
+export type CompanyDeliveryInsightTone = 'urgent' | 'warning' | 'success' | 'info';
+
+export interface CompanyDeliveryInsightPreset {
+  tone: CompanyDeliveryInsightTone;
+  title: string;
+  message: string;
+}
+
+/** Métricas agregadas das entregas de um cliente no modal de detalhe. */
+export interface CompanyDeliveryInsightsSnapshot {
+  totalTasks: number;
+  fineRiskTasks: number;
+  onTimeTasks: number;
+  lateTasks: number;
+  justifiedTasks: number;
+  judgedTasks: number;
+  onTimePct: number | null;
+  presets: CompanyDeliveryInsightPreset[];
+}
+
+export interface CompanyDeliveryInsightTaskInput {
+  created: number;
+  /** Ms de `finished_at` — preferido na comparação com `dt_prazo`. */
+  finished_at?: number;
+  dt_prazo?: string;
+  risco_multa?: boolean;
+  atraso_justificado?: boolean;
+}
+
+function buildCompanyDeliveryInsightPresets(metrics: {
+  fineRiskTasks: number;
+  lateTasks: number;
+  onTimeTasks: number;
+  justifiedTasks: number;
+  judgedTasks: number;
+  onTimePct: number | null;
+}): CompanyDeliveryInsightPreset[] {
+  const presets: CompanyDeliveryInsightPreset[] = [];
+  const { fineRiskTasks, lateTasks, onTimeTasks, justifiedTasks, judgedTasks, onTimePct } = metrics;
+
+  if (fineRiskTasks > 0) {
+    presets.push({
+      tone: 'urgent',
+      title: 'Risco de multa identificado',
+      message:
+        fineRiskTasks === 1
+          ? '1 entrega deste cliente tem risco de multa. Alinhe com a assessoria e priorize a regularização antes que vire penalidade.'
+          : `${fineRiskTasks} entregas deste cliente têm risco de multa. Alinhe com a assessoria e priorize a regularização antes que vire penalidade.`
+    });
+  }
+
+  const lateShare = judgedTasks > 0 ? lateTasks / judgedTasks : 0;
+  if (lateTasks > 0 && (lateTasks >= 2 || lateShare >= 0.25)) {
+    presets.push({
+      tone: 'warning',
+      title: 'Oportunidade de melhoria',
+      message:
+        lateTasks === 1
+          ? '1 finalização ficou fora do prazo. Revise o planejamento, antecipe etapas críticas e acompanhe de perto os próximos prazos deste cliente.'
+          : `${lateTasks} finalizações ficaram fora do prazo. Revise o planejamento, antecipe etapas críticas e acompanhe de perto os próximos prazos deste cliente.`
+    });
+  } else if (lateTasks === 1 && fineRiskTasks === 0) {
+    presets.push({
+      tone: 'warning',
+      title: 'Atenção ao prazo',
+      message:
+        '1 entrega foi concluída fora do prazo. Use este histórico para ajustar o ritmo e evitar repetição nos próximos ciclos deste cliente.'
+    });
+  }
+
+  if (judgedTasks > 0 && lateTasks === 0 && fineRiskTasks === 0) {
+    presets.push({
+      tone: 'success',
+      title: 'Ritmo saudável',
+      message:
+        onTimeTasks === 1
+          ? 'A entrega avaliada foi concluída no prazo. Mantenha a comunicação proativa com o cliente e o mesmo rigor no cumprimento dos prazos.'
+          : `Todas as ${onTimeTasks} entregas avaliadas foram concluídas no prazo. Mantenha a comunicação proativa com o cliente e o mesmo rigor no cumprimento dos prazos.`
+    });
+  } else if (onTimePct != null && onTimePct >= 80 && lateTasks > 0 && fineRiskTasks === 0) {
+    presets.push({
+      tone: 'success',
+      title: 'Desempenho majoritariamente no prazo',
+      message: `${onTimePct}% das entregas avaliadas foram no prazo. Continue priorizando os prazos mais apertados para elevar ainda mais a consistência com este cliente.`
+    });
+  }
+
+  if (justifiedTasks > 0) {
+    presets.push({
+      tone: 'info',
+      title: 'Entregas justificadas',
+      message:
+        justifiedTasks === 1
+          ? '1 entrega com atraso justificado. Documente o contexto para referência futura.'
+          : `${justifiedTasks} entregas com atraso justificado. Documente o contexto para referência futura.`
+    });
+  }
+
+  if (presets.length === 0 && judgedTasks === 0 && justifiedTasks === 0) {
+    presets.push({
+      tone: 'info',
+      title: 'Histórico em formação',
+      message: 'Ainda não há entregas finalizadas suficientes para avaliar prazos deste cliente.'
+    });
+  }
+
+  return presets;
+}
+
+/** Insights operacionais do cliente no modal de detalhe (entregas finalizadas carregadas). */
+export function computeCompanyDeliveryInsightsFromTasks(
+  tasks: CompanyDeliveryInsightTaskInput[]
+): CompanyDeliveryInsightsSnapshot {
+  let fineRiskTasks = 0;
+  let onTimeTasks = 0;
+  let lateTasks = 0;
+  let justifiedTasks = 0;
+
+  for (const task of tasks || []) {
+    if (task.risco_multa === true) {
+      fineRiskTasks += 1;
+    }
+    if (task.atraso_justificado === true) {
+      justifiedTasks += 1;
+      continue;
+    }
+    const finishedMs = task.finished_at ?? task.created;
+    const status = resolveGame4uFinishedPrazoStatus(task.dt_prazo, finishedMs);
+    if (status === 'on_time') {
+      onTimeTasks += 1;
+    } else if (status === 'late') {
+      lateTasks += 1;
+    }
+  }
+
+  const judgedTasks = onTimeTasks + lateTasks;
+  const onTimePct =
+    judgedTasks > 0 ? Math.round((onTimeTasks / judgedTasks) * 100) : null;
+
+  return {
+    totalTasks: (tasks || []).length,
+    fineRiskTasks,
+    onTimeTasks,
+    lateTasks,
+    justifiedTasks,
+    judgedTasks,
+    onTimePct,
+    presets: buildCompanyDeliveryInsightPresets({
+      fineRiskTasks,
+      lateTasks,
+      onTimeTasks,
+      justifiedTasks,
+      judgedTasks,
+      onTimePct
+    })
+  };
 }
 
 /** User-action finalizada (participação / “tarefas concluídas” ao nível de linha). */
@@ -1250,6 +1589,101 @@ export function aggregateExecutiveDeliveryRowsForRanking(
   };
 }
 
+/** Segmentação de rankings executivos por hierarquia (`hierarchy` em user-actions). */
+export type ExecutiveHierarchyRankingMode = 'gerente' | 'diretor';
+
+const EXECUTIVE_HIERARCHY_UNASSIGNED_DIRETOR_KEY = '__sem_diretoria__';
+
+/** Lê `hierarchy` normalizado de uma user-action. */
+export function readGame4uUserActionHierarchy(a: Game4uUserActionModel): Game4uUserActionHierarchy | null {
+  const raw = (a as Record<string, unknown>)['hierarchy'];
+  if (raw == null || typeof raw !== 'object' || Array.isArray(raw)) {
+    return null;
+  }
+  return raw as Game4uUserActionHierarchy;
+}
+
+/** Resolve chave e rótulo do segmento hierárquico para ranking executivo. */
+export function resolveExecutiveHierarchySegment(
+  action: Game4uUserActionModel,
+  mode: ExecutiveHierarchyRankingMode
+): { key: string; name: string; email: string } | null {
+  const hierarchy = readGame4uUserActionHierarchy(action);
+  if (!hierarchy) {
+    return null;
+  }
+
+  if (mode === 'gerente') {
+    const email = String(hierarchy.gerente_email ?? '').trim().toLowerCase();
+    const name = String(hierarchy.gerente_name ?? '').trim();
+    if (email) {
+      return { key: email, name: name || email, email };
+    }
+    const teamId = String(hierarchy.team_id ?? '').trim();
+    if (!teamId) {
+      return null;
+    }
+    const teamName = String(hierarchy.team_name ?? teamId).trim() || teamId;
+    return { key: `team:${teamId}`, name: name || teamName, email: '' };
+  }
+
+  const diretorEmail = String(hierarchy.diretor_email ?? '').trim().toLowerCase();
+  const diretorName = String(hierarchy.diretor_name ?? '').trim();
+  if (diretorEmail) {
+    return { key: diretorEmail, name: diretorName || diretorEmail, email: diretorEmail };
+  }
+  return {
+    key: EXECUTIVE_HIERARCHY_UNASSIGNED_DIRETOR_KEY,
+    name: 'Sem diretoria',
+    email: ''
+  };
+}
+
+/** Cruza user-action com linha de `finished/deliveries/cached` no mesmo escopo. */
+export function game4uUserActionMatchesDeliveryRow(
+  action: Game4uUserActionModel,
+  row: Game4uReportsFinishedDeliveryRow
+): boolean {
+  const actionEmail = String(action.user_email ?? '').trim().toLowerCase();
+  const rowEmail = String(row.user_email ?? '').trim().toLowerCase();
+  if (actionEmail && rowEmail && actionEmail === rowEmail) {
+    return true;
+  }
+
+  const emp = row.emp_id != null ? String(row.emp_id).trim() : '';
+  const integration =
+    typeof action.integration_id === 'string' || typeof action.integration_id === 'number'
+      ? String(action.integration_id).trim()
+      : '';
+  const clientId =
+    typeof action.client_id === 'string' || typeof action.client_id === 'number'
+      ? String(action.client_id).trim()
+      : '';
+  const extraCnpj = readGame4uExtraCnpj(action);
+  if (emp && (emp === integration || emp === clientId || (extraCnpj && emp === extraCnpj))) {
+    return true;
+  }
+
+  const actionDeliveryId = String(action.delivery_id ?? '').trim();
+  const rowDeliveryId = String(row.delivery_id ?? '').trim();
+  if (actionDeliveryId && rowDeliveryId && actionDeliveryId === rowDeliveryId) {
+    return true;
+  }
+
+  const rowKey = executiveDeliveryDistinctKey(row);
+  const actionKey = executiveDeliveryDistinctKey({
+    emp_id:
+      typeof action.integration_id === 'string' || typeof action.integration_id === 'number'
+        ? action.integration_id
+        : typeof action.client_id === 'string' || typeof action.client_id === 'number'
+          ? action.client_id
+          : undefined,
+    delivery_id: actionDeliveryId,
+    delivery_title: readGame4uUserActionTitle(action)
+  });
+  return rowKey !== '' && rowKey === actionKey;
+}
+
 /** Candidato ao ranking executivo de jogadores (destaque / atenção). */
 export interface ExecutivePlayerRankCandidate {
   email: string;
@@ -1258,6 +1692,64 @@ export interface ExecutivePlayerRankCandidate {
   onTimeDeliveryPct: number | null;
   /** Entregas elegíveis para métricas de prazo (exclui justificadas). */
   judgedDeliveriesCount?: number;
+}
+
+export interface ExecutiveHierarchyRankingCandidate extends ExecutivePlayerRankCandidate {
+  name: string;
+  tasksTotal: number;
+  clientsCount: number;
+  onTimePct: number | null;
+}
+
+/** Agrega candidatos a ranking por gerente (Diretor) ou diretoria (C-Level) via user-actions. */
+export function aggregateExecutiveHierarchyRankings(
+  actions: Game4uUserActionModel[],
+  mode: ExecutiveHierarchyRankingMode
+): ExecutiveHierarchyRankingCandidate[] {
+  const segmentActions = new Map<
+    string,
+    { name: string; email: string; actions: Game4uUserActionModel[] }
+  >();
+
+  for (const action of actions || []) {
+    if (!isGame4uUserActionFinalizedStatus(action.status)) {
+      continue;
+    }
+    const segment = resolveExecutiveHierarchySegment(action, mode);
+    if (!segment) {
+      continue;
+    }
+    const bucket =
+      segmentActions.get(segment.key) ??
+      { name: segment.name, email: segment.email, actions: [] as Game4uUserActionModel[] };
+    bucket.actions.push(action);
+    segmentActions.set(segment.key, bucket);
+  }
+
+  const candidates: ExecutiveHierarchyRankingCandidate[] = [];
+
+  for (const [key, bucket] of segmentActions) {
+    const agg = aggregateExecutiveDeliveryOnTimeFromUserActions(bucket.actions);
+    if ((agg.judgedDeliveriesCount ?? 0) <= 0) {
+      continue;
+    }
+    candidates.push({
+      email: key,
+      name: bucket.name,
+      tasksTotal: agg.tasksTotal,
+      clientsCount: agg.clientsCount,
+      deliveriesCount: agg.deliveriesCount,
+      judgedDeliveriesCount: agg.judgedDeliveriesCount,
+      onTimeDeliveries: agg.onTimeDeliveries,
+      onTimeDeliveryPct:
+        agg.judgedDeliveriesCount > 0
+          ? Math.round((agg.onTimeDeliveries / agg.judgedDeliveriesCount) * 1000) / 10
+          : null,
+      onTimePct: null
+    });
+  }
+
+  return candidates;
 }
 
 export interface PartitionExecutivePlayerRankingsOptions {

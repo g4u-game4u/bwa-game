@@ -37,9 +37,12 @@ import {
   TeamDailyFinishedStatsRow
 } from '@services/action-log.service';
 import {
-  aggregateExecutiveDeliveryRowsForRanking,
+  aggregateExecutiveHierarchyRankings,
+  aggregateExecutivePlayerRankingsFromUserActions,
+  aggregateExecutiveTeamRankingFromUserActions,
   aggregateExecutiveTopProcessesFromUserActions,
   buildExecutiveJustifiedDeliveryLookup,
+  type ExecutiveHierarchyRankingMode,
   countExecutiveFinishedTasksFromUserActions,
   countExecutiveOnTimeTasksFromUserActions,
   deliveryRowCountsAsOnTime,
@@ -50,7 +53,7 @@ import {
   partitionExecutivePlayerRankings
 } from '@services/game4u-game-mapper';
 import { buildDashboardInsightsSnapshotFromUserActions } from '@services/dashboard-insights.service';
-import { DashboardInsightsSnapshot } from '@model/dashboard-insights.model';
+import { DashboardInsightsSnapshot, DashboardInsightsAudience } from '@model/dashboard-insights.model';
 import {
   getManagementDashboardCachedRoleLabel,
   ManagementDashboardCachedRole
@@ -377,7 +380,8 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
   /** Indica se o ranking de jogadores deve ser exibido (oculto no drill-down de colaborador único). */
   showExecutiveInsightsPlayersRanking = false;
   /** No painel consolidado do gerente, rankings por supervisão/equipa em vez de jogador. */
-  executiveInsightsRankingByTeam = false;
+  /** Agrupamento dos rankings executivos: jogador, equipa, gerente ou diretoria. */
+  executiveInsightsRankingSegment: 'player' | 'team' | 'gerente' | 'diretor' = 'player';
   /** Geração de carga (evita race conditions com troca de mês/colaborador/equipa). */
   private executiveInsightsLoadGen = 0;
 
@@ -3948,6 +3952,24 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
     return 'do time';
   }
 
+  /** Perfil de quem visualiza os insights operacionais (tom das recomendações). */
+  get executiveInsightsAudience(): DashboardInsightsAudience {
+    if (this.managementRole === 'C_LEVEL') {
+      return 'c_level';
+    }
+    if (this.managementRole === 'DIRETOR') {
+      return 'diretor';
+    }
+    if (this.managementRole === 'GERENTE') {
+      return 'gerente';
+    }
+    const profile = this.userProfileService.getCurrentUserProfile();
+    if (profile === UserProfile.GESTOR) {
+      return 'gerente';
+    }
+    return 'supervisor';
+  }
+
   /**
    * Carrega o mini dashboard executivo com:
    *  - Top processos finalizados no mês (somatório de `tasks_total` por título do processo em user-actions).
@@ -3981,15 +4003,21 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       if (this.isManagementOverview) {
         scope = { isManagement: true };
         this.showExecutiveInsightsPlayersRanking = true;
-        this.executiveInsightsRankingByTeam = true;
+        if (this.managementRole === 'C_LEVEL') {
+          this.executiveInsightsRankingSegment = 'diretor';
+        } else if (this.managementRole === 'DIRETOR') {
+          this.executiveInsightsRankingSegment = 'gerente';
+        } else {
+          this.executiveInsightsRankingSegment = 'team';
+        }
       } else if (this.selectedCollaborator) {
         scope = { email: this.selectedCollaborator };
         this.showExecutiveInsightsPlayersRanking = false;
-        this.executiveInsightsRankingByTeam = false;
+        this.executiveInsightsRankingSegment = 'player';
       } else if (teamScopeId) {
         scope = { teamId: teamScopeId };
         this.showExecutiveInsightsPlayersRanking = true;
-        this.executiveInsightsRankingByTeam = false;
+        this.executiveInsightsRankingSegment = 'player';
       }
 
       if (!scope) {
@@ -4020,10 +4048,22 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
         isGame4uUserActionFinalizedStatus(a.status)
       );
       this.computeExecutiveInsightsFromRows(rows || [], finishedUserActions, {
-        skipPlayerRanking: this.executiveInsightsRankingByTeam
+        skipPlayerRanking: this.executiveInsightsRankingSegment !== 'player'
       });
 
-      if (this.executiveInsightsRankingByTeam) {
+      if (
+        this.executiveInsightsRankingSegment === 'gerente' ||
+        this.executiveInsightsRankingSegment === 'diretor'
+      ) {
+        const hierarchyRankings = this.buildExecutiveHierarchyRankings(
+          allUserActions || [],
+          this.executiveInsightsRankingSegment
+        );
+        if (loadGen === this.executiveInsightsLoadGen) {
+          this.executiveInsightsTopPlayers = hierarchyRankings.top;
+          this.executiveInsightsAttentionPlayers = hierarchyRankings.attention;
+        }
+      } else if (this.executiveInsightsRankingSegment === 'team') {
         const teamRankings = await this.loadExecutiveTeamRankings(month);
         if (loadGen === this.executiveInsightsLoadGen) {
           this.executiveInsightsTopPlayers = teamRankings.top;
@@ -4063,8 +4103,65 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
     this.executiveInsightsDistinctProcesses = 0;
     this.executiveInsightsOnTimePctOverall = null;
     this.executiveDashboardInsights = null;
-    this.executiveInsightsRankingByTeam = false;
+    this.executiveInsightsRankingSegment = 'player';
     this.hasExecutiveInsightsData = false;
+  }
+
+  /** Ranking agrupado (equipa, gerente ou diretoria), não por jogador individual. */
+  get executiveInsightsRankingIsGrouped(): boolean {
+    return this.executiveInsightsRankingSegment !== 'player';
+  }
+
+  get executiveInsightsRankingHighlightTitle(): string {
+    switch (this.executiveInsightsRankingSegment) {
+      case 'diretor':
+        return 'Diretorias em destaque';
+      case 'gerente':
+        return 'Gerentes em destaque';
+      case 'team':
+        return 'Supervisões em destaque';
+      default:
+        return 'Destaque do mês';
+    }
+  }
+
+  get executiveInsightsRankingHighlightMeta(): string {
+    switch (this.executiveInsightsRankingSegment) {
+      case 'diretor':
+        return 'Diretorias com mais entregas no prazo';
+      case 'gerente':
+        return 'Gerentes com mais entregas no prazo';
+      case 'team':
+        return 'Equipas com mais entregas no prazo';
+      default:
+        return 'Mais entregas no prazo';
+    }
+  }
+
+  get executiveInsightsRankingAttentionTitle(): string {
+    switch (this.executiveInsightsRankingSegment) {
+      case 'diretor':
+        return 'Diretorias que precisam de atenção';
+      case 'gerente':
+        return 'Gerentes que precisam de atenção';
+      case 'team':
+        return 'Supervisões que precisam de atenção';
+      default:
+        return 'Jogadores que precisam de atenção';
+    }
+  }
+
+  get executiveInsightsRankingAttentionMeta(): string {
+    switch (this.executiveInsightsRankingSegment) {
+      case 'diretor':
+        return 'Diretorias com menor % no prazo';
+      case 'gerente':
+        return 'Gerentes com menor % no prazo';
+      case 'team':
+        return 'Equipas com menor % no prazo';
+      default:
+        return 'Menor % de entregas no prazo';
+    }
   }
 
   /** Garante cache de user-actions (mesmo dos insights) para o modal de progresso. */
@@ -4115,6 +4212,29 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       hasAction;
   }
 
+  private buildExecutiveHierarchyRankings(
+    actions: Game4uUserActionModel[],
+    mode: ExecutiveHierarchyRankingMode
+  ): { top: ExecutiveInsightsPlayerRank[]; attention: ExecutiveInsightsPlayerRank[] } {
+    const candidates = aggregateExecutiveHierarchyRankings(actions, mode).map(candidate => ({
+      email: candidate.email,
+      name: candidate.name,
+      initials: this.computeExecutiveInitials(candidate.name),
+      tasksTotal: candidate.tasksTotal,
+      clientsCount: candidate.clientsCount,
+      deliveriesCount: candidate.deliveriesCount,
+      judgedDeliveriesCount: candidate.judgedDeliveriesCount,
+      onTimeDeliveries: candidate.onTimeDeliveries,
+      onTimeDeliveryPct: candidate.onTimeDeliveryPct,
+      onTimePct: candidate.onTimePct
+    }));
+
+    return partitionExecutivePlayerRankings(candidates, {
+      minDeliveriesForAttention: EXECUTIVE_ATTENTION_MIN_DELIVERIES,
+      maxOnTimePctForAttention: EXECUTIVE_ATTENTION_MAX_ON_TIME_PCT
+    });
+  }
+
   private async loadExecutiveTeamRankings(
     month: Date
   ): Promise<{ top: ExecutiveInsightsPlayerRank[]; attention: ExecutiveInsightsPlayerRank[] }> {
@@ -4123,34 +4243,22 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       return { top: [], attention: [] };
     }
 
-    const [batches, userActionBatches] = await Promise.all([
-      Promise.all(
-        teamIds.map(tid =>
-          firstValueFrom(
-            this.actionLogService
-              .getExecutiveDeliveriesAllPages({ teamId: tid }, month, 100)
-              .pipe(takeUntil(this.destroy$))
-          ).catch(() => [] as Game4uReportsFinishedDeliveryRow[])
-        )
-      ),
-      Promise.all(
-        teamIds.map(tid =>
-          firstValueFrom(
-            this.actionLogService
-              .getTeamUserActionsForInsightsMonth(tid, month)
-              .pipe(takeUntil(this.destroy$))
-          ).catch(() => [] as Game4uUserActionModel[])
-        )
+    const userActionBatches = await Promise.all(
+      teamIds.map(tid =>
+        firstValueFrom(
+          this.actionLogService
+            .getTeamUserActionsForInsightsMonth(tid, month)
+            .pipe(takeUntil(this.destroy$))
+        ).catch(() => [] as Game4uUserActionModel[])
       )
-    ]);
+    );
 
     const candidates: ExecutiveInsightsPlayerRank[] = teamIds
       .map((tid, index) => {
         const finishedActions = (userActionBatches[index] || []).filter(a =>
           isGame4uUserActionFinalizedStatus(a.status)
         );
-        const justifiedLookup = buildExecutiveJustifiedDeliveryLookup(finishedActions);
-        const agg = aggregateExecutiveDeliveryRowsForRanking(batches[index] || [], { justifiedLookup });
+        const agg = aggregateExecutiveTeamRankingFromUserActions(finishedActions);
         const name = this.resolveTeamDisplayNameForGame4uTeamId(tid);
         return {
           email: tid,
@@ -4161,8 +4269,11 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
           deliveriesCount: agg.deliveriesCount,
           judgedDeliveriesCount: agg.judgedDeliveriesCount,
           onTimeDeliveries: agg.onTimeDeliveries,
-          onTimeDeliveryPct: agg.onTimeDeliveryPct,
-          onTimePct: agg.onTimePct
+          onTimeDeliveryPct:
+            agg.judgedDeliveriesCount > 0
+              ? Math.round((agg.onTimeDeliveries / agg.judgedDeliveriesCount) * 1000) / 10
+              : null,
+          onTimePct: null
         };
       })
       .filter(c => (c.judgedDeliveriesCount ?? 0) > 0);
@@ -4331,30 +4442,31 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
         ? Math.round((prazoTaskCounts.onTime / prazoTaskCounts.judged) * 1000) / 10
         : null;
 
-    const playerArray: ExecutiveInsightsPlayerRank[] = [...byPlayer.entries()].map(([email, v]) => {
-      const collab = this.collaborators.find(
-        c => c.userId?.toLowerCase() === email || c.email?.toLowerCase() === email
-      );
-      const formatted = this.formatCollaboratorName(email, collab?.name);
-      return {
-        email,
-        name: formatted,
-        initials: this.computeExecutiveInitials(formatted),
-        tasksTotal: v.tasks,
-        clientsCount: v.clients.size,
-        deliveriesCount: v.deliveries,
-        judgedDeliveriesCount: v.judgedDeliveries,
-        onTimeDeliveries: v.onTimeDeliveries,
-        onTimeDeliveryPct:
-          v.judgedDeliveries > 0
-            ? Math.round((v.onTimeDeliveries / v.judgedDeliveries) * 1000) / 10
-            : null,
-        onTimePct:
-          v.tasksWithPct > 0
-            ? Math.round((v.onTimeWeighted / v.tasksWithPct) * 10) / 10
-            : null
-      };
-    });
+    const playerRankings = aggregateExecutivePlayerRankingsFromUserActions(finishedUserActions);
+
+    const playerArray: ExecutiveInsightsPlayerRank[] = [...playerRankings.entries()].map(
+      ([email, v]) => {
+        const collab = this.collaborators.find(
+          c => c.userId?.toLowerCase() === email || c.email?.toLowerCase() === email
+        );
+        const formatted = this.formatCollaboratorName(email, collab?.name);
+        return {
+          email,
+          name: formatted,
+          initials: this.computeExecutiveInitials(formatted),
+          tasksTotal: v.tasksTotal,
+          clientsCount: v.clientsCount,
+          deliveriesCount: v.deliveriesCount,
+          judgedDeliveriesCount: v.judgedDeliveriesCount,
+          onTimeDeliveries: v.onTimeDeliveries,
+          onTimeDeliveryPct:
+            v.judgedDeliveriesCount > 0
+              ? Math.round((v.onTimeDeliveries / v.judgedDeliveriesCount) * 1000) / 10
+              : null,
+          onTimePct: null
+        };
+      }
+    );
 
     if (!options?.skipPlayerRanking) {
       const rankCandidates = playerArray.filter(p => (p.judgedDeliveriesCount ?? 0) > 0);

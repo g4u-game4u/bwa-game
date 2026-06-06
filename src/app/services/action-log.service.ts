@@ -62,7 +62,11 @@ import {
   game4uActionMatchesParticipacaoModalRow,
   readDeliveriesCountFromFinishedSummary,
   mapGame4uFinishedDeliveryRowsToParticipacaoCnpjRows,
-  hasMoreFinishedDeliveriesCachedPage
+  hasMoreFinishedDeliveriesCachedPage,
+  parseGame4uRiscoMulta,
+  parseGame4uAtrasoJustificado,
+  readGame4uExtraStatusApi,
+  readGame4uUserActionDtPrazo
 } from './game4u-game-mapper';
 
 /** Linha de participação devolvida por {@link ActionLogService.getPlayerFinishedDeliveriesParticipacaoPage}. */
@@ -238,6 +242,8 @@ export interface ClienteActionItem {
   title: string; // attributes.acao
   player: string; // userId (email do executor)
   created: number; // timestamp
+  /** Ms de `finished_at` (Game4U) — usado na comparação com `dt_prazo`. */
+  finished_at?: number;
   /** Prazo da tarefa (`YYYY-MM-DD`), ex.: relatórios Game4U. */
   dt_prazo?: string;
   status?: 'finalizado' | 'pendente' | 'dispensado'; // Status da tarefa
@@ -245,6 +251,10 @@ export interface ClienteActionItem {
   processTitle?: string;
   /** Pontos da user-action / relatório Game4U. */
   points?: number;
+  /** Indica se a entrega pode gerar multa (`risco_multa` em user-actions). */
+  risco_multa?: boolean;
+  /** Entrega justificada (`extra.status_api` com «justif»). */
+  atraso_justificado?: boolean;
 }
 
 /** Página de tarefas (modal participação com `/game/reports/.../actions-by-delivery`). */
@@ -1114,8 +1124,8 @@ export class ActionLogService {
     const titleAlt = typeof raw['title'] === 'string' ? String(raw['title']).trim() : '';
     const titleRaw =
       (typeof a.action_title === 'string' && a.action_title.trim()) || titleAlt || '';
-    const timeRaw = a.finished_at ?? a.created_at ?? a.updated_at;
-    const created = Date.parse(String(timeRaw)) || 0;
+    const finishedMs = getGame4uUserActionFinishedOrFallbackMs(a);
+    const created = finishedMs ?? 0;
     const idRaw = String(a.id ?? '').trim();
     const id =
       idRaw ||
@@ -1127,19 +1137,23 @@ export class ActionLogService {
         : pts != null && String(pts).trim() !== ''
           ? Number(pts)
           : undefined;
-    const dp =
-      typeof a.dt_prazo === 'string' && a.dt_prazo.trim() ? a.dt_prazo.trim() : undefined;
+    const dp = readGame4uUserActionDtPrazo(a);
+    const riscoMulta = parseGame4uRiscoMulta(a.risco_multa);
+    const atrasoJustificado = parseGame4uAtrasoJustificado(readGame4uExtraStatusApi(a));
     return {
       id,
       title: titleRaw || 'Ação',
       player: String(a.user_email ?? ''),
       created,
+      ...(finishedMs != null ? { finished_at: finishedMs } : {}),
       ...(dp ? { dt_prazo: dp } : {}),
       processTitle: (typeof a.delivery_title === 'string' && a.delivery_title.trim()) || undefined,
       status:
         mapGame4uStatusToClienteTaskStatus(a.status) ??
         (a.finished_at != null && String(a.finished_at).trim() !== '' ? 'finalizado' : undefined),
-      ...(points != null && Number.isFinite(points) ? { points } : {})
+      ...(points != null && Number.isFinite(points) ? { points } : {}),
+      ...(riscoMulta ? { risco_multa: true } : {}),
+      ...(atrasoJustificado ? { atraso_justificado: true } : {})
     };
   }
 
