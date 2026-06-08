@@ -95,7 +95,5 @@ export const environment = {
       process.env['SHOW_MAINTENANCE_BANNER'] ?? process.env['show_maintenance_banner'] ?? 'true'
     )
       .trim()
-      .toLowerCase() !== 'false',
-
-  useOrgHierarchyReportMock: false
+      .toLowerCase() !== 'false'
 };
