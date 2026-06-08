@@ -49,32 +49,6 @@
   }
 }
 
-.mock-banner {
-  display: flex;
-  align-items: center;
-  gap: $spacing-sm;
-  padding: $spacing-sm $spacing-md;
-  margin-bottom: $spacing-md;
-  border-radius: $border-radius-sm;
-  background: rgba(255, 152, 0, 0.12);
-  border: 1px solid rgba(255, 152, 0, 0.35);
-  color: rgba(255, 224, 178, 0.95);
-  font-size: $font-size-small;
-
-  i {
-    font-size: 1.1rem;
-    flex-shrink: 0;
-    color: $warning-orange;
-  }
-
-  code {
-    font-size: 0.78rem;
-    background: rgba(0, 0, 0, 0.2);
-    padding: 1px 4px;
-    border-radius: $border-radius-xs;
-  }
-}
-
 .dashboard-header {
   display: flex;
   justify-content: center;

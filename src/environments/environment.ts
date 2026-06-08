@@ -28,19 +28,6 @@ export const environment = {
   
   // Feature Flags
   enableAnalytics: false,
-
-  /**
-   * Mock temporário do relatório organizacional hierárquico (validação de UI).
-   * Desligar: ORG_HIERARCHY_REPORT_USE_MOCK=false
-   */
-  useOrgHierarchyReportMock:
-    String(
-      process.env['ORG_HIERARCHY_REPORT_USE_MOCK'] ??
-        process.env['org_hierarchy_report_use_mock'] ??
-        'true'
-    )
-      .trim()
-      .toLowerCase() !== 'false',
   
   // Logo Configuration
   logoUrl: '', // Empty string means use default logo

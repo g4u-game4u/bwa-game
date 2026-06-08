@@ -16,7 +16,6 @@ import {
   OrgHierarchyHighlightItem,
   OrgHierarchyNode
 } from '@model/game4u-api.model';
-import { environment } from '../../../../environments/environment';
 import {
   formatBrl,
   formatOrgHierarchyComparePct,
@@ -49,7 +48,7 @@ export class OrganizationHierarchyReportComponent implements OnInit, OnDestroy {
   hasLoadError = false;
   isEmpty = false;
 
-  simulationPotBrl: number | null = environment.useOrgHierarchyReportMock ? 100_000 : null;
+  simulationPotBrl: number | null = null;
   rankingSortBy: OrgHierarchyRankingSortBy = 'balance_score';
   expandedNodeIds = new Set<string>();
 
@@ -106,10 +105,6 @@ export class OrganizationHierarchyReportComponent implements OnInit, OnDestroy {
 
   get highlightAtencao(): OrgHierarchyHighlightItem[] {
     return this.root?.highlights?.atencao ?? [];
-  }
-
-  get isMockMode(): boolean {
-    return environment.useOrgHierarchyReportMock === true;
   }
 
   get showSimulation(): boolean {

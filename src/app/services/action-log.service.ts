@@ -1,9 +1,7 @@
 ﻿import { Injectable } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
 import { Observable, of, forkJoin, throwError, EMPTY } from 'rxjs';
-import { map, catchError, shareReplay, switchMap, expand, reduce, delay } from 'rxjs/operators';
-import { environment } from '../../environments/environment';
-import { buildMockOrganizationHierarchyReport } from '../testing/org-hierarchy-report.mock';
+import { map, catchError, shareReplay, switchMap, expand, reduce } from 'rxjs/operators';
 import { BackendApiService } from './backend-api.service';
 import {
   ActivityListItem,
@@ -781,15 +779,6 @@ export class ActionLogService {
     nodeType?: OrgHierarchyNodeType;
     nodeId?: string;
   }): Observable<OrganizationHierarchyReportResponse | null> {
-    if (environment.useOrgHierarchyReportMock) {
-      return of(
-        buildMockOrganizationHierarchyReport({
-          month: options?.month,
-          simulationPotBrl: options?.simulationPotBrl
-        })
-      ).pipe(delay(500));
-    }
-
     if (!(isGame4uDataEnabled() && this.game4u.isConfigured())) {
       return of(null);
     }
