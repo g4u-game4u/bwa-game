@@ -3,6 +3,7 @@ import { Router, NavigationEnd } from '@angular/router';
 import { SessaoProvider } from '@providers/sessao/sessao.provider';
 import { UserProfileService } from '@services/user-profile.service';
 import { ROLES_LIST } from '@utils/constants';
+import { hasOrganizationHierarchyReportRole } from '@utils/org-hierarchy-report-role';
 import { filter } from 'rxjs/operators';
 
 interface DashboardOption {
@@ -43,12 +44,18 @@ export class C4uDashboardNavigationComponent implements OnInit {
       label: 'Gestão da Célula',
       route: '/dashboard/team-management',
       icon: 'ri-group-line'
+    },
+    {
+      label: 'Relatório Organizacional',
+      route: '/dashboard/organization-hierarchy',
+      icon: 'ri-organization-chart'
     }
   ];
   
   currentDashboard: DashboardOption | null = null;
   availableDashboards: DashboardOption[] = [];
   hasGestaoRole = false;
+  hasOrgHierarchyReportRole = false;
   
   constructor(
     private router: Router,
@@ -90,6 +97,9 @@ export class C4uDashboardNavigationComponent implements OnInit {
     
     // Check if user can access team management (not JOGADOR)
     this.hasGestaoRole = this.userProfileService.canAccessTeamManagement();
+    this.hasOrgHierarchyReportRole = hasOrganizationHierarchyReportRole(
+      this.sessaoProvider.usuario?.roles
+    );
   }
   
   /**
@@ -116,6 +126,10 @@ export class C4uDashboardNavigationComponent implements OnInit {
 
       if (dashboard.label === 'Gestão da Célula') {
         return isLiderCelula;
+      }
+
+      if (dashboard.label === 'Relatório Organizacional') {
+        return this.hasOrgHierarchyReportRole;
       }
       
       // Dashboards with role requirement (e.g., "Gestão de Equipe")

@@ -668,6 +668,54 @@ describe('Game4uApiService', () => {
     req.flush({ offset: 0, limit: 30, items: [] });
   });
 
+  it('getGameReportsOrganizationHierarchyReport builds month and simulation params', done => {
+    service
+      .getGameReportsOrganizationHierarchyReport({
+        month: '2026-06',
+        simulation_pot_brl: 100000,
+        depth: 5
+      })
+      .subscribe(res => {
+        expect(res.root.node_type).toBe('organization');
+        expect(res.root.label).toBe('BWA');
+        done();
+      });
+    const req = httpMock.expectOne(
+      r =>
+        r.url === `${baseUrl}/game/reports/organization/hierarchy-report` &&
+        r.params.get('month') === '2026-06' &&
+        r.params.get('simulation_pot_brl') === '100000' &&
+        r.params.get('depth') === '5'
+    );
+    req.flush({
+      refreshed_at: '2026-06-07T12:00:00.000Z',
+      params: {
+        cache_month: '2026-06-01',
+        mtd_start: '2026-06-01',
+        mtd_end: '2026-06-07',
+        prev_month: '2026-05-01',
+        prev_mtd_start: '2026-05-01',
+        prev_mtd_end: '2026-05-07'
+      },
+      root: {
+        node_type: 'organization',
+        node_id: 'bwa',
+        label: 'BWA',
+        players_count: 120,
+        season_points_total: 48000,
+        mtd: { finished: 200, points_delivered: 9000, goal_points: 12000 },
+        prev_full: { finished: 800, points_delivered: 36000 },
+        prev_mtd: { finished: 180, points_delivered: 8100 },
+        compare: {
+          vs_prev_mtd_points: 900,
+          vs_prev_mtd_points_pct: 11.1,
+          vs_prev_full_points: -27000,
+          vs_prev_full_points_pct: -75
+        }
+      }
+    });
+  });
+
   it('getGameReportsGoalMonthSummary builds dt_prazo params', done => {
     service
       .getGameReportsGoalMonthSummary({

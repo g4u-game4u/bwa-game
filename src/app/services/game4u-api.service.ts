@@ -42,7 +42,9 @@ import {
   Game4uReportsUserActionsPage,
   normalizeGameReportsUserActionsResponse,
   Game4uReportsTeamDailyFinishedStatsQuery,
-  Game4uReportsTeamDailyPendingStatsQuery
+  Game4uReportsTeamDailyPendingStatsQuery,
+  Game4uReportsOrganizationHierarchyQuery,
+  OrganizationHierarchyReportResponse
 } from '@model/game4u-api.model';
 import { Game4uSupabaseFallbackService } from './game4u-supabase-fallback.service';
 import { SeasonDatesService } from './season-dates.service';
@@ -96,6 +98,10 @@ export class Game4uApiService {
   private readonly reportsOpenSummaryCache = new Map<string, Observable<Game4uReportsOpenSummary>>();
   private readonly reportsTeamDailyFinishedStatsCache = new Map<string, Observable<unknown>>();
   private readonly reportsTeamDailyPendingStatsCache = new Map<string, Observable<unknown>>();
+  private readonly reportsOrganizationHierarchyCache = new Map<
+    string,
+    Observable<OrganizationHierarchyReportResponse>
+  >();
 
   constructor(
     private http: HttpClient,
@@ -241,6 +247,7 @@ export class Game4uApiService {
     this.reportsOpenSummaryCache.clear();
     this.reportsTeamDailyFinishedStatsCache.clear();
     this.reportsTeamDailyPendingStatsCache.clear();
+    this.reportsOrganizationHierarchyCache.clear();
   }
 
   /** GET `/game/*` com partilha entre várias subscrições (evita N× a mesma chamada). */
@@ -941,6 +948,56 @@ export class Game4uApiService {
       }
       return this.http.get<ManagementDashboardOverviewResponse>(
         `${this.baseUrl}/game/reports/management/dashboard/cached/overview`,
+        {
+          headers: this.headers(),
+          params
+        }
+      );
+    });
+  }
+
+  /**
+   * `GET /game/reports/organization/hierarchy-report` — relatório organizacional hierárquico (cache Snowflake).
+   */
+  getGameReportsOrganizationHierarchyReport(
+    q: Game4uReportsOrganizationHierarchyQuery
+  ): Observable<OrganizationHierarchyReportResponse> {
+    if (!this.isConfigured()) {
+      return throwError(
+        () =>
+          new Error('[Game4U] reports/organization/hierarchy-report: defina backend_url_base.')
+      );
+    }
+    const month = (q.month ?? '').trim();
+    if (!month) {
+      return throwError(
+        () =>
+          new Error(
+            '[Game4U] reports/organization/hierarchy-report: informe month (YYYY-MM).'
+          )
+      );
+    }
+    const sim = q.simulation_pot_brl;
+    const depth = q.depth;
+    const nodeType = (q.node_type ?? '').trim();
+    const nodeId = (q.node_id ?? '').trim();
+    const key = `org-hierarchy|${month}|${sim ?? ''}|${depth ?? ''}|${nodeType}|${nodeId}`;
+    return this.shareGame4uDedupe(key, this.reportsOrganizationHierarchyCache, () => {
+      let params = new HttpParams().set('month', month);
+      if (sim != null && Number.isFinite(sim) && sim > 0) {
+        params = params.set('simulation_pot_brl', String(sim));
+      }
+      if (depth != null && Number.isFinite(depth)) {
+        params = params.set('depth', String(Math.floor(depth)));
+      }
+      if (nodeType) {
+        params = params.set('node_type', nodeType);
+      }
+      if (nodeId) {
+        params = params.set('node_id', nodeId);
+      }
+      return this.http.get<OrganizationHierarchyReportResponse>(
+        `${this.baseUrl}/game/reports/organization/hierarchy-report`,
         {
           headers: this.headers(),
           params

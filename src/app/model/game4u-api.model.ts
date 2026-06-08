@@ -720,6 +720,111 @@ export interface Game4uReportsGoalMonthQuery {
   team_id?: string;
 }
 
+/** Nível hierárquico em `GET /game/reports/organization/hierarchy-report`. */
+export type OrgHierarchyNodeType =
+  | 'organization'
+  | 'diretoria'
+  | 'gerencia'
+  | 'supervisao'
+  | 'player';
+
+/** Métricas por janela temporal (MTD, mês anterior fechado, MTD simétrico anterior). */
+export interface OrgMetricsWindow {
+  finished?: number;
+  points_delivered?: number;
+  goal_points?: number;
+  pending_open?: number;
+  multa_risk?: number;
+  near_due?: number;
+  multa_and_near_due?: number;
+  overdue_pending?: number;
+  clients_served?: number;
+  on_time_pct?: number;
+  clients_onboarding?: number;
+  clients_classificacao_1?: number;
+  clients_classificacao_2?: number;
+  clients_classificacao_3?: number;
+  clients_classificacao_4?: number;
+  clients_classificacao_5?: number;
+}
+
+export interface OrgHierarchyCompare {
+  vs_prev_full_points?: number;
+  vs_prev_full_points_pct?: number;
+  vs_prev_mtd_points?: number;
+  vs_prev_mtd_points_pct?: number;
+}
+
+export interface OrgHierarchySimulation {
+  share_pct?: number;
+  payout_brl?: number;
+  points_basis?: number;
+}
+
+export interface OrgHierarchyHighlightItem {
+  node_type?: OrgHierarchyNodeType;
+  node_id?: string;
+  label?: string;
+  metric?: string;
+  value?: number;
+  [key: string]: unknown;
+}
+
+export interface OrgHierarchyFinishedByDow {
+  dow: number;
+  finished_count: number;
+  points_total: number;
+}
+
+export interface OrgHierarchyTopDelivery {
+  delivery_title: string;
+  finished_count: number;
+}
+
+export interface OrgHierarchyNode {
+  node_type: OrgHierarchyNodeType;
+  node_id: string;
+  label: string;
+  players_count: number;
+  season_points_total: number;
+  balance_score?: number;
+  mtd: OrgMetricsWindow;
+  prev_full: OrgMetricsWindow;
+  prev_mtd: OrgMetricsWindow;
+  compare: OrgHierarchyCompare;
+  simulation?: OrgHierarchySimulation;
+  highlights?: { destaque: OrgHierarchyHighlightItem[]; atencao: OrgHierarchyHighlightItem[] };
+  finished_by_dow?: OrgHierarchyFinishedByDow[];
+  top_deliveries?: OrgHierarchyTopDelivery[];
+  children?: OrgHierarchyNode[];
+}
+
+export interface OrganizationHierarchyReportParams {
+  cache_month: string;
+  mtd_start: string;
+  mtd_end: string;
+  prev_month: string;
+  prev_mtd_start: string;
+  prev_mtd_end: string;
+  simulation_pot_brl?: number;
+  points_per_brl?: number;
+}
+
+export interface OrganizationHierarchyReportResponse {
+  refreshed_at: string;
+  params: OrganizationHierarchyReportParams;
+  root: OrgHierarchyNode;
+}
+
+/** Query para `GET /game/reports/organization/hierarchy-report`. */
+export interface Game4uReportsOrganizationHierarchyQuery {
+  month: string;
+  simulation_pot_brl?: number;
+  depth?: number;
+  node_type?: OrgHierarchyNodeType;
+  node_id?: string;
+}
+
 function supabaseGameFallbackCredentials(): boolean {
   const url = (environment.supabaseUrl || '').trim();
   const key = (

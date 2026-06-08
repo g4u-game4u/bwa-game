@@ -1,7 +1,9 @@
 ﻿import { Injectable } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
 import { Observable, of, forkJoin, throwError, EMPTY } from 'rxjs';
-import { map, catchError, shareReplay, switchMap, expand, reduce } from 'rxjs/operators';
+import { map, catchError, shareReplay, switchMap, expand, reduce, delay } from 'rxjs/operators';
+import { environment } from '../../environments/environment';
+import { buildMockOrganizationHierarchyReport } from '../testing/org-hierarchy-report.mock';
 import { BackendApiService } from './backend-api.service';
 import {
   ActivityListItem,
@@ -30,7 +32,9 @@ import type {
   SupervisionTeamDashboardCached,
   SupervisionDashboardCachedParams,
   ManagementDashboardOverviewResponse,
-  ManagerDashboardCached
+  ManagerDashboardCached,
+  OrganizationHierarchyReportResponse,
+  OrgHierarchyNodeType
 } from '@model/game4u-api.model';
 import { SessaoProvider } from '@providers/sessao/sessao.provider';
 import {
@@ -551,6 +555,10 @@ export class ActionLogService {
     CacheEntry<ManagementDashboardOverviewResponse | null>
   >();
   private game4uManagementDashboardListCache = new Map<string, CacheEntry<ManagerDashboardCached[]>>();
+  private game4uOrganizationHierarchyReportCache = new Map<
+    string,
+    CacheEntry<OrganizationHierarchyReportResponse | null>
+  >();
   /** Uma requisição `user-actions` por equipe/mês (insights operacionais + executivos). */
   private game4uTeamUserActionsInsightsCache = new Map<string, CacheEntry<Game4uUserActionModel[]>>();
 
@@ -760,6 +768,66 @@ export class ActionLogService {
         shareReplay({ bufferSize: 1, refCount: true, windowTime: this.GAME4U_CACHE_DURATION })
       );
     this.setCachedData(this.game4uManagementDashboardOverviewCache, cacheKey, request$);
+    return request$;
+  }
+
+  /**
+   * `GET /game/reports/organization/hierarchy-report` — relatório organizacional hierárquico.
+   */
+  fetchOrganizationHierarchyReport(options?: {
+    month?: Date;
+    simulationPotBrl?: number;
+    depth?: number;
+    nodeType?: OrgHierarchyNodeType;
+    nodeId?: string;
+  }): Observable<OrganizationHierarchyReportResponse | null> {
+    if (environment.useOrgHierarchyReportMock) {
+      return of(
+        buildMockOrganizationHierarchyReport({
+          month: options?.month,
+          simulationPotBrl: options?.simulationPotBrl
+        })
+      ).pipe(delay(500));
+    }
+
+    if (!(isGame4uDataEnabled() && this.game4u.isConfigured())) {
+      return of(null);
+    }
+    const refMonth = this.resolveDashboardCachedMonth(options?.month);
+    const monthParam = this.toDashboardCachedMonthParam(refMonth);
+    const sim = options?.simulationPotBrl;
+    const depth = options?.depth ?? 5;
+    const nodeType = (options?.nodeType ?? '').trim();
+    const nodeId = (options?.nodeId ?? '').trim();
+    const cacheKey = `g4u_org_hierarchy_${monthParam}_${sim ?? ''}_${depth}_${nodeType}_${nodeId}`;
+    const cached = this.getCachedData(
+      this.game4uOrganizationHierarchyReportCache,
+      cacheKey,
+      this.GAME4U_CACHE_DURATION
+    );
+    if (cached) {
+      return cached;
+    }
+
+    const request$ = this.game4u
+      .getGameReportsOrganizationHierarchyReport({
+        month: monthParam,
+        ...(sim != null && sim > 0 ? { simulation_pot_brl: sim } : {}),
+        depth,
+        ...(nodeType ? { node_type: options!.nodeType } : {}),
+        ...(nodeId ? { node_id: nodeId } : {})
+      })
+      .pipe(
+        catchError(err => {
+          if (err instanceof HttpErrorResponse && err.status === 404) {
+            return of(null);
+          }
+          console.error('Error fetching organization/hierarchy-report:', err);
+          return of(null);
+        }),
+        shareReplay({ bufferSize: 1, refCount: true, windowTime: this.GAME4U_CACHE_DURATION })
+      );
+    this.setCachedData(this.game4uOrganizationHierarchyReportCache, cacheKey, request$);
     return request$;
   }
 
@@ -3839,6 +3907,7 @@ export class ActionLogService {
     this.game4uSupervisionDashboardCachedCache.clear();
     this.game4uManagementDashboardOverviewCache.clear();
     this.game4uManagementDashboardListCache.clear();
+    this.game4uOrganizationHierarchyReportCache.clear();
     this.game4uTeamUserActionsInsightsCache.clear();
     this.teamMetricsCache.clear();
     this.teamCnpjCache.clear();

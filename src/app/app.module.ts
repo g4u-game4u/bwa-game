@@ -19,6 +19,7 @@ import { C4uAnimacaoCidModule } from './components/c4u-animacao-cid/c4u-animacao
 import { MatSnackBarModule } from '@angular/material/snack-bar';
 import { C4uSpinnerModule } from '@components/c4u-spinner/c4u-spinner.module';
 import { AuthInterceptor } from './providers/auth.interceptor';
+import { GameReportsInterceptor } from './providers/game-reports.interceptor';
 import { NotificationService } from './services/notification.service';
 import { OverlayModule } from '@angular/cdk/overlay';
 import { HelpButtonComponent } from './components/c4u-help-button/c4u-help-button.component';
@@ -64,6 +65,11 @@ Chart.register(...registerables);
     {
       provide: HTTP_INTERCEPTORS,
       useClass: AuthInterceptor,
+      multi: true
+    },
+    {
+      provide: HTTP_INTERCEPTORS,
+      useClass: GameReportsInterceptor,
       multi: true
     },
     {

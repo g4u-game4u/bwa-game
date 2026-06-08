@@ -1,0 +1,66 @@
+<div class="org-tree-node" [class.org-tree-node--nested]="depth > 0">
+  <div
+    class="org-tree-node__header"
+    [class.org-tree-node__header--expandable]="hasChildren"
+    [attr.role]="hasChildren ? 'button' : null"
+    [attr.tabindex]="hasChildren ? 0 : null"
+    [attr.aria-expanded]="hasChildren ? isExpanded : null"
+    (click)="onToggle()"
+    (keydown)="onToggleKeydown($event)">
+    <button
+      *ngIf="hasChildren"
+      type="button"
+      class="org-tree-node__chevron"
+      [attr.aria-label]="isExpanded ? 'Recolher' : 'Expandir'"
+      tabindex="-1">
+      <i [class]="isExpanded ? 'ri-arrow-down-s-line' : 'ri-arrow-right-s-line'" aria-hidden="true"></i>
+    </button>
+    <span *ngIf="!hasChildren" class="org-tree-node__chevron org-tree-node__chevron--spacer" aria-hidden="true"></span>
+
+    <div class="org-tree-node__info">
+      <span class="org-tree-node__type">{{ nodeTypeLabel }}</span>
+      <span class="org-tree-node__label">{{ node.label }}</span>
+      <span class="org-tree-node__meta">
+        {{ node.players_count | number:'1.0-0':'pt-BR' }}
+        {{ node.players_count === 1 ? 'colaborador' : 'colaboradores' }}
+      </span>
+    </div>
+
+    <div class="org-tree-node__metrics">
+      <div class="org-tree-node__metric">
+        <span class="org-tree-node__metric-value">
+          {{ node.mtd?.points_delivered | number:'1.0-0':'pt-BR' }}
+        </span>
+        <span class="org-tree-node__metric-label">Pontos MTD</span>
+      </div>
+      <div class="org-tree-node__metric">
+        <span
+          class="org-tree-node__metric-value"
+          [class.org-tree-node__metric-value--positive]="mtdCompareTone === 'positive'"
+          [class.org-tree-node__metric-value--negative]="mtdCompareTone === 'negative'">
+          {{ mtdComparePct }}
+        </span>
+        <span class="org-tree-node__metric-label">vs MTD ant.</span>
+      </div>
+      <div class="org-tree-node__metric" *ngIf="node.balance_score != null">
+        <span class="org-tree-node__metric-value">{{ node.balance_score | number:'1.1-1':'pt-BR' }}</span>
+        <span class="org-tree-node__metric-label">Balance score</span>
+      </div>
+      <div class="org-tree-node__metric" *ngIf="showSimulation && node.simulation">
+        <span class="org-tree-node__metric-value">{{ simulationPayout }}</span>
+        <span class="org-tree-node__metric-label">Simulação ({{ simulationShare }})</span>
+      </div>
+    </div>
+  </div>
+
+  <div *ngIf="hasChildren && isExpanded" class="org-tree-node__children" role="group">
+    <c4u-org-hierarchy-tree-node
+      *ngFor="let child of node.children; trackBy: trackByNodeId"
+      [node]="child"
+      [depth]="depth + 1"
+      [showSimulation]="showSimulation"
+      [expandedIds]="expandedIds"
+      (toggleNode)="toggleNode.emit($event)">
+    </c4u-org-hierarchy-tree-node>
+  </div>
+</div>

@@ -39,11 +39,11 @@ export class ToastService {
     });
   }
 
-  warning(message = '') {
+  warning(message = '', duration = 5000) {
     this._snackBar.open(message, '', {
       panelClass: ['snackbar-warning'],
       ...this.defaultConfig,
-      duration: 5000,
+      duration,
     });
   }
 
