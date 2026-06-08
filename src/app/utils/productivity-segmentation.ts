@@ -1,4 +1,4 @@
-import { ManagementDashboardCachedRole } from './management-dashboard-role';
+﻿import { ManagementDashboardCachedRole } from './management-dashboard-role';
 import { UserProfile } from './user-profile';
 
 /** Granularidade dos gráficos na aba «Análise de Produtividade». */
@@ -52,7 +52,7 @@ export interface TeamDailyStatsSlice {
   pointsSum: number;
 }
 
-/** Soma linhas normalizadas por dia (consolidado da equipa ou de várias equipas). */
+/** Soma linhas normalizadas por dia (consolidado da equipe ou de várias equipes). */
 export function aggregateDailyFinishedStatsByDay(
   rows: TeamDailyStatsSlice[]
 ): Map<string, { tasks: number; points: number }> {

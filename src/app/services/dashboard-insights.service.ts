@@ -1,4 +1,4 @@
-import { Injectable } from '@angular/core';
+﻿import { Injectable } from '@angular/core';
 import { Observable, forkJoin, of } from 'rxjs';
 import { catchError, map } from 'rxjs/operators';
 import { ActivityListItem } from '@model/gamification-dashboard.model';
@@ -405,7 +405,7 @@ export function buildDashboardInsightPresets(
   return presets;
 }
 
-/** Snapshot a partir de user-actions já carregadas (2 pedidos por equipa: abertas + finalizadas). */
+/** Snapshot a partir de user-actions já carregadas (2 pedidos por equipe: abertas + finalizadas). */
 export function buildDashboardInsightsSnapshotFromUserActions(
   actions: Game4uUserActionModel[],
   month: Date
@@ -550,7 +550,7 @@ export function computeDashboardInsightsFromActivityLists(
   };
 }
 
-/** Combina snapshots de várias equipas (soma contagens; rankings reordenados). */
+/** Combina snapshots de várias equipes (soma contagens; rankings reordenados). */
 export function mergeDashboardInsightsSnapshots(
   snapshots: Array<DashboardInsightsSnapshot | null | undefined>
 ): DashboardInsightsSnapshot | null {
@@ -672,7 +672,7 @@ export class DashboardInsightsService {
   }
 
   /**
-   * Insights agregando várias equipas (2 pedidos user-actions por `team_id`: abertas + finalizadas).
+   * Insights agregando várias equipes (2 pedidos user-actions por `team_id`: abertas + finalizadas).
    */
   getDashboardInsightsForTeams(
     teamIds: string[],

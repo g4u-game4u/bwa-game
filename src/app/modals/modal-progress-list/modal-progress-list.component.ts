@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
+﻿import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
 import { trigger, transition, style, animate } from '@angular/animations';
 import { Subject, forkJoin, of, firstValueFrom } from 'rxjs';
 import { takeUntil, map, catchError } from 'rxjs/operators';
@@ -49,9 +49,9 @@ export interface FinishedTaskGroup {
 })
 export class ModalProgressListComponent implements OnInit, OnDestroy {
   @Input() playerId = '';
-  /** Quando definido (ex. painel de equipa Game4U), escopo `team_id` num único GET sem `email`. */
+  /** Quando definido (ex. painel de equipe Game4U), escopo `team_id` num único GET sem `email`. */
   @Input() teamId: string | null = null;
-  /** Vários times: um GET por `team_id` e concatenação no modal (painel multi-equipa). */
+  /** Vários times: um GET por `team_id` e concatenação no modal (painel multi-equipe). */
   @Input() teamIds: string[] | null = null;
   @Input() listType: ProgressListType = 'atividades';
   @Input() month?: Date;
@@ -205,7 +205,7 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
     }
   }
 
-  /** Painel de equipa (escopo `team_id`): coluna com o jogador da user-action (`user_email`). */
+  /** Painel de equipe (escopo `team_id`): coluna com o jogador da user-action (`user_email`). */
   get showActivityExecutorColumn(): boolean {
     return this.getTeamScopeIds().length > 0;
   }
@@ -401,7 +401,7 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Com escopo de equipa, a API usa só `team_id` (sem `email`). Sem escopo, legado Funifier:
+   * Com escopo de equipe, a API usa só `team_id` (sem `email`). Sem escopo, legado Funifier:
    * vários IDs separados por vírgula (forkJoin).
    */
   private getPlayerIds(): string[] {

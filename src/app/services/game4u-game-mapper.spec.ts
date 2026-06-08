@@ -1,4 +1,4 @@
-import {
+﻿import {
   computeGame4uDrPrazoMetaBoost,
   computeMonthlyPointsFromGame4uActions,
   filterGame4uActionsByCompetenceMonth,
@@ -29,6 +29,7 @@ import {
   aggregateExecutiveTopProcessesFromUserActions,
   isExecutiveDeliveryRowOnTimeFromUserActions,
   computeCompanyDeliveryInsightsFromTasks,
+  computeExecutiveJustifiedDeliveryPct,
   readGame4uUserActionDtPrazo,
   game4uUserActionMatchesDeliveryRow,
   resolveExecutiveHierarchySegment,
@@ -905,7 +906,7 @@ describe('game4u-game-mapper', () => {
         gerente_email: 'gerente@bwa.global',
         gerente_name: 'Gerente A',
         team_id: 68,
-        team_name: 'Equipa SP'
+        team_name: 'Equipe SP'
       };
       const actions = [
         {
@@ -932,7 +933,7 @@ describe('game4u-game-mapper', () => {
             gerente_email: 'outro@bwa.global',
             gerente_name: 'Gerente B',
             team_id: 69,
-            team_name: 'Equipa RJ'
+            team_name: 'Equipe RJ'
           }
         }
       ] as Game4uUserActionModel[];
@@ -976,9 +977,40 @@ describe('game4u-game-mapper', () => {
         judgedTasks: 5,
         deliveriesCount: 5,
         judgedDeliveriesCount: 5,
+        justifiedDeliveriesCount: 0,
         onTimeDeliveries: 2,
         clientsCount: 5
       });
+    });
+
+    it('aggregateExecutivePlayerRankingsFromUserActions tracks justified deliveries pct', () => {
+      const email = 'player@bwa.global';
+      const actions = [
+        {
+          id: '1',
+          points: 1,
+          status: 'DONE',
+          created_at: '2026-03-01',
+          user_email: email,
+          dt_prazo: '2099-01-01',
+          finished_at: '2026-03-05T12:00:00Z',
+          extra: { status_api: 'Pend. justificada' }
+        },
+        {
+          id: '2',
+          points: 1,
+          status: 'DONE',
+          created_at: '2026-03-02',
+          user_email: email,
+          dt_prazo: '2099-01-01',
+          finished_at: '2026-03-06T12:00:00Z'
+        }
+      ] as Game4uUserActionModel[];
+
+      const agg = aggregateExecutivePlayerRankingsFromUserActions(actions).get(email)!;
+
+      expect(agg.justifiedDeliveriesCount).toBe(1);
+      expect(computeExecutiveJustifiedDeliveryPct(agg.deliveriesCount, agg.justifiedDeliveriesCount)).toBe(50);
     });
 
     it('game4uUserActionMatchesDeliveryRow matches by user_email and emp_id', () => {

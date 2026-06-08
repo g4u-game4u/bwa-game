@@ -1,4 +1,4 @@
-# Relatórios `GET /game/reports/*` (Supabase RPC)
+﻿# Relatórios `GET /game/reports/*` (Supabase RPC)
 
 Aplicar a migration [`supabase/migrations/20260430160000_game_reports_rpc.sql`](../supabase/migrations/20260430160000_game_reports_rpc.sql) no projeto Supabase antes de chamar os endpoints.
 
@@ -11,8 +11,8 @@ Aplicar a migration [`supabase/migrations/20260430160000_game_reports_rpc.sql`](
 
 | Parâmetro | Uso |
 |-----------|-----|
-| `email` | E-mail filtrado (`user_action.user_email`). Com vista **por colaborador**, enviar `email` (e opcionalmente `team_id` para escopo de equipa). Para vista **consolidada da equipa** (gestor, sem colaborador selecionado), omitir `email` e enviar só `team_id` (= id de equipa BWA / escopo no JWT). Jogadores (`PLAYER`) só podem usar o próprio e-mail do token. |
-| `team_id` | Escopo de equipa nos relatórios. **Consolidado:** só `team_id` + intervalos. **Colaborador:** `email` + `team_id` opcional conforme contrato da API. |
+| `email` | E-mail filtrado (`user_action.user_email`). Com vista **por colaborador**, enviar `email` (e opcionalmente `team_id` para escopo de equipe). Para vista **consolidada da equipe** (gestor, sem colaborador selecionado), omitir `email` e enviar só `team_id` (= id de equipe BWA / escopo no JWT). Jogadores (`PLAYER`) só podem usar o próprio e-mail do token. |
+| `team_id` | Escopo de equipe nos relatórios. **Consolidado:** só `team_id` + intervalos. **Colaborador:** `email` + `team_id` opcional conforme contrato da API. |
 | `status` | Opcional. Repita (`status=DONE&status=DELIVERED`) ou CSV (`status=DONE,DELIVERED`). Se omitido, cada endpoint usa o default da RPC (igual aos SQLs originais). |
 | `finished_at_start` / `finished_at_end` | Intervalo ISO-8601 em `finished_at` (relatórios “finished”). |
 | `dt_prazo_start` / `dt_prazo_end` | Datas (ISO) aplicadas a `(extra->>'dt_prazo')::date`. |

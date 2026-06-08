@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, HostListener, ChangeDetectionStrategy, ChangeDetectorRef, AfterViewInit } from '@angular/core';
+﻿import { Component, OnInit, OnDestroy, HostListener, ChangeDetectionStrategy, ChangeDetectorRef, AfterViewInit } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { NgbModal } from '@ng-bootstrap/ng-bootstrap';
 import { Subject, of, forkJoin, from, firstValueFrom } from 'rxjs';
@@ -36,6 +36,7 @@ import {
 import { hasMoreFinishedDeliveriesCachedPage } from '@services/game4u-game-mapper';
 import { DashboardInsightsService } from '@services/dashboard-insights.service';
 import { DashboardInsightsSnapshot, DashboardInsightsAlertFocus } from '@model/dashboard-insights.model';
+import { ENTREGAS_JUSTIFICADAS_META_DISCLAIMER } from '@services/help-texts.service';
 
 @Component({
   selector: 'app-gamification-dashboard',
@@ -44,6 +45,7 @@ import { DashboardInsightsSnapshot, DashboardInsightsAlertFocus } from '@model/d
   changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterViewInit {
+  readonly justifiedDeliveriesDisclaimer = ENTREGAS_JUSTIFICADAS_META_DISCLAIMER;
   private destroy$ = new Subject<void>();
   private monthChange$ = new Subject<void>(); // Cancels in-flight month-dependent requests
   private endRenderMeasurement: (() => void) | null = null;
@@ -864,7 +866,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
               skipKpi: !!page.fromCachedDeliveries
             });
           }
-          // Fallback legado (equipa com `team_id` ou backend sem lista paginada)
+          // Fallback legado (equipe com `team_id` ou backend sem lista paginada)
           return this.actionLogService.getPlayerCnpjListWithCount(playerId, this.selectedMonth).pipe(
             switchMap(items => {
               const empids = items.map(i => i.cnpj).filter((c): c is string => !!c && String(c).trim().length > 0);
@@ -2191,7 +2193,8 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   logout(): void {
     const snack = this.toastService.action('Deseja sair do sistema?', 'Sair', {
       duration: 8000,
-      panelClass: ['snackbar-warning']
+      panelClass: ['snackbar-warning'],
+      dismissOnOutsideClick: true,
     });
 
     snack

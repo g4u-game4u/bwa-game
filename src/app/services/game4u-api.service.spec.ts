@@ -1,4 +1,4 @@
-import { TestBed } from '@angular/core/testing';
+﻿import { TestBed } from '@angular/core/testing';
 import { HttpClientTestingModule, HttpTestingController } from '@angular/common/http/testing';
 import { Game4uApiService } from './game4u-api.service';
 import { Game4uSupabaseFallbackService } from './game4u-supabase-fallback.service';
@@ -162,7 +162,7 @@ describe('Game4uApiService', () => {
     req.flush({ tasks_count: 3, points_sum: 40, deliveries_count: 2 });
   });
 
-  it('getGameReportsFinishedSummary builds team_id without email (consolidado equipa)', done => {
+  it('getGameReportsFinishedSummary builds team_id without email (consolidado equipe)', done => {
     service
       .getGameReportsFinishedSummary({
         team_id: '42',
@@ -543,7 +543,7 @@ describe('Game4uApiService', () => {
         limit: 50
       })
       .subscribe(res => {
-        expect(res.items[0].delivery_title).toBe('Cliente Equipa');
+        expect(res.items[0].delivery_title).toBe('Cliente Equipe');
         expect(res.items[0].on_time_pct).toBe(91);
         expect(res.total).toBe(1);
         done();
@@ -562,7 +562,7 @@ describe('Game4uApiService', () => {
       offset: 0,
       limit: 50,
       total: 1,
-      items: [{ delivery_title: 'Cliente Equipa', tasks_total: 3, on_time_pct: 91 }]
+      items: [{ delivery_title: 'Cliente Equipe', tasks_total: 3, on_time_pct: 91 }]
     });
   });
 

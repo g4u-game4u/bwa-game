@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetectorRef, ChangeDetectionStrategy } from '@angular/core';
+﻿import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetectorRef, ChangeDetectionStrategy } from '@angular/core';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { ActionLogService, ClienteActionItem } from '@services/action-log.service';
@@ -27,7 +27,7 @@ export class ModalCompanyCarteiraDetailComponent implements OnInit, OnDestroy {
   @Input() month?: Date;
   /** Quando definido, restringe o aggregate ao userId (carteira individual / colaborador). */
   @Input() actionLogUserId: string | null = null;
-  /** Vista equipa sem colaborador: restringe aos jogadores do time (mesmo critério da carteira agregada). */
+  /** Vista equipe sem colaborador: restringe aos jogadores do time (mesmo critério da carteira agregada). */
   @Input() actionLogTeamId: string | null = null;
   @Output() closed = new EventEmitter<void>();
 
@@ -156,7 +156,7 @@ export class ModalCompanyCarteiraDetailComponent implements OnInit, OnDestroy {
     const tid = !uid && this.actionLogTeamId?.trim() ? this.actionLogTeamId.trim() : undefined;
     const oneScope = (uid && !tid) || (!uid && tid);
 
-    // Colaborador OU equipa agregada + Game4U + relatório finished: resposta paginada (`items` + `total`).
+    // Colaborador OU equipe agregada + Game4U + relatório finished: resposta paginada (`items` + `total`).
     if (oneScope && isGame4uDataEnabled() && this.company.loadTasksViaGameReports) {
       this.fetchParticipationModalTasksPage(true);
       return;
@@ -195,7 +195,7 @@ export class ModalCompanyCarteiraDetailComponent implements OnInit, OnDestroy {
       return;
     }
 
-    // Equipa (sem colaborador) + Game4U: mesmas user-actions finalizadas com `team_id` (não Funifier action_log).
+    // Equipe (sem colaborador) + Game4U: mesmas user-actions finalizadas com `team_id` (não Funifier action_log).
     if (!uid && tid && isGame4uDataEnabled()) {
       this.actionLogService
         .getGame4uUserActionsForParticipationModal(

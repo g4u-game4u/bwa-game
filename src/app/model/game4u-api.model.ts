@@ -1,4 +1,4 @@
-/** Contratos alinhados ao OpenAPI Game4U (g4u-api-bwa). */
+﻿/** Contratos alinhados ao OpenAPI Game4U (g4u-api-bwa). */
 
 import { environment } from '../../environments/environment';
 
@@ -29,7 +29,7 @@ export interface Game4uUserScopedQuery extends Game4uDateRangeQuery {
 }
 
 export interface Game4uTeamScopedQuery extends Game4uDateRangeQuery {
-  /** Id numérico da equipa no jogo (query `team`). Não usar nome legível. */
+  /** Id numérico da equipe no jogo (query `team`). Não usar nome legível. */
   team: string;
   /** Evitar em `team-actions` se o backend rejeitar (`property user should not exist`). */
   user?: string;
@@ -119,7 +119,7 @@ export interface Game4uUserActionModel {
   dt_prazo?: string;
   /** Indica se a entrega pode gerar multa (relatórios user-actions). */
   risco_multa?: boolean;
-  /** Gestor, diretor e equipa associados à tarefa (painel agregado). */
+  /** Gestor, diretor e equipe associados à tarefa (painel agregado). */
   hierarchy?: Game4uUserActionHierarchy | null;
   [key: string]: unknown;
 }
@@ -154,7 +154,7 @@ export interface Game4uReportsOpenSummary {
 
 /** Query para `GET /game/reports/open/summary`: intervalo em `dt_prazo` (ISO 8601), não `finished_at_*`. */
 export interface Game4uReportsOpenSummaryQuery {
-  /** Utilizador; omitir com `team_id` para consolidado da equipa (gestor). */
+  /** Utilizador; omitir com `team_id` para consolidado da equipe (gestor). */
   email?: string;
   dt_prazo_start: string;
   dt_prazo_end: string;
@@ -440,7 +440,7 @@ export interface Game4uReportsSupervisionCachedListQuery {
 
 export interface Game4uReportsFinishedQuery {
   /**
-   * E-mail do colaborador filtrado; omitir quando só `team_id` for usado (dados consolidados da equipa).
+   * E-mail do colaborador filtrado; omitir quando só `team_id` for usado (dados consolidados da equipe).
    * Ver `game-reports-doc.md`.
    */
   email?: string;
@@ -449,7 +449,7 @@ export interface Game4uReportsFinishedQuery {
   finished_at_end?: string;
   /** Opcional: repete `status` na query string se necessário. */
   status?: string[];
-  /** Escopo BWA / equipa — consolidado sem `email`. */
+  /** Escopo BWA / equipe — consolidado sem `email`. */
   team_id?: string;
   /** Paginação opcional (quando suportada no backend). */
   offset?: number;
@@ -462,7 +462,7 @@ export interface Game4uReportsFinishedQuery {
  */
 export interface Game4uReportsTeamDailyFinishedStatsQuery {
   email?: string;
-  /** Escopo BWA / equipa (consolidado sem `email`). */
+  /** Escopo BWA / equipe (consolidado sem `email`), ou `__management_overview__` para visão agregada de gestão. */
   team_id: string;
   /** Início do intervalo (ISO 8601). */
   start: string;
@@ -498,7 +498,7 @@ export interface Game4uReportsTeamDailyFinishedStatRow {
  * agregada de gestão (GERENTE / DIRETOR / C_LEVEL / ADMIN / SERVICE).
  */
 export interface Game4uReportsTeamDailyPendingStatsQuery {
-  /** Escopo BWA / equipa, ou `__management_overview__` para visão agregada de gestão. */
+  /** Escopo BWA / equipe, ou `__management_overview__` para visão agregada de gestão. */
   team_id: string;
   /** Início do intervalo (ISO 8601 `YYYY-MM-DD`). */
   start: string;
@@ -652,7 +652,7 @@ export function normalizeGameReportsActionsByDeliveryResponse(body: unknown): Ga
 
 /** `GET /game/reports/user-actions` — query (pares de data só completos; um par por pedido). */
 export interface Game4uReportsUserActionsQuery {
-  /** Colaborador; com `team_id` omitir para agregado da equipa (se o backend permitir). */
+  /** Colaborador; com `team_id` omitir para agregado da equipe (se o backend permitir). */
   email?: string;
   /** Repetido na query string (`status=DONE&status=…`) ou equivalente CSV no backend. */
   status?: Game4uUserActionStatus[];

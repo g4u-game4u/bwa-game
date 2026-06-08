@@ -1,7 +1,7 @@
-/** Escopo da consulta de insights (espelha futuro `GET /game/reports/dashboard/insights`). */
+﻿/** Escopo da consulta de insights (espelha futuro `GET /game/reports/dashboard/insights`). */
 export interface DashboardInsightsQuery {
   month: Date;
-  /** E-mail do jogador; omitir em visão consolidada de equipa. */
+  /** E-mail do jogador; omitir em visão consolidada de equipe. */
   email?: string;
   team_id?: string;
   isManagement?: boolean;

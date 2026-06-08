@@ -1,4 +1,4 @@
-import { Injectable } from '@angular/core';
+﻿import { Injectable } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
 import { Observable, of, forkJoin, throwError, EMPTY } from 'rxjs';
 import { map, catchError, shareReplay, switchMap, expand, reduce } from 'rxjs/operators';
@@ -171,7 +171,7 @@ export interface GetProgressMetricsOptions {
   /** Repete-se como `team_id` em GET `/game/*` **user-scoped** (ignorado quando {@link game4uTeamAggregate} está definido). */
   teamId?: string | number | null;
   /**
-   * Painel equipa sem colaborador: com `team_id` BWA → `GET /game/reports/finished|open/summary`;
+   * Painel equipe sem colaborador: com `team_id` BWA → `GET /game/reports/finished|open/summary`;
    * sem BWA → só `GET /game/team-stats` (sem `team-actions`, sem `/game/stats`).
    */
   game4uTeamAggregate?: { team: string; bwaTeamId?: string | number | null };
@@ -551,7 +551,7 @@ export class ActionLogService {
     CacheEntry<ManagementDashboardOverviewResponse | null>
   >();
   private game4uManagementDashboardListCache = new Map<string, CacheEntry<ManagerDashboardCached[]>>();
-  /** Uma requisição `user-actions` por equipa/mês (insights operacionais + executivos). */
+  /** Uma requisição `user-actions` por equipe/mês (insights operacionais + executivos). */
   private game4uTeamUserActionsInsightsCache = new Map<string, CacheEntry<Game4uUserActionModel[]>>();
 
   constructor(
@@ -639,7 +639,7 @@ export class ActionLogService {
   }
 
   /**
-   * `GET /game/reports/supervision/dashboard/cached` — painel agregado por equipa (substitui finished/open/goal month summary com team_id).
+   * `GET /game/reports/supervision/dashboard/cached` — painel agregado por equipe (substitui finished/open/goal month summary com team_id).
    */
   fetchSupervisionTeamDashboardCached(
     bwaTeamScopeId: string,
@@ -954,7 +954,7 @@ export class ActionLogService {
   }
 
   /**
-   * Âmbito equipa para `/game/actions` no modal «Clientes atendidos» (gestor sem colaborador selecionado).
+   * Âmbito equipe para `/game/actions` no modal «Clientes atendidos» (gestor sem colaborador selecionado).
    * Com `team_id`, o backend omite `user` na query; o campo `user` satisfaz o tipo e alinha ao JWT.
    */
   private game4uTeamQueryForModal(teamId: string, month?: Date): Game4uUserScopedQuery | null {
@@ -990,7 +990,7 @@ export class ActionLogService {
   }
 
   /**
-   * Abertas: `PENDING`/`DOING` com intervalo `dt_prazo` do mês (1 pedido por equipa/email).
+   * Abertas: `PENDING`/`DOING` com intervalo `dt_prazo` do mês (1 pedido por equipe/email).
    */
   getTeamOpenUserActionsForInsightsMonth(
     teamId: string | number | null | undefined,
@@ -1001,7 +1001,7 @@ export class ActionLogService {
   }
 
   /**
-   * Finalizadas: `DONE`/`DELIVERED` com intervalo `finished_at` do mês (1 pedido por equipa/email).
+   * Finalizadas: `DONE`/`DELIVERED` com intervalo `finished_at` do mês (1 pedido por equipe/email).
    */
   getTeamFinishedUserActionsForInsightsMonth(
     teamId: string | number | null | undefined,
@@ -1012,7 +1012,7 @@ export class ActionLogService {
   }
 
   /**
-   * Duas chamadas `GET /game/reports/user-actions` por equipa (ou email) e mês — abertas + finalizadas.
+   * Duas chamadas `GET /game/reports/user-actions` por equipe (ou email) e mês — abertas + finalizadas.
    * Cache partilhado entre insights operacionais e executivos.
    */
   /**
@@ -1181,7 +1181,7 @@ export class ActionLogService {
   }
 
   /**
-   * Meta de pontos do mês agregada da equipa (`supervision/dashboard/cached`).
+   * Meta de pontos do mês agregada da equipe (`supervision/dashboard/cached`).
    */
   getMonthlyTeamGoalPointsTarget(bwaTeamScopeId: string, month: Date): Observable<number> {
     const tid = this.normalizeGame4uTeamId(bwaTeamScopeId);
@@ -1500,8 +1500,8 @@ export class ActionLogService {
   }
 
   /**
-   * Snapshot Game4U para sidebar do **painel de equipa** (vista agregada sem colaborador):
-   * `GET /game/reports/finished/summary` com `team_id` (= id BWA da equipa), sem `email`.
+   * Snapshot Game4U para sidebar do **painel de equipe** (vista agregada sem colaborador):
+   * `GET /game/reports/finished/summary` com `team_id` (= id BWA da equipe), sem `email`.
    */
   getMonthlyGame4uTeamDashboardData(
     bwaTeamScopeId: string,
@@ -1547,8 +1547,8 @@ export class ActionLogService {
   }
 
   /**
-   * Game4U (reports): `GET /game/reports/finished/summary` no mês selecionado, escopo equipa (`team_id`), sem `email`.
-   * Usado para o contador «Clientes atendidos este mês» (deliveries_count) no painel de equipa.
+   * Game4U (reports): `GET /game/reports/finished/summary` no mês selecionado, escopo equipe (`team_id`), sem `email`.
+   * Usado para o contador «Clientes atendidos este mês» (deliveries_count) no painel de equipe.
    */
   getTeamFinishedSummaryForMonth(
     bwaTeamScopeId: string,
@@ -1584,7 +1584,7 @@ export class ActionLogService {
   }
 
   /**
-   * Game4U (reports): daily stats de tarefas finalizadas por equipa (e opcionalmente por colaborador),
+   * Game4U (reports): daily stats de tarefas finalizadas por equipe (e opcionalmente por colaborador),
    * usado na aba “Análise de Produtividade”.
    */
   getReportTeamDailyFinishedStats(
@@ -1627,7 +1627,7 @@ export class ActionLogService {
 
   /**
    * Game4U (reports): daily stats de tarefas **pendentes** (`PENDING`+`DOING` por default)
-   * por equipa (e opcionalmente por colaborador), filtradas por `due_date` (com fallback para
+   * por equipe (e opcionalmente por colaborador), filtradas por `due_date` (com fallback para
    * `extra.dt_prazo`). Usado pelo modal de tarefas pendentes do team-management quando o
    * usuário é SUPERVISOR.
    *
@@ -1900,7 +1900,7 @@ export class ActionLogService {
     const teamExtras = tid ? { team_id: tid } : {};
     const title = row.delivery_title?.trim();
     if (row.loadTasksViaGameReports && title && month != null) {
-      /** Modal equipa passa `playerId` `'me'` + `team_id`; não enviar `email` (consolidado). Com utilizador real + `team_id`, mantém-se o e-mail. */
+      /** Modal equipe passa `playerId` `'me'` + `team_id`; não enviar `email` (consolidado). Com utilizador real + `team_id`, mantém-se o e-mail. */
       const pid = String(playerId ?? '').trim();
       const email =
         tid && pid === 'me' ? undefined : this.resolveGame4uUserEmail(playerId);
@@ -2309,7 +2309,7 @@ export class ActionLogService {
    * {@link GetProgressMetricsOptions.gamificationDashboardReportsOnly}: painel gamificação evita
    * `GET /game/stats`, `GET /game/actions` e **`GET /game/reports/user-actions`** neste método — só relatórios agregados.
    *
-   * Vista equipa (`game4uTeamAggregate` + `team_id` BWA): `supervision/dashboard/cached` no mês
+   * Vista equipe (`game4uTeamAggregate` + `team_id` BWA): `supervision/dashboard/cached` no mês
    * (substitui `finished/summary` + `open/summary`). Sem BWA: só `GET /game/team-stats`.
    */
   getProgressMetrics(
@@ -3396,7 +3396,7 @@ export class ActionLogService {
    * Carrega TODAS as páginas de `finished/deliveries/cached` (ou variante de gestão) devolvendo
    * as linhas RAW da API (com `user_email`, `tasks_total`, `tasks_on_time`, `on_time_pct`, etc.),
    * sem o mapeamento para `PlayerParticipacaoDeliveryRow`. Usado pelos «Insights Executivos»
-   * do painel de gestão da equipa para correlacionar processos × jogadores × prazos.
+   * do painel de gestão da equipe para correlacionar processos × jogadores × prazos.
    *
    * Escopo (precedência):
    *  - `isManagement: true` → `GET /game/reports/management/finished/deliveries/cached` (sem `team_id`/`email`)
@@ -3505,7 +3505,7 @@ export class ActionLogService {
 
   /**
    * Tarefas da empresa cruzadas com POST `action_log/aggregate?strict=true`.
-   * O identificador da linha da carteira pode ser `attributes.cnpj` ou `attributes.deal` (ex.: aggregate da equipa).
+   * O identificador da linha da carteira pode ser `attributes.cnpj` ou `attributes.deal` (ex.: aggregate da equipe).
    * Filtro de mês no cliente (filterByMonth), como nas outras leituras de action_log.
    */
   getActionsByCnpj(

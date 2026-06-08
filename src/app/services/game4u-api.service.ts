@@ -1,4 +1,4 @@
-import { Injectable } from '@angular/core';
+﻿import { Injectable } from '@angular/core';
 import { HttpClient, HttpHeaders, HttpParams, HttpErrorResponse } from '@angular/common/http';
 import { Observable, throwError, of } from 'rxjs';
 import { catchError, map, shareReplay, tap } from 'rxjs/operators';
@@ -177,7 +177,7 @@ export class Game4uApiService {
     return (email ?? '').trim() !== '';
   }
 
-  /** Chave de cache: equipa + opcionalmente e-mail (colaborador dentro da equipa). */
+  /** Chave de cache: equipe + opcionalmente e-mail (colaborador dentro da equipe). */
   private reportIdentitySegment(q: { email?: string; team_id?: string }): string {
     const tid = (q.team_id ?? '').trim();
     const em = (q.email ?? '').trim();
@@ -190,7 +190,7 @@ export class Game4uApiService {
     return em ? `email:${em}` : 'none';
   }
 
-  /** Relatórios exigem `email` (colaborador) ou `team_id` (consolidado da equipa). */
+  /** Relatórios exigem `email` (colaborador) ou `team_id` (consolidado da equipe). */
   private hasReportsIdentity(q: { email?: string; team_id?: string }): boolean {
     return this.shouldIncludeEmailQueryParam(q.email) || (q.team_id ?? '').trim() !== '';
   }
@@ -488,7 +488,7 @@ export class Game4uApiService {
 
   /**
    * `GET /game/reports/finished/deliveries/cached` — lista paginada + `on_time_pct` por linha (mês).
-   * Escopo: `email` (jogador) ou `team_id` (equipa).
+   * Escopo: `email` (jogador) ou `team_id` (equipe).
    */
   getGameReportsFinishedDeliveriesCached(
     q: Game4uReportsFinishedDeliveriesCachedQuery
@@ -986,7 +986,7 @@ export class Game4uApiService {
    * `GET /game/reports/team/daily-finished-stats`
    * OpenAPI: `GameController_getReportTeamDailyFinishedStats`.
    *
-   * Observação: o path foi alinhado ao padrão `/game/reports/*` usado no restante do app.
+   * Use `team_id=__management_overview__` para a visão de gestão (GERENTE/DIRETOR/C_LEVEL/ADMIN/SERVICE).
    */
   getGameReportsTeamDailyFinishedStats(
     q: Game4uReportsTeamDailyFinishedStatsQuery

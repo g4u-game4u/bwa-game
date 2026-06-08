@@ -649,6 +649,12 @@
                                     {{ player.onTimeDeliveryPct | number:'1.0-1':'pt-BR' }}% no prazo
                                   </span>
                                 </ng-container>
+                                <ng-container *ngIf="player.justifiedDeliveryPct != null">
+                                  <span aria-hidden="true">·</span>
+                                  <span class="badge-justified">
+                                    {{ player.justifiedDeliveryPct | number:'1.0-1':'pt-BR' }}% justificadas
+                                  </span>
+                                </ng-container>
                                 <ng-container *ngIf="executiveInsightsRankingIsGrouped && player.clientsCount > 0">
                                   <span aria-hidden="true">·</span>
                                   <span>
@@ -713,6 +719,12 @@
                                     {{ player.onTimeDeliveryPct | number:'1.0-1':'pt-BR' }}% no prazo
                                   </span>
                                 </ng-container>
+                                <ng-container *ngIf="player.justifiedDeliveryPct != null">
+                                  <span aria-hidden="true">·</span>
+                                  <span class="badge-justified">
+                                    {{ player.justifiedDeliveryPct | number:'1.0-1':'pt-BR' }}% justificadas
+                                  </span>
+                                </ng-container>
                                 <ng-container *ngIf="executiveInsightsRankingIsGrouped && player.clientsCount > 0">
                                   <span aria-hidden="true">·</span>
                                   <span>
@@ -748,17 +760,23 @@
               [attr.aria-busy]="isLoadingCarteira ? 'true' : null"
               aria-labelledby="company-section-title">
               <div class="section-header">
-                <h3 id="company-section-title" class="section-title">
-                  Clientes atendidos este mês
-                  <span *ngIf="!isLoadingClientesAtendidosCount" class="section-title-count" aria-hidden="true">
-                    ({{ clientesAtendidosThisMonthCount ?? teamCarteiraClientes.length }})
-                  </span>
-                  <c4u-info-button 
-                    [infoKey]="''"
-                    [customText]="'São os clientes para os quais a equipe ou o colaborador selecionado realizou alguma entrega neste mês na plataforma Acessórias. A lista segue o mês (ou período) selecionado no filtro do painel e as atividades contabilizadas pela competência das entregas no Game4U'"
-                    position="bottom">
-                  </c4u-info-button>
-                </h3>
+                <div class="section-header-main">
+                  <h3 id="company-section-title" class="section-title">
+                    Clientes atendidos este mês
+                    <span *ngIf="!isLoadingClientesAtendidosCount" class="section-title-count" aria-hidden="true">
+                      ({{ clientesAtendidosThisMonthCount ?? teamCarteiraClientes.length }})
+                    </span>
+                    <c4u-info-button 
+                      [infoKey]="''"
+                      [customText]="'São os clientes para os quais a equipe ou o colaborador selecionado realizou alguma entrega neste mês na plataforma Acessórias. A lista segue o mês (ou período) selecionado no filtro do painel e as atividades contabilizadas pela competência das entregas no Game4U'"
+                      position="bottom">
+                    </c4u-info-button>
+                  </h3>
+                  <p class="carteira-section-disclaimer" role="note">
+                    <i class="ri-information-line" aria-hidden="true"></i>
+                    <span>{{ justifiedDeliveriesDisclaimer }}</span>
+                  </p>
+                </div>
               </div>
               
               <c4u-card class="carteira-card">

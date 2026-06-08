@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, ChangeDetectionStrategy, ChangeDetectorRef, Renderer2, Inject } from '@angular/core';
+﻿import { Component, OnInit, OnDestroy, ChangeDetectionStrategy, ChangeDetectorRef, Renderer2, Inject } from '@angular/core';
 import { DOCUMENT } from '@angular/common';
 import { Router } from '@angular/router';
 import { NgbModal } from '@ng-bootstrap/ng-bootstrap';
@@ -42,6 +42,7 @@ import {
   aggregateExecutiveTeamRankingFromUserActions,
   aggregateExecutiveTopProcessesFromUserActions,
   buildExecutiveJustifiedDeliveryLookup,
+  computeExecutiveJustifiedDeliveryPct,
   type ExecutiveHierarchyRankingMode,
   countExecutiveFinishedTasksFromUserActions,
   countExecutiveOnTimeTasksFromUserActions,
@@ -88,6 +89,7 @@ import { GoalMetric } from '@components/c4u-goals-progress-tab/c4u-goals-progres
 import { GraphDataPoint, ActivityMetrics, ProcessMetrics, ChartDataset, PointWallet, SeasonProgress } from '@app/model/gamification-dashboard.model';
 import { ProgressCardType } from '@components/c4u-activity-progress/c4u-activity-progress.component';
 import { ProgressListType } from '@modals/modal-progress-list/modal-progress-list.component';
+import { ENTREGAS_JUSTIFICADAS_META_DISCLAIMER } from '@services/help-texts.service';
 
 /** Mínimo de entregas no mês para entrar na lista «precisam de atenção». */
 const EXECUTIVE_ATTENTION_MIN_DELIVERIES = 3;
@@ -103,8 +105,10 @@ export interface ExecutiveInsightsPlayerRank {
   clientsCount: number;
   deliveriesCount: number;
   judgedDeliveriesCount?: number;
+  justifiedDeliveriesCount?: number;
   onTimeDeliveries: number;
   onTimeDeliveryPct: number | null;
+  justifiedDeliveryPct: number | null;
   onTimePct: number | null;
 }
 
@@ -141,6 +145,7 @@ export interface ExecutiveInsightsPlayerRank {
   ]
 })
 export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
+  readonly justifiedDeliveriesDisclaimer = ENTREGAS_JUSTIFICADAS_META_DISCLAIMER;
   /** Id sintético usado no seletor para o «Painel do Gerente / Diretor / C-Level». */
   static readonly MANAGEMENT_OVERVIEW_TEAM_ID = '__management_overview__';
 
@@ -383,10 +388,10 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
   executiveDashboardInsights: DashboardInsightsSnapshot | null = null;
   /** Indica se o ranking de jogadores deve ser exibido (oculto no drill-down de colaborador único). */
   showExecutiveInsightsPlayersRanking = false;
-  /** No painel consolidado do gerente, rankings por supervisão/equipa em vez de jogador. */
-  /** Agrupamento dos rankings executivos: jogador, equipa, gerente ou diretoria. */
+  /** No painel consolidado do gerente, rankings por supervisão/equipe em vez de jogador. */
+  /** Agrupamento dos rankings executivos: jogador, equipe, gerente ou diretoria. */
   executiveInsightsRankingSegment: 'player' | 'team' | 'gerente' | 'diretor' = 'player';
-  /** Geração de carga (evita race conditions com troca de mês/colaborador/equipa). */
+  /** Geração de carga (evita race conditions com troca de mês/colaborador/equipe). */
   private executiveInsightsLoadGen = 0;
 
   /** Cache de supervisão (`GET /game/reports/supervision/dashboard/cached`) indisponível para o mês. */
@@ -398,7 +403,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
   teamDashboardCachedParams: PlayerDashboardCachedParams | null = null;
   /** % entregas no prazo no mês (`month_on_time_delivery_pct`), 0–100. */
   teamMonthOnTimeDeliveryPct: number | null = null;
-  /** Bundle aplicado na vista equipa agregada (evita re-fetch na mesma carga). */
+  /** Bundle aplicado na vista equipe agregada (evita re-fetch na mesma carga). */
   private teamSupervisionBundle: SupervisionTeamDashboardCachedBundle | null = null;
 
   useParticipacaoReportsPagination = false;
@@ -599,7 +604,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
           t => t.id === TeamManagementDashboardComponent.MANAGEMENT_OVERVIEW_TEAM_ID
         );
         // Papel agregado (GERENTE/DIRETOR/C-LEVEL): **sempre** abrir no «Painel do …»,
-        // ignorando `selectedTeamId` persistido — drill-down em equipa real é manual.
+        // ignorando `selectedTeamId` persistido — drill-down em equipe real é manual.
         const teamToSelect = hasManagementOverviewEntry
           ? TeamManagementDashboardComponent.MANAGEMENT_OVERVIEW_TEAM_ID
           : savedTeamId && this.teams.some(t => t.id === savedTeamId)
@@ -734,6 +739,17 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
   }
 
   /**
+   * `team_id` para `/game/reports/team/daily-finished-stats` na aba de produtividade.
+   * No painel agregado (GERENTE/DIRETOR/C_LEVEL), usa `__management_overview__` em vez do time da sessão BWA.
+   */
+  private getProductivityReportTeamId(): string | undefined {
+    if (this.isManagementOverview) {
+      return TeamManagementDashboardComponent.MANAGEMENT_OVERVIEW_TEAM_ID;
+    }
+    return this.getGame4uReportTeamId();
+  }
+
+  /**
    * Id numérico (bigint no Postgres) para query `team` em `/game/team-stats` e `/game/team-deliveries`.
    * Não usar {@link selectedTeam} (nome legível) — causa 400 «invalid input syntax for type bigint».
    */
@@ -762,7 +778,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
     return undefined;
   }
 
-  /** Valor do parâmetro `team` nos endpoints Game4U que esperam id numérico da equipa no jogo. */
+  /** Valor do parâmetro `team` nos endpoints Game4U que esperam id numérico da equipe no jogo. */
   private getGame4uTeamHttpParam(): string {
     const sel = this.teams.find(t => t.id === this.selectedTeamId) as
       | (Team & { game4uTeamId?: string })
@@ -786,8 +802,8 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       return String(bwa).trim();
     }
     console.warn(
-      '[Game4U] Defina na API BWA um campo numérico (ex.: game4u_team_id) em GET /team, ou use id de equipa só com dígitos. ' +
-        'Enviar o nome da equipa ou um ObjectId em `team` falha no backend.'
+      '[Game4U] Defina na API BWA um campo numérico (ex.: game4u_team_id) em GET /team, ou use id de equipe só com dígitos. ' +
+        'Enviar o nome da equipe ou um ObjectId em `team` falha no backend.'
     );
     return sid;
   }
@@ -970,7 +986,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Heurística BWA: equipa marcada como «célula» (sub-equipe dentro do time-pai).
+   * Heurística BWA: equipe marcada como «célula» (sub-equipe dentro do time-pai).
    * Aceita `team_type`, `tipo`, flags `is_cell` / `celula` ou nome contendo «célula».
    */
   private isCellTeamRecord(team: Record<string, unknown>): boolean {
@@ -999,7 +1015,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * LIDER_CELULA: restringe o seletor à célula (equipa em que é líder/observer), não ao time-pai.
+   * LIDER_CELULA: restringe o seletor à célula (equipe em que é líder/observer), não ao time-pai.
    */
   private filterAvailableTeamsForLiderCelula(
     availableTeams: Array<{ id: string; name: string; memberCount: number; game4uTeamId?: string }>,
@@ -1057,7 +1073,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * GESTOR: role na sessão, perfil por equipas, ou texto com "gestor" (case-insensitive).
+   * GESTOR: role na sessão, perfil por equipes, ou texto com "gestor" (case-insensitive).
    * Não usar quando {@link hasAdminSessionRole} já for true (prioridade ADMIN).
    */
   private hasGestorSessionOrProfile(): boolean {
@@ -1913,11 +1929,11 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Game4U: supervisão por equipa (GESTOR/SUPERVISOR ou drill-down do gestor numa equipa real)
+   * Game4U: supervisão por equipe (GESTOR/SUPERVISOR ou drill-down do gestor numa equipe real)
    * ou gestão agregada (GERENTE/DIRETOR/C_LEVEL no «Painel do …», sem `team_id`).
    *
    * Sempre que houver um `team_id` selecionado, usa `supervision/dashboard/cached?team_id=` para
-   * que a sidebar reflita os KPIs **daquela equipa**.
+   * que a sidebar reflita os KPIs **daquela equipe**.
    */
   private async loadTeamDashboardFromCache(): Promise<void> {
     if (this.isManagementOverview) {
@@ -1973,7 +1989,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Carrega `GET /game/reports/supervision/dashboard/cached` e aplica métricas da vista equipa agregada.
+   * Carrega `GET /game/reports/supervision/dashboard/cached` e aplica métricas da vista equipe agregada.
    */
   private async loadTeamSupervisionFromCache(): Promise<void> {
     const scope = this.getGame4uTeamScopeId() ?? '';
@@ -2074,7 +2090,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       if (this.playerService.usesGame4uWalletFromStats()) {
         if (!this.selectedTeam) {
           this.hasSidebarError = true;
-          this.sidebarErrorMessage = 'Nenhuma equipa selecionada para dados Game4U';
+          this.sidebarErrorMessage = 'Nenhuma equipe selecionada para dados Game4U';
           this.isLoadingSidebar = false;
           this.cdr.markForCheck();
           return;
@@ -2748,6 +2764,61 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
     });
   }
 
+  /**
+   * Fallback do painel agregado: uma chamada a `/daily-finished-stats` com `team_id=__management_overview__`.
+   * Usado quando metadados de `cached/list` ou `cached/overview` não permitem segmentar por gerência/supervisão.
+   */
+  private async loadProductivityDataFromManagementOverviewDailyStats(
+    dateRange: { start: Date; end: Date },
+    mode: ProductivitySegmentationMode = 'gerencias'
+  ): Promise<void> {
+    const rows = await this.fetchTeamDailyFinishedStatsRows(
+      TeamManagementDashboardComponent.MANAGEMENT_OVERVIEW_TEAM_ID,
+      dateRange
+    );
+
+    const byEmail = aggregateDailyFinishedStatsByEmail(rows);
+    const groups: Array<{
+      memberId: string;
+      memberName: string;
+      activitiesMap: Map<string, number>;
+      pointsMap: Map<string, number>;
+    }> = [];
+
+    if (byEmail.size > 0) {
+      for (const [email, dayMap] of byEmail) {
+        const activitiesMap = new Map<string, number>();
+        const pointsMap = new Map<string, number>();
+        for (const [day, v] of dayMap) {
+          activitiesMap.set(day, v.tasks);
+          pointsMap.set(day, v.points);
+        }
+        groups.push({
+          memberId: email,
+          memberName: this.formatCollaboratorName(email),
+          activitiesMap,
+          pointsMap
+        });
+      }
+    } else {
+      const byDay = aggregateDailyFinishedStatsByDay(rows);
+      const { activitiesMap, pointsMap } = dailyMapsFromDayAggregate(byDay);
+      groups.push({
+        memberId: TeamManagementDashboardComponent.MANAGEMENT_OVERVIEW_TEAM_ID,
+        memberName: 'Organização',
+        activitiesMap,
+        pointsMap
+      });
+    }
+
+    const validMemberData = this.buildProductivitySeriesFromMaps(groups, dateRange);
+    this.applyProductivityMemberData(validMemberData, {
+      apiCalls: 1,
+      rows: rows.length,
+      mode
+    });
+  }
+
   /** C_LEVEL / DIRETOR no painel agregado: uma série por gerência (gestor GERENTE). */
   private async loadProductivityDataByGerencias(dateRange: { start: Date; end: Date }): Promise<void> {
     const managers = await firstValueFrom(
@@ -2756,9 +2827,14 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
         .pipe(takeUntil(this.destroy$))
     );
 
-    if (!managers?.length) {
-      console.warn('[Productivity] Sem gerências na listagem — fallback para supervisões.');
-      await this.loadProductivityDataBySupervisoes(dateRange);
+    const gerenteManagers = (managers ?? []).filter(m => m.user_role === 'GERENTE');
+
+    // `cached/list?role=GERENTE` só devolve gerências para ADMIN/SERVICE; DIRETOR/C_LEVEL recebem [] ou a própria linha.
+    if (!gerenteManagers.length) {
+      console.warn(
+        '[Productivity] Sem gerências segmentáveis — daily-finished-stats com team_id=__management_overview__.'
+      );
+      await this.loadProductivityDataFromManagementOverviewDailyStats(dateRange, 'gerencias');
       return;
     }
 
@@ -2771,7 +2847,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       pointsMap: Map<string, number>;
     }> = [];
 
-    for (const manager of managers) {
+    for (const manager of gerenteManagers) {
       const teamIds = [
         ...(manager.team_ids ?? []).map(id => String(id)),
         ...(manager.teams ?? []).map(t => String(t.team_id))
@@ -2800,6 +2876,18 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       });
     }
 
+    const hasSeriesData = groups.some(g =>
+      [...g.activitiesMap.values(), ...g.pointsMap.values()].some(v => v > 0)
+    );
+
+    if (!hasSeriesData) {
+      console.warn(
+        '[Productivity] Gerências sem dados em daily-finished-stats por time — fallback __management_overview__.'
+      );
+      await this.loadProductivityDataFromManagementOverviewDailyStats(dateRange, 'gerencias');
+      return;
+    }
+
     const validMemberData = this.buildProductivitySeriesFromMaps(groups, dateRange);
     this.applyProductivityMemberData(validMemberData, {
       apiCalls,
@@ -2818,7 +2906,10 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
     const supervisionTeams = overview?.teams ?? [];
 
     if (!supervisionTeams.length) {
-      this.clearProductivityCharts();
+      console.warn(
+        '[Productivity] overview sem times — daily-finished-stats com team_id=__management_overview__.'
+      );
+      await this.loadProductivityDataFromManagementOverviewDailyStats(dateRange, 'supervisoes');
       return;
     }
 
@@ -2849,6 +2940,18 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       });
     }
 
+    const hasSeriesData = groups.some(g =>
+      [...g.activitiesMap.values(), ...g.pointsMap.values()].some(v => v > 0)
+    );
+
+    if (!hasSeriesData) {
+      console.warn(
+        '[Productivity] Supervisões sem dados em daily-finished-stats por time — fallback __management_overview__.'
+      );
+      await this.loadProductivityDataFromManagementOverviewDailyStats(dateRange, 'supervisoes');
+      return;
+    }
+
     const validMemberData = this.buildProductivitySeriesFromMaps(groups, dateRange);
     this.applyProductivityMemberData(validMemberData, {
       apiCalls,
@@ -2862,7 +2965,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
     dateRange: { start: Date; end: Date },
     filterToCell: boolean
   ): Promise<void> {
-    const teamTid = this.getGame4uReportTeamId();
+    const teamTid = this.getProductivityReportTeamId();
     if (!teamTid) {
       this.clearProductivityCharts();
       return;
@@ -3179,7 +3282,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
         return;
       }
       if (!this.selectedTeam) {
-        console.warn('⚠️ Sem equipa selecionada para métricas agregadas Game4U');
+        console.warn('⚠️ Sem equipe selecionada para métricas agregadas Game4U');
         return;
       }
       if (this.teamSupervisionBundle) {
@@ -3376,7 +3479,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
         return;
       }
 
-      // Paginação (`finished/deliveries/cached` + team_id): vista equipa agregada quando há month + scopeId
+      // Paginação (`finished/deliveries/cached` + team_id): vista equipe agregada quando há month + scopeId
       if (useTeam && this.playerService.usesGame4uWalletFromStats() && this.selectedMonth != null && teamTid) {
         const month = this.selectedMonth!;
         const page = await firstValueFrom(
@@ -3416,13 +3519,13 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
 
         if (uniqueBase.length > 0 && !skipGamificacaoKpi) {
           void this.applyParticipacaoPorcEntregasKpiAfterGamificacaoAsync(uniqueBase, loadGen).catch(
-            (err: unknown) => console.error('📊 Falha ao aplicar KPI de entregas (gamificação, painel equipa):', err)
+            (err: unknown) => console.error('📊 Falha ao aplicar KPI de entregas (gamificação, painel equipe):', err)
           );
         }
         return;
       }
 
-      // Paginação por email (`finished/deliveries/cached`): drill-down de colaborador no painel equipa
+      // Paginação por email (`finished/deliveries/cached`): drill-down de colaborador no painel equipe
       if (
         !useTeam &&
         playerId &&
@@ -3468,7 +3571,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
 
         if (uniqueBase.length > 0 && !skipGamificacaoKpi) {
           void this.applyParticipacaoPorcEntregasKpiAfterGamificacaoAsync(uniqueBase, loadGen).catch(
-            (err: unknown) => console.error('📊 Falha ao aplicar KPI de entregas (gamificação, painel equipa):', err)
+            (err: unknown) => console.error('📊 Falha ao aplicar KPI de entregas (gamificação, painel equipe):', err)
           );
         }
         return;
@@ -3581,12 +3684,12 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       if (!skipKpi && uniqueBase.length > 0) {
         void this.applyParticipacaoPorcEntregasKpiAfterGamificacaoAsync(uniqueBase, loadGen).catch(
           (err: unknown) => {
-            console.error('📊 Falha ao aplicar KPI de entregas (gamificação, painel equipa):', err);
+            console.error('📊 Falha ao aplicar KPI de entregas (gamificação, painel equipe):', err);
           }
         );
       }
     } catch (err: unknown) {
-      console.error('📊 Failed to load participação (painel equipa):', err);
+      console.error('📊 Failed to load participação (painel equipe):', err);
       this.teamCarteiraClientes = [];
       this.isLoadingCarteira = false;
       this.isLoadingParticipacaoKpi = false;
@@ -3693,14 +3796,14 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
             this.cdr.markForCheck();
           }
         } catch (err) {
-          console.error('📊 Falha ao aplicar KPI após carregar mais participação (painel equipa):', err);
+          console.error('📊 Falha ao aplicar KPI após carregar mais participação (painel equipe):', err);
         } finally {
           this.isLoadingCarteiraMore = false;
           this.cdr.markForCheck();
         }
       },
       error: (err: unknown) => {
-        console.error('📊 Failed to load more participação (painel equipa):', err);
+        console.error('📊 Failed to load more participação (painel equipe):', err);
         this.isLoadingCarteiraMore = false;
         this.cdr.markForCheck();
       }
@@ -3718,7 +3821,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
     void this.loadTeamCarteiraData(dateRange);
   }
 
-  /** Linha de `finished/deliveries/cached` (equipa ou jogador) → `CompanyDisplay` com `porcEntregas` quando existir. */
+  /** Linha de `finished/deliveries/cached` (equipe ou jogador) → `CompanyDisplay` com `porcEntregas` quando existir. */
   private mapTeamParticipacaoDeliveryRowsToCompanyDisplay(
     items:
       | TeamFinishedDeliveriesPageResult['items']
@@ -3884,7 +3987,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       });
       this.teamCarteiraClientes = this.dedupeParticipacaoClientes(merged);
     } catch (err: unknown) {
-      console.error('📊 Erro ao enriquecer participação (painel equipa):', err);
+      console.error('📊 Erro ao enriquecer participação (painel equipe):', err);
       if (loadGen === this.participacaoKpiLoadGen) {
         this.teamCarteiraClientes = baseClientes.map(b => ({ ...b }));
       }
@@ -3923,7 +4026,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
    * @returns Promise that resolves when carteira data is loaded
    */
   private async loadTeamCarteiraData(_dateRange: { start: Date; end: Date }): Promise<void> {
-    console.log('📊 Loading clientes atendidos (participação, equipa agregada via team-deliveries)...');
+    console.log('📊 Loading clientes atendidos (participação, equipe agregada via team-deliveries)...');
     if (!this.selectedTeamId || !(this.selectedTeam || '').trim()) {
       console.warn('⚠️ No team selected for carteira data');
       this.teamCarteiraClientes = [];
@@ -4112,7 +4215,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
     this.hasExecutiveInsightsData = false;
   }
 
-  /** Ranking agrupado (equipa, gerente ou diretoria), não por jogador individual. */
+  /** Ranking agrupado (equipe, gerente ou diretoria), não por jogador individual. */
   get executiveInsightsRankingIsGrouped(): boolean {
     return this.executiveInsightsRankingSegment !== 'player';
   }
@@ -4137,7 +4240,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       case 'gerente':
         return 'Gerentes com mais entregas no prazo';
       case 'team':
-        return 'Equipas com mais entregas no prazo';
+        return 'Equipes com mais entregas no prazo';
       default:
         return 'Mais entregas no prazo';
     }
@@ -4163,7 +4266,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       case 'gerente':
         return 'Gerentes com menor % no prazo';
       case 'team':
-        return 'Equipas com menor % no prazo';
+        return 'Equipes com menor % no prazo';
       default:
         return 'Menor % de entregas no prazo';
     }
@@ -4181,7 +4284,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
     );
   }
 
-  /** Duas requisições user-actions por equipa (abertas + finalizadas) ou por colaborador. */
+  /** Duas requisições user-actions por equipe (abertas + finalizadas) ou por colaborador. */
   private loadExecutiveScopeUserActions(month: Date): Observable<Game4uUserActionModel[]> {
     const email = this.selectedCollaborator?.trim();
     if (email) {
@@ -4229,8 +4332,10 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       clientsCount: candidate.clientsCount,
       deliveriesCount: candidate.deliveriesCount,
       judgedDeliveriesCount: candidate.judgedDeliveriesCount,
+      justifiedDeliveriesCount: candidate.justifiedDeliveriesCount,
       onTimeDeliveries: candidate.onTimeDeliveries,
       onTimeDeliveryPct: candidate.onTimeDeliveryPct,
+      justifiedDeliveryPct: candidate.justifiedDeliveryPct ?? null,
       onTimePct: candidate.onTimePct
     }));
 
@@ -4273,11 +4378,16 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
           clientsCount: agg.clientsCount,
           deliveriesCount: agg.deliveriesCount,
           judgedDeliveriesCount: agg.judgedDeliveriesCount,
+          justifiedDeliveriesCount: agg.justifiedDeliveriesCount,
           onTimeDeliveries: agg.onTimeDeliveries,
           onTimeDeliveryPct:
             agg.judgedDeliveriesCount > 0
               ? Math.round((agg.onTimeDeliveries / agg.judgedDeliveriesCount) * 1000) / 10
               : null,
+          justifiedDeliveryPct: computeExecutiveJustifiedDeliveryPct(
+            agg.deliveriesCount,
+            agg.justifiedDeliveriesCount
+          ),
           onTimePct: null
         };
       })
@@ -4289,11 +4399,11 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
     });
   }
 
-  /** Nome legível da equipa a partir do `team_id` Game4U usado nas queries. */
+  /** Nome legível da equipe a partir do `team_id` Game4U usado nas queries. */
   private resolveTeamDisplayNameForGame4uTeamId(game4uTeamId: string): string {
     const tid = (game4uTeamId || '').trim();
     if (!tid) {
-      return 'Equipa';
+      return 'Equipe';
     }
     for (const team of this.teams) {
       if (team.id === TeamManagementDashboardComponent.MANAGEMENT_OVERVIEW_TEAM_ID) {
@@ -4463,11 +4573,16 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
           clientsCount: v.clientsCount,
           deliveriesCount: v.deliveriesCount,
           judgedDeliveriesCount: v.judgedDeliveriesCount,
+          justifiedDeliveriesCount: v.justifiedDeliveriesCount,
           onTimeDeliveries: v.onTimeDeliveries,
           onTimeDeliveryPct:
             v.judgedDeliveriesCount > 0
               ? Math.round((v.onTimeDeliveries / v.judgedDeliveriesCount) * 1000) / 10
               : null,
+          justifiedDeliveryPct: computeExecutiveJustifiedDeliveryPct(
+            v.deliveriesCount,
+            v.justifiedDeliveriesCount
+          ),
           onTimePct: null
         };
       }
@@ -5479,7 +5594,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
 
   /**
    * KPIs: mesmo serviço que o painel de gamificação individual (`KPIService.getPlayerKPIs`),
-   * com chave de cache incluindo o `team_id` do painel para não misturar equipas.
+   * com chave de cache incluindo o `team_id` do painel para não misturar equipes.
    */
   private async loadTeamKPIs(collaboratorId?: string): Promise<void> {
     try {
@@ -5783,7 +5898,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
     // For teams, we use:
     // - metas: Calculated from teamKPIs (number of KPIs achieved / total KPIs)
     // - clientes: Count from player_company__c cnpj_resp (from numero-empresas KPI)
-    // - tarefasFinalizadas: Game4U equipa = `tasks_count` de finished/summary; resto = progressMetrics.atividadesFinalizadas
+    // - tarefasFinalizadas: Game4U equipe = `tasks_count` de finished/summary; resto = progressMetrics.atividadesFinalizadas
     const empresasKpi = this.teamKPIs?.find(kpi => kpi.id === 'numero-empresas');
     const uniqueClientes = empresasKpi ? empresasKpi.current : (this.teamCarteiraClientes?.length || 0);
 
@@ -5966,7 +6081,8 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
   logout(): void {
     const snack = this.toastService.action('Deseja sair do sistema?', 'Sair', {
       duration: 8000,
-      panelClass: ['snackbar-warning']
+      panelClass: ['snackbar-warning'],
+      dismissOnOutsideClick: true,
     });
 
     snack

@@ -1,4 +1,4 @@
-import {
+﻿import {
   ActivityListItem,
   ActivityMetrics,
   PointWallet,
@@ -466,8 +466,20 @@ export interface ExecutivePlayerRankingAgg {
   judgedTasks: number;
   deliveriesCount: number;
   judgedDeliveriesCount: number;
+  justifiedDeliveriesCount: number;
   onTimeDeliveries: number;
   clientsCount: number;
+}
+
+/** % de entregas justificadas sobre o total finalizado no mês (0–100). */
+export function computeExecutiveJustifiedDeliveryPct(
+  deliveriesCount: number,
+  justifiedDeliveriesCount: number
+): number | null {
+  if (deliveriesCount <= 0) {
+    return null;
+  }
+  return Math.round((justifiedDeliveriesCount / deliveriesCount) * 1000) / 10;
 }
 
 function readExecutiveUserActionClientKey(action: Game4uUserActionModel): string {
@@ -483,6 +495,7 @@ export function aggregateExecutiveDeliveryOnTimeFromUserActions(
   const clientKeys = new Set<string>();
   let deliveriesCount = 0;
   let judgedDeliveriesCount = 0;
+  let justifiedDeliveriesCount = 0;
   let onTimeDeliveries = 0;
 
   for (const action of actions || []) {
@@ -497,6 +510,7 @@ export function aggregateExecutiveDeliveryOnTimeFromUserActions(
     }
 
     if (isGame4uUserActionJustified(action)) {
+      justifiedDeliveriesCount += 1;
       continue;
     }
 
@@ -516,6 +530,7 @@ export function aggregateExecutiveDeliveryOnTimeFromUserActions(
     judgedTasks: judgedDeliveriesCount,
     deliveriesCount,
     judgedDeliveriesCount,
+    justifiedDeliveriesCount,
     onTimeDeliveries,
     clientsCount: clientKeys.size
   };
@@ -599,7 +614,7 @@ export function aggregateExecutivePlayerRankingsFromUserActions(
   return result;
 }
 
-/** Agregação de equipa/segmento a partir de user-actions finalizadas do escopo. */
+/** Agregação de equipe/segmento a partir de user-actions finalizadas do escopo. */
 export function aggregateExecutiveTeamRankingFromUserActions(
   actions: Game4uUserActionModel[]
 ): ExecutivePlayerRankingAgg {
@@ -1523,7 +1538,7 @@ export function aggregateExecutiveTopProcessesFromUserActions(
   return { top, distinctProcesses: byTitle.size };
 }
 
-/** Métricas agregadas de entregas finalizadas para ranking executivo (jogador ou equipa). */
+/** Métricas agregadas de entregas finalizadas para ranking executivo (jogador ou equipe). */
 export interface ExecutiveDeliveryRankingAgg {
   tasksTotal: number;
   deliveriesCount: number;
@@ -1692,6 +1707,8 @@ export interface ExecutivePlayerRankCandidate {
   onTimeDeliveryPct: number | null;
   /** Entregas elegíveis para métricas de prazo (exclui justificadas). */
   judgedDeliveriesCount?: number;
+  justifiedDeliveriesCount?: number;
+  justifiedDeliveryPct?: number | null;
 }
 
 export interface ExecutiveHierarchyRankingCandidate extends ExecutivePlayerRankCandidate {
@@ -1740,11 +1757,16 @@ export function aggregateExecutiveHierarchyRankings(
       clientsCount: agg.clientsCount,
       deliveriesCount: agg.deliveriesCount,
       judgedDeliveriesCount: agg.judgedDeliveriesCount,
+      justifiedDeliveriesCount: agg.justifiedDeliveriesCount,
       onTimeDeliveries: agg.onTimeDeliveries,
       onTimeDeliveryPct:
         agg.judgedDeliveriesCount > 0
           ? Math.round((agg.onTimeDeliveries / agg.judgedDeliveriesCount) * 1000) / 10
           : null,
+      justifiedDeliveryPct: computeExecutiveJustifiedDeliveryPct(
+        agg.deliveriesCount,
+        agg.justifiedDeliveriesCount
+      ),
       onTimePct: null
     });
   }
