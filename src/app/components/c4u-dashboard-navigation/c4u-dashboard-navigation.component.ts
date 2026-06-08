@@ -3,7 +3,7 @@ import { Router, NavigationEnd } from '@angular/router';
 import { SessaoProvider } from '@providers/sessao/sessao.provider';
 import { UserProfileService } from '@services/user-profile.service';
 import { ROLES_LIST } from '@utils/constants';
-import { hasOrganizationHierarchyReportRole } from '@utils/org-hierarchy-report-role';
+// import { hasOrganizationHierarchyReportRole } from '@utils/org-hierarchy-report-role';
 import { filter } from 'rxjs/operators';
 
 interface DashboardOption {
@@ -45,17 +45,17 @@ export class C4uDashboardNavigationComponent implements OnInit {
       route: '/dashboard/team-management',
       icon: 'ri-group-line'
     },
-    {
-      label: 'Relatório Organizacional',
-      route: '/dashboard/organization-hierarchy',
-      icon: 'ri-organization-chart'
-    }
+    // TODO: reativar só para ADMIN quando o relatório estiver pronto para gestores
+    // {
+    //   label: 'Relatório Organizacional',
+    //   route: '/dashboard/organization-hierarchy',
+    //   icon: 'ri-organization-chart'
+    // }
   ];
   
   currentDashboard: DashboardOption | null = null;
   availableDashboards: DashboardOption[] = [];
   hasGestaoRole = false;
-  hasOrgHierarchyReportRole = false;
   
   constructor(
     private router: Router,
@@ -97,9 +97,6 @@ export class C4uDashboardNavigationComponent implements OnInit {
     
     // Check if user can access team management (not JOGADOR)
     this.hasGestaoRole = this.userProfileService.canAccessTeamManagement();
-    this.hasOrgHierarchyReportRole = hasOrganizationHierarchyReportRole(
-      this.sessaoProvider.usuario?.roles
-    );
   }
   
   /**
@@ -128,10 +125,10 @@ export class C4uDashboardNavigationComponent implements OnInit {
         return isLiderCelula;
       }
 
-      if (dashboard.label === 'Relatório Organizacional') {
-        return this.hasOrgHierarchyReportRole;
-      }
-      
+      // if (dashboard.label === 'Relatório Organizacional') {
+      //   return this.sessaoProvider.isAdmin();
+      // }
+
       // Dashboards with role requirement (e.g., "Gestão de Equipe")
       if (dashboard.requiresRole) {
         return this.hasGestaoRole;
