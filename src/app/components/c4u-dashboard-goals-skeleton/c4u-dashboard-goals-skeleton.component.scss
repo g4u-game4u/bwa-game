@@ -1,0 +1,211 @@
+@import '../../../styles/variables.scss';
+
+:host {
+  display: block;
+  width: 100%;
+}
+
+@keyframes goals-skeleton-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+.dashboard-goals-skeleton__sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.skeleton-bone {
+  border-radius: 6px;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.06) 0%,
+    rgba(255, 255, 255, 0.14) 50%,
+    rgba(255, 255, 255, 0.06) 100%
+  );
+  background-size: 200% 100%;
+  animation: goals-skeleton-shimmer 1.5s ease-in-out infinite;
+}
+
+.kpi-skeleton-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: $spacing-xxl;
+  justify-content: center;
+}
+
+.kpi-skeleton-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: 280px;
+  max-width: 100%;
+  padding: 4px 0;
+}
+
+.kpi-skeleton-label {
+  width: 72%;
+  height: 18px;
+}
+
+.kpi-skeleton-circle {
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+}
+
+.kpi-skeleton-value {
+  width: 64px;
+  height: 24px;
+}
+
+.kpi-skeleton-target {
+  width: 88px;
+  height: 12px;
+}
+
+.kpi-skeleton-status {
+  width: 96px;
+  height: 24px;
+  border-radius: 12px;
+}
+
+.progress-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.progress-skeleton-section-title {
+  width: 96px;
+  height: 16px;
+}
+
+.progress-skeleton-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 16px;
+}
+
+.progress-skeleton-metric {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 8px;
+  min-height: 68px;
+}
+
+.progress-skeleton-icon {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+
+.progress-skeleton-content {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+.progress-skeleton-metric-label {
+  width: 72px;
+  height: 12px;
+}
+
+.progress-skeleton-metric-value {
+  width: 48px;
+  height: 20px;
+}
+
+.clientes-skeleton-list {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-sm;
+  width: 100%;
+}
+
+.clientes-skeleton-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: $spacing-md;
+  padding: $spacing-sm $spacing-md;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: $border-radius-sm;
+  min-height: 44px;
+}
+
+.clientes-skeleton-info {
+  display: flex;
+  align-items: center;
+  gap: $spacing-sm;
+  flex: 1;
+  min-width: 0;
+}
+
+.clientes-skeleton-icon {
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.clientes-skeleton-name {
+  flex: 1;
+  min-width: 0;
+  max-width: 280px;
+  height: 14px;
+}
+
+.clientes-skeleton-badge {
+  width: 52px;
+  height: 18px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.clientes-skeleton-percent {
+  width: 44px;
+  height: 22px;
+  border-radius: 12px;
+  flex-shrink: 0;
+}
+
+@media (max-width: 768px) {
+  .kpi-skeleton-grid {
+    gap: $spacing-md;
+  }
+
+  .kpi-skeleton-card {
+    width: 100%;
+    max-width: 280px;
+  }
+
+  .clientes-skeleton-item {
+    flex-wrap: wrap;
+  }
+
+  .clientes-skeleton-name {
+    max-width: 100%;
+  }
+}

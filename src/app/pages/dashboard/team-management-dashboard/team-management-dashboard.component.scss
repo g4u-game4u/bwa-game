@@ -1168,6 +1168,28 @@
     width: 100%;
     box-sizing: border-box;
 
+    .section-header-main {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .carteira-section-disclaimer {
+      display: flex;
+      align-items: flex-start;
+      gap: $spacing-xs;
+      margin: $spacing-xs 0 0;
+      font-size: 0.8125rem;
+      line-height: 1.45;
+      color: $text-secondary;
+      max-width: 52rem;
+
+      i {
+        flex-shrink: 0;
+        margin-top: 2px;
+        color: #3b82f6;
+      }
+    }
+
     &.carteira-section--loading .carteira-card {
       min-height: 160px;
     }
@@ -2028,14 +2050,6 @@
         &--people {
           background: linear-gradient(135deg, #a855f7, #6d28d9);
         }
-
-        &--goal {
-          background: linear-gradient(135deg, #f59e0b, #b45309);
-        }
-
-        &--pending {
-          background: linear-gradient(135deg, #94a3b8, #475569);
-        }
       }
 
       .executive-kpi-content {
@@ -2331,6 +2345,17 @@
         &--attention {
           background: linear-gradient(135deg, #ea580c, #f97316);
         }
+
+        &--team {
+          border-radius: $border-radius-sm;
+          background: rgba($primary-electric-blue, 0.2);
+          color: $primary-electric-blue;
+
+          i {
+            font-size: 1.1rem;
+            line-height: 1;
+          }
+        }
       }
 
       .executive-player-info {
@@ -2402,6 +2427,10 @@
     }
     .badge-neutral {
       color: $text-secondary;
+    }
+    .badge-justified {
+      color: #8b5cf6;
+      font-weight: 600;
     }
   }
 

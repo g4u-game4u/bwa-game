@@ -612,6 +612,32 @@
   
   // Carteira section with card background
   .carteira-section {
+    .section-header-main {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .carteira-section-disclaimer {
+      display: flex;
+      align-items: flex-start;
+      gap: $spacing-xs;
+      margin: $spacing-xs 0 0;
+      font-size: 0.8125rem;
+      line-height: 1.45;
+      color: $text-secondary;
+      max-width: 52rem;
+
+      i {
+        flex-shrink: 0;
+        margin-top: 2px;
+        color: #3b82f6;
+      }
+    }
+
+    &.carteira-section--loading .carteira-card {
+      min-height: 160px;
+    }
+
     .clientes-tabs {
       display: flex;
       gap: $spacing-xs;

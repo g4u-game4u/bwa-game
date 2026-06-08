@@ -94,8 +94,8 @@ export class ModalTeamManagementFaqComponent {
       icon: 'ri-pie-chart-2-line',
       theme: 'fuchsia',
       body:
-        'Visão gerencial: entregas finalizadas, percentual no prazo, pessoas ativas, progresso da meta e pendentes.\n' +
-        'Inclui ranking de processos mais finalizados, destaques do mês (mais entregas no prazo) e jogadores que precisam de atenção (menor % no prazo).\n' +
+        'Visão gerencial: entregas finalizadas, percentual no prazo e clientes atendidos por pessoa.\n' +
+        'Inclui ranking de processos mais finalizados e listas de destaque/atenção segmentadas por papel: gerentes (Diretor), diretorias (C-Level) ou supervisões (Gerente).\n' +
         'Sem colaborador selecionado, reflete o time inteiro; com colaborador, foca na performance individual.',
     },
     {

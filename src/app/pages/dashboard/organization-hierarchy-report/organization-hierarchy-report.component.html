@@ -1,0 +1,339 @@
+<div class="organization-hierarchy-report" role="main" aria-label="Relatório organizacional hierárquico">
+  <div class="report-scroll" id="main-content">
+    <div *ngIf="isMockMode" class="mock-banner" role="status">
+      <i class="ri-flask-line" aria-hidden="true"></i>
+      <span>
+        <strong>Modo demonstração</strong> — dados mockados para validação de interface.
+        Desative com <code>ORG_HIERARCHY_REPORT_USE_MOCK=false</code>.
+      </span>
+    </div>
+
+    <header class="dashboard-header" role="banner">
+      <c4u-dashboard-navigation></c4u-dashboard-navigation>
+      <div class="header-spacer"></div>
+      <c4u-seletor-mes
+        [showTodaTemporadaButton]="false"
+        (onSelectedMonth)="onMonthChange($event)">
+      </c4u-seletor-mes>
+      <span
+        class="refresh-time"
+        *ngIf="report?.refreshed_at && !isLoading && !isEmpty"
+        role="status">
+        <span class="refresh-time__line">Dados sincronizados</span>
+        <span class="refresh-time__line">em {{ report!.refreshed_at | date:'dd/MM/yyyy HH:mm' }}</span>
+        <span class="refresh-time__line" *ngIf="report?.params?.mtd_start && report?.params?.mtd_end">
+          MTD: {{ report!.params.mtd_start | date:'dd/MM' }} – {{ report!.params.mtd_end | date:'dd/MM/yyyy' }}
+        </span>
+      </span>
+      <button
+        class="logout-button"
+        type="button"
+        (click)="logout()"
+        aria-label="Sair do sistema"
+        title="Sair">
+        <i class="ri-logout-box-line" aria-hidden="true"></i>
+        <span>Sair</span>
+      </button>
+    </header>
+
+    <div class="report-content">
+      <div class="report-intro">
+        <h1 class="report-title">Relatório organizacional</h1>
+        <p class="report-subtitle" *ngIf="!isLoading && root">{{ scopeTitle }}</p>
+      </div>
+
+      <aside class="report-sidebar" aria-label="Simulação financeira">
+        <c4u-card class="simulation-card">
+          <h2 class="section-title">
+            <i class="ri-money-dollar-circle-line section-title-icon" aria-hidden="true"></i>
+            Simulação financeira
+            <c4u-info-button
+              [infoKey]="''"
+              customText="Pote fictício (BRL) rateado proporcionalmente aos pontos MTD da organização."
+              position="bottom">
+            </c4u-info-button>
+          </h2>
+          <div class="form-group">
+            <label class="form-label" for="simulation-pot-input">Valor do pote (R$)</label>
+            <input
+              id="simulation-pot-input"
+              class="form-control"
+              type="number"
+              min="0"
+              step="1000"
+              placeholder="Ex: 100000"
+              [value]="simulationPotBrl ?? ''"
+              [disabled]="isLoading"
+              (input)="onSimulationInput($any($event.target).value)" />
+          </div>
+          <p class="simulation-meta" *ngIf="showSimulation && pointsPerBrlLabel">
+            Taxa: {{ pointsPerBrlLabel }}
+          </p>
+          <p class="simulation-meta" *ngIf="showSimulation && root?.simulation">
+            Payout raiz: {{ formatCurrency(root!.simulation!.payout_brl) }}
+            ({{ root!.simulation!.share_pct | number:'1.2-2':'pt-BR' }}%)
+          </p>
+        </c4u-card>
+      </aside>
+
+      <div class="report-main">
+        <div *ngIf="isLoading" class="report-loading" role="status" aria-live="polite">
+          <c4u-shimmer></c4u-shimmer>
+          <c4u-shimmer></c4u-shimmer>
+          <c4u-shimmer></c4u-shimmer>
+        </div>
+
+        <c4u-card *ngIf="!isLoading && hasLoadError" class="report-empty" role="alert">
+          <i class="ri-error-warning-line report-empty__icon" aria-hidden="true"></i>
+          <p>Não foi possível carregar o relatório. Tente novamente.</p>
+          <button type="button" class="btn btn-primary" (click)="retryLoad()">Tentar novamente</button>
+        </c4u-card>
+
+        <c4u-card *ngIf="!isLoading && isEmpty && !hasLoadError" class="report-empty" role="status">
+          <i class="ri-database-2-line report-empty__icon" aria-hidden="true"></i>
+          <p>Dados ainda não disponíveis para este mês.</p>
+        </c4u-card>
+
+        <ng-container *ngIf="!isLoading && root && !hasLoadError">
+          <section class="dashboard-section hero-section" aria-label="Indicadores principais do mês">
+            <div class="section-header">
+              <h2 class="section-title">
+                <i class="ri-bar-chart-grouped-line section-title-icon" aria-hidden="true"></i>
+                Resumo MTD
+              </h2>
+            </div>
+            <div class="hero-grid">
+              <c4u-card class="hero-card">
+                <span class="hero-card__value">{{ root.mtd.points_delivered | number:'1.0-0':'pt-BR' }}</span>
+                <span class="hero-card__label">Pontos entregues (MTD)</span>
+                <span
+                  class="hero-card__compare"
+                  [class.hero-card__compare--positive]="mtdCompareTone(root.compare.vs_prev_mtd_points_pct) === 'positive'"
+                  [class.hero-card__compare--negative]="mtdCompareTone(root.compare.vs_prev_mtd_points_pct) === 'negative'">
+                  {{ mtdComparePct(root.compare.vs_prev_mtd_points_pct) }} vs MTD anterior
+                  <span class="hero-card__compare-abs">
+                    ({{ root.compare.vs_prev_mtd_points | number:'1.0-0':'pt-BR' }} pts)
+                  </span>
+                </span>
+              </c4u-card>
+
+              <c4u-card class="hero-card">
+                <span class="hero-card__value">{{ root.prev_full.points_delivered | number:'1.0-0':'pt-BR' }}</span>
+                <span class="hero-card__label">Pontos mês anterior (fechado)</span>
+                <span
+                  class="hero-card__compare"
+                  [class.hero-card__compare--positive]="mtdCompareTone(root.compare.vs_prev_full_points_pct) === 'positive'"
+                  [class.hero-card__compare--negative]="mtdCompareTone(root.compare.vs_prev_full_points_pct) === 'negative'">
+                  {{ mtdComparePct(root.compare.vs_prev_full_points_pct) }} vs mês ant. fechado
+                  <span class="hero-card__compare-abs">
+                    ({{ root.compare.vs_prev_full_points | number:'1.0-0':'pt-BR' }} pts)
+                  </span>
+                </span>
+              </c4u-card>
+
+              <c4u-card class="hero-card">
+                <span class="hero-card__value">{{ root.mtd.finished | number:'1.0-0':'pt-BR' }}</span>
+                <span class="hero-card__label">Entregas concluídas</span>
+              </c4u-card>
+
+              <c4u-card class="hero-card">
+                <span class="hero-card__value">{{ root.mtd.goal_points | number:'1.0-0':'pt-BR' }}</span>
+                <span class="hero-card__label">Meta de pontos</span>
+              </c4u-card>
+
+              <c4u-card class="hero-card">
+                <span class="hero-card__value">{{ root.mtd.on_time_pct | number:'1.1-1':'pt-BR' }}%</span>
+                <span class="hero-card__label">% no prazo</span>
+              </c4u-card>
+
+              <c4u-card class="hero-card">
+                <span class="hero-card__value">{{ root.mtd.clients_served | number:'1.0-0':'pt-BR' }}</span>
+                <span class="hero-card__label">Clientes atendidos</span>
+              </c4u-card>
+            </div>
+          </section>
+
+          <section class="dashboard-section risks-section" aria-label="Riscos operacionais">
+            <div class="section-header">
+              <h2 class="section-title">
+                <i class="ri-alarm-warning-line section-title-icon" aria-hidden="true"></i>
+                Riscos operacionais
+              </h2>
+            </div>
+            <div class="insights-alert-row" role="list">
+              <div class="insights-alert insights-alert--urgent" role="listitem">
+                <div class="insights-alert-icon" aria-hidden="true"><i class="ri-alarm-warning-line"></i></div>
+                <div class="insights-alert-content">
+                  <span class="insights-alert-value">{{ root.mtd.multa_risk | number:'1.0-0':'pt-BR' }}</span>
+                  <span class="insights-alert-label">Risco de multa</span>
+                </div>
+              </div>
+              <div class="insights-alert insights-alert--warning" role="listitem">
+                <div class="insights-alert-icon" aria-hidden="true"><i class="ri-time-line"></i></div>
+                <div class="insights-alert-content">
+                  <span class="insights-alert-value">{{ root.mtd.near_due | number:'1.0-0':'pt-BR' }}</span>
+                  <span class="insights-alert-label">Próximas do vencimento</span>
+                </div>
+              </div>
+              <div class="insights-alert insights-alert--danger" role="listitem">
+                <div class="insights-alert-icon" aria-hidden="true"><i class="ri-error-warning-line"></i></div>
+                <div class="insights-alert-content">
+                  <span class="insights-alert-value">{{ root.mtd.overdue_pending | number:'1.0-0':'pt-BR' }}</span>
+                  <span class="insights-alert-label">Pendentes em atraso</span>
+                </div>
+              </div>
+              <div class="insights-alert insights-alert--critical" role="listitem">
+                <div class="insights-alert-icon" aria-hidden="true"><i class="ri-fire-line"></i></div>
+                <div class="insights-alert-content">
+                  <span class="insights-alert-value">{{ root.mtd.multa_and_near_due | number:'1.0-0':'pt-BR' }}</span>
+                  <span class="insights-alert-label">Multa + proximidade</span>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section *ngIf="showDirectorateRanking" class="dashboard-section ranking-section" aria-label="Ranking de diretorias">
+            <div class="section-header section-header--with-toggle">
+              <h2 class="section-title">
+                <i class="ri-trophy-line section-title-icon" aria-hidden="true"></i>
+                Ranking de diretorias
+              </h2>
+              <div class="data-view-toggle" role="group" aria-label="Ordenar ranking">
+                <button
+                  type="button"
+                  class="toggle-btn"
+                  [class.active]="rankingSortBy === 'balance_score'"
+                  (click)="onRankingSortChange('balance_score')">
+                  <i class="ri-scales-3-line" aria-hidden="true"></i>
+                  <span class="toggle-text">Balance score</span>
+                </button>
+                <button
+                  type="button"
+                  class="toggle-btn"
+                  [class.active]="rankingSortBy === 'points_delivered'"
+                  (click)="onRankingSortChange('points_delivered')">
+                  <i class="ri-coin-line" aria-hidden="true"></i>
+                  <span class="toggle-text">Pontos MTD</span>
+                </button>
+              </div>
+            </div>
+            <div class="simple-table-wrap" role="region" aria-label="Tabela de ranking de diretorias">
+              <table class="simple-table">
+                <thead>
+                  <tr>
+                    <th>Diretoria</th>
+                    <th class="simple-table__num">Colaboradores</th>
+                    <th class="simple-table__num">Balance</th>
+                    <th class="simple-table__num">Pontos MTD</th>
+                    <th *ngIf="showSimulation" class="simple-table__num">Simulação</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr *ngFor="let dir of rankedDirectorates; trackBy: trackByNodeId">
+                    <td>{{ dir.label }}</td>
+                    <td class="simple-table__num">{{ dir.players_count | number:'1.0-0':'pt-BR' }}</td>
+                    <td class="simple-table__num">
+                      {{ dir.balance_score != null ? (dir.balance_score | number:'1.1-1':'pt-BR') : '—' }}
+                    </td>
+                    <td class="simple-table__num">{{ dir.mtd.points_delivered | number:'1.0-0':'pt-BR' }}</td>
+                    <td *ngIf="showSimulation" class="simple-table__num">
+                      {{ formatCurrency(dir.simulation?.payout_brl) }}
+                      <span class="ranking-share" *ngIf="dir.simulation?.share_pct != null">
+                        ({{ dir.simulation!.share_pct | number:'1.2-2':'pt-BR' }}%)
+                      </span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="dashboard-section heatmap-section" aria-label="Distribuição por dia da semana">
+            <div class="section-header">
+              <h2 class="section-title">
+                <i class="ri-calendar-line section-title-icon" aria-hidden="true"></i>
+                Entregas por dia da semana
+              </h2>
+            </div>
+            <c4u-card class="weekday-card">
+              <div class="insights-weekday-chart" role="img" aria-label="Distribuição de entregas por dia da semana">
+                <div
+                  *ngFor="let day of weekdayStats; trackBy: trackByWeekday"
+                  class="insights-weekday-bar-wrap">
+                  <div class="insights-weekday-bar-track">
+                    <div
+                      class="insights-weekday-bar-fill"
+                      [class.insights-weekday-bar-fill--peak]="day.finishedCount === weekdayMaxCount && day.finishedCount > 0"
+                      [class.insights-weekday-bar-fill--empty]="day.finishedCount <= 0"
+                      [style.height]="weekdayBarHeight(day.finishedCount)"
+                      [attr.title]="day.label + ': ' + day.finishedCount + ' entregas'">
+                    </div>
+                  </div>
+                  <span class="insights-weekday-count">{{ day.finishedCount }}</span>
+                  <span
+                    class="insights-weekday-label"
+                    [class.insights-weekday-label--peak]="day.finishedCount === weekdayMaxCount && day.finishedCount > 0">
+                    {{ day.shortLabel }}
+                  </span>
+                </div>
+              </div>
+            </c4u-card>
+          </section>
+
+          <section
+            *ngIf="highlightDestaque.length || highlightAtencao.length"
+            class="dashboard-section highlights-section"
+            aria-label="Destaques e atenção">
+            <div class="highlights-grid">
+              <c4u-card class="highlights-card highlights-card--success" *ngIf="highlightDestaque.length">
+                <h3 class="highlights-card__title">
+                  <i class="ri-star-line" aria-hidden="true"></i>
+                  Destaques
+                </h3>
+                <ul class="highlights-list">
+                  <li *ngFor="let item of highlightDestaque; trackBy: trackByHighlight">
+                    <span class="highlights-list__label">{{ highlightMetricLabel(item) }}</span>
+                    <span class="highlights-list__value" *ngIf="item.value != null">
+                      {{ item.value | number:'1.0-0':'pt-BR' }}
+                    </span>
+                  </li>
+                </ul>
+              </c4u-card>
+              <c4u-card class="highlights-card highlights-card--warning" *ngIf="highlightAtencao.length">
+                <h3 class="highlights-card__title">
+                  <i class="ri-alert-line" aria-hidden="true"></i>
+                  Precisam de atenção
+                </h3>
+                <ul class="highlights-list">
+                  <li *ngFor="let item of highlightAtencao; trackBy: trackByHighlight">
+                    <span class="highlights-list__label">{{ highlightMetricLabel(item) }}</span>
+                    <span class="highlights-list__value" *ngIf="item.value != null">
+                      {{ item.value | number:'1.0-0':'pt-BR' }}
+                    </span>
+                  </li>
+                </ul>
+              </c4u-card>
+            </div>
+          </section>
+
+          <section class="dashboard-section tree-section" aria-label="Drill-down hierárquico">
+            <div class="section-header">
+              <h2 class="section-title">
+                <i class="ri-organization-chart section-title-icon" aria-hidden="true"></i>
+                Hierarquia organizacional
+              </h2>
+            </div>
+            <c4u-card class="tree-card">
+              <c4u-org-hierarchy-tree-node
+                [node]="root"
+                [showSimulation]="showSimulation"
+                [expandedIds]="expandedNodeIds"
+                (toggleNode)="toggleTreeNode($event)">
+              </c4u-org-hierarchy-tree-node>
+            </c4u-card>
+          </section>
+        </ng-container>
+      </div>
+    </div>
+  </div>
+</div>

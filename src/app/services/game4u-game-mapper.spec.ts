@@ -1,4 +1,4 @@
-import {
+﻿import {
   computeGame4uDrPrazoMetaBoost,
   computeMonthlyPointsFromGame4uActions,
   filterGame4uActionsByCompetenceMonth,
@@ -21,7 +21,23 @@ import {
   mergeGame4uTeamDeliveryRows,
   mapGame4uFinishedDeliveryRowsToParticipacaoCnpjRows,
   readGame4uUserActionTitle,
+  aggregateExecutiveDeliveryOnTimeFromUserActions,
+  aggregateExecutiveDeliveryRowsForRanking,
+  aggregateExecutiveHierarchyRankings,
+  aggregateExecutivePlayerRankingsFromUserActions,
+  aggregateExecutiveTeamRankingFromUserActions,
   aggregateExecutiveTopProcessesFromUserActions,
+  isExecutiveDeliveryRowOnTimeFromUserActions,
+  computeCompanyDeliveryInsightsFromTasks,
+  computeExecutiveJustifiedDeliveryPct,
+  readGame4uUserActionDtPrazo,
+  game4uUserActionMatchesDeliveryRow,
+  resolveExecutiveHierarchySegment,
+  buildJustifiedDeliveryKeysFromUserActions,
+  countExecutiveFinishedTasksFromUserActions,
+  countExecutiveOnTimeTasksFromUserActions,
+  isGame4uDeliveryRowJustified,
+  partitionExecutivePlayerRankings,
   deliveryRowCountsAsOnTime,
   deliveryRowHasFinishedTaskInMonth,
   hasMoreFinishedDeliveriesCachedPage,
@@ -790,6 +806,399 @@ describe('game4u-game-mapper', () => {
       expect(top[0].deliveryTitle).toBe('Folha de pagamento');
       expect(top[0].tasksTotal).toBe(2);
       expect(top[0].deliveriesCount).toBe(2);
+    });
+
+    it('aggregateExecutiveDeliveryRowsForRanking sums deliveries and on-time pct', () => {
+      const agg = aggregateExecutiveDeliveryRowsForRanking([
+        { delivery_title: 'A', tasks_total: 2, tasks_on_time: 2, emp_id: 1 },
+        { delivery_title: 'B', tasks_total: 1, on_time_pct: 80, emp_id: 2 },
+        { delivery_title: 'C', tasks_total: 0, emp_id: 3 }
+      ]);
+
+      expect(agg.deliveriesCount).toBe(2);
+      expect(agg.judgedDeliveriesCount).toBe(2);
+      expect(agg.onTimeDeliveries).toBe(1);
+      expect(agg.clientsCount).toBe(2);
+      expect(agg.onTimeDeliveryPct).toBe(50);
+    });
+
+    it('aggregateExecutiveDeliveryRowsForRanking ignores justified rows in deadline metrics', () => {
+      const justifiedLookup = { keys: new Set(['2']), deliveryIds: new Set<string>() };
+      const agg = aggregateExecutiveDeliveryRowsForRanking(
+        [
+          { delivery_title: 'A', tasks_total: 2, tasks_on_time: 2, emp_id: 1 },
+          { delivery_title: 'B', tasks_total: 1, on_time_pct: 0, emp_id: 2 }
+        ],
+        { justifiedLookup }
+      );
+
+      expect(agg.deliveriesCount).toBe(2);
+      expect(agg.judgedDeliveriesCount).toBe(1);
+      expect(agg.onTimeDeliveries).toBe(1);
+      expect(agg.onTimeDeliveryPct).toBe(100);
+      expect(isGame4uDeliveryRowJustified({ delivery_title: 'B', emp_id: 2 }, justifiedLookup)).toBe(
+        true
+      );
+    });
+
+    it('isGame4uDeliveryRowJustified detects extra.status_api with justif on delivery row', () => {
+      expect(
+        isGame4uDeliveryRowJustified({
+          delivery_title: 'Cliente X',
+          emp_id: 99,
+          extra: { status_api: 'Pend. justificada' }
+        })
+      ).toBe(true);
+    });
+
+    it('countExecutiveFinishedTasksFromUserActions excludes justified actions', () => {
+      const counts = countExecutiveFinishedTasksFromUserActions([
+        { id: '1', points: 1, status: 'DONE', created_at: '2026-03-01', extra: { status_api: 'Pend. justificada' } },
+        { id: '2', points: 1, status: 'DONE', created_at: '2026-03-02' },
+        { id: '3', points: 1, status: 'PENDING', created_at: '2026-03-03' }
+      ]);
+
+      expect(counts).toEqual({ total: 2, justified: 1, judged: 1 });
+    });
+
+    it('resolveExecutiveHierarchySegment groups by gerente for diretor view', () => {
+      const action = {
+        id: '1',
+        points: 1,
+        status: 'DONE',
+        created_at: '2026-03-01',
+        hierarchy: {
+          gerente_email: 'ellem.sampaio@bwa.global',
+          gerente_name: 'Ellem Sampaio',
+          team_id: 68,
+          team_name: 'Legalização - Registro Geral - SP'
+        }
+      } as Game4uUserActionModel;
+
+      expect(resolveExecutiveHierarchySegment(action, 'gerente')).toEqual({
+        key: 'ellem.sampaio@bwa.global',
+        name: 'Ellem Sampaio',
+        email: 'ellem.sampaio@bwa.global'
+      });
+    });
+
+    it('resolveExecutiveHierarchySegment groups by diretor for c-level view', () => {
+      const action = {
+        id: '1',
+        points: 1,
+        status: 'DONE',
+        created_at: '2026-03-01',
+        hierarchy: {
+          diretor_email: 'diretor@bwa.global',
+          diretor_name: 'Diretor X'
+        }
+      } as Game4uUserActionModel;
+
+      expect(resolveExecutiveHierarchySegment(action, 'diretor')).toEqual({
+        key: 'diretor@bwa.global',
+        name: 'Diretor X',
+        email: 'diretor@bwa.global'
+      });
+    });
+
+    it('aggregateExecutiveHierarchyRankings aggregates deliveries per gerente segment', () => {
+      const hierarchy = {
+        gerente_email: 'gerente@bwa.global',
+        gerente_name: 'Gerente A',
+        team_id: 68,
+        team_name: 'Equipe SP'
+      };
+      const actions = [
+        {
+          id: '1',
+          points: 1,
+          status: 'DONE',
+          created_at: '2026-03-01',
+          user_email: 'player@bwa.global',
+          integration_id: '100',
+          dt_prazo: '2099-01-01',
+          finished_at: '2026-03-05T12:00:00Z',
+          hierarchy
+        },
+        {
+          id: '2',
+          points: 1,
+          status: 'DONE',
+          created_at: '2026-03-02',
+          user_email: 'player2@bwa.global',
+          integration_id: '200',
+          dt_prazo: '2020-01-01',
+          finished_at: '2026-03-06T12:00:00Z',
+          hierarchy: {
+            gerente_email: 'outro@bwa.global',
+            gerente_name: 'Gerente B',
+            team_id: 69,
+            team_name: 'Equipe RJ'
+          }
+        }
+      ] as Game4uUserActionModel[];
+      const rankings = aggregateExecutiveHierarchyRankings(actions, 'gerente');
+
+      expect(rankings).toHaveLength(2);
+      expect(rankings.find(r => r.email === 'gerente@bwa.global')).toEqual(
+        jasmine.objectContaining({
+          name: 'Gerente A',
+          judgedDeliveriesCount: 1,
+          onTimeDeliveries: 1,
+          onTimeDeliveryPct: 100
+        })
+      );
+      expect(rankings.find(r => r.email === 'outro@bwa.global')).toEqual(
+        jasmine.objectContaining({
+          judgedDeliveriesCount: 1,
+          onTimeDeliveries: 0,
+          onTimeDeliveryPct: 0
+        })
+      );
+    });
+
+    it('aggregateExecutivePlayerRankingsFromUserActions counts each user_action as one entrega', () => {
+      const email = 'adriano@bwa.global';
+      const actions = [1, 2, 3, 4, 5].map(n => ({
+        id: String(n),
+        points: 1,
+        status: 'DONE',
+        created_at: `2026-03-0${n}`,
+        user_email: email,
+        integration_id: String(n),
+        dt_prazo: n <= 2 ? '2099-01-01' : '2020-01-01',
+        finished_at: '2026-03-05T12:00:00Z'
+      })) as Game4uUserActionModel[];
+
+      const rankings = aggregateExecutivePlayerRankingsFromUserActions(actions);
+
+      expect(rankings.get(email)).toEqual({
+        tasksTotal: 5,
+        judgedTasks: 5,
+        deliveriesCount: 5,
+        judgedDeliveriesCount: 5,
+        justifiedDeliveriesCount: 0,
+        onTimeDeliveries: 2,
+        clientsCount: 5
+      });
+    });
+
+    it('aggregateExecutivePlayerRankingsFromUserActions tracks justified deliveries pct', () => {
+      const email = 'player@bwa.global';
+      const actions = [
+        {
+          id: '1',
+          points: 1,
+          status: 'DONE',
+          created_at: '2026-03-01',
+          user_email: email,
+          dt_prazo: '2099-01-01',
+          finished_at: '2026-03-05T12:00:00Z',
+          extra: { status_api: 'Pend. justificada' }
+        },
+        {
+          id: '2',
+          points: 1,
+          status: 'DONE',
+          created_at: '2026-03-02',
+          user_email: email,
+          dt_prazo: '2099-01-01',
+          finished_at: '2026-03-06T12:00:00Z'
+        }
+      ] as Game4uUserActionModel[];
+
+      const agg = aggregateExecutivePlayerRankingsFromUserActions(actions).get(email)!;
+
+      expect(agg.justifiedDeliveriesCount).toBe(1);
+      expect(computeExecutiveJustifiedDeliveryPct(agg.deliveriesCount, agg.justifiedDeliveriesCount)).toBe(50);
+    });
+
+    it('game4uUserActionMatchesDeliveryRow matches by user_email and emp_id', () => {
+      expect(
+        game4uUserActionMatchesDeliveryRow(
+          { id: '1', points: 1, status: 'DONE', created_at: '2026-03-01', user_email: 'a@x.com' },
+          { delivery_title: 'X', user_email: 'a@x.com', tasks_total: 1 }
+        )
+      ).toBe(true);
+      expect(
+        game4uUserActionMatchesDeliveryRow(
+          { id: '1', points: 1, status: 'DONE', created_at: '2026-03-01', integration_id: '55' },
+          { delivery_title: 'X', emp_id: 55, tasks_total: 1 }
+        )
+      ).toBe(true);
+    });
+
+    it('countExecutiveOnTimeTasksFromUserActions mirrors resumo do mês prazo rules', () => {
+      const counts = countExecutiveOnTimeTasksFromUserActions([
+        {
+          id: '1',
+          points: 1,
+          status: 'DONE',
+          created_at: '2026-03-01',
+          dt_prazo: '2026-03-10',
+          finished_at: '2026-03-05T12:00:00Z',
+          extra: { status_api: 'Pend. justificada' }
+        },
+        {
+          id: '2',
+          points: 1,
+          status: 'DONE',
+          created_at: '2026-03-02',
+          dt_prazo: '2026-03-10',
+          finished_at: '2026-03-06T12:00:00Z'
+        },
+        {
+          id: '3',
+          points: 1,
+          status: 'DONE',
+          created_at: '2026-03-03',
+          dt_prazo: '2026-03-01',
+          finished_at: '2026-03-08T12:00:00Z'
+        }
+      ]);
+
+      expect(counts).toEqual({ onTime: 1, late: 1, justified: 1, judged: 2 });
+    });
+
+    it('aggregateExecutiveTopProcessesFromUserActions excludes justified from on-time pct', () => {
+      const { top } = aggregateExecutiveTopProcessesFromUserActions([
+        {
+          id: '1',
+          points: 1,
+          status: 'DONE',
+          created_at: '2026-03-01',
+          title: 'Processo X',
+          integration_id: 'c1',
+          dt_prazo: '2020-01-01',
+          finished_at: '2026-03-05T12:00:00Z',
+          extra: { status_api: 'Pend. justificada' }
+        },
+        {
+          id: '2',
+          points: 1,
+          status: 'DONE',
+          created_at: '2026-03-02',
+          title: 'Processo X',
+          integration_id: 'c2',
+          dt_prazo: '2099-01-01',
+          finished_at: '2026-03-06T12:00:00Z'
+        }
+      ]);
+
+      expect(top[0].tasksTotal).toBe(2);
+      expect(top[0].onTimePct).toBe(100);
+      expect(buildJustifiedDeliveryKeysFromUserActions([{ id: '1', points: 1, status: 'DONE', created_at: '2026-03-01', extra: { status_api: 'Justificado' }, delivery_id: 'd1' }])).toEqual(
+        new Set(['d1'])
+      );
+    });
+
+    it('partitionExecutivePlayerRankings keeps attention players out of top highlights', () => {
+      const players = [
+        { email: 'a@x.com', deliveriesCount: 5, onTimeDeliveries: 4, onTimeDeliveryPct: 80 },
+        { email: 'b@x.com', deliveriesCount: 4, onTimeDeliveries: 3, onTimeDeliveryPct: 75 },
+        { email: 'c@x.com', deliveriesCount: 3, onTimeDeliveries: 2, onTimeDeliveryPct: 66.7 }
+      ];
+
+      const { top, attention } = partitionExecutivePlayerRankings(players);
+
+      expect(attention.map(p => p.email)).toEqual(['c@x.com', 'b@x.com', 'a@x.com']);
+      expect(top).toEqual([]);
+    });
+
+    it('partitionExecutivePlayerRankings excludes null pct and justified-only volumes from attention', () => {
+      const { attention } = partitionExecutivePlayerRankings([
+        { email: 'null@x.com', deliveriesCount: 5, judgedDeliveriesCount: 5, onTimeDeliveries: 2, onTimeDeliveryPct: null },
+        { email: 'low@x.com', deliveriesCount: 4, judgedDeliveriesCount: 4, onTimeDeliveries: 2, onTimeDeliveryPct: 50 }
+      ]);
+
+      expect(attention.map(p => p.email)).toEqual(['low@x.com']);
+    });
+
+    it('partitionExecutivePlayerRankings lists only non-attention players in top highlights', () => {
+      const players = [
+        { email: 'star@x.com', deliveriesCount: 10, onTimeDeliveries: 10, onTimeDeliveryPct: 100 },
+        { email: 'risk@x.com', deliveriesCount: 8, onTimeDeliveries: 4, onTimeDeliveryPct: 50 },
+        { email: 'mid@x.com', deliveriesCount: 6, onTimeDeliveries: 5, onTimeDeliveryPct: 83.3 }
+      ];
+
+      const { top, attention } = partitionExecutivePlayerRankings(players);
+
+      expect(attention.map(p => p.email)).toEqual(['risk@x.com', 'mid@x.com']);
+      expect(top.map(p => p.email)).toEqual(['star@x.com']);
+    });
+  });
+
+  describe('readGame4uUserActionDtPrazo', () => {
+    it('reads root dt_prazo', () => {
+      expect(
+        readGame4uUserActionDtPrazo({
+          id: '1',
+          points: 1,
+          status: 'DONE',
+          created_at: '2026-06-01',
+          dt_prazo: '2026-06-20'
+        })
+      ).toBe('2026-06-20');
+    });
+
+    it('falls back to extra.dt_prazo', () => {
+      expect(
+        readGame4uUserActionDtPrazo({
+          id: '1',
+          points: 1,
+          status: 'DONE',
+          created_at: '2026-06-01',
+          extra: { dt_prazo: '2026-06-25T00:00:00.000Z' }
+        })
+      ).toBe('2026-06-25');
+    });
+  });
+
+  describe('computeCompanyDeliveryInsightsFromTasks', () => {
+    it('flags fine risk and suggests urgent action', () => {
+      const snap = computeCompanyDeliveryInsightsFromTasks([
+        {
+          created: Date.parse('2026-06-10'),
+          dt_prazo: '2026-06-15',
+          risco_multa: true
+        }
+      ]);
+      expect(snap.fineRiskTasks).toBe(1);
+      expect(snap.presets.some(p => p.tone === 'urgent')).toBe(true);
+    });
+
+    it('suggests improvement when many tasks are late', () => {
+      const snap = computeCompanyDeliveryInsightsFromTasks([
+        { created: Date.parse('2026-06-20'), dt_prazo: '2026-06-10' },
+        { created: Date.parse('2026-06-18'), dt_prazo: '2026-06-12' }
+      ]);
+      expect(snap.lateTasks).toBe(2);
+      expect(snap.presets.some(p => p.title === 'Oportunidade de melhoria')).toBe(true);
+    });
+
+    it('suggests maintaining rhythm when all judged tasks are on time', () => {
+      const snap = computeCompanyDeliveryInsightsFromTasks([
+        { created: Date.parse('2026-06-10'), dt_prazo: '2026-06-20' },
+        { created: Date.parse('2026-06-12'), dt_prazo: '2026-06-25' }
+      ]);
+      expect(snap.onTimeTasks).toBe(2);
+      expect(snap.lateTasks).toBe(0);
+      expect(snap.presets.some(p => p.tone === 'success')).toBe(true);
+    });
+
+    it('counts justified tasks separately from late/on-time', () => {
+      const snap = computeCompanyDeliveryInsightsFromTasks([
+        {
+          created: Date.parse('2026-06-20'),
+          dt_prazo: '2026-06-10',
+          atraso_justificado: true
+        },
+        { created: Date.parse('2026-06-10'), dt_prazo: '2026-06-20' }
+      ]);
+      expect(snap.justifiedTasks).toBe(1);
+      expect(snap.onTimeTasks).toBe(1);
+      expect(snap.lateTasks).toBe(0);
+      expect(snap.presets.some(p => p.title === 'Entregas justificadas')).toBe(true);
     });
   });
 

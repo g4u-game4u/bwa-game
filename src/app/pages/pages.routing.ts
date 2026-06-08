@@ -12,6 +12,13 @@ export const PagesRoutes: Routes = [
     loadChildren: () => import('./dashboard/team-management-dashboard/team-management-dashboard.module').then(m => m.TeamManagementDashboardModule)
   },
   {
+    path: 'organization-hierarchy',
+    loadChildren: () =>
+      import('./dashboard/organization-hierarchy-report/organization-hierarchy-report.module').then(
+        m => m.OrganizationHierarchyReportModule
+      )
+  },
+  {
     path: 'supervisor',
     loadChildren: () => import('./dashboard/dashboard-supervisor/dashboard-supervisor.module')
       .then(m => m.DashboardSupervisorModule),

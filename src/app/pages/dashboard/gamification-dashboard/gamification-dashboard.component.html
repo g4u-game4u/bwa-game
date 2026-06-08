@@ -194,14 +194,23 @@
     </div>
     
     <!-- KPI Section -->
-    <section class="dashboard-section" aria-labelledby="kpi-section-title">
+    <section
+      class="dashboard-section"
+      [class.dashboard-section--loading]="isLoadingKPIs || isLoadingProgress || isLoadingMonthlyGoal"
+      aria-labelledby="kpi-section-title">
       <h3 id="kpi-section-title" class="section-title">Minhas Metas</h3>
+
+      <c4u-dashboard-goals-skeleton
+        *ngIf="isLoadingKPIs || isLoadingProgress || isLoadingMonthlyGoal"
+        type="kpi"
+        [kpiCount]="kpiLoadingSlots.length + 1">
+      </c4u-dashboard-goals-skeleton>
       
       <div
+        *ngIf="!(isLoadingKPIs || isLoadingProgress || isLoadingMonthlyGoal)"
         class="kpi-grid"
         role="group"
-        aria-labelledby="kpi-section-title"
-        [attr.aria-busy]="isLoadingKPIs">
+        aria-labelledby="kpi-section-title">
         <c4u-monthly-points-goal-progress
           [current]="monthlyPointsProgressData.current"
           [target]="monthlyPointsProgressData.target"
@@ -225,39 +234,28 @@
             </c4u-kpi-circular-progress>
           </ng-container>
         -->
-        <ng-container *ngIf="!isLoadingKPIs">
-          <ng-container *ngFor="let kpi of playerKPIs; let i = index; trackBy: trackByKpiId">
-            <c4u-kpi-circular-progress
-              *ngIf="kpi.id !== 'numero-empresas'"
-              [label]="kpi.label"
-              [current]="kpi.id === 'entregas-prazo' ? getKpiCurrentValue(kpi) : roundValue(getKpiCurrentValue(kpi))"
-              [target]="roundValue(kpi.target)"
-              [superTarget]="kpi.superTarget ? roundValue(kpi.superTarget) : undefined"
-              [color]="kpi.color"
-              [unit]="kpi.unit"
-              [colorIndex]="i"
-              [isPending]="isEntregasPrazoCircularPending(kpi)"
-              [isMissing]="getKpiCircularIsMissing(kpi)">
-            </c4u-kpi-circular-progress>
-          </ng-container>
-        </ng-container>
-
-        <ng-container *ngIf="isLoadingKPIs">
+        <ng-container *ngFor="let kpi of playerKPIs; let i = index; trackBy: trackByKpiId">
           <c4u-kpi-circular-progress
-            *ngFor="let slot of kpiLoadingSlots; let i = index"
-            [label]="'Carregando metas'"
-            [current]="0"
-            [target]="1"
-            [color]="'gray'"
+            *ngIf="kpi.id !== 'numero-empresas'"
+            [label]="kpi.label"
+            [current]="kpi.id === 'entregas-prazo' ? getKpiCurrentValue(kpi) : roundValue(getKpiCurrentValue(kpi))"
+            [target]="roundValue(kpi.target)"
+            [superTarget]="kpi.superTarget ? roundValue(kpi.superTarget) : undefined"
+            [color]="kpi.color"
+            [unit]="kpi.unit"
             [colorIndex]="i"
-            [isPending]="true">
+            [isPending]="isEntregasPrazoCircularPending(kpi)"
+            [isMissing]="getKpiCircularIsMissing(kpi)">
           </c4u-kpi-circular-progress>
         </ng-container>
       </div>
     </section>
     
     <!-- Progress Section -->
-    <section class="dashboard-section" aria-labelledby="progress-section-title">
+    <section
+      class="dashboard-section"
+      [class.dashboard-section--loading]="isLoadingProgress"
+      aria-labelledby="progress-section-title">
       <h3 id="progress-section-title" class="section-title">Meu Progresso</h3>
       <p
         *ngIf="playerDashboardCacheMissing && selectedMonth"
@@ -265,6 +263,11 @@
         role="status">
         Dados deste mês ainda não estão disponíveis. Tente outro período ou aguarde a atualização do painel.
       </p>
+
+      <c4u-dashboard-goals-skeleton
+        *ngIf="isLoadingProgress"
+        type="progress">
+      </c4u-dashboard-goals-skeleton>
       
       <c4u-activity-progress
         *ngIf="!isLoadingProgress && activityMetrics && processMetrics"
@@ -272,8 +275,6 @@
         [processos]="processMetrics"
         (cardClicked)="onProgressCardClicked($event)">
       </c4u-activity-progress>
-      
-      <c4u-shimmer *ngIf="isLoadingProgress"></c4u-shimmer>
     </section>
 
     <c4u-dashboard-insights
@@ -281,23 +282,34 @@
       class="dashboard-section"
       [insights]="dashboardInsights"
       [loading]="isLoadingDashboardInsights"
-      variant="player">
+      variant="player"
+      (alertClicked)="onInsightsAlertClicked($event)">
     </c4u-dashboard-insights>
     
     <!-- Clientes atendidos este mês: lista de participação (período do filtro); abas Carteira/Participação comentadas. -->
-    <section class="dashboard-section carteira-section" aria-labelledby="company-section-title">
+    <section
+      class="dashboard-section carteira-section"
+      [class.carteira-section--loading]="isLoadingParticipacao"
+      [attr.aria-busy]="isLoadingParticipacao ? 'true' : null"
+      aria-labelledby="company-section-title">
       <div class="section-header">
-        <h3 id="company-section-title" class="section-title">
-          Clientes atendidos este mês
-          <span *ngIf="!isLoadingClientesAtendidosCount" class="section-title-count" aria-hidden="true">
-            ({{ clientesAtendidosThisMonthCount ?? participacaoClientes.length }})
-          </span>
-          <c4u-info-button 
-            [infoKey]="''"
-            [customText]="'São os clientes para os quais você realizou alguma entrega neste mês na plataforma Acessórias. A lista segue o mês (ou período) selecionado no filtro do painel e as atividades contabilizadas pela competência das entregas no Game4U'"
-            position="bottom">
-          </c4u-info-button>
-        </h3>
+        <div class="section-header-main">
+          <h3 id="company-section-title" class="section-title">
+            Clientes atendidos este mês
+            <span *ngIf="!isLoadingClientesAtendidosCount" class="section-title-count" aria-hidden="true">
+              ({{ clientesAtendidosThisMonthCount ?? participacaoClientes.length }})
+            </span>
+            <c4u-info-button 
+              [infoKey]="''"
+              [customText]="'São os clientes para os quais você realizou alguma entrega neste mês na plataforma Acessórias. A lista segue o mês (ou período) selecionado no filtro do painel e as atividades contabilizadas pela competência das entregas no Game4U'"
+              position="bottom">
+            </c4u-info-button>
+          </h3>
+          <p class="carteira-section-disclaimer" role="note">
+            <i class="ri-information-line" aria-hidden="true"></i>
+            <span>{{ justifiedDeliveriesDisclaimer }}</span>
+          </p>
+        </div>
       </div>
       
       <!-- Abas Carteira / Participação — comentadas; exibição única = participação abaixo.
@@ -319,7 +331,10 @@
       -->
       
       <c4u-card class="carteira-card">
-        <c4u-shimmer *ngIf="isLoadingParticipacao"></c4u-shimmer>
+        <c4u-dashboard-goals-skeleton
+          *ngIf="isLoadingParticipacao"
+          type="clientes">
+        </c4u-dashboard-goals-skeleton>
 
         <div *ngIf="!isLoadingParticipacao && participacaoClientes.length > 0" class="carteira-list">
           <div *ngFor="let cliente of participacaoClientes" class="carteira-item" role="article" (click)="openCompanyDetailModal(cliente)" style="cursor: pointer;" [title]="getClienteAtendidoTooltip(cliente)">
@@ -390,6 +405,7 @@
     [playerId]="currentPlayerId"
     [listType]="progressModalType"
     [month]="selectedMonth"
+    [activityFocusFilter]="progressModalActivityFocusFilter"
     (closed)="onProgressModalClosed()">
   </modal-progress-list>
   

@@ -1,4 +1,4 @@
-import {
+﻿import {
   ActivityListItem,
   ActivityMetrics,
   PointWallet,
@@ -11,6 +11,7 @@ import {
   Game4uDeliveryModel,
   Game4uReportsFinishedDeliveryRow,
   Game4uReportsFinishedSummary,
+  Game4uUserActionHierarchy,
   Game4uUserActionModel,
   Game4uUserActionStatsResponse,
   Game4uUserActionStatus
@@ -275,12 +276,393 @@ export function readGame4uExtraStatusApi(a: Game4uUserActionModel): string | nul
   return null;
 }
 
-/** Atraso justificado quando o status da assessoria contém «justif» (ex.: «Pend. justificada»). */
+/** Entrega justificada quando o status da assessoria contém «justif» (ex.: «Pend. justificada»). */
 export function parseGame4uAtrasoJustificado(statusApi: unknown): boolean {
   if (statusApi == null || statusApi === '') {
     return false;
   }
   return String(statusApi).toLowerCase().includes('justif');
+}
+
+export function isGame4uUserActionJustified(a: Game4uUserActionModel): boolean {
+  return parseGame4uAtrasoJustificado(readGame4uExtraStatusApi(a));
+}
+
+/** Prazo da tarefa: raiz `dt_prazo` ou `extra.dt_prazo` / `extra.dr_prazo` (`YYYY-MM-DD`). */
+export function readGame4uUserActionDtPrazo(a: Game4uUserActionModel): string | undefined {
+  const top = typeof a.dt_prazo === 'string' && a.dt_prazo.trim() ? a.dt_prazo.trim() : '';
+  if (top) {
+    const ymd = /^(\d{4})-(\d{2})-(\d{2})/.exec(top);
+    return ymd ? top.slice(0, 10) : top;
+  }
+  const ex = readGame4uExtraRecord(a);
+  if (!ex) {
+    return undefined;
+  }
+  const raw = ex['dt_prazo'] ?? ex['dr_prazo'];
+  if (raw == null || raw === '') {
+    return undefined;
+  }
+  if (typeof raw === 'string') {
+    const s = raw.trim();
+    const ymd = /^(\d{4})-(\d{2})-(\d{2})/.exec(s);
+    if (ymd) {
+      return s.slice(0, 10);
+    }
+  }
+  const ms = parseExtraDrPrazoToUtcMs(raw);
+  if (ms == null) {
+    return undefined;
+  }
+  const d = new Date(ms);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+/** Chave de correlação entre linhas de `finished/deliveries/cached` e user-actions. */
+export function executiveDeliveryDistinctKey(parts: {
+  emp_id?: string | number | null;
+  delivery_id?: string | null;
+  delivery_title?: string | null;
+}): string {
+  return String(parts.emp_id ?? parts.delivery_id ?? parts.delivery_title ?? '').trim();
+}
+
+/** `status_api` em linhas de `finished/deliveries/cached` (quando presente). */
+export function readGame4uDeliveryRowStatusApi(row: Game4uReportsFinishedDeliveryRow): string | null {
+  const raw = row as unknown as Record<string, unknown>;
+  const extra = row.extra ?? (
+    raw['extra'] != null && typeof raw['extra'] === 'object'
+      ? (raw['extra'] as Record<string, unknown>)
+      : null
+  );
+  const candidates: unknown[] = [
+    extra?.['status_api'],
+    extra?.['statusApi'],
+    raw['status_api'],
+    raw['statusApi']
+  ];
+  for (const v of candidates) {
+    if (v == null || v === '') {
+      continue;
+    }
+    const s = String(v).trim();
+    if (s) {
+      return s;
+    }
+  }
+  return null;
+}
+
+/** Índice de entregas justificadas (`extra.status_api` com «justif») para cruzar user-actions × deliveries. */
+export interface ExecutiveJustifiedDeliveryLookup {
+  keys: Set<string>;
+  deliveryIds: Set<string>;
+}
+
+function addExecutiveJustifiedLookupKey(keys: Set<string>, raw: unknown): void {
+  const key = String(raw ?? '').trim();
+  if (key) {
+    keys.add(key);
+  }
+}
+
+/** Monta índice a partir de user-actions finalizadas com `extra.status_api` contendo «justif». */
+export function buildExecutiveJustifiedDeliveryLookup(
+  actions: Game4uUserActionModel[]
+): ExecutiveJustifiedDeliveryLookup {
+  const keys = new Set<string>();
+  const deliveryIds = new Set<string>();
+
+  for (const a of actions || []) {
+    if (!isGame4uUserActionFinalizedStatus(a.status) || !isGame4uUserActionJustified(a)) {
+      continue;
+    }
+
+    const did = String(a.delivery_id ?? '').trim();
+    if (did) {
+      deliveryIds.add(did);
+      addExecutiveJustifiedLookupKey(keys, did);
+      const empPrefix = did.split('-')[0]?.trim();
+      if (empPrefix) {
+        addExecutiveJustifiedLookupKey(keys, empPrefix);
+      }
+    }
+
+    addExecutiveJustifiedLookupKey(keys, a.integration_id);
+    addExecutiveJustifiedLookupKey(keys, a.client_id);
+    addExecutiveJustifiedLookupKey(keys, readGame4uExtraCnpj(a));
+    addExecutiveJustifiedLookupKey(keys, readGame4uUserActionTitle(a));
+    addExecutiveJustifiedLookupKey(keys, readGame4uProcessTitleFromUserAction(a));
+    const empId =
+      typeof a.integration_id === 'string' || typeof a.integration_id === 'number'
+        ? a.integration_id
+        : typeof a.client_id === 'string' || typeof a.client_id === 'number'
+          ? a.client_id
+          : undefined;
+    addExecutiveJustifiedLookupKey(
+      keys,
+      executiveDeliveryDistinctKey({
+        emp_id: empId,
+        delivery_id: did,
+        delivery_title: readGame4uUserActionTitle(a)
+      })
+    );
+  }
+
+  return { keys, deliveryIds };
+}
+
+/** Conta tarefas finalizadas excluindo as justificadas via `extra.status_api`. */
+export function countExecutiveFinishedTasksFromUserActions(
+  actions: Game4uUserActionModel[]
+): { total: number; justified: number; judged: number } {
+  let total = 0;
+  let justified = 0;
+  for (const a of actions || []) {
+    if (!isGame4uUserActionFinalizedStatus(a.status)) {
+      continue;
+    }
+    total += 1;
+    if (isGame4uUserActionJustified(a)) {
+      justified += 1;
+    }
+  }
+  return { total, justified, judged: total - justified };
+}
+
+/**
+ * Conta tarefas no prazo / fora do prazo com a mesma regra do Resumo do mês
+ * (`mapGame4uActionsToActivityList` + `resolveGame4uFinishedPrazoStatus`).
+ */
+export function countExecutiveOnTimeTasksFromUserActions(
+  actions: Game4uUserActionModel[]
+): { onTime: number; late: number; justified: number; judged: number } {
+  const finished = (actions || []).filter(a => isGame4uUserActionFinalizedStatus(a.status));
+  const items = mapGame4uActionsToActivityList(finished, undefined, { monthFilter: 'none' });
+  let onTime = 0;
+  let late = 0;
+  let justified = 0;
+  for (const item of items) {
+    if (item.atraso_justificado === true) {
+      justified += 1;
+      continue;
+    }
+    const status = resolveGame4uFinishedPrazoStatus(item.dt_prazo, item.created);
+    if (status === 'on_time') {
+      onTime += 1;
+    } else if (status === 'late') {
+      late += 1;
+    }
+  }
+  return { onTime, late, justified, judged: onTime + late };
+}
+
+/** Métricas de entregas (user-actions) no prazo por jogador ou segmento. */
+export interface ExecutivePlayerRankingAgg {
+  tasksTotal: number;
+  judgedTasks: number;
+  deliveriesCount: number;
+  judgedDeliveriesCount: number;
+  justifiedDeliveriesCount: number;
+  onTimeDeliveries: number;
+  clientsCount: number;
+}
+
+/** % de entregas justificadas sobre o total finalizado no mês (0–100). */
+export function computeExecutiveJustifiedDeliveryPct(
+  deliveriesCount: number,
+  justifiedDeliveriesCount: number
+): number | null {
+  if (deliveriesCount <= 0) {
+    return null;
+  }
+  return Math.round((justifiedDeliveriesCount / deliveriesCount) * 1000) / 10;
+}
+
+function readExecutiveUserActionClientKey(action: Game4uUserActionModel): string {
+  return String(
+    action.integration_id ?? action.client_id ?? readGame4uExtraCnpj(action) ?? ''
+  ).trim();
+}
+
+/** Agrega entregas (user-actions finalizadas) e no prazo por action (`dt_prazo` × `finished_at`). */
+export function aggregateExecutiveDeliveryOnTimeFromUserActions(
+  actions: Game4uUserActionModel[]
+): ExecutivePlayerRankingAgg {
+  const clientKeys = new Set<string>();
+  let deliveriesCount = 0;
+  let judgedDeliveriesCount = 0;
+  let justifiedDeliveriesCount = 0;
+  let onTimeDeliveries = 0;
+
+  for (const action of actions || []) {
+    if (!isGame4uUserActionFinalizedStatus(action.status)) {
+      continue;
+    }
+
+    deliveriesCount += 1;
+    const clientKey = readExecutiveUserActionClientKey(action);
+    if (clientKey) {
+      clientKeys.add(clientKey);
+    }
+
+    if (isGame4uUserActionJustified(action)) {
+      justifiedDeliveriesCount += 1;
+      continue;
+    }
+
+    judgedDeliveriesCount += 1;
+    const finishedMs = getGame4uUserActionFinishedOrFallbackMs(action);
+    const prazoStatus = resolveGame4uFinishedPrazoStatus(
+      typeof action.dt_prazo === 'string' ? action.dt_prazo : undefined,
+      finishedMs ?? undefined
+    );
+    if (prazoStatus === 'on_time') {
+      onTimeDeliveries += 1;
+    }
+  }
+
+  return {
+    tasksTotal: deliveriesCount,
+    judgedTasks: judgedDeliveriesCount,
+    deliveriesCount,
+    judgedDeliveriesCount,
+    justifiedDeliveriesCount,
+    onTimeDeliveries,
+    clientsCount: clientKeys.size
+  };
+}
+
+function findExecutiveUserActionsForDeliveryRow(
+  row: Game4uReportsFinishedDeliveryRow,
+  actions: Game4uUserActionModel[]
+): Game4uUserActionModel[] {
+  return (actions || []).filter(
+    action =>
+      isGame4uUserActionFinalizedStatus(action.status) &&
+      game4uUserActionMatchesDeliveryRow(action, row)
+  );
+}
+
+/**
+ * Entrega no prazo quando todas as user-actions elegíveis da linha
+ * estão no prazo (`dt_prazo` × `finished_at`). Fallback: cache da linha.
+ */
+export function isExecutiveDeliveryRowOnTimeFromUserActions(
+  row: Game4uReportsFinishedDeliveryRow,
+  actions: Game4uUserActionModel[],
+  justifiedLookup?: ExecutiveJustifiedDeliveryLookup
+): boolean {
+  if (isGame4uDeliveryRowJustified(row, justifiedLookup)) {
+    return false;
+  }
+
+  const matched = findExecutiveUserActionsForDeliveryRow(row, actions).filter(
+    action => !isGame4uUserActionJustified(action)
+  );
+  if (matched.length === 0) {
+    return deliveryRowCountsAsOnTime(row);
+  }
+
+  let onTime = 0;
+  let late = 0;
+  let unknown = 0;
+  for (const action of matched) {
+    const finishedMs = getGame4uUserActionFinishedOrFallbackMs(action);
+    const status = resolveGame4uFinishedPrazoStatus(
+      typeof action.dt_prazo === 'string' ? action.dt_prazo : undefined,
+      finishedMs ?? undefined
+    );
+    if (status === 'on_time') {
+      onTime += 1;
+    } else if (status === 'late') {
+      late += 1;
+    } else {
+      unknown += 1;
+    }
+  }
+
+  return late === 0 && unknown === 0 && onTime > 0 && onTime === matched.length;
+}
+
+/** Ranking por jogador: cada user-action finalizada conta como 1 entrega. */
+export function aggregateExecutivePlayerRankingsFromUserActions(
+  actions: Game4uUserActionModel[]
+): Map<string, ExecutivePlayerRankingAgg> {
+  const byEmail = new Map<string, Game4uUserActionModel[]>();
+
+  for (const action of actions || []) {
+    if (!isGame4uUserActionFinalizedStatus(action.status)) {
+      continue;
+    }
+    const email = String(action.user_email ?? '').trim().toLowerCase();
+    if (!email) {
+      continue;
+    }
+    const bucket = byEmail.get(email) ?? [];
+    bucket.push(action);
+    byEmail.set(email, bucket);
+  }
+
+  const result = new Map<string, ExecutivePlayerRankingAgg>();
+  for (const [email, playerActions] of byEmail) {
+    result.set(email, aggregateExecutiveDeliveryOnTimeFromUserActions(playerActions));
+  }
+  return result;
+}
+
+/** Agregação de equipe/segmento a partir de user-actions finalizadas do escopo. */
+export function aggregateExecutiveTeamRankingFromUserActions(
+  actions: Game4uUserActionModel[]
+): ExecutivePlayerRankingAgg {
+  const finishedActions = (actions || []).filter(a => isGame4uUserActionFinalizedStatus(a.status));
+  return aggregateExecutiveDeliveryOnTimeFromUserActions(finishedActions);
+}
+
+export function isGame4uDeliveryRowJustified(
+  row: Game4uReportsFinishedDeliveryRow,
+  lookup?: ExecutiveJustifiedDeliveryLookup
+): boolean {
+  if (parseGame4uAtrasoJustificado(readGame4uDeliveryRowStatusApi(row))) {
+    return true;
+  }
+  if (!lookup) {
+    return false;
+  }
+
+  const did = (row.delivery_id ?? '').trim();
+  if (did && lookup.deliveryIds.has(did)) {
+    return true;
+  }
+
+  const distinctKey = executiveDeliveryDistinctKey(row);
+  if (distinctKey && lookup.keys.has(distinctKey)) {
+    return true;
+  }
+
+  if (row.emp_id != null) {
+    const emp = String(row.emp_id).trim();
+    if (emp && lookup.keys.has(emp)) {
+      return true;
+    }
+  }
+
+  const title = (row.delivery_title ?? '').trim();
+  if (title && lookup.keys.has(title)) {
+    return true;
+  }
+
+  return false;
+}
+
+/** @deprecated Preferir {@link buildExecutiveJustifiedDeliveryLookup}. */
+export function buildJustifiedDeliveryKeysFromUserActions(
+  actions: Game4uUserActionModel[]
+): Set<string> {
+  return buildExecutiveJustifiedDeliveryLookup(actions).keys;
 }
 
 export type Game4uFinishedPrazoStatus = 'on_time' | 'late' | 'unknown';
@@ -321,6 +703,164 @@ export function resolveGame4uFinishedPrazoStatus(
     0
   ).getTime();
   return finishedDayMs <= prazoMs ? 'on_time' : 'late';
+}
+
+export type CompanyDeliveryInsightTone = 'urgent' | 'warning' | 'success' | 'info';
+
+export interface CompanyDeliveryInsightPreset {
+  tone: CompanyDeliveryInsightTone;
+  title: string;
+  message: string;
+}
+
+/** Métricas agregadas das entregas de um cliente no modal de detalhe. */
+export interface CompanyDeliveryInsightsSnapshot {
+  totalTasks: number;
+  fineRiskTasks: number;
+  onTimeTasks: number;
+  lateTasks: number;
+  justifiedTasks: number;
+  judgedTasks: number;
+  onTimePct: number | null;
+  presets: CompanyDeliveryInsightPreset[];
+}
+
+export interface CompanyDeliveryInsightTaskInput {
+  created: number;
+  /** Ms de `finished_at` — preferido na comparação com `dt_prazo`. */
+  finished_at?: number;
+  dt_prazo?: string;
+  risco_multa?: boolean;
+  atraso_justificado?: boolean;
+}
+
+function buildCompanyDeliveryInsightPresets(metrics: {
+  fineRiskTasks: number;
+  lateTasks: number;
+  onTimeTasks: number;
+  justifiedTasks: number;
+  judgedTasks: number;
+  onTimePct: number | null;
+}): CompanyDeliveryInsightPreset[] {
+  const presets: CompanyDeliveryInsightPreset[] = [];
+  const { fineRiskTasks, lateTasks, onTimeTasks, justifiedTasks, judgedTasks, onTimePct } = metrics;
+
+  if (fineRiskTasks > 0) {
+    presets.push({
+      tone: 'urgent',
+      title: 'Risco de multa identificado',
+      message:
+        fineRiskTasks === 1
+          ? '1 entrega deste cliente tem risco de multa. Alinhe com a assessoria e priorize a regularização antes que vire penalidade.'
+          : `${fineRiskTasks} entregas deste cliente têm risco de multa. Alinhe com a assessoria e priorize a regularização antes que vire penalidade.`
+    });
+  }
+
+  const lateShare = judgedTasks > 0 ? lateTasks / judgedTasks : 0;
+  if (lateTasks > 0 && (lateTasks >= 2 || lateShare >= 0.25)) {
+    presets.push({
+      tone: 'warning',
+      title: 'Oportunidade de melhoria',
+      message:
+        lateTasks === 1
+          ? '1 finalização ficou fora do prazo. Revise o planejamento, antecipe etapas críticas e acompanhe de perto os próximos prazos deste cliente.'
+          : `${lateTasks} finalizações ficaram fora do prazo. Revise o planejamento, antecipe etapas críticas e acompanhe de perto os próximos prazos deste cliente.`
+    });
+  } else if (lateTasks === 1 && fineRiskTasks === 0) {
+    presets.push({
+      tone: 'warning',
+      title: 'Atenção ao prazo',
+      message:
+        '1 entrega foi concluída fora do prazo. Use este histórico para ajustar o ritmo e evitar repetição nos próximos ciclos deste cliente.'
+    });
+  }
+
+  if (judgedTasks > 0 && lateTasks === 0 && fineRiskTasks === 0) {
+    presets.push({
+      tone: 'success',
+      title: 'Ritmo saudável',
+      message:
+        onTimeTasks === 1
+          ? 'A entrega avaliada foi concluída no prazo. Mantenha a comunicação proativa com o cliente e o mesmo rigor no cumprimento dos prazos.'
+          : `Todas as ${onTimeTasks} entregas avaliadas foram concluídas no prazo. Mantenha a comunicação proativa com o cliente e o mesmo rigor no cumprimento dos prazos.`
+    });
+  } else if (onTimePct != null && onTimePct >= 80 && lateTasks > 0 && fineRiskTasks === 0) {
+    presets.push({
+      tone: 'success',
+      title: 'Desempenho majoritariamente no prazo',
+      message: `${onTimePct}% das entregas avaliadas foram no prazo. Continue priorizando os prazos mais apertados para elevar ainda mais a consistência com este cliente.`
+    });
+  }
+
+  if (justifiedTasks > 0) {
+    presets.push({
+      tone: 'info',
+      title: 'Entregas justificadas',
+      message:
+        justifiedTasks === 1
+          ? '1 entrega com atraso justificado. Documente o contexto para referência futura.'
+          : `${justifiedTasks} entregas com atraso justificado. Documente o contexto para referência futura.`
+    });
+  }
+
+  if (presets.length === 0 && judgedTasks === 0 && justifiedTasks === 0) {
+    presets.push({
+      tone: 'info',
+      title: 'Histórico em formação',
+      message: 'Ainda não há entregas finalizadas suficientes para avaliar prazos deste cliente.'
+    });
+  }
+
+  return presets;
+}
+
+/** Insights operacionais do cliente no modal de detalhe (entregas finalizadas carregadas). */
+export function computeCompanyDeliveryInsightsFromTasks(
+  tasks: CompanyDeliveryInsightTaskInput[]
+): CompanyDeliveryInsightsSnapshot {
+  let fineRiskTasks = 0;
+  let onTimeTasks = 0;
+  let lateTasks = 0;
+  let justifiedTasks = 0;
+
+  for (const task of tasks || []) {
+    if (task.risco_multa === true) {
+      fineRiskTasks += 1;
+    }
+    if (task.atraso_justificado === true) {
+      justifiedTasks += 1;
+      continue;
+    }
+    const finishedMs = task.finished_at ?? task.created;
+    const status = resolveGame4uFinishedPrazoStatus(task.dt_prazo, finishedMs);
+    if (status === 'on_time') {
+      onTimeTasks += 1;
+    } else if (status === 'late') {
+      lateTasks += 1;
+    }
+  }
+
+  const judgedTasks = onTimeTasks + lateTasks;
+  const onTimePct =
+    judgedTasks > 0 ? Math.round((onTimeTasks / judgedTasks) * 100) : null;
+
+  return {
+    totalTasks: (tasks || []).length,
+    fineRiskTasks,
+    onTimeTasks,
+    lateTasks,
+    justifiedTasks,
+    judgedTasks,
+    onTimePct,
+    presets: buildCompanyDeliveryInsightPresets({
+      fineRiskTasks,
+      lateTasks,
+      onTimeTasks,
+      justifiedTasks,
+      judgedTasks,
+      onTimePct
+    })
+  };
 }
 
 /** User-action finalizada (participação / “tarefas concluídas” ao nível de linha). */
@@ -965,15 +1505,17 @@ export function aggregateExecutiveTopProcessesFromUserActions(
       acc.clientKeys.add(clientKey);
     }
 
-    const finishedMs = getGame4uUserActionFinishedOrFallbackMs(a);
-    const prazoStatus = resolveGame4uFinishedPrazoStatus(
-      typeof a.dt_prazo === 'string' ? a.dt_prazo : undefined,
-      finishedMs ?? undefined
-    );
-    if (prazoStatus === 'on_time') {
-      acc.onTime += 1;
-    } else if (prazoStatus === 'late') {
-      acc.late += 1;
+    if (!isGame4uUserActionJustified(a)) {
+      const finishedMs = getGame4uUserActionFinishedOrFallbackMs(a);
+      const prazoStatus = resolveGame4uFinishedPrazoStatus(
+        typeof a.dt_prazo === 'string' ? a.dt_prazo : undefined,
+        finishedMs ?? undefined
+      );
+      if (prazoStatus === 'on_time') {
+        acc.onTime += 1;
+      } else if (prazoStatus === 'late') {
+        acc.late += 1;
+      }
     }
     byTitle.set(title, acc);
   }
@@ -994,6 +1536,310 @@ export function aggregateExecutiveTopProcessesFromUserActions(
     .slice(0, 6);
 
   return { top, distinctProcesses: byTitle.size };
+}
+
+/** Métricas agregadas de entregas finalizadas para ranking executivo (jogador ou equipe). */
+export interface ExecutiveDeliveryRankingAgg {
+  tasksTotal: number;
+  deliveriesCount: number;
+  judgedDeliveriesCount: number;
+  onTimeDeliveries: number;
+  clientsCount: number;
+  onTimeDeliveryPct: number | null;
+  onTimePct: number | null;
+}
+
+/** Agrega linhas de `finished/deliveries/cached` num único candidato a ranking. */
+export function aggregateExecutiveDeliveryRowsForRanking(
+  rows: Game4uReportsFinishedDeliveryRow[],
+  options?: { justifiedLookup?: ExecutiveJustifiedDeliveryLookup }
+): ExecutiveDeliveryRankingAgg {
+  const safeRows = (rows || []).filter(r => r != null && Math.floor(Number(r.tasks_total) || 0) > 0);
+  const clients = new Set<string>();
+  let tasksTotal = 0;
+  let deliveriesCount = 0;
+  let judgedDeliveriesCount = 0;
+  let onTimeDeliveries = 0;
+  let onTimeWeighted = 0;
+  let tasksWithPct = 0;
+
+  for (const row of safeRows) {
+    const tasks = Math.floor(Number(row.tasks_total) || 0);
+    if (tasks <= 0) {
+      continue;
+    }
+    const justified = isGame4uDeliveryRowJustified(row, options?.justifiedLookup);
+    tasksTotal += tasks;
+    deliveriesCount += 1;
+    const clientKey = executiveDeliveryDistinctKey(row);
+    if (clientKey) {
+      clients.add(clientKey);
+    }
+    if (justified) {
+      continue;
+    }
+    judgedDeliveriesCount += 1;
+    if (deliveryRowCountsAsOnTime(row)) {
+      onTimeDeliveries += 1;
+    }
+    const otp = row.on_time_pct;
+    if (otp != null && Number.isFinite(Number(otp))) {
+      onTimeWeighted += Number(otp) * tasks;
+      tasksWithPct += tasks;
+    }
+  }
+
+  return {
+    tasksTotal,
+    deliveriesCount,
+    judgedDeliveriesCount,
+    onTimeDeliveries,
+    clientsCount: clients.size,
+    onTimeDeliveryPct:
+      judgedDeliveriesCount > 0
+        ? Math.round((onTimeDeliveries / judgedDeliveriesCount) * 1000) / 10
+        : null,
+    onTimePct:
+      tasksWithPct > 0 ? Math.round((onTimeWeighted / tasksWithPct) * 10) / 10 : null
+  };
+}
+
+/** Segmentação de rankings executivos por hierarquia (`hierarchy` em user-actions). */
+export type ExecutiveHierarchyRankingMode = 'gerente' | 'diretor';
+
+const EXECUTIVE_HIERARCHY_UNASSIGNED_DIRETOR_KEY = '__sem_diretoria__';
+
+/** Lê `hierarchy` normalizado de uma user-action. */
+export function readGame4uUserActionHierarchy(a: Game4uUserActionModel): Game4uUserActionHierarchy | null {
+  const raw = (a as Record<string, unknown>)['hierarchy'];
+  if (raw == null || typeof raw !== 'object' || Array.isArray(raw)) {
+    return null;
+  }
+  return raw as Game4uUserActionHierarchy;
+}
+
+/** Resolve chave e rótulo do segmento hierárquico para ranking executivo. */
+export function resolveExecutiveHierarchySegment(
+  action: Game4uUserActionModel,
+  mode: ExecutiveHierarchyRankingMode
+): { key: string; name: string; email: string } | null {
+  const hierarchy = readGame4uUserActionHierarchy(action);
+  if (!hierarchy) {
+    return null;
+  }
+
+  if (mode === 'gerente') {
+    const email = String(hierarchy.gerente_email ?? '').trim().toLowerCase();
+    const name = String(hierarchy.gerente_name ?? '').trim();
+    if (email) {
+      return { key: email, name: name || email, email };
+    }
+    const teamId = String(hierarchy.team_id ?? '').trim();
+    if (!teamId) {
+      return null;
+    }
+    const teamName = String(hierarchy.team_name ?? teamId).trim() || teamId;
+    return { key: `team:${teamId}`, name: name || teamName, email: '' };
+  }
+
+  const diretorEmail = String(hierarchy.diretor_email ?? '').trim().toLowerCase();
+  const diretorName = String(hierarchy.diretor_name ?? '').trim();
+  if (diretorEmail) {
+    return { key: diretorEmail, name: diretorName || diretorEmail, email: diretorEmail };
+  }
+  return {
+    key: EXECUTIVE_HIERARCHY_UNASSIGNED_DIRETOR_KEY,
+    name: 'Sem diretoria',
+    email: ''
+  };
+}
+
+/** Cruza user-action com linha de `finished/deliveries/cached` no mesmo escopo. */
+export function game4uUserActionMatchesDeliveryRow(
+  action: Game4uUserActionModel,
+  row: Game4uReportsFinishedDeliveryRow
+): boolean {
+  const actionEmail = String(action.user_email ?? '').trim().toLowerCase();
+  const rowEmail = String(row.user_email ?? '').trim().toLowerCase();
+  if (actionEmail && rowEmail && actionEmail === rowEmail) {
+    return true;
+  }
+
+  const emp = row.emp_id != null ? String(row.emp_id).trim() : '';
+  const integration =
+    typeof action.integration_id === 'string' || typeof action.integration_id === 'number'
+      ? String(action.integration_id).trim()
+      : '';
+  const clientId =
+    typeof action.client_id === 'string' || typeof action.client_id === 'number'
+      ? String(action.client_id).trim()
+      : '';
+  const extraCnpj = readGame4uExtraCnpj(action);
+  if (emp && (emp === integration || emp === clientId || (extraCnpj && emp === extraCnpj))) {
+    return true;
+  }
+
+  const actionDeliveryId = String(action.delivery_id ?? '').trim();
+  const rowDeliveryId = String(row.delivery_id ?? '').trim();
+  if (actionDeliveryId && rowDeliveryId && actionDeliveryId === rowDeliveryId) {
+    return true;
+  }
+
+  const rowKey = executiveDeliveryDistinctKey(row);
+  const actionKey = executiveDeliveryDistinctKey({
+    emp_id:
+      typeof action.integration_id === 'string' || typeof action.integration_id === 'number'
+        ? action.integration_id
+        : typeof action.client_id === 'string' || typeof action.client_id === 'number'
+          ? action.client_id
+          : undefined,
+    delivery_id: actionDeliveryId,
+    delivery_title: readGame4uUserActionTitle(action)
+  });
+  return rowKey !== '' && rowKey === actionKey;
+}
+
+/** Candidato ao ranking executivo de jogadores (destaque / atenção). */
+export interface ExecutivePlayerRankCandidate {
+  email: string;
+  deliveriesCount: number;
+  onTimeDeliveries: number;
+  onTimeDeliveryPct: number | null;
+  /** Entregas elegíveis para métricas de prazo (exclui justificadas). */
+  judgedDeliveriesCount?: number;
+  justifiedDeliveriesCount?: number;
+  justifiedDeliveryPct?: number | null;
+}
+
+export interface ExecutiveHierarchyRankingCandidate extends ExecutivePlayerRankCandidate {
+  name: string;
+  tasksTotal: number;
+  clientsCount: number;
+  onTimePct: number | null;
+}
+
+/** Agrega candidatos a ranking por gerente (Diretor) ou diretoria (C-Level) via user-actions. */
+export function aggregateExecutiveHierarchyRankings(
+  actions: Game4uUserActionModel[],
+  mode: ExecutiveHierarchyRankingMode
+): ExecutiveHierarchyRankingCandidate[] {
+  const segmentActions = new Map<
+    string,
+    { name: string; email: string; actions: Game4uUserActionModel[] }
+  >();
+
+  for (const action of actions || []) {
+    if (!isGame4uUserActionFinalizedStatus(action.status)) {
+      continue;
+    }
+    const segment = resolveExecutiveHierarchySegment(action, mode);
+    if (!segment) {
+      continue;
+    }
+    const bucket =
+      segmentActions.get(segment.key) ??
+      { name: segment.name, email: segment.email, actions: [] as Game4uUserActionModel[] };
+    bucket.actions.push(action);
+    segmentActions.set(segment.key, bucket);
+  }
+
+  const candidates: ExecutiveHierarchyRankingCandidate[] = [];
+
+  for (const [key, bucket] of segmentActions) {
+    const agg = aggregateExecutiveDeliveryOnTimeFromUserActions(bucket.actions);
+    if ((agg.judgedDeliveriesCount ?? 0) <= 0) {
+      continue;
+    }
+    candidates.push({
+      email: key,
+      name: bucket.name,
+      tasksTotal: agg.tasksTotal,
+      clientsCount: agg.clientsCount,
+      deliveriesCount: agg.deliveriesCount,
+      judgedDeliveriesCount: agg.judgedDeliveriesCount,
+      justifiedDeliveriesCount: agg.justifiedDeliveriesCount,
+      onTimeDeliveries: agg.onTimeDeliveries,
+      onTimeDeliveryPct:
+        agg.judgedDeliveriesCount > 0
+          ? Math.round((agg.onTimeDeliveries / agg.judgedDeliveriesCount) * 1000) / 10
+          : null,
+      justifiedDeliveryPct: computeExecutiveJustifiedDeliveryPct(
+        agg.deliveriesCount,
+        agg.justifiedDeliveriesCount
+      ),
+      onTimePct: null
+    });
+  }
+
+  return candidates;
+}
+
+export interface PartitionExecutivePlayerRankingsOptions {
+  minDeliveriesForAttention?: number;
+  maxOnTimePctForAttention?: number;
+  topCount?: number;
+  attentionCount?: number;
+}
+
+/**
+ * Separa destaques (mais entregas no prazo) e jogadores que precisam de atenção (menor % no prazo).
+ * Quem entra na lista de atenção não aparece no ranking de destaques.
+ */
+export function partitionExecutivePlayerRankings<T extends ExecutivePlayerRankCandidate>(
+  playerArray: T[],
+  options: PartitionExecutivePlayerRankingsOptions = {}
+): { top: T[]; attention: T[] } {
+  const minDeliveries = options.minDeliveriesForAttention ?? 3;
+  const maxOnTimePct = options.maxOnTimePctForAttention ?? 90;
+  const topCount = options.topCount ?? 5;
+  const attentionCount = options.attentionCount ?? 5;
+
+  const judgedDeliveries = (p: T): number => p.judgedDeliveriesCount ?? p.deliveriesCount;
+
+  const compareByOnTimeDeliveriesDesc = (a: T, b: T): number => {
+    if (b.onTimeDeliveries !== a.onTimeDeliveries) {
+      return b.onTimeDeliveries - a.onTimeDeliveries;
+    }
+    const pctA = a.onTimeDeliveryPct ?? -1;
+    const pctB = b.onTimeDeliveryPct ?? -1;
+    if (pctB !== pctA) {
+      return pctB - pctA;
+    }
+    return judgedDeliveries(b) - judgedDeliveries(a);
+  };
+
+  const compareNeedsAttention = (a: T, b: T): number => {
+    const pctA = a.onTimeDeliveryPct ?? 0;
+    const pctB = b.onTimeDeliveryPct ?? 0;
+    if (pctA !== pctB) {
+      return pctA - pctB;
+    }
+    const lateA = judgedDeliveries(a) - a.onTimeDeliveries;
+    const lateB = judgedDeliveries(b) - b.onTimeDeliveries;
+    if (lateB !== lateA) {
+      return lateB - lateA;
+    }
+    return judgedDeliveries(b) - judgedDeliveries(a);
+  };
+
+  const isEligibleForAttention = (p: T): boolean =>
+    judgedDeliveries(p) >= minDeliveries &&
+    p.onTimeDeliveryPct != null &&
+    p.onTimeDeliveryPct < maxOnTimePct;
+
+  const attention = [...playerArray]
+    .filter(isEligibleForAttention)
+    .sort(compareNeedsAttention)
+    .slice(0, attentionCount);
+
+  const attentionEmails = new Set(attention.map(p => p.email));
+
+  const top = playerArray
+    .filter(p => judgedDeliveries(p) > 0 && !attentionEmails.has(p.email))
+    .sort(compareByOnTimeDeliveriesDesc)
+    .slice(0, topCount);
+
+  return { top, attention };
 }
 
 /**

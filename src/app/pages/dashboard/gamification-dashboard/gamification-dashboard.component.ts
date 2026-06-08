@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, HostListener, ChangeDetectionStrategy, ChangeDetectorRef, AfterViewInit } from '@angular/core';
+﻿import { Component, OnInit, OnDestroy, HostListener, ChangeDetectionStrategy, ChangeDetectorRef, AfterViewInit } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { NgbModal } from '@ng-bootstrap/ng-bootstrap';
 import { Subject, of, forkJoin, from, firstValueFrom } from 'rxjs';
@@ -35,7 +35,8 @@ import {
 } from '@services/gamificacao-delivery-empid.util';
 import { hasMoreFinishedDeliveriesCachedPage } from '@services/game4u-game-mapper';
 import { DashboardInsightsService } from '@services/dashboard-insights.service';
-import { DashboardInsightsSnapshot } from '@model/dashboard-insights.model';
+import { DashboardInsightsSnapshot, DashboardInsightsAlertFocus } from '@model/dashboard-insights.model';
+import { ENTREGAS_JUSTIFICADAS_META_DISCLAIMER } from '@services/help-texts.service';
 
 @Component({
   selector: 'app-gamification-dashboard',
@@ -44,6 +45,7 @@ import { DashboardInsightsSnapshot } from '@model/dashboard-insights.model';
   changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterViewInit {
+  readonly justifiedDeliveriesDisclaimer = ENTREGAS_JUSTIFICADAS_META_DISCLAIMER;
   private destroy$ = new Subject<void>();
   private monthChange$ = new Subject<void>(); // Cancels in-flight month-dependent requests
   private endRenderMeasurement: (() => void) | null = null;
@@ -208,6 +210,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   // Progress list modal state
   isProgressModalOpen = false;
   progressModalType: ProgressListType = 'atividades';
+  progressModalActivityFocusFilter: DashboardInsightsAlertFocus | null = null;
   
   // Carteira modal state
   isCarteiraModalOpen = false;
@@ -863,7 +866,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
               skipKpi: !!page.fromCachedDeliveries
             });
           }
-          // Fallback legado (equipa com `team_id` ou backend sem lista paginada)
+          // Fallback legado (equipe com `team_id` ou backend sem lista paginada)
           return this.actionLogService.getPlayerCnpjListWithCount(playerId, this.selectedMonth).pipe(
             switchMap(items => {
               const empids = items.map(i => i.cnpj).filter((c): c is string => !!c && String(c).trim().length > 0);
@@ -1726,6 +1729,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
    */
   onProgressModalClosed(): void {
     this.isProgressModalOpen = false;
+    this.progressModalActivityFocusFilter = null;
     this.announceToScreenReader('Modal de progresso fechado');
     
     if (this.focusedElementBeforeModal) {
@@ -1736,6 +1740,21 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     }
   }
   
+  onInsightsAlertClicked(focus: DashboardInsightsAlertFocus): void {
+    this.focusedElementBeforeModal = document.activeElement as HTMLElement;
+    this.progressModalType = 'atividades-pendentes';
+    this.progressModalActivityFocusFilter = focus;
+    this.isProgressModalOpen = true;
+
+    const labels: Record<DashboardInsightsAlertFocus, string> = {
+      'fine-risk': 'Abrindo entregas com risco de multa',
+      'overdue-pending': 'Abrindo entregas pendentes atrasadas',
+      'due-soon': 'Abrindo entregas próximas do vencimento'
+    };
+    this.announceToScreenReader(labels[focus]);
+    this.cdr.markForCheck();
+  }
+
   /**
    * Open carteira modal
    */
@@ -2116,7 +2135,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
 
     const { current, target } = this.monthlyPointsProgressData;
     if (target > 0) {
-      parts.push(Math.min(100, Math.round((current / target) * 100)));
+      parts.push(Math.min(100, Math.floor((current / target) * 100)));
     }
 
     const entregasKpi = (this.playerKPIs ?? []).find(k => k.id === 'entregas-prazo');
@@ -2127,19 +2146,19 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     if (parts.length === 0) {
       return 0;
     }
-    return Math.round(parts.reduce((sum, p) => sum + p, 0) / parts.length);
+    return Math.floor(parts.reduce((sum, p) => sum + p, 0) / parts.length);
   }
 
   /** % de conclusão da meta de um KPI (mesma lógica de `c4u-kpi-circular-progress`). */
   private getKpiGoalPercent(kpi: KPIData): number {
     const current = this.getKpiCurrentValue(kpi);
     if (kpi.unit === '%') {
-      return Math.min(Math.round(current), 100);
+      return Math.min(Math.floor(current), 100);
     }
     if (!kpi.target || kpi.target === 0) {
       return 0;
     }
-    return Math.min(100, Math.round((current / kpi.target) * 100));
+    return Math.min(100, Math.floor((current / kpi.target) * 100));
   }
   
   /**
@@ -2174,7 +2193,8 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   logout(): void {
     const snack = this.toastService.action('Deseja sair do sistema?', 'Sair', {
       duration: 8000,
-      panelClass: ['snackbar-warning']
+      panelClass: ['snackbar-warning'],
+      dismissOnOutsideClick: true,
     });
 
     snack

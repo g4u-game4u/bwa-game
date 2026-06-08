@@ -1,0 +1,115 @@
+@import '../../../../styles/variables.scss';
+
+.org-tree-node {
+  &--nested {
+    margin-left: $spacing-md;
+    border-left: 2px solid rgba(255, 255, 255, 0.08);
+    padding-left: $spacing-sm;
+  }
+
+  &__header {
+    display: flex;
+    align-items: center;
+    gap: $spacing-sm;
+    padding: $spacing-sm $spacing-md;
+    border-radius: $border-radius-sm;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    margin-bottom: $spacing-xs;
+    transition: background 0.2s ease, border-color 0.2s ease;
+
+    &--expandable {
+      cursor: pointer;
+
+      &:hover {
+        background: rgba(255, 255, 255, 0.06);
+        border-color: rgba(96, 165, 250, 0.25);
+      }
+    }
+  }
+
+  &__chevron {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border: none;
+    background: transparent;
+    color: $text-secondary;
+    padding: 0;
+    flex-shrink: 0;
+
+    &--spacer {
+      visibility: hidden;
+    }
+  }
+
+  &__info {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  &__type {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: $primary-electric-blue;
+  }
+
+  &__label {
+    font-weight: 600;
+    font-size: 0.95rem;
+    color: $text-primary;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  &__meta {
+    font-size: 0.75rem;
+    color: $text-secondary;
+  }
+
+  &__metrics {
+    display: flex;
+    flex-wrap: wrap;
+    gap: $spacing-md;
+    justify-content: flex-end;
+  }
+
+  &__metric {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    min-width: 72px;
+  }
+
+  &__metric-value {
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: $text-primary;
+    font-variant-numeric: tabular-nums;
+
+    &--positive {
+      color: $success-green;
+    }
+
+    &--negative {
+      color: $error-red;
+    }
+  }
+
+  &__metric-label {
+    font-size: 0.7rem;
+    color: $text-secondary;
+    text-align: right;
+  }
+
+  &__children {
+    margin-top: $spacing-xs;
+  }
+}

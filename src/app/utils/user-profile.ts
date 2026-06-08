@@ -1,4 +1,4 @@
-/**
+﻿/**
  * User Profile Types
  * 
  * Defines user profile types and their access levels:
@@ -176,7 +176,7 @@ export function getUserOwnTeamId(
     profile === UserProfile.DIRETOR ||
     profile === UserProfile.LIDER_CELULA
   ) {
-    return null; // Jogador / líder de célula: escopo via equipas da sessão; Diretor vê tudo
+    return null; // Jogador / líder de célula: escopo via equipes da sessão; Diretor vê tudo
   }
 
   const codes = teamCodes || DEFAULT_TEAM_CODES;

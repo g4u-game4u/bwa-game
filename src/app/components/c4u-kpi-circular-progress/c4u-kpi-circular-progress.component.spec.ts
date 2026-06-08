@@ -46,10 +46,10 @@ describe('C4uKpiCircularProgressComponent', () => {
       expect(component.percentage).toBe(200);
     });
 
-    it('should round percentage to nearest integer', () => {
-      component.current = 33;
-      component.target = 100;
-      expect(component.percentage).toBe(33);
+    it('should floor percentage to nearest integer below', () => {
+      component.current = 2;
+      component.target = 3;
+      expect(component.percentage).toBe(66);
     });
   });
 

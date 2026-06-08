@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetectorRef, ChangeDetectionStrategy } from '@angular/core';
+﻿import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetectorRef, ChangeDetectionStrategy } from '@angular/core';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { ActionLogService, ClienteActionItem } from '@services/action-log.service';
@@ -10,8 +10,11 @@ import { CnpjLookupService } from '@services/cnpj-lookup.service';
 import { firstValueFrom } from 'rxjs';
 import {
   Game4uFinishedPrazoStatus,
-  resolveGame4uFinishedPrazoStatus
+  resolveGame4uFinishedPrazoStatus,
+  computeCompanyDeliveryInsightsFromTasks,
+  CompanyDeliveryInsightsSnapshot
 } from '@services/game4u-game-mapper';
+import { ENTREGAS_JUSTIFICADAS_META_DISCLAIMER } from '@services/help-texts.service';
 
 @Component({
   selector: 'modal-company-carteira-detail',
@@ -24,7 +27,7 @@ export class ModalCompanyCarteiraDetailComponent implements OnInit, OnDestroy {
   @Input() month?: Date;
   /** Quando definido, restringe o aggregate ao userId (carteira individual / colaborador). */
   @Input() actionLogUserId: string | null = null;
-  /** Vista equipa sem colaborador: restringe aos jogadores do time (mesmo critério da carteira agregada). */
+  /** Vista equipe sem colaborador: restringe aos jogadores do time (mesmo critério da carteira agregada). */
   @Input() actionLogTeamId: string | null = null;
   @Output() closed = new EventEmitter<void>();
 
@@ -39,6 +42,7 @@ export class ModalCompanyCarteiraDetailComponent implements OnInit, OnDestroy {
   tasksOffset = 0;
   private allParticipationTasks: ClienteActionItem[] = [];
   readonly tasksPageSizeFinishedReports = 25;
+  readonly justifiedDeliveriesDisclaimer = ENTREGAS_JUSTIFICADAS_META_DISCLAIMER;
   cnpjNameMap = new Map<string, string>(); // Map of original CNPJ → clean empresa name
   companyStatus = ''; // Company status from empid_cnpj__c (e.g. "Ativa")
 
@@ -152,7 +156,7 @@ export class ModalCompanyCarteiraDetailComponent implements OnInit, OnDestroy {
     const tid = !uid && this.actionLogTeamId?.trim() ? this.actionLogTeamId.trim() : undefined;
     const oneScope = (uid && !tid) || (!uid && tid);
 
-    // Colaborador OU equipa agregada + Game4U + relatório finished: resposta paginada (`items` + `total`).
+    // Colaborador OU equipe agregada + Game4U + relatório finished: resposta paginada (`items` + `total`).
     if (oneScope && isGame4uDataEnabled() && this.company.loadTasksViaGameReports) {
       this.fetchParticipationModalTasksPage(true);
       return;
@@ -191,7 +195,7 @@ export class ModalCompanyCarteiraDetailComponent implements OnInit, OnDestroy {
       return;
     }
 
-    // Equipa (sem colaborador) + Game4U: mesmas user-actions finalizadas com `team_id` (não Funifier action_log).
+    // Equipe (sem colaborador) + Game4U: mesmas user-actions finalizadas com `team_id` (não Funifier action_log).
     if (!uid && tid && isGame4uDataEnabled()) {
       this.actionLogService
         .getGame4uUserActionsForParticipationModal(
@@ -418,7 +422,33 @@ export class ModalCompanyCarteiraDetailComponent implements OnInit, OnDestroy {
   }
 
   getFinishedPrazoStatus(task: ClienteActionItem): Game4uFinishedPrazoStatus {
-    return resolveGame4uFinishedPrazoStatus(task.dt_prazo, task.created);
+    const finishedMs = task.finished_at ?? task.created;
+    return resolveGame4uFinishedPrazoStatus(task.dt_prazo, finishedMs);
+  }
+
+  getTaskFinishedTimestamp(task: ClienteActionItem): number {
+    return task.finished_at ?? task.created;
+  }
+
+  /** Todas as tarefas carregadas (inclui páginas além da visível). */
+  get tasksForInsights(): ClienteActionItem[] {
+    return this.allParticipationTasks.length > 0 ? this.allParticipationTasks : this.tasks;
+  }
+
+  get companyInsights(): CompanyDeliveryInsightsSnapshot | null {
+    const items = this.tasksForInsights;
+    if (items.length === 0) {
+      return null;
+    }
+    return computeCompanyDeliveryInsightsFromTasks(items);
+  }
+
+  hasRiscoMulta(task: ClienteActionItem): boolean {
+    return task.risco_multa === true;
+  }
+
+  hasAtrasoJustificado(task: ClienteActionItem): boolean {
+    return task.atraso_justificado === true;
   }
 
   getStatusLabel(status?: string): string {

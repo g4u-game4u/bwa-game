@@ -7,6 +7,10 @@ interface HelpTexts {
   [key: string]: string;
 }
 
+/** Aviso exibido quando há entregas justificadas (meta de prazo e insights). */
+export const ENTREGAS_JUSTIFICADAS_META_DISCLAIMER =
+  'Entregas justificadas não são contabilizadas para a meta de entregas no prazo.';
+
 @Injectable({
   providedIn: 'root'
 })
@@ -15,7 +19,7 @@ export class HelpTextsService {
   private defaultTexts: HelpTexts = {
     'clientes-na-carteira': 'Número total de clientes na sua carteira. Este valor representa a quantidade de clientes únicos que você atende. O atingimento desta meta aplica bônus na conversão de pontos desbloqueados em moedas.',
     'empresas-na-carteira': 'Número total de clientes na sua carteira. Este valor representa a quantidade de clientes únicos que você atende. O atingimento desta meta aplica bônus na conversão de pontos desbloqueados em moedas.', // Deprecated: use clientes-na-carteira
-    'entregas-no-prazo': 'Este percentual inclui entregas no prazo feitas por você e por outras pessoas que atenderam cada cliente. Valores acima de 90% indicam bom resultado. O atingimento desta meta aplica bônus ou penalidades na conversão de pontos desbloqueados em moedas.',
+    'entregas-no-prazo': 'Este percentual inclui entregas no prazo feitas por você e por outras pessoas que atenderam cada cliente. Valores acima de 90% indicam bom resultado. O atingimento desta meta aplica bônus ou penalidades na conversão de pontos desbloqueados em moedas. ' + ENTREGAS_JUSTIFICADAS_META_DISCLAIMER,
     'bloqueados': 'Pontos que ainda não foram desbloqueados e não podem ser utilizados. Eles serão liberados conforme você atinge determinadas metas.',
     'pontos': 'Pontos que foram desbloqueados indicam valor entregue aos clientes. Estes pontos são concernentes a entregas 100% finalizadas ou justificadas.',
     'desbloqueados': 'Pontos que foram desbloqueados e estão disponíveis para uso. Estes pontos são concernentes a processos 100% finalizados. Você pode utilizá-los para trocar por recompensas. A conversão destes pontos em moedas é afetada pelo desempenho nos KPIs, podendo receber bônus ou penalidades.',

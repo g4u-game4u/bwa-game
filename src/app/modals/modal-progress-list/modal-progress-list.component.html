@@ -41,7 +41,7 @@
           
           <div *ngIf="activityItems.length === 0" class="empty-state">
             <i class="ri-inbox-line empty-icon"></i>
-            <span>Nenhuma entrega encontrada</span>
+            <span>{{ activityListEmptyMessage }}</span>
           </div>
           
           <ng-container *ngIf="activityItems.length > 0">
@@ -67,7 +67,7 @@
 
             <div *ngIf="isGroupedTasksModal && displayedActivityItems.length === 0" class="empty-state empty-search">
               <i class="ri-search-line empty-icon"></i>
-              <span>Nenhuma entrega corresponde à busca</span>
+              <span>{{ activityListEmptyMessage }}</span>
             </div>
 
             <!-- Tarefas finalizadas: agrupadas por nome da tarefa + acordeão por cliente -->
@@ -146,9 +146,9 @@
                             *ngIf="!isPendingActivitiesModal && hasAtrasoJustificado(item)"
                             class="task-atraso-justificado-badge"
                             role="status"
-                            aria-label="Atraso justificado">
+                            aria-label="Entrega justificada">
                             <i class="ri-shield-check-line" aria-hidden="true"></i>
-                            <span>Atraso justificado</span>
+                            <span>Entrega justificada</span>
                           </span>
                         </div>
                       </div>

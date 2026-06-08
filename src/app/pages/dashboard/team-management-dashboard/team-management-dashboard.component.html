@@ -303,16 +303,25 @@
           id="goals-panel"
           [attr.aria-labelledby]="'goals-tab'"
           aria-live="polite">
-          <div *ngIf="!isLoadingGoals && !hasGoalsError">
+          <div *ngIf="!hasGoalsError">
             <!-- KPI Section -->
-            <section class="dashboard-section" aria-labelledby="kpi-section-title">
+            <section
+              class="dashboard-section"
+              [class.dashboard-section--loading]="isLoadingKPIs || isLoadingMonthlyPointsProgress"
+              aria-labelledby="kpi-section-title">
               <h3 id="kpi-section-title" class="section-title">Metas da Equipe</h3>
+
+              <c4u-dashboard-goals-skeleton
+                *ngIf="isLoadingKPIs || isLoadingMonthlyPointsProgress"
+                type="kpi"
+                [kpiCount]="kpiLoadingSlots.length + 1">
+              </c4u-dashboard-goals-skeleton>
               
               <div
+                *ngIf="!(isLoadingKPIs || isLoadingMonthlyPointsProgress)"
                 class="kpi-grid"
                 role="group"
-                aria-labelledby="kpi-section-title"
-                [attr.aria-busy]="isLoadingKPIs">
+                aria-labelledby="kpi-section-title">
                 <c4u-monthly-points-goal-progress
                   [label]="monthlyPointsProgressLabel"
                   [helpDescription]="teamMonthlyPointsHelpText"
@@ -338,50 +347,42 @@
                     </c4u-kpi-circular-progress>
                   </ng-container>
                 -->
-                <ng-container *ngIf="!isLoadingKPIs">
-                  <ng-container *ngFor="let kpi of teamKPIs; let i = index; trackBy: trackByKpiId">
-                    <c4u-kpi-circular-progress
-                      *ngIf="kpi.id !== 'numero-empresas'"
-                      [label]="kpi.label"
-                      [current]="kpi.id === 'entregas-prazo' ? getKpiCurrentValue(kpi) : roundValue(getKpiCurrentValue(kpi))"
-                      [target]="roundValue(kpi.target)"
-                      [superTarget]="kpi.superTarget ? roundValue(kpi.superTarget) : undefined"
-                      [color]="kpi.color"
-                      [unit]="kpi.unit"
-                      [colorIndex]="i"
-                      [isPending]="isEntregasPrazoCircularPending(kpi)"
-                      [isMissing]="getKpiCircularIsMissing(kpi)">
-                    </c4u-kpi-circular-progress>
-                  </ng-container>
-                </ng-container>
-
-                <ng-container *ngIf="isLoadingKPIs">
+                <ng-container *ngFor="let kpi of teamKPIs; let i = index; trackBy: trackByKpiId">
                   <c4u-kpi-circular-progress
-                    *ngFor="let slot of kpiLoadingSlots; let i = index"
-                    [label]="'Carregando metas'"
-                    [current]="0"
-                    [target]="1"
-                    [color]="'gray'"
+                    *ngIf="kpi.id !== 'numero-empresas'"
+                    [label]="kpi.label"
+                    [current]="kpi.id === 'entregas-prazo' ? getKpiCurrentValue(kpi) : roundValue(getKpiCurrentValue(kpi))"
+                    [target]="roundValue(kpi.target)"
+                    [superTarget]="kpi.superTarget ? roundValue(kpi.superTarget) : undefined"
+                    [color]="kpi.color"
+                    [unit]="kpi.unit"
                     [colorIndex]="i"
-                    [isPending]="true">
+                    [isPending]="isEntregasPrazoCircularPending(kpi)"
+                    [isMissing]="getKpiCircularIsMissing(kpi)">
                   </c4u-kpi-circular-progress>
                 </ng-container>
               </div>
             </section>
             
             <!-- Progress Section (Activities and Macros) -->
-            <section class="dashboard-section" aria-labelledby="progress-section-title">
+            <section
+              class="dashboard-section"
+              [class.dashboard-section--loading]="isLoadingMonthlyPointsProgress"
+              aria-labelledby="progress-section-title">
               <h3 id="progress-section-title" class="section-title">Progresso da Equipe</h3>
               
+              <c4u-dashboard-goals-skeleton
+                *ngIf="isLoadingMonthlyPointsProgress"
+                type="progress">
+              </c4u-dashboard-goals-skeleton>
+
               <c4u-activity-progress
-                *ngIf="teamActivityMetrics && teamProcessMetrics"
+                *ngIf="!isLoadingMonthlyPointsProgress && teamActivityMetrics && teamProcessMetrics"
                 [activities]="teamActivityMetrics"
                 [processos]="teamProcessMetrics"
                 [monthlyPointsBreakdown]="monthlyPointsBreakdown"
                 (cardClicked)="onProgressCardClicked($event)">
               </c4u-activity-progress>
-              
-              <c4u-shimmer *ngIf="isLoadingGoals"></c4u-shimmer>
             </section>
             <section
               class="dashboard-section executive-insights-section"
@@ -410,7 +411,8 @@
                     [insights]="null"
                     [loading]="true"
                     variant="team"
-                    [scopeLabel]="executiveActionInsightsScopeLabel">
+                    [scopeLabel]="executiveActionInsightsScopeLabel"
+                    [audience]="executiveInsightsAudience">
                   </c4u-dashboard-insights>
 
                   <div class="executive-kpi-row">
@@ -457,7 +459,9 @@
                     [insights]="executiveDashboardInsights"
                     [loading]="false"
                     variant="team"
-                    [scopeLabel]="executiveActionInsightsScopeLabel">
+                    [scopeLabel]="executiveActionInsightsScopeLabel"
+                    [audience]="executiveInsightsAudience"
+                    (alertClicked)="onExecutiveInsightsAlertClicked($event)">
                   </c4u-dashboard-insights>
 
                   <!-- KPI cards (row) -->
@@ -493,10 +497,11 @@
                           </span>
                           <span class="executive-kpi-label">Entregas no prazo</span>
                           <span
-                            *ngIf="executiveInsightsOnTimeTasks > 0"
+                            *ngIf="executiveInsightsJudgedPrazoTasks > 0"
                             class="executive-kpi-hint">
                             {{ executiveInsightsOnTimeTasks | number:'1.0-0':'pt-BR' }} de
-                            {{ executiveInsightsTotalTasks | number:'1.0-0':'pt-BR' }}
+                            {{ executiveInsightsJudgedPrazoTasks | number:'1.0-0':'pt-BR' }}
+                            {{ executiveInsightsJudgedPrazoTasks === 1 ? 'tarefa' : 'tarefas' }}
                           </span>
                         </ng-container>
                         <ng-template #noOnTime>
@@ -511,51 +516,22 @@
                         <i class="ri-team-line"></i>
                       </div>
                       <div class="executive-kpi-content">
-                        <span class="executive-kpi-value">
-                          {{ executiveInsightsActivePlayers | number:'1.0-0':'pt-BR' }}
-                        </span>
-                        <span class="executive-kpi-label">Pessoas ativas no mês</span>
-                        <span
-                          *ngIf="executiveInsightsAvgClientsPerActivePlayer > 0"
-                          class="executive-kpi-hint">
-                          ~{{ executiveInsightsAvgClientsPerActivePlayer | number:'1.0-1':'pt-BR' }} clientes / pessoa
-                        </span>
-                      </div>
-                    </div>
-
-                    <div class="executive-kpi" role="listitem">
-                      <div class="executive-kpi-icon executive-kpi-icon--goal" aria-hidden="true">
-                        <i class="ri-flag-2-line"></i>
-                      </div>
-                      <div class="executive-kpi-content">
-                        <ng-container *ngIf="executiveInsightsMonthlyGoalTarget; else noGoal">
+                        <ng-container *ngIf="executiveInsightsAvgClientsPerActivePlayer > 0; else noClientsAvg">
                           <span class="executive-kpi-value">
-                            {{ executiveInsightsGoalProgressPct | number:'1.0-1':'pt-BR' }}%
+                            {{ executiveInsightsAvgClientsPerActivePlayer | number:'1.0-1':'pt-BR' }}
                           </span>
-                          <span class="executive-kpi-label">Da meta do mês</span>
-                          <span class="executive-kpi-hint">
-                            {{ executiveInsightsMonthlyPointsDone | number:'1.0-0':'pt-BR' }}
-                            / {{ executiveInsightsMonthlyGoalTarget | number:'1.0-0':'pt-BR' }} pts
-                          </span>
+                          <span class="executive-kpi-label">Clientes atendidos por pessoa</span>
                         </ng-container>
-                        <ng-template #noGoal>
-                          <span class="executive-kpi-value executive-kpi-value--muted">—</span>
-                          <span class="executive-kpi-label">Da meta do mês</span>
-                          <span class="executive-kpi-hint">Meta não definida</span>
+                        <ng-template #noClientsAvg>
+                          <span class="executive-kpi-value executive-kpi-value--muted">n/a</span>
+                          <span class="executive-kpi-label">Clientes atendidos por pessoa</span>
                         </ng-template>
-                      </div>
-                    </div>
-
-                    <div *ngIf="executiveInsightsPendingTasks > 0" class="executive-kpi" role="listitem">
-                      <div class="executive-kpi-icon executive-kpi-icon--pending" aria-hidden="true">
-                        <i class="ri-hourglass-line"></i>
-                      </div>
-                      <div class="executive-kpi-content">
-                        <span class="executive-kpi-value">
-                          {{ executiveInsightsPendingTasks | number:'1.0-0':'pt-BR' }}
+                        <span
+                          *ngIf="executiveInsightsActivePlayers > 0"
+                          class="executive-kpi-hint">
+                          {{ executiveInsightsActivePlayers | number:'1.0-0':'pt-BR' }}
+                          {{ executiveInsightsActivePlayers === 1 ? 'pessoa ativa' : 'pessoas ativas' }} no mês
                         </span>
-                        <span class="executive-kpi-label">Entregas pendentes</span>
-                        <span class="executive-kpi-hint">no mês selecionado</span>
                       </div>
                     </div>
                   </div>
@@ -627,9 +603,13 @@
                         <div class="executive-block-header">
                           <div class="executive-block-title">
                             <i class="ri-trophy-line" aria-hidden="true"></i>
-                            <h4 id="executive-players-title">Destaque do mês</h4>
+                            <h4 id="executive-players-title">
+                              {{ executiveInsightsRankingHighlightTitle }}
+                            </h4>
                           </div>
-                          <span class="executive-block-meta">Mais entregas no prazo</span>
+                          <span class="executive-block-meta">
+                            {{ executiveInsightsRankingHighlightMeta }}
+                          </span>
                         </div>
 
                         <ul class="executive-player-list">
@@ -641,12 +621,16 @@
                               <i *ngIf="i === 0" class="ri-medal-line"></i>
                               <span *ngIf="i !== 0">{{ i + 1 }}</span>
                             </div>
-                            <div class="executive-player-avatar" [attr.aria-label]="player.name">
-                              {{ player.initials }}
+                            <div
+                              class="executive-player-avatar"
+                              [class.executive-player-avatar--team]="executiveInsightsRankingSegment === 'team'"
+                              [attr.aria-label]="player.name">
+                              <i *ngIf="executiveInsightsRankingSegment === 'team'" class="ri-team-line" aria-hidden="true"></i>
+                              <span *ngIf="executiveInsightsRankingSegment !== 'team'">{{ player.initials }}</span>
                             </div>
                             <div class="executive-player-info">
                               <div class="executive-player-name-row">
-                                <span class="executive-player-name" [title]="player.email">
+                                <span class="executive-player-name" [title]="player.name">
                                   {{ player.name }}
                                 </span>
                                 <span class="executive-player-tasks executive-player-tasks--highlight">
@@ -665,6 +649,19 @@
                                     {{ player.onTimeDeliveryPct | number:'1.0-1':'pt-BR' }}% no prazo
                                   </span>
                                 </ng-container>
+                                <ng-container *ngIf="player.justifiedDeliveryPct != null">
+                                  <span aria-hidden="true">·</span>
+                                  <span class="badge-justified">
+                                    {{ player.justifiedDeliveryPct | number:'1.0-1':'pt-BR' }}% justificadas
+                                  </span>
+                                </ng-container>
+                                <ng-container *ngIf="executiveInsightsRankingIsGrouped && player.clientsCount > 0">
+                                  <span aria-hidden="true">·</span>
+                                  <span>
+                                    {{ player.clientsCount | number:'1.0-0':'pt-BR' }}
+                                    {{ player.clientsCount === 1 ? 'cliente' : 'clientes' }}
+                                  </span>
+                                </ng-container>
                               </div>
                             </div>
                           </li>
@@ -678,9 +675,13 @@
                         <div class="executive-block-header">
                           <div class="executive-block-title">
                             <i class="ri-error-warning-line" aria-hidden="true"></i>
-                            <h4 id="executive-attention-players-title">Jogadores que precisam de atenção</h4>
+                            <h4 id="executive-attention-players-title">
+                              {{ executiveInsightsRankingAttentionTitle }}
+                            </h4>
                           </div>
-                          <span class="executive-block-meta">Menor % de entregas no prazo</span>
+                          <span class="executive-block-meta">
+                            {{ executiveInsightsRankingAttentionMeta }}
+                          </span>
                         </div>
 
                         <ul class="executive-player-list">
@@ -690,12 +691,16 @@
                             <div class="executive-player-rank executive-player-rank--attention" aria-hidden="true">
                               {{ i + 1 }}
                             </div>
-                            <div class="executive-player-avatar executive-player-avatar--attention" [attr.aria-label]="player.name">
-                              {{ player.initials }}
+                            <div
+                              class="executive-player-avatar executive-player-avatar--attention"
+                              [class.executive-player-avatar--team]="executiveInsightsRankingSegment === 'team'"
+                              [attr.aria-label]="player.name">
+                              <i *ngIf="executiveInsightsRankingSegment === 'team'" class="ri-team-line" aria-hidden="true"></i>
+                              <span *ngIf="executiveInsightsRankingSegment !== 'team'">{{ player.initials }}</span>
                             </div>
                             <div class="executive-player-info">
                               <div class="executive-player-name-row">
-                                <span class="executive-player-name" [title]="player.email">
+                                <span class="executive-player-name" [title]="player.name">
                                   {{ player.name }}
                                 </span>
                                 <span class="executive-player-tasks executive-player-tasks--warn">
@@ -712,6 +717,19 @@
                                   <span aria-hidden="true">·</span>
                                   <span [ngClass]="getExecutiveOnTimeBadgeClass(player.onTimeDeliveryPct)">
                                     {{ player.onTimeDeliveryPct | number:'1.0-1':'pt-BR' }}% no prazo
+                                  </span>
+                                </ng-container>
+                                <ng-container *ngIf="player.justifiedDeliveryPct != null">
+                                  <span aria-hidden="true">·</span>
+                                  <span class="badge-justified">
+                                    {{ player.justifiedDeliveryPct | number:'1.0-1':'pt-BR' }}% justificadas
+                                  </span>
+                                </ng-container>
+                                <ng-container *ngIf="executiveInsightsRankingIsGrouped && player.clientsCount > 0">
+                                  <span aria-hidden="true">·</span>
+                                  <span>
+                                    {{ player.clientsCount | number:'1.0-0':'pt-BR' }}
+                                    {{ player.clientsCount === 1 ? 'cliente' : 'clientes' }}
                                   </span>
                                 </ng-container>
                               </div>
@@ -742,21 +760,30 @@
               [attr.aria-busy]="isLoadingCarteira ? 'true' : null"
               aria-labelledby="company-section-title">
               <div class="section-header">
-                <h3 id="company-section-title" class="section-title">
-                  Clientes atendidos este mês
-                  <span *ngIf="!isLoadingClientesAtendidosCount" class="section-title-count" aria-hidden="true">
-                    ({{ clientesAtendidosThisMonthCount ?? teamCarteiraClientes.length }})
-                  </span>
-                  <c4u-info-button 
-                    [infoKey]="''"
-                    [customText]="'São os clientes para os quais a equipe ou o colaborador selecionado realizou alguma entrega neste mês na plataforma Acessórias. A lista segue o mês (ou período) selecionado no filtro do painel e as atividades contabilizadas pela competência das entregas no Game4U'"
-                    position="bottom">
-                  </c4u-info-button>
-                </h3>
+                <div class="section-header-main">
+                  <h3 id="company-section-title" class="section-title">
+                    Clientes atendidos este mês
+                    <span *ngIf="!isLoadingClientesAtendidosCount" class="section-title-count" aria-hidden="true">
+                      ({{ clientesAtendidosThisMonthCount ?? teamCarteiraClientes.length }})
+                    </span>
+                    <c4u-info-button 
+                      [infoKey]="''"
+                      [customText]="'São os clientes para os quais a equipe ou o colaborador selecionado realizou alguma entrega neste mês na plataforma Acessórias. A lista segue o mês (ou período) selecionado no filtro do painel e as atividades contabilizadas pela competência das entregas no Game4U'"
+                      position="bottom">
+                    </c4u-info-button>
+                  </h3>
+                  <p class="carteira-section-disclaimer" role="note">
+                    <i class="ri-information-line" aria-hidden="true"></i>
+                    <span>{{ justifiedDeliveriesDisclaimer }}</span>
+                  </p>
+                </div>
               </div>
               
               <c4u-card class="carteira-card">
-                <c4u-shimmer *ngIf="isLoadingCarteira"></c4u-shimmer>
+                <c4u-dashboard-goals-skeleton
+                  *ngIf="isLoadingCarteira"
+                  type="clientes">
+                </c4u-dashboard-goals-skeleton>
 
                 <div *ngIf="!isLoadingCarteira && teamCarteiraClientes.length > 0" class="carteira-list">
                   <div *ngFor="let cliente of teamCarteiraClientes" 
@@ -824,9 +851,7 @@
 
           </div>
 
-          <c4u-shimmer *ngIf="isLoadingGoals"></c4u-shimmer>
-
-          <div *ngIf="hasGoalsError && !isLoadingGoals" role="alert" aria-live="assertive">
+          <div *ngIf="hasGoalsError" role="alert" aria-live="assertive">
             <c4u-error-message
               [message]="goalsErrorMessage"
               [showRetry]="true"
@@ -1168,6 +1193,7 @@
     [listType]="progressModalType"
     [month]="selectedMonth"
     [useDailyPendingStatsApi]="useDailyPendingStatsApiForModal"
+    [activityFocusFilter]="progressModalActivityFocusFilter"
     (closed)="onProgressModalClosed()">
   </modal-progress-list>
   

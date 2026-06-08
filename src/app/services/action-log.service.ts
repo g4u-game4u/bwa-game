@@ -1,7 +1,9 @@
-import { Injectable } from '@angular/core';
+﻿import { Injectable } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
 import { Observable, of, forkJoin, throwError, EMPTY } from 'rxjs';
-import { map, catchError, shareReplay, switchMap, expand, reduce } from 'rxjs/operators';
+import { map, catchError, shareReplay, switchMap, expand, reduce, delay } from 'rxjs/operators';
+import { environment } from '../../environments/environment';
+import { buildMockOrganizationHierarchyReport } from '../testing/org-hierarchy-report.mock';
 import { BackendApiService } from './backend-api.service';
 import {
   ActivityListItem,
@@ -30,7 +32,9 @@ import type {
   SupervisionTeamDashboardCached,
   SupervisionDashboardCachedParams,
   ManagementDashboardOverviewResponse,
-  ManagerDashboardCached
+  ManagerDashboardCached,
+  OrganizationHierarchyReportResponse,
+  OrgHierarchyNodeType
 } from '@model/game4u-api.model';
 import { SessaoProvider } from '@providers/sessao/sessao.provider';
 import {
@@ -62,7 +66,11 @@ import {
   game4uActionMatchesParticipacaoModalRow,
   readDeliveriesCountFromFinishedSummary,
   mapGame4uFinishedDeliveryRowsToParticipacaoCnpjRows,
-  hasMoreFinishedDeliveriesCachedPage
+  hasMoreFinishedDeliveriesCachedPage,
+  parseGame4uRiscoMulta,
+  parseGame4uAtrasoJustificado,
+  readGame4uExtraStatusApi,
+  readGame4uUserActionDtPrazo
 } from './game4u-game-mapper';
 
 /** Linha de participação devolvida por {@link ActionLogService.getPlayerFinishedDeliveriesParticipacaoPage}. */
@@ -167,7 +175,7 @@ export interface GetProgressMetricsOptions {
   /** Repete-se como `team_id` em GET `/game/*` **user-scoped** (ignorado quando {@link game4uTeamAggregate} está definido). */
   teamId?: string | number | null;
   /**
-   * Painel equipa sem colaborador: com `team_id` BWA → `GET /game/reports/finished|open/summary`;
+   * Painel equipe sem colaborador: com `team_id` BWA → `GET /game/reports/finished|open/summary`;
    * sem BWA → só `GET /game/team-stats` (sem `team-actions`, sem `/game/stats`).
    */
   game4uTeamAggregate?: { team: string; bwaTeamId?: string | number | null };
@@ -238,6 +246,8 @@ export interface ClienteActionItem {
   title: string; // attributes.acao
   player: string; // userId (email do executor)
   created: number; // timestamp
+  /** Ms de `finished_at` (Game4U) — usado na comparação com `dt_prazo`. */
+  finished_at?: number;
   /** Prazo da tarefa (`YYYY-MM-DD`), ex.: relatórios Game4U. */
   dt_prazo?: string;
   status?: 'finalizado' | 'pendente' | 'dispensado'; // Status da tarefa
@@ -245,6 +255,10 @@ export interface ClienteActionItem {
   processTitle?: string;
   /** Pontos da user-action / relatório Game4U. */
   points?: number;
+  /** Indica se a entrega pode gerar multa (`risco_multa` em user-actions). */
+  risco_multa?: boolean;
+  /** Entrega justificada (`extra.status_api` com «justif»). */
+  atraso_justificado?: boolean;
 }
 
 /** Página de tarefas (modal participação com `/game/reports/.../actions-by-delivery`). */
@@ -541,7 +555,11 @@ export class ActionLogService {
     CacheEntry<ManagementDashboardOverviewResponse | null>
   >();
   private game4uManagementDashboardListCache = new Map<string, CacheEntry<ManagerDashboardCached[]>>();
-  /** Uma requisição `user-actions` por equipa/mês (insights operacionais + executivos). */
+  private game4uOrganizationHierarchyReportCache = new Map<
+    string,
+    CacheEntry<OrganizationHierarchyReportResponse | null>
+  >();
+  /** Uma requisição `user-actions` por equipe/mês (insights operacionais + executivos). */
   private game4uTeamUserActionsInsightsCache = new Map<string, CacheEntry<Game4uUserActionModel[]>>();
 
   constructor(
@@ -629,7 +647,7 @@ export class ActionLogService {
   }
 
   /**
-   * `GET /game/reports/supervision/dashboard/cached` — painel agregado por equipa (substitui finished/open/goal month summary com team_id).
+   * `GET /game/reports/supervision/dashboard/cached` — painel agregado por equipe (substitui finished/open/goal month summary com team_id).
    */
   fetchSupervisionTeamDashboardCached(
     bwaTeamScopeId: string,
@@ -750,6 +768,66 @@ export class ActionLogService {
         shareReplay({ bufferSize: 1, refCount: true, windowTime: this.GAME4U_CACHE_DURATION })
       );
     this.setCachedData(this.game4uManagementDashboardOverviewCache, cacheKey, request$);
+    return request$;
+  }
+
+  /**
+   * `GET /game/reports/organization/hierarchy-report` — relatório organizacional hierárquico.
+   */
+  fetchOrganizationHierarchyReport(options?: {
+    month?: Date;
+    simulationPotBrl?: number;
+    depth?: number;
+    nodeType?: OrgHierarchyNodeType;
+    nodeId?: string;
+  }): Observable<OrganizationHierarchyReportResponse | null> {
+    if (environment.useOrgHierarchyReportMock) {
+      return of(
+        buildMockOrganizationHierarchyReport({
+          month: options?.month,
+          simulationPotBrl: options?.simulationPotBrl
+        })
+      ).pipe(delay(500));
+    }
+
+    if (!(isGame4uDataEnabled() && this.game4u.isConfigured())) {
+      return of(null);
+    }
+    const refMonth = this.resolveDashboardCachedMonth(options?.month);
+    const monthParam = this.toDashboardCachedMonthParam(refMonth);
+    const sim = options?.simulationPotBrl;
+    const depth = options?.depth ?? 5;
+    const nodeType = (options?.nodeType ?? '').trim();
+    const nodeId = (options?.nodeId ?? '').trim();
+    const cacheKey = `g4u_org_hierarchy_${monthParam}_${sim ?? ''}_${depth}_${nodeType}_${nodeId}`;
+    const cached = this.getCachedData(
+      this.game4uOrganizationHierarchyReportCache,
+      cacheKey,
+      this.GAME4U_CACHE_DURATION
+    );
+    if (cached) {
+      return cached;
+    }
+
+    const request$ = this.game4u
+      .getGameReportsOrganizationHierarchyReport({
+        month: monthParam,
+        ...(sim != null && sim > 0 ? { simulation_pot_brl: sim } : {}),
+        depth,
+        ...(nodeType ? { node_type: options!.nodeType } : {}),
+        ...(nodeId ? { node_id: nodeId } : {})
+      })
+      .pipe(
+        catchError(err => {
+          if (err instanceof HttpErrorResponse && err.status === 404) {
+            return of(null);
+          }
+          console.error('Error fetching organization/hierarchy-report:', err);
+          return of(null);
+        }),
+        shareReplay({ bufferSize: 1, refCount: true, windowTime: this.GAME4U_CACHE_DURATION })
+      );
+    this.setCachedData(this.game4uOrganizationHierarchyReportCache, cacheKey, request$);
     return request$;
   }
 
@@ -944,7 +1022,7 @@ export class ActionLogService {
   }
 
   /**
-   * Âmbito equipa para `/game/actions` no modal «Clientes atendidos» (gestor sem colaborador selecionado).
+   * Âmbito equipe para `/game/actions` no modal «Clientes atendidos» (gestor sem colaborador selecionado).
    * Com `team_id`, o backend omite `user` na query; o campo `user` satisfaz o tipo e alinha ao JWT.
    */
   private game4uTeamQueryForModal(teamId: string, month?: Date): Game4uUserScopedQuery | null {
@@ -980,7 +1058,7 @@ export class ActionLogService {
   }
 
   /**
-   * Abertas: `PENDING`/`DOING` com intervalo `dt_prazo` do mês (1 pedido por equipa/email).
+   * Abertas: `PENDING`/`DOING` com intervalo `dt_prazo` do mês (1 pedido por equipe/email).
    */
   getTeamOpenUserActionsForInsightsMonth(
     teamId: string | number | null | undefined,
@@ -991,7 +1069,7 @@ export class ActionLogService {
   }
 
   /**
-   * Finalizadas: `DONE`/`DELIVERED` com intervalo `finished_at` do mês (1 pedido por equipa/email).
+   * Finalizadas: `DONE`/`DELIVERED` com intervalo `finished_at` do mês (1 pedido por equipe/email).
    */
   getTeamFinishedUserActionsForInsightsMonth(
     teamId: string | number | null | undefined,
@@ -1002,7 +1080,7 @@ export class ActionLogService {
   }
 
   /**
-   * Duas chamadas `GET /game/reports/user-actions` por equipa (ou email) e mês — abertas + finalizadas.
+   * Duas chamadas `GET /game/reports/user-actions` por equipe (ou email) e mês — abertas + finalizadas.
    * Cache partilhado entre insights operacionais e executivos.
    */
   /**
@@ -1114,8 +1192,8 @@ export class ActionLogService {
     const titleAlt = typeof raw['title'] === 'string' ? String(raw['title']).trim() : '';
     const titleRaw =
       (typeof a.action_title === 'string' && a.action_title.trim()) || titleAlt || '';
-    const timeRaw = a.finished_at ?? a.created_at ?? a.updated_at;
-    const created = Date.parse(String(timeRaw)) || 0;
+    const finishedMs = getGame4uUserActionFinishedOrFallbackMs(a);
+    const created = finishedMs ?? 0;
     const idRaw = String(a.id ?? '').trim();
     const id =
       idRaw ||
@@ -1127,19 +1205,23 @@ export class ActionLogService {
         : pts != null && String(pts).trim() !== ''
           ? Number(pts)
           : undefined;
-    const dp =
-      typeof a.dt_prazo === 'string' && a.dt_prazo.trim() ? a.dt_prazo.trim() : undefined;
+    const dp = readGame4uUserActionDtPrazo(a);
+    const riscoMulta = parseGame4uRiscoMulta(a.risco_multa);
+    const atrasoJustificado = parseGame4uAtrasoJustificado(readGame4uExtraStatusApi(a));
     return {
       id,
       title: titleRaw || 'Ação',
       player: String(a.user_email ?? ''),
       created,
+      ...(finishedMs != null ? { finished_at: finishedMs } : {}),
       ...(dp ? { dt_prazo: dp } : {}),
       processTitle: (typeof a.delivery_title === 'string' && a.delivery_title.trim()) || undefined,
       status:
         mapGame4uStatusToClienteTaskStatus(a.status) ??
         (a.finished_at != null && String(a.finished_at).trim() !== '' ? 'finalizado' : undefined),
-      ...(points != null && Number.isFinite(points) ? { points } : {})
+      ...(points != null && Number.isFinite(points) ? { points } : {}),
+      ...(riscoMulta ? { risco_multa: true } : {}),
+      ...(atrasoJustificado ? { atraso_justificado: true } : {})
     };
   }
 
@@ -1167,7 +1249,7 @@ export class ActionLogService {
   }
 
   /**
-   * Meta de pontos do mês agregada da equipa (`supervision/dashboard/cached`).
+   * Meta de pontos do mês agregada da equipe (`supervision/dashboard/cached`).
    */
   getMonthlyTeamGoalPointsTarget(bwaTeamScopeId: string, month: Date): Observable<number> {
     const tid = this.normalizeGame4uTeamId(bwaTeamScopeId);
@@ -1486,8 +1568,8 @@ export class ActionLogService {
   }
 
   /**
-   * Snapshot Game4U para sidebar do **painel de equipa** (vista agregada sem colaborador):
-   * `GET /game/reports/finished/summary` com `team_id` (= id BWA da equipa), sem `email`.
+   * Snapshot Game4U para sidebar do **painel de equipe** (vista agregada sem colaborador):
+   * `GET /game/reports/finished/summary` com `team_id` (= id BWA da equipe), sem `email`.
    */
   getMonthlyGame4uTeamDashboardData(
     bwaTeamScopeId: string,
@@ -1533,8 +1615,8 @@ export class ActionLogService {
   }
 
   /**
-   * Game4U (reports): `GET /game/reports/finished/summary` no mês selecionado, escopo equipa (`team_id`), sem `email`.
-   * Usado para o contador «Clientes atendidos este mês» (deliveries_count) no painel de equipa.
+   * Game4U (reports): `GET /game/reports/finished/summary` no mês selecionado, escopo equipe (`team_id`), sem `email`.
+   * Usado para o contador «Clientes atendidos este mês» (deliveries_count) no painel de equipe.
    */
   getTeamFinishedSummaryForMonth(
     bwaTeamScopeId: string,
@@ -1570,7 +1652,7 @@ export class ActionLogService {
   }
 
   /**
-   * Game4U (reports): daily stats de tarefas finalizadas por equipa (e opcionalmente por colaborador),
+   * Game4U (reports): daily stats de tarefas finalizadas por equipe (e opcionalmente por colaborador),
    * usado na aba “Análise de Produtividade”.
    */
   getReportTeamDailyFinishedStats(
@@ -1613,7 +1695,7 @@ export class ActionLogService {
 
   /**
    * Game4U (reports): daily stats de tarefas **pendentes** (`PENDING`+`DOING` por default)
-   * por equipa (e opcionalmente por colaborador), filtradas por `due_date` (com fallback para
+   * por equipe (e opcionalmente por colaborador), filtradas por `due_date` (com fallback para
    * `extra.dt_prazo`). Usado pelo modal de tarefas pendentes do team-management quando o
    * usuário é SUPERVISOR.
    *
@@ -1886,7 +1968,7 @@ export class ActionLogService {
     const teamExtras = tid ? { team_id: tid } : {};
     const title = row.delivery_title?.trim();
     if (row.loadTasksViaGameReports && title && month != null) {
-      /** Modal equipa passa `playerId` `'me'` + `team_id`; não enviar `email` (consolidado). Com utilizador real + `team_id`, mantém-se o e-mail. */
+      /** Modal equipe passa `playerId` `'me'` + `team_id`; não enviar `email` (consolidado). Com utilizador real + `team_id`, mantém-se o e-mail. */
       const pid = String(playerId ?? '').trim();
       const email =
         tid && pid === 'me' ? undefined : this.resolveGame4uUserEmail(playerId);
@@ -2295,7 +2377,7 @@ export class ActionLogService {
    * {@link GetProgressMetricsOptions.gamificationDashboardReportsOnly}: painel gamificação evita
    * `GET /game/stats`, `GET /game/actions` e **`GET /game/reports/user-actions`** neste método — só relatórios agregados.
    *
-   * Vista equipa (`game4uTeamAggregate` + `team_id` BWA): `supervision/dashboard/cached` no mês
+   * Vista equipe (`game4uTeamAggregate` + `team_id` BWA): `supervision/dashboard/cached` no mês
    * (substitui `finished/summary` + `open/summary`). Sem BWA: só `GET /game/team-stats`.
    */
   getProgressMetrics(
@@ -3382,7 +3464,7 @@ export class ActionLogService {
    * Carrega TODAS as páginas de `finished/deliveries/cached` (ou variante de gestão) devolvendo
    * as linhas RAW da API (com `user_email`, `tasks_total`, `tasks_on_time`, `on_time_pct`, etc.),
    * sem o mapeamento para `PlayerParticipacaoDeliveryRow`. Usado pelos «Insights Executivos»
-   * do painel de gestão da equipa para correlacionar processos × jogadores × prazos.
+   * do painel de gestão da equipe para correlacionar processos × jogadores × prazos.
    *
    * Escopo (precedência):
    *  - `isManagement: true` → `GET /game/reports/management/finished/deliveries/cached` (sem `team_id`/`email`)
@@ -3491,7 +3573,7 @@ export class ActionLogService {
 
   /**
    * Tarefas da empresa cruzadas com POST `action_log/aggregate?strict=true`.
-   * O identificador da linha da carteira pode ser `attributes.cnpj` ou `attributes.deal` (ex.: aggregate da equipa).
+   * O identificador da linha da carteira pode ser `attributes.cnpj` ou `attributes.deal` (ex.: aggregate da equipe).
    * Filtro de mês no cliente (filterByMonth), como nas outras leituras de action_log.
    */
   getActionsByCnpj(
@@ -3825,6 +3907,7 @@ export class ActionLogService {
     this.game4uSupervisionDashboardCachedCache.clear();
     this.game4uManagementDashboardOverviewCache.clear();
     this.game4uManagementDashboardListCache.clear();
+    this.game4uOrganizationHierarchyReportCache.clear();
     this.game4uTeamUserActionsInsightsCache.clear();
     this.teamMetricsCache.clear();
     this.teamCnpjCache.clear();

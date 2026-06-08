@@ -725,7 +725,8 @@ export class DashboardSupervisorComponent implements OnInit, OnDestroy {
   logout(): void {
     const snack = this.toastService.action('Deseja sair do sistema?', 'Sair', {
       duration: 8000,
-      panelClass: ['snackbar-warning']
+      panelClass: ['snackbar-warning'],
+      dismissOnOutsideClick: true,
     });
 
     snack

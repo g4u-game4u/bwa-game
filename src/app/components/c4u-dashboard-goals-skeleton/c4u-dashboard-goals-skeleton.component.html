@@ -1,0 +1,49 @@
+<div
+  class="dashboard-goals-skeleton"
+  [class.dashboard-goals-skeleton--kpi]="type === 'kpi'"
+  [class.dashboard-goals-skeleton--progress]="type === 'progress'"
+  [class.dashboard-goals-skeleton--clientes]="type === 'clientes'"
+  role="status"
+  [attr.aria-label]="ariaLabel">
+  <span class="dashboard-goals-skeleton__sr-only">{{ ariaLabel }}</span>
+
+  <div *ngIf="type === 'kpi'" class="kpi-skeleton-grid" aria-hidden="true">
+    <div
+      *ngFor="let slot of kpiSlots; trackBy: trackByIndex"
+      class="kpi-skeleton-card">
+      <div class="skeleton-bone kpi-skeleton-label"></div>
+      <div class="skeleton-bone kpi-skeleton-circle"></div>
+      <div class="skeleton-bone kpi-skeleton-value"></div>
+      <div class="skeleton-bone kpi-skeleton-target"></div>
+      <div class="skeleton-bone kpi-skeleton-status"></div>
+    </div>
+  </div>
+
+  <div *ngIf="type === 'progress'" class="progress-skeleton" aria-hidden="true">
+    <div class="skeleton-bone progress-skeleton-section-title"></div>
+    <div class="progress-skeleton-metrics">
+      <div
+        *ngFor="let slot of progressMetricSlots; trackBy: trackByIndex"
+        class="progress-skeleton-metric">
+        <div class="skeleton-bone progress-skeleton-icon"></div>
+        <div class="progress-skeleton-content">
+          <div class="skeleton-bone progress-skeleton-metric-label"></div>
+          <div class="skeleton-bone progress-skeleton-metric-value"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div *ngIf="type === 'clientes'" class="clientes-skeleton-list" aria-hidden="true">
+    <div
+      *ngFor="let slot of clientesSlots; trackBy: trackByIndex"
+      class="clientes-skeleton-item">
+      <div class="clientes-skeleton-info">
+        <div class="skeleton-bone clientes-skeleton-icon"></div>
+        <div class="skeleton-bone clientes-skeleton-name"></div>
+        <div class="skeleton-bone clientes-skeleton-badge"></div>
+      </div>
+      <div class="skeleton-bone clientes-skeleton-percent"></div>
+    </div>
+  </div>
+</div>

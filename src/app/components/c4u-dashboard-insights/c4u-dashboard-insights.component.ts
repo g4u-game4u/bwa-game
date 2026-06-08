@@ -1,5 +1,13 @@
-import { Component, Input, ChangeDetectionStrategy } from '@angular/core';
-import { DashboardInsightsSnapshot } from '@model/dashboard-insights.model';
+import { Component, Input, Output, EventEmitter, ChangeDetectionStrategy } from '@angular/core';
+import {
+  DashboardInsightPreset,
+  DashboardInsightsAlertFocus,
+  DashboardInsightsAudience,
+  DashboardInsightsSnapshot,
+  GAME4U_INSIGHTS_MASCOT_URL
+} from '@model/dashboard-insights.model';
+import { buildDashboardInsightPresets } from '@services/dashboard-insights.service';
+import { FeaturesService } from '@services/features.service';
 
 export type DashboardInsightsVariant = 'player' | 'team';
 
@@ -10,17 +18,35 @@ export type DashboardInsightsVariant = 'player' | 'team';
   changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class C4uDashboardInsightsComponent {
+  constructor(private readonly featuresService: FeaturesService) {}
   readonly skeletonAlerts = [0, 1, 2];
+  readonly skeletonPresetSlots = [0, 1];
   readonly skeletonRankedRows = [0, 1, 2];
-  readonly skeletonSummaryRows = [0, 1, 2, 3];
+  readonly skeletonSummaryRows = [0, 1, 2, 3, 4];
   readonly skeletonWeekdayBarHeights = [28, 44, 18, 52, 36, 22, 48];
 
   @Input() insights: DashboardInsightsSnapshot | null = null;
   @Input() loading = false;
   @Input() variant: DashboardInsightsVariant = 'player';
   @Input() scopeLabel = 'você';
+  /** Perfil de quem visualiza o painel (define tom das recomendações). */
+  @Input() audience: DashboardInsightsAudience = 'player';
   /** Sem cabeçalho de secção nem card exterior (ex.: dentro de insights executivos). */
   @Input() embedded = false;
+
+  /** Clique num card de alerta com itens (ex.: abrir entregas com risco de multa). */
+  @Output() alertClicked = new EventEmitter<DashboardInsightsAlertFocus>();
+
+  get insightPresets(): DashboardInsightPreset[] {
+    return buildDashboardInsightPresets(this.insights, {
+      audience: this.audience,
+      scopeLabel: this.variant === 'player' ? 'você' : this.scopeLabel
+    });
+  }
+
+  get mascotImageUrl(): string {
+    return this.featuresService.getMascotImageUrl()?.trim() || GAME4U_INSIGHTS_MASCOT_URL;
+  }
 
   get hasData(): boolean {
     return !!this.insights && (this.insights.pendingTasks > 0 || this.insights.finishedTasks > 0);
@@ -75,5 +101,35 @@ export class C4uDashboardInsightsComponent {
 
   trackByKey(_index: number, item: { key: string }): string {
     return item.key;
+  }
+
+  isAlertActionable(focus: DashboardInsightsAlertFocus): boolean {
+    if (!this.insights) {
+      return false;
+    }
+    switch (focus) {
+      case 'fine-risk':
+        return this.insights.fineRiskTasks > 0;
+      case 'overdue-pending':
+        return this.insights.overduePendingTasks > 0;
+      case 'due-soon':
+        return this.insights.dueSoonTasks > 0;
+      default:
+        return false;
+    }
+  }
+
+  onAlertClick(focus: DashboardInsightsAlertFocus): void {
+    if (!this.isAlertActionable(focus)) {
+      return;
+    }
+    this.alertClicked.emit(focus);
+  }
+
+  onAlertKeydown(event: KeyboardEvent, focus: DashboardInsightsAlertFocus): void {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      this.onAlertClick(focus);
+    }
   }
 }

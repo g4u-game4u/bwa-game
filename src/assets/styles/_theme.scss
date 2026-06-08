@@ -124,6 +124,46 @@ h1 {
   }
 }
 
+.mdc-snackbar__surface.snackbar-surface-with-progress,
+.mat-simple-snackbar.snackbar-surface-with-progress {
+  overflow: hidden !important;
+
+  &::before {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: rgba(0, 0, 0, 0.18);
+    z-index: 1;
+  }
+
+  &::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: rgba(255, 255, 255, 0.9);
+    transform-origin: left center;
+    transform: scaleX(1);
+    animation: snackbar-progress-countdown var(--snackbar-duration, 8s) linear forwards;
+    z-index: 2;
+  }
+}
+
+@keyframes snackbar-progress-countdown {
+  from {
+    transform: scaleX(1);
+  }
+
+  to {
+    transform: scaleX(0);
+  }
+}
+
 small {
   font-size: 14px;
   line-height: 16.8px;

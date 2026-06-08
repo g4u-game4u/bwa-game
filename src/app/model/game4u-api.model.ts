@@ -1,4 +1,4 @@
-/** Contratos alinhados ao OpenAPI Game4U (g4u-api-bwa). */
+﻿/** Contratos alinhados ao OpenAPI Game4U (g4u-api-bwa). */
 
 import { environment } from '../../environments/environment';
 
@@ -29,7 +29,7 @@ export interface Game4uUserScopedQuery extends Game4uDateRangeQuery {
 }
 
 export interface Game4uTeamScopedQuery extends Game4uDateRangeQuery {
-  /** Id numérico da equipa no jogo (query `team`). Não usar nome legível. */
+  /** Id numérico da equipe no jogo (query `team`). Não usar nome legível. */
   team: string;
   /** Evitar em `team-actions` se o backend rejeitar (`property user should not exist`). */
   user?: string;
@@ -86,6 +86,16 @@ export interface Game4uUserActionStatsResponse {
   cancelled_actions_count?: number;
 }
 
+/** Hierarquia organizacional em `GET /game/reports/user-actions` (campo `hierarchy`). */
+export interface Game4uUserActionHierarchy {
+  diretor_email?: string | null;
+  diretor_name?: string | null;
+  gerente_email?: string | null;
+  gerente_name?: string | null;
+  team_id?: number | string | null;
+  team_name?: string | null;
+}
+
 /** Campos podem vir como string ou objeto na API real — tratamos nos mappers. */
 export interface Game4uUserActionModel {
   id: string;
@@ -109,6 +119,8 @@ export interface Game4uUserActionModel {
   dt_prazo?: string;
   /** Indica se a entrega pode gerar multa (relatórios user-actions). */
   risco_multa?: boolean;
+  /** Gestor, diretor e equipe associados à tarefa (painel agregado). */
+  hierarchy?: Game4uUserActionHierarchy | null;
   [key: string]: unknown;
 }
 
@@ -142,7 +154,7 @@ export interface Game4uReportsOpenSummary {
 
 /** Query para `GET /game/reports/open/summary`: intervalo em `dt_prazo` (ISO 8601), não `finished_at_*`. */
 export interface Game4uReportsOpenSummaryQuery {
-  /** Utilizador; omitir com `team_id` para consolidado da equipa (gestor). */
+  /** Utilizador; omitir com `team_id` para consolidado da equipe (gestor). */
   email?: string;
   dt_prazo_start: string;
   dt_prazo_end: string;
@@ -159,6 +171,8 @@ export interface Game4uReportsFinishedDeliveryRow {
   delivery_id?: string;
   emp_id?: string | number;
   user_email?: string;
+  /** Metadados da assessoria (ex.: `status_api` com «justif» para entrega justificada). */
+  extra?: Record<string, unknown>;
   /** % no prazo no mês (0–100), quando vem de `finished/deliveries/cached`. */
   on_time_pct?: number | null;
   /** Tarefas DONE/DELIVERED no mês (`dt_prazo`) nesta entrega; lista só inclui linhas com valor > 0. */
@@ -199,6 +213,23 @@ export interface Game4uReportsFinishedDeliveriesCachedPage {
   total?: number;
   /** Quando presente, indica se há mais páginas além desta resposta. */
   has_more?: boolean;
+}
+
+function normalizeDeliveryRowExtraField(raw: unknown): Record<string, unknown> | undefined {
+  if (raw != null && typeof raw === 'object' && !Array.isArray(raw)) {
+    return raw as Record<string, unknown>;
+  }
+  if (typeof raw === 'string' && raw.trim()) {
+    try {
+      const parsed: unknown = JSON.parse(raw);
+      if (parsed != null && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        return parsed as Record<string, unknown>;
+      }
+    } catch {
+      // extra não é JSON — ignorar
+    }
+  }
+  return undefined;
 }
 
 function pickFirstNonEmptyString(obj: Record<string, unknown>, keys: string[]): string | undefined {
@@ -259,11 +290,13 @@ export function normalizeGameReportsFinishedDeliveriesPayload(body: unknown): Ga
       const user_email = pickFirstNonEmptyString(o, ['user_email', 'userEmail']);
       const tasks_total = Number(o['tasks_total'] ?? o['tasksTotal']);
       const tasks_on_time = Number(o['tasks_on_time'] ?? o['tasksOnTime']);
+      const extra = normalizeDeliveryRowExtraField(o['extra']);
       out.push({
         delivery_title,
         ...(delivery_id ? { delivery_id } : {}),
         ...(emp_id !== undefined ? { emp_id } : {}),
         ...(user_email ? { user_email } : {}),
+        ...(extra ? { extra } : {}),
         ...(on_time_pct != null ? { on_time_pct } : {}),
         ...(Number.isFinite(tasks_total) ? { tasks_total: Math.floor(tasks_total) } : {}),
         ...(Number.isFinite(tasks_on_time) ? { tasks_on_time: Math.floor(tasks_on_time) } : {})
@@ -407,7 +440,7 @@ export interface Game4uReportsSupervisionCachedListQuery {
 
 export interface Game4uReportsFinishedQuery {
   /**
-   * E-mail do colaborador filtrado; omitir quando só `team_id` for usado (dados consolidados da equipa).
+   * E-mail do colaborador filtrado; omitir quando só `team_id` for usado (dados consolidados da equipe).
    * Ver `game-reports-doc.md`.
    */
   email?: string;
@@ -416,7 +449,7 @@ export interface Game4uReportsFinishedQuery {
   finished_at_end?: string;
   /** Opcional: repete `status` na query string se necessário. */
   status?: string[];
-  /** Escopo BWA / equipa — consolidado sem `email`. */
+  /** Escopo BWA / equipe — consolidado sem `email`. */
   team_id?: string;
   /** Paginação opcional (quando suportada no backend). */
   offset?: number;
@@ -429,7 +462,7 @@ export interface Game4uReportsFinishedQuery {
  */
 export interface Game4uReportsTeamDailyFinishedStatsQuery {
   email?: string;
-  /** Escopo BWA / equipa (consolidado sem `email`). */
+  /** Escopo BWA / equipe (consolidado sem `email`), ou `__management_overview__` para visão agregada de gestão. */
   team_id: string;
   /** Início do intervalo (ISO 8601). */
   start: string;
@@ -465,7 +498,7 @@ export interface Game4uReportsTeamDailyFinishedStatRow {
  * agregada de gestão (GERENTE / DIRETOR / C_LEVEL / ADMIN / SERVICE).
  */
 export interface Game4uReportsTeamDailyPendingStatsQuery {
-  /** Escopo BWA / equipa, ou `__management_overview__` para visão agregada de gestão. */
+  /** Escopo BWA / equipe, ou `__management_overview__` para visão agregada de gestão. */
   team_id: string;
   /** Início do intervalo (ISO 8601 `YYYY-MM-DD`). */
   start: string;
@@ -619,7 +652,7 @@ export function normalizeGameReportsActionsByDeliveryResponse(body: unknown): Ga
 
 /** `GET /game/reports/user-actions` — query (pares de data só completos; um par por pedido). */
 export interface Game4uReportsUserActionsQuery {
-  /** Colaborador; com `team_id` omitir para agregado da equipa (se o backend permitir). */
+  /** Colaborador; com `team_id` omitir para agregado da equipe (se o backend permitir). */
   email?: string;
   /** Repetido na query string (`status=DONE&status=…`) ou equivalente CSV no backend. */
   status?: Game4uUserActionStatus[];
@@ -685,6 +718,111 @@ export interface Game4uReportsGoalMonthQuery {
   /** `YYYY-MM-DD` (exclusivo: primeiro dia do mês seguinte, como no curl do doc). */
   dt_prazo_end: string;
   team_id?: string;
+}
+
+/** Nível hierárquico em `GET /game/reports/organization/hierarchy-report`. */
+export type OrgHierarchyNodeType =
+  | 'organization'
+  | 'diretoria'
+  | 'gerencia'
+  | 'supervisao'
+  | 'player';
+
+/** Métricas por janela temporal (MTD, mês anterior fechado, MTD simétrico anterior). */
+export interface OrgMetricsWindow {
+  finished?: number;
+  points_delivered?: number;
+  goal_points?: number;
+  pending_open?: number;
+  multa_risk?: number;
+  near_due?: number;
+  multa_and_near_due?: number;
+  overdue_pending?: number;
+  clients_served?: number;
+  on_time_pct?: number;
+  clients_onboarding?: number;
+  clients_classificacao_1?: number;
+  clients_classificacao_2?: number;
+  clients_classificacao_3?: number;
+  clients_classificacao_4?: number;
+  clients_classificacao_5?: number;
+}
+
+export interface OrgHierarchyCompare {
+  vs_prev_full_points?: number;
+  vs_prev_full_points_pct?: number;
+  vs_prev_mtd_points?: number;
+  vs_prev_mtd_points_pct?: number;
+}
+
+export interface OrgHierarchySimulation {
+  share_pct?: number;
+  payout_brl?: number;
+  points_basis?: number;
+}
+
+export interface OrgHierarchyHighlightItem {
+  node_type?: OrgHierarchyNodeType;
+  node_id?: string;
+  label?: string;
+  metric?: string;
+  value?: number;
+  [key: string]: unknown;
+}
+
+export interface OrgHierarchyFinishedByDow {
+  dow: number;
+  finished_count: number;
+  points_total: number;
+}
+
+export interface OrgHierarchyTopDelivery {
+  delivery_title: string;
+  finished_count: number;
+}
+
+export interface OrgHierarchyNode {
+  node_type: OrgHierarchyNodeType;
+  node_id: string;
+  label: string;
+  players_count: number;
+  season_points_total: number;
+  balance_score?: number;
+  mtd: OrgMetricsWindow;
+  prev_full: OrgMetricsWindow;
+  prev_mtd: OrgMetricsWindow;
+  compare: OrgHierarchyCompare;
+  simulation?: OrgHierarchySimulation;
+  highlights?: { destaque: OrgHierarchyHighlightItem[]; atencao: OrgHierarchyHighlightItem[] };
+  finished_by_dow?: OrgHierarchyFinishedByDow[];
+  top_deliveries?: OrgHierarchyTopDelivery[];
+  children?: OrgHierarchyNode[];
+}
+
+export interface OrganizationHierarchyReportParams {
+  cache_month: string;
+  mtd_start: string;
+  mtd_end: string;
+  prev_month: string;
+  prev_mtd_start: string;
+  prev_mtd_end: string;
+  simulation_pot_brl?: number;
+  points_per_brl?: number;
+}
+
+export interface OrganizationHierarchyReportResponse {
+  refreshed_at: string;
+  params: OrganizationHierarchyReportParams;
+  root: OrgHierarchyNode;
+}
+
+/** Query para `GET /game/reports/organization/hierarchy-report`. */
+export interface Game4uReportsOrganizationHierarchyQuery {
+  month: string;
+  simulation_pot_brl?: number;
+  depth?: number;
+  node_type?: OrgHierarchyNodeType;
+  node_id?: string;
 }
 
 function supabaseGameFallbackCredentials(): boolean {

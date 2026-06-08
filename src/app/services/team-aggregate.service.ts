@@ -1,4 +1,4 @@
-import { Injectable } from '@angular/core';
+﻿import { Injectable } from '@angular/core';
 import { Observable, of, throwError, forkJoin, EMPTY } from 'rxjs';
 import { PONTOS_POR_ATIVIDADE_FINALIZADA_ACTION_LOG } from '@app/constants/pontos-por-atividade-action-log';
 import { map, catchError, tap, switchMap, expand, reduce } from 'rxjs/operators';
@@ -1106,7 +1106,7 @@ export class TeamAggregateService {
   }
 
   /**
-   * Game4U (reports): uma página de `GET /game/reports/finished/deliveries/cached` para «Clientes atendidos» no painel equipa.
+   * Game4U (reports): uma página de `GET /game/reports/finished/deliveries/cached` para «Clientes atendidos» no painel equipe.
    */
   getTeamFinishedDeliveriesParticipacaoPage(
     bwaTeamScopeId: string,
@@ -1152,7 +1152,7 @@ export class TeamAggregateService {
   }
 
   /**
-   * Todas as páginas de `finished/deliveries/cached` (equipa) — concatena offset/limit até acabar.
+   * Todas as páginas de `finished/deliveries/cached` (equipe) — concatena offset/limit até acabar.
    */
   getTeamFinishedDeliveriesParticipacaoAllPages(
     bwaTeamScopeId: string,
