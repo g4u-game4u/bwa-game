@@ -12,7 +12,11 @@ import {
   Game4uFinishedPrazoStatus,
   resolveGame4uFinishedPrazoStatus,
   computeCompanyDeliveryInsightsFromTasks,
-  CompanyDeliveryInsightsSnapshot
+  CompanyDeliveryInsightsSnapshot,
+  isGame4uPendingTaskOverdue,
+  resolveTaskPrazoBadgeKind,
+  TASK_PRAZO_BADGE_LABELS,
+  TaskPrazoBadgeKind
 } from '@services/game4u-game-mapper';
 import { ENTREGAS_JUSTIFICADAS_META_DISCLAIMER } from '@services/help-texts.service';
 
@@ -447,8 +451,28 @@ export class ModalCompanyCarteiraDetailComponent implements OnInit, OnDestroy {
     return task.risco_multa === true;
   }
 
-  hasAtrasoJustificado(task: ClienteActionItem): boolean {
-    return task.atraso_justificado === true;
+  hasJustificada(task: ClienteActionItem): boolean {
+    return task.justificada === true;
+  }
+
+  getTaskPrazoBadgeKind(task: ClienteActionItem): TaskPrazoBadgeKind | null {
+    return resolveTaskPrazoBadgeKind({
+      justificada: task.justificada,
+      isPending: task.status === 'pendente',
+      isOverdue: task.status === 'pendente' && isGame4uPendingTaskOverdue(task.dt_prazo)
+    });
+  }
+
+  getTaskPrazoBadgeLabel(kind: TaskPrazoBadgeKind): string {
+    return TASK_PRAZO_BADGE_LABELS[kind];
+  }
+
+  getTaskPrazoBadgeClass(kind: TaskPrazoBadgeKind): string {
+    return kind === 'atraso' ? 'task-prazo-overdue-badge' : 'task-atraso-justificado-badge';
+  }
+
+  getTaskPrazoBadgeIcon(kind: TaskPrazoBadgeKind): string {
+    return kind === 'atraso' ? 'ri-error-warning-line' : 'ri-shield-check-line';
   }
 
   getStatusLabel(status?: string): string {

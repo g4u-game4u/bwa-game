@@ -163,7 +163,15 @@
           <div class="insights-alert-content">
             <span class="insights-alert-value">{{ insights!.overduePendingTasks | number:'1.0-0':'pt-BR' }}</span>
             <span class="insights-alert-label">Pendentes atrasadas</span>
-            <span class="insights-alert-hint">Prazo já vencido</span>
+            <span class="insights-alert-hint">
+              <ng-container *ngIf="insights!.overduePendingTasks > 0; else noOverduePending">
+                Prazo já vencido
+                <ng-container *ngIf="insights!.overduePendingFineRiskTasks > 0">
+                  · {{ insights!.overduePendingFineRiskTasks | number:'1.0-0':'pt-BR' }} com risco de multa
+                </ng-container>
+              </ng-container>
+              <ng-template #noOverduePending>Nenhuma pendente com prazo vencido</ng-template>
+            </span>
             <span *ngIf="isAlertActionable('overdue-pending')" class="insights-alert-action-hint">
               Clique para visualizar
             </span>

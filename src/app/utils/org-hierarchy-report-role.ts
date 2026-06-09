@@ -1,5 +1,8 @@
 import { ROLES_LIST } from './constants';
-import { hasManagementDashboardCachedRole } from './management-dashboard-role';
+import {
+  detectManagementDashboardCachedRole,
+  hasManagementDashboardCachedRole
+} from './management-dashboard-role';
 
 function normalizeRoleToken(role: string): string {
   return role.trim().toUpperCase().replace(/-/g, '_');
@@ -21,5 +24,13 @@ export function hasOrganizationHierarchyReportRole(roles: string[] | undefined |
     hasManagementDashboardCachedRole(roles) ||
     hasJwtRoleToken(roles, ROLES_LIST.ACCESS_ADMIN_PANEL) ||
     hasJwtRoleToken(roles, 'SERVICE')
+  );
+}
+
+/** Acesso à rota e ao seletor de painéis — apenas ADMIN e C_LEVEL por enquanto. */
+export function canAccessOrganizationHierarchyNav(roles: string[] | undefined | null): boolean {
+  return (
+    hasJwtRoleToken(roles, ROLES_LIST.ACCESS_ADMIN_PANEL) ||
+    detectManagementDashboardCachedRole(roles) === 'C_LEVEL'
   );
 }

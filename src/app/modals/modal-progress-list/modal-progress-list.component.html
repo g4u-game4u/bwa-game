@@ -135,20 +135,12 @@
                         <div class="task-prazo-cell">
                           <span class="task-prazo">{{ formatDtPrazo(item.dt_prazo) }}</span>
                           <span
-                            *ngIf="isPendingActivitiesModal && isPendingTaskOverdue(item.dt_prazo)"
-                            class="task-prazo-overdue-badge"
+                            *ngIf="getTaskPrazoBadgeKind(item) as badgeKind"
+                            [class]="getTaskPrazoBadgeClass(badgeKind)"
                             role="status"
-                            [attr.aria-label]="'Atrasado: prazo em ' + formatDtPrazo(item.dt_prazo)">
-                            <i class="ri-error-warning-line" aria-hidden="true"></i>
-                            <span>Atrasado</span>
-                          </span>
-                          <span
-                            *ngIf="!isPendingActivitiesModal && hasAtrasoJustificado(item)"
-                            class="task-atraso-justificado-badge"
-                            role="status"
-                            aria-label="Entrega justificada">
-                            <i class="ri-shield-check-line" aria-hidden="true"></i>
-                            <span>Entrega justificada</span>
+                            [attr.aria-label]="getTaskPrazoBadgeLabel(badgeKind)">
+                            <i [class]="getTaskPrazoBadgeIcon(badgeKind)" aria-hidden="true"></i>
+                            <span>{{ getTaskPrazoBadgeLabel(badgeKind) }}</span>
                           </span>
                         </div>
                       </div>

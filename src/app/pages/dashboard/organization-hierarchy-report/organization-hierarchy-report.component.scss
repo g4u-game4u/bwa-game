@@ -151,6 +151,12 @@
   grid-column: 1 / -1;
 }
 
+.report-content__full-span {
+  grid-column: 1 / -1;
+  width: 100%;
+  min-width: 0;
+}
+
 .report-title {
   @include text-heading-2;
   margin: 0;
@@ -321,10 +327,35 @@
 
   ::ng-deep .content {
     display: flex;
-    flex-direction: column;
-    gap: 4px;
+    flex-direction: row;
+    align-items: flex-start;
+    gap: $spacing-md;
     width: 100%;
     box-sizing: border-box;
+  }
+
+  &__icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.06);
+
+    i {
+      font-size: 1.25rem;
+      line-height: 1;
+    }
+  }
+
+  &__body {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
   }
 
   &__value {
@@ -332,6 +363,7 @@
     font-weight: 700;
     color: $text-primary;
     font-variant-numeric: tabular-nums;
+    line-height: 1.1;
   }
 
   &__label {
@@ -356,6 +388,36 @@
   &__compare-abs {
     display: block;
     opacity: 0.85;
+  }
+
+  &--points-delivered .hero-card__icon {
+    color: #fbbf24;
+    background: rgba(251, 191, 36, 0.12);
+  }
+
+  &--points-prev .hero-card__icon {
+    color: #94a3b8;
+    background: rgba(148, 163, 184, 0.12);
+  }
+
+  &--finished .hero-card__icon {
+    color: #22c55e;
+    background: rgba(34, 197, 94, 0.12);
+  }
+
+  &--goal .hero-card__icon {
+    color: #a78bfa;
+    background: rgba(167, 139, 250, 0.12);
+  }
+
+  &--on-time .hero-card__icon {
+    color: #38bdf8;
+    background: rgba(56, 189, 248, 0.12);
+  }
+
+  &--clients .hero-card__icon {
+    color: #2dd4bf;
+    background: rgba(45, 212, 191, 0.12);
   }
 }
 
@@ -670,4 +732,197 @@
 
 .tree-section {
   margin-bottom: $spacing-xl;
+}
+
+.classification-section {
+  width: 100%;
+  box-sizing: border-box;
+
+  .classification-total {
+    font-size: $font-size-small;
+    color: $text-secondary;
+    white-space: nowrap;
+  }
+}
+
+.classification-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: $spacing-md;
+  margin-bottom: $spacing-md;
+  width: 100%;
+
+  > c4u-card.classification-card {
+    display: block;
+    flex: 1 1 calc(50% - #{$spacing-md});
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+
+    @include tablet-up {
+      flex: 1 1 0;
+    }
+  }
+}
+
+.classification-card {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  text-align: center;
+  box-sizing: border-box;
+
+  ::ng-deep .content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    width: 100%;
+    box-sizing: border-box;
+    padding-top: $spacing-sm;
+    border-top: 3px solid rgba(255, 255, 255, 0.15);
+  }
+
+  &__icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    margin-bottom: $spacing-xs;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.06);
+
+    i {
+      font-size: 1.5rem;
+      line-height: 1;
+    }
+  }
+
+  &--stone ::ng-deep .content {
+    border-top-color: #9ca3af;
+  }
+
+  &--stone .classification-card__icon i {
+    color: #9ca3af;
+  }
+
+  &--bronze ::ng-deep .content {
+    border-top-color: #cd7f32;
+  }
+
+  &--bronze .classification-card__icon i {
+    color: #cd7f32;
+  }
+
+  &--silver ::ng-deep .content {
+    border-top-color: #c0c0c0;
+  }
+
+  &--silver .classification-card__icon i {
+    color: #d1d5db;
+  }
+
+  &--gold ::ng-deep .content {
+    border-top-color: #fbbf24;
+  }
+
+  &--gold .classification-card__icon i {
+    color: #fbbf24;
+  }
+
+  &--diamond ::ng-deep .content {
+    border-top-color: #38bdf8;
+  }
+
+  &--diamond .classification-card__icon i {
+    color: #38bdf8;
+  }
+
+  &__level {
+    font-size: $font-size-caption;
+    font-weight: 700;
+    color: $text-secondary;
+    letter-spacing: 0.04em;
+  }
+
+  &__label {
+    font-size: $font-size-body;
+    font-weight: 600;
+    color: $text-primary;
+  }
+
+  &__value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: $text-primary;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.1;
+    margin-top: $spacing-xs;
+  }
+
+  &__hint {
+    font-size: $font-size-caption;
+    color: $text-secondary;
+    margin-bottom: $spacing-sm;
+  }
+
+  &__bar-track {
+    width: 100%;
+    height: 48px;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 6px;
+    padding: 0 8px;
+  }
+
+  &__bar-fill {
+    width: 72%;
+    max-width: none;
+    background: linear-gradient(180deg, rgba(96, 165, 250, 0.9), rgba(37, 99, 235, 0.7));
+    border-radius: 4px 4px 0 0;
+    transition: height 0.35s ease;
+  }
+
+  &--stone &__bar-fill {
+    background: linear-gradient(180deg, #d1d5db, #9ca3af);
+  }
+
+  &--bronze &__bar-fill {
+    background: linear-gradient(180deg, #e8b87a, #cd7f32);
+  }
+
+  &--silver &__bar-fill {
+    background: linear-gradient(180deg, #e5e7eb, #9ca3af);
+  }
+
+  &--gold &__bar-fill {
+    background: linear-gradient(180deg, #fde68a, #f59e0b);
+  }
+
+  &--diamond &__bar-fill {
+    background: linear-gradient(180deg, #7dd3fc, #0ea5e9);
+  }
+}
+
+.classification-table-wrap {
+  margin-top: $spacing-xs;
+}
+
+.classification-table {
+  width: 100%;
+  min-width: 0;
+
+  &__label {
+    display: inline-flex;
+    align-items: center;
+    gap: $spacing-xs;
+
+    i {
+      font-size: 1.1rem;
+      opacity: 0.9;
+    }
+  }
 }

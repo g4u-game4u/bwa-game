@@ -454,6 +454,7 @@ export function computeDashboardInsightsFromActivityLists(
   const dueSoonEnd = addDaysToDayStartMs(todayStart, dueSoonDays);
 
   let overduePendingTasks = 0;
+  let overduePendingFineRiskTasks = 0;
   let dueSoonTasks = 0;
   let fineRiskTasks = 0;
   const fineRiskDeliveryKeys = new Set<string>();
@@ -461,7 +462,7 @@ export function computeDashboardInsightsFromActivityLists(
   let justifiedTasks = 0;
 
   for (const item of pending) {
-    if (item.atraso_justificado === true) {
+    if (item.justificada === true) {
       justifiedTasks++;
       continue;
     }
@@ -469,6 +470,9 @@ export function computeDashboardInsightsFromActivityLists(
     if (prazoMs != null) {
       if (prazoMs < todayStart) {
         overduePendingTasks++;
+        if (item.risco_multa === true) {
+          overduePendingFineRiskTasks++;
+        }
       } else if (prazoMs >= todayStart && prazoMs <= dueSoonEnd) {
         dueSoonTasks++;
       }
@@ -485,7 +489,7 @@ export function computeDashboardInsightsFromActivityLists(
   const weekdayCounts = new Array(7).fill(0);
 
   for (const item of finished) {
-    if (item.atraso_justificado === true) {
+    if (item.justificada === true) {
       justifiedTasks++;
     } else {
       const status = resolveGame4uFinishedPrazoStatus(item.dt_prazo, item.created);
@@ -537,6 +541,7 @@ export function computeDashboardInsightsFromActivityLists(
     pendingTasks: pending.length,
     finishedTasks: finished.length,
     overduePendingTasks,
+    overduePendingFineRiskTasks,
     dueSoonTasks,
     fineRiskTasks,
     fineRiskDeliveries: fineRiskDeliveryKeys.size,
@@ -565,6 +570,7 @@ export function mergeDashboardInsightsSnapshots(
   const activityCounts = new Map<string, DashboardInsightsRankedItem>();
   const weekdayCounts = new Array(7).fill(0);
   let overduePendingTasks = 0;
+  let overduePendingFineRiskTasks = 0;
   let dueSoonTasks = 0;
   let fineRiskTasks = 0;
   let fineRiskDeliveries = 0;
@@ -577,6 +583,7 @@ export function mergeDashboardInsightsSnapshots(
 
   for (const snap of valid) {
     overduePendingTasks += snap.overduePendingTasks;
+    overduePendingFineRiskTasks += snap.overduePendingFineRiskTasks;
     dueSoonTasks += snap.dueSoonTasks;
     fineRiskTasks += snap.fineRiskTasks;
     fineRiskDeliveries += snap.fineRiskDeliveries;
@@ -627,6 +634,7 @@ export function mergeDashboardInsightsSnapshots(
     pendingTasks,
     finishedTasks,
     overduePendingTasks,
+    overduePendingFineRiskTasks,
     dueSoonTasks,
     fineRiskTasks,
     fineRiskDeliveries,

@@ -41,7 +41,8 @@
   deliveryRowCountsAsOnTime,
   deliveryRowHasFinishedTaskInMonth,
   hasMoreFinishedDeliveriesCachedPage,
-  resolveGame4uFinishedPrazoStatus
+  resolveGame4uFinishedPrazoStatus,
+  resolveTaskPrazoBadgeKind
 } from './game4u-game-mapper';
 import type { Game4uDeliveryModel, Game4uUserActionModel } from '@model/game4u-api.model';
 
@@ -442,7 +443,7 @@ describe('game4u-game-mapper', () => {
       expect(list.find(i => i.id === '2')?.risco_multa).toBeUndefined();
     });
 
-    it('maps atraso_justificado when extra.status_api contains justif (case-insensitive)', () => {
+    it('maps justificada when extra.status_api contains justif (case-insensitive)', () => {
       const month = new Date(2024, 5, 1);
       const actions: Game4uUserActionModel[] = [
         {
@@ -471,9 +472,33 @@ describe('game4u-game-mapper', () => {
         }
       ];
       const list = mapGame4uActionsToActivityList(actions, month);
-      expect(list.find(i => i.id === 'just')?.atraso_justificado).toBe(true);
-      expect(list.find(i => i.id === 'caps')?.atraso_justificado).toBe(true);
-      expect(list.find(i => i.id === 'ok')?.atraso_justificado).toBeUndefined();
+      expect(list.find(i => i.id === 'just')?.justificada).toBe(true);
+      expect(list.find(i => i.id === 'caps')?.justificada).toBe(true);
+      expect(list.find(i => i.id === 'ok')?.justificada).toBeUndefined();
+    });
+
+    it('maps justificada from user-actions field', () => {
+      const actions: Game4uUserActionModel[] = [
+        {
+          id: 'pending-just',
+          points: 1,
+          status: 'PENDING',
+          created_at: '2024-06-10T10:00:00.000Z',
+          justificada: true,
+          dt_prazo: '2024-06-01'
+        },
+        {
+          id: 'done-just',
+          points: 1,
+          status: 'DONE',
+          created_at: '2024-06-10T10:00:00.000Z',
+          finished_at: '2024-06-15T12:00:00.000Z',
+          justificada: true
+        }
+      ];
+      const list = mapGame4uActionsToActivityList(actions);
+      expect(list.find(i => i.id === 'pending-just')?.justificada).toBe(true);
+      expect(list.find(i => i.id === 'done-just')?.justificada).toBe(true);
     });
 
     it('monthFilter dtPrazo keeps pending rows whose created_at is outside month but dt_prazo is inside', () => {
@@ -1191,7 +1216,7 @@ describe('game4u-game-mapper', () => {
         {
           created: Date.parse('2026-06-20'),
           dt_prazo: '2026-06-10',
-          atraso_justificado: true
+          justificada: true
         },
         { created: Date.parse('2026-06-10'), dt_prazo: '2026-06-20' }
       ]);
@@ -1214,6 +1239,23 @@ describe('game4u-game-mapper', () => {
       );
       expect(rows.length).toBe(1);
       expect(rows[0].delivery_title).toBe('Com tarefa');
+    });
+  });
+
+  describe('resolveTaskPrazoBadgeKind', () => {
+    it('returns distinct labels for finished justified, pending justified and pending overdue', () => {
+      expect(
+        resolveTaskPrazoBadgeKind({ justificada: true, isPending: false, isOverdue: false })
+      ).toBe('entrega-justificada');
+      expect(
+        resolveTaskPrazoBadgeKind({ justificada: true, isPending: true, isOverdue: true })
+      ).toBe('atraso-justificado');
+      expect(
+        resolveTaskPrazoBadgeKind({ justificada: false, isPending: true, isOverdue: true })
+      ).toBe('atraso');
+      expect(
+        resolveTaskPrazoBadgeKind({ justificada: false, isPending: true, isOverdue: false })
+      ).toBeNull();
     });
   });
 });

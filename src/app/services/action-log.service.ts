@@ -66,8 +66,7 @@ import {
   mapGame4uFinishedDeliveryRowsToParticipacaoCnpjRows,
   hasMoreFinishedDeliveriesCachedPage,
   parseGame4uRiscoMulta,
-  parseGame4uAtrasoJustificado,
-  readGame4uExtraStatusApi,
+  isGame4uUserActionJustified,
   readGame4uUserActionDtPrazo
 } from './game4u-game-mapper';
 
@@ -255,8 +254,8 @@ export interface ClienteActionItem {
   points?: number;
   /** Indica se a entrega pode gerar multa (`risco_multa` em user-actions). */
   risco_multa?: boolean;
-  /** Entrega justificada (`extra.status_api` com «justif»). */
-  atraso_justificado?: boolean;
+  /** Tarefa/entrega justificada (`justificada` em user-actions). */
+  justificada?: boolean;
 }
 
 /** Página de tarefas (modal participação com `/game/reports/.../actions-by-delivery`). */
@@ -1196,7 +1195,7 @@ export class ActionLogService {
           : undefined;
     const dp = readGame4uUserActionDtPrazo(a);
     const riscoMulta = parseGame4uRiscoMulta(a.risco_multa);
-    const atrasoJustificado = parseGame4uAtrasoJustificado(readGame4uExtraStatusApi(a));
+    const justificada = isGame4uUserActionJustified(a);
     return {
       id,
       title: titleRaw || 'Ação',
@@ -1210,7 +1209,7 @@ export class ActionLogService {
         (a.finished_at != null && String(a.finished_at).trim() !== '' ? 'finalizado' : undefined),
       ...(points != null && Number.isFinite(points) ? { points } : {}),
       ...(riscoMulta ? { risco_multa: true } : {}),
-      ...(atrasoJustificado ? { atraso_justificado: true } : {})
+      ...(justificada ? { justificada: true } : {})
     };
   }
 

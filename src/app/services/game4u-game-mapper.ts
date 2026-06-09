@@ -284,8 +284,62 @@ export function parseGame4uAtrasoJustificado(statusApi: unknown): boolean {
   return String(statusApi).toLowerCase().includes('justif');
 }
 
+/** Normaliza `justificada` de `/game/reports/user-actions` para booleano de UI. */
+export function parseGame4uJustificadaValue(value: unknown): boolean {
+  if (value === true || value === 1) {
+    return true;
+  }
+  if (typeof value === 'string') {
+    const s = value.trim().toLowerCase();
+    return s === 'true' || s === '1' || s === 'sim' || s === 'yes';
+  }
+  return false;
+}
+
+/** Indica se a user-action está marcada como justificada (campo `justificada` ou legado `extra.status_api`). */
 export function isGame4uUserActionJustified(a: Game4uUserActionModel): boolean {
+  if (parseGame4uJustificadaValue(a.justificada)) {
+    return true;
+  }
   return parseGame4uAtrasoJustificado(readGame4uExtraStatusApi(a));
+}
+
+export type TaskPrazoBadgeKind = 'entrega-justificada' | 'atraso-justificado' | 'atraso';
+
+export const TASK_PRAZO_BADGE_LABELS: Record<TaskPrazoBadgeKind, string> = {
+  'entrega-justificada': 'Entrega justificada',
+  'atraso-justificado': 'Atraso justificado',
+  atraso: 'Atraso'
+};
+
+/** Badge de prazo conforme status da user-action e flag `justificada`. */
+export function resolveTaskPrazoBadgeKind(input: {
+  justificada?: boolean;
+  isPending: boolean;
+  isOverdue?: boolean;
+}): TaskPrazoBadgeKind | null {
+  const justified = input.justificada === true;
+  if (!input.isPending && justified) {
+    return 'entrega-justificada';
+  }
+  if (input.isPending && justified) {
+    return 'atraso-justificado';
+  }
+  if (input.isPending && input.isOverdue) {
+    return 'atraso';
+  }
+  return null;
+}
+
+/** Pendentes: prazo estritamente anterior a hoje (calendário local). */
+export function isGame4uPendingTaskOverdue(dt_prazo?: string, nowMs = Date.now()): boolean {
+  const prazoMs = parseGame4uDtPrazoToLocalDayStartMs(dt_prazo);
+  if (prazoMs == null) {
+    return false;
+  }
+  const now = new Date(nowMs);
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0).getTime();
+  return prazoMs < todayStart;
 }
 
 /** Prazo da tarefa: raiz `dt_prazo` ou `extra.dt_prazo` / `extra.dr_prazo` (`YYYY-MM-DD`). */
@@ -446,7 +500,7 @@ export function countExecutiveOnTimeTasksFromUserActions(
   let late = 0;
   let justified = 0;
   for (const item of items) {
-    if (item.atraso_justificado === true) {
+    if (item.justificada === true) {
       justified += 1;
       continue;
     }
@@ -731,7 +785,7 @@ export interface CompanyDeliveryInsightTaskInput {
   finished_at?: number;
   dt_prazo?: string;
   risco_multa?: boolean;
-  atraso_justificado?: boolean;
+  justificada?: boolean;
 }
 
 function buildCompanyDeliveryInsightPresets(metrics: {
@@ -827,7 +881,7 @@ export function computeCompanyDeliveryInsightsFromTasks(
     if (task.risco_multa === true) {
       fineRiskTasks += 1;
     }
-    if (task.atraso_justificado === true) {
+    if (task.justificada === true) {
       justifiedTasks += 1;
       continue;
     }
@@ -1315,14 +1369,14 @@ export function mapGame4uActionsToActivityList(
     const dp =
       typeof a.dt_prazo === 'string' && a.dt_prazo.trim() ? a.dt_prazo.trim() : undefined;
     const riscoMulta = parseGame4uRiscoMulta(a.risco_multa);
-    const atrasoJustificado = parseGame4uAtrasoJustificado(readGame4uExtraStatusApi(a));
+    const justificada = isGame4uUserActionJustified(a);
     return {
       id: a.id,
       title: (a.action_title as string) || 'Ação',
       delivery_title: (a.delivery_title as string) || undefined,
       ...(dp ? { dt_prazo: dp } : {}),
       ...(riscoMulta ? { risco_multa: true } : {}),
-      ...(atrasoJustificado ? { atraso_justificado: true } : {}),
+      ...(justificada ? { justificada: true } : {}),
       points: Math.floor(Number(a.points) || PONTOS_POR_ATIVIDADE_FINALIZADA_ACTION_LOG),
       created: game4uUserActionListTimestampMs(a),
       player: asString(a.user_email),

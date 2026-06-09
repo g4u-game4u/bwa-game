@@ -140,8 +140,8 @@ export interface ActivityListItem {
   dt_prazo?: string;
   /** Indica se a entrega pode gerar multa (`risco_multa` em `/game/reports/user-actions`). */
   risco_multa?: boolean;
-  /** Entrega justificada (`extra.status_api` contém «justif», ex. «Pend. justificada»). */
-  atraso_justificado?: boolean;
+  /** Tarefa/entrega justificada (`justificada` em `/game/reports/user-actions`). */
+  justificada?: boolean;
   points: number;
   created: number;
   player?: string;

@@ -22,6 +22,11 @@ import {
   getOrgHierarchyCompareTone,
   getOrgHierarchyScopeTitle,
   mapFinishedByDowToWeekdayStats,
+  mapClientClassificationTiers,
+  clientClassificationTotal,
+  clientClassificationMaxCount,
+  clientClassificationBarHeight,
+  OrgClientClassificationTier,
   OrgHierarchyRankingSortBy,
   OrgHierarchyWeekdayStat,
   sortOrgHierarchyChildren,
@@ -107,6 +112,18 @@ export class OrganizationHierarchyReportComponent implements OnInit, OnDestroy {
     return this.root?.highlights?.atencao ?? [];
   }
 
+  get clientClassificationTiers(): OrgClientClassificationTier[] {
+    return mapClientClassificationTiers(this.root?.mtd);
+  }
+
+  get clientClassificationTotalCount(): number {
+    return clientClassificationTotal(this.clientClassificationTiers);
+  }
+
+  get clientClassificationMaxCount(): number {
+    return clientClassificationMaxCount(this.clientClassificationTiers);
+  }
+
   get showSimulation(): boolean {
     return this.simulationPotBrl != null && this.simulationPotBrl > 0;
   }
@@ -133,6 +150,23 @@ export class OrganizationHierarchyReportComponent implements OnInit, OnDestroy {
 
   weekdayBarHeight(count: number): string {
     return weekdayBarHeight(count, this.weekdayMaxCount);
+  }
+
+  classificationBarHeight(count: number): string {
+    return clientClassificationBarHeight(count, this.clientClassificationMaxCount);
+  }
+
+  classificationSharePct(count: number): string {
+    const total = this.clientClassificationTotalCount;
+    if (total <= 0) {
+      return '—';
+    }
+    const pct = (count / total) * 100;
+    return `${pct.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
+  }
+
+  trackByClassificationLevel(_index: number, tier: OrgClientClassificationTier): number {
+    return tier.level;
   }
 
   onMonthChange(monthsAgo: number): void {

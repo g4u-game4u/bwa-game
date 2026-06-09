@@ -1,4 +1,7 @@
-import { hasOrganizationHierarchyReportRole } from './org-hierarchy-report-role';
+import {
+  canAccessOrganizationHierarchyNav,
+  hasOrganizationHierarchyReportRole
+} from './org-hierarchy-report-role';
 
 describe('hasOrganizationHierarchyReportRole', () => {
   it('returns true for GERENTE, DIRETOR, C_LEVEL, ADMIN and SERVICE', () => {
@@ -14,5 +17,21 @@ describe('hasOrganizationHierarchyReportRole', () => {
     expect(hasOrganizationHierarchyReportRole(['LIDER_CELULA'])).toBe(false);
     expect(hasOrganizationHierarchyReportRole(['PLAYER'])).toBe(false);
     expect(hasOrganizationHierarchyReportRole(undefined)).toBe(false);
+  });
+});
+
+describe('canAccessOrganizationHierarchyNav', () => {
+  it('returns true only for ADMIN and C_LEVEL', () => {
+    expect(canAccessOrganizationHierarchyNav(['ADMIN'])).toBe(true);
+    expect(canAccessOrganizationHierarchyNav(['C_LEVEL'])).toBe(true);
+    expect(canAccessOrganizationHierarchyNav(['C-LEVEL'])).toBe(true);
+  });
+
+  it('returns false for GERENTE, DIRETOR, SERVICE and other roles', () => {
+    expect(canAccessOrganizationHierarchyNav(['GERENTE'])).toBe(false);
+    expect(canAccessOrganizationHierarchyNav(['DIRETOR'])).toBe(false);
+    expect(canAccessOrganizationHierarchyNav(['SERVICE'])).toBe(false);
+    expect(canAccessOrganizationHierarchyNav(['SUPERVISOR'])).toBe(false);
+    expect(canAccessOrganizationHierarchyNav(undefined)).toBe(false);
   });
 });
