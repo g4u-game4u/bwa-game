@@ -1,7 +1,7 @@
 import { inject, Injectable } from '@angular/core';
 import { ActivatedRouteSnapshot, CanActivateFn, Router, RouterStateSnapshot } from '@angular/router';
 import { SessaoProvider } from '@providers/sessao/sessao.provider';
-import { hasOrganizationHierarchyReportRole } from '@utils/org-hierarchy-report-role';
+import { canAccessOrganizationHierarchyNav } from '@utils/org-hierarchy-report-role';
 
 @Injectable({
   providedIn: 'root'
@@ -21,7 +21,7 @@ export class OrgHierarchyReportGuardService {
       return false;
     }
 
-    if (hasOrganizationHierarchyReportRole(this.sessao.usuario.roles)) {
+    if (canAccessOrganizationHierarchyNav(this.sessao.usuario.roles)) {
       return true;
     }
 

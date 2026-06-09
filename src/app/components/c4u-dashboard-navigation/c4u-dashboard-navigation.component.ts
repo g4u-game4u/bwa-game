@@ -3,7 +3,7 @@ import { Router, NavigationEnd } from '@angular/router';
 import { SessaoProvider } from '@providers/sessao/sessao.provider';
 import { UserProfileService } from '@services/user-profile.service';
 import { ROLES_LIST } from '@utils/constants';
-// import { hasOrganizationHierarchyReportRole } from '@utils/org-hierarchy-report-role';
+import { canAccessOrganizationHierarchyNav } from '@utils/org-hierarchy-report-role';
 import { filter } from 'rxjs/operators';
 
 interface DashboardOption {
@@ -41,21 +41,16 @@ export class C4uDashboardNavigationComponent implements OnInit {
       requiresRole: ROLES_LIST.ACCESS_TEAM_MANAGEMENT
     },
     {
-      label: 'Gestão da Célula',
-      route: '/dashboard/team-management',
-      icon: 'ri-group-line'
-    },
-    // TODO: reativar só para ADMIN quando o relatório estiver pronto para gestores
-    // {
-    //   label: 'Relatório Organizacional',
-    //   route: '/dashboard/organization-hierarchy',
-    //   icon: 'ri-organization-chart'
-    // }
+      label: 'Relatório Organizacional',
+      route: '/dashboard/organization-hierarchy',
+      icon: 'ri-organization-chart'
+    }
   ];
   
   currentDashboard: DashboardOption | null = null;
   availableDashboards: DashboardOption[] = [];
   hasGestaoRole = false;
+  canAccessOrgHierarchyNav = false;
   
   constructor(
     private router: Router,
@@ -97,6 +92,9 @@ export class C4uDashboardNavigationComponent implements OnInit {
     
     // Check if user can access team management (not JOGADOR)
     this.hasGestaoRole = this.userProfileService.canAccessTeamManagement();
+    this.canAccessOrgHierarchyNav = canAccessOrganizationHierarchyNav(
+      this.sessaoProvider.usuario?.roles
+    );
   }
   
   /**
@@ -121,13 +119,9 @@ export class C4uDashboardNavigationComponent implements OnInit {
         return isSupervisor;
       }
 
-      if (dashboard.label === 'Gestão da Célula') {
-        return isLiderCelula;
+      if (dashboard.label === 'Relatório Organizacional') {
+        return this.canAccessOrgHierarchyNav;
       }
-
-      // if (dashboard.label === 'Relatório Organizacional') {
-      //   return this.sessaoProvider.isAdmin();
-      // }
 
       // Dashboards with role requirement (e.g., "Gestão de Equipe")
       if (dashboard.requiresRole) {

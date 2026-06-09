@@ -11,7 +11,10 @@ import {
 import type { Game4uUserActionStatus } from '@model/game4u-api.model';
 import {
   Game4uFinishedPrazoStatus,
-  resolveGame4uFinishedPrazoStatus
+  resolveGame4uFinishedPrazoStatus,
+  resolveTaskPrazoBadgeKind,
+  TASK_PRAZO_BADGE_LABELS,
+  TaskPrazoBadgeKind
 } from '@services/game4u-game-mapper';
 import { ChartDataset } from '@model/gamification-dashboard.model';
 import { DASHBOARD_INSIGHTS_DUE_SOON_DAYS, DashboardInsightsAlertFocus } from '@model/dashboard-insights.model';
@@ -1077,7 +1080,7 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
   }
 
   private matchesActivityFocusFilter(item: ActivityListItem): boolean {
-    if (this.hasAtrasoJustificado(item)) {
+    if (this.hasJustificada(item)) {
       return false;
     }
     switch (this.activityFocusFilter) {
@@ -1109,9 +1112,29 @@ export class ModalProgressListComponent implements OnInit, OnDestroy {
     return item.risco_multa === true;
   }
 
-  /** Entrega justificada (`extra.status_api` com «justif», ex. «Pend. justificada»). */
-  hasAtrasoJustificado(item: ActivityListItem): boolean {
-    return item.atraso_justificado === true;
+  /** Tarefa/entrega justificada (`justificada` em user-actions). */
+  hasJustificada(item: ActivityListItem): boolean {
+    return item.justificada === true;
+  }
+
+  getTaskPrazoBadgeKind(item: ActivityListItem): TaskPrazoBadgeKind | null {
+    return resolveTaskPrazoBadgeKind({
+      justificada: item.justificada,
+      isPending: this.isPendingActivitiesModal,
+      isOverdue: this.isPendingTaskOverdue(item.dt_prazo)
+    });
+  }
+
+  getTaskPrazoBadgeLabel(kind: TaskPrazoBadgeKind): string {
+    return TASK_PRAZO_BADGE_LABELS[kind];
+  }
+
+  getTaskPrazoBadgeClass(kind: TaskPrazoBadgeKind): string {
+    return kind === 'atraso' ? 'task-prazo-overdue-badge' : 'task-atraso-justificado-badge';
+  }
+
+  getTaskPrazoBadgeIcon(kind: TaskPrazoBadgeKind): string {
+    return kind === 'atraso' ? 'ri-error-warning-line' : 'ri-shield-check-line';
   }
 
   /** Tarefa pendente atrasada com risco de multa (badge no acordeão e na linha). */

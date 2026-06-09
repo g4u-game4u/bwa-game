@@ -48,12 +48,14 @@ export interface DashboardInsightsSnapshot {
   pendingTasks: number;
   finishedTasks: number;
   overduePendingTasks: number;
+  /** Pendentes atrasadas com `risco_multa`. */
+  overduePendingFineRiskTasks: number;
   dueSoonTasks: number;
   fineRiskTasks: number;
   fineRiskDeliveries: number;
   onTimeFinishedTasks: number;
   lateFinishedTasks: number;
-  /** Entregas com atraso justificado (`extra.status_api` com «justif»); fora de no prazo / fora do prazo. */
+  /** Entregas com justificativa (`justificada` em user-actions); fora de no prazo / fora do prazo. */
   justifiedTasks: number;
   topActivity: DashboardInsightsRankedItem | null;
   topActivities: DashboardInsightsRankedItem[];
@@ -61,7 +63,7 @@ export interface DashboardInsightsSnapshot {
   weekdayDistribution: DashboardInsightsWeekdayStat[];
 }
 
-export const DASHBOARD_INSIGHTS_DUE_SOON_DAYS = 3;
+export const DASHBOARD_INSIGHTS_DUE_SOON_DAYS = 7;
 
 /** Mascote Game4U nas recomendações de insights (fallback se `mascot_img_url` não estiver configurado). */
 export const GAME4U_INSIGHTS_MASCOT_URL =

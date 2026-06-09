@@ -95,53 +95,144 @@
               </h2>
             </div>
             <div class="hero-grid">
-              <c4u-card class="hero-card">
-                <span class="hero-card__value">{{ root.mtd.points_delivered | number:'1.0-0':'pt-BR' }}</span>
-                <span class="hero-card__label">Pontos entregues (MTD)</span>
-                <span
-                  class="hero-card__compare"
-                  [class.hero-card__compare--positive]="mtdCompareTone(root.compare.vs_prev_mtd_points_pct) === 'positive'"
-                  [class.hero-card__compare--negative]="mtdCompareTone(root.compare.vs_prev_mtd_points_pct) === 'negative'">
-                  {{ mtdComparePct(root.compare.vs_prev_mtd_points_pct) }} vs MTD anterior
-                  <span class="hero-card__compare-abs">
-                    ({{ root.compare.vs_prev_mtd_points | number:'1.0-0':'pt-BR' }} pts)
+              <c4u-card class="hero-card hero-card--points-delivered">
+                <div class="hero-card__icon" aria-hidden="true">
+                  <i class="ri-copper-coin-line"></i>
+                </div>
+                <div class="hero-card__body">
+                  <span class="hero-card__value">{{ root.mtd.points_delivered | number:'1.0-0':'pt-BR' }}</span>
+                  <span class="hero-card__label">Pontos entregues (MTD)</span>
+                  <span
+                    class="hero-card__compare"
+                    [class.hero-card__compare--positive]="mtdCompareTone(root.compare.vs_prev_mtd_points_pct) === 'positive'"
+                    [class.hero-card__compare--negative]="mtdCompareTone(root.compare.vs_prev_mtd_points_pct) === 'negative'">
+                    {{ mtdComparePct(root.compare.vs_prev_mtd_points_pct) }} vs MTD anterior
+                    <span class="hero-card__compare-abs">
+                      ({{ root.compare.vs_prev_mtd_points | number:'1.0-0':'pt-BR' }} pts)
+                    </span>
                   </span>
-                </span>
+                </div>
               </c4u-card>
 
-              <c4u-card class="hero-card">
-                <span class="hero-card__value">{{ root.prev_full.points_delivered | number:'1.0-0':'pt-BR' }}</span>
-                <span class="hero-card__label">Pontos mês anterior (fechado)</span>
-                <span
-                  class="hero-card__compare"
-                  [class.hero-card__compare--positive]="mtdCompareTone(root.compare.vs_prev_full_points_pct) === 'positive'"
-                  [class.hero-card__compare--negative]="mtdCompareTone(root.compare.vs_prev_full_points_pct) === 'negative'">
-                  {{ mtdComparePct(root.compare.vs_prev_full_points_pct) }} vs mês ant. fechado
-                  <span class="hero-card__compare-abs">
-                    ({{ root.compare.vs_prev_full_points | number:'1.0-0':'pt-BR' }} pts)
+              <c4u-card class="hero-card hero-card--points-prev">
+                <div class="hero-card__icon" aria-hidden="true">
+                  <i class="ri-history-line"></i>
+                </div>
+                <div class="hero-card__body">
+                  <span class="hero-card__value">{{ root.prev_full.points_delivered | number:'1.0-0':'pt-BR' }}</span>
+                  <span class="hero-card__label">Pontos mês anterior (fechado)</span>
+                  <span
+                    class="hero-card__compare"
+                    [class.hero-card__compare--positive]="mtdCompareTone(root.compare.vs_prev_full_points_pct) === 'positive'"
+                    [class.hero-card__compare--negative]="mtdCompareTone(root.compare.vs_prev_full_points_pct) === 'negative'">
+                    {{ mtdComparePct(root.compare.vs_prev_full_points_pct) }} vs mês ant. fechado
+                    <span class="hero-card__compare-abs">
+                      ({{ root.compare.vs_prev_full_points | number:'1.0-0':'pt-BR' }} pts)
+                    </span>
                   </span>
-                </span>
+                </div>
               </c4u-card>
 
-              <c4u-card class="hero-card">
-                <span class="hero-card__value">{{ root.mtd.finished | number:'1.0-0':'pt-BR' }}</span>
-                <span class="hero-card__label">Entregas concluídas</span>
+              <c4u-card class="hero-card hero-card--finished">
+                <div class="hero-card__icon" aria-hidden="true">
+                  <i class="ri-checkbox-circle-line"></i>
+                </div>
+                <div class="hero-card__body">
+                  <span class="hero-card__value">{{ root.mtd.finished | number:'1.0-0':'pt-BR' }}</span>
+                  <span class="hero-card__label">Entregas concluídas</span>
+                </div>
               </c4u-card>
 
-              <c4u-card class="hero-card">
-                <span class="hero-card__value">{{ root.mtd.goal_points | number:'1.0-0':'pt-BR' }}</span>
-                <span class="hero-card__label">Meta de pontos</span>
+              <c4u-card class="hero-card hero-card--goal">
+                <div class="hero-card__icon" aria-hidden="true">
+                  <i class="ri-focus-3-line"></i>
+                </div>
+                <div class="hero-card__body">
+                  <span class="hero-card__value">{{ root.mtd.goal_points | number:'1.0-0':'pt-BR' }}</span>
+                  <span class="hero-card__label">Meta de pontos</span>
+                </div>
               </c4u-card>
 
-              <c4u-card class="hero-card">
-                <span class="hero-card__value">{{ root.mtd.on_time_pct | number:'1.1-1':'pt-BR' }}%</span>
-                <span class="hero-card__label">% no prazo</span>
+              <c4u-card class="hero-card hero-card--on-time">
+                <div class="hero-card__icon" aria-hidden="true">
+                  <i class="ri-time-line"></i>
+                </div>
+                <div class="hero-card__body">
+                  <span class="hero-card__value">{{ root.mtd.on_time_pct | number:'1.1-1':'pt-BR' }}%</span>
+                  <span class="hero-card__label">% no prazo</span>
+                </div>
               </c4u-card>
 
-              <c4u-card class="hero-card">
-                <span class="hero-card__value">{{ root.mtd.clients_served | number:'1.0-0':'pt-BR' }}</span>
-                <span class="hero-card__label">Clientes atendidos</span>
+              <c4u-card class="hero-card hero-card--clients">
+                <div class="hero-card__icon" aria-hidden="true">
+                  <i class="ri-group-line"></i>
+                </div>
+                <div class="hero-card__body">
+                  <span class="hero-card__value">{{ root.mtd.clients_served | number:'1.0-0':'pt-BR' }}</span>
+                  <span class="hero-card__label">Clientes atendidos</span>
+                </div>
               </c4u-card>
+            </div>
+          </section>
+
+          <section class="dashboard-section classification-section" aria-label="Empresas por classificação">
+            <div class="section-header">
+              <h2 class="section-title">
+                <i class="ri-vip-diamond-line section-title-icon" aria-hidden="true"></i>
+                Empresas por classificação
+              </h2>
+              <span class="classification-total" *ngIf="clientClassificationTotalCount > 0">
+                {{ clientClassificationTotalCount | number:'1.0-0':'pt-BR' }} no escopo MTD
+              </span>
+            </div>
+            <div class="classification-grid">
+              <c4u-card
+                *ngFor="let tier of clientClassificationTiers; trackBy: trackByClassificationLevel"
+                class="classification-card"
+                [class.classification-card--stone]="tier.level === 1"
+                [class.classification-card--bronze]="tier.level === 2"
+                [class.classification-card--silver]="tier.level === 3"
+                [class.classification-card--gold]="tier.level === 4"
+                [class.classification-card--diamond]="tier.level === 5">
+                <div class="classification-card__icon" aria-hidden="true">
+                  <i [class]="tier.icon"></i>
+                </div>
+                <span class="classification-card__level">{{ tier.level }}</span>
+                <span class="classification-card__label">{{ tier.label }}</span>
+                <span class="classification-card__value">{{ tier.count | number:'1.0-0':'pt-BR' }}</span>
+                <span class="classification-card__hint">empresas</span>
+                <div class="classification-card__bar-track" aria-hidden="true">
+                  <div
+                    class="classification-card__bar-fill"
+                    [style.height]="classificationBarHeight(tier.count)">
+                  </div>
+                </div>
+              </c4u-card>
+            </div>
+            <div class="simple-table-wrap classification-table-wrap" role="region" aria-label="Tabela de empresas por classificação">
+              <table class="simple-table classification-table">
+                <thead>
+                  <tr>
+                    <th>Nível</th>
+                    <th>Classificação</th>
+                    <th class="simple-table__num">Empresas</th>
+                    <th class="simple-table__num">% do total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr *ngFor="let tier of clientClassificationTiers; trackBy: trackByClassificationLevel">
+                    <td>{{ tier.level }}</td>
+                    <td>
+                      <span class="classification-table__label">
+                        <i [class]="tier.icon" aria-hidden="true"></i>
+                        {{ tier.label }}
+                      </span>
+                    </td>
+                    <td class="simple-table__num">{{ tier.count | number:'1.0-0':'pt-BR' }}</td>
+                    <td class="simple-table__num">{{ classificationSharePct(tier.count) }}</td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
           </section>
 

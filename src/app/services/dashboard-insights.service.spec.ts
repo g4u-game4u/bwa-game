@@ -25,7 +25,9 @@ describe('computeDashboardInsightsFromActivityLists', () => {
     const snapshot = computeDashboardInsightsFromActivityLists(pending, []);
     expect(snapshot.fineRiskTasks).toBe(2);
     expect(snapshot.overduePendingTasks).toBe(1);
+    expect(snapshot.overduePendingFineRiskTasks).toBe(1);
     expect(snapshot.dueSoonTasks).toBe(2);
+    expect(snapshot.dueSoonDays).toBe(7);
   });
 
   it('finds top activity and most productive weekday from finished tasks', () => {
@@ -89,7 +91,7 @@ describe('computeDashboardInsightsFromActivityLists', () => {
         points: 1,
         created: Date.now(),
         dt_prazo: '2020-01-01',
-        atraso_justificado: true
+        justificada: true
       }
     ];
     const pending: ActivityListItem[] = [
@@ -99,7 +101,7 @@ describe('computeDashboardInsightsFromActivityLists', () => {
         points: 1,
         created: 0,
         dt_prazo: yesterdayYmd,
-        atraso_justificado: true
+        justificada: true
       }
     ];
 
@@ -120,7 +122,7 @@ describe('computeDashboardInsightsFromActivityLists', () => {
         points: 1,
         created: 0,
         dt_prazo: yesterdayYmd,
-        atraso_justificado: true
+        justificada: true
       },
       {
         id: '2',

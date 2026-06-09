@@ -119,6 +119,8 @@ export interface Game4uUserActionModel {
   dt_prazo?: string;
   /** Indica se a entrega pode gerar multa (relatórios user-actions). */
   risco_multa?: boolean;
+  /** Entrega/tarefa marcada como justificada em `/game/reports/user-actions`. */
+  justificada?: boolean;
   /** Gestor, diretor e equipe associados à tarefa (painel agregado). */
   hierarchy?: Game4uUserActionHierarchy | null;
   [key: string]: unknown;

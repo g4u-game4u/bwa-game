@@ -1,7 +1,8 @@
 import {
   OrgHierarchyFinishedByDow,
   OrgHierarchyNode,
-  OrgHierarchyNodeType
+  OrgHierarchyNodeType,
+  OrgMetricsWindow
 } from '@model/game4u-api.model';
 
 export type OrgHierarchyRankingSortBy = 'balance_score' | 'points_delivered';
@@ -131,4 +132,65 @@ export function weekdayBarHeight(count: number, max: number): string {
 
 export function weekdayMaxFinishedCount(stats: OrgHierarchyWeekdayStat[]): number {
   return Math.max(1, ...stats.map(s => s.finishedCount));
+}
+
+export interface OrgClientClassificationTier {
+  level: number;
+  label: string;
+  icon: string;
+  count: number;
+}
+
+/** Classificação portal: 1=Stone … 5=Diamante (`clients_classificacao_*` no MTD). */
+export const ORG_CLIENT_CLASSIFICATION_LABELS: Record<number, string> = {
+  1: 'Stone',
+  2: 'Bronze',
+  3: 'Prata',
+  4: 'Ouro',
+  5: 'Diamante'
+};
+
+export const ORG_CLIENT_CLASSIFICATION_ICONS: Record<number, string> = {
+  1: 'ri-shield-line',
+  2: 'ri-medal-line',
+  3: 'ri-award-line',
+  4: 'ri-trophy-line',
+  5: 'ri-vip-diamond-fill'
+};
+
+export function mapClientClassificationTiers(
+  mtd: OrgMetricsWindow | undefined | null
+): OrgClientClassificationTier[] {
+  return ([1, 2, 3, 4, 5] as const).map(level => ({
+    level,
+    label: ORG_CLIENT_CLASSIFICATION_LABELS[level],
+    icon: ORG_CLIENT_CLASSIFICATION_ICONS[level],
+    count: readClientClassificationCount(mtd, level)
+  }));
+}
+
+function readClientClassificationCount(
+  mtd: OrgMetricsWindow | undefined | null,
+  level: number
+): number {
+  const key = `clients_classificacao_${level}` as keyof OrgMetricsWindow;
+  const raw = mtd?.[key];
+  const n = typeof raw === 'number' ? raw : Number(raw);
+  return Number.isFinite(n) ? Math.max(0, Math.floor(n)) : 0;
+}
+
+export function clientClassificationTotal(tiers: OrgClientClassificationTier[]): number {
+  return tiers.reduce((sum, tier) => sum + tier.count, 0);
+}
+
+export function clientClassificationMaxCount(tiers: OrgClientClassificationTier[]): number {
+  return Math.max(1, ...tiers.map(t => t.count));
+}
+
+export function clientClassificationBarHeight(count: number, max: number): string {
+  if (count <= 0 || max <= 0) {
+    return '0%';
+  }
+  const pct = Math.round((count / max) * 100);
+  return `${Math.max(pct, 8)}%`;
 }
