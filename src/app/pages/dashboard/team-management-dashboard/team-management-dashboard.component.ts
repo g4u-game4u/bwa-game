@@ -83,7 +83,7 @@ import { CompanyDisplay, CompanyKpiService } from '@services/company-kpi.service
 import { KPIData } from '@app/model/gamification-dashboard.model';
 import { KPIService } from '@services/kpi.service';
 import { CnpjLookupService } from '@services/cnpj-lookup.service';
-import { buildCsvContent, downloadCsvFile } from '@utils/csv-export';
+import { buildCsvContent, downloadCsvFile } from '../../../utils/csv-export';
 
 // Models
 import { Team } from '@components/c4u-team-selector/c4u-team-selector.component';
