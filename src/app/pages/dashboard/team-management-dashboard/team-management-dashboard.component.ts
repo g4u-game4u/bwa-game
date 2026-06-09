@@ -47,6 +47,7 @@ import {
   countExecutiveFinishedTasksFromUserActions,
   countExecutiveOnTimeTasksFromUserActions,
   deliveryRowCountsAsOnTime,
+  mapGame4uFinishedDeliveryRowsToParticipacaoCnpjRows,
   hasMoreFinishedDeliveriesCachedPage,
   isGame4uDeliveryRowJustified,
   isGame4uUserActionFinalizedStatus,
@@ -82,6 +83,7 @@ import { CompanyDisplay, CompanyKpiService } from '@services/company-kpi.service
 import { KPIData } from '@app/model/gamification-dashboard.model';
 import { KPIService } from '@services/kpi.service';
 import { CnpjLookupService } from '@services/cnpj-lookup.service';
+import { buildCsvContent, downloadCsvFile } from '../../../utils/csv-export';
 
 // Models
 import { Team } from '@components/c4u-team-selector/c4u-team-selector.component';
@@ -466,6 +468,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
 
   /** Resposta de GET /team/:team_id (ApiProvider / BWA). */
   teamDetailApiResponse: any | null = null;
+  isExportingClientesAtendidosCsv = false;
   
   // Meta configuration state
   metaConfig: {
@@ -3819,6 +3822,129 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       return;
     }
     void this.loadTeamCarteiraData(dateRange);
+  }
+
+  /**
+   * Secção «Clientes atendidos este mês»: quem acede ao painel de equipe pode exportar
+   * (admin incluído — perfil por equipas pode ser JOGADOR mesmo com role ADMIN na sessão).
+   */
+  get canExportClientesAtendidos(): boolean {
+    return !!this.selectedMonth && this.userProfileService.canAccessTeamManagement();
+  }
+
+  async exportClientesAtendidosCsv(): Promise<void> {
+    const month = this.selectedMonth;
+    if (!month || this.isExportingClientesAtendidosCsv || !this.canExportClientesAtendidos) {
+      return;
+    }
+
+    this.isExportingClientesAtendidosCsv = true;
+    this.cdr.markForCheck();
+
+    try {
+      const clientes = await firstValueFrom(
+        this.fetchAllClientesAtendidosForExport(month).pipe(takeUntil(this.destroy$))
+      );
+
+      if (!clientes.length) {
+        this.toastService.error('Nenhum cliente atendido para exportar neste mês.');
+        return;
+      }
+
+      const csvRows = clientes.map(c => this.mapClienteAtendidoToCsv(c));
+      const csv = buildCsvContent(csvRows);
+      const monthLabel = dayjs(month).format('YYYY-MM');
+      const scopeSlug = this.buildClientesAtendidosExportFilenameScope();
+      downloadCsvFile(`clientes-atendidos-${scopeSlug}-${monthLabel}.csv`, csv);
+      this.toastService.success(
+        `CSV exportado (${clientes.length} ${clientes.length === 1 ? 'cliente' : 'clientes'}).`
+      );
+    } catch (error) {
+      console.error('Erro ao exportar CSV de clientes atendidos:', error);
+      this.toastService.error('Não foi possível exportar o CSV. Tente novamente.');
+    } finally {
+      this.isExportingClientesAtendidosCsv = false;
+      this.cdr.markForCheck();
+    }
+  }
+
+  private fetchAllClientesAtendidosForExport(month: Date): Observable<CompanyDisplay[]> {
+    const toDisplay = (
+      items: TeamFinishedDeliveriesPageResult['items'] | PlayerParticipacaoDeliveryRow[]
+    ): CompanyDisplay[] => {
+      const base = this.mapTeamParticipacaoDeliveryRowsToCompanyDisplay(items);
+      const unique = this.dedupeParticipacaoClientes(base);
+      unique.forEach(c => {
+        const status = this.cnpjStatusMap.get(c.cnpj);
+        if (status) {
+          c.status = status;
+        }
+      });
+      return unique;
+    };
+
+    if (this.isManagementOverview) {
+      return this.actionLogService.getExecutiveDeliveriesAllPages({ isManagement: true }, month, 200).pipe(
+        map(rows =>
+          toDisplay(mapGame4uFinishedDeliveryRowsToParticipacaoCnpjRows(rows, month))
+        )
+      );
+    }
+
+    const playerEmail = (this.participacaoPagedPlayerId || this.selectedCollaborator || '').trim();
+    if (playerEmail) {
+      return this.actionLogService
+        .getPlayerFinishedDeliveriesParticipacaoAllPages(playerEmail, month, 200)
+        .pipe(map(page => toDisplay(page.items || [])));
+    }
+
+    const teamTid = this.getGame4uTeamScopeId();
+    if (!teamTid) {
+      return of([]);
+    }
+    return this.teamAggregateService
+      .getTeamFinishedDeliveriesParticipacaoAllPages(teamTid, month, 200)
+      .pipe(map(page => toDisplay(page.items || [])));
+  }
+
+  private buildClientesAtendidosExportFilenameScope(): string {
+    if (this.isManagementOverview) {
+      return 'gestao';
+    }
+    const playerEmail = (this.participacaoPagedPlayerId || this.selectedCollaborator || '').trim();
+    if (playerEmail) {
+      const local = playerEmail.split('@')[0] || 'colaborador';
+      return local.replace(/[^\w\-]+/g, '_').slice(0, 40);
+    }
+    return (this.selectedTeam || 'equipe')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^\w\-]+/g, '_')
+      .slice(0, 40);
+  }
+
+  private mapClienteAtendidoToCsv(cliente: CompanyDisplay): Record<string, string | number> {
+    const pct = this.getListaEntregaPercent(cliente);
+    const digits =
+      String(cliente.cnpjNumber ?? '')
+        .replace(/\D/g, '')
+        .trim() ||
+      String(cliente.delivery_extra_cnpj ?? '')
+        .replace(/\D/g, '')
+        .trim() ||
+      String(this.cnpjNumberMap.get(cliente.cnpj) ?? '')
+        .replace(/\D/g, '')
+        .trim();
+    const cnpjFormatted = digits.length === 14 ? this.formatCnpjBr14(digits) : digits;
+
+    return {
+      Cliente: this.getClienteAtendidoDisplayName(cliente),
+      CNPJ: cnpjFormatted,
+      Status: this.getCompanyStatus(cliente.cnpj) || cliente.status || '',
+      '% entregas no prazo': pct != null ? pct : '',
+      'Título entrega': cliente.delivery_title ?? '',
+      'ID entrega': cliente.deliveryId ?? ''
+    };
   }
 
   /** Linha de `finished/deliveries/cached` (equipe ou jogador) → `CompanyDisplay` com `porcEntregas` quando existir. */
