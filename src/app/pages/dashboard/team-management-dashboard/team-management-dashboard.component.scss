@@ -1173,6 +1173,66 @@
       min-width: 0;
     }
 
+    .carteira-section-header {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 0;
+    }
+
+    .section-title-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: $spacing-md;
+      width: 100%;
+
+      .section-title {
+        margin-bottom: 0;
+        flex: 1;
+        min-width: 0;
+      }
+    }
+
+    .clientes-atendidos-export-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: $spacing-xs;
+      flex-shrink: 0;
+      padding: $spacing-xs $spacing-sm;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: $border-radius-sm;
+      background: rgba(255, 255, 255, 0.04);
+      color: $text-primary;
+      font-size: 0.8125rem;
+      line-height: 1.2;
+      cursor: pointer;
+      transition: background 0.15s ease, border-color 0.15s ease;
+
+      &:hover:not(:disabled) {
+        background: rgba(255, 255, 255, 0.08);
+        border-color: rgba(255, 255, 255, 0.2);
+      }
+
+      &:disabled {
+        opacity: 0.55;
+        cursor: not-allowed;
+      }
+
+      .loading-icon {
+        animation: spin 1s linear infinite;
+      }
+
+      &__label {
+        white-space: nowrap;
+      }
+    }
+
+    @media (max-width: 640px) {
+      .clientes-atendidos-export-btn__label {
+        display: none;
+      }
+    }
+
     .carteira-section-disclaimer {
       display: flex;
       align-items: flex-start;

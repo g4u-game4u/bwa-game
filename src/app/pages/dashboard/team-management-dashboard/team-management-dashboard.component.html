@@ -759,8 +759,8 @@
               [class.carteira-section--loading]="isLoadingCarteira"
               [attr.aria-busy]="isLoadingCarteira ? 'true' : null"
               aria-labelledby="company-section-title">
-              <div class="section-header">
-                <div class="section-header-main">
+              <div class="section-header carteira-section-header">
+                <div class="section-title-row">
                   <h3 id="company-section-title" class="section-title">
                     Clientes atendidos este mês
                     <span *ngIf="!isLoadingClientesAtendidosCount" class="section-title-count" aria-hidden="true">
@@ -772,11 +772,24 @@
                       position="bottom">
                     </c4u-info-button>
                   </h3>
-                  <p class="carteira-section-disclaimer" role="note">
-                    <i class="ri-information-line" aria-hidden="true"></i>
-                    <span>{{ justifiedDeliveriesDisclaimer }}</span>
-                  </p>
+                  <button
+                    type="button"
+                    class="clientes-atendidos-export-btn"
+                    [disabled]="isExportingClientesAtendidosCsv || isLoadingCarteira || !canExportClientesAtendidos"
+                    [attr.aria-busy]="isExportingClientesAtendidosCsv ? 'true' : null"
+                    (click)="exportClientesAtendidosCsv()"
+                    aria-label="Exportar clientes atendidos este mês em CSV"
+                    title="Exportar CSV">
+                    <i
+                      [class]="isExportingClientesAtendidosCsv ? 'ri-loader-4-line loading-icon' : 'ri-download-2-line'"
+                      aria-hidden="true"></i>
+                    <span class="clientes-atendidos-export-btn__label">Exportar CSV</span>
+                  </button>
                 </div>
+                <p class="carteira-section-disclaimer" role="note">
+                  <i class="ri-information-line" aria-hidden="true"></i>
+                  <span>{{ justifiedDeliveriesDisclaimer }}</span>
+                </p>
               </div>
               
               <c4u-card class="carteira-card">
