@@ -8,7 +8,7 @@ const useApiProxyFlag = (() => {
 export const environment = {
   production: false,
   // client_id: 'cidadania4u',
-  client_id: 'revisaprev',
+  client_id: 'revisaprev-test',
   /**
    * API backend. Com `ng serve`, lê `BACKEND_URL_BASE` ou `backend_url_base` do `.env` (DefinePlugin).
    * CORS no browser: no `.env` use `USE_API_PROXY=true` e base vazia — os pedidos vão para o mesmo host do `ng serve`

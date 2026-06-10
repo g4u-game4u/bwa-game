@@ -20,6 +20,8 @@ import {LoginResponse} from "@providers/auth/auth.provider";
 const WHITELISTED_URLS = [
     '/auth/login',
     '/auth/refresh',
+    '/auth/change-password-request',
+    '/auth/change-password-recovery',
     '/client/system-params',
     'funifier.com' // Whitelist all Funifier API calls
 ]

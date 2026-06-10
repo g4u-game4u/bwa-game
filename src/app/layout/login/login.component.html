@@ -71,16 +71,47 @@
     </div>
   </c4u-card>
 
+  <!-- Complete Invite Form -->
+  <c4u-card *ngIf="resetFlow === 'complete-invite'" title="Concluir cadastro" align="center">
+    <div class="login-form-container">
+      <form class="login-form" (ngSubmit)="confirmCompleteInvite()" [formGroup]="completeInviteForm">
+        <p class="reset-instructions">
+          Defina seu nome e senha para ativar sua conta.
+          <span *ngIf="inviteEmail"> E-mail: <strong>{{ inviteEmail }}</strong></span>
+        </p>
+        <input type="text" placeholder="Nome completo" formControlName="fullName" />
+        <div *ngIf="completeInviteForm.get('fullName')?.invalid && completeInviteForm.get('fullName')?.touched" class="error-message">
+          Informe seu nome completo.
+        </div>
+        <input type="password" placeholder="Nova senha" formControlName="newPassword" />
+        <div *ngIf="completeInviteForm.get('newPassword')?.invalid && completeInviteForm.get('newPassword')?.touched" class="error-message">
+          A senha deve ter no mínimo 6 caracteres.
+        </div>
+        <input type="password" placeholder="Confirmar senha" formControlName="confirmPassword" />
+        <div *ngIf="completeInviteForm.get('confirmPassword')?.touched && completeInviteForm.hasError('passwordMismatch')" class="error-message">
+          As senhas não coincidem.
+        </div>
+        <div *ngIf="isLoading" class="loading-content">
+          <c4u-spinner></c4u-spinner>
+          <span>{{loadingText}}</span>
+        </div>
+        <div class="actions">
+          <button class="login-btn" type="submit" [disabled]="isLoading || !completeInviteForm.valid || completeInviteForm.hasError('passwordMismatch')">
+            <span *ngIf="!isLoading">Concluir cadastro</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </c4u-card>
+
   <!-- Reset Confirm Form -->
   <c4u-card *ngIf="resetFlow === 'reset-confirm'" [title]="'LABEL_PASSWORD_RESET' | translate" align="center">
     <div class="login-form-container">
       <form class="login-form" (ngSubmit)="confirmResetPassword()" [formGroup]="resetConfirmForm">
-        <p class="reset-instructions">{{ 'LABEL_CODE_SENT_TO' | translate }}: <strong>{{resetEmail}}</strong></p>
-        <input type="text" [placeholder]="'LABEL_CODE_PLACEHOLDER' | translate" formControlName="code" maxlength="6" />
-        <div *ngIf="resetConfirmForm.get('code')?.invalid && resetConfirmForm.get('code')?.touched" class="error-message">
-          <span *ngIf="resetConfirmForm.get('code')?.errors?.['required']">{{ 'LABEL_CODE_REQUIRED' | translate }}</span>
-          <span *ngIf="resetConfirmForm.get('code')?.errors?.['minlength']">{{ 'LABEL_CODE_MIN_LENGTH' | translate }}</span>
-        </div>
+        <p class="reset-instructions">
+          Defina sua nova senha para concluir a redefinição.
+          <span *ngIf="resetEmail"> E-mail: <strong>{{ resetEmail }}</strong></span>
+        </p>
         <input type="password" [placeholder]="'LABEL_NEW_PASSWORD_PLACEHOLDER' | translate" formControlName="newPassword" />
         <div *ngIf="resetConfirmForm.get('newPassword')?.invalid && resetConfirmForm.get('newPassword')?.touched" class="error-message">
           <span *ngIf="resetConfirmForm.get('newPassword')?.errors?.['required']">{{ 'LABEL_PASSWORD_REQUIRED' | translate }}</span>

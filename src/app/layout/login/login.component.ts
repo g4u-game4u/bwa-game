@@ -1,6 +1,6 @@
 import {Component, OnInit} from '@angular/core';
 import {SessaoProvider} from "@providers/sessao/sessao.provider";
-import {Router} from "@angular/router";
+import {ActivatedRoute, Router} from "@angular/router";
 import {LoadingProvider} from "@providers/loading.provider";
 import {ToastService} from "@services/toast.service";
 import {FormControl, FormGroup, Validators} from "@angular/forms";
@@ -37,16 +37,19 @@ export class LoginComponent implements OnInit {
   private loadingTextInterval: any;
   loginBackgroundUrl: string | null = null;
 
-  constructor(private sessao: SessaoProvider, private router: Router, private loadingProvider: LoadingProvider,
+  constructor(private sessao: SessaoProvider, private router: Router, private route: ActivatedRoute,
+              private loadingProvider: LoadingProvider,
               private toastService: ToastService, private systemParamsService: SystemParamsService,
               private authProvider: AuthProvider, private translate: TranslateService,
               private loginLogService: LoginLogService, private logoService: LogoService) {
     this.bwaLogoUrl = this.logoService.getLogoUrl();
   }
 
-  // Estado do fluxo: 'login' | 'reset-request' | 'reset-confirm'
-  resetFlow: 'login' | 'reset-request' | 'reset-confirm' = 'login';
+  // Estado do fluxo: 'login' | 'reset-request' | 'reset-confirm' | 'complete-invite'
+  resetFlow: 'login' | 'reset-request' | 'reset-confirm' | 'complete-invite' = 'login';
   resetEmail: string = '';
+  recoveryAccessToken: string = '';
+  inviteEmail: string = '';
 
   form: FormGroup = new FormGroup({
     username: new FormControl('', Validators.required),
@@ -58,7 +61,12 @@ export class LoginComponent implements OnInit {
   });
 
   resetConfirmForm: FormGroup = new FormGroup({
-    code: new FormControl('', [Validators.required, Validators.minLength(6)]),
+    newPassword: new FormControl('', [Validators.required, Validators.minLength(6)]),
+    confirmPassword: new FormControl('', [Validators.required])
+  }, { validators: this.passwordMatchValidator });
+
+  completeInviteForm: FormGroup = new FormGroup({
+    fullName: new FormControl('', [Validators.required, Validators.minLength(2)]),
     newPassword: new FormControl('', [Validators.required, Validators.minLength(6)]),
     confirmPassword: new FormControl('', [Validators.required])
   }, { validators: this.passwordMatchValidator });
@@ -86,10 +94,6 @@ export class LoginComponent implements OnInit {
     return this.resetRequestForm.get('email')?.value;
   }
 
-  get resetConfirmCode() {
-    return this.resetConfirmForm.get('code')?.value;
-  }
-
   get resetConfirmNewPassword() {
     return this.resetConfirmForm.get('newPassword')?.value;
   }
@@ -98,7 +102,42 @@ export class LoginComponent implements OnInit {
     return this.resetConfirmForm.errors?.['passwordMismatch'];
   }
 
+  private parseUrlHash(): Record<string, string> {
+    const hash = typeof window !== 'undefined' ? window.location.hash?.replace(/^#/, '') ?? '' : '';
+    return Object.fromEntries(new URLSearchParams(hash));
+  }
+
+  private clearUrlHash(): void {
+    if (typeof window === 'undefined' || !window.history?.replaceState) {
+      return;
+    }
+    const cleanUrl = window.location.pathname + window.location.search;
+    window.history.replaceState(null, '', cleanUrl);
+  }
+
   async ngOnInit() {
+    const hashParams = this.parseUrlHash();
+    const accessToken = hashParams['access_token']?.trim();
+    const flowFromQuery = this.route.snapshot.queryParamMap.get('flow');
+    const emailFromQuery = this.route.snapshot.queryParamMap.get('email');
+    const isInviteFlow =
+      flowFromQuery === 'invite' || hashParams['type'] === 'invite';
+
+    if (accessToken) {
+      this.recoveryAccessToken = accessToken;
+      this.clearUrlHash();
+
+      if (isInviteFlow) {
+        this.inviteEmail = emailFromQuery?.trim() ?? '';
+        this.resetFlow = 'complete-invite';
+        this.completeInviteForm.reset();
+      } else {
+        this.resetEmail = emailFromQuery?.trim() ?? '';
+        this.resetFlow = 'reset-confirm';
+        this.resetConfirmForm.reset();
+      }
+    }
+
     try {
       // Inicializa os parâmetros do sistema no primeiro acesso
       // Isso carrega informações como logo, cores, etc. mesmo sem autenticação
@@ -223,7 +262,12 @@ export class LoginComponent implements OnInit {
     this.resetRequestForm.enable(); // Ensure form is enabled
     this.resetConfirmForm.reset();
     this.resetConfirmForm.enable(); // Ensure form is enabled
+    this.completeInviteForm.reset();
+    this.completeInviteForm.enable();
     this.resetEmail = '';
+    this.recoveryAccessToken = '';
+    this.inviteEmail = '';
+    void this.router.navigate(['/login'], { replaceUrl: true });
   }
 
   async requestResetCode() {
@@ -234,9 +278,10 @@ export class LoginComponent implements OnInit {
       try {
         await this.authProvider.requestPasswordReset(this.resetRequestEmail);
         this.resetEmail = this.resetRequestEmail;
-        this.resetFlow = 'reset-confirm';
-        this.resetConfirmForm.reset();
-        this.toastService.success(this.translate.instant('MESSAGE_CODE_SENT'));
+        this.toastService.success(
+          'Se existir uma conta com este e-mail, você receberá um link para redefinir a senha.',
+        );
+        this.backToLogin();
       } catch (error: any) {
         const errorMessage = error?.error?.message || this.translate.instant('ERROR_RESET_CODE_REQUEST');
         this.toastService.error(errorMessage);
@@ -248,15 +293,19 @@ export class LoginComponent implements OnInit {
   }
 
   async confirmResetPassword() {
+    if (!this.recoveryAccessToken) {
+      this.toastService.error('Link de redefinição inválido ou expirado. Solicite um novo e-mail.');
+      return;
+    }
+
     if (this.resetConfirmForm.valid && !this.resetConfirmForm.hasError('passwordMismatch')) {
       this.isLoading = true;
       this.resetConfirmForm.disable(); // Disable form controls
       this.loadingText = this.translate.instant('LOADING_RESETTING_PASSWORD');
       try {
-        await this.authProvider.resetPassword(
-          this.resetEmail,
-          this.resetConfirmCode,
-          this.resetConfirmNewPassword
+        await this.authProvider.changePasswordRecovery(
+          this.recoveryAccessToken,
+          this.resetConfirmNewPassword,
         );
         this.toastService.success(this.translate.instant('MESSAGE_PASSWORD_RESET_SUCCESS'));
         this.backToLogin();
@@ -266,6 +315,42 @@ export class LoginComponent implements OnInit {
       } finally {
         this.isLoading = false;
         this.resetConfirmForm.enable(); // Re-enable form controls
+      }
+    }
+  }
+
+  async confirmCompleteInvite() {
+    if (!this.recoveryAccessToken) {
+      this.toastService.error('Link de convite inválido. Solicite um novo convite.');
+      return;
+    }
+
+    if (this.completeInviteForm.valid && !this.completeInviteForm.hasError('passwordMismatch')) {
+      this.isLoading = true;
+      this.completeInviteForm.disable();
+      this.loadingText = 'Concluindo cadastro...';
+      try {
+        await this.authProvider.completeInviteFromRecovery({
+          accessToken: this.recoveryAccessToken,
+          fullName: this.completeInviteForm.get('fullName')?.value,
+          password: this.completeInviteForm.get('newPassword')?.value,
+        });
+        this.toastService.success('Cadastro concluído com sucesso. Faça login para continuar.');
+        if (this.inviteEmail) {
+          this.form.patchValue({ username: this.inviteEmail });
+        }
+        this.recoveryAccessToken = '';
+        this.inviteEmail = '';
+        this.resetFlow = 'login';
+        this.completeInviteForm.reset();
+        this.completeInviteForm.enable();
+        void this.router.navigate(['/login'], { replaceUrl: true });
+      } catch (error: any) {
+        const errorMessage = error?.error?.message || 'Não foi possível concluir o cadastro.';
+        this.toastService.error(errorMessage);
+      } finally {
+        this.isLoading = false;
+        this.completeInviteForm.enable();
       }
     }
   }
