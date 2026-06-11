@@ -132,12 +132,12 @@ export class RewardsComponent implements AfterViewInit, OnInit {
 
   toggleMenu() {
     this.menu.nativeElement.style.left = this.menuOpen
-        ? `-${this.menu.nativeElement.offsetWidth - 56}px`
-        : null;
+      ? `-${this.menu.nativeElement.offsetWidth - 56}px`
+      : null;
     this.menuShadow.nativeElement.style.width = this.menuOpen ? '56px' : null;
     this.menuShadow.nativeElement.style.minWidth = this.menuOpen
-        ? '56px'
-        : null;
+      ? '56px'
+      : null;
     this.menuOpen = !this.menuOpen;
   }
 
@@ -152,7 +152,7 @@ export class RewardsComponent implements AfterViewInit, OnInit {
       if (result === 'converted') {
         this.loadMetricsFromStorage();
       }
-    }, () => {});
+    }, () => { });
   }
 
   navigateTo(route: string) {
@@ -188,7 +188,7 @@ export class RewardsComponent implements AfterViewInit, OnInit {
     const totalRewards = this.rewards.length;
     const placeholderCount = this.rewards.filter(r => this.isPlaceholderImage(r.imageUrl)).length;
     const realImageCount = totalRewards - placeholderCount;
-    
+
     return {
       total: totalRewards,
       realImages: realImageCount,
@@ -253,22 +253,22 @@ export class RewardsComponent implements AfterViewInit, OnInit {
       const categoryName = catalogMap.get(catalogId) || 'Outros';
       // console.log('Item:', item, 'CatalogId:', catalogId, 'Categoria mapeada:', categoryName);
       const isLimited = item.amount > 0 && item.amount <= 10;
-      const isHighlighted = item.techniques?.includes('premium') || 
-                          item.techniques?.includes('featured') ||
-                          false;
-      const description = item.i18n?.['pt-BR']?.['description'] || 
-                        item.extra?.['description'] || 
-                        '';
+      const isHighlighted = item.techniques?.includes('premium') ||
+        item.techniques?.includes('featured') ||
+        false;
+      const description = item.i18n?.['pt-BR']?.['description'] ||
+        item.extra?.['description'] ||
+        '';
       return {
         id: item._id || item.catalogId + '-' + item.name,
         title: item.i18n?.['pt-BR']?.name || item.name,
         amount: item.amount,
         owned: item.owned || 0,
         description: description,
-        imageUrl: item.image?.medium?.url || 
-                 item.image?.original?.url || 
-                 item.image?.small?.url || 
-                 GIFT_ICON_PLACEHOLDER,
+        imageUrl: item.image?.medium?.url ||
+          item.image?.original?.url ||
+          item.image?.small?.url ||
+          GIFT_ICON_PLACEHOLDER,
         cost: item.requires?.[0]?.total || 0,
         category: categoryName,
         isHighlighted: isHighlighted,

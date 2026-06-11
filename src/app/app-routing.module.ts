@@ -28,6 +28,15 @@ const routes: Routes = [
     }]
   },
   {
+    path: 'profile',
+    component: MainComponent,
+    children: [{
+      path: '',
+      loadChildren: () => import('./pages/profile/profile.module').then(m => m.ProfileModule),
+      canActivateChild: [PermissaoAcessoGeral]
+    }]
+  },
+  {
     path: 'sem-permissao',
     component: SemPermissaoComponent
   },

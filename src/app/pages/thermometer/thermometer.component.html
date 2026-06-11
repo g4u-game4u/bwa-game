@@ -1,23 +1,10 @@
 <div class="thermometer-container" scroll>
   <aside #menu>
-    <page-season
-      (seasonData)="getSeasonData($event)"
-      [collapse]="!menuOpen"
-      [idConsulta]="idConsulta"
-      [tipoConsulta]="tipoConsulta"
-      [nomeConsulta]="nomeConsulta"
-      [time]="time"
-      [showTeamGoal]="showDashColaborador"
-      [isCSLayout]="false"
-    ></page-season>
+    <page-season (seasonData)="getSeasonData($event)" [collapse]="!menuOpen" [idConsulta]="idConsulta"
+      [tipoConsulta]="tipoConsulta" [nomeConsulta]="nomeConsulta" [time]="time" [showTeamGoal]="showDashColaborador"
+      [isCSLayout]="false"></page-season>
 
-    <button
-      class="menu-handler"
-      flex
-      vAlign="center"
-      hAlign="center"
-      (click)="toggleMenu()"
-    >
+    <button class="menu-handler" flex vAlign="center" hAlign="center" (click)="toggleMenu()">
       <i class="icon-arrow_forward_ios" [ngClass]="{ invert: menuOpen }"></i>
     </button>
   </aside>
@@ -56,51 +43,37 @@
               <div class="thermometer-stage-bg thermometer-stage-orange"></div>
               <div class="thermometer-stage-bg thermometer-stage-cyan"></div>
               <div class="thermometer-stage-bg thermometer-stage-green"></div>
-              
+
               <!-- Progress Fill -->
-              <div 
-                class="thermometer-fill"
-                [style.height]="currentProgress + '%'"
-                [style.background]="'linear-gradient(to top, ' + getThermometerColor(currentProgress) + ', transparent)'"
-              >
+              <div class="thermometer-fill" [style.height]="currentProgress + '%'"
+                [style.background]="'linear-gradient(to top, ' + getThermometerColor(currentProgress) + ', transparent)'">
                 <div class="thermometer-fill-animation"></div>
               </div>
-              
+
               <!-- Stage Indicators Inside Thermometer -->
-              <div 
-                *ngFor="let stage of stageMarkers; let i = index"
-                class="thermometer-stage-indicator"
-                [style.bottom]="stage.percentage + '%'"
-              >
+              <div *ngFor="let stage of stageMarkers; let i = index" class="thermometer-stage-indicator"
+                [style.bottom]="stage.percentage + '%'">
                 <!-- Stage line -->
                 <div class="thermometer-stage-line"></div>
-                
+
                 <!-- Current stage highlight -->
-                <div 
+                <div
                   *ngIf="currentProgress >= (i === 0 ? 0 : stageMarkers[i-1]?.percentage || 0) && currentProgress < stage.percentage"
-                  class="thermometer-stage-current"
-                  [style.backgroundColor]="stage.color"
-                >
+                  class="thermometer-stage-current" [style.backgroundColor]="stage.color">
                   ATUAL
                 </div>
-                
+
                 <!-- Percentage labels -->
-                <span 
-                  class="thermometer-stage-label"
-                  [style.color]="stage.color"
-                >
+                <span class="thermometer-stage-label" [style.color]="stage.color">
                   {{ stage.label }}
                 </span>
-                
+
                 <!-- Reward labels -->
-                <span 
-                  class="thermometer-stage-reward"
-                  [style.color]="stage.color"
-                >
+                <span class="thermometer-stage-reward" [style.color]="stage.color">
                   {{ stage.reward }}
                 </span>
               </div>
-              
+
               <!-- Achievement indicator for completed stages -->
               <div *ngIf="currentProgress >= 100" class="thermometer-achievement">
                 <div class="thermometer-achievement-icon">
@@ -110,13 +83,12 @@
             </div>
 
             <!-- Thermometer Bulb -->
-            <div 
-              class="thermometer-bulb"
-              [style.backgroundColor]="getThermometerColor(currentProgress)"
-            >
+            <div class="thermometer-bulb" [style.backgroundColor]="getThermometerColor(currentProgress)">
               <!-- Thermometer icon placeholder -->
               <svg class="thermometer-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z">
+                </path>
               </svg>
             </div>
           </div>
@@ -124,11 +96,9 @@
 
         <!-- Current Progress -->
         <div class="thermometer-progress">
-          <div 
-            class="thermometer-progress-value"
+          <div class="thermometer-progress-value"
             [style.background]="'linear-gradient(to right, ' + getThermometerColor(currentProgress) + ', ' + getThermometerColor(currentProgress) + '80)'"
-            style="WebkitBackgroundClip: text; backgroundClip: text;"
-          >
+            style="WebkitBackgroundClip: text; backgroundClip: text;">
             {{ currentProgress }}%
           </div>
           <p class="thermometer-progress-label">da meta alcançada</p>
@@ -184,16 +154,13 @@
         <div class="reward-card">
           <h3 class="reward-card-header">Estágios de Recompensa</h3>
           <div class="tier-breakdown">
-            <div 
-              *ngFor="let tier of [
+            <div *ngFor="let tier of [
                 { range: '0-49%', percentage: 1, color: 'text-red-400', bgColor: 'tier-item-current-red' },
                 { range: '50-69%', percentage: 2, color: 'text-orange-400', bgColor: 'tier-item-current-orange' },
                 { range: '70-99%', percentage: 3, color: 'text-cyan-400', bgColor: 'tier-item-current-cyan' },
                 { range: '100%+', percentage: 4, color: 'text-green-400', bgColor: 'tier-item-current-green' }
-              ]; let i = index"
-              class="tier-item"
-              [ngClass]="isCurrentTier(i) ? tier.bgColor + ' tier-item-current ' + tier.color : 'tier-item-inactive'"
-            >
+              ]; let i = index" class="tier-item"
+              [ngClass]="isCurrentTier(i) ? tier.bgColor + ' tier-item-current ' + tier.color : 'tier-item-inactive'">
               <span [ngClass]="tier.color">{{ tier.range }}</span>
               <span [ngClass]="tier.color + ' tier-percentage'">
                 {{ tier.percentage }}% da receita

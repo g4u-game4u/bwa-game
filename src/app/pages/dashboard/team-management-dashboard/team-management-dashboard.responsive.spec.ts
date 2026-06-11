@@ -154,9 +154,9 @@ describe('TeamManagementDashboardComponent - Responsive Behavior', () => {
 
     it('should detect desktop breakpoint (1920px+)', () => {
       setViewportWidth(1920);
-      
+
       expect(window.innerWidth).toBe(1920);
-      
+
       // Verify desktop layout is applied
       const dashboardContent = getComputedStyleOf('.dashboard-content');
       expect(dashboardContent).toBeTruthy();
@@ -164,9 +164,9 @@ describe('TeamManagementDashboardComponent - Responsive Behavior', () => {
 
     it('should detect large desktop breakpoint (2560px)', () => {
       setViewportWidth(2560);
-      
+
       expect(window.innerWidth).toBe(2560);
-      
+
       // Dashboard should still render correctly at very large sizes
       const dashboard = debugElement.query(By.css('.team-management-dashboard'));
       expect(dashboard).toBeTruthy();
@@ -174,9 +174,9 @@ describe('TeamManagementDashboardComponent - Responsive Behavior', () => {
 
     it('should detect tablet breakpoint (768px-1024px)', () => {
       setViewportWidth(768);
-      
+
       expect(window.innerWidth).toBe(768);
-      
+
       // Verify tablet layout is applied
       const dashboardContent = getComputedStyleOf('.dashboard-content');
       expect(dashboardContent).toBeTruthy();
@@ -184,18 +184,18 @@ describe('TeamManagementDashboardComponent - Responsive Behavior', () => {
 
     it('should detect tablet breakpoint at upper bound (1024px)', () => {
       setViewportWidth(1024);
-      
+
       expect(window.innerWidth).toBe(1024);
-      
+
       const dashboardContent = getComputedStyleOf('.dashboard-content');
       expect(dashboardContent).toBeTruthy();
     });
 
     it('should detect mobile breakpoint (<768px)', () => {
       setViewportWidth(375);
-      
+
       expect(window.innerWidth).toBe(375);
-      
+
       // Verify mobile layout is applied
       const dashboardContent = getComputedStyleOf('.dashboard-content');
       expect(dashboardContent).toBeTruthy();
@@ -203,9 +203,9 @@ describe('TeamManagementDashboardComponent - Responsive Behavior', () => {
 
     it('should detect small mobile breakpoint (320px)', () => {
       setViewportWidth(320);
-      
+
       expect(window.innerWidth).toBe(320);
-      
+
       // Dashboard should render at minimum mobile width
       const dashboard = debugElement.query(By.css('.team-management-dashboard'));
       expect(dashboard).toBeTruthy();
@@ -215,15 +215,15 @@ describe('TeamManagementDashboardComponent - Responsive Behavior', () => {
       // Start at desktop
       setViewportWidth(1920);
       expect(window.innerWidth).toBe(1920);
-      
+
       // Transition to tablet
       setViewportWidth(1024);
       expect(window.innerWidth).toBe(1024);
-      
+
       // Transition to mobile
       setViewportWidth(375);
       expect(window.innerWidth).toBe(375);
-      
+
       // Component should remain stable through transitions
       expect(component).toBeTruthy();
     });
@@ -231,11 +231,11 @@ describe('TeamManagementDashboardComponent - Responsive Behavior', () => {
     it('should maintain component state across breakpoint changes', () => {
       component.selectedTeam = 'Departamento Pessoal';
       component.activeTab = 'productivity';
-      
+
       setViewportWidth(1920);
       expect(component.selectedTeam).toBe('Departamento Pessoal');
       expect(component.activeTab).toBe('productivity');
-      
+
       setViewportWidth(375);
       expect(component.selectedTeam).toBe('Departamento Pessoal');
       expect(component.activeTab).toBe('productivity');
@@ -260,7 +260,7 @@ describe('TeamManagementDashboardComponent - Responsive Behavior', () => {
 
     it('should use grid layout on desktop (1920px+)', () => {
       setViewportWidth(1920);
-      
+
       const dashboardContent = getComputedStyleOf('.dashboard-content');
       expect(dashboardContent).toBeTruthy();
       if (dashboardContent) {
@@ -270,7 +270,7 @@ describe('TeamManagementDashboardComponent - Responsive Behavior', () => {
 
     it('should adjust grid columns on tablet (768px-1024px)', () => {
       setViewportWidth(1024);
-      
+
       const dashboardContent = getComputedStyleOf('.dashboard-content');
       expect(dashboardContent).toBeTruthy();
       if (dashboardContent) {
@@ -281,7 +281,7 @@ describe('TeamManagementDashboardComponent - Responsive Behavior', () => {
 
     it('should stack content on mobile (<768px)', () => {
       setViewportWidth(375);
-      
+
       const dashboardContent = getComputedStyleOf('.dashboard-content');
       expect(dashboardContent).toBeTruthy();
       if (dashboardContent) {
@@ -292,10 +292,10 @@ describe('TeamManagementDashboardComponent - Responsive Behavior', () => {
 
     it('should maintain sidebar visibility on desktop', () => {
       setViewportWidth(1920);
-      
+
       const sidebar = debugElement.query(By.css('.dashboard-sidebar'));
       expect(sidebar).toBeTruthy();
-      
+
       if (sidebar) {
         const style = window.getComputedStyle(sidebar.nativeElement);
         expect(style.display).not.toBe('none');
@@ -304,10 +304,10 @@ describe('TeamManagementDashboardComponent - Responsive Behavior', () => {
 
     it('should maintain sidebar visibility on tablet', () => {
       setViewportWidth(1024);
-      
+
       const sidebar = debugElement.query(By.css('.dashboard-sidebar'));
       expect(sidebar).toBeTruthy();
-      
+
       if (sidebar) {
         const style = window.getComputedStyle(sidebar.nativeElement);
         expect(style.display).not.toBe('none');
@@ -316,18 +316,18 @@ describe('TeamManagementDashboardComponent - Responsive Behavior', () => {
 
     it('should reorder content on mobile (main content first)', () => {
       setViewportWidth(375);
-      
+
       const sidebar = debugElement.query(By.css('.dashboard-sidebar'));
       const mainContent = debugElement.query(By.css('.dashboard-main'));
-      
+
       expect(sidebar).toBeTruthy();
       expect(mainContent).toBeTruthy();
-      
+
       // Both should be visible, but order may change via CSS
       if (sidebar && mainContent) {
         const sidebarStyle = window.getComputedStyle(sidebar.nativeElement);
         const mainStyle = window.getComputedStyle(mainContent.nativeElement);
-        
+
         expect(sidebarStyle.display).not.toBe('none');
         expect(mainStyle.display).not.toBe('none');
       }
@@ -335,10 +335,10 @@ describe('TeamManagementDashboardComponent - Responsive Behavior', () => {
 
     it('should adjust header layout on mobile', () => {
       setViewportWidth(375);
-      
+
       const headerContent = getComputedStyleOf('.header-content');
       expect(headerContent).toBeTruthy();
-      
+
       // Header should adapt to mobile layout
       if (headerContent) {
         expect(headerContent.display).toBe('flex');
@@ -350,12 +350,12 @@ describe('TeamManagementDashboardComponent - Responsive Behavior', () => {
       setViewportWidth(1920);
       let dashboardContent = getComputedStyleOf('.dashboard-content');
       const desktopPadding = dashboardContent?.padding;
-      
+
       // Mobile padding
       setViewportWidth(375);
       dashboardContent = getComputedStyleOf('.dashboard-content');
       const mobilePadding = dashboardContent?.padding;
-      
+
       // Padding should be different (mobile should be smaller)
       expect(desktopPadding).toBeDefined();
       expect(mobilePadding).toBeDefined();
@@ -366,12 +366,12 @@ describe('TeamManagementDashboardComponent - Responsive Behavior', () => {
       setViewportWidth(1920);
       let dashboardContent = getComputedStyleOf('.dashboard-content');
       const desktopGap = dashboardContent?.gap;
-      
+
       // Mobile gap
       setViewportWidth(375);
       dashboardContent = getComputedStyleOf('.dashboard-content');
       const mobileGap = dashboardContent?.gap;
-      
+
       // Gap should be defined
       expect(desktopGap).toBeDefined();
       expect(mobileGap).toBeDefined();
@@ -379,10 +379,10 @@ describe('TeamManagementDashboardComponent - Responsive Behavior', () => {
 
     it('should prevent horizontal scrolling at all breakpoints', () => {
       const viewports = [320, 375, 768, 1024, 1920, 2560];
-      
+
       viewports.forEach(width => {
         setViewportWidth(width);
-        
+
         const dashboard = getComputedStyleOf('.team-management-dashboard');
         if (dashboard) {
           // Should have overflow-x hidden or auto to prevent horizontal scrolling
@@ -409,21 +409,21 @@ describe('TeamManagementDashboardComponent - Responsive Behavior', () => {
 
     it('should render chart container on desktop', () => {
       setViewportWidth(1920);
-      
+
       const tabContent = debugElement.query(By.css('.tab-content'));
       expect(tabContent).toBeTruthy();
     });
 
     it('should render chart container on tablet', () => {
       setViewportWidth(1024);
-      
+
       const tabContent = debugElement.query(By.css('.tab-content'));
       expect(tabContent).toBeTruthy();
     });
 
     it('should render chart container on mobile', () => {
       setViewportWidth(375);
-      
+
       const tabContent = debugElement.query(By.css('.tab-content'));
       expect(tabContent).toBeTruthy();
     });
@@ -432,24 +432,24 @@ describe('TeamManagementDashboardComponent - Responsive Behavior', () => {
       setViewportWidth(1920);
       let tabContent = getComputedStyleOf('.tab-content');
       const desktopPadding = tabContent?.padding;
-      
+
       setViewportWidth(375);
       tabContent = getComputedStyleOf('.tab-content');
       const mobilePadding = tabContent?.padding;
-      
+
       expect(desktopPadding).toBeDefined();
       expect(mobilePadding).toBeDefined();
     });
 
     it('should maintain chart aspect ratio on resize', () => {
       const viewports = [1920, 1024, 768, 375];
-      
+
       viewports.forEach(width => {
         setViewportWidth(width);
-        
+
         const tabContent = debugElement.query(By.css('.tab-content'));
         expect(tabContent).toBeTruthy();
-        
+
         // Chart container should exist at all sizes
         if (tabContent) {
           const style = window.getComputedStyle(tabContent.nativeElement);
@@ -466,18 +466,18 @@ describe('TeamManagementDashboardComponent - Responsive Behavior', () => {
       ];
       fixture.detectChanges();
       tick();
-      
+
       setViewportWidth(375);
       fixture.detectChanges();
       tick();
-      
+
       // Data should remain consistent
       expect(component.graphData.length).toBe(2);
     }));
 
     it('should adjust chart minimum height on mobile', () => {
       setViewportWidth(375);
-      
+
       const tabContent = getComputedStyleOf('.tab-content');
       if (tabContent) {
         const minHeight = tabContent.minHeight;
@@ -503,46 +503,46 @@ describe('TeamManagementDashboardComponent - Responsive Behavior', () => {
 
     it('should render dropdown selectors on mobile', () => {
       setViewportWidth(375);
-      
+
       const selectors = debugElement.queryAll(By.css('.selector-section'));
       expect(selectors.length).toBeGreaterThan(0);
     });
 
     it('should render team selector on mobile', () => {
       setViewportWidth(375);
-      
+
       const teamSelector = debugElement.query(By.css('c4u-team-selector'));
       expect(teamSelector).toBeTruthy();
     });
 
     it('should render collaborator selector on mobile', () => {
       setViewportWidth(375);
-      
+
       const collaboratorSelector = debugElement.query(By.css('c4u-collaborator-selector'));
       expect(collaboratorSelector).toBeTruthy();
     });
 
     it('should render month selector on mobile', () => {
       setViewportWidth(375);
-      
+
       const monthSelector = debugElement.query(By.css('c4u-seletor-mes'));
       expect(monthSelector).toBeTruthy();
     });
 
     it('should have adequate touch target size for buttons on mobile', () => {
       setViewportWidth(375);
-      
+
       const buttons = debugElement.queryAll(By.css('button'));
-      
+
       buttons.forEach(button => {
         const rect = button.nativeElement.getBoundingClientRect();
         const style = window.getComputedStyle(button.nativeElement);
-        
+
         // Skip hidden buttons
         if (style.display === 'none' || style.visibility === 'hidden') {
           return;
         }
-        
+
         // Touch targets should be at least 24px (relaxed for test environment)
         // In production, aim for 44px minimum
         if (rect.width > 0 && rect.height > 0) {
@@ -554,37 +554,37 @@ describe('TeamManagementDashboardComponent - Responsive Behavior', () => {
 
     it('should render tab buttons on mobile', () => {
       setViewportWidth(375);
-      
+
       const tabButtons = debugElement.queryAll(By.css('.tab-button'));
       expect(tabButtons.length).toBe(2); // Goals and Productivity tabs
     });
 
     it('should handle tab switching on mobile', () => {
       setViewportWidth(375);
-      
+
       component.switchTab('productivity');
       fixture.detectChanges();
-      
+
       expect(component.activeTab).toBe('productivity');
-      
+
       component.switchTab('goals');
       fixture.detectChanges();
-      
+
       expect(component.activeTab).toBe('goals');
     });
 
     it('should render refresh button on mobile', () => {
       setViewportWidth(375);
-      
+
       const refreshButton = debugElement.query(By.css('.btn-refresh'));
       expect(refreshButton).toBeTruthy();
     });
 
     it('should handle refresh button click on mobile', () => {
       setViewportWidth(375);
-      
+
       spyOn(component, 'refreshData');
-      
+
       const refreshButton = debugElement.query(By.css('.btn-refresh'));
       if (refreshButton) {
         refreshButton.nativeElement.click();
@@ -596,22 +596,22 @@ describe('TeamManagementDashboardComponent - Responsive Behavior', () => {
       setViewportWidth(1920);
       let refreshButton = debugElement.query(By.css('.btn-refresh'));
       const desktopFontSize = refreshButton ? window.getComputedStyle(refreshButton.nativeElement).fontSize : null;
-      
+
       setViewportWidth(375);
       refreshButton = debugElement.query(By.css('.btn-refresh'));
       const mobileFontSize = refreshButton ? window.getComputedStyle(refreshButton.nativeElement).fontSize : null;
-      
+
       expect(desktopFontSize).toBeDefined();
       expect(mobileFontSize).toBeDefined();
     });
 
     it('should maintain interactive element accessibility on mobile', () => {
       setViewportWidth(375);
-      
+
       const interactiveElements = debugElement.nativeElement.querySelectorAll(
         'button, a, input, select, [role="button"]'
       );
-      
+
       let visibleCount = 0;
       interactiveElements.forEach((element: HTMLElement) => {
         const style = window.getComputedStyle(element);
@@ -619,20 +619,20 @@ describe('TeamManagementDashboardComponent - Responsive Behavior', () => {
           visibleCount++;
         }
       });
-      
+
       // Should have interactive elements visible
       expect(visibleCount).toBeGreaterThan(0);
     });
 
     it('should handle selector changes on mobile', () => {
       setViewportWidth(375);
-      
+
       component.onTeamChange('Financeiro');
       expect(component.selectedTeam).toBe('Financeiro');
-      
+
       component.onCollaboratorChange('user1@test.com');
       expect(component.selectedCollaborator).toBe('user1@test.com');
-      
+
       component.onMonthChange(new Date(2026, 3, 1));
       expect(component.selectedMonth.getMonth()).toBe(3);
     });
@@ -653,11 +653,11 @@ describe('TeamManagementDashboardComponent - Responsive Behavior', () => {
 
     it('should render all main sections on desktop', () => {
       setViewportWidth(1920);
-      
+
       const header = debugElement.query(By.css('.dashboard-header'));
       const sidebar = debugElement.query(By.css('.dashboard-sidebar'));
       const mainContent = debugElement.query(By.css('.dashboard-main'));
-      
+
       expect(header).toBeTruthy();
       expect(sidebar).toBeTruthy();
       expect(mainContent).toBeTruthy();
@@ -665,11 +665,11 @@ describe('TeamManagementDashboardComponent - Responsive Behavior', () => {
 
     it('should render all main sections on tablet', () => {
       setViewportWidth(1024);
-      
+
       const header = debugElement.query(By.css('.dashboard-header'));
       const sidebar = debugElement.query(By.css('.dashboard-sidebar'));
       const mainContent = debugElement.query(By.css('.dashboard-main'));
-      
+
       expect(header).toBeTruthy();
       expect(sidebar).toBeTruthy();
       expect(mainContent).toBeTruthy();
@@ -677,11 +677,11 @@ describe('TeamManagementDashboardComponent - Responsive Behavior', () => {
 
     it('should render all main sections on mobile', () => {
       setViewportWidth(375);
-      
+
       const header = debugElement.query(By.css('.dashboard-header'));
       const sidebar = debugElement.query(By.css('.dashboard-sidebar'));
       const mainContent = debugElement.query(By.css('.dashboard-main'));
-      
+
       expect(header).toBeTruthy();
       expect(sidebar).toBeTruthy();
       expect(mainContent).toBeTruthy();
@@ -689,10 +689,10 @@ describe('TeamManagementDashboardComponent - Responsive Behavior', () => {
 
     it('should render team sidebar component at all sizes', () => {
       const viewports = [1920, 1024, 768, 375];
-      
+
       viewports.forEach(width => {
         setViewportWidth(width);
-        
+
         const teamSidebar = debugElement.query(By.css('c4u-team-sidebar'));
         expect(teamSidebar).toBeTruthy();
       });
@@ -700,10 +700,10 @@ describe('TeamManagementDashboardComponent - Responsive Behavior', () => {
 
     it('should render tab navigation at all sizes', () => {
       const viewports = [1920, 1024, 768, 375];
-      
+
       viewports.forEach(width => {
         setViewportWidth(width);
-        
+
         const tabNav = debugElement.query(By.css('.tab-navigation'));
         expect(tabNav).toBeTruthy();
       });
@@ -713,7 +713,7 @@ describe('TeamManagementDashboardComponent - Responsive Behavior', () => {
       setViewportWidth(375);
       component.activeTab = 'goals';
       fixture.detectChanges();
-      
+
       const goalsTab = debugElement.query(By.css('c4u-goals-progress-tab'));
       expect(goalsTab).toBeTruthy();
     });
@@ -722,22 +722,22 @@ describe('TeamManagementDashboardComponent - Responsive Behavior', () => {
       setViewportWidth(375);
       component.activeTab = 'productivity';
       fixture.detectChanges();
-      
+
       const productivityTab = debugElement.query(By.css('c4u-productivity-analysis-tab'));
       expect(productivityTab).toBeTruthy();
     });
 
     it('should maintain readability of text at all sizes', () => {
       const viewports = [1920, 1024, 768, 375];
-      
+
       viewports.forEach(width => {
         setViewportWidth(width);
-        
+
         const title = debugElement.query(By.css('.dashboard-title'));
         if (title) {
           const style = window.getComputedStyle(title.nativeElement);
           const fontSize = parseInt(style.fontSize);
-          
+
           // Font size should be reasonable (at least 12px)
           expect(fontSize).toBeGreaterThanOrEqual(12);
         }
@@ -746,16 +746,16 @@ describe('TeamManagementDashboardComponent - Responsive Behavior', () => {
 
     it('should handle loading states at all screen sizes', () => {
       const viewports = [1920, 1024, 768, 375];
-      
+
       viewports.forEach(width => {
         setViewportWidth(width);
-        
+
         component.isLoading = true;
         fixture.detectChanges();
-        
+
         const loadingOverlay = debugElement.query(By.css('.loading-overlay'));
         expect(loadingOverlay).toBeTruthy();
-        
+
         component.isLoading = false;
         fixture.detectChanges();
       });
@@ -763,17 +763,17 @@ describe('TeamManagementDashboardComponent - Responsive Behavior', () => {
 
     it('should handle error states at all screen sizes', () => {
       const viewports = [1920, 1024, 768, 375];
-      
+
       viewports.forEach(width => {
         setViewportWidth(width);
-        
+
         component.hasSidebarError = true;
         component.sidebarErrorMessage = 'Test error';
         fixture.detectChanges();
-        
+
         const errorMessage = debugElement.query(By.css('c4u-error-message'));
         expect(errorMessage).toBeTruthy();
-        
+
         component.hasSidebarError = false;
         fixture.detectChanges();
       });
@@ -781,10 +781,10 @@ describe('TeamManagementDashboardComponent - Responsive Behavior', () => {
 
     it('should render selector labels at all sizes', () => {
       const viewports = [1920, 1024, 768, 375];
-      
+
       viewports.forEach(width => {
         setViewportWidth(width);
-        
+
         const labels = debugElement.queryAll(By.css('.selector-label'));
         expect(labels.length).toBeGreaterThan(0);
       });
@@ -792,17 +792,17 @@ describe('TeamManagementDashboardComponent - Responsive Behavior', () => {
 
     it('should maintain component hierarchy at all sizes', () => {
       const viewports = [1920, 1024, 768, 375];
-      
+
       viewports.forEach(width => {
         setViewportWidth(width);
-        
+
         // Verify the component tree structure is maintained
         const dashboard = debugElement.query(By.css('.team-management-dashboard'));
         expect(dashboard).toBeTruthy();
-        
+
         const content = debugElement.query(By.css('.dashboard-content'));
         expect(content).toBeTruthy();
-        
+
         // Content should be a child of dashboard
         expect(dashboard.nativeElement.contains(content.nativeElement)).toBe(true);
       });
@@ -822,10 +822,10 @@ describe('TeamManagementDashboardComponent - Responsive Behavior', () => {
 
     it('should handle very small viewport (320px)', () => {
       setViewportWidth(320);
-      
+
       const dashboard = debugElement.query(By.css('.team-management-dashboard'));
       expect(dashboard).toBeTruthy();
-      
+
       // Should not cause horizontal overflow
       const style = window.getComputedStyle(dashboard.nativeElement);
       expect(['hidden', 'auto', 'clip'].includes(style.overflowX)).toBe(true);
@@ -833,10 +833,10 @@ describe('TeamManagementDashboardComponent - Responsive Behavior', () => {
 
     it('should handle very large viewport (3840px - 4K)', () => {
       setViewportWidth(3840);
-      
+
       const dashboard = debugElement.query(By.css('.team-management-dashboard'));
       expect(dashboard).toBeTruthy();
-      
+
       // Content should be centered with max-width
       const content = debugElement.query(By.css('.dashboard-content'));
       if (content) {
@@ -847,7 +847,7 @@ describe('TeamManagementDashboardComponent - Responsive Behavior', () => {
 
     it('should handle rapid viewport changes', () => {
       const viewports = [1920, 375, 1024, 768, 1920];
-      
+
       viewports.forEach(width => {
         setViewportWidth(width);
         expect(component).toBeTruthy();
@@ -858,13 +858,13 @@ describe('TeamManagementDashboardComponent - Responsive Behavior', () => {
     it('should maintain data integrity during resize', fakeAsync(() => {
       component.selectedTeam = 'Departamento Pessoal';
       component.seasonPoints = { total: 100, bloqueados: 50, desbloqueados: 50 };
-      
+
       setViewportWidth(1920);
       expect(component.seasonPoints.total).toBe(100);
-      
+
       setViewportWidth(375);
       expect(component.seasonPoints.total).toBe(100);
-      
+
       setViewportWidth(1024);
       expect(component.seasonPoints.total).toBe(100);
     }));
@@ -873,11 +873,11 @@ describe('TeamManagementDashboardComponent - Responsive Behavior', () => {
       // Simulate portrait mobile
       setViewportWidth(375);
       expect(window.innerWidth).toBe(375);
-      
+
       // Simulate landscape mobile
       setViewportWidth(667);
       expect(window.innerWidth).toBe(667);
-      
+
       const dashboard = debugElement.query(By.css('.team-management-dashboard'));
       expect(dashboard).toBeTruthy();
     });
@@ -885,10 +885,10 @@ describe('TeamManagementDashboardComponent - Responsive Behavior', () => {
     it('should handle breakpoint boundaries correctly', () => {
       // Test exact breakpoint values
       const boundaries = [767, 768, 1024, 1025];
-      
+
       boundaries.forEach(width => {
         setViewportWidth(width);
-        
+
         const dashboard = debugElement.query(By.css('.team-management-dashboard'));
         expect(dashboard).toBeTruthy();
       });
@@ -896,7 +896,7 @@ describe('TeamManagementDashboardComponent - Responsive Behavior', () => {
 
     it('should not break with missing optional elements', () => {
       setViewportWidth(375);
-      
+
       // Even if some child components are missing, dashboard should render
       const dashboard = debugElement.query(By.css('.team-management-dashboard'));
       expect(dashboard).toBeTruthy();
@@ -907,13 +907,13 @@ describe('TeamManagementDashboardComponent - Responsive Behavior', () => {
       component.collaborators = [];
       component.goalMetrics = [];
       component.graphData = [];
-      
+
       const viewports = [1920, 1024, 375];
-      
+
       viewports.forEach(width => {
         setViewportWidth(width);
         fixture.detectChanges();
-        
+
         const dashboard = debugElement.query(By.css('.team-management-dashboard'));
         expect(dashboard).toBeTruthy();
       });
@@ -921,17 +921,17 @@ describe('TeamManagementDashboardComponent - Responsive Behavior', () => {
 
     it('should maintain box-sizing border-box at all sizes', () => {
       const viewports = [1920, 1024, 375];
-      
+
       viewports.forEach(width => {
         setViewportWidth(width);
-        
+
         const mainContainers = [
           '.team-management-dashboard',
           '.dashboard-content',
           '.dashboard-sidebar',
           '.dashboard-main'
         ];
-        
+
         mainContainers.forEach(selector => {
           const style = getComputedStyleOf(selector);
           if (style) {

@@ -1,28 +1,16 @@
-<div class='recompensas-layout' >
+<div class='recompensas-layout'>
   <aside #menu>
 
-    <page-season
-    (seasonData)="getSeasonData($event)"
-    [collapse]="!menuOpen"
-    [idConsulta]="idConsulta"
-    [tipoConsulta]="tipoConsulta"
-    [nomeConsulta]="nomeConsulta"
-    [showTeamGoal]="showDashColaborador"
-    [isCSLayout]="false"
-  ></page-season>
+    <page-season (seasonData)="getSeasonData($event)" [collapse]="!menuOpen" [idConsulta]="idConsulta"
+      [tipoConsulta]="tipoConsulta" [nomeConsulta]="nomeConsulta" [showTeamGoal]="showDashColaborador"
+      [isCSLayout]="false"></page-season>
 
-  <button
-    class="menu-handler"
-    flex
-    vAlign="center"
-    hAlign="center"
-    (click)="toggleMenu()"
-  >
-    <i class="icon-arrow_forward_ios" [ngClass]="{ invert: menuOpen }"></i>
-  </button>
+    <button class="menu-handler" flex vAlign="center" hAlign="center" (click)="toggleMenu()">
+      <i class="icon-arrow_forward_ios" [ngClass]="{ invert: menuOpen }"></i>
+    </button>
   </aside>
 
-  <main class='recompensas-main' flex >
+  <main class='recompensas-main' flex>
     <div class="menu-shadow" #menuShadow flexItem="0"></div>
     <div class="recompensas-content" direction="column" flexItem="1" scroll>
       <div class="metrics-grid">
@@ -32,7 +20,7 @@
           <div class="metric-label">Meus pontos desbloqueados</div>
         </div>
         <div class="convert-metric-card">
-          <div flex direction="column" >
+          <div flex direction="column">
             <div class="metric-icon"><i class="ri ri-arrow-up-down-line" style="color: orangered;"></i></div>
             <div class="metric-value">{{ price }} <span style="font-size: 1rem;">pts / moeda</span></div>
             <div flex width="100%">
@@ -40,11 +28,8 @@
             </div>
           </div>
           <div flex>
-            <button 
-              class="convert-button"
-              (click)="openConvertPointsModal()"
-            >
-            Converter
+            <button class="convert-button" (click)="openConvertPointsModal()">
+              Converter
             </button>
           </div>
         </div>
@@ -55,18 +40,15 @@
         </div>
       </div>
 
-      <app-rewards-store
-        [rewards]="rewards"
-        [categories]="categories"
-        [playerRedeemLogs]="playerRedeemLogs"
-        [isLoading]="isLoadingRewards"
-        (rewardRedeemed)="loadMetricsFromStorage()"
-      ></app-rewards-store>
+      <app-rewards-store [rewards]="rewards" [categories]="categories" [playerRedeemLogs]="playerRedeemLogs"
+        [isLoading]="isLoadingRewards" (rewardRedeemed)="loadMetricsFromStorage()"></app-rewards-store>
     </div>
-    <div *ngIf="isVirtualStoreEnabled() || isLeaderboardsEnabled() || isCashDistributionEnabled()" class="right-menu-shadow" flexItem="0"></div>
+    <div *ngIf="isVirtualStoreEnabled() || isLeaderboardsEnabled() || isCashDistributionEnabled()"
+      class="right-menu-shadow" flexItem="0"></div>
   </main>
 
-  <div *ngIf="isVirtualStoreEnabled() || isLeaderboardsEnabled() || isCashDistributionEnabled()" class="right-menu-container" #rightMenu [ngClass]="{ 'expanded': rightMenuOpen, 'collapsed': !rightMenuOpen }">
+  <div *ngIf="isVirtualStoreEnabled() || isLeaderboardsEnabled() || isCashDistributionEnabled()"
+    class="right-menu-container" #rightMenu [ngClass]="{ 'expanded': rightMenuOpen, 'collapsed': !rightMenuOpen }">
     <c4u-card class="right-menu">
       <div class="right-menu-content">
         <div class="menu-items">
@@ -75,17 +57,20 @@
             <span *ngIf="rightMenuOpen">Dashboard</span>
             <span class="menu-tooltip">Dashboard</span>
           </a>
-          <a *ngIf="isVirtualStoreEnabled()" [href]="'/rewards'" class="menu-item" (mouseenter)="onMenuItemHover('Recompensas')">
+          <a *ngIf="isVirtualStoreEnabled()" [href]="'/rewards'" class="menu-item"
+            (mouseenter)="onMenuItemHover('Recompensas')">
             <i class="ri-gift-line"></i>
             <span *ngIf="rightMenuOpen">Recompensas</span>
             <span class="menu-tooltip">Recompensas</span>
           </a>
-          <a *ngIf="isLeaderboardsEnabled()" href="/ranking" class="menu-item" (mouseenter)="onMenuItemHover('Ranking')">
+          <a *ngIf="isLeaderboardsEnabled()" href="/ranking" class="menu-item"
+            (mouseenter)="onMenuItemHover('Ranking')">
             <i class="ri-trophy-line"></i>
             <span *ngIf="rightMenuOpen">Ranking</span>
             <span class="menu-tooltip">Ranking</span>
           </a>
-          <a *ngIf="isCashDistributionEnabled()" href="/thermometer" class="menu-item" (mouseenter)="onMenuItemHover('Metas e Distribuição')">
+          <a *ngIf="isCashDistributionEnabled()" href="/thermometer" class="menu-item"
+            (mouseenter)="onMenuItemHover('Metas e Distribuição')">
             <i class="ri-focus-2-line"></i>
             <span *ngIf="rightMenuOpen">Metas e Distribuição</span>
             <span class="menu-tooltip">Metas e Distribuição</span>
@@ -94,16 +79,10 @@
       </div>
     </c4u-card>
     <div class="right-menu-handler-container">
-    <button
-      class="right-menu-handler"
-      #rightMenuHandler
-      flex
-      vAlign="center"
-      hAlign="center"
-      (click)="toggleRightMenu()"
-    >
-      <i class="icon-arrow_forward_ios" [ngClass]="{ invert: !rightMenuOpen }"></i>
-    </button>
-  </div>
+      <button class="right-menu-handler" #rightMenuHandler flex vAlign="center" hAlign="center"
+        (click)="toggleRightMenu()">
+        <i class="icon-arrow_forward_ios" [ngClass]="{ invert: !rightMenuOpen }"></i>
+      </button>
+    </div>
   </div>
 </div>

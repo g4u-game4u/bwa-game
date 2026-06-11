@@ -216,6 +216,14 @@
         <i class="ri-refresh-line" [class.spinning]="isLoading" aria-hidden="true"></i>
         <span class="refresh-time" *ngIf="lastRefresh">{{ getLastRefreshTime() }}</span>
       </button>
+      <a
+        class="profile-button"
+        routerLink="/profile"
+        aria-label="Meu perfil"
+        title="Meu perfil">
+        <i class="ri-user-line" aria-hidden="true"></i>
+        <span>Meu perfil</span>
+      </a>
       <button 
         class="logout-button"
         (click)="logout()"

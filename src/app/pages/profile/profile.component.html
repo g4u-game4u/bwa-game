@@ -1,0 +1,23 @@
+<div class="profile-page">
+  <c4u-card [title]="'LABEL_MY_PROFILE' | translate" align="center">
+    <div class="profile-content">
+      <div class="field">
+        <label>{{ 'LABEL_EMAIL' | translate }}</label>
+        <input type="email" [value]="userEmail" readonly />
+      </div>
+
+      <section class="password-section">
+        <h3>{{ 'LABEL_CHANGE_PASSWORD' | translate }}</h3>
+        <p class="instructions">{{ 'LABEL_PROFILE_PASSWORD_INSTRUCTIONS' | translate }}</p>
+        <button
+          type="button"
+          class="profile-btn"
+          (click)="sendPasswordResetLink()"
+          [disabled]="isLoading || !userEmail">
+          <span *ngIf="!isLoading">{{ 'LABEL_SEND_PASSWORD_RESET_LINK' | translate }}</span>
+          <span *ngIf="isLoading">{{ 'LOADING_SENDING_CODE' | translate }}</span>
+        </button>
+      </section>
+    </div>
+  </c4u-card>
+</div>

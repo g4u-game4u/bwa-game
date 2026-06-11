@@ -177,7 +177,7 @@ describe('GamificationDashboardComponent - Property 11: Responsive Layout Adapta
           // Verify main content area exists and is visible
           const mainContent = debugElement.query(By.css('.dashboard-main'));
           expect(mainContent).toBeTruthy();
-          
+
           if (mainContent) {
             const computedStyle = window.getComputedStyle(mainContent.nativeElement);
             // Main content should not be display:none
@@ -253,10 +253,10 @@ describe('GamificationDashboardComponent - Property 11: Responsive Layout Adapta
 
             // On mobile viewports, check that buttons have reasonable touch targets
             if (viewportWidth < 768) {
-              const isTouchTarget = element.tagName === 'BUTTON' || 
-                                   element.tagName === 'A' ||
-                                   element.getAttribute('role') === 'button';
-              
+              const isTouchTarget = element.tagName === 'BUTTON' ||
+                element.tagName === 'A' ||
+                element.getAttribute('role') === 'button';
+
               if (isTouchTarget && rect.width > 0 && rect.height > 0) {
                 // Touch targets should be at least 24px (relaxed for test environment)
                 const minSize = Math.min(rect.width, rect.height);
@@ -307,10 +307,10 @@ describe('GamificationDashboardComponent - Property 11: Responsive Layout Adapta
             const element = debugElement.nativeElement.querySelector(selector);
             if (element) {
               const computedStyle = window.getComputedStyle(element);
-              
+
               // Main containers should have overflow-x hidden or auto
               expect(['hidden', 'auto', 'clip'].includes(computedStyle.overflowX)).toBe(true);
-              
+
               // Should have box-sizing: border-box
               expect(computedStyle.boxSizing).toBe('border-box');
             }
@@ -321,7 +321,7 @@ describe('GamificationDashboardComponent - Property 11: Responsive Layout Adapta
           if (kpiGrid) {
             const computedStyle = window.getComputedStyle(kpiGrid);
             expect(computedStyle.display).toBe('grid');
-            
+
             // On mobile, should be single column
             if (viewportWidth < 768) {
               // Grid should adapt to smaller screens

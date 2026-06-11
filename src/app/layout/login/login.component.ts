@@ -279,7 +279,7 @@ export class LoginComponent implements OnInit {
         await this.authProvider.requestPasswordReset(this.resetRequestEmail);
         this.resetEmail = this.resetRequestEmail;
         this.toastService.success(
-          'Se existir uma conta com este e-mail, você receberá um link para redefinir a senha.',
+          this.translate.instant('MESSAGE_PASSWORD_RESET_EMAIL_SENT'),
         );
         this.backToLogin();
       } catch (error: any) {

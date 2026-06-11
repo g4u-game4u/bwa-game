@@ -70,7 +70,7 @@ describe('LoginComponent - Logo Integration Tests', () => {
     systemParamsServiceMock.initializeSystemParams.and.returnValue(Promise.resolve({} as any));
     systemParamsServiceMock.getParam.and.returnValue(Promise.resolve(null));
 
-    authProviderMock = jasmine.createSpyObj('AuthProvider', ['requestPasswordReset', 'resetPassword']);
+    authProviderMock = jasmine.createSpyObj('AuthProvider', ['requestPasswordReset', 'changePasswordRecovery']);
 
     loginLogServiceMock = jasmine.createSpyObj('LoginLogService', ['logLogin']);
     loginLogServiceMock.logLogin.and.returnValue(Promise.resolve());

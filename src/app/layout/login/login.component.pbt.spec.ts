@@ -57,7 +57,7 @@ describe('LoginComponent Property-Based Tests - Error Fallback Behavior', () => 
     systemParamsServiceMock.getParam.and.returnValue(Promise.resolve(null));
 
     // Create mock for AuthProvider
-    authProviderMock = jasmine.createSpyObj('AuthProvider', ['requestPasswordReset', 'resetPassword']);
+    authProviderMock = jasmine.createSpyObj('AuthProvider', ['requestPasswordReset', 'changePasswordRecovery']);
 
     // Create mock for LoginLogService
     loginLogServiceMock = jasmine.createSpyObj('LoginLogService', ['logLogin']);

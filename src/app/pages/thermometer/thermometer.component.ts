@@ -24,29 +24,29 @@ export const TIPO_CONSULTA_TIME = 1;
 
 
 @Component({
-    selector: 'app-thermometer',
-    templateUrl: './thermometer.component.html',
-    styleUrls: ['./thermometer.component.scss']
-  })
-  export class ThermometerComponent implements OnInit {
-    @ViewChild('menu')
-    menu: any;
+  selector: 'app-thermometer',
+  templateUrl: './thermometer.component.html',
+  styleUrls: ['./thermometer.component.scss']
+})
+export class ThermometerComponent implements OnInit {
+  @ViewChild('menu')
+  menu: any;
 
-    @ViewChild('menuShadow')
-    menuShadow: any;
-  
-    // Sidenav/season properties
+  @ViewChild('menuShadow')
+  menuShadow: any;
 
-  
-    // Mock data - em uma aplicação real, isso viria da sua API
-    mockData = {
-      currentProgress: 67, // 67% da meta
-      goalAmount: 1000000, // Meta de $1M
-      currentAmount: 670000, // $670K alcançado
-      teamSize: 25,
-    };
+  // Sidenav/season properties
 
-      currentProgress: number = 0;
+
+  // Mock data - em uma aplicação real, isso viria da sua API
+  mockData = {
+    currentProgress: 67, // 67% da meta
+    goalAmount: 1000000, // Meta de $1M
+    currentAmount: 670000, // $670K alcançado
+    teamSize: 25,
+  };
+
+  currentProgress: number = 0;
   goalAmount: number = 0;
   currentAmount: number = 0;
   teamSize: number = 0;
@@ -61,119 +61,119 @@ export const TIPO_CONSULTA_TIME = 1;
   tipoConsulta: number = TIPO_CONSULTA_COLABORADOR;
   nomeConsulta: string = '';
   time: { id: number; nome: string } | any;
-    dashReady = false;
+  dashReady = false;
 
 
-    
-    constructor(
-      public router: Router,
-      private sessao: SessaoProvider,
+
+  constructor(
+    public router: Router,
+    private sessao: SessaoProvider,
     private acessoService: AcessoService,
-    ) {
-      this.currentProgress = this.mockData.currentProgress;
-      this.goalAmount = this.mockData.goalAmount;
-      this.currentAmount = this.mockData.currentAmount;
-      this.teamSize = this.mockData.teamSize;
-      
-      this.stageMarkers = [
-        { percentage: 25, label: '> 50%', color: '#EF4444', reward: '0.1%' },
-        { percentage: 50, label: '50%', color: '#F59E0B', reward: '0.2%' },
-        { percentage: 70, label: '70%', color: '#06B6D4', reward: '0.5%' },
-        { percentage: 100, label: '100%', color: '#10B981', reward: '0.9%' },
-      ];
+  ) {
+    this.currentProgress = this.mockData.currentProgress;
+    this.goalAmount = this.mockData.goalAmount;
+    this.currentAmount = this.mockData.currentAmount;
+    this.teamSize = this.mockData.teamSize;
 
-      this.calculateRewards();
-    }
-  
-    async ngOnInit(): Promise<void> {
-    }
-    
-    // Calcula o tier de recompensa baseado no progresso
-    getRewardTier(progress: number): RewardTier {
-      if (progress >= 100) return { percentage: 4, tier: 'CHAMPION', color: 'text-green-400' };
-      if (progress >= 70) return { percentage: 3, tier: 'ELITE', color: 'text-orange-400' };
-      if (progress >= 50) return { percentage: 2, tier: 'RISING', color: 'text-cyan-400' };
-      return { percentage: 1, tier: 'BUILDING', color: 'text-red-400' };
-    }
+    this.stageMarkers = [
+      { percentage: 25, label: '> 50%', color: '#EF4444', reward: '0.1%' },
+      { percentage: 50, label: '50%', color: '#F59E0B', reward: '0.2%' },
+      { percentage: 70, label: '70%', color: '#06B6D4', reward: '0.5%' },
+      { percentage: 100, label: '100%', color: '#10B981', reward: '0.9%' },
+    ];
 
-    // Obtém a cor do termômetro baseada no progresso atual
-    getThermometerColor(progress: number): string {
-      if (progress >= 100) return '#10B981'; // Verde
-      if (progress >= 70) return '#F59E0B'; // Laranja
-      if (progress >= 50) return '#06B6D4'; // Ciano
-      return '#EF4444'; // Vermelho
-    }
+    this.calculateRewards();
+  }
 
-    // Calcula as recompensas
-    calculateRewards(): void {
-      this.currentTier = this.getRewardTier(this.currentProgress);
-      this.nextTier = this.currentProgress < 100 ? this.getRewardTier(Math.min(this.currentProgress + 1, 100)) : null;
-      
-      // Calcula recompensa total
-      this.totalReward = (this.currentAmount * this.currentTier.percentage) / 100;
-      this.individualReward = this.totalReward / this.teamSize;
-    }
+  async ngOnInit(): Promise<void> {
+  }
 
-    // Verifica se é o tier atual
-    isCurrentTier(index: number): boolean {
-      return (
-        (index === 0 && this.currentProgress < 50) ||
-        (index === 1 && this.currentProgress >= 50 && this.currentProgress < 70) ||
-        (index === 2 && this.currentProgress >= 70 && this.currentProgress < 100) ||
-        (index === 3 && this.currentProgress >= 100)
-      );
-    }
+  // Calcula o tier de recompensa baseado no progresso
+  getRewardTier(progress: number): RewardTier {
+    if (progress >= 100) return { percentage: 4, tier: 'CHAMPION', color: 'text-green-400' };
+    if (progress >= 70) return { percentage: 3, tier: 'ELITE', color: 'text-orange-400' };
+    if (progress >= 50) return { percentage: 2, tier: 'RISING', color: 'text-cyan-400' };
+    return { percentage: 1, tier: 'BUILDING', color: 'text-red-400' };
+  }
 
-    // Obtém o próximo tier necessário
-    getNextTierRequired(): string {
-      if (this.currentProgress >= 70) return '100%';
-      if (this.currentProgress >= 50) return '70%';
-      return '50%';
-    }
+  // Obtém a cor do termômetro baseada no progresso atual
+  getThermometerColor(progress: number): string {
+    if (progress >= 100) return '#10B981'; // Verde
+    if (progress >= 70) return '#F59E0B'; // Laranja
+    if (progress >= 50) return '#06B6D4'; // Ciano
+    return '#EF4444'; // Vermelho
+  }
 
-    // Calcula o potencial máximo por pessoa
-    getMaxPotentialPerPerson(): number {
-      return (this.goalAmount * 0.04) / this.teamSize;
-    }
+  // Calcula as recompensas
+  calculateRewards(): void {
+    this.currentTier = this.getRewardTier(this.currentProgress);
+    this.nextTier = this.currentProgress < 100 ? this.getRewardTier(Math.min(this.currentProgress + 1, 100)) : null;
 
-    // Calcula o potencial do próximo tier
-    getNextTierPotential(): number {
-      if (!this.nextTier) return 0;
-      return (this.goalAmount * this.nextTier.percentage) / 100 / this.teamSize;
-    }
+    // Calcula recompensa total
+    this.totalReward = (this.currentAmount * this.currentTier.percentage) / 100;
+    this.individualReward = this.totalReward / this.teamSize;
+  }
+
+  // Verifica se é o tier atual
+  isCurrentTier(index: number): boolean {
+    return (
+      (index === 0 && this.currentProgress < 50) ||
+      (index === 1 && this.currentProgress >= 50 && this.currentProgress < 70) ||
+      (index === 2 && this.currentProgress >= 70 && this.currentProgress < 100) ||
+      (index === 3 && this.currentProgress >= 100)
+    );
+  }
+
+  // Obtém o próximo tier necessário
+  getNextTierRequired(): string {
+    if (this.currentProgress >= 70) return '100%';
+    if (this.currentProgress >= 50) return '70%';
+    return '50%';
+  }
+
+  // Calcula o potencial máximo por pessoa
+  getMaxPotentialPerPerson(): number {
+    return (this.goalAmount * 0.04) / this.teamSize;
+  }
+
+  // Calcula o potencial do próximo tier
+  getNextTierPotential(): number {
+    if (!this.nextTier) return 0;
+    return (this.goalAmount * this.nextTier.percentage) / 100 / this.teamSize;
+  }
 
 
-    getSeasonData(data: TemporadaDashboard) {
-      this.seasonData = data;
+  getSeasonData(data: TemporadaDashboard) {
+    this.seasonData = data;
   }
 
   toggleMenu() {
     this.menu.nativeElement.style.left = this.menuOpen
-        ? `-${this.menu.nativeElement.offsetWidth - 56}px`
-        : null;
+      ? `-${this.menu.nativeElement.offsetWidth - 56}px`
+      : null;
     this.menuShadow.nativeElement.style.width = this.menuOpen ? '56px' : null;
     this.menuShadow.nativeElement.style.minWidth = this.menuOpen
-        ? '56px'
-        : null;
+      ? '56px'
+      : null;
     this.menuOpen = !this.menuOpen;
-}
+  }
 
-get showDashColaborador() {
-  return (
+  get showDashColaborador() {
+    return (
       this.dashReady &&
       (this.sessao.isColaborador() || (this.showDashGestor && !this.isTeam))
-  );
-}
+    );
+  }
 
-get isTeam() {
-  return this.tipoConsulta === TIPO_CONSULTA_TIME;
-}
+  get isTeam() {
+    return this.tipoConsulta === TIPO_CONSULTA_TIME;
+  }
 
-get showDashGestor() {
-  return (
+  get showDashGestor() {
+    return (
       this.sessao.isAdmin() ||
       this.sessao.isGerente()
-  );
-}
+    );
+  }
 
-  } 
+} 

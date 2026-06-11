@@ -662,7 +662,7 @@
       
       .refresh-button {
         position: absolute;
-        right: 120px; // Increased from 80px to add more spacing between buttons
+        right: 220px;
         top: 50%;
         transform: translateY(-50%);
         display: flex;
@@ -698,6 +698,39 @@
         
         .refresh-time {
           font-size: $font-size-small;
+        }
+      }
+
+      .profile-button {
+        position: absolute;
+        right: 110px;
+        top: 50%;
+        transform: translateY(-50%);
+        display: flex;
+        align-items: center;
+        gap: $spacing-xs;
+        padding: 8px 16px;
+        background: transparent;
+        border: 1px solid rgba($primary-electric-blue, 0.3);
+        border-radius: $border-radius-sm;
+        color: $primary-electric-blue;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        white-space: nowrap;
+        text-decoration: none;
+
+        &:hover {
+          background: rgba($primary-electric-blue, 0.1);
+          border-color: $primary-electric-blue;
+        }
+
+        i {
+          font-size: 1rem;
+        }
+
+        span {
+          font-size: $font-size-small;
+          font-weight: 500;
         }
       }
 
@@ -743,6 +776,12 @@
           transform: none;
           margin-top: $spacing-sm;
           margin-right: $spacing-sm;
+        }
+
+        .profile-button {
+          position: static;
+          transform: none;
+          margin-top: $spacing-sm;
         }
 
         .logout-button {
