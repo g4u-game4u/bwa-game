@@ -26,6 +26,9 @@ import {
   clientClassificationTotal,
   clientClassificationMaxCount,
   clientClassificationBarHeight,
+  getHighlightTeamLabel,
+  getHighlightGerenciaLabel,
+  highlightHasContext,
   OrgClientClassificationTier,
   OrgHierarchyRankingSortBy,
   OrgHierarchyWeekdayStat,
@@ -55,6 +58,7 @@ export class OrganizationHierarchyReportComponent implements OnInit, OnDestroy {
 
   simulationPotBrl: number | null = null;
   rankingSortBy: OrgHierarchyRankingSortBy = 'balance_score';
+  classificationView: 'table' | 'cards' = 'table';
   expandedNodeIds = new Set<string>();
 
   constructor(
@@ -190,6 +194,11 @@ export class OrganizationHierarchyReportComponent implements OnInit, OnDestroy {
     this.cdr.markForCheck();
   }
 
+  toggleClassificationView(): void {
+    this.classificationView = this.classificationView === 'table' ? 'cards' : 'table';
+    this.cdr.markForCheck();
+  }
+
   toggleTreeNode(nodeId: string): void {
     if (this.expandedNodeIds.has(nodeId)) {
       this.expandedNodeIds.delete(nodeId);
@@ -246,6 +255,18 @@ export class OrganizationHierarchyReportComponent implements OnInit, OnDestroy {
     return item.metric ?? 'Destaque';
   }
 
+  highlightTeamLabel(item: OrgHierarchyHighlightItem): string {
+    return getHighlightTeamLabel(item, this.root);
+  }
+
+  highlightGerenciaLabel(item: OrgHierarchyHighlightItem): string {
+    return getHighlightGerenciaLabel(item, this.root);
+  }
+
+  highlightShowsContext(item: OrgHierarchyHighlightItem): boolean {
+    return highlightHasContext(item, this.root);
+  }
+
   private updateSelectedMonthFromMonthsAgo(monthsAgo: number): void {
     const target = moment().subtract(monthsAgo, 'months').startOf('month');
     this.selectedMonth = target.toDate();
@@ -267,7 +288,7 @@ export class OrganizationHierarchyReportComponent implements OnInit, OnDestroy {
         this.actionLogService.fetchOrganizationHierarchyReport({
           month: this.selectedMonth,
           simulationPotBrl: this.simulationPotBrl ?? undefined,
-          depth: 5
+          depth: 6
         })
       );
 

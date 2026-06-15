@@ -784,7 +784,7 @@ export class ActionLogService {
     const refMonth = this.resolveDashboardCachedMonth(options?.month);
     const monthParam = this.toDashboardCachedMonthParam(refMonth);
     const sim = options?.simulationPotBrl;
-    const depth = options?.depth ?? 5;
+    const depth = options?.depth ?? 6;
     const nodeType = (options?.nodeType ?? '').trim();
     const nodeId = (options?.nodeId ?? '').trim();
     const cacheKey = `g4u_org_hierarchy_${monthParam}_${sim ?? ''}_${depth}_${nodeType}_${nodeId}`;

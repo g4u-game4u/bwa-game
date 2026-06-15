@@ -1835,6 +1835,110 @@ export interface PartitionExecutivePlayerRankingsOptions {
   attentionCount?: number;
 }
 
+export type ExecutiveHierarchyHighlightStatus = 'destaque' | 'atencao' | 'neutral';
+
+export interface ClassifiedExecutiveRank<T> {
+  item: T;
+  status: ExecutiveHierarchyHighlightStatus;
+}
+
+/** Sementes de diretoria (e-mail do diretor) a partir de user-actions e lista de gestores DIRETOR. */
+export function collectExecutiveDirectorateSeeds(
+  actions: Game4uUserActionModel[],
+  directors?: Array<{ user_email?: string | null; user_role?: string | null }>,
+  resolveDirectorLabel?: (email: string) => string
+): Map<string, { name: string; email: string }> {
+  const seeds = new Map<string, { name: string; email: string }>();
+
+  for (const action of actions || []) {
+    const segment = resolveExecutiveHierarchySegment(action, 'diretor');
+    if (!segment || segment.key === EXECUTIVE_HIERARCHY_UNASSIGNED_DIRETOR_KEY) {
+      continue;
+    }
+    seeds.set(segment.key, { name: segment.name, email: segment.email });
+  }
+
+  for (const director of directors || []) {
+    if (String(director.user_role ?? '').trim().toUpperCase() !== 'DIRETOR') {
+      continue;
+    }
+    const email = String(director.user_email ?? '').trim().toLowerCase();
+    if (!email) {
+      continue;
+    }
+    const name = resolveDirectorLabel?.(email) ?? email;
+    seeds.set(email, { name, email });
+  }
+
+  return seeds;
+}
+
+/** Une sementes de diretoria com métricas agregadas (inclui diretorias sem entregas no mês). */
+export function mergeExecutiveDirectorateCandidates(
+  seeds: Map<string, { name: string; email: string }>,
+  aggregated: ExecutiveHierarchyRankingCandidate[]
+): ExecutiveHierarchyRankingCandidate[] {
+  const aggByKey = new Map(aggregated.map(candidate => [candidate.email, candidate]));
+  const merged: ExecutiveHierarchyRankingCandidate[] = [];
+
+  for (const [key, seed] of seeds) {
+    const existing = aggByKey.get(key);
+    if (existing) {
+      merged.push(existing);
+      aggByKey.delete(key);
+      continue;
+    }
+    merged.push({
+      email: key,
+      name: seed.name,
+      tasksTotal: 0,
+      clientsCount: 0,
+      deliveriesCount: 0,
+      judgedDeliveriesCount: 0,
+      justifiedDeliveriesCount: 0,
+      onTimeDeliveries: 0,
+      onTimeDeliveryPct: null,
+      justifiedDeliveryPct: null,
+      onTimePct: null
+    });
+  }
+
+  for (const leftover of aggByKey.values()) {
+    merged.push(leftover);
+  }
+
+  return merged;
+}
+
+/**
+ * Classifica todos os candidatos (destaque / atenção / neutro) sem limitar a listagem.
+ * Destaque e atenção seguem as mesmas regras de {@link partitionExecutivePlayerRankings}.
+ */
+export function classifyExecutivePlayerRankings<T extends ExecutivePlayerRankCandidate & { name?: string }>(
+  playerArray: T[],
+  options: PartitionExecutivePlayerRankingsOptions = {}
+): ClassifiedExecutiveRank<T>[] {
+  const { top, attention } = partitionExecutivePlayerRankings(playerArray, options);
+  const topEmails = new Set(top.map(p => p.email));
+  const attentionEmails = new Set(attention.map(p => p.email));
+
+  const classified: ClassifiedExecutiveRank<T>[] = [
+    ...attention.map(item => ({ item, status: 'atencao' as const })),
+    ...top.map(item => ({ item, status: 'destaque' as const }))
+  ];
+
+  const neutral = playerArray
+    .filter(p => !attentionEmails.has(p.email) && !topEmails.has(p.email))
+    .sort((a, b) =>
+      String(a.name ?? a.email).localeCompare(String(b.name ?? b.email), 'pt-BR', {
+        sensitivity: 'base'
+      })
+    )
+    .map(item => ({ item, status: 'neutral' as const }));
+
+  return [...classified, ...neutral];
+}
+
 /**
  * Separa destaques (mais entregas no prazo) e jogadores que precisam de atenção (menor % no prazo).
  * Quem entra na lista de atenção não aparece no ranking de destaques.

@@ -176,40 +176,34 @@
           </section>
 
           <section class="dashboard-section classification-section" aria-label="Empresas por classificação">
-            <div class="section-header">
-              <h2 class="section-title">
-                <i class="ri-vip-diamond-line section-title-icon" aria-hidden="true"></i>
-                Empresas por classificação
-              </h2>
-              <span class="classification-total" *ngIf="clientClassificationTotalCount > 0">
-                {{ clientClassificationTotalCount | number:'1.0-0':'pt-BR' }} no escopo MTD
-              </span>
+            <div class="section-header section-header--with-toggle">
+              <div class="section-header__leading">
+                <h2 class="section-title">
+                  <i class="ri-vip-diamond-line section-title-icon" aria-hidden="true"></i>
+                  Empresas por classificação
+                </h2>
+                <span class="classification-total" *ngIf="clientClassificationTotalCount > 0">
+                  {{ clientClassificationTotalCount | number:'1.0-0':'pt-BR' }} no escopo MTD
+                </span>
+              </div>
+              <button
+                type="button"
+                class="classification-view-toggle"
+                (click)="toggleClassificationView()"
+                [attr.aria-pressed]="classificationView === 'cards'"
+                [attr.aria-label]="classificationView === 'table' ? 'Ver em cartões' : 'Ver tabela'">
+                <i
+                  [class]="classificationView === 'table' ? 'ri-layout-grid-line' : 'ri-table-line'"
+                  aria-hidden="true"></i>
+                <span>{{ classificationView === 'table' ? 'Cartões' : 'Tabela' }}</span>
+              </button>
             </div>
-            <div class="classification-grid">
-              <c4u-card
-                *ngFor="let tier of clientClassificationTiers; trackBy: trackByClassificationLevel"
-                class="classification-card"
-                [class.classification-card--stone]="tier.level === 1"
-                [class.classification-card--bronze]="tier.level === 2"
-                [class.classification-card--silver]="tier.level === 3"
-                [class.classification-card--gold]="tier.level === 4"
-                [class.classification-card--diamond]="tier.level === 5">
-                <div class="classification-card__icon" aria-hidden="true">
-                  <i [class]="tier.icon"></i>
-                </div>
-                <span class="classification-card__level">{{ tier.level }}</span>
-                <span class="classification-card__label">{{ tier.label }}</span>
-                <span class="classification-card__value">{{ tier.count | number:'1.0-0':'pt-BR' }}</span>
-                <span class="classification-card__hint">empresas</span>
-                <div class="classification-card__bar-track" aria-hidden="true">
-                  <div
-                    class="classification-card__bar-fill"
-                    [style.height]="classificationBarHeight(tier.count)">
-                  </div>
-                </div>
-              </c4u-card>
-            </div>
-            <div class="simple-table-wrap classification-table-wrap" role="region" aria-label="Tabela de empresas por classificação">
+
+            <div
+              *ngIf="classificationView === 'table'"
+              class="simple-table-wrap classification-table-wrap"
+              role="region"
+              aria-label="Tabela de empresas por classificação">
               <table class="simple-table classification-table">
                 <thead>
                   <tr>
@@ -233,6 +227,35 @@
                   </tr>
                 </tbody>
               </table>
+            </div>
+
+            <div
+              *ngIf="classificationView === 'cards'"
+              class="classification-grid"
+              role="region"
+              aria-label="Cartões de empresas por classificação">
+              <c4u-card
+                *ngFor="let tier of clientClassificationTiers; trackBy: trackByClassificationLevel"
+                class="classification-card"
+                [class.classification-card--stone]="tier.level === 1"
+                [class.classification-card--bronze]="tier.level === 2"
+                [class.classification-card--silver]="tier.level === 3"
+                [class.classification-card--gold]="tier.level === 4"
+                [class.classification-card--diamond]="tier.level === 5">
+                <div class="classification-card__icon" aria-hidden="true">
+                  <i [class]="tier.icon"></i>
+                </div>
+                <span class="classification-card__level">{{ tier.level }}</span>
+                <span class="classification-card__label">{{ tier.label }}</span>
+                <span class="classification-card__value">{{ tier.count | number:'1.0-0':'pt-BR' }}</span>
+                <span class="classification-card__hint">empresas</span>
+                <div class="classification-card__bar-track" aria-hidden="true">
+                  <div
+                    class="classification-card__bar-fill"
+                    [style.height]="classificationBarHeight(tier.count)">
+                  </div>
+                </div>
+              </c4u-card>
             </div>
           </section>
 
@@ -375,7 +398,19 @@
                 </h3>
                 <ul class="highlights-list">
                   <li *ngFor="let item of highlightDestaque; trackBy: trackByHighlight">
-                    <span class="highlights-list__label">{{ highlightMetricLabel(item) }}</span>
+                    <div class="highlights-list__info">
+                      <span class="highlights-list__label">{{ highlightMetricLabel(item) }}</span>
+                      <div class="highlights-list__meta" *ngIf="highlightShowsContext(item)">
+                        <span class="highlights-list__meta-item" *ngIf="highlightTeamLabel(item) !== '—'">
+                          <i class="ri-team-line" aria-hidden="true"></i>
+                          {{ highlightTeamLabel(item) }}
+                        </span>
+                        <span class="highlights-list__meta-item" *ngIf="highlightGerenciaLabel(item) !== '—'">
+                          <i class="ri-briefcase-line" aria-hidden="true"></i>
+                          {{ highlightGerenciaLabel(item) }}
+                        </span>
+                      </div>
+                    </div>
                     <span class="highlights-list__value" *ngIf="item.value != null">
                       {{ item.value | number:'1.0-0':'pt-BR' }}
                     </span>
@@ -389,7 +424,19 @@
                 </h3>
                 <ul class="highlights-list">
                   <li *ngFor="let item of highlightAtencao; trackBy: trackByHighlight">
-                    <span class="highlights-list__label">{{ highlightMetricLabel(item) }}</span>
+                    <div class="highlights-list__info">
+                      <span class="highlights-list__label">{{ highlightMetricLabel(item) }}</span>
+                      <div class="highlights-list__meta" *ngIf="highlightShowsContext(item)">
+                        <span class="highlights-list__meta-item" *ngIf="highlightTeamLabel(item) !== '—'">
+                          <i class="ri-team-line" aria-hidden="true"></i>
+                          {{ highlightTeamLabel(item) }}
+                        </span>
+                        <span class="highlights-list__meta-item" *ngIf="highlightGerenciaLabel(item) !== '—'">
+                          <i class="ri-briefcase-line" aria-hidden="true"></i>
+                          {{ highlightGerenciaLabel(item) }}
+                        </span>
+                      </div>
+                    </div>
                     <span class="highlights-list__value" *ngIf="item.value != null">
                       {{ item.value | number:'1.0-0':'pt-BR' }}
                     </span>

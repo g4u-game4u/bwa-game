@@ -594,7 +594,92 @@
                     </div>
 
                     <div
-                      *ngIf="showExecutiveInsightsPlayersRanking && (executiveInsightsTopPlayers.length > 0 || executiveInsightsAttentionPlayers.length > 0)"
+                      *ngIf="showExecutiveDirectorateUnifiedList"
+                      class="executive-insights-players-column">
+                      <div
+                        class="executive-block executive-block--players executive-block--directorates"
+                        aria-labelledby="executive-directorates-title">
+                        <div class="executive-block-header">
+                          <div class="executive-block-title">
+                            <i class="ri-building-4-line" aria-hidden="true"></i>
+                            <h4 id="executive-directorates-title">Diretorias</h4>
+                          </div>
+                          <span class="executive-block-meta">
+                            Todas as diretorias — destaque e atenção indicados por etiqueta
+                          </span>
+                        </div>
+
+                        <ul class="executive-player-list">
+                          <li
+                            *ngFor="let directorate of executiveInsightsDirectorates; trackBy: trackByExecutiveDirectorate"
+                            class="executive-player-item"
+                            [class.executive-player-item--top]="directorate.status === 'destaque'"
+                            [class.executive-player-item--attention]="directorate.status === 'atencao'">
+                            <div
+                              class="executive-directorate-status"
+                              [ngClass]="getExecutiveDirectorateStatusClass(directorate.status)"
+                              [attr.aria-label]="getExecutiveDirectorateStatusLabel(directorate.status)">
+                              <i
+                                *ngIf="directorate.status === 'destaque'"
+                                class="ri-trophy-line"
+                                aria-hidden="true"></i>
+                              <i
+                                *ngIf="directorate.status === 'atencao'"
+                                class="ri-error-warning-line"
+                                aria-hidden="true"></i>
+                              <span>{{ getExecutiveDirectorateStatusLabel(directorate.status) }}</span>
+                            </div>
+                            <div
+                              class="executive-player-avatar"
+                              [attr.aria-label]="directorate.name">
+                              <span>{{ directorate.initials }}</span>
+                            </div>
+                            <div class="executive-player-info">
+                              <div class="executive-player-name-row">
+                                <span class="executive-player-name" [title]="directorate.name">
+                                  {{ directorate.name }}
+                                </span>
+                                <span
+                                  class="executive-player-tasks"
+                                  [class.executive-player-tasks--highlight]="directorate.status === 'destaque'"
+                                  [class.executive-player-tasks--warn]="directorate.status === 'atencao'">
+                                  {{ directorate.onTimeDeliveries | number:'1.0-0':'pt-BR' }}
+                                  {{ directorate.onTimeDeliveries === 1 ? 'entrega no prazo' : 'entregas no prazo' }}
+                                </span>
+                              </div>
+                              <div class="executive-player-meta">
+                                <span>
+                                  {{ directorate.deliveriesCount | number:'1.0-0':'pt-BR' }}
+                                  {{ directorate.deliveriesCount === 1 ? 'entrega' : 'entregas' }} no mês
+                                </span>
+                                <ng-container *ngIf="directorate.onTimeDeliveryPct != null">
+                                  <span aria-hidden="true">·</span>
+                                  <span [ngClass]="getExecutiveOnTimeBadgeClass(directorate.onTimeDeliveryPct)">
+                                    {{ directorate.onTimeDeliveryPct | number:'1.0-1':'pt-BR' }}% no prazo
+                                  </span>
+                                </ng-container>
+                                <ng-container *ngIf="directorate.justifiedDeliveryPct != null">
+                                  <span aria-hidden="true">·</span>
+                                  <span class="badge-justified">
+                                    {{ directorate.justifiedDeliveryPct | number:'1.0-1':'pt-BR' }}% justificadas
+                                  </span>
+                                </ng-container>
+                                <ng-container *ngIf="directorate.clientsCount > 0">
+                                  <span aria-hidden="true">·</span>
+                                  <span>
+                                    {{ directorate.clientsCount | number:'1.0-0':'pt-BR' }}
+                                    {{ directorate.clientsCount === 1 ? 'cliente' : 'clientes' }}
+                                  </span>
+                                </ng-container>
+                              </div>
+                            </div>
+                          </li>
+                        </ul>
+                      </div>
+                    </div>
+
+                    <div
+                      *ngIf="showExecutiveInsightsPlayersRanking && !showExecutiveDirectorateUnifiedList && (executiveInsightsTopPlayers.length > 0 || executiveInsightsAttentionPlayers.length > 0)"
                       class="executive-insights-players-column">
                       <div
                         *ngIf="executiveInsightsTopPlayers.length > 0"

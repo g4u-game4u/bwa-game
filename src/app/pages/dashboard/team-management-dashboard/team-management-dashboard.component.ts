@@ -42,7 +42,10 @@ import {
   aggregateExecutiveTeamRankingFromUserActions,
   aggregateExecutiveTopProcessesFromUserActions,
   buildExecutiveJustifiedDeliveryLookup,
+  classifyExecutivePlayerRankings,
+  collectExecutiveDirectorateSeeds,
   computeExecutiveJustifiedDeliveryPct,
+  type ExecutiveHierarchyHighlightStatus,
   type ExecutiveHierarchyRankingMode,
   countExecutiveFinishedTasksFromUserActions,
   countExecutiveOnTimeTasksFromUserActions,
@@ -52,6 +55,7 @@ import {
   isGame4uDeliveryRowJustified,
   isGame4uUserActionFinalizedStatus,
   isGame4uUserActionJustified,
+  mergeExecutiveDirectorateCandidates,
   partitionExecutivePlayerRankings
 } from '@services/game4u-game-mapper';
 import { buildDashboardInsightsSnapshotFromUserActions } from '@services/dashboard-insights.service';
@@ -112,6 +116,11 @@ export interface ExecutiveInsightsPlayerRank {
   onTimeDeliveryPct: number | null;
   justifiedDeliveryPct: number | null;
   onTimePct: number | null;
+}
+
+/** Diretoria no painel C-Level com classificação visual (destaque / atenção / neutro). */
+export interface ExecutiveInsightsDirectorateRank extends ExecutiveInsightsPlayerRank {
+  status: ExecutiveHierarchyHighlightStatus;
 }
 
 /**
@@ -352,6 +361,8 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
   executiveInsightsTopPlayers: ExecutiveInsightsPlayerRank[] = [];
   /** Menor volume de entregas no prazo — precisam de atenção. */
   executiveInsightsAttentionPlayers: ExecutiveInsightsPlayerRank[] = [];
+  /** Todas as diretorias (C-Level) com indicação de destaque / atenção. */
+  executiveInsightsDirectorates: ExecutiveInsightsDirectorateRank[] = [];
 
   /** Total de tarefas DONE/DELIVERED agregadas no mês a partir das linhas RAW (não usa fallback ao supervision/dashboard). */
   executiveInsightsTotalTasks = 0;
@@ -4285,21 +4296,30 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
         skipPlayerRanking: this.executiveInsightsRankingSegment !== 'player'
       });
 
-      if (
-        this.executiveInsightsRankingSegment === 'gerente' ||
-        this.executiveInsightsRankingSegment === 'diretor'
-      ) {
+      if (this.executiveInsightsRankingSegment === 'diretor') {
+        const directorateRankings = await this.buildExecutiveDirectorateRankings(
+          allUserActions || [],
+          month
+        );
+        if (loadGen === this.executiveInsightsLoadGen) {
+          this.executiveInsightsDirectorates = directorateRankings;
+          this.executiveInsightsTopPlayers = [];
+          this.executiveInsightsAttentionPlayers = [];
+        }
+      } else if (this.executiveInsightsRankingSegment === 'gerente') {
         const hierarchyRankings = this.buildExecutiveHierarchyRankings(
           allUserActions || [],
           this.executiveInsightsRankingSegment
         );
         if (loadGen === this.executiveInsightsLoadGen) {
+          this.executiveInsightsDirectorates = [];
           this.executiveInsightsTopPlayers = hierarchyRankings.top;
           this.executiveInsightsAttentionPlayers = hierarchyRankings.attention;
         }
       } else if (this.executiveInsightsRankingSegment === 'team') {
         const teamRankings = await this.loadExecutiveTeamRankings(month);
         if (loadGen === this.executiveInsightsLoadGen) {
+          this.executiveInsightsDirectorates = [];
           this.executiveInsightsTopPlayers = teamRankings.top;
           this.executiveInsightsAttentionPlayers = teamRankings.attention;
         }
@@ -4324,6 +4344,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
     this.executiveInsightsTopProcesses = [];
     this.executiveInsightsTopPlayers = [];
     this.executiveInsightsAttentionPlayers = [];
+    this.executiveInsightsDirectorates = [];
     this.executiveInsightsTotalTasks = 0;
     this.executiveInsightsOnTimeTasks = 0;
     this.executiveInsightsJudgedTasks = 0;
@@ -4344,6 +4365,11 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
   /** Ranking agrupado (equipe, gerente ou diretoria), não por jogador individual. */
   get executiveInsightsRankingIsGrouped(): boolean {
     return this.executiveInsightsRankingSegment !== 'player';
+  }
+
+  /** Lista unificada de diretorias (C-Level): todas visíveis com classificação. */
+  get showExecutiveDirectorateUnifiedList(): boolean {
+    return this.executiveInsightsRankingSegment === 'diretor' && this.executiveInsightsDirectorates.length > 0;
   }
 
   get executiveInsightsRankingHighlightTitle(): string {
@@ -4443,14 +4469,26 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       this.executiveInsightsTopProcesses.length > 0 ||
       this.executiveInsightsTopPlayers.length > 0 ||
       this.executiveInsightsAttentionPlayers.length > 0 ||
+      this.executiveInsightsDirectorates.length > 0 ||
       hasAction;
   }
 
-  private buildExecutiveHierarchyRankings(
-    actions: Game4uUserActionModel[],
-    mode: ExecutiveHierarchyRankingMode
-  ): { top: ExecutiveInsightsPlayerRank[]; attention: ExecutiveInsightsPlayerRank[] } {
-    const candidates = aggregateExecutiveHierarchyRankings(actions, mode).map(candidate => ({
+  private mapExecutiveHierarchyCandidateToRank(
+    candidate: {
+      email: string;
+      name: string;
+      tasksTotal: number;
+      clientsCount: number;
+      deliveriesCount: number;
+      judgedDeliveriesCount?: number;
+      justifiedDeliveriesCount?: number;
+      onTimeDeliveries: number;
+      onTimeDeliveryPct: number | null;
+      justifiedDeliveryPct?: number | null;
+      onTimePct: number | null;
+    }
+  ): ExecutiveInsightsPlayerRank {
+    return {
       email: candidate.email,
       name: candidate.name,
       initials: this.computeExecutiveInitials(candidate.name),
@@ -4463,7 +4501,39 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       onTimeDeliveryPct: candidate.onTimeDeliveryPct,
       justifiedDeliveryPct: candidate.justifiedDeliveryPct ?? null,
       onTimePct: candidate.onTimePct
-    }));
+    };
+  }
+
+  private async buildExecutiveDirectorateRankings(
+    actions: Game4uUserActionModel[],
+    month: Date
+  ): Promise<ExecutiveInsightsDirectorateRank[]> {
+    const directors = await firstValueFrom(
+      this.actionLogService
+        .fetchManagementDashboardCachedList(month, 'DIRETOR')
+        .pipe(takeUntil(this.destroy$))
+    ).catch(() => []);
+
+    const seeds = collectExecutiveDirectorateSeeds(actions, directors, email =>
+      formatGerenciaGroupLabel(email)
+    );
+    const aggregated = aggregateExecutiveHierarchyRankings(actions, 'diretor');
+    const candidates = mergeExecutiveDirectorateCandidates(seeds, aggregated);
+    const ranked = candidates.map(candidate => this.mapExecutiveHierarchyCandidateToRank(candidate));
+
+    return classifyExecutivePlayerRankings(ranked, {
+      minDeliveriesForAttention: EXECUTIVE_ATTENTION_MIN_DELIVERIES,
+      maxOnTimePctForAttention: EXECUTIVE_ATTENTION_MAX_ON_TIME_PCT
+    }).map(({ item, status }) => ({ ...item, status }));
+  }
+
+  private buildExecutiveHierarchyRankings(
+    actions: Game4uUserActionModel[],
+    mode: ExecutiveHierarchyRankingMode
+  ): { top: ExecutiveInsightsPlayerRank[]; attention: ExecutiveInsightsPlayerRank[] } {
+    const candidates = aggregateExecutiveHierarchyRankings(actions, mode).map(candidate =>
+      this.mapExecutiveHierarchyCandidateToRank(candidate)
+    );
 
     return partitionExecutivePlayerRankings(candidates, {
       minDeliveriesForAttention: EXECUTIVE_ATTENTION_MIN_DELIVERIES,
@@ -4759,6 +4829,28 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
     return 'badge-danger';
   }
 
+  getExecutiveDirectorateStatusLabel(status: ExecutiveHierarchyHighlightStatus): string {
+    switch (status) {
+      case 'destaque':
+        return 'Destaque';
+      case 'atencao':
+        return 'Atenção';
+      default:
+        return 'Sem classificação';
+    }
+  }
+
+  getExecutiveDirectorateStatusClass(status: ExecutiveHierarchyHighlightStatus): string {
+    switch (status) {
+      case 'destaque':
+        return 'executive-directorate-status--destaque';
+      case 'atencao':
+        return 'executive-directorate-status--atencao';
+      default:
+        return 'executive-directorate-status--neutral';
+    }
+  }
+
   trackByExecutiveProcess(_idx: number, row: { deliveryTitle: string }): string {
     return row?.deliveryTitle ?? String(_idx);
   }
@@ -4768,6 +4860,10 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
   }
 
   trackByExecutiveAttentionPlayer(_idx: number, row: { email: string }): string {
+    return row?.email ?? String(_idx);
+  }
+
+  trackByExecutiveDirectorate(_idx: number, row: { email: string }): string {
     return row?.email ?? String(_idx);
   }
 

@@ -203,6 +203,14 @@
     gap: $spacing-md;
     flex-wrap: wrap;
   }
+
+  &__leading {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: $spacing-sm $spacing-md;
+    min-width: 0;
+  }
 }
 
 .section-title {
@@ -318,8 +326,13 @@
 
 .hero-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: $spacing-md;
+  width: 100%;
+
+  @include tablet-up {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }
 
 .hero-card {
@@ -710,16 +723,44 @@
   li {
     display: flex;
     justify-content: space-between;
+    align-items: flex-start;
     gap: $spacing-sm;
     padding: $spacing-xs 0;
     border-bottom: 1px solid rgba(255, 255, 255, 0.06);
     font-size: $font-size-small;
   }
 
-  &__label {
+  &__info {
     flex: 1;
     min-width: 0;
+  }
+
+  &__label {
+    display: block;
+    font-weight: 600;
+    color: $text-primary;
+  }
+
+  &__meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: $spacing-xs $spacing-sm;
+    margin-top: 2px;
+    font-size: $font-size-caption;
     color: $text-secondary;
+  }
+
+  &__meta-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+
+    i {
+      flex-shrink: 0;
+      font-size: 0.95rem;
+      opacity: 0.85;
+    }
   }
 
   &__value {
@@ -742,6 +783,39 @@
     font-size: $font-size-small;
     color: $text-secondary;
     white-space: nowrap;
+  }
+}
+
+.classification-view-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: $border-radius-sm;
+  color: $text-secondary;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-height: 36px;
+  white-space: nowrap;
+  flex-shrink: 0;
+
+  &:hover {
+    background: rgba($primary-electric-blue, 0.1);
+    border-color: $primary-electric-blue;
+    color: $primary-electric-blue;
+  }
+
+  i {
+    font-size: 1.05rem;
+    line-height: 1;
+  }
+
+  span {
+    font-size: 0.8125rem;
+    font-weight: 600;
   }
 }
 
@@ -908,7 +982,7 @@
 }
 
 .classification-table-wrap {
-  margin-top: $spacing-xs;
+  margin-top: 0;
 }
 
 .classification-table {
