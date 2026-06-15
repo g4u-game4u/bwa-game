@@ -34,9 +34,12 @@
   game4uUserActionMatchesDeliveryRow,
   resolveExecutiveHierarchySegment,
   buildJustifiedDeliveryKeysFromUserActions,
+  classifyExecutivePlayerRankings,
+  collectExecutiveDirectorateSeeds,
   countExecutiveFinishedTasksFromUserActions,
   countExecutiveOnTimeTasksFromUserActions,
   isGame4uDeliveryRowJustified,
+  mergeExecutiveDirectorateCandidates,
   partitionExecutivePlayerRankings,
   deliveryRowCountsAsOnTime,
   deliveryRowHasFinishedTaskInMonth,
@@ -1150,6 +1153,73 @@ describe('game4u-game-mapper', () => {
 
       expect(attention.map(p => p.email)).toEqual(['risk@x.com', 'mid@x.com']);
       expect(top.map(p => p.email)).toEqual(['star@x.com']);
+    });
+
+    it('classifyExecutivePlayerRankings returns all directorates with status labels', () => {
+      const players = [
+        { email: 'star@x.com', name: 'Star', deliveriesCount: 10, judgedDeliveriesCount: 10, onTimeDeliveries: 10, onTimeDeliveryPct: 100 },
+        { email: 'risk@x.com', name: 'Risk', deliveriesCount: 8, judgedDeliveriesCount: 8, onTimeDeliveries: 4, onTimeDeliveryPct: 50 },
+        { email: 'quiet@x.com', name: 'Quiet', deliveriesCount: 1, judgedDeliveriesCount: 1, onTimeDeliveries: 1, onTimeDeliveryPct: 100 },
+        { email: 'empty@x.com', name: 'Empty', deliveriesCount: 0, judgedDeliveriesCount: 0, onTimeDeliveries: 0, onTimeDeliveryPct: null }
+      ];
+
+      const classified = classifyExecutivePlayerRankings(players);
+
+      expect(classified.map(c => [c.item.email, c.status])).toEqual([
+        ['risk@x.com', 'atencao'],
+        ['star@x.com', 'destaque'],
+        ['empty@x.com', 'neutral'],
+        ['quiet@x.com', 'neutral']
+      ]);
+    });
+
+    it('mergeExecutiveDirectorateCandidates includes directorates without deliveries', () => {
+      const seeds = new Map([
+        ['dir-a@x.com', { name: 'Diretoria A', email: 'dir-a@x.com' }],
+        ['dir-b@x.com', { name: 'Diretoria B', email: 'dir-b@x.com' }]
+      ]);
+      const aggregated = aggregateExecutiveHierarchyRankings(
+        [
+          {
+            id: '1',
+            points: 1,
+            status: 'DONE',
+            created_at: '2026-03-01',
+            user_email: 'p@x.com',
+            hierarchy: {
+              diretor_email: 'dir-a@x.com',
+              diretor_name: 'Diretoria A'
+            },
+            dt_prazo: '2099-01-01',
+            finished_at: '2026-03-05T12:00:00Z'
+          }
+        ],
+        'diretor'
+      );
+
+      const merged = mergeExecutiveDirectorateCandidates(seeds, aggregated);
+
+      expect(merged.map(m => m.email).sort()).toEqual(['dir-a@x.com', 'dir-b@x.com']);
+      expect(merged.find(m => m.email === 'dir-b@x.com')?.deliveriesCount).toBe(0);
+    });
+
+    it('collectExecutiveDirectorateSeeds merges actions and DIRETOR managers', () => {
+      const seeds = collectExecutiveDirectorateSeeds(
+        [
+          {
+            id: '1',
+            points: 1,
+            status: 'PENDING',
+            created_at: '2026-03-01',
+            hierarchy: { diretor_email: 'dir-a@x.com', diretor_name: 'Diretoria A' }
+          }
+        ],
+        [{ user_email: 'dir-b@x.com', user_role: 'DIRETOR' }],
+        email => `Label ${email}`
+      );
+
+      expect([...seeds.keys()].sort()).toEqual(['dir-a@x.com', 'dir-b@x.com']);
+      expect(seeds.get('dir-b@x.com')?.name).toBe('Label dir-b@x.com');
     });
   });
 

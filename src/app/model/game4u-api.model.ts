@@ -769,6 +769,13 @@ export interface OrgHierarchyHighlightItem {
   label?: string;
   metric?: string;
   value?: number;
+  team_name?: string;
+  team_label?: string;
+  supervisao_label?: string;
+  supervisao_name?: string;
+  gerencia_label?: string;
+  gerencia_name?: string;
+  gerente_name?: string;
   [key: string]: unknown;
 }
 

@@ -1,5 +1,6 @@
 import {
   OrgHierarchyFinishedByDow,
+  OrgHierarchyHighlightItem,
   OrgHierarchyNode,
   OrgHierarchyNodeType,
   OrgMetricsWindow
@@ -193,4 +194,112 @@ export function clientClassificationBarHeight(count: number, max: number): strin
   }
   const pct = Math.round((count / max) * 100);
   return `${Math.max(pct, 8)}%`;
+}
+
+function readHighlightTextField(
+  item: OrgHierarchyHighlightItem,
+  keys: readonly string[]
+): string {
+  for (const key of keys) {
+    const raw = item[key];
+    if (typeof raw === 'string') {
+      const trimmed = raw.trim();
+      if (trimmed) {
+        return trimmed;
+      }
+    }
+  }
+  return '';
+}
+
+function highlightMatchesPlayerNode(item: OrgHierarchyHighlightItem, node: OrgHierarchyNode): boolean {
+  const targetId = String(item.node_id ?? '').trim().toLowerCase();
+  const targetLabel = String(item.label ?? '').trim().toLowerCase();
+  const nodeId = String(node.node_id ?? '').trim().toLowerCase();
+  const nodeLabel = String(node.label ?? '').trim().toLowerCase();
+
+  if (targetId && nodeId && (nodeId === targetId || nodeId.includes(targetId) || targetId.includes(nodeId))) {
+    return true;
+  }
+  return !!(targetLabel && nodeLabel && nodeLabel === targetLabel);
+}
+
+function resolveHighlightContextFromTree(
+  item: OrgHierarchyHighlightItem,
+  root?: OrgHierarchyNode | null
+): { teamLabel: string; gerenciaLabel: string } | null {
+  if (!root) {
+    return null;
+  }
+
+  let context: { teamLabel: string; gerenciaLabel: string } | null = null;
+
+  const walk = (
+    node: OrgHierarchyNode,
+    gerencia?: OrgHierarchyNode,
+    supervisao?: OrgHierarchyNode
+  ): boolean => {
+    const currentGerencia = node.node_type === 'gerencia' ? node : gerencia;
+    const currentSupervisao = node.node_type === 'supervisao' ? node : supervisao;
+
+    if (node.node_type === 'player' && highlightMatchesPlayerNode(item, node)) {
+      context = {
+        teamLabel: currentSupervisao?.label?.trim() ?? '',
+        gerenciaLabel: currentGerencia?.label?.trim() ?? ''
+      };
+      return true;
+    }
+
+    for (const child of node.children ?? []) {
+      if (walk(child, currentGerencia, currentSupervisao)) {
+        return true;
+      }
+    }
+    return false;
+  };
+
+  walk(root);
+  return context;
+}
+
+/** Time do jogador (supervisão) em destaques/atenção. */
+export function getHighlightTeamLabel(
+  item: OrgHierarchyHighlightItem,
+  root?: OrgHierarchyNode | null
+): string {
+  const direct = readHighlightTextField(item, [
+    'team_name',
+    'team_label',
+    'supervisao_label',
+    'supervisao_name',
+    'time'
+  ]);
+  if (direct) {
+    return direct;
+  }
+  return resolveHighlightContextFromTree(item, root)?.teamLabel || '—';
+}
+
+/** Gerência do jogador em destaques/atenção. */
+export function getHighlightGerenciaLabel(
+  item: OrgHierarchyHighlightItem,
+  root?: OrgHierarchyNode | null
+): string {
+  const direct = readHighlightTextField(item, [
+    'gerencia_label',
+    'gerencia_name',
+    'gerente_name',
+    'gerencia'
+  ]);
+  if (direct) {
+    return direct;
+  }
+  return resolveHighlightContextFromTree(item, root)?.gerenciaLabel || '—';
+}
+
+export function highlightHasContext(
+  item: OrgHierarchyHighlightItem,
+  root?: OrgHierarchyNode | null
+): boolean {
+  return getHighlightTeamLabel(item, root) !== '—' || getHighlightGerenciaLabel(item, root) !== '—';
 }

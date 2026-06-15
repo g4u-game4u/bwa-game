@@ -673,7 +673,7 @@ describe('Game4uApiService', () => {
       .getGameReportsOrganizationHierarchyReport({
         month: '2026-06',
         simulation_pot_brl: 100000,
-        depth: 5
+        depth: 6
       })
       .subscribe(res => {
         expect(res.root.node_type).toBe('organization');
@@ -685,7 +685,7 @@ describe('Game4uApiService', () => {
         r.url === `${baseUrl}/game/reports/organization/hierarchy-report` &&
         r.params.get('month') === '2026-06' &&
         r.params.get('simulation_pot_brl') === '100000' &&
-        r.params.get('depth') === '5'
+        r.params.get('depth') === '6'
     );
     req.flush({
       refreshed_at: '2026-06-07T12:00:00.000Z',
