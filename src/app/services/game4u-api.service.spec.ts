@@ -673,7 +673,7 @@ describe('Game4uApiService', () => {
       .getGameReportsOrganizationHierarchyReport({
         month: '2026-06',
         simulation_pot_brl: 100000,
-        depth: 6
+        depth: 7
       })
       .subscribe(res => {
         expect(res.root.node_type).toBe('organization');
@@ -685,7 +685,7 @@ describe('Game4uApiService', () => {
         r.url === `${baseUrl}/game/reports/organization/hierarchy-report` &&
         r.params.get('month') === '2026-06' &&
         r.params.get('simulation_pot_brl') === '100000' &&
-        r.params.get('depth') === '6'
+        r.params.get('depth') === '7'
     );
     req.flush({
       refreshed_at: '2026-06-07T12:00:00.000Z',
@@ -713,6 +713,83 @@ describe('Game4uApiService', () => {
           vs_prev_full_points_pct: -75
         }
       }
+    });
+  });
+
+  it('getGameReportsOrganizationHierarchyInsights builds scope params', done => {
+    service
+      .getGameReportsOrganizationHierarchyInsights({
+        month: '2026-06',
+        depth: 1,
+        focus: 'risks_and_actions'
+      })
+      .subscribe(res => {
+        expect(res.insights.length).toBe(1);
+        expect(res.from_cache).toBe(true);
+        done();
+      });
+    const req = httpMock.expectOne(
+      r =>
+        r.url === `${baseUrl}/game/reports/organization/hierarchy-insights` &&
+        r.params.get('month') === '2026-06' &&
+        r.params.get('depth') === '1' &&
+        r.params.get('focus') === 'risks_and_actions'
+    );
+    req.flush({
+      generated_at: '2026-06-10T12:00:00.000Z',
+      from_cache: true,
+      params: {
+        cache_month: '2026-06-01',
+        mtd_start: '2026-06-01',
+        mtd_end: '2026-06-10',
+        prev_month: '2026-05-01',
+        prev_mtd_start: '2026-05-01',
+        prev_mtd_end: '2026-05-10'
+      },
+      summary: 'Resumo',
+      insights: [
+        {
+          priority: 'high',
+          category: 'risk',
+          title: 'Título',
+          evidence: ['evidência'],
+          suggested_action: 'Agir'
+        }
+      ]
+    });
+  });
+
+  it('postGameReportsOrganizationHierarchyInsights posts query + focus body', done => {
+    service
+      .postGameReportsOrganizationHierarchyInsights(
+        { month: '2026-06', depth: 1, focus: 'risks_and_actions' },
+        { focus: 'risks_and_actions' }
+      )
+      .subscribe(res => {
+        expect(res.from_cache).toBe(false);
+        done();
+      });
+    const req = httpMock.expectOne(
+      r => r.url === `${baseUrl}/game/reports/organization/hierarchy-insights`
+    );
+    expect(req.request.method).toBe('POST');
+    expect(req.request.params.get('depth')).toBe('1');
+    // Backend expects `focus` in the body (POST), not in the query string.
+    expect(req.request.params.get('focus')).toBeNull();
+    expect(req.request.body).toEqual({ focus: 'risks_and_actions' });
+    req.flush({
+      generated_at: '2026-06-10T12:05:00.000Z',
+      from_cache: false,
+      params: {
+        cache_month: '2026-06-01',
+        mtd_start: '2026-06-01',
+        mtd_end: '2026-06-10',
+        prev_month: '2026-05-01',
+        prev_mtd_start: '2026-05-01',
+        prev_mtd_end: '2026-05-10'
+      },
+      summary: 'Resumo',
+      insights: []
     });
   });
 

@@ -1,0 +1,413 @@
+@import '../../../../styles/variables.scss';
+@import './org-area-labels.scss';
+
+// Paleta inspirada em references/organograma-bwa-times-handmade.html
+$org-bg: #0f1419;
+$org-surface: #1a2332;
+$org-surface-hover: #243044;
+$org-border: #2d3a4f;
+$org-muted: #8b9cb3;
+$org-accent: #3b82f6;
+
+$lvl-root: #6366f1;
+$lvl-area: #818cf8;
+$lvl-diretoria: #8b5cf6;
+$lvl-gerencia: #0ea5e9;
+$lvl-supervisao: #10b981;
+$lvl-player: #64748b;
+
+@mixin org-tree-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba($org-muted, 0.55) rgba($org-border, 0.28);
+
+  &::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: rgba($org-border, 0.22);
+    border-radius: 999px;
+    margin: 6px;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: rgba($org-muted, 0.42);
+    border: 2px solid transparent;
+    background-clip: padding-box;
+    border-radius: 999px;
+    transition: background 0.2s ease;
+
+    &:hover {
+      background: rgba($org-accent, 0.62);
+      background-clip: padding-box;
+    }
+
+    &:active {
+      background: rgba($org-accent, 0.78);
+      background-clip: padding-box;
+    }
+  }
+
+  &::-webkit-scrollbar-corner {
+    background: rgba($org-bg, 0.72);
+    border-radius: 0 0 $border-radius-sm 0;
+  }
+}
+
+.org-tree-table-panel {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-sm;
+}
+
+.org-tree-table-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: $spacing-sm $spacing-md;
+  padding: $spacing-sm $spacing-md;
+  background: rgba($org-surface, 0.65);
+  border: 1px solid $org-border;
+  border-radius: $border-radius-sm;
+}
+
+.org-tree-table-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: $spacing-xs $spacing-md;
+  font-size: $font-size-caption;
+  color: $org-muted;
+
+  &__item {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+  }
+
+  &__swatch {
+    width: 10px;
+    height: 10px;
+    border-radius: 3px;
+    flex-shrink: 0;
+  }
+}
+
+.org-tree-table-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: $spacing-xs;
+}
+
+.org-tree-table-action {
+  padding: 6px 12px;
+  border-radius: $border-radius-sm;
+  border: 1px solid $org-border;
+  background: $org-surface;
+  color: $text-primary;
+  font-size: $font-size-caption;
+  font-weight: $font-weight-medium;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+
+  &:hover {
+    background: $org-surface-hover;
+    border-color: rgba($org-accent, 0.45);
+  }
+
+  &:focus-visible {
+    outline: $focus-outline;
+    outline-offset: $focus-offset;
+  }
+}
+
+.org-tree-table-wrap {
+  width: 100%;
+  max-height: min(72vh, 780px);
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable both-edges;
+  padding: 0 6px 10px;
+  border: 1px solid $org-border;
+  border-radius: $border-radius-sm;
+  background: rgba($org-bg, 0.55);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  @include org-tree-scrollbar;
+}
+
+.org-tree-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0 6px;
+  min-width: 960px;
+
+  thead th {
+    position: sticky;
+    top: 0;
+    z-index: 4;
+    padding: 10px 12px;
+    background: rgba(15, 20, 25, 0.96);
+    border-bottom: 1px solid $org-border;
+    color: $org-muted;
+    font-size: $font-size-caption;
+    font-weight: $font-weight-semibold;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    text-align: left;
+    white-space: nowrap;
+  }
+
+  tbody tr {
+    transition: transform 0.12s ease;
+  }
+
+  tbody td {
+    padding: 10px 12px;
+    background: $org-surface;
+    border-top: 1px solid transparent;
+    border-bottom: 1px solid transparent;
+    font-size: $font-size-small;
+    color: $text-primary;
+    vertical-align: middle;
+  }
+
+  tbody tr:hover td {
+    background: $org-surface-hover;
+    border-color: $org-border;
+  }
+
+  tbody tr td:first-child {
+    border-left: 3px solid transparent;
+    border-radius: $border-radius-sm 0 0 $border-radius-sm;
+  }
+
+  tbody tr td:last-child {
+    border-radius: 0 $border-radius-sm $border-radius-sm 0;
+  }
+
+  &__row--organization td:first-child,
+  &__row--c_level td:first-child {
+    border-left-color: $lvl-root;
+  }
+
+  &__row--segmentacao td:first-child {
+    border-left-color: $lvl-area;
+  }
+
+  &__row--diretoria td:first-child {
+    border-left-color: $lvl-diretoria;
+  }
+
+  &__row--gerencia td:first-child {
+    border-left-color: $lvl-gerencia;
+  }
+
+  &__row--supervisao td:first-child {
+    border-left-color: $lvl-supervisao;
+  }
+
+  &__row--player td:first-child {
+    border-left-color: $lvl-player;
+  }
+
+  &__row--player td {
+    opacity: 0.94;
+  }
+
+  &__name-col {
+    min-width: 240px;
+    max-width: 360px;
+    position: sticky;
+    left: 0;
+    z-index: 2;
+    box-shadow: 8px 0 14px rgba(0, 0, 0, 0.18);
+  }
+
+  thead th.org-tree-table__name-col {
+    z-index: 5;
+  }
+
+  tbody tr:hover td.org-tree-table__name-col {
+    background: $org-surface-hover;
+  }
+
+  &__num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+
+    &--risk {
+      color: rgba($text-primary, 0.88);
+    }
+
+    &--alert {
+      color: $warning-orange;
+      font-weight: $font-weight-semibold;
+    }
+  }
+
+  &__node {
+    display: flex;
+    align-items: flex-start;
+    gap: $spacing-sm;
+    min-width: 0;
+  }
+
+  &__toggle {
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
+    margin-top: 2px;
+    border: none;
+    border-radius: $border-radius-xs;
+    background: $org-border;
+    color: $text-primary;
+    font-size: 0.75rem;
+    line-height: 1;
+    padding: 0;
+    cursor: pointer;
+    transition: background 0.15s ease;
+
+    &:hover {
+      background: rgba($org-accent, 0.35);
+    }
+
+    &:focus-visible {
+      outline: $focus-outline;
+      outline-offset: 1px;
+    }
+  }
+
+  &__toggle-spacer {
+    width: 20px;
+    flex-shrink: 0;
+  }
+
+  &__node-body {
+    flex: 1;
+    min-width: 0;
+  }
+
+  &__node-title {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 8px;
+    min-width: 0;
+  }
+
+  &__label {
+    font-weight: $font-weight-semibold;
+    font-size: 0.9375rem;
+    color: $text-primary;
+    line-height: 1.25;
+    word-break: break-word;
+  }
+
+  &__badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 0.6875rem;
+    font-weight: $font-weight-semibold;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    background: rgba(255, 255, 255, 0.08);
+    color: $org-muted;
+    white-space: nowrap;
+  }
+
+  &__row--organization &__badge,
+  &__row--c_level &__badge {
+    background: rgba(99, 102, 241, 0.2);
+    color: #a5b4fc;
+  }
+
+  &__row--segmentacao &__badge {
+    background: rgba(129, 140, 248, 0.18);
+    color: #c7d2fe;
+  }
+
+  &__row--diretoria &__badge {
+    background: rgba(139, 92, 246, 0.2);
+    color: #c4b5fd;
+  }
+
+  &__row--gerencia &__badge {
+    background: rgba(14, 165, 233, 0.18);
+    color: #7dd3fc;
+  }
+
+  &__row--supervisao &__badge {
+    background: rgba(16, 185, 129, 0.15);
+    color: #6ee7b7;
+  }
+
+  &__row--player &__badge {
+    background: rgba(100, 116, 139, 0.2);
+    color: #cbd5e1;
+  }
+
+  &__node-meta {
+    margin-top: 3px;
+    font-size: $font-size-caption;
+    color: $org-muted;
+    line-height: 1.3;
+  }
+
+  &__pct {
+    font-variant-numeric: tabular-nums;
+    font-weight: $font-weight-medium;
+
+    &--positive {
+      color: $success-green;
+      font-weight: $font-weight-bold;
+    }
+
+    &--negative {
+      color: $error-red;
+      font-weight: $font-weight-bold;
+    }
+  }
+
+  &__sim-value {
+    display: block;
+    font-weight: $font-weight-semibold;
+  }
+
+  &__sim-share {
+    display: block;
+    margin-top: 2px;
+    color: $org-muted;
+    font-size: $font-size-caption;
+  }
+}
+
+.org-tree-table__kpi-btn {
+  width: 100%;
+  border: none;
+  background: transparent;
+  color: inherit;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  font: inherit;
+  text-align: right;
+  white-space: nowrap;
+
+  &:hover {
+    color: rgba(255, 255, 255, 0.95);
+    text-decoration: underline;
+    text-decoration-color: rgba(59, 130, 246, 0.7);
+    text-decoration-thickness: 1px;
+    text-underline-offset: 3px;
+  }
+
+  &:focus-visible {
+    outline: $focus-outline;
+    outline-offset: $focus-offset;
+    border-radius: 6px;
+  }
+}

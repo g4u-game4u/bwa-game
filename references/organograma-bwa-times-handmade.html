@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Organograma BWA — Times (manual)</title>
+  <style>
+    :root {
+      --bg: #0f1419;
+      --surface: #1a2332;
+      --surface-hover: #243044;
+      --border: #2d3a4f;
+      --text: #e7ecf3;
+      --muted: #8b9cb3;
+      --accent: #3b82f6;
+      --root: #6366f1;
+      --diretoria: #8b5cf6;
+      --gerencia: #0ea5e9;
+      --supervisao: #10b981;
+      --sem-dir: #f59e0b;
+      --player: #64748b;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      background: rgba(15, 20, 25, 0.92);
+      backdrop-filter: blur(8px);
+      border-bottom: 1px solid var(--border);
+      padding: 1rem 1.5rem;
+    }
+
+    header h1 {
+      margin: 0 0 0.25rem;
+      font-size: 1.25rem;
+      font-weight: 600;
+    }
+
+    header p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.875rem;
+    }
+
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      align-items: center;
+      margin-top: 0.75rem;
+    }
+
+    .toolbar input[type="search"] {
+      flex: 1;
+      min-width: 200px;
+      padding: 0.5rem 0.75rem;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text);
+      font-size: 0.875rem;
+    }
+
+    .toolbar input[type="search"]:focus {
+      outline: 2px solid var(--accent);
+      outline-offset: 1px;
+    }
+
+    .toolbar button {
+      padding: 0.5rem 0.875rem;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text);
+      font-size: 0.8125rem;
+      cursor: pointer;
+    }
+
+    .toolbar button:hover {
+      background: var(--surface-hover);
+    }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem 1rem;
+      margin-top: 0.75rem;
+      font-size: 0.75rem;
+      color: var(--muted);
+    }
+
+    .legend span {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+    }
+
+    .legend i {
+      width: 10px;
+      height: 10px;
+      border-radius: 3px;
+      display: inline-block;
+    }
+
+    main {
+      padding: 1.5rem;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .tree ul {
+      list-style: none;
+      margin: 0;
+      padding-left: 1.25rem;
+      border-left: 1px solid var(--border);
+    }
+
+    .tree > ul {
+      padding-left: 0;
+      border-left: none;
+    }
+
+    .node {
+      margin: 0.35rem 0;
+    }
+
+    .node-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.5rem;
+      padding: 0.45rem 0.65rem;
+      border-radius: 8px;
+      background: var(--surface);
+      border: 1px solid transparent;
+      transition: background 0.15s, border-color 0.15s;
+    }
+
+    .node-row:hover {
+      background: var(--surface-hover);
+      border-color: var(--border);
+    }
+
+    .node-row.match {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.35);
+    }
+
+    .node-row.hidden-by-search {
+      display: none;
+    }
+
+    .toggle {
+      width: 1.25rem;
+      height: 1.25rem;
+      flex-shrink: 0;
+      border: none;
+      border-radius: 4px;
+      background: var(--border);
+      color: var(--text);
+      cursor: pointer;
+      font-size: 0.7rem;
+      line-height: 1;
+      margin-top: 0.15rem;
+      padding: 0;
+    }
+
+    .toggle:disabled {
+      opacity: 0.25;
+      cursor: default;
+    }
+
+    .toggle-spacer {
+      width: 1.25rem;
+      flex-shrink: 0;
+    }
+
+    .node-body {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .node-title {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.4rem 0.6rem;
+      font-weight: 600;
+      font-size: 0.9375rem;
+    }
+
+    .node-meta {
+      margin-top: 0.2rem;
+      font-size: 0.8125rem;
+      color: var(--muted);
+      word-break: break-word;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 0.1rem 0.45rem;
+      border-radius: 999px;
+      font-size: 0.6875rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+
+    .badge-level { background: rgba(255,255,255,0.08); color: var(--muted); }
+    .badge-area { background: rgba(99, 102, 241, 0.2); color: #a5b4fc; }
+    .badge-team { background: rgba(16, 185, 129, 0.15); color: #6ee7b7; }
+    .badge-id { background: rgba(245, 158, 11, 0.15); color: #fcd34d; font-family: ui-monospace, monospace; }
+
+    .level-root > .node-row { border-left: 3px solid var(--root); }
+    .level-diretoria > .node-row { border-left: 3px solid var(--diretoria); }
+    .level-diretoria.sem-diretoria > .node-row { border-left-color: var(--sem-dir); }
+    .level-gerencia > .node-row { border-left: 3px solid var(--gerencia); }
+    .level-supervisao > .node-row { border-left: 3px solid var(--supervisao); }
+    .level-player > .node-row { border-left: 3px solid var(--player); opacity: 0.92; }
+
+    .legend .lvl-player { background: var(--player); }
+
+    .legend .lvl-root { background: var(--root); }
+    .legend .lvl-diretoria { background: var(--diretoria); }
+    .legend .lvl-gerencia { background: var(--gerencia); }
+    .legend .lvl-supervisao { background: var(--supervisao); }
+    .legend .lvl-sem { background: var(--sem-dir); }
+
+    .stats {
+      margin-top: 1rem;
+      padding: 0.75rem 1rem;
+      background: var(--surface);
+      border-radius: 8px;
+      font-size: 0.8125rem;
+      color: var(--muted);
+    }
+
+    .error {
+      padding: 1rem;
+      background: rgba(239, 68, 68, 0.12);
+      border: 1px solid rgba(239, 68, 68, 0.35);
+      border-radius: 8px;
+      color: #fca5a5;
+    }
+
+    .collapsed > ul { display: none; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Organograma BWA — Times + Players</h1>
+    <p>Fonte: <code>oganograma-bwa-times-handmade-with-players.json</code> · players via <code>user_team_client</code></p>
+    <div class="toolbar">
+      <input type="search" id="search" placeholder="Buscar nome, área, time ou team_id…" autocomplete="off" />
+      <button type="button" id="expand-all">Expandir tudo</button>
+      <button type="button" id="collapse-all">Recolher tudo</button>
+    </div>
+    <div class="legend">
+      <span><i class="lvl-root"></i> C-level / raiz</span>
+      <span><i class="lvl-diretoria"></i> Diretoria</span>
+      <span><i class="lvl-sem"></i> Sem diretoria</span>
+      <span><i class="lvl-gerencia"></i> Gerência</span>
+      <span><i class="lvl-supervisao"></i> Supervisão</span>
+      <span><i class="lvl-player"></i> Player</span>
+    </div>
+  </header>
+
+  <main>
+    <div id="tree" class="tree" aria-live="polite"></div>
+    <div id="stats" class="stats"></div>
+  </main>
+
+  <script id="organogram-data" type="application/json">null</script>
+
+  <script>
+    const LEVEL_LABELS = {
+      diretoria: 'Diretoria',
+      gerencia: 'Gerência',
+      supervisao: 'Supervisão',
+      player: 'Player',
+    };
+
+    function normalize(str) {
+      return String(str ?? '')
+        .normalize('NFD')
+        .replace(/\p{M}/gu, '')
+        .toLowerCase();
+    }
+
+    function nodeSearchText(node) {
+      return normalize([
+        node.name,
+        node.area_name,
+        node.team_name,
+        node.team_id,
+        node.level_name,
+        node.email,
+      ].filter(Boolean).join(' '));
+    }
+
+    function countNodes(node) {
+      const children = node.children ?? [];
+      const counts = { total: 1, diretoria: 0, gerencia: 0, supervisao: 0, player: 0, teams: 0 };
+      if (node.level_name === 'diretoria') counts.diretoria += 1;
+      if (node.level_name === 'gerencia') counts.gerencia += 1;
+      if (node.level_name === 'supervisao') counts.supervisao += 1;
+      if (node.level_name === 'player') counts.player += 1;
+      if (node.team_id && node.level_name !== 'player') counts.teams += 1;
+      for (const child of children) {
+        const sub = countNodes(child);
+        counts.total += sub.total;
+        counts.diretoria += sub.diretoria;
+        counts.gerencia += sub.gerencia;
+        counts.supervisao += sub.supervisao;
+        counts.player += sub.player;
+        counts.teams += sub.teams;
+      }
+      return counts;
+    }
+
+    function buildNodeLi(node, depth = 0) {
+      const li = document.createElement('li');
+      const hasChildren = Array.isArray(node.children) && node.children.length > 0;
+      const level = node.level_name ?? (depth === 0 ? 'root' : '');
+      const isSemDiretoria = normalize(node.name).includes('sem diretoria');
+
+      li.className = 'node' + (hasChildren ? '' : ' leaf');
+      if (level) li.classList.add('level-' + level);
+      if (isSemDiretoria) li.classList.add('sem-diretoria');
+      li.dataset.search = nodeSearchText(node);
+
+      const row = document.createElement('div');
+      row.className = 'node-row';
+
+      if (hasChildren) {
+        const toggle = document.createElement('button');
+        toggle.type = 'button';
+        toggle.className = 'toggle';
+        toggle.setAttribute('aria-label', 'Expandir ou recolher');
+        toggle.textContent = '−';
+        toggle.addEventListener('click', () => {
+          li.classList.toggle('collapsed');
+          toggle.textContent = li.classList.contains('collapsed') ? '+' : '−';
+        });
+        row.appendChild(toggle);
+      } else {
+        const spacer = document.createElement('span');
+        spacer.className = 'toggle-spacer';
+        row.appendChild(spacer);
+      }
+
+      const body = document.createElement('div');
+      body.className = 'node-body';
+
+      const title = document.createElement('div');
+      title.className = 'node-title';
+      title.textContent = node.name;
+
+      if (node.level_name) {
+        const lvl = document.createElement('span');
+        lvl.className = 'badge badge-level';
+        lvl.textContent = LEVEL_LABELS[node.level_name] ?? node.level_name;
+        title.appendChild(lvl);
+      }
+
+      if (node.area_name) {
+        const area = document.createElement('span');
+        area.className = 'badge badge-area';
+        area.textContent = node.area_name;
+        title.appendChild(area);
+      }
+
+      if (node.team_id && node.level_name !== 'player') {
+        const id = document.createElement('span');
+        id.className = 'badge badge-id';
+        id.textContent = 'team ' + node.team_id;
+        title.appendChild(id);
+      }
+
+      if (hasChildren && node.level_name === 'supervisao') {
+        const playerCount = (node.children ?? []).filter((c) => c.level_name === 'player').length;
+        if (playerCount > 0) {
+          const pc = document.createElement('span');
+          pc.className = 'badge badge-team';
+          pc.textContent = playerCount + ' players';
+          title.appendChild(pc);
+        }
+      }
+
+      body.appendChild(title);
+
+      if (node.team_name) {
+        const meta = document.createElement('div');
+        meta.className = 'node-meta';
+        meta.textContent = node.team_name;
+        body.appendChild(meta);
+      }
+
+      if (node.email) {
+        const meta = document.createElement('div');
+        meta.className = 'node-meta';
+        meta.textContent = node.email;
+        body.appendChild(meta);
+      }
+
+      row.appendChild(body);
+      li.appendChild(row);
+
+      if (hasChildren) {
+        const ul = document.createElement('ul');
+        for (const child of node.children) {
+          ul.appendChild(buildNodeLi(child, depth + 1));
+        }
+        li.appendChild(ul);
+        if (depth >= 1) {
+          li.classList.add('collapsed');
+          row.querySelector('.toggle').textContent = '+';
+        }
+      }
+
+      return li;
+    }
+
+    function renderTree(data) {
+      const container = document.getElementById('tree');
+      const stats = document.getElementById('stats');
+      const rootUl = document.createElement('ul');
+      rootUl.appendChild(buildNodeLi(data, 0));
+      container.replaceChildren(rootUl);
+
+      const c = countNodes(data);
+      stats.textContent =
+        `${c.total} nós · ${c.diretoria} diretorias · ${c.gerencia} gerências · ${c.supervisao} supervisões · ${c.player} players · ${c.teams} células`;
+    }
+
+    function setAllCollapsed(collapsed) {
+      document.querySelectorAll('.node').forEach((li) => {
+        const toggle = li.querySelector(':scope > .node-row > .toggle');
+        if (!toggle) return;
+        li.classList.toggle('collapsed', collapsed);
+        toggle.textContent = collapsed ? '+' : '−';
+      });
+      const root = document.querySelector('.tree > ul > .node');
+      if (root) {
+        root.classList.remove('collapsed');
+        const rootToggle = root.querySelector(':scope > .node-row > .toggle');
+        if (rootToggle) rootToggle.textContent = '−';
+      }
+    }
+
+    function applySearch(query) {
+      const q = normalize(query.trim());
+      document.querySelectorAll('.node').forEach((li) => {
+        const row = li.querySelector(':scope > .node-row');
+        const text = li.dataset.search ?? '';
+        const selfMatch = !q || text.includes(q);
+        const childMatch = !!li.querySelector('.node:not(.hidden-by-search)');
+        const visible = selfMatch || (q && [...li.querySelectorAll(':scope > ul > .node')].some((c) => !c.classList.contains('hidden-by-search') && (c.dataset.search ?? '').includes(q)));
+
+        if (!q) {
+          row.classList.remove('hidden-by-search', 'match');
+          return;
+        }
+
+        if (selfMatch) {
+          row.classList.remove('hidden-by-search');
+          row.classList.add('match');
+          let parent = li.parentElement?.closest('.node');
+          while (parent) {
+            parent.classList.remove('collapsed');
+            const t = parent.querySelector(':scope > .node-row > .toggle');
+            if (t) t.textContent = '−';
+            parent = parent.parentElement?.closest('.node');
+          }
+        } else {
+          row.classList.remove('match');
+          const anyDescendant = [...li.querySelectorAll('.node')].some((d) => (d.dataset.search ?? '').includes(q));
+          row.classList.toggle('hidden-by-search', !anyDescendant);
+        }
+      });
+    }
+
+    async function loadData() {
+      const sources = [
+        './oganograma-bwa-times-handmade-with-players.json',
+        './oganograma-bwa-times-handmade.json',
+      ];
+      for (const url of sources) {
+        try {
+          const res = await fetch(url, { cache: 'no-store' });
+          if (res.ok) return res.json();
+        } catch (_) { /* file:// ou offline */ }
+      }
+      throw new Error('Abra via servidor local (ex.: Live Server) para carregar o JSON com players.');
+    }
+
+    loadData()
+      .then(renderTree)
+      .catch((err) => {
+        document.getElementById('tree').innerHTML =
+          '<div class="error">Não foi possível carregar o organograma: ' + err.message + '</div>';
+      });
+
+    document.getElementById('search').addEventListener('input', (e) => applySearch(e.target.value));
+    document.getElementById('expand-all').addEventListener('click', () => setAllCollapsed(false));
+    document.getElementById('collapse-all').addEventListener('click', () => setAllCollapsed(true));
+  </script>
+</body>
+</html>
