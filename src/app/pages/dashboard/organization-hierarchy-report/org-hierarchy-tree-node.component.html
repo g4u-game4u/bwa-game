@@ -50,6 +50,16 @@
         <span class="org-tree-node__metric-value">{{ simulationPayout }}</span>
         <span class="org-tree-node__metric-label">Simulação ({{ simulationShare }})</span>
       </div>
+
+      <div class="org-tree-node__mtd-grid" aria-label="Métricas MTD adicionais">
+        <div
+          class="org-tree-node__mtd"
+          *ngFor="let col of mtdColumns"
+          [attr.title]="col.title || null">
+          <span class="org-tree-node__mtd-value">{{ formatMtdValue(col) }}</span>
+          <span class="org-tree-node__mtd-label">{{ col.label }}</span>
+        </div>
+      </div>
     </div>
   </div>
 

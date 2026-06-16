@@ -1,0 +1,152 @@
+.kpi-detail-modal {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.kpi-detail-modal__loading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 0;
+}
+
+.kpi-detail-modal__chart {
+  min-height: 220px;
+}
+
+.kpi-detail-modal__table-wrap,
+.multa-accordion {
+  margin-top: 8px;
+}
+
+.kpi-detail-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.kpi-detail-table th,
+.kpi-detail-table td {
+  padding: 10px 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  text-align: left;
+}
+
+.kpi-detail-table th {
+  color: rgba(255, 255, 255, 0.75);
+  font-weight: 600;
+}
+
+.kpi-detail-table__num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.kpi-detail-modal__empty {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 0;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.multa-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+}
+
+.multa-summary__row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.multa-summary__label {
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.multa-summary__value {
+  font-weight: 700;
+}
+
+.multa-details__summary,
+.multa-supervisor__header {
+  list-style: none;
+  cursor: default;
+}
+
+.multa-details__summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+}
+
+.multa-details__title {
+  font-weight: 700;
+}
+
+.multa-details__count {
+  color: rgba(255, 255, 255, 0.85);
+  font-weight: 700;
+}
+
+.multa-supervisores {
+  padding: 10px 6px 2px;
+}
+
+.multa-supervisor {
+  padding: 10px 10px 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 10px;
+  margin-bottom: 12px;
+}
+
+.multa-supervisor__header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.multa-supervisor__label {
+  font-weight: 700;
+}
+
+.multa-supervisor__count {
+  font-weight: 700;
+}
+
+.multa-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.multa-table th,
+.multa-table td {
+  padding: 8px 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  text-align: left;
+  font-size: 0.9rem;
+}
+
+.multa-table th {
+  color: rgba(255, 255, 255, 0.7);
+  font-weight: 600;
+}
+
+details.multa-details > summary {
+  list-style: none;
+}
+

@@ -5,8 +5,18 @@ import {
   OrgHierarchyNodeType,
   OrgMetricsWindow
 } from '@model/game4u-api.model';
+import { normalizeOrgHierarchyNodeType } from './org-hierarchy-segmentation.mapper';
 
 export type OrgHierarchyRankingSortBy = 'balance_score' | 'points_delivered';
+
+/** Aba de visualização dos destaques / atenção no relatório organizacional. */
+export type OrgHierarchyHighlightViewTab = 'player' | 'supervisao' | 'gerencia';
+
+const HIGHLIGHT_VIEW_TAB_NODE_TYPES: readonly OrgHierarchyHighlightViewTab[] = [
+  'player',
+  'supervisao',
+  'gerencia'
+];
 
 export interface OrgHierarchyWeekdayStat {
   dow: number;
@@ -18,6 +28,8 @@ export interface OrgHierarchyWeekdayStat {
 
 const NODE_TYPE_LABELS: Record<OrgHierarchyNodeType, string> = {
   organization: 'Organização',
+  c_level: 'C-Level',
+  segmentacao: 'Segmentação',
   diretoria: 'Diretoria',
   gerencia: 'Gerência',
   supervisao: 'Supervisão',
@@ -93,7 +105,8 @@ export function formatOrgHierarchyComparePct(value: number | undefined | null): 
     return '—';
   }
   const sign = value > 0 ? '+' : '';
-  return `${sign}${value.toFixed(1)}%`;
+  const n = Math.trunc(value);
+  return `${sign}${n.toString()}%`;
 }
 
 export function getOrgHierarchyCompareTone(
@@ -212,7 +225,7 @@ function readHighlightTextField(
   return '';
 }
 
-function highlightMatchesPlayerNode(item: OrgHierarchyHighlightItem, node: OrgHierarchyNode): boolean {
+function highlightMatchesNode(item: OrgHierarchyHighlightItem, node: OrgHierarchyNode): boolean {
   const targetId = String(item.node_id ?? '').trim().toLowerCase();
   const targetLabel = String(item.label ?? '').trim().toLowerCase();
   const nodeId = String(node.node_id ?? '').trim().toLowerCase();
@@ -224,34 +237,48 @@ function highlightMatchesPlayerNode(item: OrgHierarchyHighlightItem, node: OrgHi
   return !!(targetLabel && nodeLabel && nodeLabel === targetLabel);
 }
 
+function isOrgHierarchyNodeType(node: OrgHierarchyNode, type: OrgHierarchyNodeType): boolean {
+  return normalizeOrgHierarchyNodeType(node.node_type) === type;
+}
+
 function resolveHighlightContextFromTree(
   item: OrgHierarchyHighlightItem,
   root?: OrgHierarchyNode | null
-): { teamLabel: string; gerenciaLabel: string } | null {
+): { teamLabel: string; gerenciaLabel: string; diretoriaLabel: string } | null {
   if (!root) {
     return null;
   }
 
-  let context: { teamLabel: string; gerenciaLabel: string } | null = null;
+  let context: { teamLabel: string; gerenciaLabel: string; diretoriaLabel: string } | null = null;
 
   const walk = (
     node: OrgHierarchyNode,
+    diretoria?: OrgHierarchyNode,
     gerencia?: OrgHierarchyNode,
     supervisao?: OrgHierarchyNode
   ): boolean => {
-    const currentGerencia = node.node_type === 'gerencia' ? node : gerencia;
-    const currentSupervisao = node.node_type === 'supervisao' ? node : supervisao;
+    const normalizedType = normalizeOrgHierarchyNodeType(node.node_type);
+    const currentDiretoria = normalizedType === 'diretoria' ? node : diretoria;
+    const currentGerencia = normalizedType === 'gerencia' ? node : gerencia;
+    const currentSupervisao = normalizedType === 'supervisao' ? node : supervisao;
 
-    if (node.node_type === 'player' && highlightMatchesPlayerNode(item, node)) {
+    if (
+      (normalizedType === 'player' ||
+        normalizedType === 'supervisao' ||
+        normalizedType === 'gerencia' ||
+        normalizedType === 'diretoria') &&
+      highlightMatchesNode(item, node)
+    ) {
       context = {
         teamLabel: currentSupervisao?.label?.trim() ?? '',
-        gerenciaLabel: currentGerencia?.label?.trim() ?? ''
+        gerenciaLabel: currentGerencia?.label?.trim() ?? '',
+        diretoriaLabel: currentDiretoria?.label?.trim() ?? ''
       };
       return true;
     }
 
     for (const child of node.children ?? []) {
-      if (walk(child, currentGerencia, currentSupervisao)) {
+      if (walk(child, currentDiretoria, currentGerencia, currentSupervisao)) {
         return true;
       }
     }
@@ -260,6 +287,428 @@ function resolveHighlightContextFromTree(
 
   walk(root);
   return context;
+}
+
+function findHighlightNodeInTree(
+  item: OrgHierarchyHighlightItem,
+  root?: OrgHierarchyNode | null
+): OrgHierarchyNode | null {
+  if (!root) {
+    return null;
+  }
+
+  let found: OrgHierarchyNode | null = null;
+
+  const walk = (node: OrgHierarchyNode): boolean => {
+    const normalizedType = normalizeOrgHierarchyNodeType(node.node_type);
+    if (
+      (normalizedType === 'player' ||
+        normalizedType === 'supervisao' ||
+        normalizedType === 'gerencia' ||
+        normalizedType === 'diretoria') &&
+      highlightMatchesNode(item, node)
+    ) {
+      found = node;
+      return true;
+    }
+    for (const child of node.children ?? []) {
+      if (walk(child)) {
+        return true;
+      }
+    }
+    return false;
+  };
+
+  walk(root);
+  return found;
+}
+
+/** Infere o nível hierárquico de um destaque quando `node_type` não vem na API. */
+export function inferHighlightNodeType(
+  item: OrgHierarchyHighlightItem,
+  root?: OrgHierarchyNode | null
+): OrgHierarchyHighlightViewTab {
+  const explicitRaw = String(item.node_type ?? '').trim().toLowerCase();
+  const explicit = normalizeHighlightNodeType(explicitRaw);
+  if (explicit && HIGHLIGHT_VIEW_TAB_NODE_TYPES.includes(explicit)) {
+    return explicit;
+  }
+
+  const matched = findHighlightNodeInTree(item, root);
+  if (matched) {
+    const normalized = normalizeOrgHierarchyNodeType(matched.node_type);
+    if (normalized === 'supervisao' || normalized === 'gerencia' || normalized === 'player') {
+      return normalized;
+    }
+  }
+
+  return 'player';
+}
+
+function normalizeHighlightNodeType(
+  raw: string
+): OrgHierarchyHighlightViewTab | null {
+  const v = (raw ?? '').trim().toLowerCase();
+  if (!v) {
+    return null;
+  }
+
+  // Backend pode usar sinônimos nos destaques/atenção.
+  // Mantemos o mapeamento aqui (sem depender de outros mappers) para habilitar as abas corretamente.
+  if (v === 'player' || v === 'jogador' || v === 'colaborador') {
+    return 'player';
+  }
+  if (v === 'supervisao' || v === 'supervisor' || v === 'team' || v === 'time') {
+    return 'supervisao';
+  }
+  if (v === 'gerencia' || v === 'gerente' || v === 'manager') {
+    return 'gerencia';
+  }
+
+  return null;
+}
+
+export interface DerivedOrgHierarchyHighlights {
+  destaque: OrgHierarchyHighlightItem[];
+  atencao: OrgHierarchyHighlightItem[];
+}
+
+const derivedHighlightsCache = new WeakMap<
+  OrgHierarchyNode,
+  Partial<Record<OrgHierarchyHighlightViewTab, DerivedOrgHierarchyHighlights>>
+>();
+
+function readMtdNumber(node: OrgHierarchyNode, key: keyof OrgMetricsWindow): number {
+  const raw = node.mtd?.[key];
+  const n = typeof raw === 'number' ? raw : Number(raw);
+  return Number.isFinite(n) ? n : 0;
+}
+
+export type OrgHighlightMtdFormat = 'number' | 'pct';
+
+export interface OrgHighlightMtdColumn {
+  key: keyof OrgMetricsWindow;
+  label: string;
+  format: OrgHighlightMtdFormat;
+  title?: string;
+}
+
+/** Colunas MTD exibidas nas tabelas de destaques e atenção. */
+export const ORG_HIGHLIGHT_MTD_COLUMNS: readonly OrgHighlightMtdColumn[] = [
+  { key: 'on_time_pct', label: '% prazo', format: 'pct', title: 'Percentual de entregas no prazo' },
+  { key: 'finished', label: 'Entregas', format: 'number' },
+  { key: 'clients_served', label: 'Clientes', format: 'number', title: 'Clientes atendidos' },
+  { key: 'clients_onboarding', label: 'Onboarding', format: 'number' },
+  { key: 'points_delivered', label: 'Pontos', format: 'number', title: 'Pontos entregues' },
+  { key: 'goal_points', label: 'Meta', format: 'number', title: 'Meta de pontos' },
+  { key: 'pending_open', label: 'Pendentes', format: 'number' },
+  { key: 'multa_risk', label: 'Multa risco', format: 'number' },
+  { key: 'near_due', label: 'Próx. venc.', format: 'number', title: 'Próximo do vencimento' },
+  { key: 'multa_and_near_due', label: 'Multa+prox.', format: 'number', title: 'Multa e próximo do vencimento' },
+  { key: 'overdue_pending', label: 'Atrasados', format: 'number' }
+];
+
+export function getHighlightMtdMetricValue(
+  item: OrgHierarchyHighlightItem,
+  key: keyof OrgMetricsWindow
+): number | null {
+  const fromMtd = item.mtd?.[key];
+  if (typeof fromMtd === 'number' && Number.isFinite(fromMtd)) {
+    return fromMtd;
+  }
+  const top = item[key];
+  if (typeof top === 'number' && Number.isFinite(top)) {
+    return top;
+  }
+  return null;
+}
+
+export function formatHighlightMtdMetricValue(
+  value: number | undefined | null,
+  format: OrgHighlightMtdFormat
+): string {
+  if (value == null || !Number.isFinite(value)) {
+    return '—';
+  }
+  if (format === 'pct') {
+    return `${Math.trunc(value).toString()}%`;
+  }
+  return value.toLocaleString('pt-BR', { maximumFractionDigits: 0 });
+}
+
+export function formatHighlightMtdCell(
+  item: OrgHierarchyHighlightItem,
+  column: OrgHighlightMtdColumn
+): string {
+  return formatHighlightMtdMetricValue(getHighlightMtdMetricValue(item, column.key), column.format);
+}
+
+function mapNodeToHighlightItem(
+  tab: OrgHierarchyHighlightViewTab,
+  node: OrgHierarchyNode,
+  onTimePct: number,
+  finished: number,
+  clients: number
+): OrgHierarchyHighlightItem {
+  return {
+    node_type: tab,
+    node_id: node.node_id,
+    label: node.label,
+    metric: 'on_time_pct',
+    value: onTimePct,
+    finished,
+    clients_served: clients,
+    mtd: { ...(node.mtd ?? {}) }
+  };
+}
+
+function collectNodesByType(
+  root: OrgHierarchyNode,
+  tab: OrgHierarchyHighlightViewTab
+): OrgHierarchyNode[] {
+  return collectOrgHierarchyNodesByType(root, tab);
+}
+
+/** Coleta todos os nós de um tipo na árvore hierárquica. */
+export function collectOrgHierarchyNodesByType(
+  root: OrgHierarchyNode | null | undefined,
+  nodeType: OrgHierarchyNodeType
+): OrgHierarchyNode[] {
+  if (!root) {
+    return [];
+  }
+  const out: OrgHierarchyNode[] = [];
+  const walk = (node: OrgHierarchyNode): void => {
+    if (isOrgHierarchyNodeType(node, nodeType)) {
+      out.push(node);
+    }
+    for (const child of node.children ?? []) {
+      walk(child);
+    }
+  };
+  walk(root);
+  return out;
+}
+
+export function formatOrgHierarchyNodeMtdCell(
+  node: OrgHierarchyNode,
+  column: OrgHighlightMtdColumn
+): string {
+  const value = node.mtd?.[column.key] as number | undefined | null;
+  return formatHighlightMtdMetricValue(value, column.format);
+}
+
+/** Rótulo curto da área (segmentação) para exibição no ranking de diretorias. */
+export function formatOrgHierarchyAreaShortLabel(label: string): string {
+  const normalized = label
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+  if (!normalized) {
+    return '—';
+  }
+  if (/departamento\s*pessoal/.test(normalized) || /^dp\b/.test(normalized) || normalized === 'pessoal') {
+    return 'Pessoal';
+  }
+  if (/contabil/.test(normalized)) {
+    return 'Contábil';
+  }
+  if (/legaliza/.test(normalized)) {
+    return 'Legalização';
+  }
+  if (/simples\s*nacional/.test(normalized)) {
+    return 'Simples Nacional';
+  }
+  if (/fiscal/.test(normalized)) {
+    return 'Fiscal';
+  }
+  return label.trim();
+}
+
+export type OrgHierarchyAreaKey = 'pessoal' | 'fiscal' | 'contabil' | 'legalizacao' | 'simples_nacional';
+
+/** Resolve a chave da área a partir do rótulo (curto ou completo). */
+export function resolveOrgHierarchyAreaKey(label: string): OrgHierarchyAreaKey | null {
+  const short = formatOrgHierarchyAreaShortLabel(label);
+  switch (short) {
+    case 'Pessoal':
+      return 'pessoal';
+    case 'Fiscal':
+      return 'fiscal';
+    case 'Contábil':
+      return 'contabil';
+    case 'Legalização':
+      return 'legalizacao';
+    case 'Simples Nacional':
+      return 'simples_nacional';
+    default:
+      return null;
+  }
+}
+
+/** Classe CSS para colorir o rótulo da área. */
+export function getOrgHierarchyAreaLabelClass(label: string): string | null {
+  const key = resolveOrgHierarchyAreaKey(label);
+  if (!key) {
+    return null;
+  }
+  return `org-area-label--${key.replace(/_/g, '-')}`;
+}
+
+export function resolveDirectorateAreaLabel(
+  root: OrgHierarchyNode | null | undefined,
+  diretoria: OrgHierarchyNode
+): string | null {
+  if (!root) {
+    return null;
+  }
+
+  let areaLabel: string | null = null;
+
+  const walk = (node: OrgHierarchyNode, segmentacao?: OrgHierarchyNode): boolean => {
+    const normalizedType = normalizeOrgHierarchyNodeType(node.node_type);
+    const currentSegmentacao = normalizedType === 'segmentacao' ? node : segmentacao;
+
+    if (node.node_id === diretoria.node_id && normalizedType === 'diretoria') {
+      areaLabel = currentSegmentacao?.label?.trim() ?? null;
+      return true;
+    }
+
+    for (const child of node.children ?? []) {
+      if (walk(child, currentSegmentacao)) {
+        return true;
+      }
+    }
+    return false;
+  };
+
+  walk(root);
+  return areaLabel ? formatOrgHierarchyAreaShortLabel(areaLabel) : null;
+}
+
+export function getDirectorateRankingLabel(
+  root: OrgHierarchyNode | null | undefined,
+  diretoria: OrgHierarchyNode
+): string {
+  const name = (diretoria.label ?? '').trim() || '—';
+  const area = resolveDirectorateAreaLabel(root, diretoria);
+  return area ? `${area} > ${name}` : name;
+}
+
+function computeHighlightScore(
+  node: OrgHierarchyNode,
+  maxFinished: number,
+  maxClients: number
+): number {
+  const finished = readMtdNumber(node, 'finished');
+  const clients = readMtdNumber(node, 'clients_served');
+  const onTimePct = readMtdNumber(node, 'on_time_pct');
+
+  const onTimeNorm = Math.max(0, Math.min(1, onTimePct / 100));
+  const finishedNorm = maxFinished > 0 ? Math.max(0, Math.min(1, finished / maxFinished)) : 0;
+  const clientsNorm = maxClients > 0 ? Math.max(0, Math.min(1, clients / maxClients)) : 0;
+
+  return onTimeNorm * 0.55 + finishedNorm * 0.25 + clientsNorm * 0.2;
+}
+
+function deriveHighlightsForTab(
+  root: OrgHierarchyNode,
+  tab: OrgHierarchyHighlightViewTab
+): DerivedOrgHierarchyHighlights {
+  const nodes = collectNodesByType(root, tab).filter(n => (n.label ?? '').trim().length > 0);
+  if (!nodes.length) {
+    return { destaque: [], atencao: [] };
+  }
+
+  const maxFinished = Math.max(1, ...nodes.map(n => readMtdNumber(n, 'finished')));
+  const maxClients = Math.max(1, ...nodes.map(n => readMtdNumber(n, 'clients_served')));
+
+  // Regras mínimas para evitar listas dominadas por amostras pequenas
+  const minFinished = tab === 'gerencia' ? 5 : 3;
+
+  const scored = nodes.map(node => ({
+    node,
+    finished: readMtdNumber(node, 'finished'),
+    clients: readMtdNumber(node, 'clients_served'),
+    onTimePct: readMtdNumber(node, 'on_time_pct'),
+    score: computeHighlightScore(node, maxFinished, maxClients)
+  }));
+
+  const eligible = scored.filter(row => row.finished >= minFinished);
+  if (!eligible.length) {
+    return { destaque: [], atencao: [] };
+  }
+
+  const destaqueRows = [...eligible].sort((a, b) => b.score - a.score).slice(0, 10);
+  const destaqueIds = new Set(destaqueRows.map(r => r.node.node_id));
+  const destaque = destaqueRows.map(row =>
+    mapNodeToHighlightItem(tab, row.node, row.onTimePct, row.finished, row.clients)
+  );
+
+  // Atenção é o "fundo do ranking" por prazo, mas sem repetir quem já está em destaque.
+  const atencao = [...eligible]
+    .filter(row => !destaqueIds.has(row.node.node_id))
+    .sort((a, b) => a.onTimePct - b.onTimePct || b.finished - a.finished)
+    .slice(0, 10)
+    .map(row => mapNodeToHighlightItem(tab, row.node, row.onTimePct, row.finished, row.clients));
+
+  return { destaque, atencao };
+}
+
+export function getDerivedHighlightsForTab(
+  root: OrgHierarchyNode | null | undefined,
+  tab: OrgHierarchyHighlightViewTab
+): DerivedOrgHierarchyHighlights {
+  if (!root) {
+    return { destaque: [], atencao: [] };
+  }
+  const cached = derivedHighlightsCache.get(root) ?? {};
+  const hit = cached[tab];
+  if (hit) {
+    return hit;
+  }
+  const computed = deriveHighlightsForTab(root, tab);
+  cached[tab] = computed;
+  derivedHighlightsCache.set(root, cached);
+  return computed;
+}
+
+export function filterHighlightsByViewTab(
+  items: OrgHierarchyHighlightItem[] | undefined,
+  tab: OrgHierarchyHighlightViewTab,
+  root?: OrgHierarchyNode | null
+): OrgHierarchyHighlightItem[] {
+  return (items ?? []).filter(item => inferHighlightNodeType(item, root) === tab);
+}
+
+export function countHighlightsByViewTab(
+  destaque: OrgHierarchyHighlightItem[] | undefined,
+  atencao: OrgHierarchyHighlightItem[] | undefined,
+  tab: OrgHierarchyHighlightViewTab,
+  root?: OrgHierarchyNode | null
+): number {
+  return (
+    filterHighlightsByViewTab(destaque, tab, root).length +
+    filterHighlightsByViewTab(atencao, tab, root).length
+  );
+}
+
+export function highlightsViewTabHasItems(
+  destaque: OrgHierarchyHighlightItem[] | undefined,
+  atencao: OrgHierarchyHighlightItem[] | undefined,
+  tab: OrgHierarchyHighlightViewTab,
+  root?: OrgHierarchyNode | null
+): boolean {
+  return countHighlightsByViewTab(destaque, atencao, tab, root) > 0;
+}
+
+/** Indica se existem nós do nível na árvore (habilita a aba mesmo sem destaques derivados). */
+export function highlightViewTabHasNodes(
+  root: OrgHierarchyNode | null | undefined,
+  tab: OrgHierarchyHighlightViewTab
+): boolean {
+  return collectOrgHierarchyNodesByType(root, tab).some(n => (n.label ?? '').trim().length > 0);
 }
 
 /** Time do jogador (supervisão) em destaques/atenção. */
@@ -297,9 +746,41 @@ export function getHighlightGerenciaLabel(
   return resolveHighlightContextFromTree(item, root)?.gerenciaLabel || '—';
 }
 
+/** Diretoria do destaque em nível de gerência. */
+export function getHighlightDiretoriaLabel(
+  item: OrgHierarchyHighlightItem,
+  root?: OrgHierarchyNode | null
+): string {
+  const direct = readHighlightTextField(item, [
+    'diretoria_label',
+    'diretoria_name',
+    'diretor_name',
+    'diretoria'
+  ]);
+  if (direct) {
+    return direct;
+  }
+  return resolveHighlightContextFromTree(item, root)?.diretoriaLabel || '—';
+}
+
 export function highlightHasContext(
   item: OrgHierarchyHighlightItem,
   root?: OrgHierarchyNode | null
 ): boolean {
   return getHighlightTeamLabel(item, root) !== '—' || getHighlightGerenciaLabel(item, root) !== '—';
+}
+
+export function highlightHasContextForViewTab(
+  item: OrgHierarchyHighlightItem,
+  tab: OrgHierarchyHighlightViewTab,
+  root?: OrgHierarchyNode | null
+): boolean {
+  switch (tab) {
+    case 'supervisao':
+      return getHighlightGerenciaLabel(item, root) !== '—';
+    case 'gerencia':
+      return getHighlightDiretoriaLabel(item, root) !== '—';
+    default:
+      return highlightHasContext(item, root);
+  }
 }

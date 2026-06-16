@@ -95,7 +95,14 @@
               </h2>
             </div>
             <div class="hero-grid">
-              <c4u-card class="hero-card hero-card--points-delivered">
+              <c4u-card
+                class="hero-card hero-card--points-delivered"
+                role="button"
+                tabindex="0"
+                (click)="openKpiDrillDown('points_delivered', root!)"
+                (keydown.enter)="openKpiDrillDown('points_delivered', root!)"
+                (keydown.space)="$event.preventDefault(); openKpiDrillDown('points_delivered', root!)"
+                [attr.aria-label]="'Abrir histórico de pontos entregues (MTD)'">
                 <div class="hero-card__icon" aria-hidden="true">
                   <i class="ri-copper-coin-line"></i>
                 </div>
@@ -133,7 +140,14 @@
                 </div>
               </c4u-card>
 
-              <c4u-card class="hero-card hero-card--finished">
+              <c4u-card
+                class="hero-card hero-card--finished"
+                role="button"
+                tabindex="0"
+                (click)="openKpiDrillDown('finished', root!)"
+                (keydown.enter)="openKpiDrillDown('finished', root!)"
+                (keydown.space)="$event.preventDefault(); openKpiDrillDown('finished', root!)"
+                [attr.aria-label]="'Abrir histórico de entregas concluídas (MTD)'">
                 <div class="hero-card__icon" aria-hidden="true">
                   <i class="ri-checkbox-circle-line"></i>
                 </div>
@@ -153,7 +167,14 @@
                 </div>
               </c4u-card>
 
-              <c4u-card class="hero-card hero-card--on-time">
+              <c4u-card
+                class="hero-card hero-card--on-time"
+                role="button"
+                tabindex="0"
+                (click)="openKpiDrillDown('on_time_pct', root!)"
+                (keydown.enter)="openKpiDrillDown('on_time_pct', root!)"
+                (keydown.space)="$event.preventDefault(); openKpiDrillDown('on_time_pct', root!)"
+                [attr.aria-label]="'Abrir histórico de entregas no prazo (MTD)'">
                 <div class="hero-card__icon" aria-hidden="true">
                   <i class="ri-time-line"></i>
                 </div>
@@ -163,7 +184,14 @@
                 </div>
               </c4u-card>
 
-              <c4u-card class="hero-card hero-card--clients">
+              <c4u-card
+                class="hero-card hero-card--clients"
+                role="button"
+                tabindex="0"
+                (click)="openKpiDrillDown('clients_served', root!)"
+                (keydown.enter)="openKpiDrillDown('clients_served', root!)"
+                (keydown.space)="$event.preventDefault(); openKpiDrillDown('clients_served', root!)"
+                [attr.aria-label]="'Abrir histórico de clientes atendidos (MTD)'">
                 <div class="hero-card__icon" aria-hidden="true">
                   <i class="ri-group-line"></i>
                 </div>
@@ -267,32 +295,46 @@
               </h2>
             </div>
             <div class="insights-alert-row" role="list">
-              <div class="insights-alert insights-alert--urgent" role="listitem">
+              <div
+                class="insights-alert insights-alert--urgent"
+                role="listitem"
+                tabindex="0"
+                (click)="openKpiDrillDown('multa_risk', root!)"
+                (keydown.enter)="openKpiDrillDown('multa_risk', root!)"
+                (keydown.space)="$event.preventDefault(); openKpiDrillDown('multa_risk', root!)"
+                [attr.aria-label]="'Abrir lista de entregas com risco de multa'">
                 <div class="insights-alert-icon" aria-hidden="true"><i class="ri-alarm-warning-line"></i></div>
                 <div class="insights-alert-content">
                   <span class="insights-alert-value">{{ root.mtd.multa_risk | number:'1.0-0':'pt-BR' }}</span>
                   <span class="insights-alert-label">Risco de multa</span>
                 </div>
               </div>
-              <div class="insights-alert insights-alert--warning" role="listitem">
+              <div
+                class="insights-alert insights-alert--warning"
+                role="listitem"
+                tabindex="0"
+                (click)="openKpiDrillDown('near_due', root!)"
+                (keydown.enter)="openKpiDrillDown('near_due', root!)"
+                (keydown.space)="$event.preventDefault(); openKpiDrillDown('near_due', root!)"
+                [attr.aria-label]="'Abrir lista de entregas próximas do vencimento'">
                 <div class="insights-alert-icon" aria-hidden="true"><i class="ri-time-line"></i></div>
                 <div class="insights-alert-content">
                   <span class="insights-alert-value">{{ root.mtd.near_due | number:'1.0-0':'pt-BR' }}</span>
                   <span class="insights-alert-label">Próximas do vencimento</span>
                 </div>
               </div>
-              <div class="insights-alert insights-alert--danger" role="listitem">
+              <div
+                class="insights-alert insights-alert--danger"
+                role="listitem"
+                tabindex="0"
+                (click)="openKpiDrillDown('overdue_pending', root!)"
+                (keydown.enter)="openKpiDrillDown('overdue_pending', root!)"
+                (keydown.space)="$event.preventDefault(); openKpiDrillDown('overdue_pending', root!)"
+                [attr.aria-label]="'Abrir lista de entregas com pendências em atraso'">
                 <div class="insights-alert-icon" aria-hidden="true"><i class="ri-error-warning-line"></i></div>
                 <div class="insights-alert-content">
                   <span class="insights-alert-value">{{ root.mtd.overdue_pending | number:'1.0-0':'pt-BR' }}</span>
                   <span class="insights-alert-label">Pendentes em atraso</span>
-                </div>
-              </div>
-              <div class="insights-alert insights-alert--critical" role="listitem">
-                <div class="insights-alert-icon" aria-hidden="true"><i class="ri-fire-line"></i></div>
-                <div class="insights-alert-content">
-                  <span class="insights-alert-value">{{ root.mtd.multa_and_near_due | number:'1.0-0':'pt-BR' }}</span>
-                  <span class="insights-alert-label">Multa + proximidade</span>
                 </div>
               </div>
             </div>
@@ -323,29 +365,54 @@
                 </button>
               </div>
             </div>
-            <div class="simple-table-wrap" role="region" aria-label="Tabela de ranking de diretorias">
-              <table class="simple-table">
+            <div class="simple-table-wrap ranking-table-wrap" role="region" aria-label="Tabela de ranking de diretorias">
+              <table class="simple-table ranking-table">
                 <thead>
                   <tr>
-                    <th>Diretoria</th>
-                    <th class="simple-table__num">Colaboradores</th>
+                    <th class="ranking-table__name-col">Diretoria</th>
+                    <th class="simple-table__num">Colab.</th>
+                    <th class="simple-table__num">vs ant.</th>
+                    <th
+                      *ngFor="let col of rankingMtdColumns"
+                      class="simple-table__num"
+                      [attr.title]="col.title || null">
+                      {{ col.label }}
+                    </th>
                     <th class="simple-table__num">Balance</th>
-                    <th class="simple-table__num">Pontos MTD</th>
                     <th *ngIf="showSimulation" class="simple-table__num">Simulação</th>
                   </tr>
                 </thead>
                 <tbody>
                   <tr *ngFor="let dir of rankedDirectorates; trackBy: trackByNodeId">
-                    <td>{{ dir.label }}</td>
+                    <td class="ranking-table__name-col" [title]="directorateRankingLabel(dir)">
+                      <ng-container *ngIf="directorateRankingArea(dir) as area; else rankingNameOnly">
+                        <span [class]="directorateRankingAreaClass(dir)">{{ area }}</span>
+                        <span class="ranking-table__sep"> &gt; </span>
+                        <span>{{ directorateRankingName(dir) }}</span>
+                      </ng-container>
+                      <ng-template #rankingNameOnly>{{ directorateRankingName(dir) }}</ng-template>
+                    </td>
                     <td class="simple-table__num">{{ dir.players_count | number:'1.0-0':'pt-BR' }}</td>
                     <td class="simple-table__num">
-                      {{ dir.balance_score != null ? (dir.balance_score | number:'1.1-1':'pt-BR') : '—' }}
+                      <span
+                        class="ranking-table__pct"
+                        [class.ranking-table__pct--positive]="mtdCompareTone(dir.compare?.vs_prev_mtd_points_pct) === 'positive'"
+                        [class.ranking-table__pct--negative]="mtdCompareTone(dir.compare?.vs_prev_mtd_points_pct) === 'negative'">
+                        {{ mtdComparePct(dir.compare?.vs_prev_mtd_points_pct) }}
+                      </span>
                     </td>
-                    <td class="simple-table__num">{{ dir.mtd.points_delivered | number:'1.0-0':'pt-BR' }}</td>
+                    <td
+                      *ngFor="let col of rankingMtdColumns"
+                      class="simple-table__num">
+                      {{ rankingMtdCell(dir, col) }}
+                    </td>
+                    <td class="simple-table__num">
+                      {{ dir.balance_score != null ? (dir.balance_score | number:'1.0-0':'pt-BR') : '—' }}
+                    </td>
                     <td *ngIf="showSimulation" class="simple-table__num">
                       {{ formatCurrency(dir.simulation?.payout_brl) }}
                       <span class="ranking-share" *ngIf="dir.simulation?.share_pct != null">
-                        ({{ dir.simulation!.share_pct | number:'1.2-2':'pt-BR' }}%)
+                        ({{ dir.simulation!.share_pct | number:'1.0-0':'pt-BR' }}%)
                       </span>
                     </td>
                   </tr>
@@ -387,63 +454,231 @@
           </section>
 
           <section
-            *ngIf="highlightDestaque.length || highlightAtencao.length"
+            *ngIf="showHighlightsSection"
             class="dashboard-section highlights-section"
             aria-label="Destaques e atenção">
-            <div class="highlights-grid">
-              <c4u-card class="highlights-card highlights-card--success" *ngIf="highlightDestaque.length">
+            <div class="section-header section-header--with-toggle">
+              <h2 class="section-title">
+                <i class="ri-star-line section-title-icon" aria-hidden="true"></i>
+                Destaques e atenção
+              </h2>
+              <div class="data-view-toggle" role="tablist" aria-label="Nível hierárquico dos destaques">
+                <button
+                  *ngFor="let tab of highlightViewTabs"
+                  type="button"
+                  class="toggle-btn"
+                  role="tab"
+                  [class.active]="highlightViewTab === tab.id"
+                  [attr.aria-selected]="highlightViewTab === tab.id"
+                  [attr.aria-controls]="'highlights-panel-' + tab.id"
+                  [disabled]="!isHighlightTabAvailable(tab.id)"
+                  (click)="onHighlightViewTabChange(tab.id)">
+                  <i [class]="tab.icon" aria-hidden="true"></i>
+                  <span class="toggle-text">
+                    {{ tab.label }}
+                    <span class="toggle-count" *ngIf="highlightTabCount(tab.id) > 0">
+                      ({{ highlightTabCount(tab.id) }})
+                    </span>
+                  </span>
+                </button>
+              </div>
+            </div>
+
+            <div
+              *ngIf="showCurrentHighlightTabContent"
+              class="highlights-grid"
+              [attr.id]="'highlights-panel-' + highlightViewTab"
+              role="tabpanel"
+              [attr.aria-label]="'Destaques e atenção — ' + highlightViewTab">
+              <c4u-card class="highlights-card highlights-card--success" *ngIf="filteredHighlightDestaque.length">
                 <h3 class="highlights-card__title">
                   <i class="ri-star-line" aria-hidden="true"></i>
                   Destaques
                 </h3>
-                <ul class="highlights-list">
-                  <li *ngFor="let item of highlightDestaque; trackBy: trackByHighlight">
-                    <div class="highlights-list__info">
-                      <span class="highlights-list__label">{{ highlightMetricLabel(item) }}</span>
-                      <div class="highlights-list__meta" *ngIf="highlightShowsContext(item)">
-                        <span class="highlights-list__meta-item" *ngIf="highlightTeamLabel(item) !== '—'">
-                          <i class="ri-team-line" aria-hidden="true"></i>
-                          {{ highlightTeamLabel(item) }}
-                        </span>
-                        <span class="highlights-list__meta-item" *ngIf="highlightGerenciaLabel(item) !== '—'">
-                          <i class="ri-briefcase-line" aria-hidden="true"></i>
-                          {{ highlightGerenciaLabel(item) }}
-                        </span>
-                      </div>
-                    </div>
-                    <span class="highlights-list__value" *ngIf="item.value != null">
-                      {{ item.value | number:'1.0-0':'pt-BR' }}
-                    </span>
-                  </li>
-                </ul>
+                <ng-container
+                  *ngTemplateOutlet="highlightsTable; context: { items: filteredHighlightDestaque }">
+                </ng-container>
               </c4u-card>
-              <c4u-card class="highlights-card highlights-card--warning" *ngIf="highlightAtencao.length">
+              <c4u-card
+                class="highlights-card highlights-card--warning"
+                *ngIf="filteredHighlightAtencao.length">
                 <h3 class="highlights-card__title">
                   <i class="ri-alert-line" aria-hidden="true"></i>
                   Precisam de atenção
                 </h3>
-                <ul class="highlights-list">
-                  <li *ngFor="let item of highlightAtencao; trackBy: trackByHighlight">
-                    <div class="highlights-list__info">
-                      <span class="highlights-list__label">{{ highlightMetricLabel(item) }}</span>
-                      <div class="highlights-list__meta" *ngIf="highlightShowsContext(item)">
-                        <span class="highlights-list__meta-item" *ngIf="highlightTeamLabel(item) !== '—'">
-                          <i class="ri-team-line" aria-hidden="true"></i>
-                          {{ highlightTeamLabel(item) }}
-                        </span>
-                        <span class="highlights-list__meta-item" *ngIf="highlightGerenciaLabel(item) !== '—'">
-                          <i class="ri-briefcase-line" aria-hidden="true"></i>
-                          {{ highlightGerenciaLabel(item) }}
-                        </span>
-                      </div>
-                    </div>
-                    <span class="highlights-list__value" *ngIf="item.value != null">
-                      {{ item.value | number:'1.0-0':'pt-BR' }}
-                    </span>
-                  </li>
-                </ul>
+                <ng-container
+                  *ngTemplateOutlet="highlightsTable; context: { items: filteredHighlightAtencao }">
+                </ng-container>
               </c4u-card>
+
+              <ng-template #highlightsTable let-items="items">
+                <div class="simple-table-wrap highlights-table-wrap" role="region" aria-label="Métricas MTD">
+                  <table class="simple-table highlights-table">
+                    <thead>
+                      <tr>
+                        <th class="highlights-table__name-col">Nome</th>
+                        <th
+                          *ngFor="let col of highlightMtdColumns"
+                          class="simple-table__num"
+                          [attr.title]="col.title || null">
+                          {{ col.label }}
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr *ngFor="let item of items; trackBy: trackByHighlight">
+                        <td class="highlights-table__name-col">
+                          <span class="highlights-table__name">{{ highlightMetricLabel(item) }}</span>
+                          <div class="highlights-table__meta" *ngIf="highlightShowsContext(item)">
+                            <span
+                              class="highlights-table__meta-item"
+                              *ngIf="highlightViewTab === 'player' && highlightTeamLabel(item) !== '—'">
+                              <i class="ri-team-line" aria-hidden="true"></i>
+                              {{ highlightTeamLabel(item) }}
+                            </span>
+                            <span
+                              class="highlights-table__meta-item"
+                              *ngIf="highlightViewTab === 'player' && highlightGerenciaLabel(item) !== '—'">
+                              <i class="ri-briefcase-line" aria-hidden="true"></i>
+                              {{ highlightGerenciaLabel(item) }}
+                            </span>
+                            <span
+                              class="highlights-table__meta-item"
+                              *ngIf="highlightViewTab === 'supervisao' && highlightGerenciaLabel(item) !== '—'">
+                              <i class="ri-briefcase-line" aria-hidden="true"></i>
+                              {{ highlightGerenciaLabel(item) }}
+                            </span>
+                            <span
+                              class="highlights-table__meta-item"
+                              *ngIf="highlightViewTab === 'gerencia' && highlightDiretoriaLabel(item) !== '—'">
+                              <i class="ri-building-4-line" aria-hidden="true"></i>
+                              {{ highlightDiretoriaLabel(item) }}
+                            </span>
+                          </div>
+                        </td>
+                        <td
+                          *ngFor="let col of highlightMtdColumns"
+                          class="simple-table__num"
+                          [attr.title]="col.title || null">
+                          {{ highlightMtdCell(item, col) }}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </ng-template>
             </div>
+
+            <c4u-card *ngIf="!showCurrentHighlightTabContent" class="highlights-empty-card">
+              <p class="highlights-empty-card__text">
+                Nenhum destaque ou alerta neste nível para o mês selecionado.
+              </p>
+            </c4u-card>
+          </section>
+
+          <section
+            *ngIf="showAiInsightsSection"
+            class="dashboard-section ai-insights-section"
+            aria-labelledby="org-ai-insights-title">
+            <div class="section-header section-header--with-actions">
+              <h2 id="org-ai-insights-title" class="section-title">
+                <i class="ri-presentation-line section-title-icon" aria-hidden="true"></i>
+                Análise executiva
+                <c4u-info-button
+                  [infoKey]="''"
+                  customText="Síntese automática dos principais riscos, tendências e recomendações a partir do relatório organizacional do mês."
+                  position="bottom">
+                </c4u-info-button>
+              </h2>
+              <div class="ai-insights-actions">
+                <span
+                  class="ai-insights-meta"
+                  *ngIf="hasInsightsContent && insightsGeneratedAtLabel"
+                  role="status">
+                  <span class="ai-insights-badge" *ngIf="insightsSourceBadge">{{ insightsSourceBadge }}</span>
+                  {{ insightsGeneratedAtLabel }}
+                  <span class="ai-insights-model" *ngIf="insights?.llm_model">· {{ insights!.llm_model }}</span>
+                </span>
+                <button
+                  type="button"
+                  class="btn btn--primary ai-insights-generate-btn"
+                  [disabled]="isGeneratingInsights || isLoadingInsights"
+                  [attr.aria-busy]="isGeneratingInsights ? 'true' : null"
+                  (click)="generateInsights()">
+                  <i
+                    class="ri-refresh-line"
+                    [class.ai-insights-generate-btn__spin]="isGeneratingInsights"
+                    aria-hidden="true"></i>
+                  <span>{{ isGeneratingInsights ? 'Gerando…' : (hasInsightsContent ? 'Atualizar análise' : 'Gerar análise') }}</span>
+                </button>
+              </div>
+            </div>
+
+            <c4u-card class="ai-insights-card" [attr.aria-busy]="isLoadingInsights || isGeneratingInsights ? 'true' : null">
+              <div *ngIf="isLoadingInsights || isGeneratingInsights" class="ai-insights-skeleton" role="status">
+                <c4u-shimmer></c4u-shimmer>
+                <c4u-shimmer></c4u-shimmer>
+                <c4u-shimmer></c4u-shimmer>
+              </div>
+
+              <div
+                *ngIf="!isLoadingInsights && !isGeneratingInsights && insightsBanner"
+                class="ai-insights-banner"
+                [class.ai-insights-banner--credits]="insightsBanner.kind === 'credits'"
+                role="alert">
+                <i
+                  class="ai-insights-banner__icon"
+                  [class.ri-wallet-3-line]="insightsBanner.kind === 'credits'"
+                  [class.ri-error-warning-line]="insightsBanner.kind !== 'credits'"
+                  aria-hidden="true"></i>
+                <div class="ai-insights-banner__body">
+                  <strong *ngIf="insightsBanner.kind === 'credits'">Créditos de API indisponíveis</strong>
+                  <strong *ngIf="insightsBanner.kind !== 'credits'">Não foi possível obter a análise</strong>
+                  <p>{{ insightsBanner.message }}</p>
+                </div>
+              </div>
+
+              <div *ngIf="!isLoadingInsights && !isGeneratingInsights && hasInsightsContent" class="ai-insights-body">
+                <p class="ai-insights-summary" *ngIf="insights?.summary">{{ insights!.summary }}</p>
+                <div class="ai-insights-grid">
+                  <article
+                    *ngFor="let item of insights!.insights; trackBy: trackByInsightId"
+                    class="org-ai-insight"
+                    [ngClass]="insightPriorityClass(item)">
+                    <header class="org-ai-insight__header">
+                      <div class="org-ai-insight__tags">
+                        <span class="org-ai-insight__category">{{ insightCategoryLabel(item) }}</span>
+                        <span class="org-ai-insight__priority">{{ insightPriorityLabel(item) }}</span>
+                      </div>
+                      <h3 class="org-ai-insight__title">{{ item.title }}</h3>
+                    </header>
+                    <ul class="org-ai-insight__evidence" *ngIf="item.evidence?.length">
+                      <li *ngFor="let line of item.evidence">{{ line }}</li>
+                    </ul>
+                    <p class="org-ai-insight__action" *ngIf="item.suggested_action">
+                      <strong>Ação sugerida:</strong> {{ item.suggested_action }}
+                    </p>
+                    <footer class="org-ai-insight__footer" *ngIf="item.owner_hint">
+                      <i class="ri-user-line" aria-hidden="true"></i>
+                      {{ item.owner_hint }}
+                    </footer>
+                  </article>
+                </div>
+              </div>
+
+              <div
+                *ngIf="!isLoadingInsights && !isGeneratingInsights && !hasInsightsContent && !insightsBanner"
+                class="ai-insights-empty"
+                role="status">
+                <i class="ri-sparkling-line ai-insights-empty__icon" aria-hidden="true"></i>
+                <p *ngIf="insightsNotFound">
+                  Ainda não há análise salva para este mês. Clique em <strong>Gerar análise</strong> para produzir a primeira leitura executiva.
+                </p>
+                <p *ngIf="!insightsNotFound">
+                  Nenhuma análise disponível no momento.
+                </p>
+              </div>
+            </c4u-card>
           </section>
 
           <section class="dashboard-section tree-section" aria-label="Drill-down hierárquico">
@@ -454,16 +689,30 @@
               </h2>
             </div>
             <c4u-card class="tree-card">
-              <c4u-org-hierarchy-tree-node
-                [node]="root"
+              <c4u-org-hierarchy-tree-table
+                [root]="root"
                 [showSimulation]="showSimulation"
                 [expandedIds]="expandedNodeIds"
-                (toggleNode)="toggleTreeNode($event)">
-              </c4u-org-hierarchy-tree-node>
+                (toggleNode)="toggleTreeNode($event)"
+                (kpiClick)="openKpiDrillDownFromTree($event)"
+                (expandAll)="expandAllTreeNodes()"
+                (collapseAll)="collapseAllTreeNodes()">
+              </c4u-org-hierarchy-tree-table>
             </c4u-card>
           </section>
         </ng-container>
       </div>
     </div>
   </div>
+
+  <modal-organization-hierarchy-kpi-detail
+    *ngIf="kpiDrilldownContext"
+    [kpi]="kpiDrilldownContext!.kpi"
+    [nodeType]="kpiDrilldownContext!.nodeType"
+    [nodeId]="kpiDrilldownContext!.nodeId"
+    [nodeLabel]="kpiDrilldownContext!.nodeLabel"
+    [month]="selectedMonth"
+    [months]="kpiDrilldownContext!.months"
+    (closed)="onKpiDrillDownModalClosed()">
+  </modal-organization-hierarchy-kpi-detail>
 </div>

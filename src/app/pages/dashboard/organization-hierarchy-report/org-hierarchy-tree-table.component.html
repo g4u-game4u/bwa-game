@@ -1,0 +1,126 @@
+<div class="org-tree-table-panel">
+  <div class="org-tree-table-toolbar">
+    <div class="org-tree-table-legend" aria-label="Legenda de níveis hierárquicos">
+      <span class="org-tree-table-legend__item" *ngFor="let item of legendItems">
+        <i class="org-tree-table-legend__swatch" [style.background]="item.color" aria-hidden="true"></i>
+        {{ item.label }}
+      </span>
+    </div>
+    <div class="org-tree-table-actions">
+      <button type="button" class="org-tree-table-action" (click)="expandAll.emit()">
+        Expandir tudo
+      </button>
+      <button type="button" class="org-tree-table-action" (click)="collapseAll.emit()">
+        Recolher tudo
+      </button>
+    </div>
+  </div>
+
+  <div class="org-tree-table-wrap" role="region" aria-label="Tabela de hierarquia organizacional">
+    <table class="org-tree-table">
+      <thead>
+        <tr>
+          <th class="org-tree-table__name-col">Nó</th>
+          <th class="org-tree-table__num">vs ant.</th>
+          <th class="org-tree-table__num" title="Pontos entregues no mês">Pontos MTD</th>
+          <th *ngIf="showSimulation" class="org-tree-table__num">Simulação</th>
+          <th
+            *ngFor="let col of mtdColumns"
+            class="org-tree-table__num"
+            [class.org-tree-table__num--risk]="isRiskMetric(col)"
+            [attr.title]="col.title || null">
+            {{ col.label }}
+          </th>
+          <th class="org-tree-table__num">Balance</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr
+          *ngFor="let row of rows; trackBy: trackByNodeId"
+          class="org-tree-table__row"
+          [ngClass]="levelClass(row.node)">
+          <td
+            class="org-tree-table__name-col"
+            [style.paddingLeft.px]="10 + indentPx(row.depth)">
+            <div class="org-tree-table__node">
+              <button
+                *ngIf="row.hasChildren; else toggleSpacer"
+                type="button"
+                class="org-tree-table__toggle"
+                [attr.aria-label]="row.isExpanded ? 'Recolher' : 'Expandir'"
+                [attr.aria-expanded]="row.isExpanded"
+                (click)="onToggle(row, $event)"
+                (keydown)="onToggleKeydown($event, row)">
+                {{ row.isExpanded ? '−' : '+' }}
+              </button>
+              <ng-template #toggleSpacer>
+                <span class="org-tree-table__toggle-spacer" aria-hidden="true"></span>
+              </ng-template>
+
+              <div class="org-tree-table__node-body">
+                <div class="org-tree-table__node-title">
+                  <span
+                    class="org-tree-table__label"
+                    [ngClass]="nodeAreaLabelClass(row.node)"
+                    [title]="row.node.label">{{ row.node.label }}</span>
+                  <span class="org-tree-table__badge">{{ nodeTypeLabel(row.node) }}</span>
+                </div>
+                <div class="org-tree-table__node-meta">
+                  {{ collaboratorsLabel(row.node.players_count) }}
+                </div>
+              </div>
+            </div>
+          </td>
+
+          <td class="org-tree-table__num">
+            <span
+              class="org-tree-table__pct"
+              [class.org-tree-table__pct--positive]="mtdCompareTone(row.node) === 'positive'"
+              [class.org-tree-table__pct--negative]="mtdCompareTone(row.node) === 'negative'">
+              {{ mtdComparePct(row.node) }}
+            </span>
+          </td>
+          <td class="org-tree-table__num">
+            <button
+              type="button"
+              class="org-tree-table__kpi-btn"
+              (click)="onKpiCellClick(row.node, 'points_delivered', $event)"
+              (keydown.enter)="onKpiCellClick(row.node, 'points_delivered', $event)"
+              (keydown.space)="onKpiCellClick(row.node, 'points_delivered', $event)"
+              aria-label="Ver histórico de Pontos MTD">
+              {{ formatMtdCell(row.node, pointsMtdColumn) }}
+            </button>
+          </td>
+          <td *ngIf="showSimulation" class="org-tree-table__num">
+            <ng-container *ngIf="row.node.simulation; else simDash">
+              <span class="org-tree-table__sim-value">{{ simulationPayout(row.node) }}</span>
+              <span class="org-tree-table__sim-share">{{ simulationShare(row.node) }}</span>
+            </ng-container>
+            <ng-template #simDash>—</ng-template>
+          </td>
+
+          <td
+            *ngFor="let col of mtdColumns"
+            class="org-tree-table__num"
+            [class.org-tree-table__num--risk]="isRiskMetric(col)"
+            [class.org-tree-table__num--alert]="isRiskHighlight(row.node, col)">
+            <button
+              *ngIf="isKpiDrilldownKey(col.key)"
+              type="button"
+              class="org-tree-table__kpi-btn"
+              (click)="onKpiCellClick(row.node, col.key, $event)"
+              (keydown.enter)="onKpiCellClick(row.node, col.key, $event)"
+              (keydown.space)="onKpiCellClick(row.node, col.key, $event)"
+              [attr.aria-label]="'Ver histórico de ' + col.label">
+              {{ formatMtdCell(row.node, col) }}
+            </button>
+            <span *ngIf="!isKpiDrilldownKey(col.key)">{{ formatMtdCell(row.node, col) }}</span>
+          </td>
+          <td class="org-tree-table__num">
+            {{ row.node.balance_score == null ? '—' : (row.node.balance_score | number:'1.0-0':'pt-BR') }}
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>

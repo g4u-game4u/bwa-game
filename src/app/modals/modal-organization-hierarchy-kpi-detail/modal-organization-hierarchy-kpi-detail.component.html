@@ -1,0 +1,127 @@
+<c4u-modal [modalTitle]="modalTitle" [icon]="modalIcon" (closed)="close()">
+  <div class="kpi-detail-modal">
+    <div *ngIf="isLoading" class="kpi-detail-modal__loading" role="status" aria-live="polite">
+      <c4u-spinner></c4u-spinner>
+      <span>Carregando drill-down…</span>
+    </div>
+
+    <ng-container *ngIf="!isLoading">
+      <ng-container *ngIf="kpi !== 'multa_risk'; else multaRiskPanel">
+        <ng-container *ngIf="kpiDetail">
+          <div class="kpi-detail-modal__chart">
+            <c4u-grafico-barras
+              [labels]="chartLabels"
+              [datasets]="chartDatasets"
+              [showLegend]="false">
+            </c4u-grafico-barras>
+          </div>
+
+          <div class="kpi-detail-modal__table-wrap" aria-label="Histórico mensal do KPI">
+            <table class="kpi-detail-table">
+              <thead>
+                <tr>
+                  <th>Mês</th>
+                  <th>Janela (MTD)</th>
+                  <th class="kpi-detail-table__num">{{ kpiDetail.kpi_label }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr *ngFor="let h of kpiDetail.history">
+                  <td>{{ h.month_label }}</td>
+                  <td>{{ h.mtd_start }} – {{ h.mtd_end }}</td>
+                  <td class="kpi-detail-table__num">{{ formatHistoryValue(h.value) }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </ng-container>
+
+        <div *ngIf="!kpiDetail" class="kpi-detail-modal__empty" role="status">
+          <i class="ri-database-2-line" aria-hidden="true"></i>
+          <span>Dados ainda não disponíveis para este mês.</span>
+        </div>
+      </ng-container>
+
+      <ng-template #multaRiskPanel>
+        <ng-container *ngIf="multaRisk; else multaRiskEmpty">
+          <div class="multa-summary">
+            <div class="multa-summary__row">
+              <span class="multa-summary__label">Total de entregas (MTD)</span>
+              <span class="multa-summary__value">{{ multaRisk.total_deliveries | number:'1.0-0':'pt-BR' }}</span>
+            </div>
+            <div class="multa-summary__row">
+              <span class="multa-summary__label">Janela técnico→legal</span>
+              <span class="multa-summary__value">
+                {{ formatIsoDate(multaRisk.mtd_start) }} – {{ formatIsoDate(multaRisk.mtd_end) }}
+              </span>
+            </div>
+          </div>
+
+          <div class="multa-accordion">
+            <details *ngFor="let dir of multaRisk.diretorias" open class="multa-details">
+              <summary class="multa-details__summary">
+                <span class="multa-details__title">{{ dir.label }}</span>
+                <span class="multa-details__count">
+                  {{ dir.delivery_count | number:'1.0-0':'pt-BR' }} entregas
+                </span>
+              </summary>
+
+              <div class="multa-children">
+                <details *ngFor="let ger of dir.gerencias" class="multa-details" open>
+                  <summary class="multa-details__summary">
+                    <span class="multa-details__title">{{ ger.label }}</span>
+                    <span class="multa-details__count">
+                      {{ ger.delivery_count | number:'1.0-0':'pt-BR' }} entregas
+                    </span>
+                  </summary>
+
+                  <div class="multa-supervisores">
+                    <div *ngFor="let sup of ger.supervisoes" class="multa-supervisor">
+                      <div class="multa-supervisor__header">
+                        <span class="multa-supervisor__label">{{ sup.label }}</span>
+                        <span class="multa-supervisor__count">
+                          {{ sup.delivery_count | number:'1.0-0':'pt-BR' }} entregas
+                        </span>
+                      </div>
+
+                      <table class="multa-table" aria-label="Entregas com risco de multa">
+                        <thead>
+                          <tr>
+                            <th>Entrega</th>
+                            <th>Cliente</th>
+                            <th>Prazo</th>
+                            <th>Atraso</th>
+                            <th>Colaborador</th>
+                            <th>Time</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr *ngFor="let d of sup.deliveries">
+                            <td>{{ d.delivery_title }}</td>
+                            <td>{{ deliveryClientLabel(d) }}</td>
+                            <td>{{ formatIsoDate(d.dt_prazo) }}</td>
+                            <td>{{ formatIsoDate(d.dt_atraso) }}</td>
+                            <td>{{ deliveryPlayerLabel(d) }}</td>
+                            <td>{{ d.team_name ?? d.team_id }}</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </details>
+              </div>
+            </details>
+          </div>
+        </ng-container>
+
+        <ng-template #multaRiskEmpty>
+          <div class="kpi-detail-modal__empty" role="status">
+            <i class="ri-database-2-line" aria-hidden="true"></i>
+            <span>Dados ainda não disponíveis para este mês.</span>
+          </div>
+        </ng-template>
+      </ng-template>
+    </ng-container>
+  </div>
+</c4u-modal>
+

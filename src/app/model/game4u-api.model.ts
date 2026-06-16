@@ -725,6 +725,8 @@ export interface Game4uReportsGoalMonthQuery {
 /** Nível hierárquico em `GET /game/reports/organization/hierarchy-report`. */
 export type OrgHierarchyNodeType =
   | 'organization'
+  | 'c_level'
+  | 'segmentacao'
   | 'diretoria'
   | 'gerencia'
   | 'supervisao'
@@ -769,6 +771,7 @@ export interface OrgHierarchyHighlightItem {
   label?: string;
   metric?: string;
   value?: number;
+  mtd?: OrgMetricsWindow;
   team_name?: string;
   team_label?: string;
   supervisao_label?: string;
@@ -825,6 +828,88 @@ export interface OrganizationHierarchyReportResponse {
   root: OrgHierarchyNode;
 }
 
+export type OrgHierarchyKpiDetailKey =
+  | 'on_time_pct'
+  | 'clients_served'
+  | 'finished'
+  | 'points_delivered'
+  | 'pending_open'
+  | 'near_due'
+  | 'overdue_pending'
+  | 'multa_risk';
+
+export interface OrganizationHierarchyKpiDetailHistoryItem {
+  cache_month: string; // '2026-03-01'
+  month_label: string; // '2026-03'
+  mtd_start: string;
+  mtd_end: string;
+  value: number | null;
+}
+
+export interface OrganizationHierarchyKpiDetailResponse {
+  kpi: OrgHierarchyKpiDetailKey;
+  kpi_label: string;
+  node_type: string;
+  node_id: string;
+  node_label: string;
+  history: OrganizationHierarchyKpiDetailHistoryItem[];
+}
+
+export interface Game4uReportsOrganizationHierarchyKpiDetailQuery {
+  month: string; // YYYY-MM or YYYY-MM-DD
+  kpi: OrgHierarchyKpiDetailKey;
+  node_type?: OrgHierarchyNodeType | string;
+  node_id?: string;
+  months?: number; // default 4
+}
+
+export interface OrganizationHierarchyMultaRiskDeliveryRow {
+  delivery_id: string;
+  delivery_title: string;
+  client_key: string | null;
+  dt_prazo: string | null;
+  dt_atraso: string | null;
+  player_email: string;
+  player_name: string | null;
+  team_id: string;
+  team_name: string | null;
+}
+
+export interface OrganizationHierarchyMultaRiskSupervisorRow {
+  node_id: string;
+  label: string;
+  delivery_count: number;
+  deliveries: OrganizationHierarchyMultaRiskDeliveryRow[];
+}
+
+export interface OrganizationHierarchyMultaRiskGerenciaRow {
+  node_id: string;
+  label: string;
+  delivery_count: number;
+  supervisoes: OrganizationHierarchyMultaRiskSupervisorRow[];
+}
+
+export interface OrganizationHierarchyMultaRiskDiretoriaRow {
+  node_id: string;
+  label: string;
+  delivery_count: number;
+  gerencias: OrganizationHierarchyMultaRiskGerenciaRow[];
+}
+
+export interface OrganizationHierarchyMultaRiskResponse {
+  cache_month: string;
+  mtd_start: string;
+  mtd_end: string;
+  total_deliveries: number;
+  diretorias: OrganizationHierarchyMultaRiskDiretoriaRow[];
+}
+
+export interface Game4uReportsOrganizationHierarchyMultaRiskQuery {
+  month: string;
+  node_type?: OrgHierarchyNodeType | string;
+  node_id?: string;
+}
+
 /** Query para `GET /game/reports/organization/hierarchy-report`. */
 export interface Game4uReportsOrganizationHierarchyQuery {
   month: string;
@@ -832,6 +917,59 @@ export interface Game4uReportsOrganizationHierarchyQuery {
   depth?: number;
   node_type?: OrgHierarchyNodeType;
   node_id?: string;
+}
+
+export type OrgHierarchyInsightsFocus =
+  | 'risks_and_actions'
+  | 'performance'
+  | 'people'
+  | 'financial';
+
+export type OrgHierarchyInsightPriority = 'high' | 'medium' | 'low';
+
+export type OrgHierarchyInsightCategory =
+  | 'risk'
+  | 'performance'
+  | 'opportunity'
+  | 'people'
+  | string;
+
+/** Item de insight retornado por `GET|POST /game/reports/organization/hierarchy-insights`. */
+export interface OrganizationHierarchyInsightItem {
+  priority: OrgHierarchyInsightPriority | string;
+  category: OrgHierarchyInsightCategory;
+  title: string;
+  evidence: string[];
+  suggested_action: string;
+  owner_hint?: string;
+  metric_refs?: string[];
+}
+
+/** Resposta de insights do relatório organizacional (memória Supabase). */
+export interface OrganizationHierarchyInsightsResponse {
+  generated_at: string;
+  from_cache: boolean;
+  params: OrganizationHierarchyReportParams;
+  summary: string;
+  insights: OrganizationHierarchyInsightItem[];
+  llm_provider?: string;
+  llm_model?: string;
+  scope_key?: string;
+}
+
+/** Query para `GET|POST /game/reports/organization/hierarchy-insights` (escopo na query string). */
+export interface Game4uReportsOrganizationHierarchyInsightsQuery {
+  month: string;
+  simulation_pot_brl?: number;
+  depth?: number;
+  node_type?: OrgHierarchyNodeType | string;
+  node_id?: string;
+  focus?: OrgHierarchyInsightsFocus;
+}
+
+/** Body opcional do `POST /game/reports/organization/hierarchy-insights`. */
+export interface Game4uReportsOrganizationHierarchyInsightsBody {
+  focus?: OrgHierarchyInsightsFocus;
 }
 
 function supabaseGameFallbackCredentials(): boolean {

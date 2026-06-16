@@ -2,10 +2,12 @@ import { Component, Input, Output, EventEmitter, ChangeDetectionStrategy } from 
 import { OrgHierarchyNode } from '@model/game4u-api.model';
 import {
   formatBrl,
+  formatHighlightMtdMetricValue,
   formatOrgHierarchyComparePct,
   formatOrgHierarchySharePct,
   getOrgHierarchyCompareTone,
-  getOrgHierarchyNodeTypeLabel
+  getOrgHierarchyNodeTypeLabel,
+  OrgHighlightMtdColumn
 } from '@services/org-hierarchy-report.mapper';
 
 @Component({
@@ -21,6 +23,19 @@ export class C4uOrgHierarchyTreeNodeComponent {
   @Input() expandedIds = new Set<string>();
 
   @Output() toggleNode = new EventEmitter<string>();
+
+  readonly mtdColumns: ReadonlyArray<OrgHighlightMtdColumn> = [
+    { key: 'on_time_pct', label: '% prazo', format: 'pct', title: 'Percentual de entregas no prazo' },
+    { key: 'finished', label: 'Entregas', format: 'number' },
+    { key: 'clients_served', label: 'Clientes', format: 'number', title: 'Clientes atendidos' },
+    { key: 'clients_onboarding', label: 'Onboarding', format: 'number' },
+    { key: 'pending_open', label: 'Pendentes', format: 'number' },
+    { key: 'near_due', label: 'Próx. venc.', format: 'number', title: 'Próximo do vencimento' },
+    { key: 'overdue_pending', label: 'Atrasados', format: 'number' },
+    { key: 'multa_risk', label: 'Multa risco', format: 'number' },
+    { key: 'multa_and_near_due', label: 'Multa+prox.', format: 'number', title: 'Multa e próximo do vencimento' },
+    { key: 'goal_points', label: 'Meta', format: 'number', title: 'Meta de pontos' }
+  ];
 
   get hasChildren(): boolean {
     return !!(this.node.children && this.node.children.length > 0);
@@ -48,6 +63,11 @@ export class C4uOrgHierarchyTreeNodeComponent {
 
   get simulationShare(): string {
     return formatOrgHierarchySharePct(this.node.simulation?.share_pct);
+  }
+
+  formatMtdValue(col: OrgHighlightMtdColumn): string {
+    const value = this.node.mtd?.[col.key];
+    return formatHighlightMtdMetricValue(value as number | undefined | null, col.format);
   }
 
   onToggle(): void {
