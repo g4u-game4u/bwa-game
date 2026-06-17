@@ -19,7 +19,7 @@ const gamificacaoApiToken =
     getEnv('gamificacao_api_token') ||
     '';
 
-const defaultBackendBase = 'https://g4u-api-bwa.onrender.com/api';
+const defaultBackendBase = 'https://g4u-api-bwa.onrender.com';
 
 const rawBackendFromEnv =
     getEnv('G4U_API_BASE') ||

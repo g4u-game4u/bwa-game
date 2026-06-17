@@ -4,6 +4,7 @@
 .background {
   position: absolute;
   @include fullSize;
+  pointer-events: none;
 
   // opacity: 0.3;
   // background: url("/assets/images/back_up.svg") no-repeat;

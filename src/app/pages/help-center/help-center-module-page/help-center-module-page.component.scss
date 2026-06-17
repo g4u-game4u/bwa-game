@@ -1,0 +1,184 @@
+@import "variables";
+
+.help-module-page {
+  max-width: 760px;
+}
+
+.help-module-loading,
+.help-module-not-found {
+  padding: 2rem 0;
+}
+
+.help-empty {
+  margin: 1rem 0;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.help-back-link {
+  color: #7dd3fc;
+  text-decoration: none;
+
+  &:hover,
+  &:focus-visible {
+    text-decoration: underline;
+    outline: none;
+  }
+}
+
+.help-module-header {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+  align-items: flex-start;
+}
+
+.help-module-header-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 3rem;
+  height: 3rem;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.08);
+  font-size: 1.5rem;
+}
+
+.help-module-title {
+  margin: 0 0 0.5rem;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: $texto-branco;
+}
+
+.help-module-intro {
+  margin: 0 0 0.65rem;
+  font-size: 0.95rem;
+  line-height: 1.55;
+  color: rgba(255, 255, 255, 0.65);
+}
+
+.help-module-route-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.85rem;
+  color: #7dd3fc;
+  text-decoration: none;
+
+  &:hover,
+  &:focus-visible {
+    text-decoration: underline;
+    outline: none;
+  }
+}
+
+.help-related {
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.help-related-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.help-related-link {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  width: 100%;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+  color: rgba(255, 255, 255, 0.88);
+  font-size: 0.9rem;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s ease;
+
+  span {
+    flex: 1;
+  }
+
+  &:hover,
+  &:focus-visible {
+    background: rgba(255, 255, 255, 0.06);
+    outline: none;
+  }
+}
+
+.help-support-cta {
+  margin-top: 1.5rem;
+  padding: 1rem;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.help-support-text {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.55;
+  color: rgba(255, 255, 255, 0.7);
+
+  strong {
+    color: rgba(255, 255, 255, 0.9);
+  }
+}
+
+@import '../help-center.shared.scss';
+
+.faq-theme--violet .help-module-header-icon { color: #a78bfa; }
+.faq-theme--gold .help-module-header-icon { color: #d4a574; }
+.faq-theme--emerald .help-module-header-icon { color: #6ee7b7; }
+.faq-theme--cyan .help-module-header-icon { color: #67e8f9; }
+.faq-theme--amber .help-module-header-icon { color: #fdba74; }
+.faq-theme--rose .help-module-header-icon { color: #fda4af; }
+.faq-theme--sky .help-module-header-icon { color: #7dd3fc; }
+.faq-theme--lime .help-module-header-icon { color: #bef264; }
+.faq-theme--fuchsia .help-module-header-icon { color: #e879f9; }
+
+@import "../../../../styles/mixins.scss";
+
+@include tablet-only {
+  .help-module-header {
+    gap: 0.75rem;
+  }
+
+  .help-module-intro {
+    overflow-wrap: anywhere;
+  }
+}
+
+@include mobile-only {
+  .help-module-page {
+    max-width: 100%;
+  }
+
+  .help-module-header {
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .help-module-header-icon {
+    width: 2.5rem;
+    height: 2.5rem;
+    font-size: 1.25rem;
+  }
+
+  .help-module-title {
+    font-size: clamp(1.25rem, 4vw, 1.5rem);
+  }
+
+  .help-related-link {
+    min-height: 44px;
+    padding: 0.75rem;
+  }
+}

@@ -41,5 +41,9 @@ export const PagesRoutes: Routes = [
   {
     path: 'ranking',
     loadChildren: () => import('./ranking/ranking.module').then(m => m.RankingModule)
+  },
+  {
+    path: 'help',
+    loadChildren: () => import('./help-center/help-center.module').then(m => m.HelpCenterModule)
   }
 ];

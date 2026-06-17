@@ -1,0 +1,111 @@
+<header class="help-center-top-header" role="banner">
+  <button
+    type="button"
+    class="help-center-back-button"
+    (click)="navigateBackToDashboard()"
+    aria-label="Voltar ao painel">
+    <i class="ri-arrow-left-line" aria-hidden="true"></i>
+    <span>Voltar ao painel</span>
+  </button>
+
+  <div
+    *ngIf="isCompactMobileLayout"
+    #modulePicker
+    class="help-center-module-picker"
+    (click)="$event.stopPropagation()">
+    <button
+      type="button"
+      class="help-center-menu-button"
+      [class.help-center-menu-button--open]="modulePickerOpen"
+      (click)="toggleModulePicker($event)"
+      [attr.aria-expanded]="modulePickerOpen"
+      aria-haspopup="listbox"
+      [attr.aria-label]="modulePickerOpen ? 'Fechar menu de módulos' : 'Módulos da central de ajuda'">
+      <span class="help-center-menu-icon" aria-hidden="true">
+        <i class="ri-menu-line help-center-menu-icon__burger"></i>
+        <i class="ri-close-line help-center-menu-icon__close"></i>
+      </span>
+    </button>
+
+    <div
+      *ngIf="modulePickerOpen"
+      class="help-center-module-dropdown"
+      role="listbox"
+      aria-label="Módulos da central de ajuda">
+      <button
+        type="button"
+        class="help-center-module-option"
+        role="option"
+        [class.help-center-module-option--active]="!activeModuleSlug"
+        [attr.aria-selected]="!activeModuleSlug"
+        (click)="selectModule('')">
+        <i class="ri-home-4-line" aria-hidden="true"></i>
+        <span>Início</span>
+      </button>
+
+      <button
+        *ngFor="let module of modules; trackBy: trackBySlug"
+        type="button"
+        class="help-center-module-option"
+        role="option"
+        [class.help-center-module-option--active]="activeModuleSlug === module.slug"
+        [attr.aria-selected]="activeModuleSlug === module.slug"
+        (click)="selectModule(module.slug)">
+        <i [class]="module.icon" aria-hidden="true"></i>
+        <span>{{ module.title }}</span>
+      </button>
+    </div>
+  </div>
+</header>
+
+<div class="help-center-layout" full>
+  <aside
+    *ngIf="!isCompactMobileLayout"
+    class="help-center-sidebar"
+    [class.help-center-sidebar--collapsed]="!sidebarOpen"
+    [class.help-center-sidebar--mobile]="isMobileLayout">
+    <div class="help-center-sidebar-header">
+      <h2 class="help-center-sidebar-title">
+        <i class="ri-question-answer-line" aria-hidden="true"></i>
+        <span *ngIf="sidebarOpen">Central de Ajuda</span>
+      </h2>
+      <button
+        type="button"
+        class="help-center-sidebar-toggle"
+        (click)="toggleSidebar()"
+        [attr.aria-label]="sidebarOpen ? 'Recolher menu' : 'Expandir menu'"
+        [attr.aria-expanded]="sidebarOpen">
+        <i [class]="sidebarOpen ? 'ri-arrow-left-s-line' : 'ri-arrow-right-s-line'" aria-hidden="true"></i>
+      </button>
+    </div>
+
+    <nav class="help-center-sidebar-nav" aria-label="Módulos da central de ajuda">
+      <a
+        routerLink="/dashboard/help"
+        routerLinkActive="help-center-nav-item--active"
+        [routerLinkActiveOptions]="{ exact: true }"
+        class="help-center-nav-item"
+        [class.help-center-nav-item--collapsed]="!sidebarOpen">
+        <i class="ri-home-4-line" aria-hidden="true"></i>
+        <span *ngIf="sidebarOpen">Início</span>
+      </a>
+
+      <a
+        *ngFor="let module of modules; trackBy: trackBySlug"
+        [routerLink]="['/dashboard/help', module.slug]"
+        routerLinkActive="help-center-nav-item--active"
+        class="help-center-nav-item"
+        [class.help-center-nav-item--collapsed]="!sidebarOpen"
+        [title]="module.title">
+        <i [class]="module.icon" aria-hidden="true"></i>
+        <span *ngIf="sidebarOpen">{{ module.title }}</span>
+      </a>
+    </nav>
+  </aside>
+
+  <main class="help-center-main" flexItem="1">
+    <div class="help-center-main-inner">
+      <router-outlet></router-outlet>
+    </div>
+  </main>
+</div>

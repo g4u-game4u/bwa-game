@@ -10,6 +10,7 @@ import { C4uCardModule } from '@components/c4u-card/c4u-card.module';
 import { C4uShimmerModule } from '@components/c4u-shimmer/c4u-shimmer.module';
 import { C4uErrorMessageModule } from '@components/c4u-error-message/c4u-error-message.module';
 import { C4uDashboardNavigationModule } from '@components/c4u-dashboard-navigation/c4u-dashboard-navigation.module';
+import { C4uDashboardHelpLinkModule } from '@components/c4u-dashboard-help-link/c4u-dashboard-help-link.module';
 import { C4uInfoButtonModule } from '@components/c4u-info-button/c4u-info-button.module';
 import { C4uKpiCircularProgressModule } from '@components/c4u-kpi-circular-progress/c4u-kpi-circular-progress.module';
 import { ModalPlayerDetailModule } from '@app/modals/modal-player-detail/modal-player-detail.module';
@@ -36,6 +37,7 @@ const routes: Routes = [
     C4uShimmerModule,
     C4uErrorMessageModule,
     C4uDashboardNavigationModule,
+    C4uDashboardHelpLinkModule,
     C4uInfoButtonModule,
     C4uKpiCircularProgressModule,
     ModalPlayerDetailModule,

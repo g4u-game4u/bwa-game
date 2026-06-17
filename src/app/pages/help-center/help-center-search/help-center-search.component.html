@@ -1,0 +1,19 @@
+<div class="help-search">
+  <i class="ri-search-line help-search-icon" aria-hidden="true"></i>
+  <input
+    type="search"
+    class="help-search-input"
+    [value]="value"
+    [placeholder]="placeholder"
+    (input)="onInput($event)"
+    aria-label="Buscar na central de ajuda"
+  />
+  <button
+    *ngIf="value"
+    type="button"
+    class="help-search-clear"
+    (click)="clear()"
+    aria-label="Limpar busca">
+    <i class="ri-close-line" aria-hidden="true"></i>
+  </button>
+</div>

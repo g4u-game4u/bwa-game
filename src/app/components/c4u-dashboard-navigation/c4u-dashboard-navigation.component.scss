@@ -8,11 +8,12 @@
 
 .dashboard-selector {
   position: relative;
-  
+
   &:hover .dashboard-dropdown {
     opacity: 1;
     visibility: visible;
     transform: translateY(0);
+    pointer-events: auto;
   }
 }
 
@@ -60,9 +61,10 @@
 
 .dashboard-dropdown {
   position: absolute;
-  top: calc(100% + $spacing-sm);
+  top: 100%;
   left: 0;
   min-width: 220px;
+  padding-top: $spacing-sm;
   background: $surface;
   border: 1px solid $border-color;
   border-radius: $border-radius-sm;
@@ -73,7 +75,15 @@
   transition: all $transition-duration $transition-easing;
   z-index: 1000;
   overflow: hidden;
+  pointer-events: none;
   @include card;
+
+  &--open {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+    pointer-events: auto;
+  }
 }
 
 .dashboard-option {

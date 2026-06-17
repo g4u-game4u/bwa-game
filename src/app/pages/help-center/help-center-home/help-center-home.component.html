@@ -1,0 +1,75 @@
+<div class="help-home">
+  <app-help-center-breadcrumb></app-help-center-breadcrumb>
+
+  <header class="help-home-header">
+    <h1 class="help-home-title">
+      <i class="ri-question-answer-line" aria-hidden="true"></i>
+      Central de Ajuda
+    </h1>
+    <p class="help-home-subtitle">
+      Encontre orientações sobre cada funcionalidade da plataforma BWA Game.
+    </p>
+  </header>
+
+  <app-help-center-search
+    [value]="searchQuery"
+    (valueChange)="onSearchChange($event)">
+  </app-help-center-search>
+
+  <div *ngIf="isLoading" class="help-home-loading" aria-live="polite">
+    Carregando conteúdo...
+  </div>
+
+  <ng-container *ngIf="!isLoading">
+    <section *ngIf="isSearching" class="help-search-results" aria-label="Resultados da busca">
+      <h2 class="help-section-title">Resultados da busca</h2>
+
+      <p *ngIf="searchResults.length === 0" class="help-empty">
+        Nenhum resultado para "{{ searchQuery }}". Tente outros termos.
+      </p>
+
+      <ul *ngIf="searchResults.length > 0" class="help-search-list" role="list">
+        <li *ngFor="let result of searchResults; trackBy: trackByResult" class="help-search-item">
+          <button
+            type="button"
+            class="help-search-result-btn"
+            (click)="navigateToModule(result.module.slug)">
+            <span class="help-module-icon" [ngClass]="'faq-theme--' + result.module.theme">
+              <i [class]="result.module.icon" aria-hidden="true"></i>
+            </span>
+            <span class="help-search-result-text">
+              <span class="help-search-result-title">{{ result.module.title }}</span>
+              <span class="help-search-result-meta">
+                {{ result.matchedArticles.length }} artigo(s) encontrado(s)
+              </span>
+            </span>
+            <i class="ri-arrow-right-s-line" aria-hidden="true"></i>
+          </button>
+        </li>
+      </ul>
+    </section>
+
+    <section *ngIf="!isSearching" class="help-modules-grid" aria-label="Módulos da central de ajuda">
+      <h2 class="help-section-title">Explorar por módulo</h2>
+
+      <div class="help-modules-cards">
+        <button
+          *ngFor="let module of modules; trackBy: trackBySlug"
+          type="button"
+          class="help-module-card"
+          [ngClass]="'faq-theme--' + module.theme"
+          (click)="navigateToModule(module.slug)">
+          <span class="help-module-icon">
+            <i [class]="module.icon" aria-hidden="true"></i>
+          </span>
+          <span class="help-module-card-body">
+            <span class="help-module-card-title">{{ module.title }}</span>
+            <span class="help-module-card-description">{{ module.description }}</span>
+            <span class="help-module-card-meta">{{ module.articles.length }} artigos</span>
+          </span>
+          <i class="ri-arrow-right-s-line help-module-card-arrow" aria-hidden="true"></i>
+        </button>
+      </div>
+    </section>
+  </ng-container>
+</div>

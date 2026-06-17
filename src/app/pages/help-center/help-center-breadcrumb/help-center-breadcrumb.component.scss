@@ -1,0 +1,50 @@
+@import "../../../../styles/mixins.scss";
+
+.help-breadcrumb {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-bottom: 1rem;
+  font-size: 0.85rem;
+}
+
+.help-breadcrumb-link {
+  color: rgba(255, 255, 255, 0.55);
+  text-decoration: none;
+  transition: color 0.15s ease;
+
+  &:hover,
+  &:focus-visible {
+    color: rgba(255, 255, 255, 0.85);
+    outline: none;
+  }
+}
+
+.help-breadcrumb-separator {
+  color: rgba(255, 255, 255, 0.35);
+}
+
+.help-breadcrumb-current {
+  color: rgba(255, 255, 255, 0.9);
+  font-weight: 600;
+}
+
+@include tablet-only {
+  .help-breadcrumb-current {
+    @include text-truncate;
+    max-width: 40vw;
+  }
+}
+
+@include mobile-only {
+  .help-breadcrumb {
+    font-size: 0.8rem;
+    gap: 0.25rem;
+  }
+
+  .help-breadcrumb-current {
+    @include text-truncate;
+    max-width: 55vw;
+  }
+}
