@@ -244,14 +244,17 @@
         <span class="refresh-time__line">{{ dashboardSyncLabel }}</span>
         <span class="refresh-time__line">em {{ teamDashboardRefreshedAt | date:'dd/MM/yyyy HH:mm' }}</span>
       </span>
-      <button 
-        class="logout-button"
-        (click)="logout()"
-        aria-label="Sair do sistema"
-        title="Sair">
-        <i class="ri-logout-box-line" aria-hidden="true"></i>
-        <span>Sair</span>
-      </button>
+      <div class="header-actions">
+        <c4u-dashboard-help-link></c4u-dashboard-help-link>
+        <button 
+          class="logout-button"
+          (click)="logout()"
+          aria-label="Sair do sistema"
+          title="Sair">
+          <i class="ri-logout-box-line" aria-hidden="true"></i>
+          <span>Sair</span>
+        </button>
+      </div>
     </div>
     
     <!-- Tab Navigation - Only show when no specific collaborator is selected -->

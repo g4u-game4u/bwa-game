@@ -16,6 +16,7 @@ import { C4uProductivityAnalysisTabModule } from '@components/c4u-productivity-a
 import { C4uTimePeriodSelectorModule } from '@components/c4u-time-period-selector/c4u-time-period-selector.module';
 import { C4uGraficoBarrasModule } from '@components/c4u-grafico-barras/c4u-grafico-barras.module';
 import { C4uDashboardNavigationModule } from '@components/c4u-dashboard-navigation/c4u-dashboard-navigation.module';
+import { C4uDashboardHelpLinkModule } from '@components/c4u-dashboard-help-link/c4u-dashboard-help-link.module';
 import { C4uCardModule } from '@components/c4u-card/c4u-card.module';
 import { C4uShimmerModule } from '@components/c4u-shimmer/c4u-shimmer.module';
 import { C4uActivityProgressModule } from '@components/c4u-activity-progress/c4u-activity-progress.module';
@@ -62,6 +63,7 @@ const routes: Routes = [
     C4uTimePeriodSelectorModule,
     C4uGraficoBarrasModule,
     C4uDashboardNavigationModule,
+    C4uDashboardHelpLinkModule,
     C4uErrorMessageModule,
     C4uCardModule,
     C4uShimmerModule,

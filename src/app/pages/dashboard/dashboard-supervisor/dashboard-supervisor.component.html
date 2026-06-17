@@ -82,14 +82,17 @@
           aria-label="Filtro de mês">
         </c4u-seletor-mes>
         <div class="header-spacer"></div>
-        <button 
-          class="logout-button"
-          (click)="logout()"
-          aria-label="Sair do sistema"
-          title="Sair">
-          <i class="ri-logout-box-line" aria-hidden="true"></i>
-          <span>Sair</span>
-        </button>
+        <div class="header-actions">
+          <c4u-dashboard-help-link></c4u-dashboard-help-link>
+          <button 
+            class="logout-button"
+            (click)="logout()"
+            aria-label="Sair do sistema"
+            title="Sair">
+            <i class="ri-logout-box-line" aria-hidden="true"></i>
+            <span>Sair</span>
+          </button>
+        </div>
       </header>
 
       <!-- View Toggle: Card / Table -->

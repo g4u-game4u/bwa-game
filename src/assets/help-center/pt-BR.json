@@ -1,0 +1,512 @@
+{
+  "modules": [
+    {
+      "slug": "primeiros-passos",
+      "title": "Primeiros passos",
+      "description": "Conheça o BWA Game, os painéis disponíveis e como navegar na plataforma.",
+      "icon": "ri-compass-3-line",
+      "theme": "violet",
+      "order": 1,
+      "audience": "jogador",
+      "intro": "O BWA Game é a camada de gamificação da operação BWA. Ele transforma entregas finalizadas no Acessórias em pontos, metas e insights para jogadores e supervisores.",
+      "relatedSlugs": ["conta-e-sessao", "meu-painel"],
+      "articles": [
+        {
+          "id": "o-que-e-bwa-game",
+          "title": "O que é o BWA Game?",
+          "icon": "ri-gamepad-line",
+          "theme": "violet",
+          "body": "O BWA Game é a camada de gamificação da operação BWA. Ele conecta-se ao Acessórias, analisa entregas finalizadas e transforma o desempenho operacional em pontos, metas, rankings e insights.\n\nPara cada entrega finalizada, o game calcula pontos em três camadas: (1) base da atividade (senioridade, tempo médio e complexidade); (2) multiplicadores (classificação da empresa, bônus de onboarding e risco de churn); (3) bônus ou penalidade por prazo de entrega.\n\nJogadores acompanham a performance individual em Meu Painel; supervisores e gestão veem visões de equipe conforme o perfil de acesso. Para o detalhamento completo das regras, consulte o PDF de Regras de pontuação no módulo Pontuação e temporada."
+        },
+        {
+          "id": "mapa-da-plataforma",
+          "title": "Mapa da plataforma e perfis de acesso",
+          "icon": "ri-map-2-line",
+          "theme": "sky",
+          "body": "Perfis e visões principais:\n• JOGADOR — acompanha sua performance em Meu Painel.\n• SUPERVISOR — visão da equipe em Supervisor, Gestão de equipe e Supervisor técnico.\n• Perfis de gestão — mesmas visões de supervisor, conforme permissões.\n\nFuncionalidades opcionais (quando habilitadas na campanha): Recompensas, Ranking e Metas e Distribuição."
+        },
+        {
+          "id": "navegacao-entre-paineis",
+          "title": "Como alternar entre os painéis",
+          "icon": "ri-layout-masonry-line",
+          "theme": "cyan",
+          "body": "1. Clique no seletor de painéis no topo da tela (ícone e nome da visão atual).\n2. Escolha a visão desejada na lista. As opções dependem do seu perfil:\n   • Jogador: Meu Painel\n   • Supervisor: Supervisor\n   • Perfis com acesso organizacional: também Relatório Organizacional\n3. A plataforma salva o último painel visitado e tenta restaurá-lo no próximo acesso.\n\nDica: use o link Central de Ajuda no canto superior direito do painel para consultar tutoriais. Na Central de Ajuda, use Voltar ao painel para retornar ao dashboard."
+        }
+      ]
+    },
+    {
+      "slug": "conta-e-sessao",
+      "title": "Conta e sessão",
+      "description": "Login e duração da sessão na plataforma.",
+      "icon": "ri-shield-user-line",
+      "theme": "sky",
+      "order": 2,
+      "audience": "jogador",
+      "intro": "Entenda como acessar a plataforma e o que acontece quando a sessão expira.",
+      "relatedSlugs": ["primeiros-passos", "suporte"],
+      "articles": [
+        {
+          "id": "login-e-acesso",
+          "title": "Como fazer login",
+          "icon": "ri-login-box-line",
+          "theme": "sky",
+          "body": "Acesse a URL da plataforma e informe suas credenciais corporativas.\nApós autenticação, você entra na visão principal do seu perfil."
+        },
+        {
+          "id": "sessao-e-timeout",
+          "title": "Sessão e timeout",
+          "icon": "ri-time-line",
+          "theme": "amber",
+          "body": "Por segurança, a sessão expira 12 horas após o login.\nQuando o prazo for atingido, você será direcionado à tela de login. Faça login novamente para retomar o acesso aos seus dados."
+        }
+      ]
+    },
+    {
+      "slug": "meu-painel",
+      "title": "Meu Painel",
+      "description": "Painel do jogador: sidebar, metas, KPIs e clientes atendidos.",
+      "icon": "ri-dashboard-3-line",
+      "theme": "violet",
+      "order": 3,
+      "audience": "jogador",
+      "route": "/dashboard",
+      "intro": "O Meu Painel é a visão individual do jogador. Aqui você acompanha pontos, metas do mês, progresso de entregas, insights e clientes atendidos.",
+      "relatedSlugs": ["pontuacao-e-temporada", "progresso-e-insights"],
+      "resources": [
+        {
+          "label": "Tutorial: interface do painel (PDF)",
+          "description": "Passo a passo da tela do jogador: menu lateral, metas, progresso, insights e clientes atendidos.",
+          "url": "https://zarptqqopvuwognexpon.supabase.co/storage/v1/object/public/rulebook/bwa-pdf/PLATAFORMA_BWA%20GAME_062026V1_PERFILJOGADOR.pdf",
+          "icon": "ri-layout-masonry-line",
+          "theme": "sky"
+        }
+      ],
+      "articles": [
+        {
+          "id": "organizacao-do-painel",
+          "title": "Como o painel está organizado?",
+          "icon": "ri-dashboard-3-line",
+          "theme": "violet",
+          "body": "O Meu Painel divide-se em duas áreas:\n\nBarra lateral (esquerda) — visão da temporada:\n• Pontos bloqueados e desbloqueados\n• Período da campanha\n• Entregas finalizadas e clientes atendidos no acumulado\n\nÁrea central — visão do mês selecionado no topo:\n1. Minhas Metas — KPIs circulares e barras de progresso\n2. Meu Progresso — abas Pendentes e Finalizados\n3. Insights do mês — resumo e alertas\n4. Clientes atendidos — carteira por empresa\n\nPara o passo a passo visual completo, abra o tutorial em PDF em Materiais oficiais abaixo."
+        },
+        {
+          "id": "sidebar-e-carteira",
+          "title": "Sidebar: pontos e progresso da temporada",
+          "icon": "ri-wallet-3-line",
+          "theme": "gold",
+          "body": "Onde fica: barra lateral esquerda.\n\nO que mostra:\n• Carteira de pontos bloqueados (ainda não liberados) e desbloqueados (disponíveis)\n• Nível e progresso da temporada\n• Indicadores de entregas e clientes no acumulado da campanha\n\nComo usar: clique nos ícones de informação (?) ao lado de cada indicador para ver explicações rápidas sobre a métrica."
+        },
+        {
+          "id": "seletor-de-mes",
+          "title": "Filtro de mês no topo",
+          "icon": "ri-calendar-line",
+          "theme": "emerald",
+          "body": "Onde fica: cabeçalho do painel, acima da área central.\n\nO que muda ao trocar o mês:\n• Minhas Metas, Meu Progresso, Insights e Clientes atendidos passam a refletir o mês escolhido.\n\nO que não muda:\n• A barra lateral mantém o acumulado da temporada (pontos e indicadores de campanha).\n\nDica: compare o mês atual com meses anteriores para identificar tendências de produtividade."
+        },
+        {
+          "id": "kpis-e-metas",
+          "title": "KPIs circulares e metas mensais",
+          "icon": "ri-pie-chart-2-line",
+          "theme": "cyan",
+          "body": "Onde fica: bloco Minhas Metas, no centro do painel.\n\nOs três indicadores circulares mostram o desempenho do mês em:\n• Meta de pontos\n• Entregas no prazo\n• Clientes na carteira\n\nAs barras de progresso abaixo comparam o realizado com a meta de cada indicador.\n\nPara entender como os pontos são calculados, consulte o módulo Pontuação e temporada."
+        },
+        {
+          "id": "melhorar-resultados",
+          "title": "Como usar o painel para melhorar resultados",
+          "icon": "ri-rocket-2-line",
+          "theme": "fuchsia",
+          "body": "Rotina sugerida para usar o painel no dia a dia:\n\n1. Comece por Pendentes — identifique entregas com risco de multa ou vencimento próximo.\n2. Consulte Insights do mês — priorize alertas e volume de pendentes atrasadas.\n3. Equilibre meta de pontos, entregas no prazo e cobertura de clientes na carteira.\n\nPara bônus, penalidades e estratégias de pontuação, consulte o módulo Pontuação e temporada."
+        }
+      ]
+    },
+    {
+      "slug": "pontuacao-e-temporada",
+      "title": "Pontuação e temporada",
+      "description": "Regras de pontuação, pontos bloqueados/desbloqueados e metas da campanha.",
+      "icon": "ri-trophy-line",
+      "theme": "gold",
+      "order": 4,
+      "audience": "jogador",
+      "intro": "A pontuação é o coração da gamificação. Entenda como os pontos são calculados, desbloqueados e convertidos ao longo da temporada.",
+      "relatedSlugs": ["meu-painel", "recompensas"],
+      "resources": [
+        {
+          "label": "Regras de pontuação (PDF)",
+          "description": "Balanceamento, multiplicadores, bônus e penalidades por prazo. Base oficial do cálculo de pontos.",
+          "url": "https://zarptqqopvuwognexpon.supabase.co/storage/v1/object/public/rulebook/bwa-pdf/REGRAS_BWA%20GAME_062026V1_PERFILJOGADOR.pdf",
+          "icon": "ri-medal-line",
+          "theme": "gold"
+        }
+      ],
+      "articles": [
+        {
+          "id": "como-funciona-pontuacao",
+          "title": "Como funciona a pontuação no BWA Game?",
+          "icon": "ri-trophy-line",
+          "theme": "gold",
+          "body": "Cada entrega finalizada no Acessórias é analisada pelo game e os pontos vão para quem finalizou a entrega.\nA pontuação usa três camadas: (1) base da atividade, com senioridade, tempo médio e complexidade, em escala de 1 a 5; (2) multiplicadores, com classificação da empresa (1 a 5), bônus x2 em onboarding e bônus x2 em risco de churn; (3) bônus ou penalidade por prazo, com entrega antecipada (+50%), no prazo técnico (neutro), atrasos progressivos (-10% a -100%) ou atraso com risco de multa (-100%)."
+        },
+        {
+          "id": "meta-de-pontos",
+          "title": "O que é a meta de pontos?",
+          "icon": "ri-flag-2-line",
+          "theme": "emerald",
+          "body": "É a referência de volume que a operação espera para o mês filtrado.\nContam as entregas finalizadas por você, com o peso de cada entrega conforme as regras do game.\nCompare o realizado com a meta na barra de progresso em Minhas Metas."
+        },
+        {
+          "id": "meta-90-prazo",
+          "title": "O que significa a meta de 90% de entregas no prazo?",
+          "icon": "ri-time-line",
+          "theme": "cyan",
+          "body": "É a meta de qualidade operacional com base nas entregas no Acessórias.\nO percentual considera entregas de todos os usuários que atenderam cada cliente, não apenas as suas.\nValores acima de 90% indicam resultado positivo para a carteira."
+        },
+        {
+          "id": "pontos-bloqueados-desbloqueados",
+          "title": "Pontos bloqueados vs desbloqueados",
+          "icon": "ri-lock-unlock-line",
+          "theme": "amber",
+          "body": "Pontos bloqueados ainda não foram liberados e não podem ser utilizados. Eles serão desbloqueados conforme você atinge determinadas metas.\nPontos desbloqueados estão disponíveis para uso e referem-se a entregas 100% finalizadas. Você pode utilizá-los para trocar por recompensas quando a loja virtual estiver habilitada."
+        },
+        {
+          "id": "moedas-e-metas-temporada",
+          "title": "Moedas e metas da temporada",
+          "icon": "ri-coins-line",
+          "theme": "lime",
+          "body": "Moedas são acumuladas a partir da conversão de pontos desbloqueados e podem ser trocadas por recompensas.\nO indicador de metas mostra quantas metas você atingiu em relação ao total disponível. Atingir todas as metas garante bônus extras na conversão."
+        }
+      ]
+    },
+    {
+      "slug": "progresso-e-insights",
+      "title": "Progresso e insights",
+      "description": "Pendentes, finalizados, insights do mês e clientes atendidos.",
+      "icon": "ri-lightbulb-flash-line",
+      "theme": "rose",
+      "order": 5,
+      "audience": "jogador",
+      "intro": "Use Meu Progresso e os Insights para priorizar entregas, identificar riscos e acompanhar sua produtividade no mês.",
+      "relatedSlugs": ["meu-painel", "pontuacao-e-temporada"],
+      "articles": [
+        {
+          "id": "meu-progresso",
+          "title": "Como usar Meu Progresso (Pendentes e Finalizados)?",
+          "icon": "ri-bar-chart-grouped-line",
+          "theme": "amber",
+          "body": "Em Pendentes, clique para ver os tipos de entrega em aberto, o volume por dia de prazo no mês e, ao selecionar um tipo, a lista de empresas com prazos.\nEntregas com risco de multa aparecem destacadas abaixo do nome da empresa.\nEm Finalizados, você acessa as entregas já concluídas no período."
+        },
+        {
+          "id": "insights-do-mes",
+          "title": "O que são os Insights do mês?",
+          "icon": "ri-lightbulb-flash-line",
+          "theme": "rose",
+          "body": "Resumo inteligente das suas entregas no mês: produtividade, prazos e alertas (risco de multa, vencimento próximo, pendentes atrasadas).\nMostra também atividade mais realizada, dia mais produtivo e totais de finalizadas, no prazo, fora do prazo e pendentes abertas."
+        },
+        {
+          "id": "clientes-atendidos",
+          "title": "O que são clientes atendidos este mês?",
+          "icon": "ri-building-4-line",
+          "theme": "sky",
+          "body": "Clientes para os quais você finalizou entregas no Acessórias no período filtrado.\nAo clicar em uma empresa, você vê as entregas realizadas, quem finalizou e a data de entrega, útil para monitorar a carteira por cliente."
+        },
+        {
+          "id": "entregas-no-prazo",
+          "title": "Entendendo entregas no prazo",
+          "icon": "ri-checkbox-circle-line",
+          "theme": "emerald",
+          "body": "O percentual de entregas no prazo inclui entregas feitas por você e por outras pessoas que atenderam cada cliente.\nValores acima de 90% indicam bom resultado. O atingimento desta meta aplica bônus ou penalidades na conversão de pontos em moedas.\nEntregas justificadas não são contabilizadas para a meta de entregas no prazo."
+        }
+      ]
+    },
+    {
+      "slug": "gestao-de-equipe",
+      "title": "Gestão de equipe",
+      "description": "Painel completo para supervisores acompanharem times com filtros e insights.",
+      "icon": "ri-team-line",
+      "theme": "violet",
+      "order": 6,
+      "audience": "supervisor",
+      "route": "/dashboard/team-management",
+      "intro": "O painel de Gestão de Equipe consolida metas, progresso e insights operacionais para supervisores que precisam acompanhar a performance do time com filtros e drill-down.",
+      "relatedSlugs": ["painel-supervisor", "progresso-e-insights"],
+      "articles": [
+        {
+          "id": "para-quem-e",
+          "title": "Para quem é este painel?",
+          "icon": "ri-team-line",
+          "theme": "violet",
+          "body": "Destinado a supervisores que acompanham a performance de equipes no BWA Game.\nAqui você enxerga metas, progresso, insights e clientes atendidos no escopo da sua equipe."
+        },
+        {
+          "id": "navegacao-paineis",
+          "title": "Como navegar entre os painéis da plataforma?",
+          "icon": "ri-compass-3-line",
+          "theme": "sky",
+          "body": "Use o seletor de painéis no topo para alternar entre visões:\n• Meu Painel (sua performance individual, quando disponível)\n• Supervisor (visão rápida em cards ou tabela)\n• Gestão de equipe (este painel completo, com filtros e insights)\n\nCada visão atende a um tipo de necessidade: check-in rápido ou análise detalhada."
+        },
+        {
+          "id": "filtros-equipe-colaborador",
+          "title": "Como escolher equipe e colaborador?",
+          "icon": "ri-filter-3-line",
+          "theme": "cyan",
+          "body": "Na barra lateral, o seletor Equipe / Departamento define o time (ou escopo) analisado.\nO seletor Colaborador filtra um jogador específico. Deixe vazio para ver o time inteiro agregado.\nCom colaborador selecionado, metas, insights e listas refletem apenas aquela pessoa."
+        },
+        {
+          "id": "filtro-mes-gestao",
+          "title": "Como funciona o filtro de mês?",
+          "icon": "ri-calendar-line",
+          "theme": "emerald",
+          "body": "O seletor de mês no topo altera metas, progresso, insights operacionais, insights executivos e a lista de clientes atendidos.\nA sidebar considera o acumulado da campanha; o centro do painel segue o mês filtrado.\nUse o botão Atualizar para buscar dados mais recentes após mudar o período."
+        },
+        {
+          "id": "abas-metas-produtividade",
+          "title": "Metas e Progresso vs Análise de Produtividade",
+          "icon": "ri-layout-grid-line",
+          "theme": "amber",
+          "body": "A aba Metas e Progresso concentra KPIs da equipe, cards de atividades e processos, insights e clientes atendidos.\nA aba Análise de Produtividade traz gráficos de evolução e segmentação; os dados carregam quando você abre a aba.\nAo selecionar um colaborador, as abas focam naquela pessoa."
+        },
+        {
+          "id": "insights-operacionais",
+          "title": "O que são os Insights operacionais?",
+          "icon": "ri-pulse-line",
+          "theme": "rose",
+          "body": "Resumo do time ou colaborador selecionado no mês: alertas de risco de multa, entregas próximas do vencimento e pendentes atrasadas.\nTambém mostra atividade mais realizada, dia mais produtivo e totais de finalizadas, no prazo, fora do prazo e pendentes abertas."
+        },
+        {
+          "id": "insights-executivos",
+          "title": "O que são os Insights executivos do mês?",
+          "icon": "ri-pie-chart-2-line",
+          "theme": "fuchsia",
+          "body": "Visão gerencial: entregas finalizadas, percentual no prazo e clientes atendidos por pessoa.\nInclui ranking de processos mais finalizados e listas de destaque e atenção por colaborador.\nSem colaborador selecionado, reflete o time inteiro; com colaborador, foca na performance individual."
+        },
+        {
+          "id": "rotina-insights",
+          "title": "Como tirar melhor proveito dos insights?",
+          "icon": "ri-lightbulb-line",
+          "theme": "lime",
+          "body": "Rotina sugerida:\nDiário: comece pelos Insights operacionais e trate alertas de multa, vencimento e atrasos.\nSemanal: revise meta de pontos, Insights executivos e quem precisa de apoio.\nMensal: compare evolução de entregas no prazo e produtividade do time."
+        },
+        {
+          "id": "investigar-entregas",
+          "title": "Como investigar entregas e clientes?",
+          "icon": "ri-search-eye-line",
+          "theme": "sky",
+          "body": "Clique nos cards de atividades ou processos em Progresso da equipe para abrir a lista de entregas do período.\nEm Clientes atendidos este mês, cada linha mostra participação no mês; clique para ver entregas, responsáveis e status de prazo."
+        }
+      ]
+    },
+    {
+      "slug": "painel-supervisor",
+      "title": "Painel Supervisor",
+      "description": "Visão rápida dos jogadores em cards ou tabela.",
+      "icon": "ri-user-star-line",
+      "theme": "cyan",
+      "order": 7,
+      "audience": "supervisor",
+      "route": "/dashboard/supervisor",
+      "intro": "O Painel Supervisor oferece um check-in rápido da equipe, ideal para acompanhar jogadores sem entrar no painel completo de gestão.",
+      "relatedSlugs": ["gestao-de-equipe", "supervisor-tecnico"],
+      "articles": [
+        {
+          "id": "visao-supervisor",
+          "title": "O que é o Painel Supervisor?",
+          "icon": "ri-user-star-line",
+          "theme": "cyan",
+          "body": "Visão simplificada da equipe com jogadores exibidos em cards ou tabela.\nMostra indicadores-chave de cada colaborador para um acompanhamento rápido do dia a dia."
+        },
+        {
+          "id": "cards-vs-tabela",
+          "title": "Visualização de dados de gestão",
+          "icon": "ri-layout-grid-line",
+          "theme": "sky",
+          "body": "No Painel Supervisor, você escolhe como enxergar a performance da equipe sem mudar os dados exibidos.\n\nOnde alternar\n1. Acima da lista de jogadores, use os botões Cards e Tabela.\n2. O modo padrão ao abrir o painel é Cards.\n\nO que cada modo mostra\nAmbos exibem os mesmos jogadores do seu escopo (equipes acessíveis ao seu perfil), com:\n• Nome do jogador e equipes vinculadas\n• Metas de Clientes e Entregas (realizado / meta)\n• Pontos do período filtrado\n• KPIs circulares — visíveis apenas na visualização em Cards\n\nCards\nGrade visual com um card por jogador. Indicada para varrer a equipe rapidamente e identificar quem está abaixo da meta ou merece destaque.\n\nTabela\nColunas: Jogador, Equipes, Clientes, Entregas e Pontos. Indicada para comparar vários colaboradores lado a lado em uma única tela.\n\nInteração\nEm Cards ou Tabela, clique no card ou na linha do jogador para abrir o detalhe com mais informações daquele colaborador.\n\nContexto do painel\n• O filtro de mês no topo altera metas, entregas e pontos exibidos.\n• O card lateral esquerdo mostra suas métricas e as médias da equipe no período selecionado."
+        },
+        {
+          "id": "quando-usar",
+          "title": "Painel Supervisor vs. Gestão de Equipe",
+          "icon": "ri-question-line",
+          "theme": "amber",
+          "body": "Os dois painéis complementam-se: um para check-in rápido, outro para análise aprofundada.\n\nPainel Supervisor (/dashboard/supervisor)\n• Check-in rápido do dia a dia\n• Visão consolidada da equipe em cards ou tabela\n• Médias da equipe no card lateral esquerdo\n• Abas de Clientes: Carteira equipe, Participação equipe e Carteira supervisor\n• Atalho Gestão de Equipe na própria tela para ir à análise detalhada\n\nGestão de equipe (/dashboard/team-management)\n• Filtros de Equipe/Departamento e Colaborador na barra lateral\n• Abas Metas e Progresso e Análise de Produtividade\n• Insights operacionais: alertas de multa, vencimentos e entregas atrasadas\n• Insights executivos: ranking, listas de destaque e atenção por colaborador\n• Drill-down em entregas e clientes atendidos no mês\n\nQuando usar cada um\n• Reunião rápida ou status geral da equipe → Painel Supervisor\n• Comparar jogadores lado a lado → Painel Supervisor (modo Tabela)\n• Investigar alertas, pendências e riscos → Gestão de equipe\n• Gráficos de evolução e produtividade → Gestão de equipe\n• Detalhar entregas e clientes de um colaborador → Gestão de equipe\n\nPara o passo a passo completo de filtros, abas e insights, consulte o módulo Gestão de equipe nesta Central de Ajuda."
+        }
+      ]
+    },
+    {
+      "slug": "supervisor-tecnico",
+      "title": "Supervisor técnico",
+      "description": "Visão read-only da equipe sem configuração de metas.",
+      "icon": "ri-user-settings-line",
+      "theme": "emerald",
+      "order": 8,
+      "audience": "supervisor",
+      "route": "/dashboard/supervisor-tecnico",
+      "intro": "O painel de Supervisor Técnico permite acompanhar a equipe em modo somente leitura, sem opções de configuração de metas.",
+      "relatedSlugs": ["painel-supervisor", "gestao-de-equipe"],
+      "articles": [
+        {
+          "id": "visao-supervisor",
+          "title": "O que é o Supervisor Técnico?",
+          "icon": "ri-user-star-line",
+          "theme": "cyan",
+          "body": "O Supervisor Técnico é o painel em /dashboard/supervisor-tecnico para acompanhar a performance da equipe em modo somente leitura.\n\nNeste painel você consulta indicadores, progresso, resumo da equipe, lista de jogadores e clientes — sem alterar metas ou configurações.\n\nNa barra lateral, filtre por Equipe/Departamento e Colaborador. No topo, use o seletor de mês e o botão Voltar ao Dashboard para retornar ao painel principal.\n\nOs dados refletem apenas as equipes acessíveis ao seu perfil."
+        },
+        {
+          "id": "cards-vs-tabela",
+          "title": "Visualização de dados de gestão",
+          "icon": "ri-layout-grid-line",
+          "theme": "sky",
+          "body": "No Supervisor Técnico, os dados de gestão são organizados em camadas que respondem aos mesmos filtros (equipe, colaborador e mês).\n\nFiltros laterais\n• Equipe/Departamento define o escopo analisado.\n• Colaborador restringe a visão a uma pessoa; deixe em Todos os Colaboradores para ver o time agregado.\n• Carteira de pontos e progresso da temporada na sidebar acompanham o filtro selecionado.\n\nÁrea principal\n1. Carteira da Equipe — KPIs circulares agregados do escopo.\n2. Progresso da Equipe — cards de atividades e processos; clique para abrir a lista de entregas do período.\n3. Resumo da Equipe — totais e médias de jogadores, pontos, clientes, entregas e KPIs médios.\n4. Tabela de jogadores — colunas Jogador, Equipes, Clientes, Entregas e Pontos; somente leitura; clique na linha para ver o detalhe do colaborador.\n5. Clientes — abas Carteira, Carteira Individual e Participação; clique em um cliente para abrir o detalhe.\n\nFiltro de mês\nO seletor no topo altera metas, entregas e pontos exibidos em todos os blocos acima.\n\nNão há modo cards: a comparação entre jogadores é feita pela tabela compacta, sempre alinhada ao escopo filtrado."
+        },
+        {
+          "id": "quando-usar",
+          "title": "Supervisor Técnico vs. Gestão de Equipe",
+          "icon": "ri-question-line",
+          "theme": "amber",
+          "body": "Supervisor Técnico e Gestão de Equipe atendem necessidades diferentes de acompanhamento da equipe.\n\nSupervisor Técnico (/dashboard/supervisor-tecnico)\n• Monitoramento somente leitura, sem edição de metas\n• Filtros de equipe e colaborador na barra lateral\n• KPIs, progresso da equipe, resumo e tabela de jogadores\n• Abas de clientes com drill-down em entregas e detalhes\n• Sem insights operacionais ou executivos, sem gráficos de produtividade\n\nGestão de Equipe (/dashboard/team-management)\n• Painel completo para análise aprofundada\n• Abas Metas e Progresso e Análise de Produtividade\n• Insights operacionais: alertas, vencimentos e entregas atrasadas\n• Insights executivos: ranking, destaques e atenção por colaborador\n• Drill-down avançado em entregas e clientes atendidos no mês\n\nQuando usar cada um\n• Acompanhar a equipe sem alterar configurações → Supervisor Técnico\n• Comparar jogadores em tabela no escopo filtrado → Supervisor Técnico\n• Investigar alertas, pendências e riscos → Gestão de Equipe\n• Gráficos de evolução e produtividade → Gestão de Equipe\n• Análise executiva com ranking e listas de destaque → Gestão de Equipe\n\nPara check-in ainda mais rápido em cards ou tabela, consulte também o módulo Painel Supervisor.\nPara o passo a passo completo de filtros, abas e insights, consulte o módulo Gestão de equipe nesta Central de Ajuda."
+        }
+      ]
+    },
+    {
+      "slug": "recompensas",
+      "title": "Recompensas",
+      "description": "Loja virtual: conversão de pontos, moedas e resgate de prêmios.",
+      "icon": "ri-gift-line",
+      "theme": "gold",
+      "order": 10,
+      "audience": "jogador",
+      "route": "/dashboard/rewards",
+      "featureFlag": "enableVirtualStore",
+      "intro": "A área de Recompensas permite converter pontos desbloqueados em moedas e resgatar itens do catálogo da loja virtual.",
+      "relatedSlugs": ["pontuacao-e-temporada", "ranking"],
+      "articles": [
+        {
+          "id": "pontos-e-moedas",
+          "title": "Pontos desbloqueados e moedas",
+          "icon": "ri-coins-line",
+          "theme": "gold",
+          "body": "Na parte superior da página você vê seus pontos desbloqueados, a cotação atual (pontos por moeda) e o saldo de moedas.\nApenas pontos desbloqueados podem ser convertidos."
+        },
+        {
+          "id": "conversao-pontos",
+          "title": "Como converter pontos em moedas",
+          "icon": "ri-arrow-up-down-line",
+          "theme": "amber",
+          "body": "Clique em Converter para abrir o modal de conversão.\nInforme a quantidade de pontos desejada e confirme. A cotação exibida define quantas moedas você receberá.\nO atingimento das metas pode aplicar bônus ou penalidades na conversão."
+        },
+        {
+          "id": "catalogo-resgate",
+          "title": "Catálogo e resgate de recompensas",
+          "icon": "ri-store-2-line",
+          "theme": "emerald",
+          "body": "Navegue pelo catálogo de recompensas disponíveis.\nSelecione um item, confirme o resgate com suas moedas e acompanhe o status do pedido.\nItens e disponibilidade podem variar conforme a campanha vigente."
+        }
+      ]
+    },
+    {
+      "slug": "ranking",
+      "title": "Ranking",
+      "description": "Leaderboards: tipos de ranking, período e posição dos participantes.",
+      "icon": "ri-trophy-line",
+      "theme": "amber",
+      "order": 11,
+      "audience": "jogador",
+      "route": "/dashboard/ranking",
+      "featureFlag": "enableLeaderboards",
+      "intro": "Acompanhe o desempenho dos participantes em diferentes tipos de ranking e períodos personalizados.",
+      "relatedSlugs": ["pontuacao-e-temporada", "recompensas"],
+      "articles": [
+        {
+          "id": "tipos-ranking",
+          "title": "Tipos de ranking",
+          "icon": "ri-list-ordered",
+          "theme": "amber",
+          "body": "Selecione o tipo de ranking no filtro superior. Cada tipo mede um aspecto diferente do desempenho (pontos, entregas, etc.).\nA descrição de cada tipo aparece no seletor para ajudar na escolha."
+        },
+        {
+          "id": "periodo-ranking",
+          "title": "Filtro de período",
+          "icon": "ri-calendar-2-line",
+          "theme": "cyan",
+          "body": "Defina a data de início e fim do período analisado.\nApós configurar tipo e datas, clique em Gerar Ranking para carregar os resultados."
+        },
+        {
+          "id": "interpretar-posicao",
+          "title": "Como interpretar sua posição",
+          "icon": "ri-medal-line",
+          "theme": "gold",
+          "body": "A lista exibe participantes ordenados por desempenho no período selecionado.\nSua posição reflete o acumulado de pontos ou métrica do ranking escolhido. Use rankings como referência de evolução, não como único indicador de performance."
+        }
+      ]
+    },
+    {
+      "slug": "metas-e-distribuicao",
+      "title": "Metas e distribuição",
+      "description": "Termômetro de progresso, faixas de recompensa e pote de distribuição.",
+      "icon": "ri-temp-hot-line",
+      "theme": "rose",
+      "order": 12,
+      "audience": "jogador",
+      "route": "/dashboard/thermometer",
+      "featureFlag": "enableCashDistribution",
+      "intro": "Acompanhe o progresso coletivo da equipe comercial em direção à meta e desbloqueie faixas de recompensa conforme o termômetro avança.",
+      "relatedSlugs": ["pontuacao-e-temporada", "painel-supervisor"],
+      "articles": [
+        {
+          "id": "termometro-progresso",
+          "title": "Termômetro de progresso",
+          "icon": "ri-temp-hot-line",
+          "theme": "rose",
+          "body": "O termômetro visual mostra o valor acumulado em relação à meta definida para o período.\nFaixas coloridas indicam estágios de progresso (vermelho, laranja, ciano, verde) com recompensas associadas."
+        },
+        {
+          "id": "faixas-recompensa",
+          "title": "Faixas de recompensa",
+          "icon": "ri-gift-2-line",
+          "theme": "gold",
+          "body": "Cada faixa do termômetro desbloqueia um nível de recompensa para o time.\nAcompanhe quais faixas já foram atingidas e qual é a próxima meta coletiva."
+        },
+        {
+          "id": "pote-distribuicao",
+          "title": "Pote de distribuição",
+          "icon": "ri-funds-line",
+          "theme": "emerald",
+          "body": "O pote de distribuição mostra o valor total disponível para distribuição entre participantes elegíveis.\nA distribuição segue as regras da campanha vigente definidas pela operação."
+        }
+      ]
+    },
+    {
+      "slug": "suporte",
+      "title": "Suporte",
+      "description": "Como obter suporte direcionado e prazos de atendimento.",
+      "icon": "ri-customer-service-2-line",
+      "theme": "lime",
+      "order": 13,
+      "audience": "jogador",
+      "intro": "Precisa de ajuda? Use o formulário de suporte da plataforma. A equipe Game4U responde em até 24 horas em dias úteis.",
+      "relatedSlugs": ["primeiros-passos", "conta-e-sessao"],
+      "resources": [
+        {
+          "label": "Tutorial: interface do painel (PDF)",
+          "description": "Passo a passo da tela do jogador.",
+          "url": "https://zarptqqopvuwognexpon.supabase.co/storage/v1/object/public/rulebook/bwa-pdf/PLATAFORMA_BWA%20GAME_062026V1_PERFILJOGADOR.pdf",
+          "icon": "ri-layout-masonry-line",
+          "theme": "sky"
+        },
+        {
+          "label": "Regras de pontuação (PDF)",
+          "description": "Base oficial do cálculo de pontos.",
+          "url": "https://zarptqqopvuwognexpon.supabase.co/storage/v1/object/public/rulebook/bwa-pdf/REGRAS_BWA%20GAME_062026V1_PERFILJOGADOR.pdf",
+          "icon": "ri-medal-line",
+          "theme": "gold"
+        }
+      ],
+      "articles": [
+        {
+          "id": "suporte-direcionado",
+          "title": "Como obter suporte direcionado",
+          "icon": "ri-customer-service-2-line",
+          "theme": "lime",
+          "body": "1. Clique no botão de ajuda (?) fixo no canto inferior direito de qualquer página da plataforma.\n2. Preencha nome, e-mail e descrição do problema. A página atual é enviada automaticamente para facilitar o diagnóstico.\n3. Envie o formulário e aguarde o retorno da equipe Game4U.\n\nPrazo para primeira resposta: até 24 horas em dias úteis. Todas as solicitações são acompanhadas pela equipe de suporte."
+        }
+      ]
+    }
+  ]
+}

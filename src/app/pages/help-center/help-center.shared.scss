@@ -1,0 +1,62 @@
+@import '../../../styles/faq-accordion';
+@import '../../../styles/mixins';
+
+.help-center-content {
+  .faq-body {
+    max-height: none;
+    padding-right: 0;
+  }
+
+  @include tablet-only {
+    .faq-card-body {
+      padding-left: 0.85rem;
+      padding-right: 0.85rem;
+    }
+
+    .faq-card-header {
+      min-height: 44px;
+    }
+
+    .faq-card-title {
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+
+    .faq-resource-link {
+      min-height: 44px;
+    }
+  }
+
+  @include mobile-only {
+    .faq-card-body {
+      padding-left: 0.7rem;
+      padding-right: 0.7rem;
+    }
+
+    .faq-card-header {
+      min-height: 44px;
+      padding: 0.75rem;
+    }
+
+    .faq-card-title {
+      font-size: 0.875rem;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+
+    .faq-answer {
+      font-size: 0.875rem;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+
+    .faq-resource-link {
+      min-height: 44px;
+      flex-wrap: wrap;
+    }
+
+    .faq-resource-description {
+      overflow-wrap: anywhere;
+    }
+  }
+}

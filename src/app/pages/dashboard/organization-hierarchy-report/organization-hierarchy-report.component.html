@@ -17,15 +17,18 @@
           MTD: {{ report!.params.mtd_start | date:'dd/MM' }} – {{ report!.params.mtd_end | date:'dd/MM/yyyy' }}
         </span>
       </span>
-      <button
-        class="logout-button"
-        type="button"
-        (click)="logout()"
-        aria-label="Sair do sistema"
-        title="Sair">
-        <i class="ri-logout-box-line" aria-hidden="true"></i>
-        <span>Sair</span>
-      </button>
+      <div class="header-actions">
+        <c4u-dashboard-help-link></c4u-dashboard-help-link>
+        <button
+          class="logout-button"
+          type="button"
+          (click)="logout()"
+          aria-label="Sair do sistema"
+          title="Sair">
+          <i class="ri-logout-box-line" aria-hidden="true"></i>
+          <span>Sair</span>
+        </button>
+      </div>
     </header>
 
     <div class="report-content">

@@ -1,0 +1,211 @@
+@import "variables";
+
+.help-home {
+  max-width: 960px;
+}
+
+.help-home-header {
+  margin-bottom: 1.25rem;
+}
+
+.help-home-title {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 0 0 0.5rem;
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: $texto-branco;
+
+  i {
+    color: #7dd3fc;
+  }
+}
+
+.help-home-subtitle {
+  margin: 0;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.62);
+}
+
+.help-section-title {
+  margin: 1.5rem 0 0.85rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.help-home-loading,
+.help-empty {
+  margin: 2rem 0;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 0.95rem;
+}
+
+.help-modules-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 0.75rem;
+}
+
+.help-module-card,
+.help-search-result-btn {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 1rem;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-left: 3px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.04);
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+
+  &:hover,
+  &:focus-visible {
+    background: rgba(255, 255, 255, 0.07);
+    border-color: rgba(255, 255, 255, 0.18);
+    outline: none;
+    transform: translateY(-1px);
+  }
+}
+
+.help-module-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.08);
+  font-size: 1.2rem;
+}
+
+.help-module-card-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.help-module-card-title,
+.help-search-result-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.help-module-card-description {
+  font-size: 0.85rem;
+  line-height: 1.45;
+  color: rgba(255, 255, 255, 0.58);
+}
+
+.help-module-card-meta,
+.help-search-result-meta {
+  font-size: 0.78rem;
+  color: rgba(255, 255, 255, 0.42);
+}
+
+.help-module-card-arrow {
+  flex-shrink: 0;
+  margin-top: 0.15rem;
+  color: rgba(255, 255, 255, 0.35);
+}
+
+.help-search-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.help-search-item {
+  margin: 0;
+}
+
+.help-search-result-btn {
+  align-items: center;
+}
+
+.help-search-result-text {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+@import '../help-center.shared.scss';
+
+.faq-theme--violet .help-module-icon { color: #a78bfa; border-left-color: #a78bfa; }
+.faq-theme--gold .help-module-icon { color: #d4a574; }
+.faq-theme--emerald .help-module-icon { color: #6ee7b7; }
+.faq-theme--cyan .help-module-icon { color: #67e8f9; }
+.faq-theme--amber .help-module-icon { color: #fdba74; }
+.faq-theme--rose .help-module-icon { color: #fda4af; }
+.faq-theme--sky .help-module-icon { color: #7dd3fc; }
+.faq-theme--lime .help-module-icon { color: #bef264; }
+.faq-theme--fuchsia .help-module-icon { color: #e879f9; }
+
+.faq-theme--violet.help-module-card { border-left-color: rgba(#a78bfa, 0.45); }
+.faq-theme--gold.help-module-card { border-left-color: rgba(#d4a574, 0.45); }
+.faq-theme--emerald.help-module-card { border-left-color: rgba(#6ee7b7, 0.45); }
+.faq-theme--cyan.help-module-card { border-left-color: rgba(#67e8f9, 0.45); }
+.faq-theme--amber.help-module-card { border-left-color: rgba(#fdba74, 0.45); }
+.faq-theme--rose.help-module-card { border-left-color: rgba(#fda4af, 0.45); }
+.faq-theme--sky.help-module-card { border-left-color: rgba(#7dd3fc, 0.45); }
+.faq-theme--lime.help-module-card { border-left-color: rgba(#bef264, 0.45); }
+.faq-theme--fuchsia.help-module-card { border-left-color: rgba(#e879f9, 0.45); }
+
+@import "../../../../styles/mixins.scss";
+
+@include tablet-only {
+  .help-home-title {
+    font-size: clamp(1.45rem, 3vw, 1.75rem);
+  }
+
+  .help-modules-cards {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.85rem;
+  }
+
+  .help-module-card-description {
+    overflow-wrap: anywhere;
+  }
+}
+
+@include mobile-only {
+  .help-home-title {
+    font-size: clamp(1.35rem, 5vw, 1.75rem);
+  }
+
+  .help-modules-cards {
+    grid-template-columns: 1fr;
+  }
+
+  .help-module-card,
+  .help-search-result-btn {
+    min-height: 44px;
+    transform: none;
+
+    &:hover,
+    &:focus-visible {
+      transform: none;
+    }
+  }
+
+  .help-module-card-description {
+    overflow-wrap: anywhere;
+  }
+}

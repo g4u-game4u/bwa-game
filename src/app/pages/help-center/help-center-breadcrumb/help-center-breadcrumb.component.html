@@ -1,0 +1,5 @@
+<nav class="help-breadcrumb" aria-label="Navegação da central de ajuda">
+  <a routerLink="/dashboard/help" class="help-breadcrumb-link">Central de Ajuda</a>
+  <span *ngIf="moduleTitle" class="help-breadcrumb-separator" aria-hidden="true">›</span>
+  <span *ngIf="moduleTitle" class="help-breadcrumb-current">{{ moduleTitle }}</span>
+</nav>

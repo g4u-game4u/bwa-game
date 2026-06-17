@@ -1,0 +1,130 @@
+<div class="help-module-page">
+  <div *ngIf="isLoading" class="help-module-loading" aria-live="polite">
+    Carregando módulo...
+  </div>
+
+  <div *ngIf="notFound && !isLoading" class="help-module-not-found">
+    <app-help-center-breadcrumb></app-help-center-breadcrumb>
+    <p class="help-empty">Módulo não encontrado ou indisponível para seu perfil.</p>
+    <a routerLink="/dashboard/help" class="help-back-link">Voltar à Central de Ajuda</a>
+  </div>
+
+  <ng-container *ngIf="module && !isLoading">
+    <app-help-center-breadcrumb [moduleTitle]="module.title"></app-help-center-breadcrumb>
+
+    <header class="help-module-header">
+      <span class="help-module-header-icon" [ngClass]="'faq-theme--' + module.theme">
+        <i [class]="module.icon" aria-hidden="true"></i>
+      </span>
+      <div>
+        <h1 class="help-module-title">{{ module.title }}</h1>
+        <p class="help-module-intro">{{ module.intro }}</p>
+        <a *ngIf="module.route" [routerLink]="module.route" class="help-module-route-link">
+          <i class="ri-external-link-line" aria-hidden="true"></i>
+          Ir para a funcionalidade
+        </a>
+      </div>
+    </header>
+
+    <div class="help-center-content faq-body" flex direction="column">
+      <section *ngIf="module.resources?.length" class="faq-resources" aria-labelledby="module-resources-title">
+        <h2 id="module-resources-title" class="faq-section-title">
+          <i class="ri-book-open-line" aria-hidden="true"></i>
+          Materiais oficiais
+        </h2>
+        <ul class="faq-resources-list">
+          <li *ngFor="let link of module.resources; trackBy: trackByIndex" class="faq-resource-item">
+            <a
+              class="faq-resource-link"
+              [ngClass]="'faq-theme--' + link.theme"
+              [href]="link.url"
+              target="_blank"
+              rel="noopener noreferrer"
+              [attr.aria-label]="link.label + ' (abre em nova aba)'">
+              <span class="faq-resource-badge" aria-hidden="true">
+                <i [class]="link.icon"></i>
+              </span>
+              <span class="faq-resource-text">
+                <span class="faq-resource-label">{{ link.label }}</span>
+                <span class="faq-resource-description">{{ link.description }}</span>
+              </span>
+              <span class="faq-resource-action" aria-hidden="true">
+                <i class="ri-external-link-line"></i>
+              </span>
+            </a>
+          </li>
+        </ul>
+      </section>
+
+      <section *ngIf="module.articles.length" class="faq-list-section" aria-labelledby="module-articles-title">
+        <h2 id="module-articles-title" class="faq-section-title">
+          <i class="ri-question-answer-line" aria-hidden="true"></i>
+          Artigos deste módulo
+        </h2>
+
+        <ul class="faq-list" role="list">
+          <li
+            *ngFor="let item of module.articles; let i = index; trackBy: trackByIndex"
+            class="faq-card"
+            [ngClass]="['faq-theme--' + (item.theme || module.theme), isExpanded(i) ? 'faq-card--open' : '']"
+            role="listitem">
+            <button
+              type="button"
+              class="faq-card-header"
+              (click)="toggleFaq(i)"
+              [attr.aria-expanded]="isExpanded(i)"
+              [attr.aria-controls]="'module-faq-panel-' + i"
+              [attr.id]="'module-faq-header-' + i">
+              <span class="faq-card-badge" aria-hidden="true">
+                <i [class]="item.icon || 'ri-article-line'"></i>
+              </span>
+              <span class="faq-card-title">{{ item.title }}</span>
+              <span class="faq-card-chevron" aria-hidden="true">
+                <i class="ri-arrow-down-s-line" [class.faq-card-chevron--open]="isExpanded(i)"></i>
+              </span>
+            </button>
+
+            <div
+              *ngIf="isExpanded(i)"
+              class="faq-card-body"
+              role="region"
+              [attr.id]="'module-faq-panel-' + i"
+              [attr.aria-labelledby]="'module-faq-header-' + i">
+              <p class="faq-answer">{{ item.body }}</p>
+            </div>
+          </li>
+        </ul>
+      </section>
+
+      <section *ngIf="relatedModules.length" class="help-related" aria-labelledby="related-modules-title">
+        <h2 id="related-modules-title" class="faq-section-title">
+          <i class="ri-links-line" aria-hidden="true"></i>
+          Artigos relacionados
+        </h2>
+        <ul class="help-related-list" role="list">
+          <li *ngFor="let related of relatedModules; trackBy: trackBySlug">
+            <button
+              type="button"
+              class="help-related-link"
+              (click)="navigateToModule(related.slug)">
+              <i [class]="related.icon" aria-hidden="true"></i>
+              <span>{{ related.title }}</span>
+              <i class="ri-arrow-right-s-line" aria-hidden="true"></i>
+            </button>
+          </li>
+        </ul>
+      </section>
+
+      <section class="help-support-cta" aria-labelledby="support-cta-title">
+        <h2 id="support-cta-title" class="faq-section-title">
+          <i class="ri-customer-service-2-line" aria-hidden="true"></i>
+          Precisa de mais ajuda?
+        </h2>
+        <p class="help-support-text">
+          Use o botão de ajuda <strong>?</strong> no canto inferior direito de qualquer página para reportar um incidente.
+          A equipe Game4U responde em até 24 horas em dias úteis.
+        </p>
+      </section>
+    </div>
+  </ng-container>
+</div>

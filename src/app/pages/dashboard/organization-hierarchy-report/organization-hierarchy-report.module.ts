@@ -7,6 +7,7 @@ import { C4uOrgHierarchyTreeNodeComponent } from './org-hierarchy-tree-node.comp
 import { C4uOrgHierarchyTreeTableComponent } from './org-hierarchy-tree-table.component';
 import { OrgHierarchyReportGuard } from '@guards/org-hierarchy-report.guard';
 import { C4uDashboardNavigationModule } from '@components/c4u-dashboard-navigation/c4u-dashboard-navigation.module';
+import { C4uDashboardHelpLinkModule } from '@components/c4u-dashboard-help-link/c4u-dashboard-help-link.module';
 import { C4uSeletorMesModule } from '@components/c4u-seletor-mes/c4u-seletor-mes.module';
 import { C4uCardModule } from '@components/c4u-card/c4u-card.module';
 import { C4uShimmerModule } from '@components/c4u-shimmer/c4u-shimmer.module';
@@ -35,6 +36,7 @@ const routes: Routes = [
     RouterModule.forChild(routes),
     SharedModule,
     C4uDashboardNavigationModule,
+    C4uDashboardHelpLinkModule,
     C4uSeletorMesModule,
     C4uCardModule,
     C4uShimmerModule,

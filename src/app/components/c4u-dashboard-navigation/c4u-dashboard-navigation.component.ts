@@ -1,4 +1,4 @@
-import { Component, OnInit, ChangeDetectionStrategy, ChangeDetectorRef } from '@angular/core';
+import { Component, OnInit, ChangeDetectionStrategy, ChangeDetectorRef, ElementRef, HostListener } from '@angular/core';
 import { Router, NavigationEnd } from '@angular/router';
 import { SessaoProvider } from '@providers/sessao/sessao.provider';
 import { UserProfileService } from '@services/user-profile.service';
@@ -51,12 +51,14 @@ export class C4uDashboardNavigationComponent implements OnInit {
   availableDashboards: DashboardOption[] = [];
   hasGestaoRole = false;
   canAccessOrgHierarchyNav = false;
-  
+  isDropdownOpen = false;
+
   constructor(
     private router: Router,
     private sessaoProvider: SessaoProvider,
     private userProfileService: UserProfileService,
-    private cdr: ChangeDetectorRef
+    private cdr: ChangeDetectorRef,
+    private elementRef: ElementRef<HTMLElement>
   ) {}
   
   ngOnInit(): void {
@@ -69,6 +71,7 @@ export class C4uDashboardNavigationComponent implements OnInit {
     this.router.events
       .pipe(filter(event => event instanceof NavigationEnd))
       .subscribe(() => {
+        this.closeDropdown();
         this.detectCurrentDashboard();
         this.cdr.markForCheck();
       });
@@ -153,12 +156,40 @@ export class C4uDashboardNavigationComponent implements OnInit {
    * Navigate to selected dashboard
    */
   navigateToDashboard(dashboard: DashboardOption): void {
+    this.closeDropdown();
+
     if (dashboard.route === this.currentDashboard?.route) {
-      return; // Already on this dashboard
+      return;
     }
-    
+
     this.router.navigate([dashboard.route]);
     this.saveLastVisitedDashboard(dashboard.route);
+  }
+
+  toggleDropdown(event: Event): void {
+    event.stopPropagation();
+    this.isDropdownOpen = !this.isDropdownOpen;
+    this.cdr.markForCheck();
+  }
+
+  closeDropdown(): void {
+    if (!this.isDropdownOpen) {
+      return;
+    }
+    this.isDropdownOpen = false;
+    this.cdr.markForCheck();
+  }
+
+  @HostListener('document:click', ['$event'])
+  onDocumentClick(event: MouseEvent): void {
+    if (!this.isDropdownOpen) {
+      return;
+    }
+    const target = event.target as Node | null;
+    if (target && this.elementRef.nativeElement.contains(target)) {
+      return;
+    }
+    this.closeDropdown();
   }
   
   /**
