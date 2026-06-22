@@ -5,7 +5,7 @@ import {
   EventEmitter,
   ChangeDetectionStrategy
 } from '@angular/core';
-import { OrgHierarchyNode, OrgHierarchyNodeType, OrgMetricsWindow } from '@model/game4u-api.model';
+import { OrgHierarchyNode, OrgHierarchyNodeType, OrgMetricsWindow, TeamPlayerMtd } from '@model/game4u-api.model';
 import {
   formatBrl,
   formatHighlightMtdMetricValue,
@@ -14,16 +14,20 @@ import {
   getOrgHierarchyAreaLabelClass,
   getOrgHierarchyCompareTone,
   getOrgHierarchyNodeTypeLabel,
+  ORG_TREE_COMPACT_COLUMNS,
   OrgHighlightMtdColumn
 } from '@services/org-hierarchy-report.mapper';
 import { normalizeOrgHierarchyNodeType } from '@services/org-hierarchy-segmentation.mapper';
 import type { OrgHierarchyKpiDetailKey } from '@model/game4u-api.model';
 
 interface OrgHierarchyVisibleRow {
+  rowId: string;
   node: OrgHierarchyNode;
   depth: number;
   hasChildren: boolean;
   isExpanded: boolean;
+  kind: 'node' | 'team_players';
+  teamPlayers?: TeamPlayerMtd[];
 }
 
 interface OrgHierarchyLevelLegend {
@@ -41,6 +45,7 @@ interface OrgHierarchyLevelLegend {
 export class C4uOrgHierarchyTreeTableComponent {
   @Input() root!: OrgHierarchyNode;
   @Input() showSimulation = false;
+  @Input() showAllMetrics = false;
   @Input() expandedIds = new Set<string>();
 
   @Output() toggleNode = new EventEmitter<string>();
@@ -55,13 +60,16 @@ export class C4uOrgHierarchyTreeTableComponent {
 
   private readonly kpiDrilldownKeys = new Set<OrgHierarchyKpiDetailKey>([
     'on_time_pct',
-    'clients_served',
+    // 'clients_served', // drill-down desabilitado temporariamente (performance)
     'finished',
     'points_delivered',
     'pending_open',
     'near_due',
     'overdue_pending',
-    'multa_risk'
+    'overdue_pending_justified',
+    'overdue_pending_unjustified',
+    'multa_risk',
+    'multa_incurred'
   ]);
 
   readonly mtdColumns: ReadonlyArray<OrgHighlightMtdColumn> = [
@@ -69,10 +77,16 @@ export class C4uOrgHierarchyTreeTableComponent {
     { key: 'finished', label: 'Entregas', format: 'number' },
     { key: 'clients_served', label: 'Clientes', format: 'number', title: 'Clientes atendidos' },
     { key: 'clients_onboarding', label: 'Onboarding', format: 'number' },
+    { key: 'clients_acessorias_g4', label: 'Acess. G4', format: 'number', title: 'Clientes Acessórias G4' },
+    { key: 'clients_acessorias_onboarding', label: 'Acess. onboard.', format: 'number', title: 'Clientes Acessórias em onboarding' },
+    { key: 'clients_acessorias_risco_de_churn', label: 'Acess. churn', format: 'number', title: 'Clientes Acessórias com risco de churn' },
     { key: 'pending_open', label: 'Pendentes', format: 'number' },
     { key: 'near_due', label: 'Próx. venc.', format: 'number', title: 'Próximo do vencimento' },
     { key: 'overdue_pending', label: 'Atrasados', format: 'number' },
-    { key: 'multa_risk', label: 'Risco multa', format: 'number', title: 'Risco de multa' }
+    { key: 'overdue_pending_justified', label: 'Atraso just.', format: 'number', title: 'Atraso justificado' },
+    { key: 'overdue_pending_unjustified', label: 'Atraso s/ just.', format: 'number', title: 'Atraso sem justificativa' },
+    { key: 'multa_risk', label: 'Risco multa', format: 'number', title: 'Risco de multa' },
+    { key: 'multa_incurred', label: 'Multa incorr.', format: 'number', title: 'Multas incorridas' }
   ];
 
   readonly pointsMtdColumn: OrgHighlightMtdColumn = {
@@ -86,7 +100,11 @@ export class C4uOrgHierarchyTreeTableComponent {
     'pending_open',
     'near_due',
     'overdue_pending',
-    'multa_risk'
+    'overdue_pending_justified',
+    'overdue_pending_unjustified',
+    'multa_risk',
+    'multa_and_near_due',
+    'multa_incurred'
   ]);
 
   readonly legendItems: ReadonlyArray<OrgHierarchyLevelLegend> = [
@@ -99,12 +117,54 @@ export class C4uOrgHierarchyTreeTableComponent {
     { type: 'player', label: 'Colaborador', color: '#64748b' }
   ];
 
+  get visibleMtdColumns(): ReadonlyArray<OrgHighlightMtdColumn> {
+    return this.showAllMetrics ? this.mtdColumns : ORG_TREE_COMPACT_COLUMNS;
+  }
+
+  get showExtendedTreeColumns(): boolean {
+    return this.showAllMetrics;
+  }
+
+  get tableColumnCount(): number {
+    let count = 3 + this.visibleMtdColumns.length;
+    if (this.showExtendedTreeColumns) {
+      count += 2;
+      if (this.showSimulation) {
+        count += 1;
+      }
+    }
+    return count;
+  }
+
   get rows(): OrgHierarchyVisibleRow[] {
     const out: OrgHierarchyVisibleRow[] = [];
     const walk = (node: OrgHierarchyNode, depth: number): void => {
       const hasChildren = !!(node.children && node.children.length > 0);
       const isExpanded = this.expandedIds.has(node.node_id);
-      out.push({ node, depth, hasChildren, isExpanded });
+      out.push({
+        rowId: node.node_id,
+        node,
+        depth,
+        hasChildren,
+        isExpanded,
+        kind: 'node'
+      });
+
+      if (
+        normalizeOrgHierarchyNodeType(node.node_type) === 'supervisao' &&
+        (node.team_players_mtd?.length ?? 0) > 0
+      ) {
+        out.push({
+          rowId: `${node.node_id}__team_players`,
+          node,
+          depth: depth + 1,
+          hasChildren: false,
+          isExpanded: false,
+          kind: 'team_players',
+          teamPlayers: node.team_players_mtd
+        });
+      }
+
       if (hasChildren && isExpanded) {
         for (const child of node.children ?? []) {
           walk(child, depth + 1);
@@ -113,6 +173,25 @@ export class C4uOrgHierarchyTreeTableComponent {
     };
     walk(this.root, 0);
     return out;
+  }
+
+  isNodeRow(row: OrgHierarchyVisibleRow): boolean {
+    return row.kind === 'node';
+  }
+
+  isTeamPlayersRow(row: OrgHierarchyVisibleRow): boolean {
+    return row.kind === 'team_players';
+  }
+
+  formatTeamPlayerNumber(value: number | undefined | null): string {
+    if (value == null || !Number.isFinite(value)) {
+      return '—';
+    }
+    return value.toLocaleString('pt-BR', { maximumFractionDigits: 0 });
+  }
+
+  trackByTeamPlayer(_index: number, player: TeamPlayerMtd): string {
+    return player.player_email;
   }
 
   nodeTypeLabel(node: OrgHierarchyNode): string {
@@ -216,6 +295,6 @@ export class C4uOrgHierarchyTreeTableComponent {
   }
 
   trackByNodeId(_index: number, row: OrgHierarchyVisibleRow): string {
-    return row.node.node_id;
+    return row.rowId;
   }
 }

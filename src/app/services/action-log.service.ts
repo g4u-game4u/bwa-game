@@ -1,5 +1,5 @@
 ﻿import { Injectable } from '@angular/core';
-import { HttpErrorResponse } from '@angular/common/http';
+import { HttpErrorResponse, HttpResponse } from '@angular/common/http';
 import { Observable, of, forkJoin, throwError, EMPTY } from 'rxjs';
 import { map, catchError, shareReplay, switchMap, expand, reduce, tap } from 'rxjs/operators';
 import { BackendApiService } from './backend-api.service';
@@ -13,7 +13,8 @@ import {
   ProcessMetrics
 } from '@model/gamification-dashboard.model';
 import { PONTOS_POR_ATIVIDADE_FINALIZADA_ACTION_LOG } from '@app/constants/pontos-por-atividade-action-log';
-import { isGame4uDataEnabled, type Game4uReportsUserActionsQuery } from '@model/game4u-api.model';
+import { isGame4uDataEnabled, normalizeOrganizationHierarchyDeliveriesResponse, type Game4uReportsUserActionsQuery } from '@model/game4u-api.model';
+import { normalizeOrganizationHierarchyKpiDetailResponse } from '@services/org-hierarchy-client-lists.mapper';
 import type {
   Game4uUserActionModel,
   Game4uUserActionStatsResponse,
@@ -38,6 +39,9 @@ import type {
   OrgHierarchyKpiDetailKey,
   OrganizationHierarchyKpiDetailResponse,
   OrganizationHierarchyMultaRiskResponse,
+  OrganizationHierarchyDeliveriesResponse,
+  OrgHierarchyDeliveriesDrilldownKey,
+  CriticalClientIssueFilter,
   Game4uReportsOrganizationHierarchyInsightsQuery
 } from '@model/game4u-api.model';
 import { SessaoProvider } from '@providers/sessao/sessao.provider';
@@ -570,6 +574,10 @@ export class ActionLogService {
     string,
     CacheEntry<OrganizationHierarchyMultaRiskResponse | null>
   >();
+  private game4uOrganizationHierarchyDeliveriesCache = new Map<
+    string,
+    CacheEntry<OrganizationHierarchyDeliveriesResponse | null>
+  >();
   private game4uOrganizationHierarchyInsightsCache = new Map<
     string,
     CacheEntry<OrganizationHierarchyInsightsResponse | null>
@@ -876,6 +884,7 @@ export class ActionLogService {
         ...(nodeId ? { node_id: nodeId } : {})
       })
       .pipe(
+        map(body => normalizeOrganizationHierarchyKpiDetailResponse(body)),
         catchError(err => {
           if (err instanceof HttpErrorResponse && err.status === 404) {
             return of(null);
@@ -888,6 +897,36 @@ export class ActionLogService {
 
     this.setCachedData(this.game4uOrganizationHierarchyKpiDetailCache, cacheKey, request$);
     return request$;
+  }
+
+  /**
+   * `GET /game/reports/organization/hierarchy-report/clients-served/export/xlsx`
+   */
+  exportOrganizationHierarchyClientsServedXlsx(options: {
+    month?: Date;
+    nodeType?: OrgHierarchyNodeType;
+    nodeId?: string;
+  }): Observable<HttpResponse<Blob>> {
+    if (!(isGame4uDataEnabled() && this.game4u.isConfigured())) {
+      return throwError(() => new Error('[Game4U] clients-served export: backend não configurado.'));
+    }
+    const refMonth = this.resolveDashboardCachedMonth(options?.month);
+    const monthParam = this.toDashboardCachedMonthParam(refMonth);
+    const nodeType = (options.nodeType ?? '').trim();
+    const nodeId = (options.nodeId ?? '').trim();
+
+    return this.game4u
+      .getGameReportsOrganizationHierarchyClientsServedExportXlsx({
+        month: monthParam,
+        ...(nodeType ? { node_type: nodeType } : {}),
+        ...(nodeId ? { node_id: nodeId } : {})
+      })
+      .pipe(
+        catchError(err => {
+          console.error('Error exporting organization/hierarchy-report/clients-served:', err);
+          return throwError(() => err);
+        })
+      );
   }
 
   /**
@@ -923,6 +962,7 @@ export class ActionLogService {
         ...(nodeId ? { node_id: nodeId } : {})
       })
       .pipe(
+        map(body => normalizeOrganizationHierarchyDeliveriesResponse(body)),
         catchError(err => {
           if (err instanceof HttpErrorResponse && err.status === 404) {
             return of(null);
@@ -934,6 +974,63 @@ export class ActionLogService {
       );
 
     this.setCachedData(this.game4uOrganizationHierarchyMultaRiskCache, cacheKey, request$);
+    return request$;
+  }
+
+  /**
+   * `GET /game/reports/organization/hierarchy-report/deliveries`
+   */
+  fetchOrganizationHierarchyDeliveries(options: {
+    month?: Date;
+    drilldown: OrgHierarchyDeliveriesDrilldownKey;
+    nodeType?: OrgHierarchyNodeType;
+    nodeId?: string;
+    companyServeKey?: string;
+    issue?: CriticalClientIssueFilter;
+  }): Observable<OrganizationHierarchyDeliveriesResponse | null> {
+    if (!(isGame4uDataEnabled() && this.game4u.isConfigured())) {
+      return of(null);
+    }
+    const refMonth = this.resolveDashboardCachedMonth(options?.month);
+    const monthParam = this.toDashboardCachedMonthParam(refMonth);
+    const drilldown = options.drilldown;
+    const nodeType = (options.nodeType ?? '').trim();
+    const nodeId = (options.nodeId ?? '').trim();
+    const companyServeKey = (options.companyServeKey ?? '').trim();
+    const issue = (options.issue ?? '').trim();
+
+    const cacheKey = `g4u_org_hierarchy_deliveries_${monthParam}_${drilldown}_${nodeType}_${nodeId}_${companyServeKey}_${issue}`;
+    const cached = this.getCachedData(
+      this.game4uOrganizationHierarchyDeliveriesCache,
+      cacheKey,
+      this.GAME4U_CACHE_DURATION
+    );
+    if (cached) {
+      return cached;
+    }
+
+    const request$ = this.game4u
+      .getGameReportsOrganizationHierarchyDeliveries({
+        month: monthParam,
+        drilldown,
+        ...(nodeType ? { node_type: nodeType } : {}),
+        ...(nodeId ? { node_id: nodeId } : {}),
+        ...(companyServeKey ? { company_serve_key: companyServeKey } : {}),
+        ...(issue ? { issue: issue as CriticalClientIssueFilter } : {})
+      })
+      .pipe(
+        map(body => normalizeOrganizationHierarchyDeliveriesResponse(body)),
+        catchError(err => {
+          if (err instanceof HttpErrorResponse && err.status === 404) {
+            return of(null);
+          }
+          console.error('Error fetching organization/hierarchy-report/deliveries:', err);
+          return of(null);
+        }),
+        shareReplay({ bufferSize: 1, refCount: true, windowTime: this.GAME4U_CACHE_DURATION })
+      );
+
+    this.setCachedData(this.game4uOrganizationHierarchyDeliveriesCache, cacheKey, request$);
     return request$;
   }
 
@@ -4119,6 +4216,7 @@ export class ActionLogService {
     this.game4uOrganizationHierarchyReportCache.clear();
     this.game4uOrganizationHierarchyKpiDetailCache.clear();
     this.game4uOrganizationHierarchyMultaRiskCache.clear();
+    this.game4uOrganizationHierarchyDeliveriesCache.clear();
     this.game4uOrganizationHierarchyInsightsCache.clear();
     this.game4uTeamUserActionsInsightsCache.clear();
     this.teamMetricsCache.clear();

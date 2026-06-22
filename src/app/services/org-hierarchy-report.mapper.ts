@@ -1,16 +1,263 @@
 import {
+  OrgHierarchyAccessByDow,
   OrgHierarchyFinishedByDow,
   OrgHierarchyHighlightItem,
+  OrgHierarchyKpiDetailKey,
   OrgHierarchyNode,
   OrgHierarchyNodeType,
+  OrgHierarchyOperationalDeliveriesDrilldownKey,
+  OrganizationHierarchyDeliveryRow,
   OrgMetricsWindow
 } from '@model/game4u-api.model';
 import { normalizeOrgHierarchyNodeType } from './org-hierarchy-segmentation.mapper';
 
-export type OrgHierarchyRankingSortBy = 'balance_score' | 'points_delivered';
+export type OrgHierarchyRankingSortBy = 'on_time_pct' | 'points_per_collaborator';
+
+export type OrgRankingColumnKey = keyof OrgMetricsWindow | 'points_per_collaborator';
+
+export interface OrgRankingColumn {
+  key: OrgRankingColumnKey;
+  label: string;
+  format: OrgHighlightMtdFormat;
+  title?: string;
+}
+
+/** KPIs operacionais com lista hierárquica de entregas (`/deliveries?drilldown=…`). */
+export const ORG_HIERARCHY_DELIVERIES_DRILLDOWN_KPIS = new Set<OrgHierarchyKpiDetailKey>([
+  'multa_risk',
+  'multa_incurred',
+  'near_due',
+  'overdue_pending',
+  'overdue_pending_justified',
+  'overdue_pending_unjustified'
+]);
+
+export function isOrgHierarchyDeliveriesDrilldownKpi(
+  kpi: OrgHierarchyKpiDetailKey
+): kpi is OrgHierarchyOperationalDeliveriesDrilldownKey {
+  return ORG_HIERARCHY_DELIVERIES_DRILLDOWN_KPIS.has(kpi);
+}
+
+export function getOrgHierarchyDeliveryTitle(
+  delivery: Pick<
+    OrganizationHierarchyDeliveryRow,
+    'delivery_title' | 'action_name' | 'action_title' | 'delivery_id'
+  >
+): string {
+  const title =
+    delivery.delivery_title?.trim() ||
+    delivery.action_title?.trim() ||
+    delivery.action_name?.trim();
+  return title || delivery.delivery_id?.trim() || '—';
+}
+
+export function getOrgHierarchyDeliveryCompanyLabel(
+  delivery: Pick<
+    OrganizationHierarchyDeliveryRow,
+    'delivery_title' | 'client_name' | 'client_key'
+  >
+): string {
+  return (
+    delivery.delivery_title?.trim() ||
+    delivery.client_name?.trim() ||
+    delivery.client_key?.trim() ||
+    '—'
+  );
+}
+
+export function getOrgHierarchyDeliveryActionTitle(
+  delivery: Pick<OrganizationHierarchyDeliveryRow, 'action_title' | 'action_name'>
+): string {
+  return delivery.action_title?.trim() || delivery.action_name?.trim() || '—';
+}
+
+export function getOrgHierarchyDeliveryClientLabel(
+  delivery: Pick<OrganizationHierarchyDeliveryRow, 'client_name' | 'client_key'>
+): string {
+  return delivery.client_name?.trim() || delivery.client_key?.trim() || '—';
+}
 
 /** Aba de visualização dos destaques / atenção no relatório organizacional. */
 export type OrgHierarchyHighlightViewTab = 'player' | 'supervisao' | 'gerencia';
+
+/** Aba principal do painel de relatório organizacional. */
+export type OrgHierarchyReportPanelTab = 'operations' | 'access' | 'simulation';
+
+export type OrgPipelineSegmentTone = 'info' | 'warning' | 'destructive' | 'muted';
+
+export interface OrgPipelineSegment {
+  key: string;
+  label: string;
+  value: number;
+  tone: OrgPipelineSegmentTone;
+  kpi: OrgHierarchyKpiDetailKey;
+  emphasis?: boolean;
+  tooltip?: string;
+}
+
+/** Colunas essenciais do ranking de diretorias (demais ficam atrás de "Ver detalhes"). */
+export const ORG_RANKING_ESSENTIAL_COLUMNS: readonly OrgRankingColumn[] = [
+  { key: 'finished', label: 'Entregas', format: 'number' },
+  { key: 'on_time_pct', label: '% Prazo', format: 'pct', title: 'Percentual de entregas no prazo' },
+  { key: 'points_delivered', label: 'Pontos', format: 'number', title: 'Pontos entregues' },
+  {
+    key: 'points_per_collaborator',
+    label: 'Pts/colab.',
+    format: 'number',
+    title: 'Pontos entregues MTD ÷ colaboradores do nó'
+  },
+  { key: 'goal_points', label: 'Meta', format: 'number', title: 'Meta de pontos do mês cheio' }
+];
+
+/** Colunas detalhadas do ranking (toggle "Ver detalhes"). */
+export const ORG_RANKING_DETAIL_COLUMNS: readonly OrgHighlightMtdColumn[] = [
+  { key: 'clients_served', label: 'Clientes', format: 'number', title: 'Clientes atendidos' },
+  { key: 'clients_onboarding', label: 'Onboarding', format: 'number' },
+  { key: 'clients_acessorias_g4', label: 'G4', format: 'number', title: 'Clientes Acessórias G4' },
+  { key: 'clients_acessorias_risco_de_churn', label: 'Churn', format: 'number', title: 'Clientes Acessórias com risco de churn' },
+  { key: 'pending_open', label: 'Pendentes', format: 'number' },
+  { key: 'multa_risk', label: 'Risco multa', format: 'number' },
+  { key: 'multa_incurred', label: 'Multa incorr.', format: 'number', title: 'Multas incorridas (concluídas após dt_atraso)' },
+  { key: 'overdue_pending_unjustified', label: 'Atraso s/ just.', format: 'number', title: 'Atraso sem justificativa' }
+];
+
+/** Colunas compactas da árvore hierárquica (toggle "Mostrar todas as métricas"). */
+export const ORG_TREE_COMPACT_COLUMNS: readonly OrgHighlightMtdColumn[] = [
+  { key: 'clients_served', label: 'Clientes', format: 'number', title: 'Clientes atendidos' },
+  { key: 'clients_onboarding', label: 'Onboarding', format: 'number' },
+  { key: 'on_time_pct', label: '% Prazo', format: 'pct', title: 'Percentual de entregas no prazo' },
+  { key: 'pending_open', label: 'Pendentes', format: 'number' }
+];
+
+export function mapOrgPipelineSegments(mtd: OrgMetricsWindow | undefined | null): OrgPipelineSegment[] {
+  if (!mtd) {
+    return [];
+  }
+  return [
+    {
+      key: 'pending_open',
+      label: 'Pendentes em aberto',
+      value: mtd.pending_open ?? 0,
+      tone: 'info',
+      kpi: 'pending_open'
+    },
+    {
+      key: 'near_due',
+      label: 'Próx. vencimento',
+      value: mtd.near_due ?? 0,
+      tone: 'warning',
+      kpi: 'near_due'
+    },
+    {
+      key: 'overdue_pending_justified',
+      label: 'Atraso justificado',
+      value: mtd.overdue_pending_justified ?? 0,
+      tone: 'muted',
+      kpi: 'overdue_pending_justified'
+    },
+    {
+      key: 'overdue_pending_unjustified',
+      label: 'Atraso s/ justificativa',
+      value: mtd.overdue_pending_unjustified ?? 0,
+      tone: 'destructive',
+      kpi: 'overdue_pending_unjustified'
+    },
+    {
+      key: 'multa_risk',
+      label: 'Risco de multa',
+      value: mtd.multa_risk ?? 0,
+      tone: 'destructive',
+      kpi: 'multa_risk',
+      emphasis: (mtd.multa_risk ?? 0) > 0,
+      tooltip: 'Pendente + EntMulta na janela técnico→legal'
+    },
+    {
+      key: 'multa_incurred',
+      label: 'Multas incorridas',
+      value: mtd.multa_incurred ?? 0,
+      tone: 'destructive',
+      kpi: 'multa_incurred',
+      emphasis: (mtd.multa_incurred ?? 0) > 0,
+      tooltip: 'Concluída MTD com EntMulta após dt_atraso (exceto justificada)'
+    }
+  ];
+}
+
+export interface OrgOperationalRiskAlert {
+  key: string;
+  label: string;
+  value: number;
+  kpi: OrgHierarchyKpiDetailKey;
+  severity: 'critical' | 'warning';
+  description: string;
+}
+
+export function buildOrgOperationalRiskAlerts(mtd: OrgMetricsWindow | undefined | null): OrgOperationalRiskAlert[] {
+  if (!mtd) {
+    return [];
+  }
+  const alerts: OrgOperationalRiskAlert[] = [];
+  const multaIncurred = mtd.multa_incurred ?? 0;
+  const multaRisk = mtd.multa_risk ?? 0;
+
+  if (multaIncurred > 0) {
+    alerts.push({
+      key: 'multa_incurred',
+      label: 'Multas incorridas',
+      value: multaIncurred,
+      kpi: 'multa_incurred',
+      severity: 'critical',
+      description: 'Entregas concluídas após dt_atraso com regra de multa'
+    });
+  }
+  if (multaRisk > 0) {
+    alerts.push({
+      key: 'multa_risk',
+      label: 'Risco de multa',
+      value: multaRisk,
+      kpi: 'multa_risk',
+      severity: 'critical',
+      description: 'Pendentes na janela entre prazo técnico e legal'
+    });
+  }
+  return alerts;
+}
+
+const ORG_PIPELINE_LEGEND_EXCLUDED_KEYS = new Set(['multa_risk', 'multa_incurred']);
+
+export function filterOrgPipelineLegendSegments(
+  segments: readonly OrgPipelineSegment[]
+): OrgPipelineSegment[] {
+  return segments.filter(seg => !ORG_PIPELINE_LEGEND_EXCLUDED_KEYS.has(seg.key));
+}
+
+export function orgPipelineSegmentsTotal(segments: readonly OrgPipelineSegment[]): number {
+  return segments.reduce((sum, seg) => sum + seg.value, 0);
+}
+
+export function orgPipelineSegmentWidthPct(
+  value: number,
+  segments: readonly OrgPipelineSegment[]
+): number {
+  const total = orgPipelineSegmentsTotal(segments);
+  if (total <= 0) {
+    return 0;
+  }
+  return (value / total) * 100;
+}
+
+export function computeFinishedVsOpenPct(mtd: OrgMetricsWindow | undefined | null): number | null {
+  if (!mtd) {
+    return null;
+  }
+  const finished = mtd.finished ?? 0;
+  const pending = mtd.pending_open ?? 0;
+  const total = finished + pending;
+  if (total <= 0) {
+    return null;
+  }
+  return (finished / total) * 100;
+}
 
 const HIGHLIGHT_VIEW_TAB_NODE_TYPES: readonly OrgHierarchyHighlightViewTab[] = [
   'player',
@@ -24,6 +271,14 @@ export interface OrgHierarchyWeekdayStat {
   shortLabel: string;
   finishedCount: number;
   pointsTotal: number;
+}
+
+export interface OrgHierarchyAccessWeekdayStat {
+  dow: number;
+  label: string;
+  shortLabel: string;
+  accessDays: number;
+  accessSessions: number;
 }
 
 const NODE_TYPE_LABELS: Record<OrgHierarchyNodeType, string> = {
@@ -55,27 +310,69 @@ export function getOrgHierarchyScopeTitle(root: OrgHierarchyNode): string {
   return `${typeLabel}: ${root.label}`;
 }
 
+export function computeOrgPointsPerCollaborator(node: OrgHierarchyNode): number | null {
+  const points = node.mtd?.points_delivered;
+  const count = node.players_count;
+  if (
+    points == null ||
+    count == null ||
+    !Number.isFinite(points) ||
+    !Number.isFinite(count) ||
+    count <= 0
+  ) {
+    return null;
+  }
+  return points / count;
+}
+
+export function formatOrgPointsPerCollaborator(node: OrgHierarchyNode): string {
+  const value = computeOrgPointsPerCollaborator(node);
+  if (value == null || !Number.isFinite(value)) {
+    return '—';
+  }
+  return value.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+}
+
+function rankingSortValue(
+  node: OrgHierarchyNode,
+  sortBy: OrgHierarchyRankingSortBy
+): number {
+  if (sortBy === 'on_time_pct') {
+    return node.mtd?.on_time_pct ?? -Infinity;
+  }
+  return computeOrgPointsPerCollaborator(node) ?? -Infinity;
+}
+
 export function sortOrgHierarchyChildren(
   nodes: OrgHierarchyNode[] | undefined,
-  sortBy: OrgHierarchyRankingSortBy = 'balance_score'
+  sortBy: OrgHierarchyRankingSortBy = 'on_time_pct'
 ): OrgHierarchyNode[] {
   if (!nodes?.length) {
     return [];
   }
   const copy = [...nodes];
   copy.sort((a, b) => {
-    if (sortBy === 'balance_score') {
-      const scoreA = a.balance_score ?? -Infinity;
-      const scoreB = b.balance_score ?? -Infinity;
-      if (scoreB !== scoreA) {
-        return scoreB - scoreA;
-      }
+    const primaryB = rankingSortValue(b, sortBy);
+    const primaryA = rankingSortValue(a, sortBy);
+    if (primaryB !== primaryA) {
+      return primaryB - primaryA;
     }
-    const ptsA = a.mtd?.points_delivered ?? 0;
     const ptsB = b.mtd?.points_delivered ?? 0;
-    return ptsB - ptsA;
+    const ptsA = a.mtd?.points_delivered ?? 0;
+    if (ptsB !== ptsA) {
+      return ptsB - ptsA;
+    }
+    return (a.label ?? '').localeCompare(b.label ?? '', 'pt-BR');
   });
   return copy;
+}
+
+export function formatOrgRankingCell(node: OrgHierarchyNode, column: OrgRankingColumn): string {
+  if (column.key === 'points_per_collaborator') {
+    return formatOrgPointsPerCollaborator(node);
+  }
+  const value = node.mtd?.[column.key] as number | undefined | null;
+  return formatHighlightMtdMetricValue(value, column.format);
 }
 
 export function mapFinishedByDowToWeekdayStats(
@@ -96,6 +393,28 @@ export function mapFinishedByDowToWeekdayStats(
       shortLabel: labels.shortLabel,
       finishedCount: row?.finished_count ?? 0,
       pointsTotal: row?.points_total ?? 0
+    };
+  });
+}
+
+export function mapAccessByDowToWeekdayStats(
+  rows: OrgHierarchyAccessByDow[] | undefined
+): OrgHierarchyAccessWeekdayStat[] {
+  const byDow = new Map<number, OrgHierarchyAccessByDow>();
+  for (const row of rows ?? []) {
+    if (row.dow >= 1 && row.dow <= 7) {
+      byDow.set(row.dow, row);
+    }
+  }
+  return ISO_DOW_LABELS.map((labels, index) => {
+    const dow = index + 1;
+    const row = byDow.get(dow);
+    return {
+      dow,
+      label: labels.label,
+      shortLabel: labels.shortLabel,
+      accessDays: row?.access_days ?? 0,
+      accessSessions: row?.access_sessions ?? 0
     };
   });
 }
@@ -146,6 +465,57 @@ export function weekdayBarHeight(count: number, max: number): string {
 
 export function weekdayMaxFinishedCount(stats: OrgHierarchyWeekdayStat[]): number {
   return Math.max(1, ...stats.map(s => s.finishedCount));
+}
+
+export function weekdayMaxAccessDays(stats: OrgHierarchyAccessWeekdayStat[]): number {
+  return Math.max(1, ...stats.map(s => s.accessDays));
+}
+
+export function weekdayMaxAccessSessions(stats: OrgHierarchyAccessWeekdayStat[]): number {
+  return Math.max(1, ...stats.map(s => s.accessSessions));
+}
+
+export interface OrgHierarchyPlayerAccessRow {
+  nodeId: string;
+  label: string;
+  accessDays: number;
+  accessSessions: number;
+  currentStreak?: number;
+  lastAccessDate?: string | null;
+  accessedToday?: boolean;
+}
+
+/** Colaboradores com métricas MTD de acesso (dias e sessões totais). */
+export function mapPlayerAccessRows(
+  root: OrgHierarchyNode | null | undefined
+): OrgHierarchyPlayerAccessRow[] {
+  return collectOrgHierarchyNodesByType(root, 'player')
+    .filter(player => player.access?.mtd != null)
+    .map(player => ({
+      nodeId: player.node_id,
+      label: (player.label ?? player.node_id).trim() || player.node_id,
+      accessDays: player.access?.mtd?.access_days ?? 0,
+      accessSessions: player.access?.mtd?.access_sessions ?? 0,
+      currentStreak: player.access?.current_streak,
+      lastAccessDate: player.access?.last_access_date,
+      accessedToday: player.access?.accessed_today
+    }))
+    .sort(
+      (a, b) =>
+        b.accessSessions - a.accessSessions ||
+        b.accessDays - a.accessDays ||
+        a.label.localeCompare(b.label, 'pt-BR')
+    );
+}
+
+export function avgAccessSessionsPerActiveUser(
+  accessSessions: number | undefined | null,
+  activeUsers: number | undefined | null
+): number | null {
+  if (accessSessions == null || activeUsers == null || activeUsers <= 0) {
+    return null;
+  }
+  return Math.round((accessSessions / activeUsers) * 10) / 10;
 }
 
 export interface OrgClientClassificationTier {
@@ -393,19 +763,84 @@ export interface OrgHighlightMtdColumn {
   title?: string;
 }
 
+export interface OrgGlobalMtdMetric {
+  key: keyof OrgMetricsWindow;
+  label: string;
+  format: OrgHighlightMtdFormat;
+  title?: string;
+  kpi?: OrgHierarchyKpiDetailKey;
+}
+
+/** Indicadores MTD globais (raiz da organização) — espelha o objeto `root.mtd` da API. */
+export const ORG_GLOBAL_MTD_METRICS: readonly OrgGlobalMtdMetric[] = [
+  { key: 'clients_served', label: 'Clientes atendidos', format: 'number', kpi: 'clients_served' },
+  { key: 'finished', label: 'Entregas concluídas', format: 'number', kpi: 'finished' },
+  { key: 'goal_points', label: 'Meta de pontos', format: 'number', title: 'Meta do mês cheio' },
+  { key: 'on_time_pct', label: '% no prazo', format: 'pct', kpi: 'on_time_pct' },
+  { key: 'pending_open', label: 'Pendentes em aberto', format: 'number', kpi: 'pending_open' },
+  { key: 'near_due', label: 'Próximas do vencimento', format: 'number', kpi: 'near_due' },
+  {
+    key: 'overdue_pending',
+    label: 'Pendentes em atraso (total)',
+    format: 'number',
+    kpi: 'overdue_pending'
+  },
+  {
+    key: 'overdue_pending_justified',
+    label: 'Atraso justificado',
+    format: 'number',
+    kpi: 'overdue_pending_justified',
+    title: 'Pendentes vencidas com atraso justificado'
+  },
+  {
+    key: 'overdue_pending_unjustified',
+    label: 'Atraso sem justificativa',
+    format: 'number',
+    kpi: 'overdue_pending_unjustified',
+    title: 'Pendentes vencidas sem justificativa'
+  },
+  { key: 'multa_risk', label: 'Risco de multa', format: 'number', kpi: 'multa_risk' },
+  {
+    key: 'multa_incurred',
+    label: 'Multas incorridas',
+    format: 'number',
+    kpi: 'multa_incurred',
+    title: 'Entregas concluídas no MTD com regra de multa'
+  },
+  {
+    key: 'multa_and_near_due',
+    label: 'Multa + próx. vencimento',
+    format: 'number',
+    title: 'Interseção de risco de multa e proximidade de vencimento'
+  }
+];
+
+export function formatOrgGlobalMtdValue(
+  mtd: OrgMetricsWindow | undefined | null,
+  metric: OrgGlobalMtdMetric
+): string {
+  return formatHighlightMtdMetricValue(mtd?.[metric.key] as number | undefined | null, metric.format);
+}
+
 /** Colunas MTD exibidas nas tabelas de destaques e atenção. */
 export const ORG_HIGHLIGHT_MTD_COLUMNS: readonly OrgHighlightMtdColumn[] = [
   { key: 'on_time_pct', label: '% prazo', format: 'pct', title: 'Percentual de entregas no prazo' },
   { key: 'finished', label: 'Entregas', format: 'number' },
   { key: 'clients_served', label: 'Clientes', format: 'number', title: 'Clientes atendidos' },
   { key: 'clients_onboarding', label: 'Onboarding', format: 'number' },
+  { key: 'clients_acessorias_g4', label: 'Acess. G4', format: 'number', title: 'Clientes Acessórias G4' },
+  { key: 'clients_acessorias_onboarding', label: 'Acess. onboard.', format: 'number', title: 'Clientes Acessórias em onboarding' },
+  { key: 'clients_acessorias_risco_de_churn', label: 'Acess. churn', format: 'number', title: 'Clientes Acessórias com risco de churn' },
   { key: 'points_delivered', label: 'Pontos', format: 'number', title: 'Pontos entregues' },
   { key: 'goal_points', label: 'Meta', format: 'number', title: 'Meta de pontos' },
   { key: 'pending_open', label: 'Pendentes', format: 'number' },
   { key: 'multa_risk', label: 'Multa risco', format: 'number' },
+  { key: 'multa_incurred', label: 'Multa incorr.', format: 'number', title: 'Multas incorridas (concluídas)' },
   { key: 'near_due', label: 'Próx. venc.', format: 'number', title: 'Próximo do vencimento' },
   { key: 'multa_and_near_due', label: 'Multa+prox.', format: 'number', title: 'Multa e próximo do vencimento' },
-  { key: 'overdue_pending', label: 'Atrasados', format: 'number' }
+  { key: 'overdue_pending', label: 'Atrasados', format: 'number' },
+  { key: 'overdue_pending_justified', label: 'Atraso just.', format: 'number', title: 'Atraso justificado' },
+  { key: 'overdue_pending_unjustified', label: 'Atraso s/ just.', format: 'number', title: 'Atraso sem justificativa' }
 ];
 
 export function getHighlightMtdMetricValue(
@@ -469,6 +904,26 @@ function collectNodesByType(
   return collectOrgHierarchyNodesByType(root, tab);
 }
 
+/** Localiza um nó na árvore pelo `node_id`. */
+export function findOrgHierarchyNodeById(
+  root: OrgHierarchyNode | null | undefined,
+  nodeId: string | null | undefined
+): OrgHierarchyNode | null {
+  if (!root || !nodeId) {
+    return null;
+  }
+  if (root.node_id === nodeId) {
+    return root;
+  }
+  for (const child of root.children ?? []) {
+    const found = findOrgHierarchyNodeById(child, nodeId);
+    if (found) {
+      return found;
+    }
+  }
+  return null;
+}
+
 /** Coleta todos os nós de um tipo na árvore hierárquica. */
 export function collectOrgHierarchyNodesByType(
   root: OrgHierarchyNode | null | undefined,
@@ -496,6 +951,61 @@ export function formatOrgHierarchyNodeMtdCell(
 ): string {
   const value = node.mtd?.[column.key] as number | undefined | null;
   return formatHighlightMtdMetricValue(value, column.format);
+}
+
+/** Percentual de pontos entregues em relação à meta MTD (0–∞). */
+export function computeOrgPointsGoalPct(mtd: OrgMetricsWindow | undefined | null): number | null {
+  const points = mtd?.points_delivered;
+  const goal = mtd?.goal_points;
+  if (
+    points == null ||
+    goal == null ||
+    !Number.isFinite(points) ||
+    !Number.isFinite(goal) ||
+    goal <= 0
+  ) {
+    return null;
+  }
+  return (points / goal) * 100;
+}
+
+/** Percentual de entregas concluídas em relação à meta do mês cheio (0–∞). */
+export function computeOrgDeliveriesGoalPct(mtd: OrgMetricsWindow | undefined | null): number | null {
+  const finished = mtd?.finished;
+  const goal = mtd?.goal_deliveries;
+  if (
+    finished == null ||
+    goal == null ||
+    !Number.isFinite(finished) ||
+    !Number.isFinite(goal) ||
+    goal <= 0
+  ) {
+    return null;
+  }
+  return (finished / goal) * 100;
+}
+
+export function formatOrgPointsGoalPct(mtd: OrgMetricsWindow | undefined | null): string | null {
+  const pct = computeOrgPointsGoalPct(mtd);
+  if (pct == null) {
+    return null;
+  }
+  return `${Math.round(pct)}%`;
+}
+
+export function getOrgPointsGoalTone(
+  pct: number | null | undefined
+): 'positive' | 'negative' | 'neutral' {
+  if (pct == null || !Number.isFinite(pct)) {
+    return 'neutral';
+  }
+  if (pct >= 100) {
+    return 'positive';
+  }
+  if (pct < 70) {
+    return 'negative';
+  }
+  return 'neutral';
 }
 
 /** Rótulo curto da área (segmentação) para exibição no ranking de diretorias. */

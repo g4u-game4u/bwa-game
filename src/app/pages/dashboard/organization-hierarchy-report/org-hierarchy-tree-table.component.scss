@@ -411,3 +411,55 @@ $lvl-player: #64748b;
     border-radius: 6px;
   }
 }
+
+.org-tree-table__row--team-players {
+  background: rgba($org-surface, 0.45);
+
+  > td {
+    padding-top: 0;
+    padding-bottom: 10px;
+    border-bottom: 1px solid rgba($org-border, 0.65);
+  }
+}
+
+.org-tree-team-players {
+  margin: 4px 0 6px;
+  padding: 10px 12px;
+  border: 1px dashed rgba($org-accent, 0.35);
+  border-radius: $border-radius-sm;
+  background: rgba($org-bg, 0.55);
+
+  &__title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 8px;
+    font-size: $font-size-caption;
+    font-weight: 600;
+    color: $org-muted;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  &__table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: $font-size-caption;
+
+    th,
+    td {
+      padding: 6px 8px;
+      border-bottom: 1px solid rgba($org-border, 0.55);
+      text-align: left;
+    }
+
+    th {
+      color: $org-muted;
+      font-weight: 600;
+    }
+
+    tbody tr:last-child td {
+      border-bottom: none;
+    }
+  }
+}
