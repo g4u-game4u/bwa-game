@@ -60,6 +60,41 @@
           <span class="org-tree-node__mtd-label">{{ col.label }}</span>
         </div>
       </div>
+
+      <div
+        *ngIf="showPlayerAccess"
+        class="org-tree-node__access"
+        aria-label="Engajamento de acesso do colaborador">
+        <div class="org-tree-node__access-item">
+          <span class="org-tree-node__access-value">{{ playerAccessDaysLabel }}</span>
+          <span class="org-tree-node__access-label">Dias MTD</span>
+        </div>
+        <div class="org-tree-node__access-item">
+          <span class="org-tree-node__access-value">{{ playerAccessSessionsLabel }}</span>
+          <span class="org-tree-node__access-label">Sessões MTD</span>
+        </div>
+        <div class="org-tree-node__access-item">
+          <span class="org-tree-node__access-value">{{ playerAccessStreakLabel }}</span>
+          <span class="org-tree-node__access-label">Streak atual</span>
+        </div>
+        <div class="org-tree-node__access-item">
+          <span class="org-tree-node__access-value">{{ playerLongestStreakLabel }}</span>
+          <span class="org-tree-node__access-label">Maior streak</span>
+        </div>
+        <div class="org-tree-node__access-item" *ngIf="node.access?.last_access_date">
+          <span class="org-tree-node__access-value">
+            {{ node.access!.last_access_date | date:'dd/MM/yyyy' }}
+          </span>
+          <span class="org-tree-node__access-label">Último acesso</span>
+        </div>
+        <div class="org-tree-node__access-item" *ngIf="node.access?.accessed_today != null">
+          <span
+            class="org-tree-node__access-badge"
+            [class.org-tree-node__access-badge--active]="node.access!.accessed_today">
+            {{ node.access!.accessed_today ? 'Acessou hoje' : 'Sem acesso hoje' }}
+          </span>
+        </div>
+      </div>
     </div>
   </div>
 

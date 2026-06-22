@@ -14,7 +14,21 @@ import {
   highlightViewTabHasNodes,
   getDirectorateRankingLabel,
   getOrgHierarchyAreaLabelClass,
-  ORG_HIGHLIGHT_MTD_COLUMNS
+  ORG_HIGHLIGHT_MTD_COLUMNS,
+  ORG_GLOBAL_MTD_METRICS,
+  formatOrgGlobalMtdValue,
+  isOrgHierarchyDeliveriesDrilldownKpi,
+  computeOrgPointsGoalPct,
+  formatOrgPointsGoalPct,
+  getOrgPointsGoalTone,
+  computeOrgPointsPerCollaborator,
+  formatOrgPointsPerCollaborator,
+  sortOrgHierarchyChildren,
+  mapAccessByDowToWeekdayStats,
+  mapPlayerAccessRows,
+  avgAccessSessionsPerActiveUser,
+  weekdayMaxAccessDays,
+  weekdayMaxAccessSessions
 } from './org-hierarchy-report.mapper';
 
 describe('org-hierarchy-report.mapper highlights', () => {
@@ -408,5 +422,168 @@ describe('org-hierarchy-report.mapper highlights', () => {
     expect(getOrgHierarchyAreaLabelClass('Fiscal')).toBe('org-area-label--fiscal');
     expect(getOrgHierarchyAreaLabelClass('Contábil')).toBe('org-area-label--contabil');
     expect(getOrgHierarchyAreaLabelClass('Legalização')).toBe('org-area-label--legalizacao');
+  });
+});
+
+describe('org-hierarchy-report.mapper access', () => {
+  it('maps access_by_dow to all weekdays with zero defaults', () => {
+    const stats = mapAccessByDowToWeekdayStats([
+      { dow: 1, access_days: 10, access_sessions: 15 },
+      { dow: 5, access_days: 20, access_sessions: 25 }
+    ]);
+    expect(stats).toHaveLength(7);
+    expect(stats[0]).toMatchObject({ dow: 1, shortLabel: 'Seg', accessDays: 10, accessSessions: 15 });
+    expect(stats[4]).toMatchObject({ dow: 5, shortLabel: 'Sex', accessDays: 20, accessSessions: 25 });
+    expect(stats[6]).toMatchObject({ dow: 7, accessDays: 0, accessSessions: 0 });
+  });
+
+  it('computes max access days for heatmap scaling', () => {
+    const stats = mapAccessByDowToWeekdayStats([{ dow: 3, access_days: 8, access_sessions: 12 }]);
+    expect(weekdayMaxAccessDays(stats)).toBe(8);
+    expect(weekdayMaxAccessSessions(stats)).toBe(12);
+  });
+
+  it('maps player access rows sorted by sessions desc', () => {
+    const root = {
+      node_type: 'organization',
+      node_id: 'bwa',
+      label: 'BWA',
+      players_count: 2,
+      season_points_total: 0,
+      mtd: {},
+      prev_full: {},
+      prev_mtd: {},
+      compare: {},
+      children: [
+        {
+          node_type: 'player',
+          node_id: 'a@bwa.com',
+          label: 'Alice',
+          players_count: 1,
+          season_points_total: 0,
+          mtd: {},
+          prev_full: {},
+          prev_mtd: {},
+          compare: {},
+          access: {
+            mtd: { access_days: 3, access_sessions: 5 },
+            prev_full: {},
+            prev_mtd: {},
+            compare: {},
+            current_streak: 2,
+            last_access_date: '2026-06-15'
+          }
+        },
+        {
+          node_type: 'player',
+          node_id: 'b@bwa.com',
+          label: 'Bob',
+          players_count: 1,
+          season_points_total: 0,
+          mtd: {},
+          prev_full: {},
+          prev_mtd: {},
+          compare: {},
+          access: {
+            mtd: { access_days: 5, access_sessions: 12 },
+            prev_full: {},
+            prev_mtd: {},
+            compare: {}
+          }
+        }
+      ]
+    } as any;
+
+    const rows = mapPlayerAccessRows(root);
+    expect(rows).toHaveLength(2);
+    expect(rows[0].label).toBe('Bob');
+    expect(rows[0].accessSessions).toBe(12);
+    expect(rows[1].accessDays).toBe(3);
+  });
+
+  it('computes avg sessions per active user', () => {
+    expect(avgAccessSessionsPerActiveUser(25, 5)).toBe(5);
+    expect(avgAccessSessionsPerActiveUser(10, 0)).toBeNull();
+  });
+});
+
+describe('org-hierarchy-report.mapper global MTD', () => {
+  it('formats global MTD metrics from root.mtd', () => {
+    const mtd = {
+      clients_served: 4595,
+      finished: 59986,
+      on_time_pct: 86.84,
+      overdue_pending: 1528,
+      overdue_pending_justified: 294,
+      overdue_pending_unjustified: 1234
+    };
+
+    const onTime = ORG_GLOBAL_MTD_METRICS.find((m) => m.key === 'on_time_pct')!;
+    const justified = ORG_GLOBAL_MTD_METRICS.find((m) => m.key === 'overdue_pending_justified')!;
+
+    expect(formatOrgGlobalMtdValue(mtd, onTime)).toBe('86%');
+    expect(formatOrgGlobalMtdValue(mtd, justified)).toBe('294');
+    expect(ORG_GLOBAL_MTD_METRICS.map((m) => m.key)).toContain('multa_incurred');
+    expect(ORG_GLOBAL_MTD_METRICS.map((m) => m.key)).toContain('multa_and_near_due');
+  });
+});
+
+describe('org-hierarchy-report.mapper deliveries drilldown', () => {
+  it('recognizes multa_incurred as deliveries drilldown kpi', () => {
+    expect(isOrgHierarchyDeliveriesDrilldownKpi('multa_incurred')).toBe(true);
+    expect(isOrgHierarchyDeliveriesDrilldownKpi('multa_risk')).toBe(true);
+    expect(isOrgHierarchyDeliveriesDrilldownKpi('finished')).toBe(false);
+  });
+});
+
+describe('org-hierarchy-report.mapper points goal pct', () => {
+  it('computes and formats points vs goal percentage', () => {
+    expect(computeOrgPointsGoalPct({ points_delivered: 9000, goal_points: 12000 })).toBe(75);
+    expect(formatOrgPointsGoalPct({ points_delivered: 9000, goal_points: 12000 })).toBe('75%');
+    expect(getOrgPointsGoalTone(75)).toBe('neutral');
+    expect(getOrgPointsGoalTone(100)).toBe('positive');
+    expect(getOrgPointsGoalTone(69)).toBe('negative');
+    expect(formatOrgPointsGoalPct({ points_delivered: 100, goal_points: 0 })).toBeNull();
+  });
+});
+
+describe('org-hierarchy-report.mapper ranking sort', () => {
+  const node = (
+    label: string,
+    onTime: number,
+    points: number,
+    players: number
+  ): OrgHierarchyNode => ({
+    node_type: 'diretoria',
+    node_id: label,
+    label,
+    players_count: players,
+    season_points_total: 0,
+    mtd: { on_time_pct: onTime, points_delivered: points, finished: 0, goal_points: 0 },
+    prev_full: { finished: 0, points_delivered: 0, goal_points: 0 },
+    prev_mtd: { finished: 0, points_delivered: 0, goal_points: 0 },
+    compare: {
+      vs_prev_full_points: 0,
+      vs_prev_full_points_pct: 0,
+      vs_prev_mtd_points: 0,
+      vs_prev_mtd_points_pct: 0
+    }
+  });
+
+  it('sorts directorates by on_time_pct descending', () => {
+    const sorted = sortOrgHierarchyChildren(
+      [node('B', 70, 1000, 10), node('A', 90, 500, 5), node('C', 85, 2000, 20)],
+      'on_time_pct'
+    );
+    expect(sorted.map(n => n.label)).toEqual(['A', 'C', 'B']);
+  });
+
+  it('sorts directorates by points per collaborator descending', () => {
+    const a = node('A', 80, 1000, 10);
+    const b = node('B', 80, 1500, 10);
+    const sorted = sortOrgHierarchyChildren([a, b], 'points_per_collaborator');
+    expect(sorted.map(n => n.label)).toEqual(['B', 'A']);
+    expect(computeOrgPointsPerCollaborator(b)).toBe(150);
+    expect(formatOrgPointsPerCollaborator(b)).toBe('150,0');
   });
 });

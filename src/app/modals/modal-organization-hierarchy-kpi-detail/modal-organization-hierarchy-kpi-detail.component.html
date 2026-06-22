@@ -1,64 +1,370 @@
 <c4u-modal [modalTitle]="modalTitle" [icon]="modalIcon" (closed)="close()">
   <div class="kpi-detail-modal">
-    <div *ngIf="isLoading" class="kpi-detail-modal__loading" role="status" aria-live="polite">
-      <c4u-spinner></c4u-spinner>
-      <span>Carregando drill-down…</span>
+    <div *ngIf="isLoading" class="kpi-detail-modal__skeleton" role="status" aria-live="polite" aria-busy="true">
+      <span class="kpi-detail-modal__sr-only">Carregando drill-down…</span>
+
+      <ng-container *ngIf="!usesDeliveriesPanel; else deliveriesSkeleton">
+        <div class="kpi-detail-modal__skeleton-compare" aria-hidden="true">
+          <div class="kpi-skeleton-bone kpi-detail-modal__skeleton-assessment"></div>
+          <div class="kpi-detail-modal__skeleton-snapshots">
+            <div *ngFor="let slot of skeletonCompareSlots; trackBy: trackBySkeletonIndex" class="kpi-detail-modal__skeleton-snapshot">
+              <div class="kpi-skeleton-bone kpi-detail-modal__skeleton-label"></div>
+              <div class="kpi-skeleton-bone kpi-detail-modal__skeleton-value"></div>
+              <div class="kpi-skeleton-bone kpi-detail-modal__skeleton-hint"></div>
+            </div>
+          </div>
+        </div>
+        <div class="kpi-skeleton-bone kpi-detail-modal__skeleton-chart" aria-hidden="true"></div>
+        <div class="kpi-detail-modal__skeleton-table" aria-hidden="true">
+          <div class="kpi-skeleton-bone kpi-detail-modal__skeleton-table-head"></div>
+          <div *ngFor="let slot of skeletonTableRowSlots; trackBy: trackBySkeletonIndex" class="kpi-detail-modal__skeleton-table-row">
+            <div class="kpi-skeleton-bone kpi-detail-modal__skeleton-cell kpi-detail-modal__skeleton-cell--wide"></div>
+            <div class="kpi-skeleton-bone kpi-detail-modal__skeleton-cell"></div>
+            <div class="kpi-skeleton-bone kpi-detail-modal__skeleton-cell"></div>
+            <div class="kpi-skeleton-bone kpi-detail-modal__skeleton-cell"></div>
+          </div>
+        </div>
+      </ng-container>
+
+      <ng-template #deliveriesSkeleton>
+        <div class="kpi-detail-modal__skeleton-deliveries" aria-hidden="true">
+          <div class="kpi-skeleton-bone kpi-detail-modal__skeleton-banner"></div>
+          <div class="kpi-skeleton-bone kpi-detail-modal__skeleton-search"></div>
+          <div *ngFor="let slot of skeletonDeliveryGroupSlots; trackBy: trackBySkeletonIndex" class="kpi-detail-modal__skeleton-group">
+            <div class="kpi-skeleton-bone kpi-detail-modal__skeleton-group-title"></div>
+            <div *ngFor="let row of skeletonTableRowSlots; trackBy: trackBySkeletonIndex" class="kpi-detail-modal__skeleton-delivery-row">
+              <div class="kpi-skeleton-bone kpi-detail-modal__skeleton-cell kpi-detail-modal__skeleton-cell--wide"></div>
+              <div class="kpi-skeleton-bone kpi-detail-modal__skeleton-cell"></div>
+              <div class="kpi-skeleton-bone kpi-detail-modal__skeleton-cell"></div>
+            </div>
+          </div>
+        </div>
+      </ng-template>
     </div>
 
     <ng-container *ngIf="!isLoading">
-      <ng-container *ngIf="kpi !== 'multa_risk'; else multaRiskPanel">
-        <ng-container *ngIf="kpiDetail">
-          <div class="kpi-detail-modal__chart">
+      <ng-container *ngIf="!usesDeliveriesPanel; else deliveriesPanel">
+        <ng-container *ngIf="showKpiComparePanel || showKpiChart || showClientListsPanel || showClientsServedServerExport">
+          <div class="kpi-detail-modal__export-bar" *ngIf="showClientsServedServerExport">
+            <button
+              type="button"
+              class="kpi-detail-modal__export-btn"
+              [disabled]="isExportingClientsServed"
+              (click)="exportClientsServedXlsx()"
+              aria-label="Exportar lista completa de clientes atendidos em Excel">
+              <i class="ri-file-excel-2-line" aria-hidden="true"></i>
+              <span>{{ isExportingClientsServed ? 'Exportando…' : 'Exportar Excel' }}</span>
+            </button>
+          </div>
+
+          <section
+            *ngIf="showKpiComparePanel && kpiComparePanel as cmp"
+            class="kpi-compare-panel"
+            aria-label="Comparativo MTD e mês fechado">
+            <div class="kpi-compare-panel__assessment kpi-compare-panel__assessment--{{ cmp.assessmentTone }}">
+              <i class="ri-pulse-line" aria-hidden="true"></i>
+              <span>{{ cmp.assessmentLabel }}</span>
+            </div>
+
+            <div class="kpi-compare-snapshots">
+              <article
+                class="kpi-compare-snapshot"
+                [class.kpi-compare-snapshot--current]="cmp.currentSnapshot.isCurrent">
+                <p class="kpi-compare-snapshot__label">{{ cmp.currentSnapshot.label }}</p>
+                <p class="kpi-compare-snapshot__value">{{ cmp.currentSnapshot.valueLabel }}</p>
+                <p class="kpi-compare-snapshot__window">{{ cmp.currentSnapshot.windowLabel }}</p>
+              </article>
+
+              <article class="kpi-compare-snapshot">
+                <p class="kpi-compare-snapshot__label">{{ cmp.prevMtdSnapshot.label }}</p>
+                <p class="kpi-compare-snapshot__value">{{ cmp.prevMtdSnapshot.valueLabel }}</p>
+                <p class="kpi-compare-snapshot__window">{{ cmp.prevMtdSnapshot.windowLabel }}</p>
+                <p
+                  class="kpi-compare-snapshot__delta kpi-compare-snapshot__delta--{{ cmp.vsPrevMtd.tone }}"
+                  [attr.title]="cmp.vsPrevMtd.hint">
+                  {{ cmp.vsPrevMtd.deltaLabel }}
+                  <span *ngIf="cmp.vsPrevMtd.deltaPctLabel !== '—'">({{ cmp.vsPrevMtd.deltaPctLabel }})</span>
+                </p>
+              </article>
+
+              <article class="kpi-compare-snapshot">
+                <p class="kpi-compare-snapshot__label">{{ cmp.prevFullSnapshot.label }}</p>
+                <p class="kpi-compare-snapshot__value">{{ cmp.prevFullSnapshot.valueLabel }}</p>
+                <p class="kpi-compare-snapshot__window">{{ cmp.prevFullSnapshot.windowLabel }}</p>
+                <p
+                  class="kpi-compare-snapshot__delta kpi-compare-snapshot__delta--{{ cmp.vsPrevFull.tone }}"
+                  [attr.title]="cmp.vsPrevFull.hint">
+                  {{ cmp.vsPrevFull.deltaLabel }}
+                  <span *ngIf="cmp.vsPrevFull.deltaPctLabel !== '—'">({{ cmp.vsPrevFull.deltaPctLabel }})</span>
+                </p>
+              </article>
+            </div>
+
+            <div class="kpi-detail-modal__chart" *ngIf="showKpiChart">
+              <c4u-grafico-barras
+                [labels]="chartLabels"
+                [datasets]="chartDatasets"
+                [showLegend]="chartShowLegend">
+              </c4u-grafico-barras>
+            </div>
+
+            <div class="kpi-compare-panel__table-wrap" *ngIf="hasMonthlyHistoryTable" aria-label="Histórico por mês">
+              <h3 class="kpi-compare-panel__subtitle">Histórico (meses anteriores)</h3>
+              <table class="kpi-detail-table">
+                <thead>
+                  <tr>
+                    <th>Mês</th>
+                    <th class="kpi-detail-table__num">Valor MTD</th>
+                    <th class="kpi-detail-table__num">Mês fechado</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr *ngFor="let row of kpiComparePanel!.monthlyHistory">
+                    <td>{{ row.monthLabel }}</td>
+                    <td class="kpi-detail-table__num">{{ row.mtdValueLabel }}</td>
+                    <td class="kpi-detail-table__num">{{ row.fullValueLabel }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <div class="kpi-detail-modal__chart kpi-detail-modal__chart--standalone" *ngIf="showKpiChart && !showKpiComparePanel">
             <c4u-grafico-barras
               [labels]="chartLabels"
               [datasets]="chartDatasets"
-              [showLegend]="false">
+              [showLegend]="chartShowLegend">
             </c4u-grafico-barras>
           </div>
 
-          <div class="kpi-detail-modal__table-wrap" aria-label="Histórico mensal do KPI">
-            <table class="kpi-detail-table">
+          <section
+            *ngIf="showClientListsPanel"
+            class="client-lists-panel"
+            aria-label="Lista de clientes">
+          <div class="client-lists-panel__header">
+            <div>
+              <h3 class="kpi-compare-panel__subtitle">Clientes (MTD)</h3>
+              <p class="client-lists-panel__summary">
+                {{ activeClientListLabel }} ·
+                <ng-container *ngIf="hasClientListSearch; else clientListFullTotal">
+                  {{ filteredClientListItems.length | number:'1.0-0':'pt-BR' }}
+                  de {{ activeClientListItems.length | number:'1.0-0':'pt-BR' }}
+                </ng-container>
+                <ng-template #clientListFullTotal>
+                  {{ activeClientListItems.length | number:'1.0-0':'pt-BR' }}
+                </ng-template>
+              </p>
+            </div>
+          </div>
+
+          <div
+            *ngIf="clientListTabs.length > 1"
+            class="critical-issue-filters client-list-filters"
+            role="tablist"
+            aria-label="Filtrar lista de clientes">
+            <button
+              *ngFor="let tab of clientListTabs"
+              type="button"
+              class="critical-issue-filters__btn"
+              [class.critical-issue-filters__btn--active]="clientListFilter === tab.key"
+              role="tab"
+              [attr.aria-selected]="clientListFilter === tab.key"
+              (click)="onClientListFilterChange(tab.key)">
+              {{ tab.label }}
+              <span class="client-list-filters__count">({{ tab.count | number:'1.0-0':'pt-BR' }})</span>
+            </button>
+          </div>
+
+          <div class="deliveries-search-bar" role="search">
+            <i class="ri-search-line deliveries-search-bar__icon" aria-hidden="true"></i>
+            <input
+              type="search"
+              class="deliveries-search-bar__input"
+              [value]="clientListSearchQuery"
+              (input)="onClientListSearchInput($event)"
+              placeholder="Buscar por cliente, CNPJ, responsável ou hierarquia…"
+              aria-label="Buscar clientes" />
+            <button
+              *ngIf="hasClientListSearch"
+              type="button"
+              class="deliveries-search-bar__clear"
+              (click)="clearClientListSearch()"
+              aria-label="Limpar busca">
+              <i class="ri-close-line" aria-hidden="true"></i>
+            </button>
+          </div>
+
+          <div class="kpi-detail-modal__export-bar" *ngIf="filteredClientListItems.length > 0">
+            <button
+              type="button"
+              class="kpi-detail-modal__export-btn"
+              (click)="exportClientList('csv')"
+              aria-label="Exportar clientes em CSV">
+              <i class="ri-file-download-line" aria-hidden="true"></i>
+              <span>Exportar CSV</span>
+            </button>
+            <button
+              type="button"
+              class="kpi-detail-modal__export-btn"
+              (click)="exportClientList('xlsx')"
+              aria-label="Exportar clientes em Excel">
+              <i class="ri-file-excel-2-line" aria-hidden="true"></i>
+              <span>Exportar Excel</span>
+            </button>
+          </div>
+
+          <div
+            *ngIf="hasClientListSearch && filteredClientListItems.length === 0"
+            class="kpi-detail-modal__empty deliveries-search-empty"
+            role="status">
+            <i class="ri-search-line" aria-hidden="true"></i>
+            <span>Nenhum cliente encontrado para esta busca.</span>
+          </div>
+
+          <div class="simple-table-wrap client-lists-table-wrap" *ngIf="filteredClientListItems.length > 0">
+            <table class="simple-table client-lists-table">
               <thead>
                 <tr>
-                  <th>Mês</th>
-                  <th>Janela (MTD)</th>
-                  <th class="kpi-detail-table__num">{{ kpiDetail.kpi_label }}</th>
+                  <th>Cliente</th>
+                  <th>CNPJ / ID</th>
+                  <th *ngIf="showClientListTagsColumn">Tags</th>
+                  <th>Diretoria</th>
+                  <th>Gerência</th>
+                  <th>Supervisão</th>
+                  <th>Colaborador</th>
                 </tr>
               </thead>
               <tbody>
-                <tr *ngFor="let h of kpiDetail.history">
-                  <td>{{ h.month_label }}</td>
-                  <td>{{ h.mtd_start }} – {{ h.mtd_end }}</td>
-                  <td class="kpi-detail-table__num">{{ formatHistoryValue(h.value) }}</td>
+                <tr
+                  *ngFor="let client of filteredClientListItems; trackBy: trackByClientListItem">
+                  <td>{{ client.company_name }}</td>
+                  <td>{{ client.company_serve_key }}</td>
+                  <td *ngIf="showClientListTagsColumn">{{ clientListTagsLabel(client) }}</td>
+                  <td>{{ client.diretor_name || '—' }}</td>
+                  <td>{{ client.gerente_name || '—' }}</td>
+                  <td>{{ client.supervisor_name || '—' }}</td>
+                  <td>{{ clientListPlayerLabel(client) }}</td>
                 </tr>
               </tbody>
             </table>
           </div>
+        </section>
         </ng-container>
 
-        <div *ngIf="!kpiDetail" class="kpi-detail-modal__empty" role="status">
+        <div *ngIf="!showKpiComparePanel && !showKpiChart && !showClientListsPanel && !usesDeliveriesPanel" class="kpi-detail-modal__empty" role="status">
           <i class="ri-database-2-line" aria-hidden="true"></i>
           <span>Dados ainda não disponíveis para este mês.</span>
         </div>
       </ng-container>
 
-      <ng-template #multaRiskPanel>
-        <ng-container *ngIf="multaRisk; else multaRiskEmpty">
-          <div class="multa-summary">
-            <div class="multa-summary__row">
-              <span class="multa-summary__label">Total de entregas (MTD)</span>
-              <span class="multa-summary__value">{{ multaRisk.total_deliveries | number:'1.0-0':'pt-BR' }}</span>
-            </div>
-            <div class="multa-summary__row">
-              <span class="multa-summary__label">Janela técnico→legal</span>
-              <span class="multa-summary__value">
-                {{ formatIsoDate(multaRisk.mtd_start) }} – {{ formatIsoDate(multaRisk.mtd_end) }}
-              </span>
+      <ng-template #deliveriesPanel>
+        <ng-container *ngIf="deliveries; else deliveriesEmpty">
+          <div
+            *ngIf="drilldownBanner as banner"
+            class="drilldown-banner drilldown-banner--{{ banner.severity }}"
+            role="note">
+            <i
+              class="drilldown-banner__icon"
+              [class.ri-alarm-warning-fill]="banner.severity === 'critical'"
+              [class.ri-error-warning-line]="banner.severity === 'warning'"
+              [class.ri-information-line]="banner.severity === 'info'"
+              aria-hidden="true"></i>
+            <div class="drilldown-banner__body">
+              <strong class="drilldown-banner__title">{{ banner.title }}</strong>
+              <p class="drilldown-banner__text">{{ banner.body }}</p>
             </div>
           </div>
 
-          <div class="multa-accordion">
-            <details *ngFor="let dir of multaRisk.diretorias" open class="multa-details">
+          <div class="multa-summary">
+            <div class="multa-summary__row">
+              <span class="multa-summary__label">Total de entregas</span>
+              <span class="multa-summary__value">
+                <ng-container *ngIf="hasDeliverySearch; else deliveriesFullTotal">
+                  {{ filteredDeliveryTotal | number:'1.0-0':'pt-BR' }}
+                  de {{ deliveries.total_deliveries | number:'1.0-0':'pt-BR' }}
+                </ng-container>
+                <ng-template #deliveriesFullTotal>
+                  {{ deliveries.total_deliveries | number:'1.0-0':'pt-BR' }}
+                </ng-template>
+              </span>
+            </div>
+            <div class="multa-summary__row">
+              <span class="multa-summary__label">{{ deliveriesWindowLabel }}</span>
+              <span class="multa-summary__value">
+                {{ formatIsoDate(deliveries.mtd_start) }} – {{ formatIsoDate(deliveries.mtd_end) }}
+              </span>
+            </div>
+            <div class="multa-summary__row" *ngIf="deliveries.ref_date">
+              <span class="multa-summary__label">Data de referência</span>
+              <span class="multa-summary__value">{{ formatIsoDate(deliveries.ref_date) }}</span>
+            </div>
+          </div>
+
+          <div
+            *ngIf="isCriticalClientDrilldown"
+            class="critical-issue-filters"
+            role="tablist"
+            aria-label="Filtrar tipo de problema">
+            <button
+              *ngFor="let filter of criticalIssueFilters"
+              type="button"
+              class="critical-issue-filters__btn"
+              [class.critical-issue-filters__btn--active]="issueFilter === filter.id"
+              role="tab"
+              [attr.aria-selected]="issueFilter === filter.id"
+              (click)="onCriticalIssueFilterChange(filter.id)">
+              {{ filter.label }}
+            </button>
+          </div>
+
+          <div class="deliveries-search-bar" role="search">
+            <i class="ri-search-line deliveries-search-bar__icon" aria-hidden="true"></i>
+            <input
+              type="search"
+              class="deliveries-search-bar__input"
+              [value]="deliverySearchQuery"
+              (input)="onDeliverySearchInput($event)"
+              placeholder="Buscar por cliente, tarefa, time ou responsável…"
+              aria-label="Buscar entregas por cliente, tarefa, time ou responsável" />
+            <button
+              *ngIf="hasDeliverySearch"
+              type="button"
+              class="deliveries-search-bar__clear"
+              (click)="clearDeliverySearch()"
+              aria-label="Limpar busca">
+              <i class="ri-close-line" aria-hidden="true"></i>
+            </button>
+          </div>
+
+          <div class="kpi-detail-modal__export-bar" *ngIf="filteredDiretorias.length > 0">
+            <button
+              type="button"
+              class="kpi-detail-modal__export-btn"
+              (click)="exportDeliveries('csv')"
+              aria-label="Exportar entregas em CSV">
+              <i class="ri-file-download-line" aria-hidden="true"></i>
+              <span>Exportar CSV</span>
+            </button>
+            <button
+              type="button"
+              class="kpi-detail-modal__export-btn"
+              (click)="exportDeliveries('xlsx')"
+              aria-label="Exportar entregas em Excel">
+              <i class="ri-file-excel-2-line" aria-hidden="true"></i>
+              <span>Exportar Excel</span>
+            </button>
+          </div>
+
+          <div
+            *ngIf="hasDeliverySearch && filteredDiretorias.length === 0"
+            class="kpi-detail-modal__empty deliveries-search-empty"
+            role="status">
+            <i class="ri-search-line" aria-hidden="true"></i>
+            <span>Nenhuma entrega encontrada para esta busca.</span>
+          </div>
+
+          <div class="multa-accordion" *ngIf="filteredDiretorias.length > 0">
+            <details *ngFor="let dir of filteredDiretorias" open class="multa-details">
               <summary class="multa-details__summary">
                 <span class="multa-details__title">{{ dir.label }}</span>
                 <span class="multa-details__count">
@@ -84,23 +390,34 @@
                         </span>
                       </div>
 
-                      <table class="multa-table" aria-label="Entregas com risco de multa">
+                      <table class="multa-table" [attr.aria-label]="'Entregas: ' + modalTitle">
                         <thead>
                           <tr>
-                            <th>Entrega</th>
                             <th>Cliente</th>
+                            <th>Tarefa</th>
+                            <th *ngIf="showDeliveryIssueKindColumn">Problema</th>
                             <th>Prazo</th>
-                            <th>Atraso</th>
+                            <th *ngIf="showDeliveryDelayColumn && !showDeliveryFinishedColumn">Atraso</th>
+                            <th *ngIf="showDeliveryDelayColumn && showDeliveryFinishedColumn">Atraso legal</th>
+                            <th *ngIf="showDeliveryFinishedColumn">Conclusão</th>
+                            <th *ngIf="showDeliveryStatusColumn">Status</th>
+                            <th *ngIf="showDeliveryPointsColumn">Pontos</th>
                             <th>Colaborador</th>
                             <th>Time</th>
                           </tr>
                         </thead>
                         <tbody>
-                          <tr *ngFor="let d of sup.deliveries">
-                            <td>{{ d.delivery_title }}</td>
-                            <td>{{ deliveryClientLabel(d) }}</td>
+                          <tr *ngFor="let d of sup.deliveries" [ngClass]="deliveryRowClass(d)">
+                            <td>{{ deliveryCompanyLabel(d) }}</td>
+                            <td>{{ deliveryActionTitleLabel(d) }}</td>
+                            <td *ngIf="showDeliveryIssueKindColumn">{{ deliveryIssueKindLabel(d) }}</td>
                             <td>{{ formatIsoDate(d.dt_prazo) }}</td>
-                            <td>{{ formatIsoDate(d.dt_atraso) }}</td>
+                            <td *ngIf="showDeliveryDelayColumn">{{ formatIsoDate(d.dt_atraso) }}</td>
+                            <td *ngIf="showDeliveryFinishedColumn">{{ formatIsoDate(d.finished_at) }}</td>
+                            <td *ngIf="showDeliveryStatusColumn">
+                              <span class="multa-table__status">{{ deliveryStatusLabel(d) }}</span>
+                            </td>
+                            <td *ngIf="showDeliveryPointsColumn">{{ formatDeliveryPoints(d.points) }}</td>
                             <td>{{ deliveryPlayerLabel(d) }}</td>
                             <td>{{ d.team_name ?? d.team_id }}</td>
                           </tr>
@@ -114,7 +431,7 @@
           </div>
         </ng-container>
 
-        <ng-template #multaRiskEmpty>
+        <ng-template #deliveriesEmpty>
           <div class="kpi-detail-modal__empty" role="status">
             <i class="ri-database-2-line" aria-hidden="true"></i>
             <span>Dados ainda não disponíveis para este mês.</span>
@@ -124,4 +441,3 @@
     </ng-container>
   </div>
 </c4u-modal>
-

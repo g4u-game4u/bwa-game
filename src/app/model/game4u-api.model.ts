@@ -737,19 +737,38 @@ export interface OrgMetricsWindow {
   finished?: number;
   points_delivered?: number;
   goal_points?: number;
+  expected_points_to_date?: number;
+  goal_deliveries?: number;
+  expected_deliveries_to_date?: number;
   pending_open?: number;
   multa_risk?: number;
+  multa_incurred?: number;
   near_due?: number;
   multa_and_near_due?: number;
   overdue_pending?: number;
+  overdue_pending_justified?: number;
+  overdue_pending_unjustified?: number;
   clients_served?: number;
   on_time_pct?: number;
   clients_onboarding?: number;
+  clients_acessorias_g4?: number;
+  clients_acessorias_onboarding?: number;
+  clients_acessorias_risco_de_churn?: number;
   clients_classificacao_1?: number;
   clients_classificacao_2?: number;
   clients_classificacao_3?: number;
   clients_classificacao_4?: number;
   clients_classificacao_5?: number;
+  /** Ritmo preditivo — somente em mtd (calculado na API). */
+  points_gap_vs_expected?: number;
+  pct_of_expected_delivered?: number;
+  pace_points_per_day?: number;
+  projected_points_month_end?: number;
+  required_pace_points_per_day?: number;
+  finished_gap_vs_expected?: number;
+  pace_finished_per_day?: number;
+  projected_finished_month_end?: number;
+  required_pace_finished_per_day?: number;
 }
 
 export interface OrgHierarchyCompare {
@@ -757,6 +776,68 @@ export interface OrgHierarchyCompare {
   vs_prev_full_points_pct?: number;
   vs_prev_mtd_points?: number;
   vs_prev_mtd_points_pct?: number;
+  prev_mtd?: Record<string, number>;
+  prev_full?: Record<string, number>;
+}
+
+export interface TeamPlayerMtd {
+  player_email: string;
+  player_name: string;
+  points_delivered: number;
+  goal_points: number;
+  expected_points_to_date: number;
+  finished: number;
+  goal_deliveries: number;
+  expected_deliveries_to_date: number;
+}
+
+export type CriticalClientRiskTier = 'critical' | 'high' | 'medium' | 'low';
+
+export interface CriticalClientItem {
+  company_serve_key: string;
+  company_label: string;
+  risk_score: number;
+  risk_tier: CriticalClientRiskTier;
+  is_acessorias_risco_de_churn: boolean;
+  is_acessorias_onboarding: boolean;
+  is_acessorias_g4: boolean;
+  mtd_overdue_unjustified: number;
+  mtd_late_finish: number;
+  consecutive_issue_months: number;
+}
+
+export interface CriticalClientsSummary {
+  count: number;
+  with_overdue: number;
+  with_late_finish: number;
+  high_risk: number;
+  consecutive_2plus: number;
+  avg_risk_score: number;
+  max_risk_score: number;
+  top_clients?: CriticalClientItem[];
+}
+
+export interface OrgMetricsMonthlyPoint {
+  cache_month: string;
+  mtd_finished: number;
+  mtd_points_delivered: number;
+  mtd_goal_points: number;
+  mtd_expected_points_to_date?: number;
+  mtd_goal_deliveries?: number;
+  mtd_expected_deliveries_to_date?: number;
+  mtd_pending_open: number;
+  mtd_multa_risk: number;
+  mtd_multa_incurred: number;
+  mtd_on_time_pct: number;
+  mtd_clients_served: number;
+  /** Valores do mês fechado (mesmo KPI, janela completa). */
+  full_finished?: number;
+  full_points_delivered?: number;
+  full_on_time_pct?: number;
+  full_clients_served?: number;
+  full_pending_open?: number;
+  full_multa_risk?: number;
+  full_multa_incurred?: number;
 }
 
 export interface OrgHierarchySimulation {
@@ -793,6 +874,38 @@ export interface OrgHierarchyTopDelivery {
   finished_count: number;
 }
 
+export interface OrgHierarchyAccessMetrics {
+  access_days?: number;
+  access_sessions?: number;
+  active_users?: number;
+  active_users_pct?: number;
+  avg_access_days_per_active_user?: number;
+}
+
+export interface OrgHierarchyAccessCompare {
+  vs_prev_mtd_active_users?: number;
+  vs_prev_mtd_active_users_pct?: number;
+  vs_prev_mtd_access_days?: number;
+}
+
+export interface OrgHierarchyAccessByDow {
+  dow: number;
+  access_days: number;
+  access_sessions: number;
+}
+
+export interface OrgHierarchyAccess {
+  mtd: OrgHierarchyAccessMetrics;
+  prev_full: OrgHierarchyAccessMetrics;
+  prev_mtd: OrgHierarchyAccessMetrics;
+  compare: OrgHierarchyAccessCompare;
+  access_by_dow?: OrgHierarchyAccessByDow[];
+  current_streak?: number;
+  longest_streak?: number;
+  last_access_date?: string | null;
+  accessed_today?: boolean;
+}
+
 export interface OrgHierarchyNode {
   node_type: OrgHierarchyNodeType;
   node_id: string;
@@ -808,6 +921,14 @@ export interface OrgHierarchyNode {
   highlights?: { destaque: OrgHierarchyHighlightItem[]; atencao: OrgHierarchyHighlightItem[] };
   finished_by_dow?: OrgHierarchyFinishedByDow[];
   top_deliveries?: OrgHierarchyTopDelivery[];
+  access?: OrgHierarchyAccess;
+  prior_months_mtd?: OrgMetricsWindow;
+  mtd_monthly_series?: OrgMetricsMonthlyPoint[];
+  month_day_count?: number;
+  mtd_elapsed_days?: number;
+  days_remaining_in_month?: number;
+  team_players_mtd?: TeamPlayerMtd[];
+  critical_clients?: CriticalClientsSummary;
   children?: OrgHierarchyNode[];
 }
 
@@ -836,7 +957,59 @@ export type OrgHierarchyKpiDetailKey =
   | 'pending_open'
   | 'near_due'
   | 'overdue_pending'
-  | 'multa_risk';
+  | 'overdue_pending_justified'
+  | 'overdue_pending_unjustified'
+  | 'multa_risk'
+  | 'multa_incurred'
+  | 'clients_acessorias_risco_de_churn'
+  | 'clients_acessorias_onboarding'
+  | 'clients_acessorias_g4';
+
+export type OrgHierarchyDeliveriesDrilldownKey =
+  | 'multa_risk'
+  | 'multa_incurred'
+  | 'near_due'
+  | 'overdue_pending'
+  | 'overdue_pending_justified'
+  | 'overdue_pending_unjustified'
+  | 'critical_client';
+
+/** Drill-downs operacionais que também são {@link OrgHierarchyKpiDetailKey}. */
+export type OrgHierarchyOperationalDeliveriesDrilldownKey = Exclude<
+  OrgHierarchyDeliveriesDrilldownKey,
+  'critical_client'
+>;
+
+/** Filtro de problemas no drill-down de cliente crítico (`/deliveries?drilldown=critical_client`). */
+export type CriticalClientIssueFilter = 'all' | 'overdue' | 'late_finish';
+
+export type CriticalClientIssueKind = 'overdue' | 'late_finish';
+
+export type OrgHierarchyClientListKey =
+  | 'clients_served'
+  | 'clients_acessorias_g4'
+  | 'clients_acessorias_onboarding'
+  | 'clients_acessorias_risco_de_churn';
+
+export interface OrgHierarchyClientListItem {
+  company_serve_key: string;
+  company_name: string;
+  is_acessorias_g4: boolean;
+  is_acessorias_onboarding: boolean;
+  is_acessorias_risco_de_churn: boolean;
+  player_email: string | null;
+  player_name: string | null;
+  diretor_name: string | null;
+  gerente_name: string | null;
+  supervisor_name: string | null;
+}
+
+export interface OrgHierarchyClientLists {
+  clients_served: OrgHierarchyClientListItem[];
+  clients_acessorias_g4: OrgHierarchyClientListItem[];
+  clients_acessorias_onboarding: OrgHierarchyClientListItem[];
+  clients_acessorias_risco_de_churn: OrgHierarchyClientListItem[];
+}
 
 export interface OrganizationHierarchyKpiDetailHistoryItem {
   cache_month: string; // '2026-03-01'
@@ -844,6 +1017,8 @@ export interface OrganizationHierarchyKpiDetailHistoryItem {
   mtd_start: string;
   mtd_end: string;
   value: number | null;
+  /** Valor do mês fechado (quando disponível na API). */
+  full_value?: number | null;
 }
 
 export interface OrganizationHierarchyKpiDetailResponse {
@@ -853,6 +1028,7 @@ export interface OrganizationHierarchyKpiDetailResponse {
   node_id: string;
   node_label: string;
   history: OrganizationHierarchyKpiDetailHistoryItem[];
+  client_lists?: OrgHierarchyClientLists;
 }
 
 export interface Game4uReportsOrganizationHierarchyKpiDetailQuery {
@@ -863,46 +1039,305 @@ export interface Game4uReportsOrganizationHierarchyKpiDetailQuery {
   months?: number; // default 4
 }
 
-export interface OrganizationHierarchyMultaRiskDeliveryRow {
+/** Query para `GET /game/reports/organization/hierarchy-report/clients-served/export/xlsx`. */
+export interface Game4uReportsOrganizationHierarchyClientsServedExportQuery {
+  month: string; // YYYY-MM
+  node_type?: OrgHierarchyNodeType | string;
+  node_id?: string;
+}
+
+export interface OrganizationHierarchyDeliveryRow {
   delivery_id: string;
   delivery_title: string;
+  action_name?: string | null;
+  action_title?: string | null;
+  company_serve_key?: string | null;
+  issue_kind?: CriticalClientIssueKind | null;
   client_key: string | null;
+  client_name?: string | null;
   dt_prazo: string | null;
   dt_atraso: string | null;
+  status?: string | null;
+  status_calc?: string | null;
+  points?: number | null;
+  finished_at?: string | null;
+  is_justificada?: boolean | null;
   player_email: string;
   player_name: string | null;
   team_id: string;
   team_name: string | null;
 }
 
-export interface OrganizationHierarchyMultaRiskSupervisorRow {
+export interface OrganizationHierarchyDeliveriesSupervisorRow {
   node_id: string;
   label: string;
   delivery_count: number;
-  deliveries: OrganizationHierarchyMultaRiskDeliveryRow[];
+  deliveries: OrganizationHierarchyDeliveryRow[];
 }
 
-export interface OrganizationHierarchyMultaRiskGerenciaRow {
+export interface OrganizationHierarchyDeliveriesGerenciaRow {
   node_id: string;
   label: string;
   delivery_count: number;
-  supervisoes: OrganizationHierarchyMultaRiskSupervisorRow[];
+  supervisoes: OrganizationHierarchyDeliveriesSupervisorRow[];
 }
 
-export interface OrganizationHierarchyMultaRiskDiretoriaRow {
+export interface OrganizationHierarchyDeliveriesDiretoriaRow {
   node_id: string;
   label: string;
   delivery_count: number;
-  gerencias: OrganizationHierarchyMultaRiskGerenciaRow[];
+  gerencias: OrganizationHierarchyDeliveriesGerenciaRow[];
 }
 
-export interface OrganizationHierarchyMultaRiskResponse {
+export interface OrganizationHierarchyDeliveriesResponse {
   cache_month: string;
   mtd_start: string;
   mtd_end: string;
+  drilldown?: string;
+  drilldown_label?: string;
+  ref_date?: string;
   total_deliveries: number;
-  diretorias: OrganizationHierarchyMultaRiskDiretoriaRow[];
+  diretorias: OrganizationHierarchyDeliveriesDiretoriaRow[];
 }
+
+function pickOptionalString(
+  obj: Record<string, unknown>,
+  keys: string[]
+): string | undefined {
+  const value = pickFirstNonEmptyString(obj, keys);
+  return value ?? undefined;
+}
+
+function pickNullableString(obj: Record<string, unknown>, keys: string[]): string | null {
+  return pickFirstNonEmptyString(obj, keys) ?? null;
+}
+
+function pickOptionalNumber(obj: Record<string, unknown>, keys: string[]): number | null | undefined {
+  for (const key of keys) {
+    const raw = obj[key];
+    if (raw == null || raw === '') {
+      continue;
+    }
+    const n = Number(raw);
+    if (Number.isFinite(n)) {
+      return n;
+    }
+  }
+  return undefined;
+}
+
+function pickOptionalBoolean(obj: Record<string, unknown>, keys: string[]): boolean | null | undefined {
+  for (const key of keys) {
+    const raw = obj[key];
+    if (raw == null || raw === '') {
+      continue;
+    }
+    if (typeof raw === 'boolean') {
+      return raw;
+    }
+    if (typeof raw === 'string') {
+      const normalized = raw.trim().toLowerCase();
+      if (normalized === 'true' || normalized === '1' || normalized === 'sim') {
+        return true;
+      }
+      if (normalized === 'false' || normalized === '0' || normalized === 'nao' || normalized === 'não') {
+        return false;
+      }
+    }
+  }
+  return undefined;
+}
+
+function normalizeOrganizationHierarchyDeliveryRow(
+  raw: unknown
+): OrganizationHierarchyDeliveryRow | null {
+  if (!raw || typeof raw !== 'object') {
+    return null;
+  }
+  const o = raw as Record<string, unknown>;
+  const delivery_id =
+    pickFirstNonEmptyString(o, ['delivery_id', 'deliveryId', 'action_id', 'actionId']) ?? '';
+  const action_name = pickOptionalString(o, ['action_name', 'actionName', 'action_title', 'actionTitle']);
+  const action_title = pickOptionalString(o, ['action_title', 'actionTitle', 'action_name', 'actionName']);
+  const client_name = pickOptionalString(o, ['client_name', 'clientName']);
+  let delivery_title = pickFirstNonEmptyString(o, [
+    'delivery_title',
+    'deliveryTitle',
+    'action_title',
+    'actionTitle',
+    'action_name',
+    'actionName',
+    'title'
+  ]);
+  if (!delivery_title && delivery_id) {
+    delivery_title = delivery_id;
+  }
+  if (!delivery_title) {
+    return null;
+  }
+
+  const issueKindRaw = pickOptionalString(o, ['issue_kind', 'issueKind']);
+  const issue_kind: CriticalClientIssueKind | null =
+    issueKindRaw === 'overdue' || issueKindRaw === 'late_finish' ? issueKindRaw : null;
+
+  return {
+    delivery_id,
+    delivery_title,
+    action_name,
+    action_title,
+    company_serve_key: pickNullableString(o, ['company_serve_key', 'companyServeKey']),
+    issue_kind,
+    client_key: pickNullableString(o, [
+      'client_name',
+      'clientName',
+      'client_key',
+      'clientKey',
+      'emp_title',
+      'empTitle'
+    ]),
+    client_name,
+    dt_prazo: pickNullableString(o, ['dt_prazo', 'dtPrazo']),
+    dt_atraso: pickNullableString(o, ['dt_atraso', 'dtAtraso']),
+    status: pickOptionalString(o, ['status']),
+    status_calc: pickOptionalString(o, ['status_calc', 'statusCalc']),
+    points: pickOptionalNumber(o, ['points']),
+    finished_at: pickNullableString(o, ['finished_at', 'finishedAt']),
+    is_justificada: pickOptionalBoolean(o, ['is_justificada', 'isJustificada']),
+    player_email:
+      pickFirstNonEmptyString(o, ['player_email', 'playerEmail', 'user_email', 'userEmail']) ?? '',
+    player_name: pickNullableString(o, ['player_name', 'playerName']),
+    team_id: pickFirstNonEmptyString(o, ['team_id', 'teamId']) ?? '',
+    team_name: pickNullableString(o, ['team_name', 'teamName'])
+  };
+}
+
+function normalizeOrganizationHierarchyDeliveriesSupervisorRow(
+  raw: unknown
+): OrganizationHierarchyDeliveriesSupervisorRow | null {
+  if (!raw || typeof raw !== 'object') {
+    return null;
+  }
+  const o = raw as Record<string, unknown>;
+  const node_id = pickFirstNonEmptyString(o, ['node_id', 'nodeId']) ?? '';
+  const label = pickFirstNonEmptyString(o, ['label']) ?? node_id;
+  const deliveries = Array.isArray(o['deliveries'])
+    ? o['deliveries']
+        .map(item => normalizeOrganizationHierarchyDeliveryRow(item))
+        .filter((item): item is OrganizationHierarchyDeliveryRow => item != null)
+    : [];
+  const delivery_count = Number(o['delivery_count'] ?? o['deliveryCount']);
+  return {
+    node_id,
+    label,
+    delivery_count: Number.isFinite(delivery_count) ? delivery_count : deliveries.length,
+    deliveries
+  };
+}
+
+function normalizeOrganizationHierarchyDeliveriesGerenciaRow(
+  raw: unknown
+): OrganizationHierarchyDeliveriesGerenciaRow | null {
+  if (!raw || typeof raw !== 'object') {
+    return null;
+  }
+  const o = raw as Record<string, unknown>;
+  const node_id = pickFirstNonEmptyString(o, ['node_id', 'nodeId']) ?? '';
+  const label = pickFirstNonEmptyString(o, ['label']) ?? node_id;
+  const supervisoes = Array.isArray(o['supervisoes'])
+    ? o['supervisoes']
+        .map(item => normalizeOrganizationHierarchyDeliveriesSupervisorRow(item))
+        .filter((item): item is OrganizationHierarchyDeliveriesSupervisorRow => item != null)
+    : [];
+  const delivery_count = Number(o['delivery_count'] ?? o['deliveryCount']);
+  return {
+    node_id,
+    label,
+    delivery_count: Number.isFinite(delivery_count)
+      ? delivery_count
+      : supervisoes.reduce((sum, sup) => sum + sup.delivery_count, 0),
+    supervisoes
+  };
+}
+
+function normalizeOrganizationHierarchyDeliveriesDiretoriaRow(
+  raw: unknown
+): OrganizationHierarchyDeliveriesDiretoriaRow | null {
+  if (!raw || typeof raw !== 'object') {
+    return null;
+  }
+  const o = raw as Record<string, unknown>;
+  const node_id = pickFirstNonEmptyString(o, ['node_id', 'nodeId']) ?? '';
+  const label = pickFirstNonEmptyString(o, ['label']) ?? node_id;
+  const gerencias = Array.isArray(o['gerencias'])
+    ? o['gerencias']
+        .map(item => normalizeOrganizationHierarchyDeliveriesGerenciaRow(item))
+        .filter((item): item is OrganizationHierarchyDeliveriesGerenciaRow => item != null)
+    : [];
+  const delivery_count = Number(o['delivery_count'] ?? o['deliveryCount']);
+  return {
+    node_id,
+    label,
+    delivery_count: Number.isFinite(delivery_count)
+      ? delivery_count
+      : gerencias.reduce((sum, ger) => sum + ger.delivery_count, 0),
+    gerencias
+  };
+}
+
+/** Normaliza payload de `/deliveries` e `/multa-risk` (aliases de campo da API). */
+export function normalizeOrganizationHierarchyDeliveriesResponse(
+  body: unknown
+): OrganizationHierarchyDeliveriesResponse | null {
+  if (!body || typeof body !== 'object') {
+    return null;
+  }
+  const o = body as Record<string, unknown>;
+  const diretorias = Array.isArray(o['diretorias'])
+    ? o['diretorias']
+        .map(item => normalizeOrganizationHierarchyDeliveriesDiretoriaRow(item))
+        .filter((item): item is OrganizationHierarchyDeliveriesDiretoriaRow => item != null)
+    : [];
+  const total_deliveries = Number(o['total_deliveries'] ?? o['totalDeliveries']);
+  return {
+    cache_month:
+      pickFirstNonEmptyString(o, ['cache_month', 'cacheMonth']) ??
+      pickFirstNonEmptyString(o, ['month']) ??
+      '',
+    mtd_start: pickFirstNonEmptyString(o, ['mtd_start', 'mtdStart']) ?? '',
+    mtd_end: pickFirstNonEmptyString(o, ['mtd_end', 'mtdEnd']) ?? '',
+    drilldown: pickOptionalString(o, ['drilldown']),
+    drilldown_label: pickOptionalString(o, ['drilldown_label', 'drilldownLabel']),
+    ref_date: pickOptionalString(o, ['ref_date', 'refDate']),
+    total_deliveries: Number.isFinite(total_deliveries)
+      ? total_deliveries
+      : diretorias.reduce((sum, dir) => sum + dir.delivery_count, 0),
+    diretorias
+  };
+}
+
+export interface Game4uReportsOrganizationHierarchyDeliveriesQuery {
+  month: string;
+  drilldown: OrgHierarchyDeliveriesDrilldownKey;
+  node_type?: OrgHierarchyNodeType | string;
+  node_id?: string;
+  company_serve_key?: string;
+  issue?: CriticalClientIssueFilter;
+}
+
+/** @deprecated Prefer {@link OrganizationHierarchyDeliveryRow} */
+export type OrganizationHierarchyMultaRiskDeliveryRow = OrganizationHierarchyDeliveryRow;
+
+/** @deprecated Prefer {@link OrganizationHierarchyDeliveriesSupervisorRow} */
+export type OrganizationHierarchyMultaRiskSupervisorRow = OrganizationHierarchyDeliveriesSupervisorRow;
+
+/** @deprecated Prefer {@link OrganizationHierarchyDeliveriesGerenciaRow} */
+export type OrganizationHierarchyMultaRiskGerenciaRow = OrganizationHierarchyDeliveriesGerenciaRow;
+
+/** @deprecated Prefer {@link OrganizationHierarchyDeliveriesDiretoriaRow} */
+export type OrganizationHierarchyMultaRiskDiretoriaRow = OrganizationHierarchyDeliveriesDiretoriaRow;
+
+/** @deprecated Prefer {@link OrganizationHierarchyDeliveriesResponse} */
+export type OrganizationHierarchyMultaRiskResponse = OrganizationHierarchyDeliveriesResponse;
 
 export interface Game4uReportsOrganizationHierarchyMultaRiskQuery {
   month: string;

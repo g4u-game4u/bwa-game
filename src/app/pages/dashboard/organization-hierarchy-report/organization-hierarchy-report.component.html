@@ -28,51 +28,127 @@
       </button>
     </header>
 
-    <div class="report-content">
+    <div
+      class="report-content"
+      [class.report-content--single-column]="!isLoading && !!root && !hasLoadError">
       <div class="report-intro">
-        <h1 class="report-title">Relatório organizacional</h1>
+        <div class="report-intro__head">
+          <h1 class="report-title">Relatório organizacional</h1>
+          <nav
+            *ngIf="!isLoading && root && !hasLoadError"
+            class="report-panel-tabs"
+            role="tablist"
+            aria-label="Visões do relatório organizacional">
+            <button
+              *ngFor="let tab of reportPanelTabs; trackBy: trackByReportPanelTab"
+              type="button"
+              class="report-panel-tab"
+              role="tab"
+              [class.report-panel-tab--active]="reportPanelTab === tab.id"
+              [attr.aria-selected]="reportPanelTab === tab.id"
+              [attr.aria-controls]="'report-panel-' + tab.id"
+              [attr.id]="'report-panel-tab-' + tab.id"
+              [attr.title]="tab.description"
+              (click)="onReportPanelTabChange(tab.id)">
+              <i [class]="tab.icon" aria-hidden="true"></i>
+              <span>{{ tab.label }}</span>
+            </button>
+          </nav>
+          <div *ngIf="isLoading" class="report-skeleton-tabs" aria-hidden="true">
+            <div
+              *ngFor="let slot of skeletonTabSlots; trackBy: trackBySkeletonIndex"
+              class="org-skeleton-bone report-skeleton-tab"></div>
+          </div>
+        </div>
         <p class="report-subtitle" *ngIf="!isLoading && root">{{ scopeTitle }}</p>
+        <div *ngIf="isLoading" class="org-skeleton-bone report-skeleton-subtitle" aria-hidden="true"></div>
       </div>
 
-      <aside class="report-sidebar" aria-label="Simulação financeira">
-        <c4u-card class="simulation-card">
-          <h2 class="section-title">
-            <i class="ri-money-dollar-circle-line section-title-icon" aria-hidden="true"></i>
-            Simulação financeira
-            <c4u-info-button
-              [infoKey]="''"
-              customText="Pote fictício (BRL) rateado proporcionalmente aos pontos MTD da organização."
-              position="bottom">
-            </c4u-info-button>
-          </h2>
-          <div class="form-group">
-            <label class="form-label" for="simulation-pot-input">Valor do pote (R$)</label>
-            <input
-              id="simulation-pot-input"
-              class="form-control"
-              type="number"
-              min="0"
-              step="1000"
-              placeholder="Ex: 100000"
-              [value]="simulationPotBrl ?? ''"
-              [disabled]="isLoading"
-              (input)="onSimulationInput($any($event.target).value)" />
-          </div>
-          <p class="simulation-meta" *ngIf="showSimulation && pointsPerBrlLabel">
-            Taxa: {{ pointsPerBrlLabel }}
-          </p>
-          <p class="simulation-meta" *ngIf="showSimulation && root?.simulation">
-            Payout raiz: {{ formatCurrency(root!.simulation!.payout_brl) }}
-            ({{ root!.simulation!.share_pct | number:'1.2-2':'pt-BR' }}%)
-          </p>
-        </c4u-card>
-      </aside>
-
       <div class="report-main">
-        <div *ngIf="isLoading" class="report-loading" role="status" aria-live="polite">
-          <c4u-shimmer></c4u-shimmer>
-          <c4u-shimmer></c4u-shimmer>
-          <c4u-shimmer></c4u-shimmer>
+        <div *ngIf="isLoading" class="report-skeleton" role="status" aria-live="polite" aria-busy="true">
+          <span class="report-skeleton__sr-only">Carregando relatório organizacional…</span>
+
+          <section class="report-skeleton__section" aria-hidden="true">
+            <div class="org-skeleton-bone report-skeleton__eyebrow"></div>
+            <div class="report-skeleton__hero-grid">
+              <article *ngFor="let slot of skeletonHeroSlots; trackBy: trackBySkeletonIndex" class="report-skeleton__hero-card">
+                <div class="org-skeleton-bone report-skeleton__hero-label"></div>
+                <div class="org-skeleton-bone report-skeleton__hero-value"></div>
+                <div class="org-skeleton-bone report-skeleton__hero-bar"></div>
+                <div class="org-skeleton-bone report-skeleton__hero-hint"></div>
+              </article>
+            </div>
+          </section>
+
+          <section class="report-skeleton__card" aria-hidden="true">
+            <div class="report-skeleton__card-head">
+              <div>
+                <div class="org-skeleton-bone report-skeleton__title"></div>
+                <div class="org-skeleton-bone report-skeleton__subtitle"></div>
+              </div>
+              <div class="org-skeleton-bone report-skeleton__badge"></div>
+            </div>
+            <div class="report-skeleton__pace-grid">
+              <div *ngFor="let slot of skeletonPaceCardSlots; trackBy: trackBySkeletonIndex" class="report-skeleton__pace-card">
+                <div class="org-skeleton-bone report-skeleton__pace-label"></div>
+                <div class="org-skeleton-bone report-skeleton__pace-value"></div>
+              </div>
+            </div>
+          </section>
+
+          <section class="report-skeleton__card" aria-hidden="true">
+            <div class="report-skeleton__card-head">
+              <div>
+                <div class="org-skeleton-bone report-skeleton__title"></div>
+                <div class="org-skeleton-bone report-skeleton__subtitle"></div>
+              </div>
+            </div>
+            <div class="org-skeleton-bone report-skeleton__pipeline-bar"></div>
+            <div class="report-skeleton__pipeline-chips">
+              <div *ngFor="let slot of skeletonPipelineChipSlots; trackBy: trackBySkeletonIndex" class="report-skeleton__pipeline-chip">
+                <div class="org-skeleton-bone report-skeleton__chip-value"></div>
+                <div class="org-skeleton-bone report-skeleton__chip-label"></div>
+              </div>
+            </div>
+          </section>
+
+          <div class="report-skeleton__charts-row" aria-hidden="true">
+            <section class="report-skeleton__card report-skeleton__card--chart">
+              <div class="org-skeleton-bone report-skeleton__title"></div>
+              <div class="report-skeleton__weekday-chart">
+                <div
+                  *ngFor="let height of skeletonWeekdayBarHeights; trackBy: trackBySkeletonIndex"
+                  class="report-skeleton__weekday-bar-wrap">
+                  <div class="report-skeleton__weekday-track">
+                    <div class="org-skeleton-bone report-skeleton__weekday-fill" [style.height.%]="height"></div>
+                  </div>
+                  <div class="org-skeleton-bone report-skeleton__weekday-label"></div>
+                </div>
+              </div>
+            </section>
+            <section class="report-skeleton__card report-skeleton__card--side">
+              <div class="org-skeleton-bone report-skeleton__title"></div>
+              <div class="org-skeleton-bone report-skeleton__classification-bar"></div>
+              <div *ngFor="let slot of skeletonTableRowSlots; trackBy: trackBySkeletonIndex" class="report-skeleton__list-row">
+                <div class="org-skeleton-bone report-skeleton__list-dot"></div>
+                <div class="org-skeleton-bone report-skeleton__list-label"></div>
+                <div class="org-skeleton-bone report-skeleton__list-value"></div>
+              </div>
+            </section>
+          </div>
+
+          <section class="report-skeleton__card" aria-hidden="true">
+            <div class="org-skeleton-bone report-skeleton__title"></div>
+            <div class="report-skeleton__table">
+              <div class="org-skeleton-bone report-skeleton__table-head"></div>
+              <div *ngFor="let slot of skeletonTreeRowSlots; trackBy: trackBySkeletonIndex" class="report-skeleton__table-row">
+                <div class="org-skeleton-bone report-skeleton__table-cell report-skeleton__table-cell--wide"></div>
+                <div class="org-skeleton-bone report-skeleton__table-cell"></div>
+                <div class="org-skeleton-bone report-skeleton__table-cell"></div>
+                <div class="org-skeleton-bone report-skeleton__table-cell"></div>
+              </div>
+            </div>
+          </section>
         </div>
 
         <c4u-card *ngIf="!isLoading && hasLoadError" class="report-empty" role="alert">
@@ -87,353 +163,397 @@
         </c4u-card>
 
         <ng-container *ngIf="!isLoading && root && !hasLoadError">
-          <section class="dashboard-section hero-section" aria-label="Indicadores principais do mês">
-            <div class="section-header">
-              <h2 class="section-title">
-                <i class="ri-bar-chart-grouped-line section-title-icon" aria-hidden="true"></i>
-                Resumo MTD
-              </h2>
+          <div
+            *ngIf="reportPanelTab === 'operations'"
+            id="report-panel-operations"
+            class="report-panel"
+            role="tabpanel"
+            aria-labelledby="report-panel-tab-operations"
+            tabindex="0">
+          <section class="dashboard-section hero-section" aria-labelledby="hero-kpis-heading">
+            <div class="section-header section-header--compact">
+              <h2 id="hero-kpis-heading" class="section-eyebrow">Indicadores principais</h2>
             </div>
-            <div class="hero-grid">
-              <c4u-card
-                class="hero-card hero-card--points-delivered"
-                role="button"
-                tabindex="0"
+            <div class="hero-grid hero-grid--primary">
+              <button
+                type="button"
+                class="hero-kpi"
                 (click)="openKpiDrillDown('points_delivered', root!)"
-                (keydown.enter)="openKpiDrillDown('points_delivered', root!)"
-                (keydown.space)="$event.preventDefault(); openKpiDrillDown('points_delivered', root!)"
                 [attr.aria-label]="'Abrir histórico de pontos entregues (MTD)'">
-                <div class="hero-card__icon" aria-hidden="true">
-                  <i class="ri-copper-coin-line"></i>
+                <p class="hero-kpi__label">Pontos entregues (MTD)</p>
+                <p class="hero-kpi__value">{{ root.mtd.points_delivered | number:'1.0-0':'pt-BR' }}</p>
+                <div class="hero-kpi__progress" *ngIf="showHeroPointsGoal" aria-hidden="true">
+                  <div
+                    class="hero-kpi__progress-fill"
+                    [class.hero-kpi__progress-fill--positive]="heroPointsGoalTone === 'positive'"
+                    [class.hero-kpi__progress-fill--negative]="heroPointsGoalTone === 'negative'"
+                    [style.width.%]="heroPointsGoalPctBar">
+                  </div>
                 </div>
-                <div class="hero-card__body">
-                  <span class="hero-card__value">{{ root.mtd.points_delivered | number:'1.0-0':'pt-BR' }}</span>
-                  <span class="hero-card__label">Pontos entregues (MTD)</span>
+                <div class="hero-kpi__delta">
+                  <span class="hero-kpi__hint" *ngIf="showHeroPointsGoal && heroPointsGoalPctLabel">
+                    meta {{ root.mtd.goal_points | number:'1.0-0':'pt-BR' }} pts · {{ heroPointsGoalPctLabel }} da meta
+                  </span>
                   <span
-                    class="hero-card__compare"
-                    [class.hero-card__compare--positive]="mtdCompareTone(root.compare.vs_prev_mtd_points_pct) === 'positive'"
-                    [class.hero-card__compare--negative]="mtdCompareTone(root.compare.vs_prev_mtd_points_pct) === 'negative'">
-                    {{ mtdComparePct(root.compare.vs_prev_mtd_points_pct) }} vs MTD anterior
-                    <span class="hero-card__compare-abs">
-                      ({{ root.compare.vs_prev_mtd_points | number:'1.0-0':'pt-BR' }} pts)
-                    </span>
+                    class="delta-pill"
+                    [class.delta-pill--positive]="mtdCompareTone(root.compare.vs_prev_mtd_points_pct) === 'positive'"
+                    [class.delta-pill--negative]="mtdCompareTone(root.compare.vs_prev_mtd_points_pct) === 'negative'">
+                    {{ mtdComparePct(root.compare.vs_prev_mtd_points_pct) }}
+                  </span>
+                  <span class="hero-kpi__hint">
+                    vs MTD anterior ({{ root.compare.vs_prev_mtd_points | number:'1.0-0':'pt-BR' }} pts)
                   </span>
                 </div>
-              </c4u-card>
+              </button>
 
-              <c4u-card class="hero-card hero-card--points-prev">
-                <div class="hero-card__icon" aria-hidden="true">
-                  <i class="ri-history-line"></i>
-                </div>
-                <div class="hero-card__body">
-                  <span class="hero-card__value">{{ root.prev_full.points_delivered | number:'1.0-0':'pt-BR' }}</span>
-                  <span class="hero-card__label">Pontos mês anterior (fechado)</span>
-                  <span
-                    class="hero-card__compare"
-                    [class.hero-card__compare--positive]="mtdCompareTone(root.compare.vs_prev_full_points_pct) === 'positive'"
-                    [class.hero-card__compare--negative]="mtdCompareTone(root.compare.vs_prev_full_points_pct) === 'negative'">
-                    {{ mtdComparePct(root.compare.vs_prev_full_points_pct) }} vs mês ant. fechado
-                    <span class="hero-card__compare-abs">
-                      ({{ root.compare.vs_prev_full_points | number:'1.0-0':'pt-BR' }} pts)
-                    </span>
-                  </span>
-                </div>
-              </c4u-card>
-
-              <c4u-card
-                class="hero-card hero-card--finished"
-                role="button"
-                tabindex="0"
-                (click)="openKpiDrillDown('finished', root!)"
-                (keydown.enter)="openKpiDrillDown('finished', root!)"
-                (keydown.space)="$event.preventDefault(); openKpiDrillDown('finished', root!)"
-                [attr.aria-label]="'Abrir histórico de entregas concluídas (MTD)'">
-                <div class="hero-card__icon" aria-hidden="true">
-                  <i class="ri-checkbox-circle-line"></i>
-                </div>
-                <div class="hero-card__body">
-                  <span class="hero-card__value">{{ root.mtd.finished | number:'1.0-0':'pt-BR' }}</span>
-                  <span class="hero-card__label">Entregas concluídas</span>
-                </div>
-              </c4u-card>
-
-              <c4u-card class="hero-card hero-card--goal">
-                <div class="hero-card__icon" aria-hidden="true">
-                  <i class="ri-focus-3-line"></i>
-                </div>
-                <div class="hero-card__body">
-                  <span class="hero-card__value">{{ root.mtd.goal_points | number:'1.0-0':'pt-BR' }}</span>
-                  <span class="hero-card__label">Meta de pontos</span>
-                </div>
-              </c4u-card>
-
-              <c4u-card
-                class="hero-card hero-card--on-time"
-                role="button"
-                tabindex="0"
+              <button
+                type="button"
+                class="hero-kpi"
                 (click)="openKpiDrillDown('on_time_pct', root!)"
-                (keydown.enter)="openKpiDrillDown('on_time_pct', root!)"
-                (keydown.space)="$event.preventDefault(); openKpiDrillDown('on_time_pct', root!)"
                 [attr.aria-label]="'Abrir histórico de entregas no prazo (MTD)'">
-                <div class="hero-card__icon" aria-hidden="true">
-                  <i class="ri-time-line"></i>
+                <p class="hero-kpi__label">% no prazo</p>
+                <div class="hero-kpi__row">
+                  <p class="hero-kpi__value">{{ root.mtd.on_time_pct | number:'1.1-1':'pt-BR' }}%</p>
+                  <div class="hero-kpi__gauge" aria-hidden="true">
+                    <div class="hero-kpi__gauge-fill" [style.width.%]="onTimeGaugePct()"></div>
+                  </div>
                 </div>
-                <div class="hero-card__body">
-                  <span class="hero-card__value">{{ root.mtd.on_time_pct | number:'1.1-1':'pt-BR' }}%</span>
-                  <span class="hero-card__label">% no prazo</span>
+                <div class="hero-kpi__delta">
+                  <span class="hero-kpi__hint">meta 90%</span>
                 </div>
-              </c4u-card>
+              </button>
 
-              <c4u-card
-                class="hero-card hero-card--clients"
-                role="button"
-                tabindex="0"
-                (click)="openKpiDrillDown('clients_served', root!)"
-                (keydown.enter)="openKpiDrillDown('clients_served', root!)"
-                (keydown.space)="$event.preventDefault(); openKpiDrillDown('clients_served', root!)"
-                [attr.aria-label]="'Abrir histórico de clientes atendidos (MTD)'">
-                <div class="hero-card__icon" aria-hidden="true">
-                  <i class="ri-group-line"></i>
+              <button
+                type="button"
+                class="hero-kpi"
+                (click)="openKpiDrillDown('finished', root!)"
+                [attr.aria-label]="'Abrir histórico de entregas concluídas (MTD)'">
+                <p class="hero-kpi__label">Entregas concluídas</p>
+                <p class="hero-kpi__value">{{ root.mtd.finished | number:'1.0-0':'pt-BR' }}</p>
+                <div
+                  class="hero-kpi__progress"
+                  *ngIf="showHeroDeliveriesGoal || finishedVsOpenPct != null"
+                  aria-hidden="true">
+                  <div
+                    class="hero-kpi__progress-fill"
+                    [class.hero-kpi__progress-fill--positive]="finishedHeroProgressTone === 'positive'"
+                    [class.hero-kpi__progress-fill--negative]="finishedHeroProgressTone === 'negative'"
+                    [style.width.%]="finishedHeroProgressPct">
+                  </div>
                 </div>
-                <div class="hero-card__body">
-                  <span class="hero-card__value">{{ root.mtd.clients_served | number:'1.0-0':'pt-BR' }}</span>
-                  <span class="hero-card__label">Clientes atendidos</span>
+                <div class="hero-kpi__delta">
+                  <span class="hero-kpi__hint" *ngIf="showHeroDeliveriesGoal && heroDeliveriesGoalPctLabel">
+                    meta {{ root.mtd.goal_deliveries | number:'1.0-0':'pt-BR' }} entregas · {{ heroDeliveriesGoalPctLabel }} da meta
+                  </span>
+                  <span class="hero-kpi__hint" *ngIf="!showHeroDeliveriesGoal && finishedVsOpenPct != null">
+                    {{ finishedVsOpenPct | number:'1.1-1':'pt-BR' }}% do volume concluído + pendente
+                  </span>
                 </div>
-              </c4u-card>
+              </button>
+
+              <div class="hero-kpi hero-kpi--static" aria-label="Clientes atendidos (MTD)">
+                <p class="hero-kpi__label">Clientes atendidos</p>
+                <p class="hero-kpi__value">{{ root.mtd.clients_served | number:'1.0-0':'pt-BR' }}</p>
+                <div class="hero-kpi__breakdown">
+                  <!-- Drill-down por tag desabilitado temporariamente (performance). -->
+                  <span class="hero-kpi__breakdown-item">
+                    <span class="hero-kpi__breakdown-value">{{ root.mtd.clients_acessorias_g4 | number:'1.0-0':'pt-BR' }}</span>
+                    <span class="hero-kpi__breakdown-label">G4</span>
+                  </span>
+                  <span class="hero-kpi__breakdown-item">
+                    <span class="hero-kpi__breakdown-value">{{ root.mtd.clients_acessorias_onboarding | number:'1.0-0':'pt-BR' }}</span>
+                    <span class="hero-kpi__breakdown-label">Onboarding</span>
+                  </span>
+                  <span class="hero-kpi__breakdown-item">
+                    <span class="hero-kpi__breakdown-value">{{ root.mtd.clients_acessorias_risco_de_churn | number:'1.0-0':'pt-BR' }}</span>
+                    <span class="hero-kpi__breakdown-label">Risco churn</span>
+                  </span>
+                </div>
+              </div>
             </div>
           </section>
 
-          <section class="dashboard-section classification-section" aria-label="Empresas por classificação">
-            <div class="section-header section-header--with-toggle">
-              <div class="section-header__leading">
-                <h2 class="section-title">
-                  <i class="ri-vip-diamond-line section-title-icon" aria-hidden="true"></i>
-                  Empresas por classificação
+          <c4u-card *ngIf="showPaceSection" class="dashboard-section pace-section" aria-labelledby="pace-heading">
+            <div class="pace-section__header">
+              <div>
+                <h2 id="pace-heading" class="section-title section-title--inline">
+                  <i class="ri-speed-up-line section-title-icon" aria-hidden="true"></i>
+                  Meta vs realizado / ritmo
                 </h2>
-                <span class="classification-total" *ngIf="clientClassificationTotalCount > 0">
-                  {{ clientClassificationTotalCount | number:'1.0-0':'pt-BR' }} no escopo MTD
-                </span>
+                <p class="section-subtitle" *ngIf="paceCalendarLabel">{{ paceCalendarLabel }}</p>
               </div>
-              <button
-                type="button"
-                class="classification-view-toggle"
-                (click)="toggleClassificationView()"
-                [attr.aria-pressed]="classificationView === 'cards'"
-                [attr.aria-label]="classificationView === 'table' ? 'Ver em cartões' : 'Ver tabela'">
+              <div class="pace-compare__ratio-badge" *ngIf="paceGoalComparison as cmp">
+                <span class="pace-compare__ratio-value" [class.pace-compare__ratio-value--positive]="cmp.tone === 'positive'"
+                  [class.pace-compare__ratio-value--warning]="cmp.tone === 'warning' || cmp.tone === 'negative'">
+                  {{ cmp.paceRatioLabel }}
+                </span>
+                <span class="pace-compare__ratio-label">do ritmo necessário</span>
+              </div>
+            </div>
+
+            <div class="pace-compare" *ngIf="paceGoalComparison as cmp" role="region" aria-label="Comparação de ritmo para meta de pontos">
+              <div class="pace-compare__status pace-compare__status--{{ cmp.tone }}">
                 <i
-                  [class]="classificationView === 'table' ? 'ri-layout-grid-line' : 'ri-table-line'"
+                  class="pace-compare__status-icon"
+                  [class.ri-checkbox-circle-fill]="cmp.tone === 'positive'"
+                  [class.ri-error-warning-line]="cmp.tone === 'warning' || cmp.tone === 'negative'"
+                  [class.ri-information-line]="cmp.tone === 'neutral'"
                   aria-hidden="true"></i>
-                <span>{{ classificationView === 'table' ? 'Cartões' : 'Tabela' }}</span>
+                <div>
+                  <p class="pace-compare__status-label">{{ cmp.statusLabel }}</p>
+                  <p class="pace-compare__status-hint">{{ cmp.statusHint }}</p>
+                </div>
+              </div>
+
+              <div class="pace-compare__metrics">
+                <div class="pace-compare__metric">
+                  <div class="pace-compare__metric-head">
+                    <span class="pace-compare__metric-label">Ritmo atual</span>
+                    <span class="pace-compare__metric-value">{{ cmp.currentPaceLabel }} <span class="pace-compare__metric-unit">pts/dia</span></span>
+                  </div>
+                  <div class="pace-compare__bar" aria-hidden="true">
+                    <div
+                      class="pace-compare__bar-fill pace-compare__bar-fill--current"
+                      [class.pace-compare__bar-fill--positive]="cmp.tone === 'positive'"
+                      [class.pace-compare__bar-fill--warning]="cmp.tone === 'warning' || cmp.tone === 'negative'"
+                      [style.width.%]="cmp.currentBarPct">
+                    </div>
+                  </div>
+                </div>
+
+                <div class="pace-compare__metric">
+                  <div class="pace-compare__metric-head">
+                    <span class="pace-compare__metric-label">Ritmo necessário</span>
+                    <span class="pace-compare__metric-value">{{ cmp.requiredPaceLabel }} <span class="pace-compare__metric-unit">pts/dia</span></span>
+                  </div>
+                  <div class="pace-compare__bar" aria-hidden="true">
+                    <div class="pace-compare__bar-fill pace-compare__bar-fill--required" [style.width.%]="cmp.requiredBarPct"></div>
+                  </div>
+                </div>
+              </div>
+
+              <p class="pace-compare__gap">
+                Diferença:
+                <strong
+                  [class.pace-compare__gap--positive]="cmp.paceGapPerDay >= 0"
+                  [class.pace-compare__gap--negative]="cmp.paceGapPerDay < 0">
+                  {{ cmp.paceGapPerDayLabel }}
+                </strong>
+              </p>
+            </div>
+
+            <div class="pace-cards" *ngIf="paceSupportingCards.length">
+              <div
+                *ngFor="let card of paceSupportingCards; trackBy: trackByPaceCard"
+                class="pace-card"
+                [class.pace-card--positive]="card.tone === 'positive'"
+                [class.pace-card--negative]="card.tone === 'negative'"
+                [class.pace-card--warning]="card.tone === 'warning'">
+                <p class="pace-card__label">{{ card.label }}</p>
+                <p class="pace-card__value">{{ card.value }}</p>
+                <p class="pace-card__hint" *ngIf="card.hint">{{ card.hint }}</p>
+              </div>
+            </div>
+          </c4u-card>
+
+          <c4u-card class="dashboard-section operational-health-card" aria-label="Saúde operacional">
+            <div class="operational-health__header">
+              <div>
+                <h2 class="section-title section-title--inline">
+                  <i class="ri-line-chart-line section-title-icon" aria-hidden="true"></i>
+                  Saúde operacional
+                </h2>
+                <p class="section-subtitle">
+                  Pipeline de {{ pipelineTotal | number:'1.0-0':'pt-BR' }} entregas em aberto · clique numa faixa para detalhar
+                </p>
+              </div>
+              <div class="operational-health__total">
+                <p class="operational-health__total-value">{{ pipelineTotal | number:'1.0-0':'pt-BR' }}</p>
+                <p class="operational-health__total-label">Total em aberto</p>
+              </div>
+            </div>
+
+            <div
+              *ngIf="operationalRiskAlerts.length"
+              class="operational-alerts"
+              role="region"
+              aria-label="Alertas operacionais prioritários">
+              <button
+                *ngFor="let alert of operationalRiskAlerts; trackBy: trackByOperationalAlert"
+                type="button"
+                class="operational-alert operational-alert--{{ alert.severity }}"
+                [attr.title]="alert.description"
+                (click)="openKpiDrillDown(alert.kpi, root!)">
+                <i
+                  class="operational-alert__icon"
+                  [class.ri-alarm-warning-fill]="alert.severity === 'critical'"
+                  [class.ri-error-warning-line]="alert.severity === 'warning'"
+                  aria-hidden="true"></i>
+                <span class="operational-alert__body">
+                  <span class="operational-alert__value">{{ alert.value | number:'1.0-0':'pt-BR' }}</span>
+                  <span class="operational-alert__label">{{ alert.label }}</span>
+                </span>
+                <i class="ri-arrow-right-s-line operational-alert__chevron" aria-hidden="true"></i>
               </button>
             </div>
 
-            <div
-              *ngIf="classificationView === 'table'"
-              class="simple-table-wrap classification-table-wrap"
-              role="region"
-              aria-label="Tabela de empresas por classificação">
-              <table class="simple-table classification-table">
+            <div class="pipeline-bar" role="img" [attr.aria-label]="'Distribuição do pipeline operacional'">
+              <button
+                *ngFor="let seg of pipelineSegments; trackBy: trackByPipelineSegment"
+                type="button"
+                class="pipeline-bar__segment pipeline-bar__segment--{{ seg.tone }}"
+                [class.pipeline-bar__segment--emphasis]="seg.emphasis"
+                [style.width]="pipelineSegmentWidth(seg.value)"
+                [attr.title]="(seg.tooltip ? seg.tooltip + ' · ' : '') + seg.label + ' · ' + (seg.value | number:'1.0-0':'pt-BR')"
+                [attr.aria-label]="seg.label + ': ' + seg.value"
+                (click)="onPipelineSegmentClick(seg)">
+              </button>
+            </div>
+
+            <div class="pipeline-legend">
+              <button
+                *ngFor="let seg of pipelineLegendSegments; trackBy: trackByPipelineSegment"
+                type="button"
+                class="pipeline-chip pipeline-chip--{{ seg.tone }}"
+                (click)="onPipelineSegmentClick(seg)"
+                [attr.title]="seg.tooltip || null">
+                <span class="pipeline-chip__dot"></span>
+                <span class="pipeline-chip__value">{{ seg.value | number:'1.0-0':'pt-BR' }}</span>
+                <span class="pipeline-chip__label">{{ seg.label }}</span>
+              </button>
+            </div>
+          </c4u-card>
+
+          <c4u-card
+            *ngIf="showCriticalClientsSection"
+            class="dashboard-section critical-clients-section"
+            aria-labelledby="critical-clients-heading">
+            <div class="critical-clients__header">
+              <div>
+                <h2 id="critical-clients-heading" class="section-title section-title--inline">
+                  <i class="ri-user-unfollow-line section-title-icon" aria-hidden="true"></i>
+                  Clientes críticos
+                </h2>
+                <p class="section-subtitle">
+                  Score composto por tags acessórias, atrasos e meses consecutivos com problemas
+                </p>
+              </div>
+            </div>
+
+            <div class="critical-clients__chips" role="list" aria-label="Resumo de clientes críticos">
+              <div
+                *ngFor="let chip of criticalClientKpiChips"
+                class="critical-kpi-chip critical-kpi-chip--{{ chip.tone }}"
+                role="listitem">
+                <span class="critical-kpi-chip__value">{{ chip.value | number:'1.0-0':'pt-BR' }}</span>
+                <span class="critical-kpi-chip__label">{{ chip.label }}</span>
+              </div>
+            </div>
+
+            <div class="simple-table-wrap critical-clients-table-wrap" role="region" aria-label="Top clientes críticos">
+              <table class="simple-table critical-clients-table">
                 <thead>
                   <tr>
-                    <th>Nível</th>
-                    <th>Classificação</th>
-                    <th class="simple-table__num">Empresas</th>
-                    <th class="simple-table__num">% do total</th>
+                    <th class="critical-clients-table__name-col">Cliente</th>
+                    <th class="simple-table__num">Score</th>
+                    <th>Risco</th>
+                    <th class="simple-table__num">Atraso s/ just.</th>
+                    <th class="simple-table__num">Entrega tardia</th>
+                    <th class="simple-table__num">Meses c/ prob.</th>
+                    <th>Tags</th>
                   </tr>
                 </thead>
                 <tbody>
-                  <tr *ngFor="let tier of clientClassificationTiers; trackBy: trackByClassificationLevel">
-                    <td>{{ tier.level }}</td>
-                    <td>
-                      <span class="classification-table__label">
-                        <i [class]="tier.icon" aria-hidden="true"></i>
-                        {{ tier.label }}
-                      </span>
+                  <tr
+                    *ngFor="let client of criticalClientsTop; trackBy: trackByCriticalClient"
+                    class="critical-clients-table__row--clickable"
+                    [class.critical-clients-table__row--alert]="criticalClientHasIssues(client)"
+                    tabindex="0"
+                    role="button"
+                    [attr.aria-label]="'Ver entregas de ' + client.company_label"
+                    (click)="openCriticalClientDrillDown(client)"
+                    (keydown.enter)="openCriticalClientDrillDown(client)"
+                    (keydown.space)="$event.preventDefault(); openCriticalClientDrillDown(client)">
+                    <td class="critical-clients-table__name-col">
+                      <span class="critical-clients-table__name">{{ client.company_label }}</span>
+                      <i class="ri-arrow-right-s-line critical-clients-table__drill-icon" aria-hidden="true"></i>
                     </td>
-                    <td class="simple-table__num">{{ tier.count | number:'1.0-0':'pt-BR' }}</td>
-                    <td class="simple-table__num">{{ classificationSharePct(tier.count) }}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-
-            <div
-              *ngIf="classificationView === 'cards'"
-              class="classification-grid"
-              role="region"
-              aria-label="Cartões de empresas por classificação">
-              <c4u-card
-                *ngFor="let tier of clientClassificationTiers; trackBy: trackByClassificationLevel"
-                class="classification-card"
-                [class.classification-card--stone]="tier.level === 1"
-                [class.classification-card--bronze]="tier.level === 2"
-                [class.classification-card--silver]="tier.level === 3"
-                [class.classification-card--gold]="tier.level === 4"
-                [class.classification-card--diamond]="tier.level === 5">
-                <div class="classification-card__icon" aria-hidden="true">
-                  <i [class]="tier.icon"></i>
-                </div>
-                <span class="classification-card__level">{{ tier.level }}</span>
-                <span class="classification-card__label">{{ tier.label }}</span>
-                <span class="classification-card__value">{{ tier.count | number:'1.0-0':'pt-BR' }}</span>
-                <span class="classification-card__hint">empresas</span>
-                <div class="classification-card__bar-track" aria-hidden="true">
-                  <div
-                    class="classification-card__bar-fill"
-                    [style.height]="classificationBarHeight(tier.count)">
-                  </div>
-                </div>
-              </c4u-card>
-            </div>
-          </section>
-
-          <section class="dashboard-section risks-section" aria-label="Riscos operacionais">
-            <div class="section-header">
-              <h2 class="section-title">
-                <i class="ri-alarm-warning-line section-title-icon" aria-hidden="true"></i>
-                Riscos operacionais
-              </h2>
-            </div>
-            <div class="insights-alert-row" role="list">
-              <div
-                class="insights-alert insights-alert--urgent"
-                role="listitem"
-                tabindex="0"
-                (click)="openKpiDrillDown('multa_risk', root!)"
-                (keydown.enter)="openKpiDrillDown('multa_risk', root!)"
-                (keydown.space)="$event.preventDefault(); openKpiDrillDown('multa_risk', root!)"
-                [attr.aria-label]="'Abrir lista de entregas com risco de multa'">
-                <div class="insights-alert-icon" aria-hidden="true"><i class="ri-alarm-warning-line"></i></div>
-                <div class="insights-alert-content">
-                  <span class="insights-alert-value">{{ root.mtd.multa_risk | number:'1.0-0':'pt-BR' }}</span>
-                  <span class="insights-alert-label">Risco de multa</span>
-                </div>
-              </div>
-              <div
-                class="insights-alert insights-alert--warning"
-                role="listitem"
-                tabindex="0"
-                (click)="openKpiDrillDown('near_due', root!)"
-                (keydown.enter)="openKpiDrillDown('near_due', root!)"
-                (keydown.space)="$event.preventDefault(); openKpiDrillDown('near_due', root!)"
-                [attr.aria-label]="'Abrir lista de entregas próximas do vencimento'">
-                <div class="insights-alert-icon" aria-hidden="true"><i class="ri-time-line"></i></div>
-                <div class="insights-alert-content">
-                  <span class="insights-alert-value">{{ root.mtd.near_due | number:'1.0-0':'pt-BR' }}</span>
-                  <span class="insights-alert-label">Próximas do vencimento</span>
-                </div>
-              </div>
-              <div
-                class="insights-alert insights-alert--danger"
-                role="listitem"
-                tabindex="0"
-                (click)="openKpiDrillDown('overdue_pending', root!)"
-                (keydown.enter)="openKpiDrillDown('overdue_pending', root!)"
-                (keydown.space)="$event.preventDefault(); openKpiDrillDown('overdue_pending', root!)"
-                [attr.aria-label]="'Abrir lista de entregas com pendências em atraso'">
-                <div class="insights-alert-icon" aria-hidden="true"><i class="ri-error-warning-line"></i></div>
-                <div class="insights-alert-content">
-                  <span class="insights-alert-value">{{ root.mtd.overdue_pending | number:'1.0-0':'pt-BR' }}</span>
-                  <span class="insights-alert-label">Pendentes em atraso</span>
-                </div>
-              </div>
-            </div>
-          </section>
-
-          <section *ngIf="showDirectorateRanking" class="dashboard-section ranking-section" aria-label="Ranking de diretorias">
-            <div class="section-header section-header--with-toggle">
-              <h2 class="section-title">
-                <i class="ri-trophy-line section-title-icon" aria-hidden="true"></i>
-                Ranking de diretorias
-              </h2>
-              <div class="data-view-toggle" role="group" aria-label="Ordenar ranking">
-                <button
-                  type="button"
-                  class="toggle-btn"
-                  [class.active]="rankingSortBy === 'balance_score'"
-                  (click)="onRankingSortChange('balance_score')">
-                  <i class="ri-scales-3-line" aria-hidden="true"></i>
-                  <span class="toggle-text">Balance score</span>
-                </button>
-                <button
-                  type="button"
-                  class="toggle-btn"
-                  [class.active]="rankingSortBy === 'points_delivered'"
-                  (click)="onRankingSortChange('points_delivered')">
-                  <i class="ri-coin-line" aria-hidden="true"></i>
-                  <span class="toggle-text">Pontos MTD</span>
-                </button>
-              </div>
-            </div>
-            <div class="simple-table-wrap ranking-table-wrap" role="region" aria-label="Tabela de ranking de diretorias">
-              <table class="simple-table ranking-table">
-                <thead>
-                  <tr>
-                    <th class="ranking-table__name-col">Diretoria</th>
-                    <th class="simple-table__num">Colab.</th>
-                    <th class="simple-table__num">vs ant.</th>
-                    <th
-                      *ngFor="let col of rankingMtdColumns"
-                      class="simple-table__num"
-                      [attr.title]="col.title || null">
-                      {{ col.label }}
-                    </th>
-                    <th class="simple-table__num">Balance</th>
-                    <th *ngIf="showSimulation" class="simple-table__num">Simulação</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr *ngFor="let dir of rankedDirectorates; trackBy: trackByNodeId">
-                    <td class="ranking-table__name-col" [title]="directorateRankingLabel(dir)">
-                      <ng-container *ngIf="directorateRankingArea(dir) as area; else rankingNameOnly">
-                        <span [class]="directorateRankingAreaClass(dir)">{{ area }}</span>
-                        <span class="ranking-table__sep"> &gt; </span>
-                        <span>{{ directorateRankingName(dir) }}</span>
-                      </ng-container>
-                      <ng-template #rankingNameOnly>{{ directorateRankingName(dir) }}</ng-template>
-                    </td>
-                    <td class="simple-table__num">{{ dir.players_count | number:'1.0-0':'pt-BR' }}</td>
                     <td class="simple-table__num">
                       <span
-                        class="ranking-table__pct"
-                        [class.ranking-table__pct--positive]="mtdCompareTone(dir.compare?.vs_prev_mtd_points_pct) === 'positive'"
-                        [class.ranking-table__pct--negative]="mtdCompareTone(dir.compare?.vs_prev_mtd_points_pct) === 'negative'">
-                        {{ mtdComparePct(dir.compare?.vs_prev_mtd_points_pct) }}
+                        class="critical-score"
+                        [class.critical-score--high]="client.risk_score >= 50"
+                        [class.critical-score--critical]="client.risk_score >= 75">
+                        {{ criticalClientRiskScore(client) }}
                       </span>
                     </td>
-                    <td
-                      *ngFor="let col of rankingMtdColumns"
-                      class="simple-table__num">
-                      {{ rankingMtdCell(dir, col) }}
+                    <td>
+                      <span class="critical-tier-badge" [ngClass]="criticalClientTierClass(client)">
+                        {{ criticalClientTierLabel(client) }}
+                      </span>
                     </td>
                     <td class="simple-table__num">
-                      {{ dir.balance_score != null ? (dir.balance_score | number:'1.0-0':'pt-BR') : '—' }}
+                      <button
+                        type="button"
+                        class="critical-metric critical-metric--danger critical-metric--link"
+                        *ngIf="client.mtd_overdue_unjustified > 0; else zeroOverdue"
+                        [attr.aria-label]="'Ver atrasos pendentes de ' + client.company_label"
+                        (click)="openCriticalClientDrillDown(client, 'overdue'); $event.stopPropagation()">
+                        {{ client.mtd_overdue_unjustified | number:'1.0-0':'pt-BR' }}
+                      </button>
+                      <ng-template #zeroOverdue>—</ng-template>
                     </td>
-                    <td *ngIf="showSimulation" class="simple-table__num">
-                      {{ formatCurrency(dir.simulation?.payout_brl) }}
-                      <span class="ranking-share" *ngIf="dir.simulation?.share_pct != null">
-                        ({{ dir.simulation!.share_pct | number:'1.0-0':'pt-BR' }}%)
+                    <td class="simple-table__num">
+                      <button
+                        type="button"
+                        class="critical-metric critical-metric--warning critical-metric--link"
+                        *ngIf="client.mtd_late_finish > 0; else zeroLate"
+                        [attr.aria-label]="'Ver entregas tardias de ' + client.company_label"
+                        (click)="openCriticalClientDrillDown(client, 'late_finish'); $event.stopPropagation()">
+                        {{ client.mtd_late_finish | number:'1.0-0':'pt-BR' }}
+                      </button>
+                      <ng-template #zeroLate>—</ng-template>
+                    </td>
+                    <td class="simple-table__num">
+                      <span
+                        class="critical-metric"
+                        [class.critical-metric--warning]="client.consecutive_issue_months >= 2">
+                        {{ client.consecutive_issue_months | number:'1.0-0':'pt-BR' }}
+                      </span>
+                    </td>
+                    <td>
+                      <span class="critical-tag-list">
+                        <span
+                          *ngFor="let tag of criticalClientTags(client)"
+                          class="critical-tag"
+                          [class.critical-tag--churn]="tag === '#RISCODECHURN'">
+                          {{ tag }}
+                        </span>
+                        <span *ngIf="!criticalClientTags(client).length" class="critical-tag critical-tag--muted">—</span>
                       </span>
                     </td>
                   </tr>
                 </tbody>
               </table>
             </div>
-          </section>
+          </c4u-card>
 
-          <section class="dashboard-section heatmap-section" aria-label="Distribuição por dia da semana">
-            <div class="section-header">
-              <h2 class="section-title">
-                <i class="ri-calendar-line section-title-icon" aria-hidden="true"></i>
-                Entregas por dia da semana
-              </h2>
-            </div>
-            <c4u-card class="weekday-card">
-              <div class="insights-weekday-chart" role="img" aria-label="Distribuição de entregas por dia da semana">
+          <div class="dashboard-section charts-row">
+            <c4u-card class="weekday-card charts-row__heatmap" aria-label="Entregas por dia da semana">
+              <div class="charts-row__header">
+                <div>
+                  <h2 class="section-title section-title--inline">Entregas por dia da semana</h2>
+                  <p class="section-subtitle" *ngIf="weekdayPeakStat as peak">
+                    Pico em {{ peak.label }} ({{ peak.finishedCount | number:'1.0-0':'pt-BR' }}) ·
+                    {{ weekdayFinishedTotal | number:'1.0-0':'pt-BR' }} no total MTD
+                  </p>
+                </div>
+              </div>
+              <div class="insights-weekday-chart insights-weekday-chart--tall" role="img" aria-label="Distribuição de entregas por dia da semana">
                 <div
                   *ngFor="let day of weekdayStats; trackBy: trackByWeekday"
                   class="insights-weekday-bar-wrap">
-                  <div class="insights-weekday-bar-track">
+                  <span class="insights-weekday-count">{{ day.finishedCount | number:'1.0-0':'pt-BR' }}</span>
+                  <div class="insights-weekday-bar-track insights-weekday-bar-track--tall">
                     <div
                       class="insights-weekday-bar-fill"
                       [class.insights-weekday-bar-fill--peak]="day.finishedCount === weekdayMaxCount && day.finishedCount > 0"
@@ -442,7 +562,6 @@
                       [attr.title]="day.label + ': ' + day.finishedCount + ' entregas'">
                     </div>
                   </div>
-                  <span class="insights-weekday-count">{{ day.finishedCount }}</span>
                   <span
                     class="insights-weekday-label"
                     [class.insights-weekday-label--peak]="day.finishedCount === weekdayMaxCount && day.finishedCount > 0">
@@ -451,18 +570,184 @@
                 </div>
               </div>
             </c4u-card>
-          </section>
 
-          <section
-            *ngIf="showHighlightsSection"
-            class="dashboard-section highlights-section"
-            aria-label="Destaques e atenção">
+            <c4u-card class="classification-compact charts-row__classification" aria-label="Empresas por classificação">
+              <h2 class="section-title section-title--inline">Empresas por classificação</h2>
+              <p class="section-subtitle" *ngIf="clientClassificationTotalCount > 0">
+                {{ clientClassificationTotalCount | number:'1.0-0':'pt-BR' }} empresas no escopo MTD
+              </p>
+              <div class="classification-compact__bar" aria-hidden="true">
+                <div
+                  *ngFor="let tier of clientClassificationTiers; trackBy: trackByClassificationLevel"
+                  class="classification-compact__segment classification-compact__segment--level-{{ tier.level }}"
+                  [style.width]="classificationShareWidth(tier.count)">
+                </div>
+              </div>
+              <ul class="classification-compact__list">
+                <li *ngFor="let tier of clientClassificationTiers; trackBy: trackByClassificationLevel">
+                  <span class="classification-compact__dot classification-compact__dot--level-{{ tier.level }}"></span>
+                  <span class="classification-compact__name">{{ tier.label }}</span>
+                  <span class="classification-compact__count">{{ tier.count | number:'1.0-0':'pt-BR' }}</span>
+                  <span class="classification-compact__share">{{ classificationSharePct(tier.count) }}</span>
+                </li>
+              </ul>
+            </c4u-card>
+          </div>
+
+          <c4u-card *ngIf="showDirectorateRanking" class="dashboard-section ranking-section" aria-label="Ranking de diretorias">
             <div class="section-header section-header--with-toggle">
-              <h2 class="section-title">
-                <i class="ri-star-line section-title-icon" aria-hidden="true"></i>
-                Destaques e atenção
-              </h2>
-              <div class="data-view-toggle" role="tablist" aria-label="Nível hierárquico dos destaques">
+              <div class="section-header__leading">
+                <h2 class="section-title section-title--inline">Ranking de diretorias</h2>
+                <p class="section-subtitle">Ordenado por {{ rankingSortLabel }}</p>
+              </div>
+              <div class="section-header__actions">
+                <button type="button" class="outline-btn" (click)="toggleRankingDetails()">
+                  {{ rankingShowDetails ? 'Ocultar detalhes' : 'Ver detalhes' }}
+                </button>
+                <div class="data-view-toggle" role="group" aria-label="Ordenar ranking">
+                  <button
+                    type="button"
+                    class="toggle-btn"
+                    [class.active]="rankingSortBy === 'on_time_pct'"
+                    (click)="onRankingSortChange('on_time_pct')">
+                    <i class="ri-time-line" aria-hidden="true"></i>
+                    <span class="toggle-text">% no prazo</span>
+                  </button>
+                  <button
+                    type="button"
+                    class="toggle-btn"
+                    [class.active]="rankingSortBy === 'points_per_collaborator'"
+                    (click)="onRankingSortChange('points_per_collaborator')">
+                    <i class="ri-user-star-line" aria-hidden="true"></i>
+                    <span class="toggle-text">Pts/colab.</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div class="simple-table-wrap ranking-table-wrap" role="region" aria-label="Tabela de ranking de diretorias">
+              <table class="simple-table ranking-table ranking-table--compact">
+                <thead>
+                  <tr>
+                    <th class="ranking-table__name-col">Diretoria</th>
+                    <th
+                      *ngFor="let col of rankingEssentialColumns"
+                      class="simple-table__num"
+                      [attr.title]="col.title || null">
+                      {{ col.label }}
+                    </th>
+                    <ng-container *ngIf="rankingShowDetails">
+                      <th
+                        *ngFor="let col of rankingDetailColumns"
+                        class="simple-table__num"
+                        [attr.title]="col.title || null">
+                        {{ col.label }}
+                      </th>
+                    </ng-container>
+                    <th class="simple-table__num">Balance</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr *ngFor="let dir of rankedDirectorates; trackBy: trackByNodeId">
+                    <td class="ranking-table__name-col" [title]="directorateRankingLabel(dir)">
+                      <span class="ranking-table__lead">{{ directorateRankingName(dir) }}</span>
+                      <span class="ranking-table__area" *ngIf="directorateRankingArea(dir) as area">{{ area }}</span>
+                    </td>
+                    <td
+                      *ngFor="let col of rankingEssentialColumns"
+                      class="simple-table__num">
+                      <ng-container *ngIf="col.key === 'on_time_pct'; else rankingEssentialDefault">
+                        <span
+                          class="metric-chip"
+                          [class.metric-chip--success]="(dir.mtd.on_time_pct ?? 0) >= 90"
+                          [class.metric-chip--warning]="(dir.mtd.on_time_pct ?? 0) >= 70 && (dir.mtd.on_time_pct ?? 0) < 90"
+                          [class.metric-chip--danger]="(dir.mtd.on_time_pct ?? 0) < 70">
+                          {{ rankingMtdCell(dir, col) }}
+                        </span>
+                      </ng-container>
+                      <ng-template #rankingEssentialDefault>
+                        <ng-container *ngIf="col.key === 'goal_points'; else rankingEssentialValue">
+                          <span>{{ rankingMtdCell(dir, col) }}</span>
+                          <div class="ranking-table__goal-bar" *ngIf="rankingPointsGoalPct(dir)">
+                            <div
+                              class="ranking-table__goal-bar-fill"
+                              [class.ranking-table__goal-bar-fill--positive]="rankingPointsGoalTone(dir) === 'positive'"
+                              [class.ranking-table__goal-bar-fill--negative]="rankingPointsGoalTone(dir) === 'negative'"
+                              [style.width.%]="rankingPointsGoalPctNumber(dir)">
+                            </div>
+                          </div>
+                        </ng-container>
+                        <ng-template #rankingEssentialValue>
+                          {{ rankingMtdCell(dir, col) }}
+                        </ng-template>
+                      </ng-template>
+                    </td>
+                    <ng-container *ngIf="rankingShowDetails">
+                      <td
+                        *ngFor="let col of rankingDetailColumns"
+                        class="simple-table__num"
+                        [class.simple-table__num--alert]="(col.key === 'multa_risk' || col.key === 'multa_incurred') && (dir.mtd[col.key] ?? 0) > 0">
+                        {{ rankingMtdCell(dir, col) }}
+                      </td>
+                    </ng-container>
+                    <td class="simple-table__num">
+                      <span
+                        class="balance-badge"
+                        [class.balance-badge--success]="(dir.balance_score ?? 0) >= 100"
+                        [class.balance-badge--info]="(dir.balance_score ?? 0) >= 60 && (dir.balance_score ?? 0) < 100"
+                        [class.balance-badge--warning]="(dir.balance_score ?? 0) < 60">
+                        {{ dir.balance_score != null ? (dir.balance_score | number:'1.0-0':'pt-BR') : '—' }}
+                      </span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </c4u-card>
+
+          <c4u-card *ngIf="showPeopleSection" class="dashboard-section people-section" aria-label="Pessoas">
+            <div class="people-section__header">
+              <div>
+                <h2 class="section-title section-title--inline">Pessoas</h2>
+                <p class="section-subtitle">Destaques e pontos de atenção entre gerentes, supervisores e jogadores</p>
+              </div>
+              <div class="people-section__search">
+                <i class="ri-search-line" aria-hidden="true"></i>
+                <input
+                  type="search"
+                  class="people-section__search-input"
+                  placeholder="Buscar nome…"
+                  [value]="peopleSearch"
+                  (input)="onPeopleSearchInput($any($event.target).value)"
+                  aria-label="Buscar pessoa por nome" />
+              </div>
+            </div>
+
+            <div class="people-section__controls">
+              <div class="people-tabs" role="tablist" aria-label="Destaques ou atenção">
+                <button
+                  type="button"
+                  class="people-tab"
+                  role="tab"
+                  [class.people-tab--active]="peopleHighlightTab === 'destaques'"
+                  [attr.aria-selected]="peopleHighlightTab === 'destaques'"
+                  (click)="onPeopleHighlightTabChange('destaques')">
+                  <i class="ri-star-line" aria-hidden="true"></i>
+                  Destaques
+                  <span class="people-tab__count">{{ filteredHighlightDestaque.length }}</span>
+                </button>
+                <button
+                  type="button"
+                  class="people-tab"
+                  role="tab"
+                  [class.people-tab--active]="peopleHighlightTab === 'atencao'"
+                  [attr.aria-selected]="peopleHighlightTab === 'atencao'"
+                  (click)="onPeopleHighlightTabChange('atencao')">
+                  <i class="ri-alert-line" aria-hidden="true"></i>
+                  Precisam de atenção
+                  <span class="people-tab__count">{{ filteredHighlightAtencao.length }}</span>
+                </button>
+              </div>
+              <div class="data-view-toggle" role="tablist" aria-label="Nível hierárquico">
                 <button
                   *ngFor="let tab of highlightViewTabs"
                   type="button"
@@ -470,112 +755,63 @@
                   role="tab"
                   [class.active]="highlightViewTab === tab.id"
                   [attr.aria-selected]="highlightViewTab === tab.id"
-                  [attr.aria-controls]="'highlights-panel-' + tab.id"
                   [disabled]="!isHighlightTabAvailable(tab.id)"
                   (click)="onHighlightViewTabChange(tab.id)">
                   <i [class]="tab.icon" aria-hidden="true"></i>
-                  <span class="toggle-text">
-                    {{ tab.label }}
-                    <span class="toggle-count" *ngIf="highlightTabCount(tab.id) > 0">
-                      ({{ highlightTabCount(tab.id) }})
-                    </span>
-                  </span>
+                  <span class="toggle-text">{{ tab.label }}</span>
                 </button>
               </div>
             </div>
 
-            <div
-              *ngIf="showCurrentHighlightTabContent"
-              class="highlights-grid"
-              [attr.id]="'highlights-panel-' + highlightViewTab"
-              role="tabpanel"
-              [attr.aria-label]="'Destaques e atenção — ' + highlightViewTab">
-              <c4u-card class="highlights-card highlights-card--success" *ngIf="filteredHighlightDestaque.length">
-                <h3 class="highlights-card__title">
-                  <i class="ri-star-line" aria-hidden="true"></i>
-                  Destaques
-                </h3>
-                <ng-container
-                  *ngTemplateOutlet="highlightsTable; context: { items: filteredHighlightDestaque }">
-                </ng-container>
-              </c4u-card>
-              <c4u-card
-                class="highlights-card highlights-card--warning"
-                *ngIf="filteredHighlightAtencao.length">
-                <h3 class="highlights-card__title">
-                  <i class="ri-alert-line" aria-hidden="true"></i>
-                  Precisam de atenção
-                </h3>
-                <ng-container
-                  *ngTemplateOutlet="highlightsTable; context: { items: filteredHighlightAtencao }">
-                </ng-container>
-              </c4u-card>
-
-              <ng-template #highlightsTable let-items="items">
-                <div class="simple-table-wrap highlights-table-wrap" role="region" aria-label="Métricas MTD">
-                  <table class="simple-table highlights-table">
-                    <thead>
-                      <tr>
-                        <th class="highlights-table__name-col">Nome</th>
-                        <th
-                          *ngFor="let col of highlightMtdColumns"
-                          class="simple-table__num"
-                          [attr.title]="col.title || null">
-                          {{ col.label }}
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr *ngFor="let item of items; trackBy: trackByHighlight">
-                        <td class="highlights-table__name-col">
-                          <span class="highlights-table__name">{{ highlightMetricLabel(item) }}</span>
-                          <div class="highlights-table__meta" *ngIf="highlightShowsContext(item)">
-                            <span
-                              class="highlights-table__meta-item"
-                              *ngIf="highlightViewTab === 'player' && highlightTeamLabel(item) !== '—'">
-                              <i class="ri-team-line" aria-hidden="true"></i>
-                              {{ highlightTeamLabel(item) }}
-                            </span>
-                            <span
-                              class="highlights-table__meta-item"
-                              *ngIf="highlightViewTab === 'player' && highlightGerenciaLabel(item) !== '—'">
-                              <i class="ri-briefcase-line" aria-hidden="true"></i>
-                              {{ highlightGerenciaLabel(item) }}
-                            </span>
-                            <span
-                              class="highlights-table__meta-item"
-                              *ngIf="highlightViewTab === 'supervisao' && highlightGerenciaLabel(item) !== '—'">
-                              <i class="ri-briefcase-line" aria-hidden="true"></i>
-                              {{ highlightGerenciaLabel(item) }}
-                            </span>
-                            <span
-                              class="highlights-table__meta-item"
-                              *ngIf="highlightViewTab === 'gerencia' && highlightDiretoriaLabel(item) !== '—'">
-                              <i class="ri-building-4-line" aria-hidden="true"></i>
-                              {{ highlightDiretoriaLabel(item) }}
-                            </span>
-                          </div>
-                        </td>
-                        <td
-                          *ngFor="let col of highlightMtdColumns"
-                          class="simple-table__num"
-                          [attr.title]="col.title || null">
-                          {{ highlightMtdCell(item, col) }}
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              </ng-template>
+            <div class="simple-table-wrap people-table-wrap" role="region" *ngIf="currentPeopleHighlights.length; else peopleEmpty">
+              <table class="simple-table people-table">
+                <thead>
+                  <tr>
+                    <th class="people-table__name-col">Nome</th>
+                    <th class="simple-table__num">% Prazo</th>
+                    <th class="simple-table__num">Entregas</th>
+                    <th class="simple-table__num">Clientes</th>
+                    <th class="simple-table__num">Onboarding</th>
+                    <th class="simple-table__num">Acess. churn</th>
+                    <th class="simple-table__num">Pontos</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr *ngFor="let item of currentPeopleHighlights; trackBy: trackByHighlight">
+                    <td class="people-table__name-col">
+                      <div class="people-table__identity">
+                        <span
+                          class="people-table__avatar"
+                          [class.people-table__avatar--highlight]="peopleHighlightTab === 'destaques'"
+                          [class.people-table__avatar--attention]="peopleHighlightTab === 'atencao'">
+                          {{ highlightInitials(item) }}
+                        </span>
+                        <div>
+                          <span class="people-table__name">{{ highlightMetricLabel(item) }}</span>
+                          <span class="people-table__meta" *ngIf="highlightShowsContext(item)">
+                            {{ highlightContextLabel(item) }}
+                          </span>
+                        </div>
+                      </div>
+                    </td>
+                    <td class="simple-table__num">{{ highlightMtdCell(item, peopleOnTimeColumn) }}</td>
+                    <td class="simple-table__num">{{ highlightMtdCell(item, peopleFinishedColumn) }}</td>
+                    <td class="simple-table__num">{{ highlightMtdCell(item, peopleClientsColumn) }}</td>
+                    <td class="simple-table__num">{{ highlightMtdCell(item, peopleOnboardingColumn) }}</td>
+                    <td class="simple-table__num">{{ highlightMtdCell(item, peopleChurnColumn) }}</td>
+                    <td class="simple-table__num people-table__points">{{ highlightMtdCell(item, peoplePointsColumn) }}</td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
-
-            <c4u-card *ngIf="!showCurrentHighlightTabContent" class="highlights-empty-card">
-              <p class="highlights-empty-card__text">
-                Nenhum destaque ou alerta neste nível para o mês selecionado.
+            <ng-template #peopleEmpty>
+              <p class="people-section__empty">
+                Nenhuma pessoa corresponde aos filtros neste nível para o mês selecionado.
               </p>
-            </c4u-card>
-          </section>
+            </ng-template>
+          </c4u-card>
 
+          <!-- Análise executiva (IA) — desativada temporariamente; reative ao retomar integração OpenAI.
           <section
             *ngIf="showAiInsightsSection"
             class="dashboard-section ai-insights-section"
@@ -680,26 +916,287 @@
               </div>
             </c4u-card>
           </section>
+          -->
 
-          <section class="dashboard-section tree-section" aria-label="Drill-down hierárquico">
-            <div class="section-header">
-              <h2 class="section-title">
-                <i class="ri-organization-chart section-title-icon" aria-hidden="true"></i>
-                Hierarquia organizacional
-              </h2>
+          <c4u-card class="dashboard-section tree-section" aria-label="Hierarquia organizacional">
+            <div class="section-header section-header--with-toggle">
+              <div class="section-header__leading">
+                <h2 class="section-title section-title--inline">Hierarquia organizacional</h2>
+                <p class="section-subtitle">Métricas consolidadas por nó da organização</p>
+              </div>
+              <button type="button" class="outline-btn" (click)="toggleTreeAllMetrics()">
+                {{ treeShowAllMetrics ? 'Ocultar métricas extras' : 'Mostrar todas as métricas' }}
+              </button>
             </div>
-            <c4u-card class="tree-card">
-              <c4u-org-hierarchy-tree-table
-                [root]="root"
-                [showSimulation]="showSimulation"
-                [expandedIds]="expandedNodeIds"
-                (toggleNode)="toggleTreeNode($event)"
-                (kpiClick)="openKpiDrillDownFromTree($event)"
-                (expandAll)="expandAllTreeNodes()"
-                (collapseAll)="collapseAllTreeNodes()">
-              </c4u-org-hierarchy-tree-table>
+            <c4u-org-hierarchy-tree-table
+              [root]="root"
+              [showSimulation]="showSimulation"
+              [showAllMetrics]="treeShowAllMetrics"
+              [expandedIds]="expandedNodeIds"
+              (toggleNode)="toggleTreeNode($event)"
+              (kpiClick)="openKpiDrillDownFromTree($event)"
+              (expandAll)="expandAllTreeNodes()"
+              (collapseAll)="collapseAllTreeNodes()">
+            </c4u-org-hierarchy-tree-table>
+          </c4u-card>
+          </div>
+
+          <div
+            *ngIf="reportPanelTab === 'simulation'"
+            id="report-panel-simulation"
+            class="report-panel"
+            role="tabpanel"
+            aria-labelledby="report-panel-tab-simulation"
+            tabindex="0">
+            <c4u-card class="simulation-panel">
+              <h2 class="section-title section-title--inline">
+                <i class="ri-money-dollar-circle-line section-title-icon" aria-hidden="true"></i>
+                Simulação financeira
+                <c4u-info-button
+                  [infoKey]="''"
+                  customText="Pote fictício (BRL) rateado proporcionalmente aos pontos MTD da organização."
+                  position="bottom">
+                </c4u-info-button>
+              </h2>
+              <p class="section-subtitle">
+                Informe o valor do pote para estimar o rateio por diretoria e nó hierárquico.
+              </p>
+              <div class="form-group simulation-panel__form">
+                <label class="form-label" for="simulation-pot-input">Valor do pote (R$)</label>
+                <input
+                  id="simulation-pot-input"
+                  class="form-control simulation-panel__input"
+                  type="number"
+                  min="0"
+                  step="1000"
+                  placeholder="Ex: 100000"
+                  [value]="simulationPotBrl ?? ''"
+                  [disabled]="isLoading"
+                  (input)="onSimulationInput($any($event.target).value)" />
+              </div>
+              <p class="simulation-meta" *ngIf="showSimulation && pointsPerBrlLabel">
+                Taxa: {{ pointsPerBrlLabel }}
+              </p>
+              <p class="simulation-meta" *ngIf="showSimulation && root?.simulation">
+                Payout raiz: {{ formatCurrency(root!.simulation!.payout_brl) }}
+                ({{ root!.simulation!.share_pct | number:'1.2-2':'pt-BR' }}%)
+              </p>
+              <p class="simulation-meta simulation-meta--hint" *ngIf="!showSimulation">
+                Com o pote preenchido, a coluna de simulação aparece na hierarquia (modo métricas completas).
+              </p>
             </c4u-card>
-          </section>
+          </div>
+
+          <div
+            *ngIf="reportPanelTab === 'access'"
+            id="report-panel-access"
+            class="report-panel"
+            role="tabpanel"
+            aria-labelledby="report-panel-tab-access"
+            tabindex="0">
+            <c4u-card *ngIf="!showAccessSection" class="report-empty report-empty--inline" role="status">
+              <i class="ri-login-circle-line report-empty__icon" aria-hidden="true"></i>
+              <p>Dados de acesso ao app indisponíveis para este mês ou escopo.</p>
+            </c4u-card>
+
+            <section
+              *ngIf="showAccessSection"
+              class="dashboard-section access-section"
+              aria-label="Acessos ao aplicativo">
+              <div class="section-header">
+                <h2 class="section-title">
+                  <i class="ri-login-circle-line section-title-icon" aria-hidden="true"></i>
+                  Engajamento no aplicativo
+                  <c4u-info-button
+                    [infoKey]="''"
+                    customText="Métricas de uso com base em user_daily_access (Supabase), independentes das entregas operacionais do relatório."
+                    position="bottom">
+                  </c4u-info-button>
+                </h2>
+              </div>
+
+              <div class="hero-grid access-grid">
+                <c4u-card class="hero-card hero-card--access-rate">
+                  <div class="hero-card__icon" aria-hidden="true">
+                    <i class="ri-user-follow-line"></i>
+                  </div>
+                  <div class="hero-card__body">
+                    <span class="hero-card__value">
+                      {{ accessMtd!.active_users_pct | number:'1.1-1':'pt-BR' }}%
+                    </span>
+                    <span class="hero-card__label">Colaboradores ativos (MTD)</span>
+                    <span class="hero-card__hint">
+                      {{ accessMtd!.active_users | number:'1.0-0':'pt-BR' }}
+                      de {{ root!.players_count | number:'1.0-0':'pt-BR' }}
+                    </span>
+                    <span
+                      class="hero-card__compare"
+                      *ngIf="accessCompare"
+                      [class.hero-card__compare--positive]="mtdCompareTone(accessCompare.vs_prev_mtd_active_users_pct) === 'positive'"
+                      [class.hero-card__compare--negative]="mtdCompareTone(accessCompare.vs_prev_mtd_active_users_pct) === 'negative'">
+                      {{ mtdComparePct(accessCompare.vs_prev_mtd_active_users_pct) }} vs MTD anterior
+                      <span class="hero-card__compare-abs" *ngIf="accessCompare.vs_prev_mtd_active_users != null">
+                        ({{ accessCompare.vs_prev_mtd_active_users | number:'1.0-0':'pt-BR' }} colab.)
+                      </span>
+                    </span>
+                  </div>
+                </c4u-card>
+
+                <c4u-card class="hero-card hero-card--access-days">
+                  <div class="hero-card__icon" aria-hidden="true">
+                    <i class="ri-calendar-check-line"></i>
+                  </div>
+                  <div class="hero-card__body">
+                    <span class="hero-card__value">
+                      {{ accessMtd!.access_days | number:'1.0-0':'pt-BR' }}
+                    </span>
+                    <span class="hero-card__label">Dias com acesso (user-days)</span>
+                    <span
+                      class="hero-card__compare"
+                      *ngIf="accessCompare?.vs_prev_mtd_access_days != null"
+                      [class.hero-card__compare--positive]="mtdCompareTone(accessCompare!.vs_prev_mtd_access_days) === 'positive'"
+                      [class.hero-card__compare--negative]="mtdCompareTone(accessCompare!.vs_prev_mtd_access_days) === 'negative'">
+                      {{ accessCompare!.vs_prev_mtd_access_days! >= 0 ? '+' : '' }}{{ accessCompare!.vs_prev_mtd_access_days | number:'1.0-0':'pt-BR' }}
+                      vs MTD anterior
+                    </span>
+                  </div>
+                </c4u-card>
+
+                <c4u-card class="hero-card hero-card--access-sessions">
+                  <div class="hero-card__icon" aria-hidden="true">
+                    <i class="ri-door-open-line"></i>
+                  </div>
+                  <div class="hero-card__body">
+                    <span class="hero-card__value">
+                      {{ accessMtd!.access_sessions | number:'1.0-0':'pt-BR' }}
+                    </span>
+                    <span class="hero-card__label">Sessões de acesso (total)</span>
+                    <span
+                      class="hero-card__compare"
+                      *ngIf="accessSessionsCompareDelta != null"
+                      [class.hero-card__compare--positive]="accessSessionsCompareDelta! > 0"
+                      [class.hero-card__compare--negative]="accessSessionsCompareDelta! < 0">
+                      {{ formatAccessSessionsCompare(accessSessionsCompareDelta!) }} vs MTD anterior
+                    </span>
+                  </div>
+                </c4u-card>
+
+                <c4u-card class="hero-card hero-card--access-avg-sessions">
+                  <div class="hero-card__icon" aria-hidden="true">
+                    <i class="ri-loop-left-line"></i>
+                  </div>
+                  <div class="hero-card__body">
+                    <span class="hero-card__value">{{ avgAccessSessionsPerActiveUserLabel }}</span>
+                    <span class="hero-card__label">Média de sessões / usuário ativo</span>
+                  </div>
+                </c4u-card>
+
+                <c4u-card class="hero-card hero-card--access-avg">
+                  <div class="hero-card__icon" aria-hidden="true">
+                    <i class="ri-bar-chart-2-line"></i>
+                  </div>
+                  <div class="hero-card__body">
+                    <span class="hero-card__value">
+                      {{ accessMtd!.avg_access_days_per_active_user | number:'1.1-1':'pt-BR' }}
+                    </span>
+                    <span class="hero-card__label">Média de dias / usuário ativo</span>
+                  </div>
+                </c4u-card>
+              </div>
+
+              <c4u-card class="weekday-card access-weekday-card" *ngIf="accessWeekdayStats.length">
+                <div class="section-header section-header--with-toggle access-weekday-card__header">
+                  <h3 class="access-weekday-card__title">Distribuição de acessos (MTD)</h3>
+                  <div class="data-view-toggle" role="group" aria-label="Métrica do gráfico de acessos">
+                    <button
+                      type="button"
+                      class="toggle-btn"
+                      [class.active]="accessWeekdayView === 'days'"
+                      (click)="onAccessWeekdayViewChange('days')">
+                      <i class="ri-calendar-check-line" aria-hidden="true"></i>
+                      <span class="toggle-text">Dias</span>
+                    </button>
+                    <button
+                      type="button"
+                      class="toggle-btn"
+                      [class.active]="accessWeekdayView === 'sessions'"
+                      (click)="onAccessWeekdayViewChange('sessions')">
+                      <i class="ri-door-open-line" aria-hidden="true"></i>
+                      <span class="toggle-text">Sessões</span>
+                    </button>
+                  </div>
+                </div>
+                <div
+                  class="insights-weekday-chart insights-weekday-chart--access"
+                  role="img"
+                  [attr.aria-label]="accessWeekdayView === 'sessions'
+                    ? 'Distribuição de sessões de acesso por dia da semana'
+                    : 'Distribuição de dias com acesso por dia da semana'">
+                  <div
+                    *ngFor="let day of accessWeekdayStats; trackBy: trackByAccessWeekday"
+                    class="insights-weekday-bar-wrap">
+                    <div class="insights-weekday-bar-track">
+                      <div
+                        class="insights-weekday-bar-fill insights-weekday-bar-fill--access"
+                        [class.insights-weekday-bar-fill--peak]="isAccessWeekdayPeak(day)"
+                        [class.insights-weekday-bar-fill--empty]="accessWeekdayDisplayValue(day) <= 0"
+                        [style.height]="accessWeekdayBarHeight(accessWeekdayDisplayValue(day))"
+                        [attr.title]="accessWeekdayView === 'sessions'
+                          ? (day.label + ': ' + day.accessSessions + ' sessões')
+                          : (day.label + ': ' + day.accessDays + ' user-days, ' + day.accessSessions + ' sessões')">
+                      </div>
+                    </div>
+                    <span class="insights-weekday-count">{{ accessWeekdayDisplayValue(day) }}</span>
+                    <span
+                      class="insights-weekday-label"
+                      [class.insights-weekday-label--peak]="isAccessWeekdayPeak(day)">
+                      {{ day.shortLabel }}
+                    </span>
+                  </div>
+                </div>
+              </c4u-card>
+
+              <div
+                *ngIf="showPlayerAccessTable"
+                class="simple-table-wrap access-users-table-wrap"
+                role="region"
+                aria-label="Acessos por colaborador no MTD">
+                <h3 class="access-users-table__title">Acessos por colaborador</h3>
+                <table class="simple-table access-users-table">
+                  <thead>
+                    <tr>
+                      <th class="access-users-table__name-col">Colaborador</th>
+                      <th class="simple-table__num" title="Dias distintos com pelo menos um acesso no MTD">Dias MTD</th>
+                      <th class="simple-table__num" title="Total de aberturas do app (access_count) no MTD">Sessões MTD</th>
+                      <th class="simple-table__num">Streak</th>
+                      <th>Último acesso</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr *ngFor="let row of playerAccessRows; trackBy: trackByPlayerAccess">
+                      <td class="access-users-table__name-col">{{ row.label }}</td>
+                      <td class="simple-table__num">{{ row.accessDays | number:'1.0-0':'pt-BR' }}</td>
+                      <td class="simple-table__num">{{ row.accessSessions | number:'1.0-0':'pt-BR' }}</td>
+                      <td class="simple-table__num">
+                        {{ row.currentStreak != null ? (row.currentStreak | number:'1.0-0':'pt-BR') : '—' }}
+                      </td>
+                      <td>
+                        <span *ngIf="row.lastAccessDate; else noLastAccess">
+                          {{ row.lastAccessDate | date:'dd/MM/yyyy' }}
+                          <span
+                            class="access-users-table__today"
+                            *ngIf="row.accessedToday">
+                            · hoje
+                          </span>
+                        </span>
+                        <ng-template #noLastAccess>—</ng-template>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          </div>
         </ng-container>
       </div>
     </div>
@@ -707,12 +1204,18 @@
 
   <modal-organization-hierarchy-kpi-detail
     *ngIf="kpiDrilldownContext"
-    [kpi]="kpiDrilldownContext!.kpi"
+    [kpi]="kpiDrilldownContext!.kind === 'kpi' ? kpiDrilldownContext!.kpi : undefined"
+    [criticalClient]="kpiDrilldownContext!.kind === 'critical_client' ? kpiDrilldownContext!.client : null"
+    [issueFilter]="kpiDrilldownContext!.kind === 'critical_client' ? kpiDrilldownContext!.issue : 'all'"
     [nodeType]="kpiDrilldownContext!.nodeType"
     [nodeId]="kpiDrilldownContext!.nodeId"
     [nodeLabel]="kpiDrilldownContext!.nodeLabel"
     [month]="selectedMonth"
-    [months]="kpiDrilldownContext!.months"
+    [months]="kpiDrilldownContext!.kind === 'kpi' ? kpiDrilldownContext!.months : 4"
+    [compareContext]="kpiDrilldownContext!.kind === 'kpi' ? kpiDrilldownContext!.compareContext : null"
+    [reportParams]="kpiDrilldownContext!.kind === 'kpi' ? kpiDrilldownContext!.reportParams : null"
+    [initialClientListKey]="kpiDrilldownContext!.kind === 'kpi' ? kpiDrilldownContext!.clientListKey ?? null : null"
+    (issueFilterChange)="onCriticalClientIssueFilterChange($event)"
     (closed)="onKpiDrillDownModalClosed()">
   </modal-organization-hierarchy-kpi-detail>
 </div>

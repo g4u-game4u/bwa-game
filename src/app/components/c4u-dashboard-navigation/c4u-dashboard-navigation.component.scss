@@ -4,15 +4,30 @@
 .dashboard-navigation {
   position: relative;
   display: inline-block;
+  z-index: 20;
 }
 
 .dashboard-selector {
   position: relative;
-  
-  &:hover .dashboard-dropdown {
-    opacity: 1;
-    visibility: visible;
-    transform: translateY(0);
+
+  &:hover,
+  &:focus-within {
+    .current-dashboard {
+      border-color: rgba($primary-electric-blue, 0.55);
+      box-shadow: 0 2px 12px rgba(0, 0, 0, 0.35);
+    }
+
+    .dropdown-chevron {
+      transform: rotate(180deg);
+      color: $primary-electric-blue;
+    }
+
+    .dashboard-dropdown {
+      opacity: 1;
+      visibility: visible;
+      transform: translateY(0);
+      pointer-events: auto;
+    }
   }
 }
 
@@ -22,36 +37,48 @@
   align-items: center;
   gap: $spacing-sm;
   padding: $spacing-sm $spacing-md;
-  background: rgba($primary-electric-blue, 0.1);
-  border: 1px solid rgba($primary-electric-blue, 0.2);
+  background: $bg-secondary;
+  border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: $border-radius-sm;
   color: $text-primary;
   font-size: $font-size-small;
   font-weight: $font-weight-medium;
   cursor: pointer;
-  transition: all $transition-duration $transition-easing;
+  transition: background $transition-duration $transition-easing,
+    border-color $transition-duration $transition-easing,
+    box-shadow $transition-duration $transition-easing;
   min-height: auto;
-  
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+
   &:hover {
-    background: rgba($primary-electric-blue, 0.15);
-    border-color: $primary-electric-blue;
-    box-shadow: 0 2px 8px rgba($primary-electric-blue, 0.2);
+    background: lighten($bg-secondary, 6%);
+    border-color: rgba($primary-electric-blue, 0.55);
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.35);
+    transform: none;
   }
 
   &:focus-visible {
     @include focus-visible;
   }
-  
-  i {
+
+  > i:not(.dropdown-chevron) {
     font-size: 18px;
-    transition: transform $transition-duration $transition-easing;
+    color: $primary-electric-blue;
+    flex-shrink: 0;
   }
 
-  &:hover i {
-    transform: scale(1.1);
+  .dropdown-chevron {
+    font-size: 16px;
+    color: $text-secondary;
+    margin-left: $spacing-xs;
+    transition: transform $transition-duration $transition-easing,
+      color $transition-duration $transition-easing;
+    flex-shrink: 0;
   }
-  
+
   .dashboard-name {
+    white-space: nowrap;
+
     @media (max-width: 768px) {
       display: none;
     }
@@ -60,20 +87,35 @@
 
 .dashboard-dropdown {
   position: absolute;
-  top: calc(100% + $spacing-sm);
+  top: calc(100% + $spacing-xs);
   left: 0;
-  min-width: 220px;
-  background: $surface;
-  border: 1px solid $border-color;
+  min-width: 240px;
+  padding: $spacing-xs;
+  background: $bg-secondary;
+  border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: $border-radius-sm;
-  box-shadow: $shadow-hover;
+  box-shadow:
+    0 12px 32px rgba(0, 0, 0, 0.45),
+    0 0 0 1px rgba(255, 255, 255, 0.04);
   opacity: 0;
   visibility: hidden;
-  transform: translateY(-8px);
-  transition: all $transition-duration $transition-easing;
-  z-index: 1000;
+  transform: translateY(-6px);
+  transition: opacity $transition-duration $transition-easing,
+    visibility $transition-duration $transition-easing,
+    transform $transition-duration $transition-easing;
+  z-index: 1100;
   overflow: hidden;
-  @include card;
+  pointer-events: none;
+
+  // Ponte invisível para manter o hover ao mover o cursor até o menu
+  &::before {
+    content: '';
+    position: absolute;
+    top: -$spacing-xs;
+    left: 0;
+    right: 0;
+    height: $spacing-xs;
+  }
 }
 
 .dashboard-option {
@@ -84,31 +126,37 @@
   padding: $spacing-sm $spacing-md;
   background: transparent;
   border: none;
+  border-radius: $border-radius-xs;
   color: $text-primary;
   font-size: $font-size-small;
   font-family: $font-family;
   text-align: left;
   cursor: pointer;
-  transition: all $transition-duration $transition-easing;
+  transition: background $transition-duration $transition-easing,
+    color $transition-duration $transition-easing;
   position: relative;
   min-height: $min-touch-target;
-  
+
   &:hover {
-    background: rgba($primary-electric-blue, 0.1);
-    color: $primary-electric-blue;
-    
-    i {
-      transform: scale(1.1);
+    background: rgba(255, 255, 255, 0.08);
+    color: $text-primary;
+
+    i:not(.check-icon) {
+      color: $primary-electric-blue;
     }
   }
-  
+
   &.active {
-    background: rgba($primary-electric-blue, 0.15);
-    color: $primary-electric-blue;
+    background: rgba($primary-electric-blue, 0.18);
+    color: $text-primary;
     font-weight: $font-weight-semibold;
-    
+
+    i:not(.check-icon) {
+      color: $primary-electric-blue;
+    }
+
     &:hover {
-      background: rgba($primary-electric-blue, 0.2);
+      background: rgba($primary-electric-blue, 0.24);
     }
   }
 
@@ -116,23 +164,24 @@
     @include focus-visible;
   }
   
-  i {
+  i:not(.check-icon) {
     font-size: 18px;
     flex-shrink: 0;
-    transition: transform $transition-duration $transition-easing;
+    color: $text-secondary;
+    transition: color $transition-duration $transition-easing;
   }
-  
+
   span {
     flex: 1;
   }
-  
+
   .check-icon {
     font-size: 16px;
     color: $primary-electric-blue;
   }
-  
-  &:not(:last-child) {
-    border-bottom: 1px solid $border-color;
+
+  & + & {
+    margin-top: 2px;
   }
 }
 
@@ -141,6 +190,9 @@
   align-items: center;
   gap: $spacing-sm;
   padding: $spacing-sm $spacing-md;
+  background: $bg-secondary;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: $border-radius-sm;
   color: $text-primary;
   font-size: $font-size-small;
   font-weight: $font-weight-medium;

@@ -1,5 +1,5 @@
 ﻿import { Injectable } from '@angular/core';
-import { HttpClient, HttpHeaders, HttpParams, HttpErrorResponse } from '@angular/common/http';
+import { HttpClient, HttpHeaders, HttpParams, HttpErrorResponse, HttpResponse } from '@angular/common/http';
 import { Observable, throwError, of } from 'rxjs';
 import { catchError, map, shareReplay, tap } from 'rxjs/operators';
 import { environment } from '../../environments/environment';
@@ -49,6 +49,9 @@ import {
   OrganizationHierarchyKpiDetailResponse,
   Game4uReportsOrganizationHierarchyMultaRiskQuery,
   OrganizationHierarchyMultaRiskResponse,
+  Game4uReportsOrganizationHierarchyDeliveriesQuery,
+  Game4uReportsOrganizationHierarchyClientsServedExportQuery,
+  OrganizationHierarchyDeliveriesResponse,
   Game4uReportsOrganizationHierarchyInsightsQuery,
   Game4uReportsOrganizationHierarchyInsightsBody,
   OrganizationHierarchyInsightsResponse
@@ -121,6 +124,10 @@ export class Game4uApiService {
   private readonly reportsOrganizationHierarchyMultaRiskCache = new Map<
     string,
     Observable<OrganizationHierarchyMultaRiskResponse>
+  >();
+  private readonly reportsOrganizationHierarchyDeliveriesCache = new Map<
+    string,
+    Observable<OrganizationHierarchyDeliveriesResponse>
   >();
   private readonly reportsOrganizationHierarchyInsightsCache = new Map<
     string,
@@ -274,6 +281,7 @@ export class Game4uApiService {
     this.reportsOrganizationHierarchyCache.clear();
     this.reportsOrganizationHierarchyKpiDetailCache.clear();
     this.reportsOrganizationHierarchyMultaRiskCache.clear();
+    this.reportsOrganizationHierarchyDeliveriesCache.clear();
     this.reportsOrganizationHierarchyInsightsCache.clear();
   }
 
@@ -1105,6 +1113,98 @@ export class Game4uApiService {
       }
       return this.http.get<OrganizationHierarchyMultaRiskResponse>(
         `${this.baseUrl}/game/reports/organization/hierarchy-report/multa-risk`,
+        {
+          headers: this.headers(),
+          params
+        }
+      );
+    });
+  }
+
+  /**
+   * `GET /game/reports/organization/hierarchy-report/clients-served/export/xlsx`
+   */
+  getGameReportsOrganizationHierarchyClientsServedExportXlsx(
+    q: Game4uReportsOrganizationHierarchyClientsServedExportQuery
+  ): Observable<HttpResponse<Blob>> {
+    if (!this.isConfigured()) {
+      return throwError(
+        () =>
+          new Error(
+            '[Game4U] reports/organization/hierarchy-report/clients-served/export/xlsx: defina backend_url_base.'
+          )
+      );
+    }
+    const month = (q.month ?? '').trim();
+    if (!month) {
+      return throwError(
+        () =>
+          new Error(
+            '[Game4U] clients-served/export/xlsx: informe month (YYYY-MM).'
+          )
+      );
+    }
+    const nodeType = (q.node_type ?? '').trim();
+    const nodeId = (q.node_id ?? '').trim();
+    let params = new HttpParams().set('month', month);
+    if (nodeType) {
+      params = params.set('node_type', nodeType);
+    }
+    if (nodeId) {
+      params = params.set('node_id', nodeId);
+    }
+    return this.http.get(`${this.baseUrl}/game/reports/organization/hierarchy-report/clients-served/export/xlsx`, {
+      headers: this.headers(),
+      params,
+      observe: 'response',
+      responseType: 'blob'
+    });
+  }
+
+  /**
+   * `GET /game/reports/organization/hierarchy-report/deliveries`
+   */
+  getGameReportsOrganizationHierarchyDeliveries(
+    q: Game4uReportsOrganizationHierarchyDeliveriesQuery
+  ): Observable<OrganizationHierarchyDeliveriesResponse> {
+    if (!this.isConfigured()) {
+      return throwError(
+        () =>
+          new Error(
+            '[Game4U] reports/organization/hierarchy-report/deliveries: defina backend_url_base.'
+          )
+      );
+    }
+    const month = (q.month ?? '').trim();
+    const drilldown = (q.drilldown ?? '').trim();
+    if (!month) {
+      return throwError(() => new Error('[Game4U] deliveries: informe month (YYYY-MM).'));
+    }
+    if (!drilldown) {
+      return throwError(() => new Error('[Game4U] deliveries: informe drilldown.'));
+    }
+    const nodeType = (q.node_type ?? '').trim();
+    const nodeId = (q.node_id ?? '').trim();
+
+    const key = `org-hierarchy-deliveries|${month}|${drilldown}|${nodeType}|${nodeId}|${(q.company_serve_key ?? '').trim()}|${(q.issue ?? '').trim()}`;
+    return this.shareGame4uDedupe(key, this.reportsOrganizationHierarchyDeliveriesCache, () => {
+      let params = new HttpParams().set('month', month).set('drilldown', drilldown);
+      if (nodeType) {
+        params = params.set('node_type', nodeType);
+      }
+      if (nodeId) {
+        params = params.set('node_id', nodeId);
+      }
+      const companyServeKey = (q.company_serve_key ?? '').trim();
+      if (companyServeKey) {
+        params = params.set('company_serve_key', companyServeKey);
+      }
+      const issue = (q.issue ?? '').trim();
+      if (issue) {
+        params = params.set('issue', issue);
+      }
+      return this.http.get<OrganizationHierarchyDeliveriesResponse>(
+        `${this.baseUrl}/game/reports/organization/hierarchy-report/deliveries`,
         {
           headers: this.headers(),
           params

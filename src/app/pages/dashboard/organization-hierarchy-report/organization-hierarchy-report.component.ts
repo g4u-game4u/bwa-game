@@ -12,11 +12,19 @@ import { ActionLogService } from '@services/action-log.service';
 import { SessaoProvider } from '@providers/sessao/sessao.provider';
 import { ToastService } from '@services/toast.service';
 import {
+  buildOrgKpiDrilldownCompareContext,
+  OrgKpiDrilldownCompareContext
+} from '@services/org-hierarchy-kpi-compare.mapper';
+import {
   OrganizationHierarchyReportResponse,
+  OrganizationHierarchyReportParams,
   OrgHierarchyHighlightItem,
   OrgHierarchyNode,
   OrgHierarchyKpiDetailKey,
   OrgHierarchyNodeType,
+  CriticalClientItem,
+  CriticalClientIssueFilter,
+  OrgHierarchyClientListKey,
   OrganizationHierarchyInsightItem,
   OrganizationHierarchyInsightsResponse
 } from '@model/game4u-api.model';
@@ -26,6 +34,9 @@ import {
   getOrgHierarchyCompareTone,
   getOrgHierarchyScopeTitle,
   mapFinishedByDowToWeekdayStats,
+  mapAccessByDowToWeekdayStats,
+  mapPlayerAccessRows,
+  avgAccessSessionsPerActiveUser,
   mapClientClassificationTiers,
   clientClassificationTotal,
   clientClassificationMaxCount,
@@ -37,8 +48,28 @@ import {
   getDerivedHighlightsForTab,
   highlightViewTabHasNodes,
   ORG_HIGHLIGHT_MTD_COLUMNS,
+  ORG_GLOBAL_MTD_METRICS,
+  ORG_RANKING_ESSENTIAL_COLUMNS,
+  ORG_RANKING_DETAIL_COLUMNS,
+  OrgGlobalMtdMetric,
+  OrgPipelineSegment,
+  mapOrgPipelineSegments,
+  orgPipelineSegmentWidthPct,
+  orgPipelineSegmentsTotal,
+  buildOrgOperationalRiskAlerts,
+  filterOrgPipelineLegendSegments,
+  OrgOperationalRiskAlert,
+  computeFinishedVsOpenPct,
+  formatOrgGlobalMtdValue,
   collectOrgHierarchyNodesByType,
+  findOrgHierarchyNodeById,
+  computeOrgPointsGoalPct,
+  computeOrgDeliveriesGoalPct,
   formatOrgHierarchyNodeMtdCell,
+  formatOrgPointsGoalPct,
+  formatOrgRankingCell,
+  getOrgPointsGoalTone,
+  OrgRankingColumn,
   getDirectorateRankingLabel,
   getOrgHierarchyAreaLabelClass,
   resolveDirectorateAreaLabel,
@@ -47,11 +78,35 @@ import {
   OrgHierarchyHighlightViewTab,
   OrgClientClassificationTier,
   OrgHierarchyRankingSortBy,
+  OrgHierarchyReportPanelTab,
   OrgHierarchyWeekdayStat,
+  OrgHierarchyAccessWeekdayStat,
+  OrgHierarchyPlayerAccessRow,
   sortOrgHierarchyChildren,
   weekdayBarHeight,
-  weekdayMaxFinishedCount
+  weekdayMaxFinishedCount,
+  weekdayMaxAccessDays,
+  weekdayMaxAccessSessions
 } from '@services/org-hierarchy-report.mapper';
+import {
+  buildOrgPaceGoalComparison,
+  buildOrgPaceSupportingCards,
+  hasOrgPaceMetrics,
+  orgPaceCalendarLabel,
+  OrgPaceGoalComparison,
+  OrgPaceMetricCard
+} from '@services/org-hierarchy-pace.mapper';
+import {
+  buildCriticalClientKpiChips,
+  criticalClientHasOperationalIssues,
+  formatCriticalClientRiskScore,
+  getCriticalClientTagLabels,
+  getCriticalClientTierClass,
+  getCriticalClientTierLabel,
+  getCriticalClientsTopList,
+  hasCriticalClients,
+  CriticalClientKpiChip
+} from '@services/org-hierarchy-critical-clients.mapper';
 import {
   OrgHierarchyInsightsErrorInfo,
   orgHierarchyInsightCategoryLabel,
@@ -73,6 +128,8 @@ export class OrganizationHierarchyReportComponent implements OnInit, OnDestroy {
   private loadGen = 0;
   private insightsLoadGen = 0;
   private insightsDepth = 7; // teste econômico: se não houver cache em depth=7, tenta depth=1
+  /** Análise executiva (IA) — desativada no template; não dispara GET de insights. */
+  private readonly aiExecutiveAnalysisEnabled = false;
 
   selectedMonthsAgo = 0;
   selectedMonth: Date = new Date();
@@ -88,18 +145,43 @@ export class OrganizationHierarchyReportComponent implements OnInit, OnDestroy {
   insightsBanner: OrgHierarchyInsightsErrorInfo | null = null;
 
   simulationPotBrl: number | null = null;
-  rankingSortBy: OrgHierarchyRankingSortBy = 'balance_score';
-  classificationView: 'table' | 'cards' = 'table';
+  rankingSortBy: OrgHierarchyRankingSortBy = 'on_time_pct';
+  rankingShowDetails = false;
+  treeShowAllMetrics = false;
+  peopleHighlightTab: 'destaques' | 'atencao' = 'destaques';
+  peopleSearch = '';
+  accessWeekdayView: 'days' | 'sessions' = 'days';
+  reportPanelTab: OrgHierarchyReportPanelTab = 'operations';
   highlightViewTab: OrgHierarchyHighlightViewTab = 'gerencia';
   expandedNodeIds = new Set<string>();
 
+  readonly skeletonTabSlots = [0, 1, 2];
+  readonly skeletonHeroSlots = [0, 1, 2, 3];
+  readonly skeletonPaceCardSlots = [0, 1, 2, 3];
+  readonly skeletonPipelineChipSlots = [0, 1, 2, 3];
+  readonly skeletonTableRowSlots = [0, 1, 2, 3, 4];
+  readonly skeletonWeekdayBarHeights = [28, 44, 18, 52, 36, 22, 48];
+  readonly skeletonTreeRowSlots = [0, 1, 2, 3, 4, 5];
+
   kpiDrilldownContext:
     | {
+        kind: 'kpi';
         kpi: OrgHierarchyKpiDetailKey;
         nodeType: OrgHierarchyNodeType;
         nodeId: string;
         nodeLabel: string;
         months: number;
+        compareContext: OrgKpiDrilldownCompareContext | null;
+        reportParams: OrganizationHierarchyReportParams | null;
+        clientListKey?: OrgHierarchyClientListKey | null;
+      }
+    | {
+        kind: 'critical_client';
+        client: CriticalClientItem;
+        issue: CriticalClientIssueFilter;
+        nodeType: OrgHierarchyNodeType;
+        nodeId: string;
+        nodeLabel: string;
       }
     | null = null;
 
@@ -114,7 +196,41 @@ export class OrganizationHierarchyReportComponent implements OnInit, OnDestroy {
   ];
 
   readonly highlightMtdColumns = ORG_HIGHLIGHT_MTD_COLUMNS;
-  readonly rankingMtdColumns = ORG_HIGHLIGHT_MTD_COLUMNS;
+  readonly rankingEssentialColumns = ORG_RANKING_ESSENTIAL_COLUMNS;
+  readonly rankingDetailColumns = ORG_RANKING_DETAIL_COLUMNS;
+  readonly globalMtdMetrics = ORG_GLOBAL_MTD_METRICS;
+  readonly peopleOnTimeColumn = ORG_HIGHLIGHT_MTD_COLUMNS.find(c => c.key === 'on_time_pct')!;
+  readonly peopleFinishedColumn = ORG_HIGHLIGHT_MTD_COLUMNS.find(c => c.key === 'finished')!;
+  readonly peopleClientsColumn = ORG_HIGHLIGHT_MTD_COLUMNS.find(c => c.key === 'clients_served')!;
+  readonly peopleOnboardingColumn = ORG_HIGHLIGHT_MTD_COLUMNS.find(c => c.key === 'clients_onboarding')!;
+  readonly peopleChurnColumn = ORG_HIGHLIGHT_MTD_COLUMNS.find(c => c.key === 'clients_acessorias_risco_de_churn')!;
+  readonly peoplePointsColumn = ORG_HIGHLIGHT_MTD_COLUMNS.find(c => c.key === 'points_delivered')!;
+
+  readonly reportPanelTabs: ReadonlyArray<{
+    id: OrgHierarchyReportPanelTab;
+    label: string;
+    icon: string;
+    description: string;
+  }> = [
+    {
+      id: 'operations',
+      label: 'Operacional',
+      icon: 'ri-bar-chart-grouped-line',
+      description: 'Entregas, metas, riscos e hierarquia organizacional'
+    },
+    {
+      id: 'access',
+      label: 'Acessos ao app',
+      icon: 'ri-login-circle-line',
+      description: 'Engajamento e frequência de uso do aplicativo'
+    },
+    {
+      id: 'simulation',
+      label: 'Simulação financeira',
+      icon: 'ri-money-dollar-circle-line',
+      description: 'Pote fictício rateado pelos pontos MTD da organização'
+    }
+  ];
 
   constructor(
     private readonly actionLogService: ActionLogService,
@@ -161,12 +277,71 @@ export class OrganizationHierarchyReportComponent implements OnInit, OnDestroy {
     return sortOrgHierarchyChildren(this.directorateNodes, this.rankingSortBy);
   }
 
+  get rankingSortLabel(): string {
+    return this.rankingSortBy === 'on_time_pct' ? '% no prazo' : 'pontos por colaborador';
+  }
+
   get weekdayStats(): OrgHierarchyWeekdayStat[] {
     return mapFinishedByDowToWeekdayStats(this.root?.finished_by_dow);
   }
 
   get weekdayMaxCount(): number {
     return weekdayMaxFinishedCount(this.weekdayStats);
+  }
+
+  get showAccessSection(): boolean {
+    return !!this.root?.access?.mtd;
+  }
+
+  get accessMtd() {
+    return this.root?.access?.mtd;
+  }
+
+  get accessCompare() {
+    return this.root?.access?.compare;
+  }
+
+  get accessWeekdayStats(): OrgHierarchyAccessWeekdayStat[] {
+    return mapAccessByDowToWeekdayStats(this.root?.access?.access_by_dow);
+  }
+
+  get accessWeekdayMaxDays(): number {
+    return weekdayMaxAccessDays(this.accessWeekdayStats);
+  }
+
+  get accessWeekdayMaxSessions(): number {
+    return weekdayMaxAccessSessions(this.accessWeekdayStats);
+  }
+
+  get accessWeekdayPeakValue(): number {
+    return this.accessWeekdayView === 'sessions'
+      ? this.accessWeekdayMaxSessions
+      : this.accessWeekdayMaxDays;
+  }
+
+  get playerAccessRows(): OrgHierarchyPlayerAccessRow[] {
+    return mapPlayerAccessRows(this.root);
+  }
+
+  get showPlayerAccessTable(): boolean {
+    return this.playerAccessRows.length > 0;
+  }
+
+  get avgAccessSessionsPerActiveUserLabel(): string {
+    const avg = avgAccessSessionsPerActiveUser(
+      this.accessMtd?.access_sessions,
+      this.accessMtd?.active_users
+    );
+    return avg == null ? '—' : avg.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+  }
+
+  get accessSessionsCompareDelta(): number | null {
+    const mtd = this.accessMtd?.access_sessions;
+    const prev = this.root?.access?.prev_mtd?.access_sessions;
+    if (mtd == null || prev == null) {
+      return null;
+    }
+    return mtd - prev;
   }
 
   get highlightDestaque(): OrgHierarchyHighlightItem[] {
@@ -177,12 +352,226 @@ export class OrganizationHierarchyReportComponent implements OnInit, OnDestroy {
     return getDerivedHighlightsForTab(this.root, this.highlightViewTab).atencao;
   }
 
+  get pipelineSegments(): OrgPipelineSegment[] {
+    return mapOrgPipelineSegments(this.root?.mtd);
+  }
+
+  get pipelineLegendSegments(): OrgPipelineSegment[] {
+    return filterOrgPipelineLegendSegments(this.pipelineSegments);
+  }
+
+  get operationalRiskAlerts(): OrgOperationalRiskAlert[] {
+    return buildOrgOperationalRiskAlerts(this.root?.mtd);
+  }
+
+  get showPaceSection(): boolean {
+    return hasOrgPaceMetrics(this.root);
+  }
+
+  get paceGoalComparison(): OrgPaceGoalComparison | null {
+    return buildOrgPaceGoalComparison(this.root);
+  }
+
+  get paceSupportingCards(): OrgPaceMetricCard[] {
+    return buildOrgPaceSupportingCards(this.root);
+  }
+
+  get paceCalendarLabel(): string | null {
+    return orgPaceCalendarLabel(this.root);
+  }
+
+  get showCriticalClientsSection(): boolean {
+    return hasCriticalClients(this.root?.critical_clients);
+  }
+
+  get criticalClientKpiChips(): CriticalClientKpiChip[] {
+    return buildCriticalClientKpiChips(this.root?.critical_clients);
+  }
+
+  get criticalClientsTop(): CriticalClientItem[] {
+    return getCriticalClientsTopList(this.root?.critical_clients);
+  }
+
+  criticalClientTierLabel(client: CriticalClientItem): string {
+    return getCriticalClientTierLabel(client.risk_tier);
+  }
+
+  criticalClientTierClass(client: CriticalClientItem): string {
+    return getCriticalClientTierClass(client.risk_tier);
+  }
+
+  criticalClientTags(client: CriticalClientItem): string[] {
+    return getCriticalClientTagLabels(client);
+  }
+
+  criticalClientRiskScore(client: CriticalClientItem): string {
+    return formatCriticalClientRiskScore(client.risk_score);
+  }
+
+  criticalClientHasIssues(client: CriticalClientItem): boolean {
+    return criticalClientHasOperationalIssues(client);
+  }
+
+  trackByCriticalClient(_index: number, client: CriticalClientItem): string {
+    return client.company_serve_key || client.company_label;
+  }
+
+  trackByOperationalAlert(_index: number, alert: OrgOperationalRiskAlert): string {
+    return alert.key;
+  }
+
+  trackByPaceCard(_index: number, card: OrgPaceMetricCard): string {
+    return card.key;
+  }
+
+  get pipelineTotal(): number {
+    return this.root?.mtd?.pending_open ?? orgPipelineSegmentsTotal(this.pipelineSegments);
+  }
+
+  get finishedVsOpenPct(): number | null {
+    return computeFinishedVsOpenPct(this.root?.mtd);
+  }
+
+  get showHeroPointsGoal(): boolean {
+    const goal = this.root?.mtd?.goal_points;
+    return goal != null && Number.isFinite(goal) && goal > 0;
+  }
+
+  get heroPointsGoalPct(): number | null {
+    return computeOrgPointsGoalPct(this.root?.mtd);
+  }
+
+  get heroPointsGoalPctLabel(): string | null {
+    const pct = this.heroPointsGoalPct;
+    if (pct == null) {
+      return null;
+    }
+    return `${pct.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
+  }
+
+  get heroPointsGoalPctBar(): number {
+    const pct = this.heroPointsGoalPct;
+    if (pct == null || !Number.isFinite(pct)) {
+      return 0;
+    }
+    return Math.min(100, Math.max(0, pct));
+  }
+
+  get heroPointsGoalTone(): 'positive' | 'negative' | 'neutral' {
+    return getOrgPointsGoalTone(this.heroPointsGoalPct);
+  }
+
+  get showHeroDeliveriesGoal(): boolean {
+    const goal = this.root?.mtd?.goal_deliveries;
+    return goal != null && Number.isFinite(goal) && goal > 0;
+  }
+
+  get heroDeliveriesGoalPct(): number | null {
+    return computeOrgDeliveriesGoalPct(this.root?.mtd);
+  }
+
+  get heroDeliveriesGoalPctLabel(): string | null {
+    const pct = this.heroDeliveriesGoalPct;
+    if (pct == null) {
+      return null;
+    }
+    return `${pct.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
+  }
+
+  get heroDeliveriesGoalPctBar(): number {
+    const pct = this.heroDeliveriesGoalPct;
+    if (pct == null || !Number.isFinite(pct)) {
+      return 0;
+    }
+    return Math.min(100, Math.max(0, pct));
+  }
+
+  get heroDeliveriesGoalTone(): 'positive' | 'negative' | 'neutral' {
+    return getOrgPointsGoalTone(this.heroDeliveriesGoalPct);
+  }
+
+  get finishedHeroProgressPct(): number {
+    if (this.showHeroDeliveriesGoal) {
+      return this.heroDeliveriesGoalPctBar;
+    }
+    return this.finishedVsOpenPct ?? 0;
+  }
+
+  get finishedHeroProgressTone(): 'positive' | 'negative' | 'neutral' {
+    return this.showHeroDeliveriesGoal ? this.heroDeliveriesGoalTone : 'neutral';
+  }
+
+  get weekdayPeakStat(): OrgHierarchyWeekdayStat | null {
+    const stats = this.weekdayStats;
+    if (!stats.length) {
+      return null;
+    }
+    return stats.reduce((peak, day) => (day.finishedCount > peak.finishedCount ? day : peak), stats[0]);
+  }
+
+  get weekdayFinishedTotal(): number {
+    return this.weekdayStats.reduce((sum, day) => sum + day.finishedCount, 0);
+  }
+
+  get currentPeopleHighlights(): OrgHierarchyHighlightItem[] {
+    const items =
+      this.peopleHighlightTab === 'destaques' ? this.filteredHighlightDestaque : this.filteredHighlightAtencao;
+    return this.filterPeopleBySearch(items);
+  }
+
+  get showPeopleSection(): boolean {
+    return this.showHighlightsSection;
+  }
+
   get showHighlightsSection(): boolean {
     return this.highlightViewTabs.some(tab => this.isHighlightTabAvailable(tab.id));
   }
 
+  pipelineSegmentWidth(value: number): string {
+    return `${orgPipelineSegmentWidthPct(value, this.pipelineSegments)}%`;
+  }
+
+  onTimeGaugePct(): number {
+    const pct = this.root?.mtd?.on_time_pct;
+    return pct != null && Number.isFinite(pct) ? Math.min(100, Math.max(0, pct)) : 0;
+  }
+
+  filterPeopleBySearch(items: OrgHierarchyHighlightItem[]): OrgHierarchyHighlightItem[] {
+    const q = this.peopleSearch.trim().toLowerCase();
+    if (!q) {
+      return items;
+    }
+    return items.filter(item => this.highlightMetricLabel(item).toLowerCase().includes(q));
+  }
+
+  onPeopleHighlightTabChange(tab: 'destaques' | 'atencao'): void {
+    this.peopleHighlightTab = tab;
+    this.cdr.markForCheck();
+  }
+
+  onPeopleSearchInput(raw: string): void {
+    this.peopleSearch = raw;
+    this.cdr.markForCheck();
+  }
+
+  toggleRankingDetails(): void {
+    this.rankingShowDetails = !this.rankingShowDetails;
+    this.cdr.markForCheck();
+  }
+
+  toggleTreeAllMetrics(): void {
+    this.treeShowAllMetrics = !this.treeShowAllMetrics;
+    this.cdr.markForCheck();
+  }
+
+  onPipelineSegmentClick(segment: OrgPipelineSegment): void {
+    if (!this.root) {
+      return;
+    }
+    this.openKpiDrillDown(segment.kpi, this.root);
+  }
+
   get filteredHighlightDestaque(): OrgHierarchyHighlightItem[] {
-    // Destaques já são derivados por aba; mantemos a interface atual da view.
     return this.highlightDestaque;
   }
 
@@ -220,7 +609,7 @@ export class OrganizationHierarchyReportComponent implements OnInit, OnDestroy {
   }
 
   get showAiInsightsSection(): boolean {
-    return !this.isLoading && !this.hasLoadError && !this.isEmpty;
+    return this.aiExecutiveAnalysisEnabled && !this.isLoading && !this.hasLoadError && !this.isEmpty;
   }
 
   get hasInsightsContent(): boolean {
@@ -279,6 +668,37 @@ export class OrganizationHierarchyReportComponent implements OnInit, OnDestroy {
     return weekdayBarHeight(count, this.weekdayMaxCount);
   }
 
+  accessWeekdayBarHeight(value: number): string {
+    return weekdayBarHeight(value, this.accessWeekdayPeakValue);
+  }
+
+  accessWeekdayDisplayValue(day: OrgHierarchyAccessWeekdayStat): number {
+    return this.accessWeekdayView === 'sessions' ? day.accessSessions : day.accessDays;
+  }
+
+  isAccessWeekdayPeak(day: OrgHierarchyAccessWeekdayStat): boolean {
+    const value = this.accessWeekdayDisplayValue(day);
+    return value > 0 && value === this.accessWeekdayPeakValue;
+  }
+
+  onAccessWeekdayViewChange(view: 'days' | 'sessions'): void {
+    this.accessWeekdayView = view;
+    this.cdr.markForCheck();
+  }
+
+  trackByPlayerAccess(_index: number, row: OrgHierarchyPlayerAccessRow): string {
+    return row.nodeId;
+  }
+
+  formatAccessSessionsCompare(delta: number): string {
+    const sign = delta > 0 ? '+' : '';
+    return `${sign}${delta.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}`;
+  }
+
+  trackByAccessWeekday(_index: number, day: OrgHierarchyAccessWeekdayStat): number {
+    return day.dow;
+  }
+
   classificationBarHeight(count: number): string {
     return clientClassificationBarHeight(count, this.clientClassificationMaxCount);
   }
@@ -290,6 +710,18 @@ export class OrganizationHierarchyReportComponent implements OnInit, OnDestroy {
     }
     const pct = (count / total) * 100;
     return `${pct.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
+  }
+
+  classificationShareWidth(count: number): string {
+    const total = this.clientClassificationTotalCount;
+    if (total <= 0) {
+      return '0%';
+    }
+    return `${(count / total) * 100}%`;
+  }
+
+  trackByPipelineSegment(_index: number, segment: OrgPipelineSegment): string {
+    return segment.key;
   }
 
   trackByClassificationLevel(_index: number, tier: OrgClientClassificationTier): number {
@@ -322,9 +754,17 @@ export class OrganizationHierarchyReportComponent implements OnInit, OnDestroy {
     this.cdr.markForCheck();
   }
 
-  toggleClassificationView(): void {
-    this.classificationView = this.classificationView === 'table' ? 'cards' : 'table';
+  onReportPanelTabChange(tab: OrgHierarchyReportPanelTab): void {
+    this.reportPanelTab = tab;
     this.cdr.markForCheck();
+  }
+
+  trackByReportPanelTab(_index: number, tab: { id: OrgHierarchyReportPanelTab }): string {
+    return tab.id;
+  }
+
+  trackBySkeletonIndex(_index: number, item: number): number {
+    return item;
   }
 
   toggleTreeNode(nodeId: string): void {
@@ -374,23 +814,104 @@ export class OrganizationHierarchyReportComponent implements OnInit, OnDestroy {
     nodeId: string;
     nodeLabel: string;
   }): void {
+    // Drill-down de listagem de clientes (total e tags) desabilitado temporariamente — performance.
+    if (this.isClientListDrilldownDisabled(payload.kpi)) {
+      return;
+    }
+
+    const node = findOrgHierarchyNodeById(this.root, payload.nodeId);
     this.kpiDrilldownContext = {
+      kind: 'kpi',
       kpi: payload.kpi,
       nodeType: payload.nodeType,
       nodeId: payload.nodeId,
       nodeLabel: payload.nodeLabel,
-      months: 4
+      months: 4,
+      compareContext: node ? buildOrgKpiDrilldownCompareContext(node) : null,
+      reportParams: this.report?.params ?? null
     };
     this.cdr.markForCheck();
   }
 
-  openKpiDrillDown(kpi: OrgHierarchyKpiDetailKey, node: OrgHierarchyNode): void {
+  openKpiDrillDown(
+    kpi: OrgHierarchyKpiDetailKey,
+    node: OrgHierarchyNode,
+    clientListKey?: OrgHierarchyClientListKey | null
+  ): void {
+    // Drill-down de listagem de clientes (total e tags) desabilitado temporariamente — performance.
+    if (this.isClientListDrilldownDisabled(kpi)) {
+      return;
+    }
+
     this.kpiDrilldownContext = {
+      kind: 'kpi',
       kpi,
       nodeType: node.node_type,
       nodeId: node.node_id,
       nodeLabel: node.label,
-      months: 4
+      months: 4,
+      compareContext: buildOrgKpiDrilldownCompareContext(node),
+      reportParams: this.report?.params ?? null,
+      clientListKey: clientListKey ?? null
+    };
+    this.cdr.markForCheck();
+  }
+
+  /**
+   * Abre drill-down da lista de clientes atendidos filtrada por tag (G4 / onboarding / churn).
+   * Desabilitado temporariamente — reativar quando a listagem otimizada estiver pronta.
+   */
+  openClientsServedListDrillDown(
+    _clientListKey: OrgHierarchyClientListKey,
+    _node?: OrgHierarchyNode | null
+  ): void {
+    return;
+
+    /*
+    const scope = _node ?? this.root;
+    if (!scope) {
+      return;
+    }
+    this.openKpiDrillDown('clients_served', scope, _clientListKey);
+    */
+  }
+
+  /** KPIs de listagem de clientes cujo drill-down está pausado por performance. */
+  private isClientListDrilldownDisabled(kpi: OrgHierarchyKpiDetailKey): boolean {
+    return (
+      kpi === 'clients_served' ||
+      kpi === 'clients_acessorias_g4' ||
+      kpi === 'clients_acessorias_onboarding' ||
+      kpi === 'clients_acessorias_risco_de_churn'
+    );
+  }
+
+  openCriticalClientDrillDown(
+    client: CriticalClientItem,
+    issue: CriticalClientIssueFilter = 'all'
+  ): void {
+    const node = this.root;
+    if (!node) {
+      return;
+    }
+    this.kpiDrilldownContext = {
+      kind: 'critical_client',
+      client,
+      issue,
+      nodeType: node.node_type,
+      nodeId: node.node_id,
+      nodeLabel: node.label
+    };
+    this.cdr.markForCheck();
+  }
+
+  onCriticalClientIssueFilterChange(issue: CriticalClientIssueFilter): void {
+    if (!this.kpiDrilldownContext || this.kpiDrilldownContext.kind !== 'critical_client') {
+      return;
+    }
+    this.kpiDrilldownContext = {
+      ...this.kpiDrilldownContext,
+      issue
     };
     this.cdr.markForCheck();
   }
@@ -445,6 +966,34 @@ export class OrganizationHierarchyReportComponent implements OnInit, OnDestroy {
     return node.node_id;
   }
 
+  trackByGlobalMtdMetric(_index: number, metric: OrgGlobalMtdMetric): string {
+    return metric.key;
+  }
+
+  onGlobalMtdMetricClick(metric: OrgGlobalMtdMetric): void {
+    if (!metric.kpi || !this.root) {
+      return;
+    }
+    this.openKpiDrillDown(metric.kpi, this.root);
+  }
+
+  formatGlobalMtdValue(metric: OrgGlobalMtdMetric): string {
+    return formatOrgGlobalMtdValue(this.root?.mtd, metric);
+  }
+
+  isGlobalMtdRiskMetric(metric: OrgGlobalMtdMetric): boolean {
+    return [
+      'pending_open',
+      'near_due',
+      'overdue_pending',
+      'overdue_pending_justified',
+      'overdue_pending_unjustified',
+      'multa_risk',
+      'multa_incurred',
+      'multa_and_near_due'
+    ].includes(metric.key);
+  }
+
   trackByHighlight(_index: number, item: OrgHierarchyHighlightItem): string {
     return `${item.node_id ?? ''}_${item.label ?? ''}_${_index}`;
   }
@@ -493,8 +1042,52 @@ export class OrganizationHierarchyReportComponent implements OnInit, OnDestroy {
     return formatHighlightMtdCell(item, column);
   }
 
-  rankingMtdCell(node: OrgHierarchyNode, column: OrgHighlightMtdColumn): string {
-    return formatOrgHierarchyNodeMtdCell(node, column);
+  highlightInitials(item: OrgHierarchyHighlightItem): string {
+    const label = this.highlightMetricLabel(item);
+    return label
+      .split(/\s+/)
+      .filter(Boolean)
+      .map(part => part[0])
+      .slice(0, 2)
+      .join('')
+      .toUpperCase();
+  }
+
+  highlightContextLabel(item: OrgHierarchyHighlightItem): string {
+    if (this.highlightViewTab === 'player') {
+      const team = this.highlightTeamLabel(item);
+      const gerencia = this.highlightGerenciaLabel(item);
+      return [team !== '—' ? team : null, gerencia !== '—' ? gerencia : null].filter(Boolean).join(' · ');
+    }
+    if (this.highlightViewTab === 'supervisao') {
+      const gerencia = this.highlightGerenciaLabel(item);
+      return gerencia !== '—' ? gerencia : '';
+    }
+    const diretoria = this.highlightDiretoriaLabel(item);
+    return diretoria !== '—' ? diretoria : '';
+  }
+
+  rankingMtdCell(node: OrgHierarchyNode, column: OrgRankingColumn | OrgHighlightMtdColumn): string {
+    if (column.key === 'points_per_collaborator') {
+      return formatOrgRankingCell(node, column as OrgRankingColumn);
+    }
+    return formatOrgHierarchyNodeMtdCell(node, column as OrgHighlightMtdColumn);
+  }
+
+  rankingPointsGoalPct(node: OrgHierarchyNode): string | null {
+    return formatOrgPointsGoalPct(node.mtd);
+  }
+
+  rankingPointsGoalTone(node: OrgHierarchyNode): 'positive' | 'negative' | 'neutral' {
+    return getOrgPointsGoalTone(computeOrgPointsGoalPct(node.mtd));
+  }
+
+  rankingPointsGoalPctNumber(node: OrgHierarchyNode): number {
+    const pct = computeOrgPointsGoalPct(node.mtd);
+    if (pct == null || !Number.isFinite(pct)) {
+      return 0;
+    }
+    return Math.min(100, Math.max(0, pct));
   }
 
   directorateRankingLabel(diretoria: OrgHierarchyNode): string {
@@ -535,8 +1128,8 @@ export class OrganizationHierarchyReportComponent implements OnInit, OnDestroy {
     this.insights = null;
     this.insightsNotFound = false;
     this.insightsBanner = null;
-    this.insightsDepth = 7;
-    this.cdr.markForCheck();
+      this.insightsDepth = 7;
+      this.cdr.markForCheck();
 
     if (force) {
       this.actionLogService.clearCache();
@@ -562,7 +1155,9 @@ export class OrganizationHierarchyReportComponent implements OnInit, OnDestroy {
       }
       this.ensureValidHighlightViewTab();
       if (this.report) {
-        void this.loadInsights(gen);
+        if (this.aiExecutiveAnalysisEnabled) {
+          void this.loadInsights(gen);
+        }
       }
     } catch (error) {
       console.error('Erro ao carregar relatório organizacional:', error);

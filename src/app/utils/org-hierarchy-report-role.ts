@@ -27,10 +27,12 @@ export function hasOrganizationHierarchyReportRole(roles: string[] | undefined |
   );
 }
 
-/** Acesso à rota e ao seletor de painéis — apenas ADMIN e C_LEVEL por enquanto. */
+/** Acesso à rota e ao seletor de painéis — ADMIN, C_LEVEL e DIRETOR. */
 export function canAccessOrganizationHierarchyNav(roles: string[] | undefined | null): boolean {
+  const cachedRole = detectManagementDashboardCachedRole(roles);
   return (
     hasJwtRoleToken(roles, ROLES_LIST.ACCESS_ADMIN_PANEL) ||
-    detectManagementDashboardCachedRole(roles) === 'C_LEVEL'
+    cachedRole === 'C_LEVEL' ||
+    cachedRole === 'DIRETOR'
   );
 }

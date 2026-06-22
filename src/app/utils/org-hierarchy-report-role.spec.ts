@@ -21,15 +21,15 @@ describe('hasOrganizationHierarchyReportRole', () => {
 });
 
 describe('canAccessOrganizationHierarchyNav', () => {
-  it('returns true only for ADMIN and C_LEVEL', () => {
+  it('returns true for ADMIN, C_LEVEL and DIRETOR', () => {
     expect(canAccessOrganizationHierarchyNav(['ADMIN'])).toBe(true);
     expect(canAccessOrganizationHierarchyNav(['C_LEVEL'])).toBe(true);
     expect(canAccessOrganizationHierarchyNav(['C-LEVEL'])).toBe(true);
+    expect(canAccessOrganizationHierarchyNav(['DIRETOR'])).toBe(true);
   });
 
-  it('returns false for GERENTE, DIRETOR, SERVICE and other roles', () => {
+  it('returns false for GERENTE, SERVICE and other roles', () => {
     expect(canAccessOrganizationHierarchyNav(['GERENTE'])).toBe(false);
-    expect(canAccessOrganizationHierarchyNav(['DIRETOR'])).toBe(false);
     expect(canAccessOrganizationHierarchyNav(['SERVICE'])).toBe(false);
     expect(canAccessOrganizationHierarchyNav(['SUPERVISOR'])).toBe(false);
     expect(canAccessOrganizationHierarchyNav(undefined)).toBe(false);
