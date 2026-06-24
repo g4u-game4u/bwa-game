@@ -56,6 +56,7 @@ import {
   formatOrgKpiCompareValue,
   OrgKpiComparePanel,
   OrgKpiDrilldownCompareContext,
+  OrgKpiMonthlyHistoryRow,
   resolveOrgKpiMonthlyHistoryForChart,
   supportsOrgKpiWindowCompare
 } from '@services/org-hierarchy-kpi-compare.mapper';
@@ -255,7 +256,19 @@ export class ModalOrganizationHierarchyKpiDetailComponent implements OnInit, OnC
   }
 
   get hasMonthlyHistoryTable(): boolean {
-    return (this.kpiComparePanel?.monthlyHistory?.length ?? 0) > 0;
+    return this.kpiMonthlyHistory.length > 0;
+  }
+
+  get kpiMonthlyHistory(): OrgKpiMonthlyHistoryRow[] {
+    if (!this.kpi) {
+      return [];
+    }
+    return resolveOrgKpiMonthlyHistoryForChart(
+      this.kpi,
+      this.compareContext,
+      this.kpiDetail?.history,
+      this.reportParams
+    );
   }
 
   get usesClientListsPanel(): boolean {
@@ -459,6 +472,10 @@ export class ModalOrganizationHierarchyKpiDetailComponent implements OnInit, OnC
     if (shouldFetchOrgHierarchyClientLists(this.kpi, this.initialClientListKey)) {
       return true;
     }
+    // KPIs com comparativo MTD vs mês fechado: buscar kpi-detail para enriquecer histórico.
+    if (supportsOrgKpiWindowCompare(this.kpi)) {
+      return true;
+    }
     return !this.hasCompareMonthlyHistory();
   }
 
@@ -573,11 +590,7 @@ export class ModalOrganizationHierarchyKpiDetailComponent implements OnInit, OnC
       return;
     }
 
-    const history = resolveOrgKpiMonthlyHistoryForChart(
-      this.kpi,
-      this.compareContext,
-      this.kpiDetail?.history
-    );
+    const history = this.kpiMonthlyHistory;
 
     if (!history.length) {
       this.chartLabels = [];

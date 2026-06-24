@@ -161,6 +161,20 @@ export function buildOrgHierarchyDeliveriesExportFilename(
   return `relatorio-organizacional-entregas-${subjectSlug}-${monthLabel}-${scopeSlug}${filterSuffix}${extension}`;
 }
 
+/** Nome de arquivo PT-BR para exportação agregada de entregas de clientes críticos. */
+export function buildOrgHierarchyCriticalClientsDeliveriesExportFilename(options: {
+  month: Date;
+  scopeLabel?: string | null;
+  format?: 'csv' | 'xlsx';
+  issue?: CriticalClientIssueFilter;
+}): string {
+  const monthLabel = buildMonthSlug(options.month);
+  const scopeSlug = slugifyExportFilenamePart(options.scopeLabel);
+  const issueSuffix = buildIssueFilterSuffix(options.issue);
+  const extension = (options.format ?? 'xlsx') === 'csv' ? '.csv' : '.xlsx';
+  return `relatorio-organizacional-entregas-clientes-criticos-${monthLabel}-${scopeSlug}${issueSuffix}${extension}`;
+}
+
 /** @deprecated Prefer {@link buildOrgHierarchyDeliveriesExportFilename}. */
 export function buildOrgHierarchyKpiExportFilename(options: {
   kpi: OrgHierarchyKpiDetailKey;

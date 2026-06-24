@@ -1,0 +1,95 @@
+<div class="org-flowchart-branch">
+  <div
+    class="org-flowchart-card"
+    [ngClass]="levelClass()"
+    [class.org-flowchart-card--selected]="isSelected"
+    [class.org-flowchart-card--match]="isSearchMatch"
+    [class.org-flowchart-card--expanded]="isExpanded && hasChildren"
+    role="button"
+    tabindex="0"
+    [attr.aria-label]="node.label + ', ' + nodeTypeLabel()"
+    [attr.aria-expanded]="hasChildren ? isExpanded : null"
+    (click)="onCardClick()"
+    (keydown)="onCardKeydown($event)">
+    <button
+      *ngIf="hasChildren; else leafIcon"
+      type="button"
+      class="org-flowchart-card__expand"
+      [attr.aria-label]="isExpanded ? 'Recolher subníveis' : 'Expandir subníveis'"
+      (click)="onExpandClick($event)"
+      (keydown)="onExpandKeydown($event)">
+      {{ isExpanded ? '−' : '+' }}
+    </button>
+    <ng-template #leafIcon>
+      <span class="org-flowchart-card__leaf-dot" aria-hidden="true"></span>
+    </ng-template>
+
+    <div class="org-flowchart-card__body">
+      <div class="org-flowchart-card__head">
+        <span class="org-flowchart-card__badge">{{ nodeTypeLabel() }}</span>
+        <span
+          class="org-flowchart-card__label"
+          [ngClass]="nodeAreaLabelClass()"
+          [title]="node.label">
+          {{ node.label }}
+        </span>
+      </div>
+
+      <div class="org-flowchart-card__metrics">
+        <button
+          type="button"
+          class="org-flowchart-card__metric org-flowchart-card__metric--clickable"
+          title="Ver histórico de pontos"
+          (click)="onKpiClick('points_delivered', $event)">
+          <span class="org-flowchart-card__metric-value">{{ formatPoints() }}</span>
+          <span class="org-flowchart-card__metric-label">pts MTD</span>
+        </button>
+        <button
+          type="button"
+          class="org-flowchart-card__metric org-flowchart-card__metric--clickable"
+          title="Ver histórico de % no prazo"
+          (click)="onKpiClick('on_time_pct', $event)">
+          <span
+            class="org-flowchart-card__metric-value org-flowchart-card__metric-value--on-time org-flowchart-card__metric-value--{{ onTimeTone() }}">
+            {{ formatOnTime() }}
+          </span>
+          <span class="org-flowchart-card__metric-label">% prazo</span>
+        </button>
+        <div class="org-flowchart-card__metric">
+          <span class="org-flowchart-card__metric-value">{{ node.players_count | number:'1.0-0':'pt-BR' }}</span>
+          <span class="org-flowchart-card__metric-label">colab.</span>
+        </div>
+      </div>
+
+      <div class="org-flowchart-card__footer">
+        <span
+          *ngIf="formatGoalPct() as goalPct"
+          class="org-flowchart-card__goal org-flowchart-card__goal--{{ goalTone() }}">
+          {{ goalPct }}
+        </span>
+        <span *ngIf="hasChildren" class="org-flowchart-card__children-hint">
+          {{ childCountLabel() }}
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <div *ngIf="showChildren" class="org-flowchart-children">
+    <div class="org-flowchart-children__connector" aria-hidden="true"></div>
+    <ul class="org-flowchart-children__list">
+      <li
+        *ngFor="let child of node.children; trackBy: trackByNodeId"
+        class="org-flowchart-children__item">
+        <c4u-org-hierarchy-flowchart-node
+          [node]="child"
+          [expandedIds]="expandedIds"
+          [searchHighlightIds]="searchHighlightIds"
+          [selectedNodeId]="selectedNodeId"
+          (toggleNode)="toggleNode.emit($event)"
+          (selectNode)="selectNode.emit($event)"
+          (kpiClick)="kpiClick.emit($event)">
+        </c4u-org-hierarchy-flowchart-node>
+      </li>
+    </ul>
+  </div>
+</div>

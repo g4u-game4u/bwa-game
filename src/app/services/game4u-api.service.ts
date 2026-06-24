@@ -51,6 +51,7 @@ import {
   OrganizationHierarchyMultaRiskResponse,
   Game4uReportsOrganizationHierarchyDeliveriesQuery,
   Game4uReportsOrganizationHierarchyClientsServedExportQuery,
+  Game4uReportsOrganizationHierarchyCriticalClientsDeliveriesExportQuery,
   OrganizationHierarchyDeliveriesResponse,
   Game4uReportsOrganizationHierarchyInsightsQuery,
   Game4uReportsOrganizationHierarchyInsightsBody,
@@ -1159,6 +1160,50 @@ export class Game4uApiService {
       observe: 'response',
       responseType: 'blob'
     });
+  }
+
+  /**
+   * `GET /game/reports/organization/hierarchy-report/critical-clients/deliveries/export`
+   */
+  getGameReportsOrganizationHierarchyCriticalClientsDeliveriesExport(
+    q: Game4uReportsOrganizationHierarchyCriticalClientsDeliveriesExportQuery
+  ): Observable<HttpResponse<Blob>> {
+    if (!this.isConfigured()) {
+      return throwError(
+        () =>
+          new Error(
+            '[Game4U] reports/organization/hierarchy-report/critical-clients/deliveries/export: defina backend_url_base.'
+          )
+      );
+    }
+    const month = (q.month ?? '').trim();
+    if (!month) {
+      return throwError(
+        () =>
+          new Error(
+            '[Game4U] critical-clients/deliveries/export: informe month (YYYY-MM).'
+          )
+      );
+    }
+    const nodeType = (q.node_type ?? '').trim();
+    const nodeId = (q.node_id ?? '').trim();
+    const issue = (q.issue ?? 'all').trim() || 'all';
+    let params = new HttpParams().set('month', month).set('issue', issue);
+    if (nodeType) {
+      params = params.set('node_type', nodeType);
+    }
+    if (nodeId) {
+      params = params.set('node_id', nodeId);
+    }
+    return this.http.get(
+      `${this.baseUrl}/game/reports/organization/hierarchy-report/critical-clients/deliveries/export`,
+      {
+        headers: this.headers(),
+        params,
+        observe: 'response',
+        responseType: 'blob'
+      }
+    );
   }
 
   /**

@@ -1,0 +1,342 @@
+@import '../../../../styles/variables.scss';
+@import './org-area-labels.scss';
+
+$org-bg: #0f1419;
+$org-surface: #1a2332;
+$org-surface-hover: #243044;
+$org-border: #2d3a4f;
+$org-muted: #8b9cb3;
+$org-accent: #3b82f6;
+
+$lvl-root: #6366f1;
+$lvl-area: #818cf8;
+$lvl-diretoria: #8b5cf6;
+$lvl-gerencia: #0ea5e9;
+$lvl-supervisao: #10b981;
+$lvl-player: #64748b;
+
+@mixin org-flowchart-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba($org-muted, 0.55) rgba($org-border, 0.28);
+
+  &::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: rgba($org-border, 0.22);
+    border-radius: 999px;
+    margin: 6px;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: rgba($org-muted, 0.42);
+    border: 2px solid transparent;
+    background-clip: padding-box;
+    border-radius: 999px;
+
+    &:hover {
+      background: rgba($org-accent, 0.62);
+      background-clip: padding-box;
+    }
+  }
+
+  &::-webkit-scrollbar-corner {
+    background: rgba($org-bg, 0.72);
+  }
+}
+
+.org-flowchart-panel {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-sm;
+}
+
+.org-flowchart-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: $spacing-sm $spacing-md;
+  padding: $spacing-sm $spacing-md;
+  background: rgba($org-surface, 0.65);
+  border: 1px solid $org-border;
+  border-radius: $border-radius-sm;
+}
+
+.org-flowchart-toolbar__search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 220px;
+  min-width: 200px;
+  padding: 0 10px;
+  border: 1px solid $org-border;
+  border-radius: $border-radius-sm;
+  background: rgba($org-bg, 0.55);
+  color: $org-muted;
+
+  i {
+    font-size: 1rem;
+    flex-shrink: 0;
+  }
+}
+
+.org-flowchart-search {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  color: $text-primary;
+  font-size: $font-size-small;
+  padding: 8px 0;
+  outline: none;
+
+  &::placeholder {
+    color: $org-muted;
+  }
+
+  &:focus {
+    outline: none;
+  }
+}
+
+.org-flowchart-search-clear {
+  border: none;
+  background: transparent;
+  color: $org-muted;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  line-height: 1;
+
+  &:hover {
+    color: $text-primary;
+    background: rgba(255, 255, 255, 0.08);
+  }
+}
+
+.org-flowchart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: $spacing-xs $spacing-md;
+  font-size: $font-size-caption;
+  color: $org-muted;
+
+  &__item {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+  }
+
+  &__swatch {
+    width: 10px;
+    height: 10px;
+    border-radius: 3px;
+    flex-shrink: 0;
+  }
+}
+
+.org-flowchart-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: $spacing-xs;
+  margin-left: auto;
+}
+
+.org-flowchart-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: $border-radius-sm;
+  border: 1px solid $org-border;
+  background: $org-surface;
+  color: $text-primary;
+  font-size: $font-size-caption;
+  font-weight: $font-weight-medium;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+
+  i {
+    font-size: 0.95rem;
+    opacity: 0.85;
+  }
+
+  &:hover {
+    background: $org-surface-hover;
+    border-color: rgba($org-accent, 0.45);
+  }
+
+  &:focus-visible {
+    outline: $focus-outline;
+    outline-offset: $focus-offset;
+  }
+}
+
+.org-flowchart-hint {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0;
+  padding: 0 $spacing-xs;
+  font-size: $font-size-caption;
+  color: $org-muted;
+  line-height: 1.45;
+
+  i {
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+
+  strong {
+    color: rgba($text-primary, 0.85);
+    font-weight: 600;
+  }
+}
+
+.org-flowchart-detail {
+  padding: $spacing-sm $spacing-md;
+  border: 1px solid rgba($org-accent, 0.35);
+  border-radius: $border-radius-sm;
+  background: rgba($org-surface, 0.75);
+  animation: org-flowchart-detail-in 0.18s ease;
+
+  &__head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: $spacing-sm;
+    margin-bottom: $spacing-sm;
+  }
+
+  &__eyebrow {
+    margin: 0 0 2px;
+    font-size: $font-size-caption;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: $org-muted;
+    font-weight: 600;
+  }
+
+  &__title {
+    margin: 0;
+    font-size: 1.05rem;
+    font-weight: $font-weight-semibold;
+    color: $text-primary;
+    line-height: 1.25;
+  }
+
+  &__people {
+    font-size: $font-size-caption;
+    color: $org-muted;
+    white-space: nowrap;
+  }
+
+  &__metrics {
+    display: flex;
+    flex-wrap: wrap;
+    gap: $spacing-sm $spacing-lg;
+  }
+
+  &__metric {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 72px;
+  }
+
+  &__metric-label {
+    font-size: 0.6875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: $org-muted;
+    font-weight: 600;
+  }
+
+  &__metric-value {
+    font-size: $font-size-small;
+    font-weight: $font-weight-semibold;
+    font-variant-numeric: tabular-nums;
+    color: $text-primary;
+
+    &--on-time {
+      &--success {
+        color: $success-green;
+      }
+
+      &--warning {
+        color: $warning-orange;
+      }
+
+      &--danger {
+        color: $error-red;
+      }
+    }
+
+    &--compare {
+      &--positive {
+        color: $success-green;
+      }
+
+      &--negative {
+        color: $error-red;
+      }
+    }
+  }
+}
+
+@keyframes org-flowchart-detail-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.org-flowchart-canvas-wrap {
+  width: 100%;
+  max-height: min(72vh, 820px);
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable both-edges;
+  padding: $spacing-lg $spacing-md $spacing-xl;
+  border: 1px solid $org-border;
+  border-radius: $border-radius-sm;
+  background:
+    radial-gradient(circle at 1px 1px, rgba($org-border, 0.35) 1px, transparent 0) 0 0 / 20px 20px,
+    rgba($org-bg, 0.55);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  display: flex;
+  justify-content: center;
+  @include org-flowchart-scrollbar;
+}
+
+.org-flowchart-canvas {
+  display: inline-flex;
+  min-width: min(100%, 640px);
+  width: max-content;
+  justify-content: center;
+}
+
+@media (max-width: 768px) {
+  .org-flowchart-actions {
+    margin-left: 0;
+    width: 100%;
+  }
+
+  .org-flowchart-action {
+    flex: 1;
+    justify-content: center;
+  }
+
+  .org-flowchart-legend {
+    width: 100%;
+  }
+}

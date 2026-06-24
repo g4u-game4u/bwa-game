@@ -1046,6 +1046,14 @@ export interface Game4uReportsOrganizationHierarchyClientsServedExportQuery {
   node_id?: string;
 }
 
+/** Query para `GET /game/reports/organization/hierarchy-report/critical-clients/deliveries/export`. */
+export interface Game4uReportsOrganizationHierarchyCriticalClientsDeliveriesExportQuery {
+  month: string; // YYYY-MM
+  node_type?: OrgHierarchyNodeType | string;
+  node_id?: string;
+  issue?: CriticalClientIssueFilter | string;
+}
+
 export interface OrganizationHierarchyDeliveryRow {
   delivery_id: string;
   delivery_title: string;

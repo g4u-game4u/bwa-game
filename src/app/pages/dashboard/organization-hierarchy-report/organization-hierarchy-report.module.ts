@@ -5,6 +5,8 @@ import { FormsModule } from '@angular/forms';
 import { OrganizationHierarchyReportComponent } from './organization-hierarchy-report.component';
 import { C4uOrgHierarchyTreeNodeComponent } from './org-hierarchy-tree-node.component';
 import { C4uOrgHierarchyTreeTableComponent } from './org-hierarchy-tree-table.component';
+import { C4uOrgHierarchyFlowchartComponent } from './org-hierarchy-flowchart.component';
+import { C4uOrgHierarchyFlowchartNodeComponent } from './org-hierarchy-flowchart-node.component';
 import { OrgHierarchyReportGuard } from '@guards/org-hierarchy-report.guard';
 import { C4uDashboardNavigationModule } from '@components/c4u-dashboard-navigation/c4u-dashboard-navigation.module';
 import { C4uSeletorMesModule } from '@components/c4u-seletor-mes/c4u-seletor-mes.module';
@@ -27,7 +29,9 @@ const routes: Routes = [
   declarations: [
     OrganizationHierarchyReportComponent,
     C4uOrgHierarchyTreeNodeComponent,
-    C4uOrgHierarchyTreeTableComponent
+    C4uOrgHierarchyTreeTableComponent,
+    C4uOrgHierarchyFlowchartComponent,
+    C4uOrgHierarchyFlowchartNodeComponent
   ],
   imports: [
     CommonModule,

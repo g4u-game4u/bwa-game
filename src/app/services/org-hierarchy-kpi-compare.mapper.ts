@@ -41,6 +41,7 @@ export interface OrgKpiCompareDelta {
 }
 
 export interface OrgKpiMonthlyHistoryRow {
+  cacheMonth: string;
   monthLabel: string;
   mtdValue: number | null;
   mtdValueLabel: string;
@@ -83,8 +84,96 @@ export function buildOrgKpiDrilldownCompareContext(
     prev_mtd: node.prev_mtd ?? {},
     prev_full: node.prev_full ?? {},
     compare: node.compare ?? {},
-    mtd_monthly_series: node.mtd_monthly_series
+    mtd_monthly_series: normalizeOrgMetricsMonthlySeries(node.mtd_monthly_series)
   };
+}
+
+function pickMonthlyPointNumber(raw: Record<string, unknown>, keys: string[]): number | undefined {
+  for (const key of keys) {
+    const value = raw[key];
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return value;
+    }
+  }
+  return undefined;
+}
+
+function pickMonthlyPointString(raw: Record<string, unknown>, keys: string[]): string {
+  for (const key of keys) {
+    const value = raw[key];
+    if (typeof value === 'string' && value.trim()) {
+      return value.trim();
+    }
+  }
+  return '';
+}
+
+/** Normaliza pontos de `mtd_monthly_series` (snake/camel + aliases legados). */
+export function normalizeOrgMetricsMonthlyPoint(raw: unknown): OrgMetricsMonthlyPoint | null {
+  if (!raw || typeof raw !== 'object') {
+    return null;
+  }
+  const o = raw as Record<string, unknown>;
+  const cache_month = pickMonthlyPointString(o, ['cache_month', 'cacheMonth']);
+  if (!cache_month) {
+    return null;
+  }
+
+  return {
+    cache_month,
+    mtd_finished: pickMonthlyPointNumber(o, ['mtd_finished', 'mtdFinished', 'finished']) ?? 0,
+    mtd_points_delivered:
+      pickMonthlyPointNumber(o, ['mtd_points_delivered', 'mtdPointsDelivered', 'points_delivered']) ?? 0,
+    mtd_goal_points: pickMonthlyPointNumber(o, ['mtd_goal_points', 'mtdGoalPoints', 'goal_points']) ?? 0,
+    mtd_expected_points_to_date: pickMonthlyPointNumber(o, [
+      'mtd_expected_points_to_date',
+      'mtdExpectedPointsToDate',
+      'expected_points_to_date'
+    ]),
+    mtd_goal_deliveries: pickMonthlyPointNumber(o, ['mtd_goal_deliveries', 'mtdGoalDeliveries', 'goal_deliveries']),
+    mtd_expected_deliveries_to_date: pickMonthlyPointNumber(o, [
+      'mtd_expected_deliveries_to_date',
+      'mtdExpectedDeliveriesToDate',
+      'expected_deliveries_to_date'
+    ]),
+    mtd_pending_open: pickMonthlyPointNumber(o, ['mtd_pending_open', 'mtdPendingOpen', 'pending_open']) ?? 0,
+    mtd_multa_risk: pickMonthlyPointNumber(o, ['mtd_multa_risk', 'mtdMultaRisk', 'multa_risk']) ?? 0,
+    mtd_multa_incurred: pickMonthlyPointNumber(o, ['mtd_multa_incurred', 'mtdMultaIncurred', 'multa_incurred']) ?? 0,
+    mtd_on_time_pct: pickMonthlyPointNumber(o, ['mtd_on_time_pct', 'mtdOnTimePct', 'on_time_pct']) ?? 0,
+    mtd_clients_served: pickMonthlyPointNumber(o, ['mtd_clients_served', 'mtdClientsServed', 'clients_served']) ?? 0,
+    full_finished: pickMonthlyPointNumber(o, ['full_finished', 'fullFinished']),
+    full_points_delivered: pickMonthlyPointNumber(o, ['full_points_delivered', 'fullPointsDelivered']),
+    full_on_time_pct: pickMonthlyPointNumber(o, ['full_on_time_pct', 'fullOnTimePct']),
+    full_clients_served: pickMonthlyPointNumber(o, ['full_clients_served', 'fullClientsServed']),
+    full_pending_open: pickMonthlyPointNumber(o, ['full_pending_open', 'fullPendingOpen']),
+    full_multa_risk: pickMonthlyPointNumber(o, ['full_multa_risk', 'fullMultaRisk']),
+    full_multa_incurred: pickMonthlyPointNumber(o, ['full_multa_incurred', 'fullMultaIncurred'])
+  };
+}
+
+export function normalizeOrgMetricsMonthlySeries(
+  raw: OrgMetricsMonthlyPoint[] | undefined | null
+): OrgMetricsMonthlyPoint[] | undefined {
+  if (!raw?.length) {
+    return undefined;
+  }
+  const normalized = raw
+    .map(point => normalizeOrgMetricsMonthlyPoint(point))
+    .filter((point): point is OrgMetricsMonthlyPoint => point != null);
+  return normalized.length ? normalized : undefined;
+}
+
+function monthKeyFromCacheMonth(cacheMonth: string | undefined | null): string {
+  return (cacheMonth ?? '').trim().slice(0, 7);
+}
+
+function isClosedHistoryMonth(pointMonth: string, refCacheMonth: string | null | undefined): boolean {
+  const refKey = monthKeyFromCacheMonth(refCacheMonth);
+  const pointKey = monthKeyFromCacheMonth(pointMonth);
+  if (!refKey || !pointKey) {
+    return false;
+  }
+  return pointKey < refKey;
 }
 
 export function getOrgMetricsKpiValue(
@@ -311,7 +400,8 @@ function readMonthlyPointNumber(
 
 function buildMonthlyHistory(
   kpi: OrgHierarchyKpiDetailKey,
-  series: OrgMetricsMonthlyPoint[] | undefined
+  series: OrgMetricsMonthlyPoint[] | undefined,
+  refCacheMonth?: string | null
 ): OrgKpiMonthlyHistoryRow[] {
   const mtdField = kpiToMonthlySeriesField(kpi);
   const fullField = kpiToMonthlySeriesFullField(kpi);
@@ -321,9 +411,17 @@ function buildMonthlyHistory(
   return [...series]
     .sort((a, b) => String(a.cache_month).localeCompare(String(b.cache_month)))
     .map(point => {
-      const mtdValue = readMonthlyPointNumber(point, mtdField);
-      const fullValue = readMonthlyPointNumber(point, fullField);
+      let mtdValue = readMonthlyPointNumber(point, mtdField);
+      let fullValue = readMonthlyPointNumber(point, fullField);
+
+      // Meses fechados: quando a API só envia um total em mtd_*, exibir em "Mês fechado".
+      if (fullValue == null && mtdValue != null && isClosedHistoryMonth(point.cache_month, refCacheMonth)) {
+        fullValue = mtdValue;
+        mtdValue = null;
+      }
+
       return {
+        cacheMonth: monthKeyFromCacheMonth(point.cache_month),
         monthLabel: formatMonthLabel(point.cache_month),
         mtdValue,
         mtdValueLabel: formatOrgKpiCompareValue(kpi, mtdValue),
@@ -374,17 +472,69 @@ export function buildOrgKpiMonthlyHistoryChartDatasets(
 
 function buildMonthlyHistoryFromKpiDetail(
   kpi: OrgHierarchyKpiDetailKey,
-  history: Array<{ month_label: string; value: number | null; full_value?: number | null }> | undefined
+  history: Array<{ month_label: string; value: number | null; full_value?: number | null; cache_month?: string }> | undefined,
+  refCacheMonth?: string | null
 ): OrgKpiMonthlyHistoryRow[] {
   if (!history?.length) {
     return [];
   }
   return history.map(item => {
-    const mtdValue = typeof item.value === 'number' && Number.isFinite(item.value) ? item.value : null;
-    const fullValue =
+    const cacheMonth =
+      monthKeyFromCacheMonth(item.cache_month) || monthKeyFromCacheMonth(item.month_label);
+    let mtdValue = typeof item.value === 'number' && Number.isFinite(item.value) ? item.value : null;
+    let fullValue =
       typeof item.full_value === 'number' && Number.isFinite(item.full_value) ? item.full_value : null;
+
+    if (fullValue == null && mtdValue != null && isClosedHistoryMonth(cacheMonth, refCacheMonth)) {
+      fullValue = mtdValue;
+      mtdValue = null;
+    }
+
     return {
+      cacheMonth,
       monthLabel: item.month_label,
+      mtdValue,
+      mtdValueLabel: formatOrgKpiCompareValue(kpi, mtdValue),
+      fullValue,
+      fullValueLabel: formatOrgKpiCompareValue(kpi, fullValue)
+    };
+  });
+}
+
+function mergeOrgKpiMonthlyHistoryRows(
+  kpi: OrgHierarchyKpiDetailKey,
+  fromSeries: OrgKpiMonthlyHistoryRow[],
+  fromDetail: OrgKpiMonthlyHistoryRow[]
+): OrgKpiMonthlyHistoryRow[] {
+  if (!fromDetail.length) {
+    return fromSeries;
+  }
+  if (!fromSeries.length) {
+    return fromDetail;
+  }
+
+  const detailByMonth = new Map(fromDetail.map(row => [row.cacheMonth, row]));
+  const seriesByMonth = new Map(fromSeries.map(row => [row.cacheMonth, row]));
+  const monthKeys = [...new Set([...fromSeries, ...fromDetail].map(row => row.cacheMonth))]
+    .filter(Boolean)
+    .sort();
+
+  return monthKeys.map(cacheMonth => {
+    const series = seriesByMonth.get(cacheMonth);
+    const detail = detailByMonth.get(cacheMonth);
+    if (!series) {
+      return detail!;
+    }
+    if (!detail) {
+      return series;
+    }
+
+    const mtdValue = series.mtdValue ?? detail.mtdValue;
+    const fullValue = detail.fullValue ?? series.fullValue;
+
+    return {
+      cacheMonth,
+      monthLabel: series.monthLabel || detail.monthLabel,
       mtdValue,
       mtdValueLabel: formatOrgKpiCompareValue(kpi, mtdValue),
       fullValue,
@@ -396,13 +546,18 @@ function buildMonthlyHistoryFromKpiDetail(
 export function resolveOrgKpiMonthlyHistoryForChart(
   kpi: OrgHierarchyKpiDetailKey,
   context: OrgKpiDrilldownCompareContext | null | undefined,
-  kpiDetailHistory: Array<{ month_label: string; value: number | null; full_value?: number | null }> | undefined
+  kpiDetailHistory: Array<{
+    month_label: string;
+    value: number | null;
+    full_value?: number | null;
+    cache_month?: string;
+  }> | undefined,
+  params?: OrganizationHierarchyReportParams | null | undefined
 ): OrgKpiMonthlyHistoryRow[] {
-  const fromSeries = buildMonthlyHistory(kpi, context?.mtd_monthly_series);
-  if (fromSeries.length) {
-    return fromSeries;
-  }
-  return buildMonthlyHistoryFromKpiDetail(kpi, kpiDetailHistory);
+  const refCacheMonth = params?.cache_month ?? null;
+  const fromSeries = buildMonthlyHistory(kpi, context?.mtd_monthly_series, refCacheMonth);
+  const fromDetail = buildMonthlyHistoryFromKpiDetail(kpi, kpiDetailHistory, refCacheMonth);
+  return mergeOrgKpiMonthlyHistoryRows(kpi, fromSeries, fromDetail);
 }
 
 export function buildOrgKpiComparePanel(
@@ -484,7 +639,7 @@ export function buildOrgKpiComparePanel(
     vsPrevFull,
     assessmentLabel,
     assessmentTone,
-    monthlyHistory: buildMonthlyHistory(kpi, context.mtd_monthly_series)
+    monthlyHistory: buildMonthlyHistory(kpi, context.mtd_monthly_series, params?.cache_month)
   };
 }
 
