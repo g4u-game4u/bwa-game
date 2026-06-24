@@ -1,0 +1,142 @@
+<div class="pipeline-changes" role="main" aria-label="Log de mudanças do pipeline de integração">
+  <div class="pipeline-changes__scroll" id="main-content">
+    <header class="dashboard-header" role="banner">
+      <c4u-dashboard-navigation></c4u-dashboard-navigation>
+      <div class="header-spacer"></div>
+      <c4u-seletor-mes
+        [showTodaTemporadaButton]="false"
+        (onSelectedMonth)="onMonthChange($event)">
+      </c4u-seletor-mes>
+      <button
+        class="logout-button"
+        type="button"
+        (click)="logout()"
+        aria-label="Sair do sistema"
+        title="Sair">
+        <i class="ri-logout-box-line" aria-hidden="true"></i>
+        <span>Sair</span>
+      </button>
+    </header>
+
+    <div class="pipeline-changes__intro">
+      <div class="pipeline-changes__head">
+        <h1 class="pipeline-changes__title">Log do pipeline de integração</h1>
+        <p class="pipeline-changes__subtitle">
+          Mudanças registradas em <code>pipeline_integracao_changes</code> · {{ intervalLabel }}
+        </p>
+      </div>
+
+      <div class="pipeline-changes__filters" role="search" aria-label="Filtros do log">
+        <label class="filter-field">
+          <span class="filter-field__label">Fase</span>
+          <select
+            class="filter-field__control"
+            [value]="selectedPhase"
+            (change)="onPhaseChange($any($event.target).value)">
+            <option *ngFor="let option of phaseOptions" [value]="option.value">
+              {{ option.label }}
+            </option>
+          </select>
+        </label>
+
+        <label class="filter-field">
+          <span class="filter-field__label">Limite</span>
+          <input
+            class="filter-field__control"
+            type="number"
+            min="1"
+            max="1000"
+            [value]="limit"
+            (change)="onLimitChange($any($event.target).value)" />
+        </label>
+
+        <button
+          type="button"
+          class="refresh-button"
+          [disabled]="isLoading"
+          (click)="reload()">
+          <i class="ri-refresh-line" [class.spin]="isLoading" aria-hidden="true"></i>
+          Atualizar
+        </button>
+      </div>
+    </div>
+
+    <div *ngIf="isLoading" class="pipeline-changes__state" role="status" aria-live="polite" aria-busy="true">
+      <div class="pipeline-changes__spinner" aria-hidden="true"></div>
+      <p>Carregando mudanças do pipeline…</p>
+    </div>
+
+    <div *ngIf="hasLoadError && !isLoading" class="pipeline-changes__state pipeline-changes__state--error" role="alert">
+      <i class="ri-error-warning-line" aria-hidden="true"></i>
+      <p>{{ errorMessage }}</p>
+      <button type="button" class="refresh-button" (click)="reload()">Tentar novamente</button>
+    </div>
+
+    <div *ngIf="isEmpty" class="pipeline-changes__state" role="status">
+      <i class="ri-inbox-line" aria-hidden="true"></i>
+      <p>Nenhuma mudança encontrada para o período e fase selecionados.</p>
+    </div>
+
+    <section
+      *ngIf="!isLoading && !hasLoadError && rows.length > 0"
+      class="pipeline-changes__table-wrap"
+      aria-label="Tabela de mudanças">
+      <div class="pipeline-changes__meta" role="status">
+        <span>{{ rows.length | number:'1.0-0':'pt-BR' }} registro(s)</span>
+        <span *ngIf="page?.total != null">
+          · total {{ page!.total | number:'1.0-0':'pt-BR' }}
+        </span>
+        <span *ngIf="page?.phase"> · fase {{ page!.phase }}</span>
+      </div>
+
+      <div class="pipeline-changes__table-scroll">
+        <table class="pipeline-changes__table">
+          <thead>
+            <tr>
+              <th scope="col">Data</th>
+              <th scope="col">Fase</th>
+              <th scope="col">Entidade</th>
+              <th scope="col">Campo</th>
+              <th scope="col">Antes</th>
+              <th scope="col">Depois</th>
+              <th scope="col">Run</th>
+              <th scope="col" class="col-actions">Detalhe</th>
+            </tr>
+          </thead>
+          <tbody>
+            <ng-container *ngFor="let row of rows; trackBy: rowTrackId">
+              <tr>
+                <td>
+                  <ng-container *ngIf="pipelineChangeTimestamp(row) as ts; else noTs">
+                    {{ ts | date:'dd/MM/yyyy HH:mm:ss' }}
+                  </ng-container>
+                  <ng-template #noTs>—</ng-template>
+                </td>
+                <td>{{ row.phase || '—' }}</td>
+                <td>{{ pipelineChangeEntityLabel(row) }}</td>
+                <td>{{ pipelineChangeFieldName(row) || '—' }}</td>
+                <td class="cell-value">{{ pipelineChangeOldValue(row) }}</td>
+                <td class="cell-value">{{ pipelineChangeNewValue(row) }}</td>
+                <td>{{ row.run_id || row.batch_id || '—' }}</td>
+                <td class="col-actions">
+                  <button
+                    type="button"
+                    class="detail-button"
+                    [attr.aria-expanded]="isRowExpanded(row)"
+                    (click)="toggleRowDetails(row)">
+                    {{ isRowExpanded(row) ? 'Ocultar' : 'Ver JSON' }}
+                  </button>
+                </td>
+              </tr>
+              <tr *ngIf="isRowExpanded(row)" class="row-details">
+                <td colspan="8">
+                  <pre class="row-details__json">{{ formatJson(row) }}</pre>
+                </td>
+              </tr>
+            </ng-container>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+</div>

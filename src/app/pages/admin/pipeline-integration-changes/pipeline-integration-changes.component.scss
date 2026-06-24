@@ -1,0 +1,246 @@
+@import '../../../../styles/variables.scss';
+@import '../../../../styles/mixins.scss';
+
+.pipeline-changes {
+  height: 100vh;
+  overflow: hidden;
+  position: relative;
+  @include fade-in;
+
+  @include mobile-only {
+    height: auto;
+    min-height: 100vh;
+    overflow: visible;
+  }
+}
+
+.pipeline-changes__scroll {
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: $spacing-lg;
+  box-sizing: border-box;
+
+  @include mobile-only {
+    height: auto;
+    overflow: visible;
+    padding: $spacing-md;
+  }
+}
+
+.dashboard-header {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-bottom: $spacing-lg;
+  gap: $spacing-md;
+  position: relative;
+  flex-wrap: wrap;
+
+  .header-spacer {
+    display: none;
+  }
+
+  c4u-seletor-mes {
+    flex: 0 0 auto;
+  }
+
+  .logout-button {
+    position: absolute;
+    right: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    display: inline-flex;
+    align-items: center;
+    gap: $spacing-xs;
+    padding: $spacing-xs $spacing-sm;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: $border-radius-sm;
+    background: rgba(255, 255, 255, 0.04);
+    color: $text-secondary;
+    cursor: pointer;
+
+    &:hover {
+      background: rgba(255, 255, 255, 0.08);
+      color: $text-primary;
+    }
+  }
+}
+
+.pipeline-changes__intro {
+  margin-bottom: $spacing-lg;
+}
+
+.pipeline-changes__head {
+  margin-bottom: $spacing-md;
+}
+
+.pipeline-changes__title {
+  margin: 0 0 $spacing-xs;
+  font-size: $font-size-h2;
+  color: $text-primary;
+}
+
+.pipeline-changes__subtitle {
+  margin: 0;
+  color: $text-secondary;
+  font-size: $font-size-body;
+
+  code {
+    font-size: 0.92em;
+    color: $text-primary;
+  }
+}
+
+.pipeline-changes__filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: $spacing-md;
+  align-items: flex-end;
+}
+
+.filter-field {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-xs;
+  min-width: 140px;
+}
+
+.filter-field__label {
+  font-size: $font-size-caption;
+  color: $text-secondary;
+}
+
+.filter-field__control {
+  padding: $spacing-xs $spacing-sm;
+  border-radius: $border-radius-sm;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(0, 0, 0, 0.2);
+  color: $text-primary;
+}
+
+.refresh-button {
+  display: inline-flex;
+  align-items: center;
+  gap: $spacing-xs;
+  padding: $spacing-xs $spacing-md;
+  border-radius: $border-radius-sm;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.06);
+  color: $text-primary;
+  cursor: pointer;
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  .spin {
+    animation: spin 1s linear infinite;
+  }
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.pipeline-changes__state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: $spacing-sm;
+  padding: $spacing-xl;
+  text-align: center;
+  color: $text-secondary;
+
+  i {
+    font-size: 2rem;
+  }
+
+  &--error {
+    color: #f87171;
+  }
+}
+
+.pipeline-changes__spinner {
+  width: 36px;
+  height: 36px;
+  border: 3px solid rgba(255, 255, 255, 0.15);
+  border-top-color: $text-primary;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+.pipeline-changes__meta {
+  margin-bottom: $spacing-sm;
+  color: $text-secondary;
+  font-size: $font-size-caption;
+}
+
+.pipeline-changes__table-wrap {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: $border-radius;
+  background: rgba(0, 0, 0, 0.18);
+  padding: $spacing-md;
+}
+
+.pipeline-changes__table-scroll {
+  overflow-x: auto;
+}
+
+.pipeline-changes__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: $font-size-caption;
+
+  th,
+  td {
+    padding: $spacing-sm;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    text-align: left;
+    vertical-align: top;
+  }
+
+  th {
+    color: $text-secondary;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  td {
+    color: $text-primary;
+  }
+
+  .cell-value {
+    max-width: 220px;
+    word-break: break-word;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 0.85em;
+  }
+
+  .col-actions {
+    width: 96px;
+    white-space: nowrap;
+  }
+}
+
+.detail-button {
+  padding: 2px $spacing-xs;
+  border: none;
+  background: transparent;
+  color: #60a5fa;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.row-details__json {
+  margin: 0;
+  padding: $spacing-sm;
+  border-radius: $border-radius-sm;
+  background: rgba(0, 0, 0, 0.35);
+  overflow-x: auto;
+  font-size: 0.8rem;
+  line-height: 1.45;
+}

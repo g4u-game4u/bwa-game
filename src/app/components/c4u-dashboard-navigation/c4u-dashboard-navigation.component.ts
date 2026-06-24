@@ -11,6 +11,7 @@ interface DashboardOption {
   route: string;
   icon: string;
   requiresRole?: ROLES_LIST;
+  requiresAdmin?: boolean;
 }
 
 @Component({
@@ -44,6 +45,12 @@ export class C4uDashboardNavigationComponent implements OnInit {
       label: 'Relatório Organizacional',
       route: '/dashboard/organization-hierarchy',
       icon: 'ri-organization-chart'
+    },
+    {
+      label: 'Log Pipeline',
+      route: '/dashboard/admin/pipeline-integration-changes',
+      icon: 'ri-file-list-3-line',
+      requiresAdmin: true
     }
   ];
   
@@ -51,6 +58,7 @@ export class C4uDashboardNavigationComponent implements OnInit {
   availableDashboards: DashboardOption[] = [];
   hasGestaoRole = false;
   canAccessOrgHierarchyNav = false;
+  isAdmin = false;
   
   constructor(
     private router: Router,
@@ -92,6 +100,7 @@ export class C4uDashboardNavigationComponent implements OnInit {
     
     // Check if user can access team management (not JOGADOR)
     this.hasGestaoRole = this.userProfileService.canAccessTeamManagement();
+    this.isAdmin = !!this.sessaoProvider.isAdmin();
     this.canAccessOrgHierarchyNav = canAccessOrganizationHierarchyNav(
       this.sessaoProvider.usuario?.roles
     );
@@ -121,6 +130,10 @@ export class C4uDashboardNavigationComponent implements OnInit {
 
       if (dashboard.label === 'Relatório Organizacional') {
         return this.canAccessOrgHierarchyNav;
+      }
+
+      if (dashboard.requiresAdmin) {
+        return this.isAdmin;
       }
 
       // Dashboards with role requirement (e.g., "Gestão de Equipe")

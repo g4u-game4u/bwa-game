@@ -1415,6 +1415,159 @@ export interface Game4uReportsOrganizationHierarchyInsightsBody {
   focus?: OrgHierarchyInsightsFocus;
 }
 
+/** Fase do pipeline em `GET /game/reports/pipeline-integration/changes`. */
+export type PipelineIntegrationPhase =
+  | 'reconcile'
+  | 'ingest'
+  | 'transform'
+  | 'sync'
+  | string;
+
+/** Query `GET /game/reports/pipeline-integration/changes` (`pipeline_integracao_changes`). */
+export interface Game4uReportsPipelineIntegrationChangesQuery {
+  /** Início do intervalo (ISO 8601). */
+  start: string;
+  /** Fim do intervalo (ISO 8601). */
+  end: string;
+  phase?: PipelineIntegrationPhase;
+  limit?: number;
+  offset?: number;
+}
+
+/** Linha de `pipeline_integracao_changes` (campos normalizados na leitura). */
+export interface PipelineIntegrationChangeRow {
+  id?: string | number;
+  phase?: string;
+  entity_type?: string;
+  entity_id?: string;
+  table_name?: string;
+  record_key?: string;
+  field_name?: string;
+  column_name?: string;
+  old_value?: unknown;
+  new_value?: unknown;
+  value_before?: unknown;
+  value_after?: unknown;
+  changed_at?: string;
+  created_at?: string;
+  recorded_at?: string;
+  run_id?: string;
+  batch_id?: string;
+  delivery_id?: string;
+  action_id?: string;
+  user_email?: string;
+  details?: unknown;
+  metadata?: unknown;
+  [key: string]: unknown;
+}
+
+/** Resposta paginada de `GET /game/reports/pipeline-integration/changes`. */
+export interface Game4uReportsPipelineIntegrationChangesPage {
+  items: PipelineIntegrationChangeRow[];
+  total?: number;
+  limit: number;
+  offset?: number;
+  start?: string;
+  end?: string;
+  phase?: string;
+}
+
+function formatPipelineChangeValue(value: unknown): string {
+  if (value == null) {
+    return '—';
+  }
+  if (typeof value === 'object') {
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return String(value);
+    }
+  }
+  return String(value);
+}
+
+export function pipelineChangeTimestamp(row: PipelineIntegrationChangeRow): string | null {
+  const raw = row.changed_at ?? row.created_at ?? row.recorded_at;
+  return typeof raw === 'string' && raw.trim() ? raw.trim() : null;
+}
+
+export function pipelineChangeFieldName(row: PipelineIntegrationChangeRow): string {
+  const raw = row.field_name ?? row.column_name ?? row['field'];
+  return typeof raw === 'string' ? raw.trim() : '';
+}
+
+export function pipelineChangeOldValue(row: PipelineIntegrationChangeRow): string {
+  return formatPipelineChangeValue(row.old_value ?? row.value_before ?? row['before_value']);
+}
+
+export function pipelineChangeNewValue(row: PipelineIntegrationChangeRow): string {
+  return formatPipelineChangeValue(row.new_value ?? row.value_after ?? row['after_value']);
+}
+
+export function pipelineChangeEntityLabel(row: PipelineIntegrationChangeRow): string {
+  const type = (row.entity_type ?? row.table_name ?? '').toString().trim();
+  const id = (
+    row.entity_id ??
+    row.record_key ??
+    row.delivery_id ??
+    row.action_id ??
+    ''
+  )
+    .toString()
+    .trim();
+  if (type && id) {
+    return `${type} · ${id}`;
+  }
+  return type || id || '—';
+}
+
+export function normalizePipelineIntegrationChangesResponse(
+  body: unknown
+): Game4uReportsPipelineIntegrationChangesPage {
+  const empty: Game4uReportsPipelineIntegrationChangesPage = { items: [], limit: 100 };
+  if (!body || typeof body !== 'object') {
+    return empty;
+  }
+  const o = body as Record<string, unknown>;
+  const raw = o['items'] ?? o['data'] ?? o['results'] ?? o['changes'];
+  const items = Array.isArray(raw) ? (raw as PipelineIntegrationChangeRow[]) : [];
+  const limRaw = o['limit'];
+  const limit =
+    typeof limRaw === 'number' && Number.isFinite(limRaw)
+      ? Math.floor(limRaw)
+      : typeof limRaw === 'string' && limRaw.trim() !== ''
+        ? Math.floor(Number(limRaw)) || items.length || 100
+        : items.length > 0
+          ? items.length
+          : 100;
+  const offRaw = o['offset'];
+  const offset =
+    typeof offRaw === 'number' && Number.isFinite(offRaw)
+      ? Math.floor(offRaw)
+      : typeof offRaw === 'string' && offRaw.trim() !== ''
+        ? Math.floor(Number(offRaw)) || 0
+        : undefined;
+  const totalRaw = o['total'] ?? o['count'];
+  const total =
+    typeof totalRaw === 'number' && Number.isFinite(totalRaw)
+      ? Math.floor(totalRaw)
+      : typeof totalRaw === 'string' && totalRaw.trim() !== ''
+        ? Math.floor(Number(totalRaw))
+        : undefined;
+  const start = typeof o['start'] === 'string' ? o['start'] : undefined;
+  const end = typeof o['end'] === 'string' ? o['end'] : undefined;
+  const phase = typeof o['phase'] === 'string' ? o['phase'] : undefined;
+  return {
+    items,
+    limit,
+    ...(offset != null ? { offset } : {}),
+    ...(total != null && Number.isFinite(total) ? { total } : {}),
+    ...(start ? { start } : {}),
+    ...(end ? { end } : {}),
+    ...(phase ? { phase } : {})
+  };
+}
+
 function supabaseGameFallbackCredentials(): boolean {
   const url = (environment.supabaseUrl || '').trim();
   const key = (

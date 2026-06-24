@@ -19,6 +19,13 @@ export const PagesRoutes: Routes = [
       )
   },
   {
+    path: 'admin/pipeline-integration-changes',
+    loadChildren: () =>
+      import('./admin/pipeline-integration-changes/pipeline-integration-changes.module').then(
+        m => m.PipelineIntegrationChangesModule
+      )
+  },
+  {
     path: 'supervisor',
     loadChildren: () => import('./dashboard/dashboard-supervisor/dashboard-supervisor.module')
       .then(m => m.DashboardSupervisorModule),

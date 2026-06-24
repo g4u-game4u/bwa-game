@@ -55,7 +55,10 @@ import {
   OrganizationHierarchyDeliveriesResponse,
   Game4uReportsOrganizationHierarchyInsightsQuery,
   Game4uReportsOrganizationHierarchyInsightsBody,
-  OrganizationHierarchyInsightsResponse
+  OrganizationHierarchyInsightsResponse,
+  Game4uReportsPipelineIntegrationChangesQuery,
+  Game4uReportsPipelineIntegrationChangesPage,
+  normalizePipelineIntegrationChangesResponse
 } from '@model/game4u-api.model';
 import { Game4uSupabaseFallbackService } from './game4u-supabase-fallback.service';
 import {
@@ -1330,6 +1333,47 @@ export class Game4uApiService {
           this.reportsOrganizationHierarchyInsightsCache.delete(key);
         })
       );
+  }
+
+  /**
+   * `GET /game/reports/pipeline-integration/changes` — log de `pipeline_integracao_changes` (ADMIN).
+   */
+  getGameReportsPipelineIntegrationChanges(
+    q: Game4uReportsPipelineIntegrationChangesQuery
+  ): Observable<Game4uReportsPipelineIntegrationChangesPage> {
+    if (!this.isConfigured()) {
+      return throwError(
+        () =>
+          new Error('[Game4U] reports/pipeline-integration/changes: defina backend_url_base.')
+      );
+    }
+    const start = (q.start ?? '').trim();
+    const end = (q.end ?? '').trim();
+    if (!start || !end) {
+      return throwError(
+        () =>
+          new Error(
+            '[Game4U] reports/pipeline-integration/changes: informe start e end (ISO 8601).'
+          )
+      );
+    }
+    let params = new HttpParams().set('start', start).set('end', end);
+    const phase = (q.phase ?? '').trim();
+    if (phase) {
+      params = params.set('phase', phase);
+    }
+    if (q.limit != null && Number.isFinite(q.limit) && q.limit > 0) {
+      params = params.set('limit', String(Math.floor(q.limit)));
+    }
+    if (q.offset != null && Number.isFinite(q.offset) && q.offset >= 0) {
+      params = params.set('offset', String(Math.floor(q.offset)));
+    }
+    return this.http
+      .get<unknown>(`${this.baseUrl}/game/reports/pipeline-integration/changes`, {
+        headers: this.headers(),
+        params
+      })
+      .pipe(map(body => normalizePipelineIntegrationChangesResponse(body)));
   }
 
   /**
