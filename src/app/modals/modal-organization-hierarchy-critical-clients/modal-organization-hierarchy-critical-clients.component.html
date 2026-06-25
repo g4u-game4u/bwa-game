@@ -1,0 +1,103 @@
+<c4u-modal
+  modalTitle="Clientes críticos"
+  icon="ri-user-unfollow-line"
+  (closed)="close()">
+  <div class="critical-clients-modal">
+    <p class="critical-clients-modal__subtitle">
+      {{ summary?.count | number:'1.0-0':'pt-BR' }} clientes com score composto por tags, atrasos e meses consecutivos com problemas
+    </p>
+
+    <div class="critical-clients-modal__chips" role="list" aria-label="Resumo de clientes críticos">
+      <div
+        *ngFor="let chip of kpiChips"
+        class="critical-kpi-chip critical-kpi-chip--{{ chip.tone }}"
+        role="listitem">
+        <span class="critical-kpi-chip__value">{{ chip.value | number:'1.0-0':'pt-BR' }}</span>
+        <span class="critical-kpi-chip__label">{{ chip.label }}</span>
+      </div>
+    </div>
+
+    <div class="critical-clients-modal__toolbar">
+      <label class="critical-clients-modal__search">
+        <i class="ri-search-line" aria-hidden="true"></i>
+        <input
+          type="search"
+          [value]="search"
+          (input)="onSearchChange($any($event.target).value)"
+          placeholder="Buscar por cliente, chave ou tag…"
+          aria-label="Buscar clientes críticos" />
+      </label>
+      <button
+        type="button"
+        class="critical-clients-modal__export-btn"
+        [disabled]="isExporting || filteredClients.length === 0"
+        (click)="exportExcel()"
+        aria-label="Exportar clientes críticos e KPIs em Excel">
+        <i class="ri-file-excel-2-line" aria-hidden="true"></i>
+        <span>{{ isExporting ? 'Exportando…' : 'Exportar Excel' }}</span>
+      </button>
+    </div>
+
+    <div
+      *ngIf="hasSearch && filteredClients.length === 0"
+      class="critical-clients-modal__empty"
+      role="status">
+      <i class="ri-search-line" aria-hidden="true"></i>
+      <span>Nenhum cliente encontrado para esta busca.</span>
+    </div>
+
+    <div
+      *ngIf="filteredClients.length > 0"
+      class="simple-table-wrap critical-clients-table-wrap"
+      role="region"
+      aria-label="Lista completa de clientes críticos">
+      <table class="simple-table critical-clients-table">
+        <thead>
+          <tr>
+            <th class="critical-clients-table__name-col">Cliente</th>
+            <th class="simple-table__num">Score</th>
+            <th>Risco</th>
+            <th class="simple-table__num">Atraso s/ just.</th>
+            <th class="simple-table__num">Entrega tardia</th>
+            <th class="simple-table__num">Meses c/ prob.</th>
+            <th>Tags</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr
+            *ngFor="let client of filteredClients; trackBy: trackByClient"
+            class="critical-clients-table__row--clickable"
+            [class.critical-clients-table__row--alert]="hasIssues(client)"
+            tabindex="0"
+            role="button"
+            [attr.aria-label]="'Ver entregas de ' + client.company_label"
+            (click)="onClientClick(client)"
+            (keydown.enter)="onClientClick(client)"
+            (keydown.space)="$event.preventDefault(); onClientClick(client)">
+            <td class="critical-clients-table__name-col">
+              <span class="critical-clients-table__name-cell">
+                <span class="critical-clients-table__name">{{ client.company_label }}</span>
+                <i class="ri-arrow-right-s-line critical-clients-table__drill-icon" aria-hidden="true"></i>
+              </span>
+            </td>
+            <td class="simple-table__num">
+              <span
+                class="critical-score"
+                [class.critical-score--high]="client.risk_score >= 50"
+                [class.critical-score--critical]="client.risk_score >= 75">
+                {{ riskScore(client) }}
+              </span>
+            </td>
+            <td>
+              <span class="critical-tier-badge" [ngClass]="tierClass(client)">{{ tierLabel(client) }}</span>
+            </td>
+            <td class="simple-table__num">{{ client.mtd_overdue_unjustified | number:'1.0-0':'pt-BR' }}</td>
+            <td class="simple-table__num">{{ client.mtd_late_finish | number:'1.0-0':'pt-BR' }}</td>
+            <td class="simple-table__num">{{ client.consecutive_issue_months | number:'1.0-0':'pt-BR' }}</td>
+            <td>{{ tagsLabel(client) }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</c4u-modal>

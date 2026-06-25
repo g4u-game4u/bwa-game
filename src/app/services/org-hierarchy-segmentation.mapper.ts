@@ -59,7 +59,8 @@ const METRIC_SUM_KEYS: ReadonlyArray<keyof OrgMetricsWindow> = [
   'clients_classificacao_2',
   'clients_classificacao_3',
   'clients_classificacao_4',
-  'clients_classificacao_5'
+  'clients_classificacao_5',
+  'clients_sem_classificacao'
 ];
 
 function normalizeLookupText(value: string): string {

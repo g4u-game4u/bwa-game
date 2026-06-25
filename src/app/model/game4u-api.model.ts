@@ -750,6 +750,10 @@ export interface OrgMetricsWindow {
   overdue_pending_unjustified?: number;
   clients_served?: number;
   on_time_pct?: number;
+  /** % no prazo MTD por tag Acessórias (somente `mtd`). */
+  on_time_pct_acessorias_g4?: number;
+  on_time_pct_acessorias_risco_de_churn?: number;
+  on_time_pct_acessorias_onboarding?: number;
   clients_onboarding?: number;
   clients_acessorias_g4?: number;
   clients_acessorias_onboarding?: number;
@@ -759,6 +763,8 @@ export interface OrgMetricsWindow {
   clients_classificacao_3?: number;
   clients_classificacao_4?: number;
   clients_classificacao_5?: number;
+  /** Empresas ativas com classificação nula no portal BWA. */
+  clients_sem_classificacao?: number;
   /** Ritmo preditivo — somente em mtd (calculado na API). */
   points_gap_vs_expected?: number;
   pct_of_expected_delivered?: number;
@@ -814,6 +820,8 @@ export interface CriticalClientsSummary {
   consecutive_2plus: number;
   avg_risk_score: number;
   max_risk_score: number;
+  /** Lista completa ordenada por risk_score desc. */
+  clients?: CriticalClientItem[];
   top_clients?: CriticalClientItem[];
 }
 
@@ -963,7 +971,13 @@ export type OrgHierarchyKpiDetailKey =
   | 'multa_incurred'
   | 'clients_acessorias_risco_de_churn'
   | 'clients_acessorias_onboarding'
-  | 'clients_acessorias_g4';
+  | 'clients_acessorias_g4'
+  | 'clients_classificacao_1'
+  | 'clients_classificacao_2'
+  | 'clients_classificacao_3'
+  | 'clients_classificacao_4'
+  | 'clients_classificacao_5'
+  | 'clients_sem_classificacao';
 
 export type OrgHierarchyDeliveriesDrilldownKey =
   | 'multa_risk'
@@ -989,11 +1003,19 @@ export type OrgHierarchyClientListKey =
   | 'clients_served'
   | 'clients_acessorias_g4'
   | 'clients_acessorias_onboarding'
-  | 'clients_acessorias_risco_de_churn';
+  | 'clients_acessorias_risco_de_churn'
+  | 'clients_classificacao_1'
+  | 'clients_classificacao_2'
+  | 'clients_classificacao_3'
+  | 'clients_classificacao_4'
+  | 'clients_classificacao_5'
+  | 'clients_sem_classificacao';
 
 export interface OrgHierarchyClientListItem {
   company_serve_key: string;
+  company_cnpj_digits?: string | null;
   company_name: string;
+  acessorias_classificacao?: number | null;
   is_acessorias_g4: boolean;
   is_acessorias_onboarding: boolean;
   is_acessorias_risco_de_churn: boolean;
@@ -1009,6 +1031,12 @@ export interface OrgHierarchyClientLists {
   clients_acessorias_g4: OrgHierarchyClientListItem[];
   clients_acessorias_onboarding: OrgHierarchyClientListItem[];
   clients_acessorias_risco_de_churn: OrgHierarchyClientListItem[];
+  clients_classificacao_1: OrgHierarchyClientListItem[];
+  clients_classificacao_2: OrgHierarchyClientListItem[];
+  clients_classificacao_3: OrgHierarchyClientListItem[];
+  clients_classificacao_4: OrgHierarchyClientListItem[];
+  clients_classificacao_5: OrgHierarchyClientListItem[];
+  clients_sem_classificacao: OrgHierarchyClientListItem[];
 }
 
 export interface OrganizationHierarchyKpiDetailHistoryItem {
@@ -1060,6 +1088,7 @@ export interface OrganizationHierarchyDeliveryRow {
   action_name?: string | null;
   action_title?: string | null;
   company_serve_key?: string | null;
+  company_cnpj_digits?: string | null;
   issue_kind?: CriticalClientIssueKind | null;
   client_key: string | null;
   client_name?: string | null;
@@ -1194,6 +1223,7 @@ function normalizeOrganizationHierarchyDeliveryRow(
     action_name,
     action_title,
     company_serve_key: pickNullableString(o, ['company_serve_key', 'companyServeKey']),
+    company_cnpj_digits: pickNullableString(o, ['company_cnpj_digits', 'companyCnpjDigits']),
     issue_kind,
     client_key: pickNullableString(o, [
       'client_name',

@@ -20,6 +20,8 @@ export interface OrgHierarchyDeliveriesExportOptions {
   includeStatusColumns?: boolean;
   includeDelayWithFinished?: boolean;
   includeIssueKindColumn?: boolean;
+  /** Coluna CNPJ — somente em exportações Excel. */
+  includeCnpj?: boolean;
 }
 
 const DELIVERIES_DRILLDOWN_SLUGS: Record<OrgHierarchyDeliveriesDrilldownKey, string> = {
@@ -80,6 +82,10 @@ function mapDeliveryRowForExport(
     'E-mail colaborador': delivery.player_email ?? '',
     Time: delivery.team_name ?? delivery.team_id ?? ''
   };
+
+  if (options.includeCnpj) {
+    row['CNPJ'] = delivery.company_cnpj_digits ?? delivery.company_serve_key ?? '';
+  }
 
   if (options.includeIssueKindColumn) {
     row['Tipo de problema'] = formatCriticalClientIssueKindLabel(delivery.issue_kind);

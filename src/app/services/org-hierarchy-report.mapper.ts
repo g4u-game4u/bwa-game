@@ -77,6 +77,85 @@ export function getOrgHierarchyDeliveryClientLabel(
   return delivery.client_name?.trim() || delivery.client_key?.trim() || '—';
 }
 
+export function getOrgHierarchyDeliveryCnpjLabel(
+  delivery: Pick<OrganizationHierarchyDeliveryRow, 'company_cnpj_digits' | 'company_serve_key' | 'client_key'>
+): string {
+  return (
+    delivery.company_cnpj_digits?.trim() ||
+    delivery.company_serve_key?.trim() ||
+    delivery.client_key?.trim() ||
+    '—'
+  );
+}
+
+export interface OrgOnTimePctSegment {
+  key: string;
+  label: string;
+  value: number | null;
+}
+
+/** Meta fixa de % no prazo usada no painel organizacional. */
+export const ORG_ON_TIME_PCT_GOAL = 90;
+
+export function shouldOmitOrgHierarchyModalScope(scope: string | null | undefined): boolean {
+  const normalized = scope?.trim().toLowerCase();
+  return !normalized || normalized === 'escopo' || normalized === 'bwa';
+}
+
+export function formatOrgHierarchyDrilldownModalTitle(
+  kpiLabel: string,
+  scope?: string | null
+): string {
+  if (shouldOmitOrgHierarchyModalScope(scope)) {
+    return kpiLabel;
+  }
+  return `${kpiLabel} (${scope!.trim()})`;
+}
+
+/** Percentual de entregas no prazo em relação à meta (90%). */
+export function computeOrgOnTimeGoalPct(mtd: OrgMetricsWindow | undefined | null): number | null {
+  const onTime = mtd?.on_time_pct;
+  if (onTime == null || !Number.isFinite(onTime)) {
+    return null;
+  }
+  return (onTime / ORG_ON_TIME_PCT_GOAL) * 100;
+}
+
+/** Segmentos de % no prazo MTD (geral + tags Acessórias). */
+export function buildOrgOnTimePctSegments(mtd: OrgMetricsWindow | undefined | null): OrgOnTimePctSegment[] {
+  if (!mtd) {
+    return [];
+  }
+  return [
+    { key: 'general', label: 'Geral', value: mtd.on_time_pct ?? null },
+    { key: 'g4', label: 'G4', value: mtd.on_time_pct_acessorias_g4 ?? null },
+    {
+      key: 'churn',
+      label: 'Risco churn',
+      value: mtd.on_time_pct_acessorias_risco_de_churn ?? null
+    },
+    {
+      key: 'onboarding',
+      label: 'Onboarding',
+      value: mtd.on_time_pct_acessorias_onboarding ?? null
+    }
+  ].filter(segment => segment.value != null && Number.isFinite(segment.value));
+}
+
+export function formatOrgOnTimePctSegment(value: number | null): string {
+  if (value == null || !Number.isFinite(value)) {
+    return '—';
+  }
+  return `${value.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
+}
+
+export function orgOnTimePctGaugeWidth(value: number | null): number {
+  if (value == null || !Number.isFinite(value)) {
+    return 0;
+  }
+  return Math.min(100, Math.max(0, value));
+}
+
 /** Aba de visualização dos destaques / atenção no relatório organizacional. */
 export type OrgHierarchyHighlightViewTab = 'player' | 'supervisao' | 'gerencia';
 
@@ -525,10 +604,12 @@ export interface OrgClientClassificationTier {
   label: string;
   icon: string;
   count: number;
+  kpi: OrgHierarchyKpiDetailKey;
 }
 
-/** Classificação portal: 1=Stone … 5=Diamante (`clients_classificacao_*` no MTD). */
+/** Classificação portal: 1=Stone … 5=Diamante; 0=sem classificação no portal. */
 export const ORG_CLIENT_CLASSIFICATION_LABELS: Record<number, string> = {
+  0: 'Sem classificação',
   1: 'Stone',
   2: 'Bronze',
   3: 'Prata',
@@ -537,6 +618,7 @@ export const ORG_CLIENT_CLASSIFICATION_LABELS: Record<number, string> = {
 };
 
 export const ORG_CLIENT_CLASSIFICATION_ICONS: Record<number, string> = {
+  0: 'ri-question-line',
   1: 'ri-shield-line',
   2: 'ri-medal-line',
   3: 'ri-award-line',
@@ -547,12 +629,32 @@ export const ORG_CLIENT_CLASSIFICATION_ICONS: Record<number, string> = {
 export function mapClientClassificationTiers(
   mtd: OrgMetricsWindow | undefined | null
 ): OrgClientClassificationTier[] {
-  return ([1, 2, 3, 4, 5] as const).map(level => ({
+  const tiers: OrgClientClassificationTier[] = ([1, 2, 3, 4, 5] as const).map(level => ({
     level,
     label: ORG_CLIENT_CLASSIFICATION_LABELS[level],
     icon: ORG_CLIENT_CLASSIFICATION_ICONS[level],
-    count: readClientClassificationCount(mtd, level)
+    count: readClientClassificationCount(mtd, level),
+    kpi: `clients_classificacao_${level}` as OrgHierarchyKpiDetailKey
   }));
+
+  const semClassificacao = readClientSemClassificacaoCount(mtd);
+  if (semClassificacao > 0) {
+    tiers.push({
+      level: 0,
+      label: ORG_CLIENT_CLASSIFICATION_LABELS[0],
+      icon: ORG_CLIENT_CLASSIFICATION_ICONS[0],
+      count: semClassificacao,
+      kpi: 'clients_sem_classificacao'
+    });
+  }
+
+  return tiers;
+}
+
+function readClientSemClassificacaoCount(mtd: OrgMetricsWindow | undefined | null): number {
+  const raw = mtd?.clients_sem_classificacao;
+  const n = typeof raw === 'number' ? raw : Number(raw);
+  return Number.isFinite(n) ? Math.max(0, Math.floor(n)) : 0;
 }
 
 function readClientClassificationCount(

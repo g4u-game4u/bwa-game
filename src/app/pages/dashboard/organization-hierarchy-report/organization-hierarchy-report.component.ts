@@ -65,6 +65,7 @@ import {
   findOrgHierarchyNodeById,
   computeOrgPointsGoalPct,
   computeOrgDeliveriesGoalPct,
+  ORG_ON_TIME_PCT_GOAL,
   formatOrgHierarchyNodeMtdCell,
   formatOrgPointsGoalPct,
   formatOrgRankingCell,
@@ -120,6 +121,7 @@ import {
 import {
   buildOrgHierarchyCriticalClientsDeliveriesExportFilename
 } from '@services/org-hierarchy-kpi-export.mapper';
+import { buildOrgHierarchyClientListExportFilename } from '@services/org-hierarchy-client-lists.mapper';
 import {
   downloadBlobFile,
   parseHttpContentDispositionFilename
@@ -149,6 +151,8 @@ export class OrganizationHierarchyReportComponent implements OnInit, OnDestroy {
   isLoadingInsights = false;
   isGeneratingInsights = false;
   isExportingCriticalClientsDeliveries = false;
+  isExportingClientsServed = false;
+  criticalClientsModalOpen = false;
   hasLoadError = false;
   isEmpty = false;
   insightsNotFound = false;
@@ -404,6 +408,51 @@ export class OrganizationHierarchyReportComponent implements OnInit, OnDestroy {
     return getCriticalClientsTopList(this.root?.critical_clients);
   }
 
+  get heroOnTimePctBreakdown(): { label: string; value: number }[] {
+    const mtd = this.root?.mtd;
+    if (!mtd) {
+      return [];
+    }
+    const segments = [
+      { label: 'G4', value: mtd.on_time_pct_acessorias_g4 },
+      { label: 'Onboarding', value: mtd.on_time_pct_acessorias_onboarding },
+      { label: 'Risco churn', value: mtd.on_time_pct_acessorias_risco_de_churn }
+    ];
+    return segments.filter(
+      (segment): segment is { label: string; value: number } =>
+        segment.value != null && Number.isFinite(segment.value)
+    );
+  }
+
+  formatHeroOnTimePct(value: number): string {
+    return `${value.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
+  }
+
+  openCriticalClientsModal(): void {
+    if (!this.showCriticalClientsSection) {
+      return;
+    }
+    this.criticalClientsModalOpen = true;
+    this.cdr.markForCheck();
+  }
+
+  onCriticalClientsModalClosed(): void {
+    this.criticalClientsModalOpen = false;
+    this.cdr.markForCheck();
+  }
+
+  onCriticalClientFromModal(client: CriticalClientItem): void {
+    this.criticalClientsModalOpen = false;
+    this.openCriticalClientDrillDown(client);
+  }
+
+  openClassificationDrillDown(tier: OrgClientClassificationTier): void {
+    if (!this.root || tier.count <= 0) {
+      return;
+    }
+    this.openKpiDrillDown(tier.kpi, this.root);
+  }
+
   criticalClientTierLabel(client: CriticalClientItem): string {
     return getCriticalClientTierLabel(client.risk_tier);
   }
@@ -461,6 +510,16 @@ export class OrganizationHierarchyReportComponent implements OnInit, OnDestroy {
     return `${pct.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
   }
 
+  get heroPointsDetailLabel(): string | null {
+    const mtd = this.root?.mtd;
+    if (!mtd || !this.showHeroPointsGoal) {
+      return null;
+    }
+    const points = mtd.points_delivered ?? 0;
+    const goal = mtd.goal_points ?? 0;
+    return `${points.toLocaleString('pt-BR')} pontos de ${goal.toLocaleString('pt-BR')} (meta)`;
+  }
+
   get heroPointsGoalPctBar(): number {
     const pct = this.heroPointsGoalPct;
     if (pct == null || !Number.isFinite(pct)) {
@@ -490,6 +549,16 @@ export class OrganizationHierarchyReportComponent implements OnInit, OnDestroy {
     return `${pct.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
   }
 
+  get heroDeliveriesDetailLabel(): string | null {
+    const mtd = this.root?.mtd;
+    if (!mtd || !this.showHeroDeliveriesGoal) {
+      return null;
+    }
+    const finished = mtd.finished ?? 0;
+    const goal = mtd.goal_deliveries ?? 0;
+    return `${finished.toLocaleString('pt-BR')} entregas de ${goal.toLocaleString('pt-BR')} (meta)`;
+  }
+
   get heroDeliveriesGoalPctBar(): number {
     const pct = this.heroDeliveriesGoalPct;
     if (pct == null || !Number.isFinite(pct)) {
@@ -511,6 +580,40 @@ export class OrganizationHierarchyReportComponent implements OnInit, OnDestroy {
 
   get finishedHeroProgressTone(): 'positive' | 'negative' | 'neutral' {
     return this.showHeroDeliveriesGoal ? this.heroDeliveriesGoalTone : 'neutral';
+  }
+
+  get heroOnTimePct(): number | null {
+    const onTime = this.root?.mtd?.on_time_pct;
+    if (onTime == null || !Number.isFinite(onTime)) {
+      return null;
+    }
+    return onTime;
+  }
+
+  get heroOnTimePctLabel(): string | null {
+    const onTime = this.heroOnTimePct;
+    if (onTime == null) {
+      return null;
+    }
+    return this.formatHeroOnTimePct(onTime);
+  }
+
+  get heroOnTimeTone(): 'positive' | 'negative' | 'neutral' {
+    const onTime = this.heroOnTimePct;
+    if (onTime == null) {
+      return 'neutral';
+    }
+    if (onTime >= ORG_ON_TIME_PCT_GOAL) {
+      return 'positive';
+    }
+    if (onTime < 70) {
+      return 'negative';
+    }
+    return 'neutral';
+  }
+
+  get heroOnTimeMetaLabel(): string {
+    return `meta ${ORG_ON_TIME_PCT_GOAL}%`;
   }
 
   get weekdayPeakStat(): OrgHierarchyWeekdayStat | null {
@@ -544,8 +647,8 @@ export class OrganizationHierarchyReportComponent implements OnInit, OnDestroy {
   }
 
   onTimeGaugePct(): number {
-    const pct = this.root?.mtd?.on_time_pct;
-    return pct != null && Number.isFinite(pct) ? Math.min(100, Math.max(0, pct)) : 0;
+    const onTime = this.heroOnTimePct;
+    return onTime != null ? Math.min(100, Math.max(0, onTime)) : 0;
   }
 
   filterPeopleBySearch(items: OrgHierarchyHighlightItem[]): OrgHierarchyHighlightItem[] {
@@ -963,6 +1066,52 @@ export class OrganizationHierarchyReportComponent implements OnInit, OnDestroy {
     );
   }
 
+  exportClientsServedXlsx(): void {
+    if (this.isExportingClientsServed || !this.root) {
+      return;
+    }
+    this.isExportingClientsServed = true;
+    this.cdr.markForCheck();
+
+    this.actionLogService
+      .exportOrganizationHierarchyClientsServedXlsx({
+        month: this.selectedMonth,
+        nodeType: this.root.node_type,
+        nodeId: this.root.node_id
+      })
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: res => {
+          this.isExportingClientsServed = false;
+          const blob = res.body;
+          if (!blob || blob.size === 0) {
+            this.toastService.error('Não foi possível exportar os clientes.', false);
+            this.cdr.markForCheck();
+            return;
+          }
+          const headerFilename = parseHttpContentDispositionFilename(
+            res.headers.get('Content-Disposition')
+          );
+          const filename =
+            headerFilename ??
+            buildOrgHierarchyClientListExportFilename({
+              listKey: 'clients_served',
+              month: this.selectedMonth,
+              scopeLabel: this.root?.label,
+              format: 'xlsx'
+            });
+          downloadBlobFile(blob, filename);
+          this.toastService.success('Arquivo Excel exportado.');
+          this.cdr.markForCheck();
+        },
+        error: () => {
+          this.isExportingClientsServed = false;
+          this.toastService.error('Falha ao exportar clientes atendidos.', false);
+          this.cdr.markForCheck();
+        }
+      });
+  }
+
   openCriticalClientDrillDown(
     client: CriticalClientItem,
     issue: CriticalClientIssueFilter = 'all'
@@ -1278,6 +1427,7 @@ export class OrganizationHierarchyReportComponent implements OnInit, OnDestroy {
       }
 
       this.report = result ?? null;
+      this.criticalClientsModalOpen = false;
       this.isEmpty = !this.report;
       if (this.report?.root?.node_type === 'organization') {
         this.expandAllRootChildren();

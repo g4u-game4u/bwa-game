@@ -3,6 +3,10 @@ import { buildCsvContent, downloadCsvFile } from './csv-export';
 
 export type SpreadsheetExportFormat = 'csv' | 'xlsx';
 
+function sanitizeXlsxSheetName(name: string): string {
+  return name.replace(/[\\/?*[\]:]/g, ' ').trim().slice(0, 31) || 'Dados';
+}
+
 export function downloadXlsxFile(
   filename: string,
   rows: Record<string, string | number>[],
@@ -13,8 +17,26 @@ export function downloadXlsxFile(
   }
   const worksheet = XLSX.utils.json_to_sheet(rows);
   const workbook = XLSX.utils.book_new();
-  const safeSheetName = sheetName.replace(/[\\/?*[\]:]/g, ' ').trim().slice(0, 31) || 'Dados';
-  XLSX.utils.book_append_sheet(workbook, worksheet, safeSheetName);
+  XLSX.utils.book_append_sheet(workbook, worksheet, sanitizeXlsxSheetName(sheetName));
+  const safeFilename = filename.endsWith('.xlsx') ? filename : `${filename}.xlsx`;
+  XLSX.writeFile(workbook, safeFilename);
+}
+
+export function downloadXlsxWorkbook(
+  filename: string,
+  sheets: { name: string; rows: Record<string, string | number>[] }[]
+): void {
+  const workbook = XLSX.utils.book_new();
+  for (const sheet of sheets) {
+    if (sheet.rows.length === 0) {
+      continue;
+    }
+    const worksheet = XLSX.utils.json_to_sheet(sheet.rows);
+    XLSX.utils.book_append_sheet(workbook, worksheet, sanitizeXlsxSheetName(sheet.name));
+  }
+  if (workbook.SheetNames.length === 0) {
+    return;
+  }
   const safeFilename = filename.endsWith('.xlsx') ? filename : `${filename}.xlsx`;
   XLSX.writeFile(workbook, safeFilename);
 }
