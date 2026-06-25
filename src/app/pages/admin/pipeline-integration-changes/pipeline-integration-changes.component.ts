@@ -13,13 +13,27 @@ import { ToastService } from '@services/toast.service';
 import {
   Game4uReportsPipelineIntegrationChangesPage,
   PipelineIntegrationChangeRow,
-  PipelineIntegrationPhase,
-  pipelineChangeEntityLabel,
-  pipelineChangeFieldName,
-  pipelineChangeNewValue,
-  pipelineChangeOldValue,
-  pipelineChangeTimestamp
+  PipelineIntegrationChangesSummary,
+  PipelineIntegrationPhase
 } from '@model/game4u-api.model';
+import {
+  PipelineIntegrationChangeDiffEntry,
+  buildPipelineChangeDiffEntries,
+  buildPipelineIntegrationChangesExportFilename,
+  flattenPipelineIntegrationChangesForExport,
+  formatPipelineSnapshotJson,
+  formatPipelineSnapshotValue,
+  pipelineChangeActionLabel,
+  pipelineChangeAppliedAt,
+  pipelineChangeChangedEntries,
+  pipelineChangeEmail,
+  pipelineChangeHasSnapshotDiff,
+  pipelineChangePhase,
+  pipelineChangeRule,
+  pipelineChangeRunIdShort,
+  pipelineChangeSuccess
+} from '@services/pipeline-integration-changes.mapper';
+import { downloadXlsxFile } from '@utils/spreadsheet-export';
 
 interface PhaseOption {
   value: PipelineIntegrationPhase | '';
@@ -49,16 +63,24 @@ export class PipelineIntegrationChangesComponent implements OnInit, OnDestroy {
   selectedMonthsAgo = 0;
 
   isLoading = false;
+  isExporting = false;
   hasLoadError = false;
   errorMessage = '';
   page: Game4uReportsPipelineIntegrationChangesPage | null = null;
   expandedRowId: string | number | null = null;
 
-  readonly pipelineChangeTimestamp = pipelineChangeTimestamp;
-  readonly pipelineChangeFieldName = pipelineChangeFieldName;
-  readonly pipelineChangeOldValue = pipelineChangeOldValue;
-  readonly pipelineChangeNewValue = pipelineChangeNewValue;
-  readonly pipelineChangeEntityLabel = pipelineChangeEntityLabel;
+  readonly pipelineChangeAppliedAt = pipelineChangeAppliedAt;
+  readonly pipelineChangePhase = pipelineChangePhase;
+  readonly pipelineChangeActionLabel = pipelineChangeActionLabel;
+  readonly pipelineChangeEmail = pipelineChangeEmail;
+  readonly pipelineChangeRule = pipelineChangeRule;
+  readonly pipelineChangeSuccess = pipelineChangeSuccess;
+  readonly pipelineChangeRunIdShort = pipelineChangeRunIdShort;
+  readonly pipelineChangeHasSnapshotDiff = pipelineChangeHasSnapshotDiff;
+  readonly pipelineChangeChangedEntries = pipelineChangeChangedEntries;
+  readonly buildPipelineChangeDiffEntries = buildPipelineChangeDiffEntries;
+  readonly formatPipelineSnapshotValue = formatPipelineSnapshotValue;
+  readonly formatPipelineSnapshotJson = formatPipelineSnapshotJson;
 
   constructor(
     private game4uApi: Game4uApiService,
@@ -78,6 +100,20 @@ export class PipelineIntegrationChangesComponent implements OnInit, OnDestroy {
 
   get rows(): PipelineIntegrationChangeRow[] {
     return this.page?.items ?? [];
+  }
+
+  get summary(): PipelineIntegrationChangesSummary | null {
+    return this.page?.summary ?? null;
+  }
+
+  get summaryActionKinds(): Array<{ kind: string; count: number }> {
+    const byKind = this.summary?.by_action_kind;
+    if (!byKind) {
+      return [];
+    }
+    return Object.entries(byKind)
+      .map(([kind, count]) => ({ kind, count }))
+      .sort((a, b) => b.count - a.count);
   }
 
   get isEmpty(): boolean {
@@ -110,27 +146,66 @@ export class PipelineIntegrationChangesComponent implements OnInit, OnDestroy {
     await this.loadChanges();
   }
 
+  async exportToExcel(): Promise<void> {
+    if (this.isExporting || this.isLoading) {
+      return;
+    }
+
+    this.isExporting = true;
+    this.cdr.markForCheck();
+
+    try {
+      const rows = await this.fetchAllRowsForExport();
+      if (rows.length === 0) {
+        this.toastService.error('Nenhum registro para exportar no período selecionado.');
+        return;
+      }
+
+      const exportRows = flattenPipelineIntegrationChangesForExport(rows);
+      const filename = buildPipelineIntegrationChangesExportFilename({
+        month: this.selectedMonth,
+        phase: this.selectedPhase || undefined
+      });
+      downloadXlsxFile(filename, exportRows, 'Pipeline');
+      this.toastService.success(`Exportados ${rows.length} registro(s) em Excel.`);
+    } catch (error) {
+      this.toastService.error(
+        error instanceof Error ? error.message : 'Não foi possível exportar os logs para Excel.'
+      );
+    } finally {
+      this.isExporting = false;
+      this.cdr.markForCheck();
+    }
+  }
+
   toggleRowDetails(row: PipelineIntegrationChangeRow): void {
-    const id = row.id ?? pipelineChangeTimestamp(row) ?? JSON.stringify(row);
+    const id = row.id ?? pipelineChangeAppliedAt(row) ?? JSON.stringify(row);
     this.expandedRowId = this.expandedRowId === id ? null : id;
     this.cdr.markForCheck();
   }
 
   isRowExpanded(row: PipelineIntegrationChangeRow): boolean {
-    const id = row.id ?? pipelineChangeTimestamp(row) ?? JSON.stringify(row);
+    const id = row.id ?? pipelineChangeAppliedAt(row) ?? JSON.stringify(row);
     return this.expandedRowId === id;
   }
 
   rowTrackId(index: number, row: PipelineIntegrationChangeRow): string | number {
-    return row.id ?? pipelineChangeTimestamp(row) ?? index;
+    return row.id ?? pipelineChangeAppliedAt(row) ?? index;
   }
 
-  formatJson(row: PipelineIntegrationChangeRow): string {
-    try {
-      return JSON.stringify(row, null, 2);
-    } catch {
-      return String(row);
+  diffTrackKey(_index: number, entry: PipelineIntegrationChangeDiffEntry): string {
+    return entry.key;
+  }
+
+  rowStatusClass(row: PipelineIntegrationChangeRow): string {
+    const success = pipelineChangeSuccess(row);
+    if (success === false) {
+      return 'row--failed';
     }
+    if (pipelineChangeHasSnapshotDiff(row)) {
+      return 'row--diff';
+    }
+    return '';
   }
 
   logout(): void {
@@ -183,5 +258,34 @@ export class PipelineIntegrationChangesComponent implements OnInit, OnDestroy {
       this.isLoading = false;
       this.cdr.markForCheck();
     }
+  }
+
+  private async fetchAllRowsForExport(): Promise<PipelineIntegrationChangeRow[]> {
+    const { start, end } = this.buildInterval();
+    const pageSize = 500;
+    const all: PipelineIntegrationChangeRow[] = [];
+    let offset = 0;
+
+    while (true) {
+      const page = await firstValueFrom(
+        this.game4uApi.getGameReportsPipelineIntegrationChanges({
+          start,
+          end,
+          ...(this.selectedPhase ? { phase: this.selectedPhase } : {}),
+          limit: pageSize,
+          offset
+        })
+      );
+
+      all.push(...page.items);
+
+      if (!page.has_more || page.items.length === 0) {
+        break;
+      }
+
+      offset += page.items.length;
+    }
+
+    return all;
   }
 }

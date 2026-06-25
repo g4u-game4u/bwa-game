@@ -1437,8 +1437,26 @@ export interface Game4uReportsPipelineIntegrationChangesQuery {
 /** Linha de `pipeline_integracao_changes` (campos normalizados na leitura). */
 export interface PipelineIntegrationChangeRow {
   id?: string | number;
-  phase?: string;
+  run_id?: string;
+  applied_at?: string;
+  rule?: string;
+  action_kind?: string;
+  email?: string;
   entity_type?: string;
+  success?: boolean;
+  error_message?: string | null;
+  before_json?: Record<string, unknown> | null;
+  after_json?: Record<string, unknown> | null;
+  detail_summary?: string;
+  run?: {
+    id?: string;
+    phase?: string;
+    trigger?: string;
+    status?: string;
+    started_at?: string;
+    finished_at?: string;
+  };
+  phase?: string;
   entity_id?: string;
   table_name?: string;
   record_key?: string;
@@ -1451,7 +1469,6 @@ export interface PipelineIntegrationChangeRow {
   changed_at?: string;
   created_at?: string;
   recorded_at?: string;
-  run_id?: string;
   batch_id?: string;
   delivery_id?: string;
   action_id?: string;
@@ -1459,6 +1476,15 @@ export interface PipelineIntegrationChangeRow {
   details?: unknown;
   metadata?: unknown;
   [key: string]: unknown;
+}
+
+export interface PipelineIntegrationChangesSummary {
+  total_changes?: number;
+  success_count?: number;
+  failed_count?: number;
+  distinct_emails?: number;
+  distinct_runs?: number;
+  by_action_kind?: Record<string, number>;
 }
 
 /** Resposta paginada de `GET /game/reports/pipeline-integration/changes`. */
@@ -1470,6 +1496,9 @@ export interface Game4uReportsPipelineIntegrationChangesPage {
   start?: string;
   end?: string;
   phase?: string;
+  has_more?: boolean;
+  summary?: PipelineIntegrationChangesSummary;
+  params?: Record<string, unknown>;
 }
 
 function formatPipelineChangeValue(value: unknown): string {
@@ -1486,39 +1515,37 @@ function formatPipelineChangeValue(value: unknown): string {
   return String(value);
 }
 
+/** @deprecated Prefer {@link pipelineChangeAppliedAt} from pipeline-integration-changes.mapper */
 export function pipelineChangeTimestamp(row: PipelineIntegrationChangeRow): string | null {
-  const raw = row.changed_at ?? row.created_at ?? row.recorded_at;
+  const raw = row.applied_at ?? row.changed_at ?? row.created_at ?? row.recorded_at;
   return typeof raw === 'string' && raw.trim() ? raw.trim() : null;
 }
 
+/** @deprecated Prefer diff helpers from pipeline-integration-changes.mapper */
 export function pipelineChangeFieldName(row: PipelineIntegrationChangeRow): string {
   const raw = row.field_name ?? row.column_name ?? row['field'];
   return typeof raw === 'string' ? raw.trim() : '';
 }
 
+/** @deprecated Prefer {@link pipelineChangeBeforeJson} */
 export function pipelineChangeOldValue(row: PipelineIntegrationChangeRow): string {
-  return formatPipelineChangeValue(row.old_value ?? row.value_before ?? row['before_value']);
+  const snapshot = row.before_json ?? row.old_value ?? row.value_before ?? row['before_value'];
+  return formatPipelineChangeValue(snapshot);
 }
 
+/** @deprecated Prefer {@link pipelineChangeAfterJson} */
 export function pipelineChangeNewValue(row: PipelineIntegrationChangeRow): string {
-  return formatPipelineChangeValue(row.new_value ?? row.value_after ?? row['after_value']);
+  const snapshot = row.after_json ?? row.new_value ?? row.value_after ?? row['after_value'];
+  return formatPipelineChangeValue(snapshot);
 }
 
 export function pipelineChangeEntityLabel(row: PipelineIntegrationChangeRow): string {
+  const email = (row.email ?? row.user_email ?? '').toString().trim();
   const type = (row.entity_type ?? row.table_name ?? '').toString().trim();
-  const id = (
-    row.entity_id ??
-    row.record_key ??
-    row.delivery_id ??
-    row.action_id ??
-    ''
-  )
-    .toString()
-    .trim();
-  if (type && id) {
-    return `${type} · ${id}`;
+  if (email && type) {
+    return `${email} (${type})`;
   }
-  return type || id || '—';
+  return email || type || '—';
 }
 
 export function normalizePipelineIntegrationChangesResponse(
@@ -1547,21 +1574,49 @@ export function normalizePipelineIntegrationChangesResponse(
       : typeof offRaw === 'string' && offRaw.trim() !== ''
         ? Math.floor(Number(offRaw)) || 0
         : undefined;
-  const totalRaw = o['total'] ?? o['count'];
+  const summaryRaw = o['summary'];
+  const summary =
+    summaryRaw && typeof summaryRaw === 'object'
+      ? (summaryRaw as PipelineIntegrationChangesSummary)
+      : undefined;
+  const totalRaw = o['total'] ?? o['count'] ?? summary?.total_changes;
   const total =
     typeof totalRaw === 'number' && Number.isFinite(totalRaw)
       ? Math.floor(totalRaw)
       : typeof totalRaw === 'string' && totalRaw.trim() !== ''
         ? Math.floor(Number(totalRaw))
         : undefined;
-  const start = typeof o['start'] === 'string' ? o['start'] : undefined;
-  const end = typeof o['end'] === 'string' ? o['end'] : undefined;
-  const phase = typeof o['phase'] === 'string' ? o['phase'] : undefined;
+  const params =
+    o['params'] && typeof o['params'] === 'object'
+      ? (o['params'] as Record<string, unknown>)
+      : undefined;
+  const hasMore = typeof o['has_more'] === 'boolean' ? o['has_more'] : undefined;
+  const start =
+    typeof o['start'] === 'string'
+      ? o['start']
+      : typeof params?.['start'] === 'string'
+        ? params['start']
+        : undefined;
+  const end =
+    typeof o['end'] === 'string'
+      ? o['end']
+      : typeof params?.['end'] === 'string'
+        ? params['end']
+        : undefined;
+  const phase =
+    typeof o['phase'] === 'string'
+      ? o['phase']
+      : typeof params?.['phase'] === 'string'
+        ? params['phase']
+        : undefined;
   return {
     items,
     limit,
     ...(offset != null ? { offset } : {}),
     ...(total != null && Number.isFinite(total) ? { total } : {}),
+    ...(hasMore != null ? { has_more: hasMore } : {}),
+    ...(summary ? { summary } : {}),
+    ...(params ? { params } : {}),
     ...(start ? { start } : {}),
     ...(end ? { end } : {}),
     ...(phase ? { phase } : {})

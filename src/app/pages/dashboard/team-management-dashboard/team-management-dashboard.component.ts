@@ -414,8 +414,10 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
   readonly dashboardSyncLabel = 'Sincronizado com Acessórias';
   /** Intervalos `season_*` / `month_*` em `params` do cache de supervisão. */
   teamDashboardCachedParams: PlayerDashboardCachedParams | null = null;
-  /** % entregas no prazo no mês (`month_on_time_delivery_pct`), 0–100. */
+  /** % entregas no prazo no mês (`month_on_time_delivery_pct`), 0–100 — vista equipe/gestão. */
   teamMonthOnTimeDeliveryPct: number | null = null;
+  /** % entregas no prazo do colaborador (`month_on_time_delivery_pct` em `dashboard/cached`). */
+  collaboratorMonthOnTimeDeliveryPct: number | null = null;
   /** Bundle aplicado na vista equipe agregada (evita re-fetch na mesma carga). */
   private teamSupervisionBundle: SupervisionTeamDashboardCachedBundle | null = null;
 
@@ -1607,6 +1609,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
         // Otherwise, load team aggregated data
         console.log('👥 Loading team aggregated data');
         this.teamSupervisionBundle = null;
+        this.collaboratorMonthOnTimeDeliveryPct = null;
         if (this.playerService.usesGame4uWalletFromStats()) {
           await this.loadTeamDashboardFromCache();
         } else {
@@ -1802,6 +1805,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       this.sidebarErrorMessage = '';
       this.monthlyPointsGoalTarget = null;
       this.teamSidebarDeliveryStatsTotal = undefined;
+      this.collaboratorMonthOnTimeDeliveryPct = null;
       
       console.log('📊 Loading sidebar data for collaborator:', collaboratorId);
       
@@ -1831,6 +1835,8 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
           metrics = { activity: bundle.activity, processo: bundle.processo };
           const g = Math.floor(Number(bundle.monthlyGoalTarget) || 0);
           this.monthlyPointsGoalTarget = g > 0 ? g : null;
+          this.collaboratorMonthOnTimeDeliveryPct =
+            this.selectedMonth != null ? bundle.monthOnTimeDeliveryPct : null;
           const pts = bundle.seasonWalletPoints;
           snap = {
             wallet: { moedas: 0, bloqueados: 0, desbloqueados: pts },
@@ -1925,6 +1931,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       this.isLoadingSidebar = false;
       this.sidebarLoadedOnce = true;
       this.isLoadingMonthlyPointsProgress = false;
+      this.syncEntregasPrazoKpiFromParticipacao();
 
       console.log('✅ Collaborator sidebar data loaded:', {
         points: this.seasonPoints,
@@ -1936,6 +1943,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       console.error('Error in loadCollaboratorSidebarData:', error);
       this.hasSidebarError = true;
       this.sidebarErrorMessage = 'Erro ao carregar dados da barra lateral';
+      this.collaboratorMonthOnTimeDeliveryPct = null;
       this.isLoadingSidebar = false;
       this.isLoadingMonthlyPointsProgress = false;
       this.cdr.markForCheck();
@@ -5858,16 +5866,17 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * KPI «entregas-prazo»: média das % na lista «Clientes atendidos este mês» (após gamificação),
-   * alinhado a `gamification-dashboard.syncEntregasPrazoKpiFromParticipacao`.
+   * KPI «entregas-prazo»: `month_on_time_delivery_pct` do cache Game4U
+   * (colaborador → `dashboard/cached`; equipe/gestão → supervisão ou management overview).
    */
   private getEntregasPrazoPercentFromSupervisionCache(): number | null {
-    if (
-      !this.playerService.usesGame4uWalletFromStats() ||
-      this.selectedCollaborator != null ||
-      this.selectedMonth == null ||
-      this.teamMonthOnTimeDeliveryPct == null
-    ) {
+    if (!this.playerService.usesGame4uWalletFromStats() || this.selectedMonth == null) {
+      return null;
+    }
+    if (this.selectedCollaborator != null) {
+      return this.collaboratorMonthOnTimeDeliveryPct;
+    }
+    if (this.teamMonthOnTimeDeliveryPct == null) {
       return null;
     }
     return this.teamMonthOnTimeDeliveryPct;
@@ -5945,7 +5954,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Valor atual do anel: para entregas no prazo, prioriza a média da lista de participação.
+   * Valor atual do anel: para entregas no prazo, prioriza `month_on_time_delivery_pct` do cache.
    */
   getKpiCurrentValue(kpi: KPIData): number {
     if (kpi.id === 'entregas-prazo') {

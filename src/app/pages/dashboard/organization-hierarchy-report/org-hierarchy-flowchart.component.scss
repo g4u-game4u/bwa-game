@@ -300,29 +300,108 @@ $lvl-player: #64748b;
   }
 }
 
-.org-flowchart-canvas-wrap {
+.org-flowchart-viewport {
+  position: relative;
   width: 100%;
-  max-height: min(72vh, 820px);
-  overflow: auto;
-  overscroll-behavior: contain;
-  scrollbar-gutter: stable both-edges;
-  padding: $spacing-lg $spacing-md $spacing-xl;
+  height: min(72vh, 820px);
+  min-height: 420px;
+  overflow: hidden;
   border: 1px solid $org-border;
   border-radius: $border-radius-sm;
-  background:
-    radial-gradient(circle at 1px 1px, rgba($org-border, 0.35) 1px, transparent 0) 0 0 / 20px 20px,
-    rgba($org-bg, 0.55);
+  background: rgba($org-bg, 0.55);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
-  display: flex;
-  justify-content: center;
-  @include org-flowchart-scrollbar;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+
+  &--panning {
+    cursor: grabbing;
+  }
 }
 
-.org-flowchart-canvas {
+.org-flowchart-stage {
   display: inline-flex;
   min-width: min(100%, 640px);
   width: max-content;
   justify-content: center;
+  padding: $spacing-xl $spacing-lg;
+  transform-origin: 0 0;
+  background:
+    radial-gradient(circle at 1px 1px, rgba($org-border, 0.35) 1px, transparent 0) 0 0 / 20px 20px;
+}
+
+.org-flowchart-zoom {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  z-index: 5;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px;
+  border-radius: $border-radius-sm;
+  border: 1px solid $org-border;
+  background: rgba($org-surface, 0.94);
+  backdrop-filter: blur(6px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+
+  &__btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 32px;
+    height: 32px;
+    padding: 0 8px;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    background: transparent;
+    color: $text-primary;
+    font-size: $font-size-caption;
+    font-weight: $font-weight-semibold;
+    cursor: pointer;
+    transition: background 0.12s ease, border-color 0.12s ease;
+
+    i {
+      font-size: 1rem;
+    }
+
+    &:hover:not(:disabled) {
+      background: rgba($org-accent, 0.15);
+      border-color: rgba($org-accent, 0.35);
+    }
+
+    &:disabled {
+      opacity: 0.35;
+      cursor: not-allowed;
+    }
+
+    &:focus-visible {
+      outline: $focus-outline;
+      outline-offset: 1px;
+    }
+
+    &--text {
+      gap: 4px;
+      padding: 0 10px;
+      white-space: nowrap;
+    }
+  }
+
+  &__label {
+    min-width: 44px;
+    text-align: center;
+    font-size: $font-size-caption;
+    font-weight: $font-weight-semibold;
+    font-variant-numeric: tabular-nums;
+    color: $org-muted;
+  }
+
+  &__divider {
+    width: 1px;
+    height: 20px;
+    background: $org-border;
+    margin: 0 2px;
+  }
 }
 
 @media (max-width: 768px) {

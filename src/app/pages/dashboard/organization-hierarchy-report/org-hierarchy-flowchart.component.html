@@ -40,8 +40,8 @@
 
   <p class="org-flowchart-hint" role="note">
     <i class="ri-information-line" aria-hidden="true"></i>
-    Clique numa caixa para selecionar · use
-    <strong>+</strong>/<strong>−</strong> para abrir ou fechar subníveis · arraste para navegar
+    Clique numa caixa para selecionar · <strong>+</strong>/<strong>−</strong> para expandir subníveis ·
+    <strong>scroll</strong> para zoom · arraste o fundo para mover
   </p>
 
   <div
@@ -93,8 +93,13 @@
     </div>
   </div>
 
-  <div class="org-flowchart-canvas-wrap" role="region" aria-label="Organograma interativo">
-    <div class="org-flowchart-canvas">
+  <div
+    class="org-flowchart-viewport"
+    #viewport
+    [class.org-flowchart-viewport--panning]="isPanning"
+    role="region"
+    aria-label="Organograma interativo">
+    <div class="org-flowchart-stage" #stage>
       <c4u-org-hierarchy-flowchart-node
         [node]="root"
         [expandedIds]="expandedIds"
@@ -104,6 +109,42 @@
         (selectNode)="onNodeSelect($event)"
         (kpiClick)="kpiClick.emit($event)">
       </c4u-org-hierarchy-flowchart-node>
+    </div>
+
+    <div class="org-flowchart-zoom" role="group" aria-label="Controles de zoom">
+      <button
+        type="button"
+        class="org-flowchart-zoom__btn"
+        (click)="zoomOut()"
+        [disabled]="zoomLevel <= minZoom + 0.01"
+        aria-label="Diminuir zoom">
+        <i class="ri-subtract-line" aria-hidden="true"></i>
+      </button>
+      <span class="org-flowchart-zoom__label" aria-live="polite">{{ zoomPercentLabel }}</span>
+      <button
+        type="button"
+        class="org-flowchart-zoom__btn"
+        (click)="zoomIn()"
+        [disabled]="zoomLevel >= maxZoom - 0.01"
+        aria-label="Aumentar zoom">
+        <i class="ri-add-line" aria-hidden="true"></i>
+      </button>
+      <span class="org-flowchart-zoom__divider" aria-hidden="true"></span>
+      <button
+        type="button"
+        class="org-flowchart-zoom__btn org-flowchart-zoom__btn--text"
+        (click)="resetZoom()"
+        title="Voltar zoom para 100%">
+        100%
+      </button>
+      <button
+        type="button"
+        class="org-flowchart-zoom__btn org-flowchart-zoom__btn--text"
+        (click)="fitToView()"
+        title="Ajustar organograma à área visível">
+        <i class="ri-fullscreen-line" aria-hidden="true"></i>
+        Ajustar
+      </button>
     </div>
   </div>
 </div>

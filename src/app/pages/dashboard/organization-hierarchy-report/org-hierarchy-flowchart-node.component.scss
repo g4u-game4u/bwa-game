@@ -293,95 +293,104 @@ $lvl-player: #64748b;
   }
 }
 
-.org-flowchart-children {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  width: 100%;
-  padding-top: 28px;
-  position: relative;
+// Conectores contínuos (padrão CSS tree — sem gaps entre linhas)
+$org-link-h: 24px;
+$org-link-color: $org-border;
 
-  &__connector {
+.org-flowchart-tree {
+  list-style: none;
+  margin: 0;
+  padding: $org-link-h 0 0;
+  position: relative;
+  display: flex;
+  flex-wrap: nowrap;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 0;
+
+  &::before {
+    content: '';
     position: absolute;
     top: 0;
     left: 50%;
-    transform: translateX(-50%);
     width: 2px;
-    height: 28px;
-    background: $org-border;
-  }
-
-  &__list {
-    display: flex;
-    flex-wrap: nowrap;
-    justify-content: center;
-    align-items: flex-start;
-    gap: 20px;
-    list-style: none;
-    margin: 0;
-    padding: 28px 8px 0;
-    position: relative;
-
-    &::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      height: 2px;
-      background: $org-border;
-    }
+    height: $org-link-h;
+    background: $org-link-color;
+    transform: translateX(-50%);
   }
 
   &__item {
+    position: relative;
     display: flex;
     flex-direction: column;
     align-items: center;
-    position: relative;
-    padding-top: 28px;
+    padding: $org-link-h 12px 0;
     flex: 0 0 auto;
 
     &::before {
       content: '';
       position: absolute;
       top: 0;
-      left: 50%;
-      transform: translateX(-50%);
-      width: 2px;
-      height: 28px;
-      background: $org-border;
+      right: 50%;
+      width: 50%;
+      height: $org-link-h;
+      border-top: 2px solid $org-link-color;
     }
 
-    &:only-child::before {
-      height: 28px;
+    &::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 50%;
+      width: 50%;
+      height: $org-link-h;
+      border-top: 2px solid $org-link-color;
+      border-left: 2px solid $org-link-color;
+      box-sizing: border-box;
+    }
+
+    &:only-child {
+      padding-top: 0;
+
+      &::before,
+      &::after {
+        display: none;
+      }
+    }
+
+    &:first-child:not(:only-child)::before {
+      border: none;
+    }
+
+    &:last-child:not(:only-child)::after {
+      border-top: 2px solid $org-link-color;
+      border-left: none;
+      border-right: none;
     }
   }
 }
 
 @media (max-width: 640px) {
-  .org-flowchart-children__list {
+  .org-flowchart-tree {
     flex-direction: column;
     align-items: center;
-    padding-top: 16px;
 
-    &::before {
-      display: none;
-    }
-  }
+    &__item {
+      padding-left: 0;
+      padding-right: 0;
 
-  .org-flowchart-children__item {
-    padding-top: 16px;
+      &::before {
+        display: none;
+      }
 
-    &::before {
-      height: 16px;
-    }
-  }
-
-  .org-flowchart-children {
-    padding-top: 16px;
-
-    &__connector {
-      height: 16px;
+      &:not(:only-child)::after {
+        display: block;
+        left: 50%;
+        width: 2px;
+        border: none;
+        border-left: 2px solid $org-link-color;
+        transform: translateX(-50%);
+      }
     }
   }
 }

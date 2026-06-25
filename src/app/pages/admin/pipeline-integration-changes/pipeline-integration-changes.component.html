@@ -58,7 +58,47 @@
           <i class="ri-refresh-line" [class.spin]="isLoading" aria-hidden="true"></i>
           Atualizar
         </button>
+
+        <button
+          type="button"
+          class="export-button"
+          [disabled]="isLoading || isExporting"
+          (click)="exportToExcel()">
+          <i class="ri-file-excel-2-line" [class.spin]="isExporting" aria-hidden="true"></i>
+          {{ isExporting ? 'Exportando…' : 'Exportar Excel' }}
+        </button>
       </div>
+    </div>
+
+    <section *ngIf="summary && !isLoading" class="pipeline-changes__summary" aria-label="Resumo do período">
+      <article class="summary-card">
+        <span class="summary-card__label">Total</span>
+        <strong class="summary-card__value">{{ summary.total_changes | number:'1.0-0':'pt-BR' }}</strong>
+      </article>
+      <article class="summary-card summary-card--success">
+        <span class="summary-card__label">Sucesso</span>
+        <strong class="summary-card__value">{{ summary.success_count | number:'1.0-0':'pt-BR' }}</strong>
+      </article>
+      <article class="summary-card summary-card--failed">
+        <span class="summary-card__label">Falhas</span>
+        <strong class="summary-card__value">{{ summary.failed_count | number:'1.0-0':'pt-BR' }}</strong>
+      </article>
+      <article class="summary-card">
+        <span class="summary-card__label">E-mails distintos</span>
+        <strong class="summary-card__value">{{ summary.distinct_emails | number:'1.0-0':'pt-BR' }}</strong>
+      </article>
+      <article class="summary-card">
+        <span class="summary-card__label">Runs</span>
+        <strong class="summary-card__value">{{ summary.distinct_runs | number:'1.0-0':'pt-BR' }}</strong>
+      </article>
+    </section>
+
+    <div *ngIf="summaryActionKinds.length" class="pipeline-changes__kinds" aria-label="Ações por tipo">
+      <span
+        *ngFor="let item of summaryActionKinds"
+        class="kind-chip">
+        {{ item.kind }} · {{ item.count | number:'1.0-0':'pt-BR' }}
+      </span>
     </div>
 
     <div *ngIf="isLoading" class="pipeline-changes__state" role="status" aria-live="polite" aria-busy="true">
@@ -82,11 +122,11 @@
       class="pipeline-changes__table-wrap"
       aria-label="Tabela de mudanças">
       <div class="pipeline-changes__meta" role="status">
-        <span>{{ rows.length | number:'1.0-0':'pt-BR' }} registro(s)</span>
+        <span>{{ rows.length | number:'1.0-0':'pt-BR' }} registro(s) nesta página</span>
         <span *ngIf="page?.total != null">
           · total {{ page!.total | number:'1.0-0':'pt-BR' }}
         </span>
-        <span *ngIf="page?.phase"> · fase {{ page!.phase }}</span>
+        <span *ngIf="page?.has_more"> · há mais registros além do limite</span>
       </div>
 
       <div class="pipeline-changes__table-scroll">
@@ -95,42 +135,104 @@
             <tr>
               <th scope="col">Data</th>
               <th scope="col">Fase</th>
-              <th scope="col">Entidade</th>
-              <th scope="col">Campo</th>
-              <th scope="col">Antes</th>
-              <th scope="col">Depois</th>
+              <th scope="col">Ação</th>
+              <th scope="col">E-mail</th>
+              <th scope="col">Regra</th>
+              <th scope="col">Status</th>
+              <th scope="col" class="col-snapshots">before_json → after_json</th>
               <th scope="col">Run</th>
-              <th scope="col" class="col-actions">Detalhe</th>
             </tr>
           </thead>
           <tbody>
             <ng-container *ngFor="let row of rows; trackBy: rowTrackId">
-              <tr>
+              <tr [class]="rowStatusClass(row)">
                 <td>
-                  <ng-container *ngIf="pipelineChangeTimestamp(row) as ts; else noTs">
+                  <ng-container *ngIf="pipelineChangeAppliedAt(row) as ts; else noTs">
                     {{ ts | date:'dd/MM/yyyy HH:mm:ss' }}
                   </ng-container>
                   <ng-template #noTs>—</ng-template>
                 </td>
-                <td>{{ row.phase || '—' }}</td>
-                <td>{{ pipelineChangeEntityLabel(row) }}</td>
-                <td>{{ pipelineChangeFieldName(row) || '—' }}</td>
-                <td class="cell-value">{{ pipelineChangeOldValue(row) }}</td>
-                <td class="cell-value">{{ pipelineChangeNewValue(row) }}</td>
-                <td>{{ row.run_id || row.batch_id || '—' }}</td>
-                <td class="col-actions">
-                  <button
-                    type="button"
-                    class="detail-button"
-                    [attr.aria-expanded]="isRowExpanded(row)"
-                    (click)="toggleRowDetails(row)">
-                    {{ isRowExpanded(row) ? 'Ocultar' : 'Ver JSON' }}
-                  </button>
+                <td>{{ pipelineChangePhase(row) }}</td>
+                <td class="cell-action">{{ pipelineChangeActionLabel(row) }}</td>
+                <td>{{ pipelineChangeEmail(row) }}</td>
+                <td>{{ pipelineChangeRule(row) }}</td>
+                <td>
+                  <span
+                    class="status-badge"
+                    [class.status-badge--success]="pipelineChangeSuccess(row) === true"
+                    [class.status-badge--failed]="pipelineChangeSuccess(row) === false">
+                    {{ pipelineChangeSuccess(row) === true ? 'OK' : pipelineChangeSuccess(row) === false ? 'Falha' : '—' }}
+                  </span>
                 </td>
+                <td class="col-snapshots">
+                  <div class="snapshot-preview">
+                    <ng-container *ngIf="pipelineChangeHasSnapshotDiff(row); else identicalSnapshots">
+                      <div
+                        *ngFor="let entry of pipelineChangeChangedEntries(row); trackBy: diffTrackKey"
+                        class="diff-chip"
+                        [title]="entry.key + ': ' + formatPipelineSnapshotValue(entry.before) + ' → ' + formatPipelineSnapshotValue(entry.after)">
+                        <span class="diff-chip__key">{{ entry.key }}</span>
+                        <span class="diff-chip__before">{{ formatPipelineSnapshotValue(entry.before) }}</span>
+                        <i class="ri-arrow-right-line diff-chip__arrow" aria-hidden="true"></i>
+                        <span class="diff-chip__after">{{ formatPipelineSnapshotValue(entry.after) }}</span>
+                      </div>
+                    </ng-container>
+                    <ng-template #identicalSnapshots>
+                      <span class="snapshot-note">Snapshots idênticos</span>
+                    </ng-template>
+                    <button
+                      type="button"
+                      class="detail-button"
+                      [attr.aria-expanded]="isRowExpanded(row)"
+                      (click)="toggleRowDetails(row)">
+                      {{ isRowExpanded(row) ? 'Ocultar diff' : 'Ver diff completo' }}
+                    </button>
+                  </div>
+                  <p *ngIf="row.error_message" class="row-error">{{ row.error_message }}</p>
+                </td>
+                <td [title]="row.run_id || ''">{{ pipelineChangeRunIdShort(row) }}</td>
               </tr>
+
               <tr *ngIf="isRowExpanded(row)" class="row-details">
                 <td colspan="8">
-                  <pre class="row-details__json">{{ formatJson(row) }}</pre>
+                  <div class="snapshot-diff" role="region" [attr.aria-label]="'Diff before e after do registro ' + row.id">
+                    <div class="snapshot-diff__header">
+                      <h3 class="snapshot-diff__title">Comparativo before_json / after_json</h3>
+                      <p class="snapshot-diff__hint" *ngIf="!pipelineChangeHasSnapshotDiff(row)">
+                        Nenhum campo divergente entre os snapshots neste registro.
+                      </p>
+                    </div>
+
+                    <table class="snapshot-diff__table">
+                      <thead>
+                        <tr>
+                          <th scope="col">Campo</th>
+                          <th scope="col">before_json</th>
+                          <th scope="col">after_json</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr
+                          *ngFor="let entry of buildPipelineChangeDiffEntries(row); trackBy: diffTrackKey"
+                          [class.snapshot-diff__row--changed]="entry.changed">
+                          <th scope="row">{{ entry.key }}</th>
+                          <td class="snapshot-diff__value">{{ formatPipelineSnapshotValue(entry.before) }}</td>
+                          <td class="snapshot-diff__value">{{ formatPipelineSnapshotValue(entry.after) }}</td>
+                        </tr>
+                      </tbody>
+                    </table>
+
+                    <div class="snapshot-diff__raw">
+                      <div class="snapshot-panel">
+                        <h4 class="snapshot-panel__title">before_json</h4>
+                        <pre class="snapshot-panel__json">{{ formatPipelineSnapshotJson(row.before_json) }}</pre>
+                      </div>
+                      <div class="snapshot-panel">
+                        <h4 class="snapshot-panel__title">after_json</h4>
+                        <pre class="snapshot-panel__json">{{ formatPipelineSnapshotJson(row.after_json) }}</pre>
+                      </div>
+                    </div>
+                  </div>
                 </td>
               </tr>
             </ng-container>

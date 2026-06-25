@@ -74,22 +74,19 @@
     </div>
   </div>
 
-  <div *ngIf="showChildren" class="org-flowchart-children">
-    <div class="org-flowchart-children__connector" aria-hidden="true"></div>
-    <ul class="org-flowchart-children__list">
-      <li
-        *ngFor="let child of node.children; trackBy: trackByNodeId"
-        class="org-flowchart-children__item">
-        <c4u-org-hierarchy-flowchart-node
-          [node]="child"
-          [expandedIds]="expandedIds"
-          [searchHighlightIds]="searchHighlightIds"
-          [selectedNodeId]="selectedNodeId"
-          (toggleNode)="toggleNode.emit($event)"
-          (selectNode)="selectNode.emit($event)"
-          (kpiClick)="kpiClick.emit($event)">
-        </c4u-org-hierarchy-flowchart-node>
-      </li>
-    </ul>
-  </div>
+  <ul *ngIf="showChildren" class="org-flowchart-tree">
+    <li
+      *ngFor="let child of node.children; trackBy: trackByNodeId"
+      class="org-flowchart-tree__item">
+      <c4u-org-hierarchy-flowchart-node
+        [node]="child"
+        [expandedIds]="expandedIds"
+        [searchHighlightIds]="searchHighlightIds"
+        [selectedNodeId]="selectedNodeId"
+        (toggleNode)="toggleNode.emit($event)"
+        (selectNode)="selectNode.emit($event)"
+        (kpiClick)="kpiClick.emit($event)">
+      </c4u-org-hierarchy-flowchart-node>
+    </li>
+  </ul>
 </div>
