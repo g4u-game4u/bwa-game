@@ -1046,6 +1046,14 @@ export interface Game4uReportsOrganizationHierarchyClientsServedExportQuery {
   node_id?: string;
 }
 
+/** Query para `GET /game/reports/organization/hierarchy-report/critical-clients/deliveries/export`. */
+export interface Game4uReportsOrganizationHierarchyCriticalClientsDeliveriesExportQuery {
+  month: string; // YYYY-MM
+  node_type?: OrgHierarchyNodeType | string;
+  node_id?: string;
+  issue?: CriticalClientIssueFilter | string;
+}
+
 export interface OrganizationHierarchyDeliveryRow {
   delivery_id: string;
   delivery_title: string;
@@ -1405,6 +1413,214 @@ export interface Game4uReportsOrganizationHierarchyInsightsQuery {
 /** Body opcional do `POST /game/reports/organization/hierarchy-insights`. */
 export interface Game4uReportsOrganizationHierarchyInsightsBody {
   focus?: OrgHierarchyInsightsFocus;
+}
+
+/** Fase do pipeline em `GET /game/reports/pipeline-integration/changes`. */
+export type PipelineIntegrationPhase =
+  | 'reconcile'
+  | 'ingest'
+  | 'transform'
+  | 'sync'
+  | string;
+
+/** Query `GET /game/reports/pipeline-integration/changes` (`pipeline_integracao_changes`). */
+export interface Game4uReportsPipelineIntegrationChangesQuery {
+  /** Início do intervalo (ISO 8601). */
+  start: string;
+  /** Fim do intervalo (ISO 8601). */
+  end: string;
+  phase?: PipelineIntegrationPhase;
+  limit?: number;
+  offset?: number;
+}
+
+/** Linha de `pipeline_integracao_changes` (campos normalizados na leitura). */
+export interface PipelineIntegrationChangeRow {
+  id?: string | number;
+  run_id?: string;
+  applied_at?: string;
+  rule?: string;
+  action_kind?: string;
+  email?: string;
+  entity_type?: string;
+  success?: boolean;
+  error_message?: string | null;
+  before_json?: Record<string, unknown> | null;
+  after_json?: Record<string, unknown> | null;
+  detail_summary?: string;
+  run?: {
+    id?: string;
+    phase?: string;
+    trigger?: string;
+    status?: string;
+    started_at?: string;
+    finished_at?: string;
+  };
+  phase?: string;
+  entity_id?: string;
+  table_name?: string;
+  record_key?: string;
+  field_name?: string;
+  column_name?: string;
+  old_value?: unknown;
+  new_value?: unknown;
+  value_before?: unknown;
+  value_after?: unknown;
+  changed_at?: string;
+  created_at?: string;
+  recorded_at?: string;
+  batch_id?: string;
+  delivery_id?: string;
+  action_id?: string;
+  user_email?: string;
+  details?: unknown;
+  metadata?: unknown;
+  [key: string]: unknown;
+}
+
+export interface PipelineIntegrationChangesSummary {
+  total_changes?: number;
+  success_count?: number;
+  failed_count?: number;
+  distinct_emails?: number;
+  distinct_runs?: number;
+  by_action_kind?: Record<string, number>;
+}
+
+/** Resposta paginada de `GET /game/reports/pipeline-integration/changes`. */
+export interface Game4uReportsPipelineIntegrationChangesPage {
+  items: PipelineIntegrationChangeRow[];
+  total?: number;
+  limit: number;
+  offset?: number;
+  start?: string;
+  end?: string;
+  phase?: string;
+  has_more?: boolean;
+  summary?: PipelineIntegrationChangesSummary;
+  params?: Record<string, unknown>;
+}
+
+function formatPipelineChangeValue(value: unknown): string {
+  if (value == null) {
+    return '—';
+  }
+  if (typeof value === 'object') {
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return String(value);
+    }
+  }
+  return String(value);
+}
+
+/** @deprecated Prefer {@link pipelineChangeAppliedAt} from pipeline-integration-changes.mapper */
+export function pipelineChangeTimestamp(row: PipelineIntegrationChangeRow): string | null {
+  const raw = row.applied_at ?? row.changed_at ?? row.created_at ?? row.recorded_at;
+  return typeof raw === 'string' && raw.trim() ? raw.trim() : null;
+}
+
+/** @deprecated Prefer diff helpers from pipeline-integration-changes.mapper */
+export function pipelineChangeFieldName(row: PipelineIntegrationChangeRow): string {
+  const raw = row.field_name ?? row.column_name ?? row['field'];
+  return typeof raw === 'string' ? raw.trim() : '';
+}
+
+/** @deprecated Prefer {@link pipelineChangeBeforeJson} */
+export function pipelineChangeOldValue(row: PipelineIntegrationChangeRow): string {
+  const snapshot = row.before_json ?? row.old_value ?? row.value_before ?? row['before_value'];
+  return formatPipelineChangeValue(snapshot);
+}
+
+/** @deprecated Prefer {@link pipelineChangeAfterJson} */
+export function pipelineChangeNewValue(row: PipelineIntegrationChangeRow): string {
+  const snapshot = row.after_json ?? row.new_value ?? row.value_after ?? row['after_value'];
+  return formatPipelineChangeValue(snapshot);
+}
+
+export function pipelineChangeEntityLabel(row: PipelineIntegrationChangeRow): string {
+  const email = (row.email ?? row.user_email ?? '').toString().trim();
+  const type = (row.entity_type ?? row.table_name ?? '').toString().trim();
+  if (email && type) {
+    return `${email} (${type})`;
+  }
+  return email || type || '—';
+}
+
+export function normalizePipelineIntegrationChangesResponse(
+  body: unknown
+): Game4uReportsPipelineIntegrationChangesPage {
+  const empty: Game4uReportsPipelineIntegrationChangesPage = { items: [], limit: 100 };
+  if (!body || typeof body !== 'object') {
+    return empty;
+  }
+  const o = body as Record<string, unknown>;
+  const raw = o['items'] ?? o['data'] ?? o['results'] ?? o['changes'];
+  const items = Array.isArray(raw) ? (raw as PipelineIntegrationChangeRow[]) : [];
+  const limRaw = o['limit'];
+  const limit =
+    typeof limRaw === 'number' && Number.isFinite(limRaw)
+      ? Math.floor(limRaw)
+      : typeof limRaw === 'string' && limRaw.trim() !== ''
+        ? Math.floor(Number(limRaw)) || items.length || 100
+        : items.length > 0
+          ? items.length
+          : 100;
+  const offRaw = o['offset'];
+  const offset =
+    typeof offRaw === 'number' && Number.isFinite(offRaw)
+      ? Math.floor(offRaw)
+      : typeof offRaw === 'string' && offRaw.trim() !== ''
+        ? Math.floor(Number(offRaw)) || 0
+        : undefined;
+  const summaryRaw = o['summary'];
+  const summary =
+    summaryRaw && typeof summaryRaw === 'object'
+      ? (summaryRaw as PipelineIntegrationChangesSummary)
+      : undefined;
+  const totalRaw = o['total'] ?? o['count'] ?? summary?.total_changes;
+  const total =
+    typeof totalRaw === 'number' && Number.isFinite(totalRaw)
+      ? Math.floor(totalRaw)
+      : typeof totalRaw === 'string' && totalRaw.trim() !== ''
+        ? Math.floor(Number(totalRaw))
+        : undefined;
+  const params =
+    o['params'] && typeof o['params'] === 'object'
+      ? (o['params'] as Record<string, unknown>)
+      : undefined;
+  const hasMore = typeof o['has_more'] === 'boolean' ? o['has_more'] : undefined;
+  const start =
+    typeof o['start'] === 'string'
+      ? o['start']
+      : typeof params?.['start'] === 'string'
+        ? params['start']
+        : undefined;
+  const end =
+    typeof o['end'] === 'string'
+      ? o['end']
+      : typeof params?.['end'] === 'string'
+        ? params['end']
+        : undefined;
+  const phase =
+    typeof o['phase'] === 'string'
+      ? o['phase']
+      : typeof params?.['phase'] === 'string'
+        ? params['phase']
+        : undefined;
+  return {
+    items,
+    limit,
+    ...(offset != null ? { offset } : {}),
+    ...(total != null && Number.isFinite(total) ? { total } : {}),
+    ...(hasMore != null ? { has_more: hasMore } : {}),
+    ...(summary ? { summary } : {}),
+    ...(params ? { params } : {}),
+    ...(start ? { start } : {}),
+    ...(end ? { end } : {}),
+    ...(phase ? { phase } : {})
+  };
 }
 
 function supabaseGameFallbackCredentials(): boolean {

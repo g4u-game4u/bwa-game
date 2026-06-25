@@ -930,6 +930,41 @@ export class ActionLogService {
   }
 
   /**
+   * `GET /game/reports/organization/hierarchy-report/critical-clients/deliveries/export`
+   */
+  exportOrganizationHierarchyCriticalClientsDeliveries(options: {
+    month?: Date;
+    nodeType?: OrgHierarchyNodeType;
+    nodeId?: string;
+    issue?: CriticalClientIssueFilter;
+  }): Observable<HttpResponse<Blob>> {
+    if (!(isGame4uDataEnabled() && this.game4u.isConfigured())) {
+      return throwError(
+        () => new Error('[Game4U] critical-clients deliveries export: backend não configurado.')
+      );
+    }
+    const refMonth = this.resolveDashboardCachedMonth(options?.month);
+    const monthParam = this.toDashboardCachedMonthParam(refMonth);
+    const nodeType = (options.nodeType ?? '').trim();
+    const nodeId = (options.nodeId ?? '').trim();
+    const issue = (options.issue ?? 'all').trim() || 'all';
+
+    return this.game4u
+      .getGameReportsOrganizationHierarchyCriticalClientsDeliveriesExport({
+        month: monthParam,
+        issue,
+        ...(nodeType ? { node_type: nodeType } : {}),
+        ...(nodeId ? { node_id: nodeId } : {})
+      })
+      .pipe(
+        catchError(err => {
+          console.error('Error exporting organization/hierarchy-report/critical-clients/deliveries:', err);
+          return throwError(() => err);
+        })
+      );
+  }
+
+  /**
    * `GET /game/reports/organization/hierarchy-report/multa-risk`
    */
   fetchOrganizationHierarchyMultaRisk(options: {

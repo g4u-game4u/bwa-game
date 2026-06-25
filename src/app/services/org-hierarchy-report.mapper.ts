@@ -83,6 +83,8 @@ export type OrgHierarchyHighlightViewTab = 'player' | 'supervisao' | 'gerencia';
 /** Aba principal do painel de relatório organizacional. */
 export type OrgHierarchyReportPanelTab = 'operations' | 'access' | 'simulation';
 
+export type OrgHierarchyTreeViewMode = 'table' | 'flowchart';
+
 export type OrgPipelineSegmentTone = 'info' | 'warning' | 'destructive' | 'muted';
 
 export interface OrgPipelineSegment {

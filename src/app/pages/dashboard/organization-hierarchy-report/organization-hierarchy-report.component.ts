@@ -79,6 +79,8 @@ import {
   OrgClientClassificationTier,
   OrgHierarchyRankingSortBy,
   OrgHierarchyReportPanelTab,
+  OrgHierarchyTreeViewMode,
+  getOrgHierarchyNodeTypeLabel,
   OrgHierarchyWeekdayStat,
   OrgHierarchyAccessWeekdayStat,
   OrgHierarchyPlayerAccessRow,
@@ -115,6 +117,13 @@ import {
   orgHierarchyInsightsSourceLabel,
   parseOrgHierarchyInsightsError
 } from '@services/org-hierarchy-insights.mapper';
+import {
+  buildOrgHierarchyCriticalClientsDeliveriesExportFilename
+} from '@services/org-hierarchy-kpi-export.mapper';
+import {
+  downloadBlobFile,
+  parseHttpContentDispositionFilename
+} from '@utils/spreadsheet-export';
 
 @Component({
   selector: 'app-organization-hierarchy-report',
@@ -139,6 +148,7 @@ export class OrganizationHierarchyReportComponent implements OnInit, OnDestroy {
   isLoading = true;
   isLoadingInsights = false;
   isGeneratingInsights = false;
+  isExportingCriticalClientsDeliveries = false;
   hasLoadError = false;
   isEmpty = false;
   insightsNotFound = false;
@@ -148,6 +158,8 @@ export class OrganizationHierarchyReportComponent implements OnInit, OnDestroy {
   rankingSortBy: OrgHierarchyRankingSortBy = 'on_time_pct';
   rankingShowDetails = false;
   treeShowAllMetrics = false;
+  treeViewMode: OrgHierarchyTreeViewMode = 'table';
+  flowchartSearchHighlightIds = new Set<string>();
   peopleHighlightTab: 'destaques' | 'atencao' = 'destaques';
   peopleSearch = '';
   accessWeekdayView: 'days' | 'sessions' = 'days';
@@ -564,6 +576,21 @@ export class OrganizationHierarchyReportComponent implements OnInit, OnDestroy {
     this.cdr.markForCheck();
   }
 
+  onTreeViewModeChange(mode: OrgHierarchyTreeViewMode): void {
+    this.treeViewMode = mode;
+    if (mode === 'flowchart' && this.root?.children?.length) {
+      const ids = new Set(this.expandedNodeIds);
+      ids.add(this.root.node_id);
+      this.expandedNodeIds = ids;
+    }
+    this.cdr.markForCheck();
+  }
+
+  onFlowchartSearchChange(query: string): void {
+    this.applyFlowchartSearch(query);
+    this.cdr.markForCheck();
+  }
+
   onPipelineSegmentClick(segment: OrgPipelineSegment): void {
     if (!this.root) {
       return;
@@ -805,7 +832,57 @@ export class OrganizationHierarchyReportComponent implements OnInit, OnDestroy {
 
   collapseAllTreeNodes(): void {
     this.expandedNodeIds = new Set();
+    this.flowchartSearchHighlightIds = new Set();
     this.cdr.markForCheck();
+  }
+
+  private applyFlowchartSearch(query: string): void {
+    const normalizedQuery = this.normalizeFlowchartSearchText(query);
+    if (!normalizedQuery || !this.root) {
+      this.flowchartSearchHighlightIds = new Set();
+      return;
+    }
+
+    const highlights = new Set<string>();
+    const toExpand = new Set(this.expandedNodeIds);
+
+    const walk = (node: OrgHierarchyNode, ancestors: string[]): boolean => {
+      const selfMatch = this.normalizeFlowchartSearchText(
+        `${node.label ?? ''} ${getOrgHierarchyNodeTypeLabel(node.node_type)}`
+      ).includes(normalizedQuery);
+
+      let childMatch = false;
+      for (const child of node.children ?? []) {
+        if (walk(child, [...ancestors, node.node_id])) {
+          childMatch = true;
+        }
+      }
+
+      if (selfMatch) {
+        highlights.add(node.node_id);
+        for (const ancestorId of ancestors) {
+          toExpand.add(ancestorId);
+        }
+      }
+
+      if (childMatch) {
+        toExpand.add(node.node_id);
+      }
+
+      return selfMatch || childMatch;
+    };
+
+    walk(this.root, []);
+    this.flowchartSearchHighlightIds = highlights;
+    this.expandedNodeIds = toExpand;
+  }
+
+  private normalizeFlowchartSearchText(value: string | null | undefined): string {
+    return String(value ?? '')
+      .normalize('NFD')
+      .replace(/\p{M}/gu, '')
+      .toLowerCase()
+      .trim();
   }
 
   openKpiDrillDownFromTree(payload: {
@@ -903,6 +980,58 @@ export class OrganizationHierarchyReportComponent implements OnInit, OnDestroy {
       nodeLabel: node.label
     };
     this.cdr.markForCheck();
+  }
+
+  exportCriticalClientsDeliveries(): void {
+    if (this.isExportingCriticalClientsDeliveries) {
+      return;
+    }
+    const node = this.root;
+    if (!node || !this.showCriticalClientsSection) {
+      this.toastService.error('Nenhum cliente crítico para exportar.', false);
+      return;
+    }
+
+    this.isExportingCriticalClientsDeliveries = true;
+    this.cdr.markForCheck();
+
+    this.actionLogService
+      .exportOrganizationHierarchyCriticalClientsDeliveries({
+        month: this.selectedMonth,
+        nodeType: node.node_type,
+        nodeId: node.node_id,
+        issue: 'all'
+      })
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: res => {
+          this.isExportingCriticalClientsDeliveries = false;
+          const blob = res.body;
+          if (!blob || blob.size === 0) {
+            this.toastService.error('Não foi possível exportar as entregas.', false);
+            this.cdr.markForCheck();
+            return;
+          }
+          const headerFilename = parseHttpContentDispositionFilename(
+            res.headers.get('Content-Disposition')
+          );
+          const filename =
+            headerFilename ??
+            buildOrgHierarchyCriticalClientsDeliveriesExportFilename({
+              month: this.selectedMonth,
+              scopeLabel: node.label,
+              issue: 'all'
+            });
+          downloadBlobFile(blob, filename);
+          this.toastService.success('Arquivo Excel exportado.');
+          this.cdr.markForCheck();
+        },
+        error: () => {
+          this.isExportingCriticalClientsDeliveries = false;
+          this.toastService.error('Falha ao exportar entregas de clientes críticos.', false);
+          this.cdr.markForCheck();
+        }
+      });
   }
 
   onCriticalClientIssueFilterChange(issue: CriticalClientIssueFilter): void {

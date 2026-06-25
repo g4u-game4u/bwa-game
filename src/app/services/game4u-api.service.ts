@@ -51,10 +51,14 @@ import {
   OrganizationHierarchyMultaRiskResponse,
   Game4uReportsOrganizationHierarchyDeliveriesQuery,
   Game4uReportsOrganizationHierarchyClientsServedExportQuery,
+  Game4uReportsOrganizationHierarchyCriticalClientsDeliveriesExportQuery,
   OrganizationHierarchyDeliveriesResponse,
   Game4uReportsOrganizationHierarchyInsightsQuery,
   Game4uReportsOrganizationHierarchyInsightsBody,
-  OrganizationHierarchyInsightsResponse
+  OrganizationHierarchyInsightsResponse,
+  Game4uReportsPipelineIntegrationChangesQuery,
+  Game4uReportsPipelineIntegrationChangesPage,
+  normalizePipelineIntegrationChangesResponse
 } from '@model/game4u-api.model';
 import { Game4uSupabaseFallbackService } from './game4u-supabase-fallback.service';
 import {
@@ -1162,6 +1166,50 @@ export class Game4uApiService {
   }
 
   /**
+   * `GET /game/reports/organization/hierarchy-report/critical-clients/deliveries/export`
+   */
+  getGameReportsOrganizationHierarchyCriticalClientsDeliveriesExport(
+    q: Game4uReportsOrganizationHierarchyCriticalClientsDeliveriesExportQuery
+  ): Observable<HttpResponse<Blob>> {
+    if (!this.isConfigured()) {
+      return throwError(
+        () =>
+          new Error(
+            '[Game4U] reports/organization/hierarchy-report/critical-clients/deliveries/export: defina backend_url_base.'
+          )
+      );
+    }
+    const month = (q.month ?? '').trim();
+    if (!month) {
+      return throwError(
+        () =>
+          new Error(
+            '[Game4U] critical-clients/deliveries/export: informe month (YYYY-MM).'
+          )
+      );
+    }
+    const nodeType = (q.node_type ?? '').trim();
+    const nodeId = (q.node_id ?? '').trim();
+    const issue = (q.issue ?? 'all').trim() || 'all';
+    let params = new HttpParams().set('month', month).set('issue', issue);
+    if (nodeType) {
+      params = params.set('node_type', nodeType);
+    }
+    if (nodeId) {
+      params = params.set('node_id', nodeId);
+    }
+    return this.http.get(
+      `${this.baseUrl}/game/reports/organization/hierarchy-report/critical-clients/deliveries/export`,
+      {
+        headers: this.headers(),
+        params,
+        observe: 'response',
+        responseType: 'blob'
+      }
+    );
+  }
+
+  /**
    * `GET /game/reports/organization/hierarchy-report/deliveries`
    */
   getGameReportsOrganizationHierarchyDeliveries(
@@ -1285,6 +1333,47 @@ export class Game4uApiService {
           this.reportsOrganizationHierarchyInsightsCache.delete(key);
         })
       );
+  }
+
+  /**
+   * `GET /game/reports/pipeline-integration/changes` — log de `pipeline_integracao_changes` (ADMIN).
+   */
+  getGameReportsPipelineIntegrationChanges(
+    q: Game4uReportsPipelineIntegrationChangesQuery
+  ): Observable<Game4uReportsPipelineIntegrationChangesPage> {
+    if (!this.isConfigured()) {
+      return throwError(
+        () =>
+          new Error('[Game4U] reports/pipeline-integration/changes: defina backend_url_base.')
+      );
+    }
+    const start = (q.start ?? '').trim();
+    const end = (q.end ?? '').trim();
+    if (!start || !end) {
+      return throwError(
+        () =>
+          new Error(
+            '[Game4U] reports/pipeline-integration/changes: informe start e end (ISO 8601).'
+          )
+      );
+    }
+    let params = new HttpParams().set('start', start).set('end', end);
+    const phase = (q.phase ?? '').trim();
+    if (phase) {
+      params = params.set('phase', phase);
+    }
+    if (q.limit != null && Number.isFinite(q.limit) && q.limit > 0) {
+      params = params.set('limit', String(Math.floor(q.limit)));
+    }
+    if (q.offset != null && Number.isFinite(q.offset) && q.offset >= 0) {
+      params = params.set('offset', String(Math.floor(q.offset)));
+    }
+    return this.http
+      .get<unknown>(`${this.baseUrl}/game/reports/pipeline-integration/changes`, {
+        headers: this.headers(),
+        params
+      })
+      .pipe(map(body => normalizePipelineIntegrationChangesResponse(body)));
   }
 
   /**

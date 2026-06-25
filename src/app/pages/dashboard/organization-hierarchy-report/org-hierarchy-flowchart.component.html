@@ -1,0 +1,150 @@
+<div class="org-flowchart-panel">
+  <div class="org-flowchart-toolbar">
+    <div class="org-flowchart-toolbar__search">
+      <i class="ri-search-line" aria-hidden="true"></i>
+      <input
+        type="search"
+        class="org-flowchart-search"
+        placeholder="Buscar área, diretoria, gerência, time ou colaborador…"
+        [value]="searchQuery"
+        (input)="onSearchInput($any($event.target).value)"
+        aria-label="Buscar na hierarquia" />
+      <button
+        *ngIf="hasSearch"
+        type="button"
+        class="org-flowchart-search-clear"
+        (click)="clearSearch()"
+        aria-label="Limpar busca">
+        <i class="ri-close-line" aria-hidden="true"></i>
+      </button>
+    </div>
+
+    <div class="org-flowchart-legend" aria-label="Legenda de níveis hierárquicos">
+      <span class="org-flowchart-legend__item" *ngFor="let item of legendItems">
+        <i class="org-flowchart-legend__swatch" [style.background]="item.color" aria-hidden="true"></i>
+        {{ item.label }}
+      </span>
+    </div>
+
+    <div class="org-flowchart-actions">
+      <button type="button" class="org-flowchart-action" (click)="expandAll.emit()">
+        <i class="ri-node-tree" aria-hidden="true"></i>
+        Expandir tudo
+      </button>
+      <button type="button" class="org-flowchart-action" (click)="collapseAll.emit()">
+        <i class="ri-contract-left-right-line" aria-hidden="true"></i>
+        Recolher tudo
+      </button>
+    </div>
+  </div>
+
+  <p class="org-flowchart-hint" role="note">
+    <i class="ri-information-line" aria-hidden="true"></i>
+    Clique numa caixa para selecionar · <strong>+</strong>/<strong>−</strong> para expandir subníveis ·
+    <strong>scroll</strong> para zoom · arraste o fundo para mover
+  </p>
+
+  <div
+    *ngIf="selectedNode as node"
+    class="org-flowchart-detail"
+    role="region"
+    [attr.aria-label]="'Detalhes de ' + node.label">
+    <div class="org-flowchart-detail__head">
+      <div>
+        <p class="org-flowchart-detail__eyebrow">{{ nodeTypeLabel(node) }}</p>
+        <h3 class="org-flowchart-detail__title">{{ node.label }}</h3>
+      </div>
+      <span class="org-flowchart-detail__people">
+        {{ node.players_count | number:'1.0-0':'pt-BR' }}
+        {{ node.players_count === 1 ? 'colaborador' : 'colaboradores' }}
+      </span>
+    </div>
+    <div class="org-flowchart-detail__metrics">
+      <div class="org-flowchart-detail__metric">
+        <span class="org-flowchart-detail__metric-label">Pontos MTD</span>
+        <span class="org-flowchart-detail__metric-value">{{ formatPoints(node) }}</span>
+      </div>
+      <div class="org-flowchart-detail__metric">
+        <span class="org-flowchart-detail__metric-label">% no prazo</span>
+        <span
+          class="org-flowchart-detail__metric-value org-flowchart-detail__metric-value--on-time org-flowchart-detail__metric-value--{{ onTimeTone(node) }}">
+          {{ formatOnTime(node) }}
+        </span>
+      </div>
+      <div class="org-flowchart-detail__metric">
+        <span class="org-flowchart-detail__metric-label">Entregas</span>
+        <span class="org-flowchart-detail__metric-value">{{ formatFinished(node) }}</span>
+      </div>
+      <div class="org-flowchart-detail__metric">
+        <span class="org-flowchart-detail__metric-label">Pendentes</span>
+        <span class="org-flowchart-detail__metric-value">{{ formatPending(node) }}</span>
+      </div>
+      <div class="org-flowchart-detail__metric">
+        <span class="org-flowchart-detail__metric-label">vs MTD anterior</span>
+        <span
+          class="org-flowchart-detail__metric-value org-flowchart-detail__metric-value--compare org-flowchart-detail__metric-value--{{ mtdCompareTone(node) }}">
+          {{ mtdComparePct(node) }}
+        </span>
+      </div>
+      <div class="org-flowchart-detail__metric" *ngIf="node.balance_score != null">
+        <span class="org-flowchart-detail__metric-label">Balance</span>
+        <span class="org-flowchart-detail__metric-value">{{ node.balance_score | number:'1.0-0':'pt-BR' }}</span>
+      </div>
+    </div>
+  </div>
+
+  <div
+    class="org-flowchart-viewport"
+    #viewport
+    [class.org-flowchart-viewport--panning]="isPanning"
+    role="region"
+    aria-label="Organograma interativo">
+    <div class="org-flowchart-stage" #stage>
+      <c4u-org-hierarchy-flowchart-node
+        [node]="root"
+        [expandedIds]="expandedIds"
+        [searchHighlightIds]="searchHighlightIds"
+        [selectedNodeId]="selectedNodeId"
+        (toggleNode)="toggleNode.emit($event)"
+        (selectNode)="onNodeSelect($event)"
+        (kpiClick)="kpiClick.emit($event)">
+      </c4u-org-hierarchy-flowchart-node>
+    </div>
+
+    <div class="org-flowchart-zoom" role="group" aria-label="Controles de zoom">
+      <button
+        type="button"
+        class="org-flowchart-zoom__btn"
+        (click)="zoomOut()"
+        [disabled]="zoomLevel <= minZoom + 0.01"
+        aria-label="Diminuir zoom">
+        <i class="ri-subtract-line" aria-hidden="true"></i>
+      </button>
+      <span class="org-flowchart-zoom__label" aria-live="polite">{{ zoomPercentLabel }}</span>
+      <button
+        type="button"
+        class="org-flowchart-zoom__btn"
+        (click)="zoomIn()"
+        [disabled]="zoomLevel >= maxZoom - 0.01"
+        aria-label="Aumentar zoom">
+        <i class="ri-add-line" aria-hidden="true"></i>
+      </button>
+      <span class="org-flowchart-zoom__divider" aria-hidden="true"></span>
+      <button
+        type="button"
+        class="org-flowchart-zoom__btn org-flowchart-zoom__btn--text"
+        (click)="resetZoom()"
+        title="Voltar zoom para 100%">
+        100%
+      </button>
+      <button
+        type="button"
+        class="org-flowchart-zoom__btn org-flowchart-zoom__btn--text"
+        (click)="fitToView()"
+        title="Ajustar organograma à área visível">
+        <i class="ri-fullscreen-line" aria-hidden="true"></i>
+        Ajustar
+      </button>
+    </div>
+  </div>
+</div>
