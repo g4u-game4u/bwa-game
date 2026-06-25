@@ -182,7 +182,7 @@
               class="deliveries-search-bar__input"
               [value]="clientListSearchQuery"
               (input)="onClientListSearchInput($event)"
-              placeholder="Buscar por cliente, CNPJ, responsável ou hierarquia…"
+              placeholder="Buscar por cliente, responsável ou hierarquia…"
               aria-label="Buscar clientes" />
             <button
               *ngIf="hasClientListSearch"
@@ -226,7 +226,7 @@
               <thead>
                 <tr>
                   <th>Cliente</th>
-                  <th>CNPJ / ID</th>
+                  <th *ngIf="showClientListClassificationColumn">Classificação</th>
                   <th *ngIf="showClientListTagsColumn">Tags</th>
                   <th>Diretoria</th>
                   <th>Gerência</th>
@@ -238,7 +238,7 @@
                 <tr
                   *ngFor="let client of filteredClientListItems; trackBy: trackByClientListItem">
                   <td>{{ client.company_name }}</td>
-                  <td>{{ client.company_serve_key }}</td>
+                  <td *ngIf="showClientListClassificationColumn">{{ clientListClassificationLabel(client) }}</td>
                   <td *ngIf="showClientListTagsColumn">{{ clientListTagsLabel(client) }}</td>
                   <td>{{ client.diretor_name || '—' }}</td>
                   <td>{{ client.gerente_name || '—' }}</td>

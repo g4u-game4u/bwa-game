@@ -8,9 +8,7 @@ import {
   ViewChild,
   ElementRef,
   AfterViewInit,
-  OnDestroy,
-  OnChanges,
-  SimpleChanges
+  OnDestroy
 } from '@angular/core';
 import panzoom, { PanZoom } from 'panzoom';
 import { OrgHierarchyNode, OrgHierarchyNodeType, OrgHierarchyKpiDetailKey } from '@model/game4u-api.model';
@@ -27,7 +25,7 @@ import {
   styleUrls: ['./org-hierarchy-flowchart.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush
 })
-export class C4uOrgHierarchyFlowchartComponent implements AfterViewInit, OnDestroy, OnChanges {
+export class C4uOrgHierarchyFlowchartComponent implements AfterViewInit, OnDestroy {
   @Input() root!: OrgHierarchyNode;
   @Input() expandedIds = new Set<string>();
   @Input() searchHighlightIds = new Set<string>();
@@ -90,12 +88,6 @@ export class C4uOrgHierarchyFlowchartComponent implements AfterViewInit, OnDestr
   ngAfterViewInit(): void {
     this.initPanzoom();
     this.scheduleFitToView();
-  }
-
-  ngOnChanges(changes: SimpleChanges): void {
-    if (changes['expandedIds'] && !changes['expandedIds'].firstChange) {
-      this.scheduleFitToView();
-    }
   }
 
   ngOnDestroy(): void {

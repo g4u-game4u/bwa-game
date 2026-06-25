@@ -31,6 +31,7 @@ import { ActionLogService } from '@services/action-log.service';
 import {
   getOrgHierarchyDeliveryActionTitle,
   getOrgHierarchyDeliveryCompanyLabel,
+  formatOrgHierarchyDrilldownModalTitle,
   isOrgHierarchyDeliveriesDrilldownKpi
 } from '@services/org-hierarchy-report.mapper';
 import {
@@ -64,10 +65,12 @@ import {
   buildOrgHierarchyClientListExportFilename,
   buildOrgHierarchyClientListTabs,
   filterOrgHierarchyClientListItems,
+  formatOrgHierarchyClientClassificationLabel,
   formatOrgHierarchyClientListTags,
   getClientListItems,
   getDefaultClientListKeyForKpi,
   getOrgHierarchyClientListLabel,
+  isOrgHierarchyClassificationClientListKey,
   isOrgHierarchyTagClientListKey,
   mapOrgHierarchyClientListForExport,
   shouldFetchOrgHierarchyClientLists,
@@ -284,7 +287,10 @@ export class ModalOrganizationHierarchyKpiDetailComponent implements OnInit, OnC
   }
 
   get clientListTabs(): OrgHierarchyClientListTab[] {
-    return buildOrgHierarchyClientListTabs(this.kpiDetail?.client_lists);
+    return buildOrgHierarchyClientListTabs(this.kpiDetail?.client_lists, {
+      includeAllServed: this.kpi === 'clients_served',
+      kpi: this.kpi ?? null
+    });
   }
 
   get activeClientListItems(): OrgHierarchyClientListItem[] {
@@ -300,7 +306,17 @@ export class ModalOrganizationHierarchyKpiDetailComponent implements OnInit, OnC
   }
 
   get showClientListTagsColumn(): boolean {
-    return this.clientListFilter === 'clients_served';
+    return (
+      this.clientListFilter === 'clients_served' ||
+      isOrgHierarchyTagClientListKey(this.clientListFilter)
+    );
+  }
+
+  get showClientListClassificationColumn(): boolean {
+    return (
+      isOrgHierarchyClassificationClientListKey(this.clientListFilter) ||
+      this.clientListFilter === 'clients_served'
+    );
   }
 
   get activeClientListLabel(): string {
@@ -378,22 +394,14 @@ export class ModalOrganizationHierarchyKpiDetailComponent implements OnInit, OnC
     if (this.criticalClient) {
       const issueSuffix =
         this.issueFilter !== 'all' ? ` · ${getCriticalClientIssueFilterLabel(this.issueFilter)}` : '';
-      const scope = this.nodeLabel?.trim();
       const base = `Entregas · ${this.criticalClient.company_label}${issueSuffix}`;
-      if (!scope || scope === 'Escopo') {
-        return base;
-      }
-      return `${base} (${scope})`;
+      return formatOrgHierarchyDrilldownModalTitle(base, this.nodeLabel);
     }
     const kpiLabel =
       this.deliveries?.drilldown_label ??
       this.kpiDetail?.kpi_label ??
       this.kpiLabelFallback;
-    const scope = this.nodeLabel?.trim();
-    if (!scope || scope === 'Escopo') {
-      return kpiLabel;
-    }
-    return `${kpiLabel} (${scope})`;
+    return formatOrgHierarchyDrilldownModalTitle(kpiLabel, this.nodeLabel);
   }
 
   readonly skeletonCompareSlots = [0, 1, 2];
@@ -436,6 +444,18 @@ export class ModalOrganizationHierarchyKpiDetailComponent implements OnInit, OnC
         return 'Clientes Acessórias (onboarding)';
       case 'clients_acessorias_g4':
         return 'Clientes Acessórias (G4)';
+      case 'clients_classificacao_1':
+        return 'Classificação 1 (Stone)';
+      case 'clients_classificacao_2':
+        return 'Classificação 2 (Bronze)';
+      case 'clients_classificacao_3':
+        return 'Classificação 3 (Prata)';
+      case 'clients_classificacao_4':
+        return 'Classificação 4 (Ouro)';
+      case 'clients_classificacao_5':
+        return 'Classificação 5 (Diamante)';
+      case 'clients_sem_classificacao':
+        return 'Sem classificação no portal';
       default:
         return this.kpi ?? 'Detalhamento';
     }
@@ -638,7 +658,8 @@ export class ModalOrganizationHierarchyKpiDetailComponent implements OnInit, OnC
       includePointsColumn: this.showDeliveryPointsColumn,
       includeStatusColumns: this.showDeliveryStatusColumn,
       includeDelayWithFinished: this.kpi === 'multa_incurred' || this.isCriticalClientDrilldown,
-      includeIssueKindColumn: this.showDeliveryIssueKindColumn
+      includeIssueKindColumn: this.showDeliveryIssueKindColumn,
+      includeCnpj: format === 'xlsx'
     });
     if (rows.length === 0) {
       this.toastService.error('Nenhuma entrega para exportar.', false);
@@ -697,13 +718,19 @@ export class ModalOrganizationHierarchyKpiDetailComponent implements OnInit, OnC
     return formatOrgHierarchyClientListTags(client) || '—';
   }
 
+  clientListClassificationLabel(client: OrgHierarchyClientListItem): string {
+    return formatOrgHierarchyClientClassificationLabel(client);
+  }
+
   clientListPlayerLabel(client: OrgHierarchyClientListItem): string {
     return client.player_name ?? client.player_email ?? '—';
   }
 
   exportClientList(format: SpreadsheetExportFormat): void {
     const rows = mapOrgHierarchyClientListForExport(this.filteredClientListItems, {
-      includeTags: this.showClientListTagsColumn
+      includeTags: this.showClientListTagsColumn,
+      includeClassification: this.showClientListClassificationColumn,
+      includeCnpj: format === 'xlsx'
     });
     if (rows.length === 0) {
       this.toastService.error('Nenhum cliente para exportar.', false);

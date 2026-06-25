@@ -12,28 +12,55 @@ export const ORG_HIERARCHY_CLIENT_LIST_KPIS = new Set<OrgHierarchyKpiDetailKey>(
   'clients_served',
   'clients_acessorias_g4',
   'clients_acessorias_onboarding',
-  'clients_acessorias_risco_de_churn'
+  'clients_acessorias_risco_de_churn',
+  'clients_classificacao_1',
+  'clients_classificacao_2',
+  'clients_classificacao_3',
+  'clients_classificacao_4',
+  'clients_classificacao_5',
+  'clients_sem_classificacao'
 ]);
 
-/** Listas tag Acessórias — únicas carregadas sob demanda no drill-down. */
+/** Listas tag Acessórias — carregadas sob demanda no drill-down. */
 export const ORG_HIERARCHY_TAG_CLIENT_LIST_KEYS = new Set<OrgHierarchyClientListKey>([
   'clients_acessorias_g4',
   'clients_acessorias_onboarding',
   'clients_acessorias_risco_de_churn'
 ]);
 
+export const ORG_HIERARCHY_CLASSIFICATION_CLIENT_LIST_KEYS = new Set<OrgHierarchyClientListKey>([
+  'clients_classificacao_1',
+  'clients_classificacao_2',
+  'clients_classificacao_3',
+  'clients_classificacao_4',
+  'clients_classificacao_5',
+  'clients_sem_classificacao'
+]);
+
 const CLIENT_LIST_LABELS: Record<OrgHierarchyClientListKey, string> = {
   clients_served: 'Atendidos (total)',
   clients_acessorias_g4: 'G4',
   clients_acessorias_onboarding: 'Onboarding',
-  clients_acessorias_risco_de_churn: 'Risco churn'
+  clients_acessorias_risco_de_churn: 'Risco churn',
+  clients_classificacao_1: 'Classificação 1 (Stone)',
+  clients_classificacao_2: 'Classificação 2 (Bronze)',
+  clients_classificacao_3: 'Classificação 3 (Prata)',
+  clients_classificacao_4: 'Classificação 4 (Ouro)',
+  clients_classificacao_5: 'Classificação 5 (Diamante)',
+  clients_sem_classificacao: 'Sem classificação'
 };
 
 const CLIENT_LIST_EXPORT_SLUGS: Record<OrgHierarchyClientListKey, string> = {
   clients_served: 'clientes-atendidos',
   clients_acessorias_g4: 'clientes-g4',
   clients_acessorias_onboarding: 'clientes-onboarding',
-  clients_acessorias_risco_de_churn: 'clientes-risco-churn'
+  clients_acessorias_risco_de_churn: 'clientes-risco-churn',
+  clients_classificacao_1: 'clientes-classificacao-1',
+  clients_classificacao_2: 'clientes-classificacao-2',
+  clients_classificacao_3: 'clientes-classificacao-3',
+  clients_classificacao_4: 'clientes-classificacao-4',
+  clients_classificacao_5: 'clientes-classificacao-5',
+  clients_sem_classificacao: 'clientes-sem-classificacao'
 };
 
 export interface OrgHierarchyClientListTab {
@@ -55,6 +82,20 @@ function pickString(obj: Record<string, unknown>, keys: string[]): string {
 function pickNullableString(obj: Record<string, unknown>, keys: string[]): string | null {
   const value = pickString(obj, keys);
   return value || null;
+}
+
+function pickOptionalNumber(obj: Record<string, unknown>, keys: string[]): number | null | undefined {
+  for (const key of keys) {
+    const raw = obj[key];
+    if (raw == null || raw === '') {
+      continue;
+    }
+    const n = Number(raw);
+    if (Number.isFinite(n)) {
+      return n;
+    }
+  }
+  return undefined;
 }
 
 function pickBoolean(obj: Record<string, unknown>, keys: string[]): boolean {
@@ -88,7 +129,13 @@ export function normalizeOrgHierarchyClientListItem(raw: unknown): OrgHierarchyC
   }
   return {
     company_serve_key: company_serve_key || company_name,
+    company_cnpj_digits: pickNullableString(o, ['company_cnpj_digits', 'companyCnpjDigits']),
     company_name: company_name || company_serve_key,
+    acessorias_classificacao: pickOptionalNumber(o, [
+      'acessorias_classificacao',
+      'acessoriasClassificacao',
+      'classificacao'
+    ]),
     is_acessorias_g4: pickBoolean(o, ['is_acessorias_g4', 'isAcessoriasG4']),
     is_acessorias_onboarding: pickBoolean(o, ['is_acessorias_onboarding', 'isAcessoriasOnboarding']),
     is_acessorias_risco_de_churn: pickBoolean(o, [
@@ -127,6 +174,24 @@ export function normalizeOrgHierarchyClientLists(raw: unknown): OrgHierarchyClie
     ),
     clients_acessorias_risco_de_churn: normalizeClientListArray(
       o['clients_acessorias_risco_de_churn'] ?? o['clientsAcessoriasRiscoDeChurn']
+    ),
+    clients_classificacao_1: normalizeClientListArray(
+      o['clients_classificacao_1'] ?? o['clientsClassificacao1']
+    ),
+    clients_classificacao_2: normalizeClientListArray(
+      o['clients_classificacao_2'] ?? o['clientsClassificacao2']
+    ),
+    clients_classificacao_3: normalizeClientListArray(
+      o['clients_classificacao_3'] ?? o['clientsClassificacao3']
+    ),
+    clients_classificacao_4: normalizeClientListArray(
+      o['clients_classificacao_4'] ?? o['clientsClassificacao4']
+    ),
+    clients_classificacao_5: normalizeClientListArray(
+      o['clients_classificacao_5'] ?? o['clientsClassificacao5']
+    ),
+    clients_sem_classificacao: normalizeClientListArray(
+      o['clients_sem_classificacao'] ?? o['clientsSemClassificacao']
     )
   };
 }
@@ -200,7 +265,7 @@ export function supportsOrgHierarchyClientListKpi(kpi: OrgHierarchyKpiDetailKey)
   return ORG_HIERARCHY_CLIENT_LIST_KPIS.has(kpi);
 }
 
-/** Só dispara `/kpi-detail` com `client_lists` para tags (G4 / onboarding / churn). */
+/** Dispara `/kpi-detail` com `client_lists` para KPIs de clientes/classificação. */
 export function shouldFetchOrgHierarchyClientLists(
   kpi: OrgHierarchyKpiDetailKey | undefined | null,
   initialClientListKey?: OrgHierarchyClientListKey | null
@@ -208,14 +273,10 @@ export function shouldFetchOrgHierarchyClientLists(
   if (!kpi) {
     return false;
   }
-  if (initialClientListKey && ORG_HIERARCHY_TAG_CLIENT_LIST_KEYS.has(initialClientListKey)) {
+  if (initialClientListKey) {
     return true;
   }
-  return (
-    kpi === 'clients_acessorias_g4' ||
-    kpi === 'clients_acessorias_onboarding' ||
-    kpi === 'clients_acessorias_risco_de_churn'
-  );
+  return supportsOrgHierarchyClientListKpi(kpi);
 }
 
 export function isOrgHierarchyTagClientListKey(
@@ -224,13 +285,15 @@ export function isOrgHierarchyTagClientListKey(
   return !!key && ORG_HIERARCHY_TAG_CLIENT_LIST_KEYS.has(key);
 }
 
+export function isOrgHierarchyClassificationClientListKey(
+  key: OrgHierarchyClientListKey | null | undefined
+): boolean {
+  return !!key && ORG_HIERARCHY_CLASSIFICATION_CLIENT_LIST_KEYS.has(key);
+}
+
 export function getDefaultClientListKeyForKpi(kpi: OrgHierarchyKpiDetailKey): OrgHierarchyClientListKey {
-  if (
-    kpi === 'clients_acessorias_g4' ||
-    kpi === 'clients_acessorias_onboarding' ||
-    kpi === 'clients_acessorias_risco_de_churn'
-  ) {
-    return kpi;
+  if (ORG_HIERARCHY_CLIENT_LIST_KPIS.has(kpi)) {
+    return kpi as OrgHierarchyClientListKey;
   }
   return 'clients_served';
 }
@@ -252,26 +315,33 @@ export function hasOrgHierarchyClientLists(
   if (!clientLists) {
     return false;
   }
-  return (
-    clientLists.clients_served.length > 0 ||
-    clientLists.clients_acessorias_g4.length > 0 ||
-    clientLists.clients_acessorias_onboarding.length > 0 ||
-    clientLists.clients_acessorias_risco_de_churn.length > 0
+  return (Object.keys(CLIENT_LIST_LABELS) as OrgHierarchyClientListKey[]).some(
+    key => getClientListItems(clientLists, key).length > 0
   );
 }
 
 export function buildOrgHierarchyClientListTabs(
   clientLists: OrgHierarchyClientLists | undefined | null,
-  options?: { includeAllServed?: boolean }
+  options?: { includeAllServed?: boolean; kpi?: OrgHierarchyKpiDetailKey | null }
 ): OrgHierarchyClientListTab[] {
   if (!clientLists) {
     return [];
   }
-  const keys = (
-    options?.includeAllServed
-      ? (Object.keys(CLIENT_LIST_LABELS) as OrgHierarchyClientListKey[])
-      : Array.from(ORG_HIERARCHY_TAG_CLIENT_LIST_KEYS)
-  ) as OrgHierarchyClientListKey[];
+  let keys: OrgHierarchyClientListKey[];
+  if (options?.kpi && ORG_HIERARCHY_CLASSIFICATION_CLIENT_LIST_KEYS.has(options.kpi as OrgHierarchyClientListKey)) {
+    keys = [options.kpi as OrgHierarchyClientListKey];
+  } else if (options?.kpi && ORG_HIERARCHY_TAG_CLIENT_LIST_KEYS.has(options.kpi as OrgHierarchyClientListKey)) {
+    keys = [options.kpi as OrgHierarchyClientListKey];
+  } else {
+    keys = (
+      options?.includeAllServed
+        ? (Object.keys(CLIENT_LIST_LABELS) as OrgHierarchyClientListKey[])
+        : [
+            ...Array.from(ORG_HIERARCHY_TAG_CLIENT_LIST_KEYS),
+            ...Array.from(ORG_HIERARCHY_CLASSIFICATION_CLIENT_LIST_KEYS)
+          ]
+    ) as OrgHierarchyClientListKey[];
+  }
 
   return keys
     .map(key => ({
@@ -296,6 +366,20 @@ export function formatOrgHierarchyClientListTags(item: OrgHierarchyClientListIte
   return tags.join(', ');
 }
 
+export function formatOrgHierarchyClientListCnpj(item: OrgHierarchyClientListItem): string {
+  return item.company_cnpj_digits?.trim() || item.company_serve_key?.trim() || '—';
+}
+
+export function formatOrgHierarchyClientClassificationLabel(
+  item: OrgHierarchyClientListItem
+): string {
+  const value = item.acessorias_classificacao;
+  if (value == null || !Number.isFinite(value)) {
+    return 'Sem classificação';
+  }
+  return String(Math.trunc(value));
+}
+
 function normalizeSearchTerm(value: string): string {
   return value
     .normalize('NFD')
@@ -317,6 +401,7 @@ export function filterOrgHierarchyClientListItems(
       [
         item.company_name,
         item.company_serve_key,
+        item.company_cnpj_digits,
         item.player_name,
         item.player_email,
         item.diretor_name,
@@ -333,18 +418,24 @@ export function filterOrgHierarchyClientListItems(
 
 export function mapOrgHierarchyClientListForExport(
   items: OrgHierarchyClientListItem[],
-  options: { includeTags: boolean }
+  options: { includeTags: boolean; includeClassification?: boolean; includeCnpj?: boolean }
 ): Record<string, string>[] {
   return items.map(item => {
     const row: Record<string, string> = {
       Cliente: item.company_name,
-      'CNPJ / ID': item.company_serve_key,
+      'Chave cliente': item.company_serve_key,
       Diretoria: item.diretor_name ?? '',
       Gerência: item.gerente_name ?? '',
       Supervisão: item.supervisor_name ?? '',
       Colaborador: item.player_name ?? item.player_email ?? '',
       'E-mail colaborador': item.player_email ?? ''
     };
+    if (options.includeCnpj) {
+      row['CNPJ'] = item.company_cnpj_digits ?? '';
+    }
+    if (options.includeClassification) {
+      row['Classificação Acessórias'] = formatOrgHierarchyClientClassificationLabel(item);
+    }
     if (options.includeTags) {
       row['Tags'] = formatOrgHierarchyClientListTags(item);
     }

@@ -1974,6 +1974,39 @@
     }
   }
 
+  &__header-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    width: 100%;
+  }
+
+  &__export-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 8px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.05);
+    color: $text-secondary;
+    font-size: $font-size-caption;
+    font-weight: 600;
+    cursor: pointer;
+
+    &:hover:not(:disabled) {
+      color: $text-primary;
+      border-color: rgba(255, 255, 255, 0.2);
+      background: rgba(255, 255, 255, 0.08);
+    }
+
+    &:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+  }
+
   &__label {
     margin: 0;
     font-size: $font-size-caption;
@@ -2011,6 +2044,14 @@
     height: 100%;
     border-radius: inherit;
     background: linear-gradient(90deg, rgba(59, 130, 246, 0.85), rgba(96, 165, 250, 0.95));
+
+    &--positive {
+      background: linear-gradient(90deg, rgba(34, 197, 94, 0.85), rgba(74, 222, 128, 0.95));
+    }
+
+    &--negative {
+      background: linear-gradient(90deg, rgba(239, 68, 68, 0.85), rgba(248, 113, 113, 0.95));
+    }
   }
 
   &__delta {
@@ -2188,6 +2229,71 @@
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: $spacing-sm;
   margin-top: $spacing-md;
+}
+
+.on-time-segments {
+  margin-top: $spacing-lg;
+  padding-top: $spacing-md;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+
+  &__title {
+    margin: 0 0 $spacing-sm;
+    font-size: $font-size-small;
+    font-weight: 600;
+    color: $text-secondary;
+  }
+
+  &__grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: $spacing-sm;
+  }
+}
+
+.on-time-segment {
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: $border-radius-sm;
+  background: rgba(255, 255, 255, 0.03);
+
+  &--general {
+    border-color: rgba(59, 130, 246, 0.25);
+    background: rgba(59, 130, 246, 0.06);
+  }
+
+  &__head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+
+  &__label {
+    font-size: $font-size-caption;
+    color: $text-secondary;
+    font-weight: 600;
+  }
+
+  &__value {
+    font-size: 1rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    color: $text-primary;
+  }
+
+  &__gauge {
+    height: 6px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.08);
+    overflow: hidden;
+  }
+
+  &__gauge-fill {
+    height: 100%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, rgba(34, 197, 94, 0.85), rgba(74, 222, 128, 0.95));
+  }
 }
 
 .pipeline-chip {
@@ -2611,6 +2717,10 @@
   gap: 10px;
 }
 
+.critical-clients-view-all-btn {
+  @extend .critical-clients-export-btn;
+}
+
 .critical-clients-export-btn {
   display: inline-flex;
   align-items: center;
@@ -2682,12 +2792,21 @@
 }
 
 .critical-clients-table {
+  th,
+  td {
+    vertical-align: middle;
+  }
+
   &__name-col {
     min-width: 180px;
+  }
+
+  &__name-cell {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 8px;
+    width: 100%;
   }
 
   &__name {
@@ -2869,6 +2988,7 @@
     &--level-3 { background: #c0c0c0; }
     &--level-4 { background: #fbbf24; }
     &--level-5 { background: #38bdf8; }
+    &--level-0 { background: #94a3b8; }
   }
 
   &__list {
@@ -2880,12 +3000,43 @@
     gap: 8px;
   }
 
-  li {
+  &__item {
     display: grid;
-    grid-template-columns: 12px 1fr auto auto;
+    grid-template-columns: 12px 1fr auto auto 16px;
     gap: 10px;
     align-items: center;
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: $border-radius-sm;
+    background: rgba(255, 255, 255, 0.03);
     font-size: 0.875rem;
+    text-align: left;
+    cursor: pointer;
+    transition: border-color 0.2s ease, background 0.2s ease;
+
+    &:hover:not(:disabled) {
+      border-color: rgba(255, 255, 255, 0.16);
+      background: rgba(255, 255, 255, 0.06);
+    }
+
+    &:disabled {
+      opacity: 0.45;
+      cursor: default;
+    }
+
+    &--level-0 {
+      border-style: dashed;
+    }
+  }
+
+  &__chevron {
+    color: $text-secondary;
+    font-size: 1rem;
+  }
+
+  li {
+    list-style: none;
   }
 
   &__dot {
@@ -2898,6 +3049,7 @@
     &--level-3 { background: #c0c0c0; }
     &--level-4 { background: #fbbf24; }
     &--level-5 { background: #38bdf8; }
+    &--level-0 { background: #94a3b8; }
   }
 
   &__name {

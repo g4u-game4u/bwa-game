@@ -181,7 +181,12 @@
                 (click)="openKpiDrillDown('points_delivered', root!)"
                 [attr.aria-label]="'Abrir histórico de pontos entregues (MTD)'">
                 <p class="hero-kpi__label">Pontos entregues (MTD)</p>
-                <p class="hero-kpi__value">{{ root.mtd.points_delivered | number:'1.0-0':'pt-BR' }}</p>
+                <p class="hero-kpi__value" *ngIf="showHeroPointsGoal; else heroPointsRawValue">
+                  {{ heroPointsGoalPctLabel }}
+                </p>
+                <ng-template #heroPointsRawValue>
+                  <p class="hero-kpi__value">{{ root.mtd.points_delivered | number:'1.0-0':'pt-BR' }}</p>
+                </ng-template>
                 <div class="hero-kpi__progress" *ngIf="showHeroPointsGoal" aria-hidden="true">
                   <div
                     class="hero-kpi__progress-fill"
@@ -191,9 +196,7 @@
                   </div>
                 </div>
                 <div class="hero-kpi__delta">
-                  <span class="hero-kpi__hint" *ngIf="showHeroPointsGoal && heroPointsGoalPctLabel">
-                    meta {{ root.mtd.goal_points | number:'1.0-0':'pt-BR' }} pts · {{ heroPointsGoalPctLabel }} da meta
-                  </span>
+                  <span class="hero-kpi__hint" *ngIf="heroPointsDetailLabel">{{ heroPointsDetailLabel }}</span>
                   <span
                     class="delta-pill"
                     [class.delta-pill--positive]="mtdCompareTone(root.compare.vs_prev_mtd_points_pct) === 'positive'"
@@ -213,13 +216,26 @@
                 [attr.aria-label]="'Abrir histórico de entregas no prazo (MTD)'">
                 <p class="hero-kpi__label">% no prazo</p>
                 <div class="hero-kpi__row">
-                  <p class="hero-kpi__value">{{ root.mtd.on_time_pct | number:'1.1-1':'pt-BR' }}%</p>
+                  <p class="hero-kpi__value">{{ heroOnTimePctLabel || '—' }}</p>
                   <div class="hero-kpi__gauge" aria-hidden="true">
-                    <div class="hero-kpi__gauge-fill" [style.width.%]="onTimeGaugePct()"></div>
+                    <div
+                      class="hero-kpi__gauge-fill"
+                      [class.hero-kpi__gauge-fill--positive]="heroOnTimeTone === 'positive'"
+                      [class.hero-kpi__gauge-fill--negative]="heroOnTimeTone === 'negative'"
+                      [style.width.%]="onTimeGaugePct()">
+                    </div>
                   </div>
                 </div>
                 <div class="hero-kpi__delta">
-                  <span class="hero-kpi__hint">meta 90%</span>
+                  <span class="hero-kpi__hint">{{ heroOnTimeMetaLabel }}</span>
+                </div>
+                <div class="hero-kpi__breakdown" *ngIf="heroOnTimePctBreakdown.length > 0">
+                  <span
+                    class="hero-kpi__breakdown-item"
+                    *ngFor="let segment of heroOnTimePctBreakdown">
+                    <span class="hero-kpi__breakdown-value">{{ formatHeroOnTimePct(segment.value) }}</span>
+                    <span class="hero-kpi__breakdown-label">{{ segment.label }}</span>
+                  </span>
                 </div>
               </button>
 
@@ -229,7 +245,12 @@
                 (click)="openKpiDrillDown('finished', root!)"
                 [attr.aria-label]="'Abrir histórico de entregas concluídas (MTD)'">
                 <p class="hero-kpi__label">Entregas concluídas</p>
-                <p class="hero-kpi__value">{{ root.mtd.finished | number:'1.0-0':'pt-BR' }}</p>
+                <p class="hero-kpi__value" *ngIf="showHeroDeliveriesGoal; else heroFinishedRawValue">
+                  {{ heroDeliveriesGoalPctLabel }}
+                </p>
+                <ng-template #heroFinishedRawValue>
+                  <p class="hero-kpi__value">{{ root.mtd.finished | number:'1.0-0':'pt-BR' }}</p>
+                </ng-template>
                 <div
                   class="hero-kpi__progress"
                   *ngIf="showHeroDeliveriesGoal || finishedVsOpenPct != null"
@@ -242,9 +263,7 @@
                   </div>
                 </div>
                 <div class="hero-kpi__delta">
-                  <span class="hero-kpi__hint" *ngIf="showHeroDeliveriesGoal && heroDeliveriesGoalPctLabel">
-                    meta {{ root.mtd.goal_deliveries | number:'1.0-0':'pt-BR' }} entregas · {{ heroDeliveriesGoalPctLabel }} da meta
-                  </span>
+                  <span class="hero-kpi__hint" *ngIf="heroDeliveriesDetailLabel">{{ heroDeliveriesDetailLabel }}</span>
                   <span class="hero-kpi__hint" *ngIf="!showHeroDeliveriesGoal && finishedVsOpenPct != null">
                     {{ finishedVsOpenPct | number:'1.1-1':'pt-BR' }}% do volume concluído + pendente
                   </span>
@@ -252,7 +271,19 @@
               </button>
 
               <div class="hero-kpi hero-kpi--static" aria-label="Clientes atendidos (MTD)">
-                <p class="hero-kpi__label">Clientes atendidos</p>
+                <div class="hero-kpi__header-row">
+                  <p class="hero-kpi__label">Clientes atendidos</p>
+                  <button
+                    type="button"
+                    class="hero-kpi__export-btn"
+                    [disabled]="isExportingClientsServed"
+                    (click)="exportClientsServedXlsx()"
+                    aria-label="Exportar clientes atendidos em Excel"
+                    title="Exportar Excel">
+                    <i class="ri-file-excel-2-line" aria-hidden="true"></i>
+                    <span>{{ isExportingClientsServed ? 'Exportando…' : 'Excel' }}</span>
+                  </button>
+                </div>
                 <p class="hero-kpi__value">{{ root.mtd.clients_served | number:'1.0-0':'pt-BR' }}</p>
                 <div class="hero-kpi__breakdown">
                   <!-- Drill-down por tag desabilitado temporariamente (performance). -->
@@ -454,6 +485,14 @@
               <div class="critical-clients-table-toolbar__actions">
                 <button
                   type="button"
+                  class="critical-clients-view-all-btn"
+                  (click)="openCriticalClientsModal()"
+                  aria-label="Ver todos os clientes críticos">
+                  <i class="ri-list-check-2" aria-hidden="true"></i>
+                  <span>Ver todos ({{ root.critical_clients?.count | number:'1.0-0':'pt-BR' }})</span>
+                </button>
+                <button
+                  type="button"
                   class="critical-clients-export-btn"
                   [disabled]="isExportingCriticalClientsDeliveries"
                   (click)="exportCriticalClientsDeliveries()"
@@ -489,8 +528,10 @@
                     (keydown.enter)="openCriticalClientDrillDown(client)"
                     (keydown.space)="$event.preventDefault(); openCriticalClientDrillDown(client)">
                     <td class="critical-clients-table__name-col">
-                      <span class="critical-clients-table__name">{{ client.company_label }}</span>
-                      <i class="ri-arrow-right-s-line critical-clients-table__drill-icon" aria-hidden="true"></i>
+                      <span class="critical-clients-table__name-cell">
+                        <span class="critical-clients-table__name">{{ client.company_label }}</span>
+                        <i class="ri-arrow-right-s-line critical-clients-table__drill-icon" aria-hidden="true"></i>
+                      </span>
                     </td>
                     <td class="simple-table__num">
                       <span
@@ -599,10 +640,19 @@
               </div>
               <ul class="classification-compact__list">
                 <li *ngFor="let tier of clientClassificationTiers; trackBy: trackByClassificationLevel">
-                  <span class="classification-compact__dot classification-compact__dot--level-{{ tier.level }}"></span>
-                  <span class="classification-compact__name">{{ tier.label }}</span>
-                  <span class="classification-compact__count">{{ tier.count | number:'1.0-0':'pt-BR' }}</span>
-                  <span class="classification-compact__share">{{ classificationSharePct(tier.count) }}</span>
+                  <button
+                    type="button"
+                    class="classification-compact__item"
+                    [disabled]="tier.count <= 0"
+                    [ngClass]="'classification-compact__item--level-' + tier.level"
+                    [attr.aria-label]="'Ver clientes ' + tier.label"
+                    (click)="openClassificationDrillDown(tier)">
+                    <span class="classification-compact__dot classification-compact__dot--level-{{ tier.level }}"></span>
+                    <span class="classification-compact__name">{{ tier.label }}</span>
+                    <span class="classification-compact__count">{{ tier.count | number:'1.0-0':'pt-BR' }}</span>
+                    <span class="classification-compact__share">{{ classificationSharePct(tier.count) }}</span>
+                    <i class="ri-arrow-right-s-line classification-compact__chevron" aria-hidden="true"></i>
+                  </button>
                 </li>
               </ul>
             </c4u-card>
@@ -1257,6 +1307,15 @@
       </div>
     </div>
   </div>
+
+  <modal-organization-hierarchy-critical-clients
+    *ngIf="criticalClientsModalOpen && root?.critical_clients"
+    [summary]="root!.critical_clients!"
+    [month]="selectedMonth"
+    [scopeLabel]="root!.label"
+    (closed)="onCriticalClientsModalClosed()"
+    (clientDrillDown)="onCriticalClientFromModal($event)">
+  </modal-organization-hierarchy-critical-clients>
 
   <modal-organization-hierarchy-kpi-detail
     *ngIf="kpiDrilldownContext"

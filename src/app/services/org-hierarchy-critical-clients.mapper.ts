@@ -1,4 +1,5 @@
 import { CriticalClientItem, CriticalClientRiskTier, CriticalClientsSummary, CriticalClientIssueKind, CriticalClientIssueFilter } from '@model/game4u-api.model';
+import { downloadXlsxWorkbook, slugifyExportFilenamePart } from '@utils/spreadsheet-export';
 
 export interface CriticalClientKpiChip {
   key: string;
@@ -14,7 +15,22 @@ export function hasCriticalClients(summary: CriticalClientsSummary | null | unde
 export function getCriticalClientsTopList(
   summary: CriticalClientsSummary | null | undefined
 ): CriticalClientItem[] {
+  return summary?.top_clients ?? summary?.clients?.slice(0, 15) ?? [];
+}
+
+export function getCriticalClientsFullList(
+  summary: CriticalClientsSummary | null | undefined
+): CriticalClientItem[] {
+  if (summary?.clients?.length) {
+    return summary.clients;
+  }
   return summary?.top_clients ?? [];
+}
+
+export function criticalClientsHasFullList(summary: CriticalClientsSummary | null | undefined): boolean {
+  const fullCount = summary?.clients?.length ?? 0;
+  const topCount = summary?.top_clients?.length ?? 0;
+  return fullCount > topCount;
 }
 
 export function buildCriticalClientKpiChips(
@@ -106,4 +122,48 @@ export function getCriticalClientIssueFilterLabel(issue: CriticalClientIssueFilt
     default:
       return 'Todos os problemas';
   }
+}
+
+export function mapCriticalClientForExport(client: CriticalClientItem): Record<string, string | number> {
+  return {
+    Cliente: client.company_label,
+    'Chave cliente': client.company_serve_key,
+    Score: Math.round(client.risk_score ?? 0),
+    Risco: getCriticalClientTierLabel(client.risk_tier),
+    'Atraso s/ just. (MTD)': client.mtd_overdue_unjustified ?? 0,
+    'Entrega tardia (MTD)': client.mtd_late_finish ?? 0,
+    'Meses c/ problemas': client.consecutive_issue_months ?? 0,
+    G4: client.is_acessorias_g4 ? 'Sim' : 'Não',
+    Onboarding: client.is_acessorias_onboarding ? 'Sim' : 'Não',
+    'Risco churn': client.is_acessorias_risco_de_churn ? 'Sim' : 'Não'
+  };
+}
+
+export function mapCriticalClientsSummaryForExport(
+  chips: CriticalClientKpiChip[]
+): Record<string, string | number>[] {
+  return chips.map(chip => ({
+    Indicador: chip.label,
+    Valor: chip.value
+  }));
+}
+
+export function buildCriticalClientsListExportFilename(options: {
+  month: Date;
+  scopeLabel?: string | null;
+}): string {
+  const monthLabel = `${options.month.getFullYear()}-${String(options.month.getMonth() + 1).padStart(2, '0')}`;
+  const scopeSlug = slugifyExportFilenamePart(options.scopeLabel);
+  return `relatorio-organizacional-clientes-criticos-${monthLabel}-${scopeSlug}.xlsx`;
+}
+
+export function downloadCriticalClientsExcel(options: {
+  filename: string;
+  chips: CriticalClientKpiChip[];
+  clients: CriticalClientItem[];
+}): void {
+  downloadXlsxWorkbook(options.filename, [
+    { name: 'Resumo', rows: mapCriticalClientsSummaryForExport(options.chips) },
+    { name: 'Clientes', rows: options.clients.map(mapCriticalClientForExport) }
+  ]);
 }
