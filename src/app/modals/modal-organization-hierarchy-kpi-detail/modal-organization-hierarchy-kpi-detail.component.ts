@@ -40,6 +40,7 @@ import {
 } from '@services/org-hierarchy-kpi-export.mapper';
 import {
   formatCriticalClientIssueKindLabel,
+  getCriticalClientExpectedDeliveryCount,
   getCriticalClientIssueFilterLabel,
   getCriticalClientTagLabels,
   getCriticalClientTierLabel
@@ -108,6 +109,8 @@ export class ModalOrganizationHierarchyKpiDetailComponent implements OnInit, OnC
   deliverySearchQuery = '';
   clientListSearchQuery = '';
   clientListFilter: OrgHierarchyClientListKey = 'clients_served';
+  /** `false` = lista resumida (1 linha/entrega); `true` = detalhe alinhado aos contadores KPI. */
+  criticalClientAllScoringEvents = false;
 
   chartLabels: string[] = [];
   chartDatasets: ChartDataset[] = [];
@@ -124,6 +127,9 @@ export class ModalOrganizationHierarchyKpiDetailComponent implements OnInit, OnC
   }
 
   ngOnChanges(changes: SimpleChanges): void {
+    if (changes['criticalClient']) {
+      this.criticalClientAllScoringEvents = false;
+    }
     if (
       changes['kpi'] ||
       changes['month'] ||
@@ -166,6 +172,23 @@ export class ModalOrganizationHierarchyKpiDetailComponent implements OnInit, OnC
     { id: 'late_finish', label: 'Entrega tardia' }
   ];
 
+  readonly criticalClientViewModes: ReadonlyArray<{
+    allScoringEvents: boolean;
+    label: string;
+    title: string;
+  }> = [
+    {
+      allScoringEvents: false,
+      label: 'Resumida',
+      title: 'Uma linha por entrega problemática'
+    },
+    {
+      allScoringEvents: true,
+      label: 'Detalhe KPI',
+      title: 'Eventos alinhados aos contadores MTD (atraso + entrega tardia)'
+    }
+  ];
+
   get showDeliveryFinishedColumn(): boolean {
     if (this.isCriticalClientDrilldown) {
       return this.issueFilter === 'late_finish' || this.issueFilter === 'all';
@@ -203,10 +226,13 @@ export class ModalOrganizationHierarchyKpiDetailComponent implements OnInit, OnC
     if (this.criticalClient) {
       const tags = getCriticalClientTagLabels(this.criticalClient);
       const tier = getCriticalClientTierLabel(this.criticalClient.risk_tier);
+      const viewHint = this.criticalClientAllScoringEvents
+        ? 'Detalhe alinhado aos contadores MTD do cliente.'
+        : 'Lista resumida: uma linha por entrega problemática.';
       const issueHint =
         this.issueFilter === 'all'
-          ? 'Inclui pendências em atraso e entregas concluídas após o prazo.'
-          : getCriticalClientIssueFilterLabel(this.issueFilter);
+          ? viewHint
+          : `${getCriticalClientIssueFilterLabel(this.issueFilter)} · ${viewHint}`;
       return {
         severity: this.criticalClient.risk_score >= 75 ? 'critical' : 'warning',
         title: `Cliente crítico · ${tier}`,
@@ -348,6 +374,32 @@ export class ModalOrganizationHierarchyKpiDetailComponent implements OnInit, OnC
 
   get filteredDeliveryTotal(): number {
     return this.filteredDiretorias.reduce((sum, dir) => sum + (dir.delivery_count ?? 0), 0);
+  }
+
+  get criticalClientExpectedDeliveryCount(): number | null {
+    if (!this.criticalClient || !this.criticalClientAllScoringEvents) {
+      return null;
+    }
+    return getCriticalClientExpectedDeliveryCount(this.criticalClient, this.issueFilter);
+  }
+
+  get criticalClientDeliveryCountMismatch(): boolean {
+    if (!this.criticalClientAllScoringEvents || !this.deliveries || this.criticalClientExpectedDeliveryCount == null) {
+      return false;
+    }
+    return this.deliveries.total_deliveries !== this.criticalClientExpectedDeliveryCount;
+  }
+
+  onCriticalClientViewModeChange(allScoringEvents: boolean): void {
+    if (this.criticalClientAllScoringEvents === allScoringEvents) {
+      return;
+    }
+    this.criticalClientAllScoringEvents = allScoringEvents;
+    this.isLoading = true;
+    this.deliveries = null;
+    this.deliverySearchQuery = '';
+    this.cdr.markForCheck();
+    this.loadCriticalClientDeliveries();
   }
 
   onDeliverySearchInput(event: Event): void {
@@ -515,28 +567,7 @@ export class ModalOrganizationHierarchyKpiDetailComponent implements OnInit, OnC
     this.resetState();
 
     if (this.criticalClient) {
-      this.actionLogService
-        .fetchOrganizationHierarchyDeliveries({
-          month: this.month,
-          drilldown: 'critical_client',
-          nodeType: this.nodeType,
-          nodeId: this.nodeId,
-          companyServeKey: this.criticalClient.company_serve_key,
-          issue: this.issueFilter
-        })
-        .pipe(takeUntil(this.destroy$))
-        .subscribe({
-          next: res => {
-            this.deliveries = res;
-            this.isLoading = false;
-            this.cdr.markForCheck();
-          },
-          error: () => {
-            this.deliveries = null;
-            this.isLoading = false;
-            this.cdr.markForCheck();
-          }
-        });
+      this.loadCriticalClientDeliveries();
       return;
     }
 
@@ -590,6 +621,35 @@ export class ModalOrganizationHierarchyKpiDetailComponent implements OnInit, OnC
         error: () => {
           this.kpiDetail = null;
           this.applyChartData();
+          this.isLoading = false;
+          this.cdr.markForCheck();
+        }
+      });
+  }
+
+  private loadCriticalClientDeliveries(): void {
+    if (!this.criticalClient) {
+      return;
+    }
+    this.actionLogService
+      .fetchOrganizationHierarchyDeliveries({
+        month: this.month,
+        drilldown: 'critical_client',
+        nodeType: this.nodeType,
+        nodeId: this.nodeId,
+        companyServeKey: this.criticalClient.company_serve_key,
+        issue: this.issueFilter,
+        allScoringEvents: this.criticalClientAllScoringEvents
+      })
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: res => {
+          this.deliveries = res;
+          this.isLoading = false;
+          this.cdr.markForCheck();
+        },
+        error: () => {
+          this.deliveries = null;
           this.isLoading = false;
           this.cdr.markForCheck();
         }
@@ -659,7 +719,8 @@ export class ModalOrganizationHierarchyKpiDetailComponent implements OnInit, OnC
       includeStatusColumns: this.showDeliveryStatusColumn,
       includeDelayWithFinished: this.kpi === 'multa_incurred' || this.isCriticalClientDrilldown,
       includeIssueKindColumn: this.showDeliveryIssueKindColumn,
-      includeCnpj: format === 'xlsx'
+      includeCnpj: format === 'xlsx',
+      includeUserActionId: this.isCriticalClientDrilldown && this.criticalClientAllScoringEvents
     });
     if (rows.length === 0) {
       this.toastService.error('Nenhuma entrega para exportar.', false);

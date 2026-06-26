@@ -1079,7 +1079,10 @@ export interface Game4uReportsOrganizationHierarchyCriticalClientsDeliveriesExpo
   month: string; // YYYY-MM
   node_type?: OrgHierarchyNodeType | string;
   node_id?: string;
+  company_serve_key?: string;
   issue?: CriticalClientIssueFilter | string;
+  /** `true` = todas as user_actions que entram no score do cliente crítico. */
+  all_scoring_events?: boolean;
 }
 
 export interface OrganizationHierarchyDeliveryRow {
@@ -1090,6 +1093,8 @@ export interface OrganizationHierarchyDeliveryRow {
   company_serve_key?: string | null;
   company_cnpj_digits?: string | null;
   issue_kind?: CriticalClientIssueKind | null;
+  /** Presente quando `all_scoring_events=true` no drill-down de cliente crítico. */
+  user_action_id?: string | null;
   client_key: string | null;
   client_name?: string | null;
   dt_prazo: string | null;
@@ -1225,6 +1230,7 @@ function normalizeOrganizationHierarchyDeliveryRow(
     company_serve_key: pickNullableString(o, ['company_serve_key', 'companyServeKey']),
     company_cnpj_digits: pickNullableString(o, ['company_cnpj_digits', 'companyCnpjDigits']),
     issue_kind,
+    user_action_id: pickNullableString(o, ['user_action_id', 'userActionId']),
     client_key: pickNullableString(o, [
       'client_name',
       'clientName',
@@ -1360,6 +1366,8 @@ export interface Game4uReportsOrganizationHierarchyDeliveriesQuery {
   node_id?: string;
   company_serve_key?: string;
   issue?: CriticalClientIssueFilter;
+  /** Cliente crítico: `true` lista cada user_action do score (paridade com contadores MTD). */
+  all_scoring_events?: boolean;
 }
 
 /** @deprecated Prefer {@link OrganizationHierarchyDeliveryRow} */

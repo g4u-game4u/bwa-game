@@ -1191,12 +1191,19 @@ export class Game4uApiService {
     const nodeType = (q.node_type ?? '').trim();
     const nodeId = (q.node_id ?? '').trim();
     const issue = (q.issue ?? 'all').trim() || 'all';
+    const companyServeKey = (q.company_serve_key ?? '').trim();
     let params = new HttpParams().set('month', month).set('issue', issue);
     if (nodeType) {
       params = params.set('node_type', nodeType);
     }
     if (nodeId) {
       params = params.set('node_id', nodeId);
+    }
+    if (companyServeKey) {
+      params = params.set('company_serve_key', companyServeKey);
+    }
+    if (q.all_scoring_events) {
+      params = params.set('all_scoring_events', 'true');
     }
     return this.http.get(
       `${this.baseUrl}/game/reports/organization/hierarchy-report/critical-clients/deliveries/export`,
@@ -1234,7 +1241,7 @@ export class Game4uApiService {
     const nodeType = (q.node_type ?? '').trim();
     const nodeId = (q.node_id ?? '').trim();
 
-    const key = `org-hierarchy-deliveries|${month}|${drilldown}|${nodeType}|${nodeId}|${(q.company_serve_key ?? '').trim()}|${(q.issue ?? '').trim()}`;
+    const key = `org-hierarchy-deliveries|${month}|${drilldown}|${nodeType}|${nodeId}|${(q.company_serve_key ?? '').trim()}|${(q.issue ?? '').trim()}|${q.all_scoring_events ? '1' : '0'}`;
     return this.shareGame4uDedupe(key, this.reportsOrganizationHierarchyDeliveriesCache, () => {
       let params = new HttpParams().set('month', month).set('drilldown', drilldown);
       if (nodeType) {
@@ -1250,6 +1257,9 @@ export class Game4uApiService {
       const issue = (q.issue ?? '').trim();
       if (issue) {
         params = params.set('issue', issue);
+      }
+      if (q.all_scoring_events) {
+        params = params.set('all_scoring_events', 'true');
       }
       return this.http.get<OrganizationHierarchyDeliveriesResponse>(
         `${this.baseUrl}/game/reports/organization/hierarchy-report/deliveries`,

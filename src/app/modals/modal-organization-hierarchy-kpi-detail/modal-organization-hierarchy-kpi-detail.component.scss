@@ -322,6 +322,10 @@
 
 .multa-summary__value {
   font-weight: 700;
+
+  &--warning {
+    color: #fbbf24;
+  }
 }
 
 .multa-details__summary,
@@ -451,6 +455,36 @@ details.multa-details > summary {
 
 .deliveries-search-empty {
   margin-top: 4px;
+}
+
+.critical-view-modes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.critical-view-modes__btn {
+  padding: 6px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+
+  &--active {
+    background: rgba(56, 189, 248, 0.14);
+    border-color: rgba(56, 189, 248, 0.45);
+    color: #bae6fd;
+  }
+
+  &:hover:not(&--active) {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.2);
+  }
 }
 
 .critical-issue-filters {

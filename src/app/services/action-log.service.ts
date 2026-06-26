@@ -936,7 +936,9 @@ export class ActionLogService {
     month?: Date;
     nodeType?: OrgHierarchyNodeType;
     nodeId?: string;
+    companyServeKey?: string;
     issue?: CriticalClientIssueFilter;
+    allScoringEvents?: boolean;
   }): Observable<HttpResponse<Blob>> {
     if (!(isGame4uDataEnabled() && this.game4u.isConfigured())) {
       return throwError(
@@ -948,13 +950,16 @@ export class ActionLogService {
     const nodeType = (options.nodeType ?? '').trim();
     const nodeId = (options.nodeId ?? '').trim();
     const issue = (options.issue ?? 'all').trim() || 'all';
+    const companyServeKey = (options.companyServeKey ?? '').trim();
 
     return this.game4u
       .getGameReportsOrganizationHierarchyCriticalClientsDeliveriesExport({
         month: monthParam,
         issue,
         ...(nodeType ? { node_type: nodeType } : {}),
-        ...(nodeId ? { node_id: nodeId } : {})
+        ...(nodeId ? { node_id: nodeId } : {}),
+        ...(companyServeKey ? { company_serve_key: companyServeKey } : {}),
+        ...(options.allScoringEvents ? { all_scoring_events: true } : {})
       })
       .pipe(
         catchError(err => {
@@ -1022,6 +1027,7 @@ export class ActionLogService {
     nodeId?: string;
     companyServeKey?: string;
     issue?: CriticalClientIssueFilter;
+    allScoringEvents?: boolean;
   }): Observable<OrganizationHierarchyDeliveriesResponse | null> {
     if (!(isGame4uDataEnabled() && this.game4u.isConfigured())) {
       return of(null);
@@ -1033,8 +1039,9 @@ export class ActionLogService {
     const nodeId = (options.nodeId ?? '').trim();
     const companyServeKey = (options.companyServeKey ?? '').trim();
     const issue = (options.issue ?? '').trim();
+    const allScoringEvents = options.allScoringEvents === true;
 
-    const cacheKey = `g4u_org_hierarchy_deliveries_${monthParam}_${drilldown}_${nodeType}_${nodeId}_${companyServeKey}_${issue}`;
+    const cacheKey = `g4u_org_hierarchy_deliveries_${monthParam}_${drilldown}_${nodeType}_${nodeId}_${companyServeKey}_${issue}_${allScoringEvents ? '1' : '0'}`;
     const cached = this.getCachedData(
       this.game4uOrganizationHierarchyDeliveriesCache,
       cacheKey,
@@ -1051,7 +1058,8 @@ export class ActionLogService {
         ...(nodeType ? { node_type: nodeType } : {}),
         ...(nodeId ? { node_id: nodeId } : {}),
         ...(companyServeKey ? { company_serve_key: companyServeKey } : {}),
-        ...(issue ? { issue: issue as CriticalClientIssueFilter } : {})
+        ...(issue ? { issue: issue as CriticalClientIssueFilter } : {}),
+        ...(allScoringEvents ? { all_scoring_events: true } : {})
       })
       .pipe(
         map(body => normalizeOrganizationHierarchyDeliveriesResponse(body)),

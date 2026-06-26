@@ -298,6 +298,34 @@
               <span class="multa-summary__label">Data de referência</span>
               <span class="multa-summary__value">{{ formatIsoDate(deliveries.ref_date) }}</span>
             </div>
+            <div
+              class="multa-summary__row"
+              *ngIf="isCriticalClientDrilldown && criticalClientExpectedDeliveryCount != null">
+              <span class="multa-summary__label">Esperado (KPI MTD)</span>
+              <span
+                class="multa-summary__value"
+                [class.multa-summary__value--warning]="criticalClientDeliveryCountMismatch">
+                {{ criticalClientExpectedDeliveryCount | number:'1.0-0':'pt-BR' }}
+              </span>
+            </div>
+          </div>
+
+          <div
+            *ngIf="isCriticalClientDrilldown"
+            class="critical-view-modes"
+            role="tablist"
+            aria-label="Modo de visualização das entregas">
+            <button
+              *ngFor="let mode of criticalClientViewModes"
+              type="button"
+              class="critical-view-modes__btn"
+              [class.critical-view-modes__btn--active]="criticalClientAllScoringEvents === mode.allScoringEvents"
+              role="tab"
+              [attr.aria-selected]="criticalClientAllScoringEvents === mode.allScoringEvents"
+              [attr.title]="mode.title"
+              (click)="onCriticalClientViewModeChange(mode.allScoringEvents)">
+              {{ mode.label }}
+            </button>
           </div>
 
           <div

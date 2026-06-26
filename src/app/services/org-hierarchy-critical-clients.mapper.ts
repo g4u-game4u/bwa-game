@@ -124,6 +124,21 @@ export function getCriticalClientIssueFilterLabel(issue: CriticalClientIssueFilt
   }
 }
 
+/** Contagem MTD esperada no drill-down com `all_scoring_events=true`. */
+export function getCriticalClientExpectedDeliveryCount(
+  client: CriticalClientItem,
+  issue: CriticalClientIssueFilter
+): number {
+  switch (issue) {
+    case 'overdue':
+      return client.mtd_overdue_unjustified ?? 0;
+    case 'late_finish':
+      return client.mtd_late_finish ?? 0;
+    default:
+      return (client.mtd_overdue_unjustified ?? 0) + (client.mtd_late_finish ?? 0);
+  }
+}
+
 export function mapCriticalClientForExport(client: CriticalClientItem): Record<string, string | number> {
   return {
     Cliente: client.company_label,
