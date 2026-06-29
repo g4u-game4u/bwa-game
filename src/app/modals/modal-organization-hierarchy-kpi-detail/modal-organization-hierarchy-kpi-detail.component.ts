@@ -43,7 +43,11 @@ import {
   getCriticalClientExpectedDeliveryCount,
   getCriticalClientIssueFilterLabel,
   getCriticalClientTagLabels,
-  getCriticalClientTierLabel
+  getCriticalClientTierLabel,
+  getCriticalClientTierClass,
+  formatCriticalClientRiskScore,
+  buildCriticalClientDeliveriesView,
+  countCriticalClientDeliveriesByIssue
 } from '@services/org-hierarchy-critical-clients.mapper';
 import { ToastService } from '@services/toast.service';
 import {
@@ -111,6 +115,8 @@ export class ModalOrganizationHierarchyKpiDetailComponent implements OnInit, OnC
   clientListFilter: OrgHierarchyClientListKey = 'clients_served';
   /** `false` = lista resumida (1 linha/entrega); `true` = detalhe alinhado aos contadores KPI. */
   criticalClientAllScoringEvents = false;
+  criticalClientIssueFilter: CriticalClientIssueFilter = 'all';
+  private criticalClientDeliveriesSource: OrganizationHierarchyDeliveriesResponse | null = null;
 
   chartLabels: string[] = [];
   chartDatasets: ChartDataset[] = [];
@@ -129,6 +135,7 @@ export class ModalOrganizationHierarchyKpiDetailComponent implements OnInit, OnC
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['criticalClient']) {
       this.criticalClientAllScoringEvents = false;
+      this.criticalClientIssueFilter = this.issueFilter ?? 'all';
     }
     if (
       changes['kpi'] ||
@@ -139,7 +146,6 @@ export class ModalOrganizationHierarchyKpiDetailComponent implements OnInit, OnC
       changes['compareContext'] ||
       changes['reportParams'] ||
       changes['criticalClient'] ||
-      changes['issueFilter'] ||
       changes['initialClientListKey']
     ) {
       void this.load();
@@ -191,7 +197,7 @@ export class ModalOrganizationHierarchyKpiDetailComponent implements OnInit, OnC
 
   get showDeliveryFinishedColumn(): boolean {
     if (this.isCriticalClientDrilldown) {
-      return this.issueFilter === 'late_finish' || this.issueFilter === 'all';
+      return this.criticalClientIssueFilter === 'late_finish' || this.criticalClientIssueFilter === 'all';
     }
     return this.kpi === 'multa_incurred';
   }
@@ -224,20 +230,7 @@ export class ModalOrganizationHierarchyKpiDetailComponent implements OnInit, OnC
 
   get drilldownBanner(): { severity: 'critical' | 'warning' | 'info'; title: string; body: string } | null {
     if (this.criticalClient) {
-      const tags = getCriticalClientTagLabels(this.criticalClient);
-      const tier = getCriticalClientTierLabel(this.criticalClient.risk_tier);
-      const viewHint = this.criticalClientAllScoringEvents
-        ? 'Detalhe alinhado aos contadores MTD do cliente.'
-        : 'Lista resumida: uma linha por entrega problemática.';
-      const issueHint =
-        this.issueFilter === 'all'
-          ? viewHint
-          : `${getCriticalClientIssueFilterLabel(this.issueFilter)} · ${viewHint}`;
-      return {
-        severity: this.criticalClient.risk_score >= 75 ? 'critical' : 'warning',
-        title: `Cliente crítico · ${tier}`,
-        body: `${this.criticalClient.company_label} (score ${Math.round(this.criticalClient.risk_score)}). ${issueHint}${tags.length ? ` Tags: ${tags.join(', ')}.` : ''}`
-      };
+      return null;
     }
     switch (this.kpi) {
       case 'multa_incurred':
@@ -380,7 +373,7 @@ export class ModalOrganizationHierarchyKpiDetailComponent implements OnInit, OnC
     if (!this.criticalClient || !this.criticalClientAllScoringEvents) {
       return null;
     }
-    return getCriticalClientExpectedDeliveryCount(this.criticalClient, this.issueFilter);
+    return getCriticalClientExpectedDeliveryCount(this.criticalClient, this.criticalClientIssueFilter);
   }
 
   get criticalClientDeliveryCountMismatch(): boolean {
@@ -390,16 +383,37 @@ export class ModalOrganizationHierarchyKpiDetailComponent implements OnInit, OnC
     return this.deliveries.total_deliveries !== this.criticalClientExpectedDeliveryCount;
   }
 
+  criticalClientIssueCount(issue: CriticalClientIssueFilter): number {
+    return countCriticalClientDeliveriesByIssue(
+      this.criticalClientDeliveriesSource,
+      issue,
+      this.criticalClientAllScoringEvents
+    );
+  }
+
+  criticalClientTierLabel(): string {
+    return this.criticalClient ? getCriticalClientTierLabel(this.criticalClient.risk_tier) : '';
+  }
+
+  criticalClientTierClass(): string {
+    return this.criticalClient ? getCriticalClientTierClass(this.criticalClient.risk_tier) : '';
+  }
+
+  criticalClientTags(): string[] {
+    return this.criticalClient ? getCriticalClientTagLabels(this.criticalClient) : [];
+  }
+
+  criticalClientScoreLabel(): string {
+    return this.criticalClient ? formatCriticalClientRiskScore(this.criticalClient.risk_score) : '—';
+  }
+
   onCriticalClientViewModeChange(allScoringEvents: boolean): void {
     if (this.criticalClientAllScoringEvents === allScoringEvents) {
       return;
     }
     this.criticalClientAllScoringEvents = allScoringEvents;
-    this.isLoading = true;
-    this.deliveries = null;
-    this.deliverySearchQuery = '';
+    this.applyCriticalClientDeliveriesView();
     this.cdr.markForCheck();
-    this.loadCriticalClientDeliveries();
   }
 
   onDeliverySearchInput(event: Event): void {
@@ -445,7 +459,9 @@ export class ModalOrganizationHierarchyKpiDetailComponent implements OnInit, OnC
   get modalTitle(): string {
     if (this.criticalClient) {
       const issueSuffix =
-        this.issueFilter !== 'all' ? ` · ${getCriticalClientIssueFilterLabel(this.issueFilter)}` : '';
+        this.criticalClientIssueFilter !== 'all'
+          ? ` · ${getCriticalClientIssueFilterLabel(this.criticalClientIssueFilter)}`
+          : '';
       const base = `Entregas · ${this.criticalClient.company_label}${issueSuffix}`;
       return formatOrgHierarchyDrilldownModalTitle(base, this.nodeLabel);
     }
@@ -518,6 +534,7 @@ export class ModalOrganizationHierarchyKpiDetailComponent implements OnInit, OnC
     this.isExportingClientsServed = false;
     this.kpiDetail = null;
     this.deliveries = null;
+    this.criticalClientDeliveriesSource = null;
     this.deliverySearchQuery = '';
     this.clientListSearchQuery = '';
     this.clientListFilter = this.resolveInitialClientListFilter();
@@ -638,22 +655,31 @@ export class ModalOrganizationHierarchyKpiDetailComponent implements OnInit, OnC
         nodeType: this.nodeType,
         nodeId: this.nodeId,
         companyServeKey: this.criticalClient.company_serve_key,
-        issue: this.issueFilter,
-        allScoringEvents: this.criticalClientAllScoringEvents
+        issue: 'all',
+        allScoringEvents: true
       })
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: res => {
-          this.deliveries = res;
+          this.criticalClientDeliveriesSource = res;
+          this.applyCriticalClientDeliveriesView();
           this.isLoading = false;
           this.cdr.markForCheck();
         },
         error: () => {
+          this.criticalClientDeliveriesSource = null;
           this.deliveries = null;
           this.isLoading = false;
           this.cdr.markForCheck();
         }
       });
+  }
+
+  private applyCriticalClientDeliveriesView(): void {
+    this.deliveries = buildCriticalClientDeliveriesView(this.criticalClientDeliveriesSource, {
+      issue: this.criticalClientIssueFilter,
+      allScoringEvents: this.criticalClientAllScoringEvents
+    });
   }
 
   private finishKpiPanelLoad(): void {
@@ -741,7 +767,7 @@ export class ModalOrganizationHierarchyKpiDetailComponent implements OnInit, OnC
       format,
       filtered: this.hasDeliverySearch,
       clientLabel: this.criticalClient?.company_label,
-      issue: this.isCriticalClientDrilldown ? this.issueFilter : undefined
+      issue: this.isCriticalClientDrilldown ? this.criticalClientIssueFilter : undefined
     });
     downloadSpreadsheetFile(format, filename, rows, 'Entregas');
     this.toastService.success(
@@ -750,6 +776,16 @@ export class ModalOrganizationHierarchyKpiDetailComponent implements OnInit, OnC
   }
 
   onCriticalIssueFilterChange(issue: CriticalClientIssueFilter): void {
+    if (this.isCriticalClientDrilldown) {
+      if (this.criticalClientIssueFilter === issue) {
+        return;
+      }
+      this.criticalClientIssueFilter = issue;
+      this.applyCriticalClientDeliveriesView();
+      this.issueFilterChange.emit(issue);
+      this.cdr.markForCheck();
+      return;
+    }
     if (this.issueFilter === issue) {
       return;
     }

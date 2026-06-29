@@ -1,4 +1,13 @@
-import { CriticalClientItem, CriticalClientRiskTier, CriticalClientsSummary, CriticalClientIssueKind, CriticalClientIssueFilter } from '@model/game4u-api.model';
+import {
+  CriticalClientItem,
+  CriticalClientRiskTier,
+  CriticalClientsSummary,
+  CriticalClientIssueKind,
+  CriticalClientIssueFilter,
+  OrganizationHierarchyDeliveriesResponse,
+  OrganizationHierarchyDeliveriesDiretoriaRow,
+  OrganizationHierarchyDeliveryRow
+} from '@model/game4u-api.model';
 import { downloadXlsxWorkbook, slugifyExportFilenamePart } from '@utils/spreadsheet-export';
 
 export interface CriticalClientKpiChip {
@@ -181,4 +190,122 @@ export function downloadCriticalClientsExcel(options: {
     { name: 'Resumo', rows: mapCriticalClientsSummaryForExport(options.chips) },
     { name: 'Clientes', rows: options.clients.map(mapCriticalClientForExport) }
   ]);
+}
+
+export interface CriticalClientDeliveriesViewOptions {
+  issue: CriticalClientIssueFilter;
+  allScoringEvents: boolean;
+}
+
+function deliveryIssuePriority(issueKind: CriticalClientIssueKind | null | undefined): number {
+  if (issueKind === 'overdue') {
+    return 2;
+  }
+  if (issueKind === 'late_finish') {
+    return 1;
+  }
+  return 0;
+}
+
+function dedupeDeliveriesByDeliveryId(
+  deliveries: OrganizationHierarchyDeliveryRow[]
+): OrganizationHierarchyDeliveryRow[] {
+  const byId = new Map<string, OrganizationHierarchyDeliveryRow>();
+  for (const delivery of deliveries) {
+    const key = delivery.delivery_id || delivery.user_action_id || '';
+    if (!key) {
+      continue;
+    }
+    const existing = byId.get(key);
+    if (!existing || deliveryIssuePriority(delivery.issue_kind) > deliveryIssuePriority(existing.issue_kind)) {
+      byId.set(key, delivery);
+    }
+  }
+  return Array.from(byId.values());
+}
+
+function filterDeliveriesForView(
+  deliveries: OrganizationHierarchyDeliveryRow[],
+  issue: CriticalClientIssueFilter,
+  allScoringEvents: boolean
+): OrganizationHierarchyDeliveryRow[] {
+  let rows = deliveries;
+  if (issue !== 'all') {
+    rows = rows.filter(d => d.issue_kind === issue);
+  }
+  if (!allScoringEvents) {
+    rows = dedupeDeliveriesByDeliveryId(rows);
+  }
+  return rows;
+}
+
+function mapCriticalClientDeliveriesTree(
+  source: OrganizationHierarchyDeliveriesResponse,
+  mapDeliveries: (deliveries: OrganizationHierarchyDeliveryRow[]) => OrganizationHierarchyDeliveryRow[]
+): OrganizationHierarchyDeliveriesDiretoriaRow[] {
+  return (source.diretorias ?? [])
+    .map(dir => {
+      const gerencias = (dir.gerencias ?? [])
+        .map(ger => {
+          const supervisoes = (ger.supervisoes ?? [])
+            .map(sup => {
+              const deliveries = mapDeliveries(sup.deliveries ?? []);
+              if (deliveries.length === 0) {
+                return null;
+              }
+              return {
+                ...sup,
+                deliveries,
+                delivery_count: deliveries.length
+              };
+            })
+            .filter((sup): sup is NonNullable<typeof sup> => sup != null);
+          if (supervisoes.length === 0) {
+            return null;
+          }
+          const delivery_count = supervisoes.reduce((sum, sup) => sum + sup.delivery_count, 0);
+          return { ...ger, supervisoes, delivery_count };
+        })
+        .filter((ger): ger is NonNullable<typeof ger> => ger != null);
+      if (gerencias.length === 0) {
+        return null;
+      }
+      const delivery_count = gerencias.reduce((sum, ger) => sum + ger.delivery_count, 0);
+      return { ...dir, gerencias, delivery_count };
+    })
+    .filter((dir): dir is OrganizationHierarchyDeliveriesDiretoriaRow => dir != null);
+}
+
+/** Aplica filtro de problema e modo resumido/detalhe KPI em memória (após fetch robusto). */
+export function buildCriticalClientDeliveriesView(
+  source: OrganizationHierarchyDeliveriesResponse | null | undefined,
+  options: CriticalClientDeliveriesViewOptions
+): OrganizationHierarchyDeliveriesResponse | null {
+  if (!source) {
+    return null;
+  }
+  const diretorias = mapCriticalClientDeliveriesTree(source, deliveries =>
+    filterDeliveriesForView(deliveries, options.issue, options.allScoringEvents)
+  );
+  const total_deliveries = diretorias.reduce((sum, dir) => sum + dir.delivery_count, 0);
+  return {
+    ...source,
+    total_deliveries,
+    diretorias
+  };
+}
+
+export function countCriticalClientDeliveriesInView(
+  source: OrganizationHierarchyDeliveriesResponse | null | undefined,
+  options: CriticalClientDeliveriesViewOptions
+): number {
+  return buildCriticalClientDeliveriesView(source, options)?.total_deliveries ?? 0;
+}
+
+export function countCriticalClientDeliveriesByIssue(
+  source: OrganizationHierarchyDeliveriesResponse | null | undefined,
+  issue: CriticalClientIssueFilter,
+  allScoringEvents: boolean
+): number {
+  return countCriticalClientDeliveriesInView(source, { issue, allScoringEvents });
 }
