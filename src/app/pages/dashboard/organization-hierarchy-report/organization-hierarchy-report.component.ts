@@ -8,6 +8,7 @@ import {
 import { Subject, firstValueFrom } from 'rxjs';
 import { debounceTime, distinctUntilChanged, take, takeUntil } from 'rxjs/operators';
 import * as moment from 'moment';
+import { dateFromMonthFilterOffset } from '@utils/month-filter-offset.util';
 import { ActionLogService } from '@services/action-log.service';
 import { SessaoProvider } from '@providers/sessao/sessao.provider';
 import { ToastService } from '@services/toast.service';
@@ -66,6 +67,7 @@ import {
   computeOrgPointsGoalPct,
   computeOrgDeliveriesGoalPct,
   ORG_ON_TIME_PCT_GOAL,
+  getOnTimeDeliveryGoalForMonth,
   formatOrgHierarchyNodeMtdCell,
   formatOrgPointsGoalPct,
   formatOrgRankingCell,
@@ -603,7 +605,7 @@ export class OrganizationHierarchyReportComponent implements OnInit, OnDestroy {
     if (onTime == null) {
       return 'neutral';
     }
-    if (onTime >= ORG_ON_TIME_PCT_GOAL) {
+    if (onTime >= getOnTimeDeliveryGoalForMonth(this.selectedMonth)) {
       return 'positive';
     }
     if (onTime < 70) {
@@ -613,7 +615,7 @@ export class OrganizationHierarchyReportComponent implements OnInit, OnDestroy {
   }
 
   get heroOnTimeMetaLabel(): string {
-    return `meta ${ORG_ON_TIME_PCT_GOAL}%`;
+    return `meta ${getOnTimeDeliveryGoalForMonth(this.selectedMonth)}%`;
   }
 
   get weekdayPeakStat(): OrgHierarchyWeekdayStat | null {
@@ -1386,8 +1388,8 @@ export class OrganizationHierarchyReportComponent implements OnInit, OnDestroy {
   }
 
   private updateSelectedMonthFromMonthsAgo(monthsAgo: number): void {
-    const target = moment().subtract(monthsAgo, 'months').startOf('month');
-    this.selectedMonth = target.toDate();
+    const parsed = dateFromMonthFilterOffset(monthsAgo);
+    this.selectedMonth = moment(parsed ?? new Date()).startOf('month').toDate();
   }
 
   private ensureValidHighlightViewTab(): void {

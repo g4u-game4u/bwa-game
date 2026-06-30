@@ -3,6 +3,7 @@ import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { Observable, of, firstValueFrom } from 'rxjs';
 import { map, catchError, shareReplay, take } from 'rxjs/operators';
 import { KPIData } from '@model/gamification-dashboard.model';
+import { getOnTimeDeliveryGoalForMonth } from '@app/constants/on-time-delivery-goal';
 import { environment } from '../../environments/environment';
 import {
   buildGamificacaoLookupKeyForParticipacaoRow,
@@ -784,8 +785,8 @@ export class CompanyKpiService {
     }
   }
 
-  private mapToKpiData(current: number): KPIData {
-    const target = 90;
+  private mapToKpiData(current: number, month?: Date | null): KPIData {
+    const target = getOnTimeDeliveryGoalForMonth(month);
     const percentage = Math.max(0, Math.min((current / target) * 100, 100));
 
     return {

@@ -94,8 +94,12 @@ export interface OrgOnTimePctSegment {
   value: number | null;
 }
 
-/** Meta fixa de % no prazo usada no painel organizacional. */
-export const ORG_ON_TIME_PCT_GOAL = 90;
+import {
+  getOnTimeDeliveryGoalForMonth,
+  ORG_ON_TIME_PCT_GOAL
+} from '@app/constants/on-time-delivery-goal';
+
+export { ORG_ON_TIME_PCT_GOAL, getOnTimeDeliveryGoalForMonth };
 
 export function shouldOmitOrgHierarchyModalScope(scope: string | null | undefined): boolean {
   const normalized = scope?.trim().toLowerCase();
@@ -112,13 +116,17 @@ export function formatOrgHierarchyDrilldownModalTitle(
   return `${kpiLabel} (${scope!.trim()})`;
 }
 
-/** Percentual de entregas no prazo em relação à meta (90%). */
-export function computeOrgOnTimeGoalPct(mtd: OrgMetricsWindow | undefined | null): number | null {
+/** Percentual de entregas no prazo em relação à meta vigente do mês. */
+export function computeOrgOnTimeGoalPct(
+  mtd: OrgMetricsWindow | undefined | null,
+  month?: Date | null
+): number | null {
   const onTime = mtd?.on_time_pct;
   if (onTime == null || !Number.isFinite(onTime)) {
     return null;
   }
-  return (onTime / ORG_ON_TIME_PCT_GOAL) * 100;
+  const goal = getOnTimeDeliveryGoalForMonth(month);
+  return (onTime / goal) * 100;
 }
 
 /** Segmentos de % no prazo MTD (geral + tags Acessórias). */

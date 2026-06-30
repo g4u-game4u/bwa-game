@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { Observable, throwError, of } from 'rxjs';
 import { map, catchError, shareReplay } from 'rxjs/operators';
+import { getOnTimeDeliveryGoalForMonth } from '@app/constants/on-time-delivery-goal';
 import { BackendApiService } from './backend-api.service';
 import { KPIMapper } from './kpi-mapper.service';
 import { KPIData } from '@model/gamification-dashboard.model';
@@ -148,11 +149,12 @@ export class KPIService {
         });
 
         // Entregas no Prazo - from player.extra.entrega
-        // Get entrega target from player's extra.entrega_goal, fallback to default 90
+        // Get entrega target from player's extra.entrega_goal, fallback to meta vigente do mês
         const entregaGoalRaw = playerStatus.extra?.entrega_goal;
+        const monthGoal = getOnTimeDeliveryGoalForMonth(selectedMonth);
         const entregaTarget = (entregaGoalRaw !== undefined && entregaGoalRaw !== null)
           ? (typeof entregaGoalRaw === 'number' ? entregaGoalRaw : parseFloat(String(entregaGoalRaw)))
-          : 90;
+          : monthGoal;
         const entregaSuperTarget = 100;
 
         if (playerStatus.extra?.entrega != null && playerStatus.extra.entrega !== '') {

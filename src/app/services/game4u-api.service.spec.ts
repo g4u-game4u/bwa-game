@@ -492,6 +492,52 @@ describe('Game4uApiService', () => {
     });
   });
 
+  it('getGameReportsManagementDashboardCachedOverview forwards role (ADMIN preview)', done => {
+    service
+      .getGameReportsManagementDashboardCachedOverview({ month: '2026-05', role: 'DIRETOR' })
+      .subscribe(res => {
+        expect(res.manager.user_role).toBe('DIRETOR');
+        done();
+      });
+    const req = httpMock.expectOne(
+      r =>
+        r.url === `${baseUrl}/game/reports/management/dashboard/cached/overview` &&
+        r.params.get('month') === '2026-05' &&
+        r.params.get('role') === 'DIRETOR'
+    );
+    req.flush({
+      manager: {
+        refreshed_at: '2026-05-20T18:00:00.000Z',
+        user_id: 'admin-preview',
+        user_email: 'admin@bwa.global',
+        user_role: 'DIRETOR',
+        teams_count: 0,
+        team_ids: [],
+        teams: [],
+        players_count: 0,
+        params: {
+          cache_month: '2026-05-01',
+          season_start: '2026-03-01',
+          season_end: '2026-06-30',
+          month_start: '2026-05-01',
+          month_end: '2026-05-31'
+        },
+        season_points_total: 0,
+        season_clients_total: 0,
+        season_tasks_finished_total: 0,
+        month_points_done_delivered: 0,
+        month_goal_points: 0,
+        month_pending_tasks_count: 0,
+        month_finished_tasks_count: 0,
+        month_clients_served: 0,
+        month_on_time_delivery_pct: 0,
+        refresh_error: null
+      },
+      teams: [],
+      organizational_tier: null
+    });
+  });
+
   it('getGameReportsSupervisionDashboardCachedList builds month param', done => {
     service
       .getGameReportsSupervisionDashboardCachedList({ month: '2026-05' })

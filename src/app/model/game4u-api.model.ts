@@ -203,6 +203,8 @@ export interface Game4uReportsManagementFinishedDeliveriesCachedQuery {
   limit?: number;
   /** Só ADMIN/SERVICE: consultar outro gestor. */
   user_id?: string;
+  /** Só ADMIN/SERVICE: simular escopo de GERENTE / DIRETOR / C_LEVEL. */
+  role?: ManagementDashboardUserRole;
 }
 
 /** Resposta paginada de `GET /game/reports/finished/deliveries/cached`. */
@@ -416,6 +418,8 @@ export interface ManagementDashboardOverviewResponse {
 export interface Game4uReportsManagementCachedQuery {
   month: string;
   user_id?: string;
+  /** Só ADMIN/SERVICE: simular escopo de GERENTE / DIRETOR / C_LEVEL. */
+  role?: ManagementDashboardUserRole;
 }
 
 /** Query para `GET /game/reports/management/dashboard/cached/list`. */
@@ -473,6 +477,10 @@ export interface Game4uReportsTeamDailyFinishedStatsQuery {
   status?: string[];
   offset?: number;
   limit?: number;
+  /** Só ADMIN/SERVICE com `team_id=__management_overview__`: simular escopo de gestão. */
+  role?: ManagementDashboardUserRole;
+  /** Só ADMIN/SERVICE com `team_id=__management_overview__`: consultar outro gestor. */
+  user_id?: string;
 }
 
 /**
@@ -510,6 +518,8 @@ export interface Game4uReportsTeamDailyPendingStatsQuery {
   status?: string[];
   /** E-mail opcional do colaborador (drill-down). */
   email?: string;
+  /** Só ADMIN/SERVICE com `team_id=__management_overview__`: simular escopo de gestão. */
+  role?: ManagementDashboardUserRole;
 }
 
 /**

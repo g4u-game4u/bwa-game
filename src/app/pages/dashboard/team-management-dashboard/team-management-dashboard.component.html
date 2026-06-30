@@ -25,6 +25,49 @@
           </c4u-team-selector>
         </div>
 
+        <!-- ADMIN: escolher qual gerente/diretor/c-level ver no painel agregado -->
+        <div class="sidebar-section" *ngIf="showManagementUserSelector">
+          <label class="selector-label selector-label--with-count" for="management-user-selector">
+            <span>{{ managementPreviewSelectorLabel }}</span>
+            <span
+              *ngIf="!isLoadingManagementPreviewManagers"
+              class="selector-label__count"
+              aria-hidden="true">
+              ({{ managementPreviewManagers.length }})
+            </span>
+            <span
+              *ngIf="isLoadingManagementPreviewManagers"
+              class="selector-label__count selector-label__count--muted"
+              aria-hidden="true">…</span>
+          </label>
+          <c4u-collaborator-selector
+            id="management-user-selector"
+            [collaborators]="managementPreviewManagers"
+            [selectedCollaborator]="selectedManagementUserId"
+            (collaboratorSelected)="onManagementUserChange($event)"
+            [attr.aria-label]="'Selecionar ' + managementPreviewSelectorLabel.toLowerCase()">
+          </c4u-collaborator-selector>
+          <p
+            *ngIf="managementPreviewManagersLoadError"
+            class="selector-hint selector-hint--error"
+            role="alert">
+            Não foi possível carregar a lista de {{ managementPreviewSelectorLabel | lowercase }}s.
+          </p>
+          <p
+            *ngIf="!managementPreviewManagersLoadError && !isLoadingManagementPreviewManagers && managementPreviewManagers.length === 0"
+            class="selector-hint"
+            role="status">
+            Nenhum {{ managementPreviewSelectorLabel | lowercase }} encontrado no organograma para este mês.
+            Verifique se o cache de gestão foi gerado ou escolha outro mês.
+          </p>
+          <p
+            *ngIf="managementPreviewManagersFromOrgChart && managementPreviewManagers.length > 0"
+            class="selector-hint"
+            role="status">
+            Lista carregada do organograma (cache de gestão indisponível neste mês).
+          </p>
+        </div>
+
         <!-- Collaborator Selector — escondido no «Painel do Gerente / Diretor / C-Level» (sem time selecionado). -->
         <div class="sidebar-section" *ngIf="!isManagementOverview">
           <label class="selector-label selector-label--with-count" for="collaborator-selector">
@@ -253,6 +296,11 @@
         <span>Sair</span>
       </button>
     </div>
+
+    <c4u-game-rules-update-banner
+      [selectedMonth]="selectedMonth"
+      [audience]="selectedCollaborator ? 'collaborator' : 'team'">
+    </c4u-game-rules-update-banner>
     
     <!-- Tab Navigation - Only show when no specific collaborator is selected -->
     <div class="tab-navigation" *ngIf="!selectedCollaborator" role="tablist" aria-label="Visualizações do dashboard">

@@ -396,12 +396,15 @@ export class Game4uApiService {
   }
 
   private reportsTeamDailyFinishedStatsKey(q: Game4uReportsTeamDailyFinishedStatsQuery): string {
-    return `rpt-team-daily|${this.reportIdentitySegment(q)}|${q.start}|${q.end}|${q.team_id ?? ''}`;
+    const role = (q.role ?? '').trim();
+    const uid = (q.user_id ?? '').trim();
+    return `rpt-team-daily|${this.reportIdentitySegment(q)}|${q.start}|${q.end}|${q.team_id ?? ''}|${role}|${uid}`;
   }
 
   private reportsTeamDailyPendingStatsKey(q: Game4uReportsTeamDailyPendingStatsQuery): string {
     const st = (q.status ?? []).join(',');
-    return `rpt-team-daily-pending|${this.reportIdentitySegment(q)}|${q.start}|${q.end}|${q.team_id ?? ''}|${st}`;
+    const role = (q.role ?? '').trim();
+    return `rpt-team-daily-pending|${this.reportIdentitySegment(q)}|${q.start}|${q.end}|${q.team_id ?? ''}|${st}|${role}`;
   }
 
   private appendTeamDailyPendingStatsParams(
@@ -414,6 +417,10 @@ export class Game4uApiService {
     }
     for (const s of q.status ?? []) {
       p = p.append('status', s);
+    }
+    const role = (q.role ?? '').trim();
+    if (role) {
+      p = p.set('role', role);
     }
     return this.withOptionalTeamId(p, q.team_id);
   }
@@ -436,6 +443,14 @@ export class Game4uApiService {
     }
     if (lim != null && Number.isFinite(lim)) {
       p = p.set('limit', String(Math.min(Math.max(1, Math.floor(lim)), 500)));
+    }
+    const role = (q.role ?? '').trim();
+    if (role) {
+      p = p.set('role', role);
+    }
+    const uid = (q.user_id ?? '').trim();
+    if (uid) {
+      p = p.set('user_id', uid);
     }
     return this.withOptionalTeamId(p, q.team_id);
   }
@@ -618,7 +633,8 @@ export class Game4uApiService {
     const uid = (q.user_id ?? '').trim();
     const off = Math.max(0, Math.floor(q.offset ?? 0));
     const lim = Math.min(Math.max(Math.floor(q.limit ?? 30), 1), 500);
-    const key = `rpt-mgmt-del-cached|${uid}|${month}|${off}|${lim}`;
+    const role = (q.role ?? '').trim();
+    const key = `rpt-mgmt-del-cached|${uid}|${role}|${month}|${off}|${lim}`;
     return this.shareGame4uDedupe(key, this.reportsManagementFinishedDeliveriesCachedCache, () => {
       let params = new HttpParams()
         .set('month', month)
@@ -626,6 +642,9 @@ export class Game4uApiService {
         .set('limit', String(lim));
       if (uid) {
         params = params.set('user_id', uid);
+      }
+      if (role) {
+        params = params.set('role', role);
       }
       return this.http
         .get<unknown>(`${this.baseUrl}/game/reports/management/finished/deliveries/cached`, {
@@ -979,11 +998,15 @@ export class Game4uApiService {
       );
     }
     const uid = (q.user_id ?? '').trim();
-    const key = `management-overview|${month}|${uid}`;
+    const role = (q.role ?? '').trim();
+    const key = `management-overview|${month}|${uid}|${role}`;
     return this.shareGame4uDedupe(key, this.reportsManagementDashboardOverviewCache, () => {
       let params = new HttpParams().set('month', month);
       if (uid) {
         params = params.set('user_id', uid);
+      }
+      if (role) {
+        params = params.set('role', role);
       }
       return this.http.get<ManagementDashboardOverviewResponse>(
         `${this.baseUrl}/game/reports/management/dashboard/cached/overview`,
