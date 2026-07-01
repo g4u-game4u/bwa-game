@@ -11,6 +11,7 @@ import {
   formatHighlightMtdMetricValue,
   getOrgHierarchyCompareTone
 } from './org-hierarchy-report.mapper';
+import { getOnTimeDeliveryGoalForMonth } from '@app/constants/on-time-delivery-goal';
 
 export interface OrgKpiDrilldownCompareContext {
   mtd: OrgMetricsWindow;
@@ -625,7 +626,8 @@ export function buildOrgKpiComparePanel(
     assessmentLabel = `${vsPrevMtd.deltaPctLabel} vs mesmo MTD do mês anterior`;
     assessmentTone = vsPrevMtd.tone;
     if (kpi === 'on_time_pct' && currentValue != null) {
-      assessmentLabel += currentValue >= 90 ? ' · acima da meta de 90%' : ' · abaixo da meta de 90%';
+      const goal = getOnTimeDeliveryGoalForMonth(parseOrgCacheMonthToDate(params?.cache_month));
+      assessmentLabel += currentValue >= goal ? ` · acima da meta de ${goal}%` : ` · abaixo da meta de ${goal}%`;
     }
   } else if (currentValue != null) {
     assessmentLabel = `Valor atual: ${formatOrgKpiCompareValue(kpi, currentValue)}`;
@@ -641,6 +643,22 @@ export function buildOrgKpiComparePanel(
     assessmentTone,
     monthlyHistory: buildMonthlyHistory(kpi, context.mtd_monthly_series, params?.cache_month)
   };
+}
+
+function parseOrgCacheMonthToDate(cacheMonth?: string | null): Date | null {
+  if (!cacheMonth) {
+    return null;
+  }
+  const parts = String(cacheMonth).trim().split('-');
+  if (parts.length < 2) {
+    return null;
+  }
+  const year = Number(parts[0]);
+  const month = Number(parts[1]);
+  if (!Number.isFinite(year) || !Number.isFinite(month) || month < 1 || month > 12) {
+    return null;
+  }
+  return new Date(year, month - 1, 1);
 }
 
 const ORG_KPI_WINDOW_COMPARE_KEYS = new Set<OrgHierarchyKpiDetailKey>([

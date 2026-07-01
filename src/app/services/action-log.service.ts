@@ -48,7 +48,9 @@ import { SessaoProvider } from '@providers/sessao/sessao.provider';
 import {
   detectManagementDashboardCachedRole,
   hasManagementDashboardCachedRole,
-  ManagementDashboardCachedRole
+  ManagementDashboardCachedRole,
+  managerMatchesDashboardCachedRole,
+  parseManagementManagerUserId
 } from '@utils/management-dashboard-role';
 import {
   computeGame4uDrPrazoMetaBoost,
@@ -757,7 +759,8 @@ export class ActionLogService {
    */
   fetchManagementDashboardCachedOverview(
     month?: Date,
-    userId?: string
+    userId?: string,
+    role?: ManagementDashboardCachedRole
   ): Observable<ManagementDashboardOverviewResponse | null> {
     if (!(isGame4uDataEnabled() && this.game4u.isConfigured())) {
       return of(null);
@@ -765,7 +768,8 @@ export class ActionLogService {
     const refMonth = this.resolveDashboardCachedMonth(month);
     const monthParam = this.toDashboardCachedMonthParam(refMonth);
     const uid = (userId ?? '').trim();
-    const cacheKey = `g4u_management_overview_${monthParam}_${uid}`;
+    const roleKey = (role ?? '').trim();
+    const cacheKey = `g4u_management_overview_${monthParam}_${uid}_${roleKey}`;
     const cached = this.getCachedData(
       this.game4uManagementDashboardOverviewCache,
       cacheKey,
@@ -778,7 +782,8 @@ export class ActionLogService {
     const request$ = this.game4u
       .getGameReportsManagementDashboardCachedOverview({
         month: monthParam,
-        ...(uid ? { user_id: uid } : {})
+        ...(uid ? { user_id: uid } : {}),
+        ...(roleKey ? { role } : {})
       })
       .pipe(
         catchError(err => {
@@ -936,7 +941,9 @@ export class ActionLogService {
     month?: Date;
     nodeType?: OrgHierarchyNodeType;
     nodeId?: string;
+    companyServeKey?: string;
     issue?: CriticalClientIssueFilter;
+    allScoringEvents?: boolean;
   }): Observable<HttpResponse<Blob>> {
     if (!(isGame4uDataEnabled() && this.game4u.isConfigured())) {
       return throwError(
@@ -948,13 +955,16 @@ export class ActionLogService {
     const nodeType = (options.nodeType ?? '').trim();
     const nodeId = (options.nodeId ?? '').trim();
     const issue = (options.issue ?? 'all').trim() || 'all';
+    const companyServeKey = (options.companyServeKey ?? '').trim();
 
     return this.game4u
       .getGameReportsOrganizationHierarchyCriticalClientsDeliveriesExport({
         month: monthParam,
         issue,
         ...(nodeType ? { node_type: nodeType } : {}),
-        ...(nodeId ? { node_id: nodeId } : {})
+        ...(nodeId ? { node_id: nodeId } : {}),
+        ...(companyServeKey ? { company_serve_key: companyServeKey } : {}),
+        ...(options.allScoringEvents ? { all_scoring_events: true } : {})
       })
       .pipe(
         catchError(err => {
@@ -1022,6 +1032,7 @@ export class ActionLogService {
     nodeId?: string;
     companyServeKey?: string;
     issue?: CriticalClientIssueFilter;
+    allScoringEvents?: boolean;
   }): Observable<OrganizationHierarchyDeliveriesResponse | null> {
     if (!(isGame4uDataEnabled() && this.game4u.isConfigured())) {
       return of(null);
@@ -1033,8 +1044,9 @@ export class ActionLogService {
     const nodeId = (options.nodeId ?? '').trim();
     const companyServeKey = (options.companyServeKey ?? '').trim();
     const issue = (options.issue ?? '').trim();
+    const allScoringEvents = options.allScoringEvents === true;
 
-    const cacheKey = `g4u_org_hierarchy_deliveries_${monthParam}_${drilldown}_${nodeType}_${nodeId}_${companyServeKey}_${issue}`;
+    const cacheKey = `g4u_org_hierarchy_deliveries_${monthParam}_${drilldown}_${nodeType}_${nodeId}_${companyServeKey}_${issue}_${allScoringEvents ? '1' : '0'}`;
     const cached = this.getCachedData(
       this.game4uOrganizationHierarchyDeliveriesCache,
       cacheKey,
@@ -1051,7 +1063,8 @@ export class ActionLogService {
         ...(nodeType ? { node_type: nodeType } : {}),
         ...(nodeId ? { node_id: nodeId } : {}),
         ...(companyServeKey ? { company_serve_key: companyServeKey } : {}),
-        ...(issue ? { issue: issue as CriticalClientIssueFilter } : {})
+        ...(issue ? { issue: issue as CriticalClientIssueFilter } : {}),
+        ...(allScoringEvents ? { all_scoring_events: true } : {})
       })
       .pipe(
         map(body => normalizeOrganizationHierarchyDeliveriesResponse(body)),
@@ -1195,24 +1208,95 @@ export class ActionLogService {
       return cached;
     }
 
-    const request$ = this.game4u
+    const request$ = this.fetchManagementDashboardCachedListDirect(monthParam, role).pipe(
+      catchError(err => {
+        console.error('Error fetching management/dashboard/cached/list:', err);
+        return of([] as ManagerDashboardCached[]);
+      }),
+      shareReplay({ bufferSize: 1, refCount: true, windowTime: this.GAME4U_CACHE_DURATION })
+    );
+    this.setCachedData(this.game4uManagementDashboardListCache, cacheKey, request$);
+    return request$;
+  }
+
+  /**
+   * Lista de gestores para pré-visualização ADMIN — sem cache de listas vazias (404),
+   * com retry sem `role` e normalização da resposta.
+   */
+  fetchManagementDashboardCachedListForAdminPreview(
+    month?: Date,
+    role?: ManagementDashboardCachedRole
+  ): Observable<ManagerDashboardCached[]> {
+    if (!(isGame4uDataEnabled() && this.game4u.isConfigured())) {
+      return of([]);
+    }
+    const refMonth = this.resolveDashboardCachedMonth(month);
+    const monthParam = this.toDashboardCachedMonthParam(refMonth);
+
+    const fetchOnce = (roleArg?: ManagementDashboardCachedRole) =>
+      this.fetchManagementDashboardCachedListDirect(monthParam, roleArg);
+
+    return fetchOnce(role).pipe(
+      switchMap(withRole => {
+        const filtered = this.filterManagersByCachedRole(withRole, role);
+        if (filtered.length > 0) {
+          return of(filtered);
+        }
+        if (!role) {
+          return of(withRole);
+        }
+        return fetchOnce(undefined).pipe(map(all => this.filterManagersByCachedRole(all, role)));
+      }),
+      catchError(err => {
+        console.error('Error fetching management/dashboard/cached/list (admin preview):', err);
+        return of([]);
+      })
+    );
+  }
+
+  private fetchManagementDashboardCachedListDirect(
+    monthParam: string,
+    role?: ManagementDashboardCachedRole
+  ): Observable<ManagerDashboardCached[]> {
+    const roleKey = (role ?? '').trim();
+    return this.game4u
       .getGameReportsManagementDashboardCachedList({
         month: monthParam,
         ...(roleKey ? { role } : {})
       })
       .pipe(
-        map(res => (Array.isArray(res?.managers) ? res.managers : [])),
+        map(res => this.normalizeManagementDashboardCachedList(res)),
         catchError(err => {
           if (err instanceof HttpErrorResponse && err.status === 404) {
             return of([]);
           }
-          console.error('Error fetching management/dashboard/cached/list:', err);
-          return of([]);
-        }),
-        shareReplay({ bufferSize: 1, refCount: true, windowTime: this.GAME4U_CACHE_DURATION })
+          return throwError(() => err);
+        })
       );
-    this.setCachedData(this.game4uManagementDashboardListCache, cacheKey, request$);
-    return request$;
+  }
+
+  private normalizeManagementDashboardCachedList(body: unknown): ManagerDashboardCached[] {
+    if (Array.isArray(body)) {
+      return body as ManagerDashboardCached[];
+    }
+    if (body != null && typeof body === 'object') {
+      const record = body as Record<string, unknown>;
+      const managers = record['managers'] ?? record['items'] ?? record['data'];
+      if (Array.isArray(managers)) {
+        return managers as ManagerDashboardCached[];
+      }
+    }
+    return [];
+  }
+
+  private filterManagersByCachedRole(
+    managers: ManagerDashboardCached[],
+    role?: ManagementDashboardCachedRole
+  ): ManagerDashboardCached[] {
+    if (!role) {
+      return managers ?? [];
+    }
+    return (managers ?? []).filter(m => managerMatchesDashboardCachedRole(m.user_role, role));
   }
 
   /**
@@ -1220,9 +1304,10 @@ export class ActionLogService {
    */
   getManagementDashboardCachedBundle(
     month?: Date,
-    userId?: string
+    userId?: string,
+    role?: ManagementDashboardCachedRole
   ): Observable<SupervisionTeamDashboardCachedBundle | null> {
-    return this.fetchManagementDashboardCachedOverview(month, userId).pipe(
+    return this.fetchManagementDashboardCachedOverview(month, userId, role).pipe(
       map(overview => {
         if (!overview?.manager) {
           return null;
@@ -2009,9 +2094,11 @@ export class ActionLogService {
       return of([]);
     }
     const statusKey = Array.isArray(q.status) ? q.status.join(',') : '';
+    const roleKey = (q.role ?? '').trim();
+    const uidKey = (q.user_id ?? '').trim();
     const cacheKey = `g4u_team_daily_finished_${tid}_${String(q.email ?? '')}_${String(q.start ?? '')}_${String(
       q.end ?? ''
-    )}_${statusKey}_${String(q.offset ?? '')}_${String(q.limit ?? '')}`;
+    )}_${statusKey}_${String(q.offset ?? '')}_${String(q.limit ?? '')}_${roleKey}_${uidKey}`;
     const cached = this.getCachedData(
       this.game4uTeamDailyFinishedStatsCache,
       cacheKey,
@@ -3703,7 +3790,8 @@ export class ActionLogService {
     month: Date | undefined,
     offset: number,
     limit: number,
-    userId?: string
+    userId?: string,
+    role?: ManagementDashboardCachedRole
   ): Observable<PlayerParticipacaoDeliveriesPageResult> {
     const off = Math.max(0, Math.floor(offset));
     const lim = Math.min(Math.max(Math.floor(limit), 1), 500);
@@ -3712,12 +3800,14 @@ export class ActionLogService {
     }
     const monthParam = this.toDashboardCachedMonthParam(month);
     const uid = (userId ?? '').trim();
+    const roleKey = (role ?? '').trim();
     return this.game4u
       .getGameReportsManagementFinishedDeliveriesCached({
         month: monthParam,
         offset: off,
         limit: lim,
-        ...(uid ? { user_id: uid } : {})
+        ...(uid ? { user_id: uid } : {}),
+        ...(roleKey ? { role } : {})
       })
       .pipe(
         map(page => {
@@ -3845,7 +3935,13 @@ export class ActionLogService {
   }
 
   getExecutiveDeliveriesAllPages(
-    scope: { teamId?: string | number | null; email?: string | null; isManagement?: boolean; userId?: string | null },
+    scope: {
+      teamId?: string | number | null;
+      email?: string | null;
+      isManagement?: boolean;
+      userId?: string | null;
+      managementRole?: ManagementDashboardCachedRole | null;
+    },
     month: Date,
     pageSize = 100
   ): Observable<Game4uReportsFinishedDeliveryRow[]> {
@@ -3857,6 +3953,8 @@ export class ActionLogService {
     const teamId = this.normalizeGame4uTeamId(scope.teamId) ?? '';
     const email = (scope.email ?? '').trim();
     const userId = (scope.userId ?? '').trim();
+    const managementRole = (scope.managementRole ?? undefined) as ManagementDashboardCachedRole | undefined;
+    const roleKey = (managementRole ?? '').trim();
     const isManagement = !!scope.isManagement;
 
     if (!isManagement && !teamId && !email) {
@@ -3869,7 +3967,7 @@ export class ActionLogService {
           month: monthParam,
           offset,
           limit: lim,
-          ...(userId ? { user_id: userId } : {})
+          ...(userId ? { user_id: userId } : roleKey ? { role: managementRole } : {})
         });
       }
       if (teamId) {

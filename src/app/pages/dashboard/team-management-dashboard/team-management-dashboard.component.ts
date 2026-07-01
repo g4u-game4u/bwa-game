@@ -5,6 +5,8 @@ import { NgbModal } from '@ng-bootstrap/ng-bootstrap';
 import { Subject, of, firstValueFrom, lastValueFrom, Observable, forkJoin } from 'rxjs';
 import { takeUntil, finalize, map, take, mergeMap, last } from 'rxjs/operators';
 import { PONTOS_POR_ATIVIDADE_FINALIZADA_ACTION_LOG } from '@app/constants/pontos-por-atividade-action-log';
+import { getOnTimeDeliveryGoalForMonth } from '@app/constants/on-time-delivery-goal';
+import { dateFromMonthFilterOffset, MONTH_FILTER_TODA_TEMPORADA } from '@utils/month-filter-offset.util';
 import { ModalTeamManagementFaqComponent } from '@modals/modal-team-management-faq/modal-team-management-faq.component';
 import {
   extractGamificacaoEmpIdFromDeliveryKey,
@@ -65,9 +67,20 @@ import {
   DashboardInsightsAudience
 } from '@model/dashboard-insights.model';
 import {
+  buildManagementOverviewTeamId,
+  extractOrgHierarchyNodeUserId,
   getManagementDashboardCachedRoleLabel,
-  ManagementDashboardCachedRole
+  getManagementPreviewRoleNounLabel,
+  isManagementOverviewTeamId,
+  MANAGEMENT_DASHBOARD_CACHED_ROLES,
+  MANAGEMENT_OVERVIEW_TEAM_ID,
+  ManagementDashboardCachedRole,
+  managementRoleToOrgHierarchyNodeType,
+  parseManagementManagerUserId,
+  resolveManagementRoleFromOverviewTeamId,
+  toManagementOverviewApiTeamId
 } from '@utils/management-dashboard-role';
+import { collectOrgHierarchyNodesByType } from '@services/org-hierarchy-report.mapper';
 import type {
   PlayerDashboardCachedParams,
   Game4uReportsFinishedDeliveryRow,
@@ -99,8 +112,7 @@ import { ENTREGAS_JUSTIFICADAS_META_DISCLAIMER } from '@services/help-texts.serv
 
 /** Mínimo de entregas no mês para entrar na lista «precisam de atenção». */
 const EXECUTIVE_ATTENTION_MIN_DELIVERIES = 3;
-/** Abaixo deste % de entregas no prazo o jogador é elegível para atenção. */
-const EXECUTIVE_ATTENTION_MAX_ON_TIME_PCT = 90;
+/** Abaixo da meta vigente de entregas no prazo o jogador é elegível para atenção (ver {@link getOnTimeDeliveryGoalForMonth}). */
 
 /** Linha de ranking de jogador nos insights executivos (destaque / atenção). */
 export interface ExecutiveInsightsPlayerRank {
@@ -157,8 +169,8 @@ export interface ExecutiveInsightsDirectorateRank extends ExecutiveInsightsPlaye
 })
 export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
   readonly justifiedDeliveriesDisclaimer = ENTREGAS_JUSTIFICADAS_META_DISCLAIMER;
-  /** Id sintético usado no seletor para o «Painel do Gerente / Diretor / C-Level». */
-  static readonly MANAGEMENT_OVERVIEW_TEAM_ID = '__management_overview__';
+  /** Id sintético usado no seletor para o «Painel do Gerente / Diretor / C-Level» (e na API). */
+  static readonly MANAGEMENT_OVERVIEW_TEAM_ID = MANAGEMENT_OVERVIEW_TEAM_ID;
 
   // State management
   selectedTeam: string = '';
@@ -168,6 +180,14 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
   managementRole: ManagementDashboardCachedRole | null = null;
   /** Vista corrente no «Painel do Gerente / Diretor / C-Level» (sem time selecionado). */
   isManagementOverview = false;
+  /** ADMIN: gestores disponíveis no painel agregado selecionado (`cached/list`). */
+  managementPreviewManagers: Collaborator[] = [];
+  /** ADMIN: `user_id` do gestor cuja visão está a ser pré-visualizada. */
+  selectedManagementUserId: string | null = null;
+  isLoadingManagementPreviewManagers = false;
+  managementPreviewManagersLoadError = false;
+  /** Lista veio do organograma (fallback) em vez de `management/dashboard/cached/list`. */
+  managementPreviewManagersFromOrgChart = false;
   // Initialize to February 2026 by default (similar to gamification-dashboard)
   // Calculate months ago from current date to February 2026
   selectedMonthsAgo: number = (() => {
@@ -616,16 +636,24 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
 
       if (this.teams.length > 0) {
         const savedTeamId = localStorage.getItem('selectedTeamId');
-        const hasManagementOverviewEntry = this.teams.some(
-          t => t.id === TeamManagementDashboardComponent.MANAGEMENT_OVERVIEW_TEAM_ID
-        );
-        // Papel agregado (GERENTE/DIRETOR/C-LEVEL): **sempre** abrir no «Painel do …»,
-        // ignorando `selectedTeamId` persistido — drill-down em equipe real é manual.
-        const teamToSelect = hasManagementOverviewEntry
-          ? TeamManagementDashboardComponent.MANAGEMENT_OVERVIEW_TEAM_ID
-          : savedTeamId && this.teams.some(t => t.id === savedTeamId)
-            ? savedTeamId
-            : this.teams[0].id;
+        const jwtManagementRole = this.actionLogService.getManagementDashboardCachedRole();
+        const managementOverviewTeams = this.teams.filter(t => isManagementOverviewTeamId(t.id));
+        const shouldDefaultToManagementOverview =
+          jwtManagementRole != null && managementOverviewTeams.length > 0;
+
+        let teamToSelect: string;
+        if (shouldDefaultToManagementOverview) {
+          const savedIsOverview = !!savedTeamId && isManagementOverviewTeamId(savedTeamId);
+          teamToSelect = savedIsOverview
+            ? savedTeamId!
+            : managementOverviewTeams.length === 1
+              ? managementOverviewTeams[0].id
+              : buildManagementOverviewTeamId(jwtManagementRole!);
+        } else if (savedTeamId && this.teams.some(t => t.id === savedTeamId)) {
+          teamToSelect = savedTeamId;
+        } else {
+          teamToSelect = this.teams[0].id;
+        }
 
         await this.onTeamChange(teamToSelect);
         console.log('✅ Initial team selected:', teamToSelect);
@@ -727,7 +755,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
    */
   private getGame4uTeamScopeId(): string | undefined {
     const t = (this.selectedTeamId || '').trim();
-    if (t === '' || t === TeamManagementDashboardComponent.MANAGEMENT_OVERVIEW_TEAM_ID) {
+    if (t === '' || isManagementOverviewTeamId(t)) {
       return undefined;
     }
     return t;
@@ -1106,6 +1134,192 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
     return roles.some((r) => typeof r === 'string' && r.toLowerCase().includes('gestor'));
   }
 
+  /** ADMIN ou SERVICE na sessão (pré-visualização dos painéis de gestão). */
+  private hasManagementPreviewSessionRole(): boolean {
+    if (this.hasAdminSessionRole()) {
+      return true;
+    }
+    const roles = this.sessaoProvider.usuario?.roles;
+    if (!Array.isArray(roles)) {
+      return false;
+    }
+    return roles.some(
+      r => typeof r === 'string' && r.trim().toUpperCase().replace(/-/g, '_').includes('SERVICE')
+    );
+  }
+
+  /**
+   * ADMIN no painel agregado: envia `user_id` nas rotas `management/*` para ver o painel
+   * do gestor/diretor/c-level escolhido. Gestores reais usam só o JWT.
+   */
+  private isAdminManagementPreview(): boolean {
+    return this.hasManagementPreviewSessionRole() && this.isManagementOverview;
+  }
+
+  get showManagementUserSelector(): boolean {
+    return this.isAdminManagementPreview();
+  }
+
+  get managementPreviewSelectorLabel(): string {
+    return getManagementPreviewRoleNounLabel(this.managementRole);
+  }
+
+  private getManagementDashboardApiUserId(): string | undefined {
+    if (!this.isAdminManagementPreview()) {
+      return undefined;
+    }
+    const uid = (this.selectedManagementUserId ?? '').trim();
+    return uid || undefined;
+  }
+
+  private managementPreviewUserStorageKey(teamId: string): string {
+    return `managementPreviewUserId_${teamId}`;
+  }
+
+  private restoreManagementPreviewUserSelection(teamId: string): void {
+    const saved = localStorage.getItem(this.managementPreviewUserStorageKey(teamId));
+    this.selectedManagementUserId = saved?.trim() ? saved.trim() : null;
+  }
+
+  private persistManagementPreviewUserSelection(): void {
+    const key = this.managementPreviewUserStorageKey(this.selectedTeamId);
+    if (this.selectedManagementUserId) {
+      localStorage.setItem(key, this.selectedManagementUserId);
+    } else {
+      localStorage.removeItem(key);
+    }
+  }
+
+  private mapManagerDashboardCachedToCollaborator(manager: unknown): Collaborator | null {
+    const userId = parseManagementManagerUserId(manager);
+    if (!userId) {
+      return null;
+    }
+    const record =
+      manager != null && typeof manager === 'object'
+        ? (manager as Record<string, unknown>)
+        : {};
+    const email = String(record['user_email'] ?? record['userEmail'] ?? '').trim();
+    const label = formatGerenciaGroupLabel(email || userId);
+    return {
+      userId,
+      name: label,
+      email: email || userId
+    };
+  }
+
+  private async loadManagementPreviewManagersFromOrgChart(): Promise<Collaborator[]> {
+    const nodeType = managementRoleToOrgHierarchyNodeType(this.managementRole);
+    if (nodeType == null || this.selectedMonth == null) {
+      return [];
+    }
+
+    const report = await firstValueFrom(
+      this.actionLogService
+        .fetchOrganizationHierarchyReport({ month: this.selectedMonth })
+        .pipe(takeUntil(this.destroy$))
+    ).catch(() => null);
+
+    if (!report?.root) {
+      return [];
+    }
+
+    return collectOrgHierarchyNodesByType(report.root, nodeType)
+      .map(node => {
+        const userId = extractOrgHierarchyNodeUserId(node.node_id);
+        if (!userId) {
+          return null;
+        }
+        const label = (node.label ?? '').trim() || formatGerenciaGroupLabel(userId);
+        return {
+          userId,
+          name: label,
+          email: userId.includes('@') ? userId : userId
+        };
+      })
+      .filter((m): m is Collaborator => m != null)
+      .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+  }
+
+  private async loadManagementPreviewManagers(): Promise<void> {
+    if (!this.isAdminManagementPreview() || this.selectedMonth == null || !this.managementRole) {
+      this.managementPreviewManagers = [];
+      this.managementPreviewManagersLoadError = false;
+      this.managementPreviewManagersFromOrgChart = false;
+      this.isLoadingManagementPreviewManagers = false;
+      return;
+    }
+
+    this.isLoadingManagementPreviewManagers = true;
+    this.managementPreviewManagersLoadError = false;
+    this.managementPreviewManagersFromOrgChart = false;
+    this.cdr.markForCheck();
+
+    try {
+      const fromCache = await firstValueFrom(
+        this.actionLogService
+          .fetchManagementDashboardCachedListForAdminPreview(this.selectedMonth, this.managementRole)
+          .pipe(takeUntil(this.destroy$))
+      );
+
+      let collaborators = (fromCache ?? [])
+        .map(m => this.mapManagerDashboardCachedToCollaborator(m))
+        .filter((m): m is Collaborator => m != null);
+
+      if (collaborators.length === 0) {
+        collaborators = await this.loadManagementPreviewManagersFromOrgChart();
+        this.managementPreviewManagersFromOrgChart = collaborators.length > 0;
+      }
+
+      this.managementPreviewManagers = collaborators.sort((a, b) =>
+        a.name.localeCompare(b.name, 'pt-BR')
+      );
+
+      const stillValid =
+        !!this.selectedManagementUserId &&
+        this.managementPreviewManagers.some(m => m.userId === this.selectedManagementUserId);
+
+      if (!stillValid) {
+        this.selectedManagementUserId =
+          this.managementPreviewManagers.length > 0
+            ? this.managementPreviewManagers[0].userId
+            : null;
+        this.persistManagementPreviewUserSelection();
+      }
+    } catch (error) {
+      console.error('Error loading management preview managers:', error);
+      this.managementPreviewManagers = [];
+      this.managementPreviewManagersLoadError = true;
+      this.managementPreviewManagersFromOrgChart = false;
+      this.selectedManagementUserId = null;
+    } finally {
+      this.isLoadingManagementPreviewManagers = false;
+      this.cdr.markForCheck();
+    }
+  }
+
+  private async ensureAdminManagementPreviewReady(): Promise<boolean> {
+    if (!this.isAdminManagementPreview()) {
+      return true;
+    }
+    await this.loadManagementPreviewManagers();
+    return this.getManagementDashboardApiUserId() != null;
+  }
+
+  async onManagementUserChange(userId: string | null): Promise<void> {
+    this.selectedManagementUserId = userId;
+    this.persistManagementPreviewUserSelection();
+    if (!this.isManagementOverview) {
+      return;
+    }
+    const ready = await this.ensureAdminManagementPreviewReady();
+    if (!ready) {
+      this.cdr.markForCheck();
+      return;
+    }
+    await this.loadManagementOverviewData();
+  }
+
   /**
    * Load all available teams from Funifier and filter by user profile.
    * 
@@ -1301,10 +1515,9 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       }
 
       this.managementRole = this.actionLogService.getManagementDashboardCachedRole();
-      const hasManagementOverview =
-        this.managementRole != null && this.playerService.usesGame4uWalletFromStats();
-      if (hasManagementOverview) {
-        const label = getManagementDashboardCachedRoleLabel(this.managementRole!);
+      const usesGame4uWallet = this.playerService.usesGame4uWalletFromStats();
+      if (this.managementRole != null && usesGame4uWallet) {
+        const label = getManagementDashboardCachedRoleLabel(this.managementRole);
         availableTeams = [
           {
             id: TeamManagementDashboardComponent.MANAGEMENT_OVERVIEW_TEAM_ID,
@@ -1314,11 +1527,22 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
           ...availableTeams
         ];
         console.log('✅ Painel agregado disponível:', label);
+      } else if (isAdminRole && usesGame4uWallet) {
+        const adminPanels = MANAGEMENT_DASHBOARD_CACHED_ROLES.map(role => ({
+          id: buildManagementOverviewTeamId(role),
+          name: getManagementDashboardCachedRoleLabel(role),
+          memberCount: 0
+        }));
+        availableTeams = [...adminPanels, ...availableTeams];
+        console.log(
+          '✅ Painéis de gestão (ADMIN):',
+          adminPanels.map(p => p.name).join(', ')
+        );
       }
 
       // Load member count for each team using aggregate queries
       const memberCountPromises = availableTeams.map(async (team) => {
-        if (team.id === TeamManagementDashboardComponent.MANAGEMENT_OVERVIEW_TEAM_ID) {
+        if (isManagementOverviewTeamId(team.id)) {
           return team;
         }
         try {
@@ -1580,7 +1804,19 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
    * @see {@link loadProductivityData}
    */
   async loadTeamData(): Promise<void> {
-    if (!this.selectedTeam || !this.selectedTeamId) {
+    if (!this.selectedTeamId) {
+      return;
+    }
+
+    if (this.isManagementOverview) {
+      const ready = await this.ensureAdminManagementPreviewReady();
+      if (ready) {
+        await this.loadManagementOverviewData();
+      }
+      return;
+    }
+
+    if (!this.selectedTeam) {
       return;
     }
     
@@ -1751,8 +1987,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       };
     }
     
-    const now = dayjs();
-    const targetMonth = now.subtract(this.selectedMonthsAgo, 'month');
+    const targetMonth = dayjs(this.selectedMonth).startOf('month');
     const seasonStartDate = dayjs('2026-01-01');
     
     // Check if the target month is January or February 2026
@@ -1983,7 +2218,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
     try {
       const bundle = await firstValueFrom(
         this.actionLogService
-          .getManagementDashboardCachedBundle(month)
+          .getManagementDashboardCachedBundle(month, this.getManagementDashboardApiUserId())
           .pipe(takeUntil(this.destroy$))
       );
       if (!bundle) {
@@ -2617,12 +2852,17 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
   ): Promise<TeamDailyFinishedStatsRow[]> {
     const startDate = dayjs(dateRange.start).startOf('day');
     const endDate = dayjs(dateRange.end).endOf('day');
+    const apiTeamId = toManagementOverviewApiTeamId(teamId);
+    const managementUserId = isManagementOverviewTeamId(teamId)
+      ? this.getManagementDashboardApiUserId()
+      : undefined;
     return firstValueFrom(
       this.actionLogService
         .getReportTeamDailyFinishedStats({
-          team_id: teamId,
+          team_id: apiTeamId,
           start: startDate.toISOString(),
-          end: endDate.toISOString()
+          end: endDate.toISOString(),
+          ...(managementUserId ? { user_id: managementUserId } : {})
         })
         .pipe(takeUntil(this.destroy$))
     );
@@ -2922,7 +3162,10 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
   private async loadProductivityDataBySupervisoes(dateRange: { start: Date; end: Date }): Promise<void> {
     const overview = await firstValueFrom(
       this.actionLogService
-        .fetchManagementDashboardCachedOverview(this.selectedMonth)
+        .fetchManagementDashboardCachedOverview(
+          this.selectedMonth,
+          this.getManagementDashboardApiUserId()
+        )
         .pipe(takeUntil(this.destroy$))
     );
     const supervisionTeams = overview?.teams ?? [];
@@ -3465,7 +3708,12 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
         const month = this.selectedMonth!;
         const page = await firstValueFrom(
           this.actionLogService
-            .getManagementFinishedDeliveriesParticipacaoPage(month, 0, this.participacaoPageLimit)
+            .getManagementFinishedDeliveriesParticipacaoPage(
+              month,
+              0,
+              this.participacaoPageLimit,
+              this.getManagementDashboardApiUserId()
+            )
             .pipe(takeUntil(this.destroy$))
         );
         this.useParticipacaoReportsPagination = true;
@@ -3761,7 +4009,8 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
         ? this.actionLogService.getManagementFinishedDeliveriesParticipacaoPage(
             month,
             this.participacaoNextOffset,
-            this.participacaoPageLimit
+            this.participacaoPageLimit,
+            this.getManagementDashboardApiUserId()
           )
         : (() => {
             const teamTid = this.getGame4uTeamScopeId();
@@ -4101,7 +4350,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
 
     try {
       const kpiRows = await firstValueFrom(
-        this.companyKpiService.enrichFromParticipacaoRowKeys(participacaoGamificacaoRows).pipe(take(1))
+        this.companyKpiService.enrichFromParticipacaoRowKeys(participacaoGamificacaoRows, this.selectedMonth).pipe(take(1))
       );
       if (loadGen !== this.participacaoKpiLoadGen) {
         return;
@@ -4251,10 +4500,18 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       const teamScopeId = resolvedTeamId ?? this.getGame4uTeamScopeId() ?? '';
 
       let scope:
-        | { teamId?: string; email?: string; isManagement?: boolean }
+        | {
+            teamId?: string;
+            email?: string;
+            isManagement?: boolean;
+            userId?: string | null;
+          }
         | null = null;
       if (this.isManagementOverview) {
-        scope = { isManagement: true };
+        scope = {
+          isManagement: true,
+          userId: this.getManagementDashboardApiUserId() ?? null
+        };
         this.showExecutiveInsightsPlayersRanking = true;
         if (this.managementRole === 'C_LEVEL') {
           this.executiveInsightsRankingSegment = 'diretor';
@@ -4531,7 +4788,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
 
     return classifyExecutivePlayerRankings(ranked, {
       minDeliveriesForAttention: EXECUTIVE_ATTENTION_MIN_DELIVERIES,
-      maxOnTimePctForAttention: EXECUTIVE_ATTENTION_MAX_ON_TIME_PCT
+      maxOnTimePctForAttention: getOnTimeDeliveryGoalForMonth(this.selectedMonth)
     }).map(({ item, status }) => ({ ...item, status }));
   }
 
@@ -4545,7 +4802,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
 
     return partitionExecutivePlayerRankings(candidates, {
       minDeliveriesForAttention: EXECUTIVE_ATTENTION_MIN_DELIVERIES,
-      maxOnTimePctForAttention: EXECUTIVE_ATTENTION_MAX_ON_TIME_PCT
+      maxOnTimePctForAttention: getOnTimeDeliveryGoalForMonth(this.selectedMonth)
     });
   }
 
@@ -4599,7 +4856,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
 
     return partitionExecutivePlayerRankings(candidates, {
       minDeliveriesForAttention: EXECUTIVE_ATTENTION_MIN_DELIVERIES,
-      maxOnTimePctForAttention: EXECUTIVE_ATTENTION_MAX_ON_TIME_PCT
+      maxOnTimePctForAttention: getOnTimeDeliveryGoalForMonth(this.selectedMonth)
     });
   }
 
@@ -4610,7 +4867,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       return 'Equipe';
     }
     for (const team of this.teams) {
-      if (team.id === TeamManagementDashboardComponent.MANAGEMENT_OVERVIEW_TEAM_ID) {
+      if (isManagementOverviewTeamId(team.id)) {
         continue;
       }
       const resolved = this.resolveGame4uTeamIdForPickerId(team.id);
@@ -4796,7 +5053,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       const rankCandidates = playerArray.filter(p => (p.judgedDeliveriesCount ?? 0) > 0);
       const { top, attention } = partitionExecutivePlayerRankings(rankCandidates, {
         minDeliveriesForAttention: EXECUTIVE_ATTENTION_MIN_DELIVERIES,
-        maxOnTimePctForAttention: EXECUTIVE_ATTENTION_MAX_ON_TIME_PCT
+        maxOnTimePctForAttention: getOnTimeDeliveryGoalForMonth(this.selectedMonth)
       });
       this.executiveInsightsTopPlayers = top;
       this.executiveInsightsAttentionPlayers = attention;
@@ -4828,7 +5085,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
     if (pct == null || !Number.isFinite(pct)) {
       return 'badge-neutral';
     }
-    if (pct >= 90) {
+    if (pct >= getOnTimeDeliveryGoalForMonth(this.selectedMonth)) {
       return 'badge-success';
     }
     if (pct >= 70) {
@@ -4905,13 +5162,28 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       }
 
       const isTeamChanging = this.selectedTeamId !== teamId;
-      const isManagementOverview =
-        teamId === TeamManagementDashboardComponent.MANAGEMENT_OVERVIEW_TEAM_ID;
+      const isManagementOverview = isManagementOverviewTeamId(teamId);
 
       this.selectedTeamId = teamId;
       this.selectedTeam = team.name;
       this.displayTeamName = team.name;
       this.isManagementOverview = isManagementOverview;
+      if (isManagementOverview) {
+        this.managementRole = resolveManagementRoleFromOverviewTeamId(
+          teamId,
+          this.sessaoProvider.usuario?.roles
+        );
+        if (this.isAdminManagementPreview()) {
+          this.restoreManagementPreviewUserSelection(teamId);
+        } else {
+          this.selectedManagementUserId = null;
+          this.managementPreviewManagers = [];
+        }
+      } else {
+        this.managementRole = this.actionLogService.getManagementDashboardCachedRole();
+        this.selectedManagementUserId = null;
+        this.managementPreviewManagers = [];
+      }
 
       if (isTeamChanging) {
         this.sidebarLoadedOnce = false;
@@ -4922,7 +5194,17 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       localStorage.setItem('selectedTeamId', teamId);
 
       if (isManagementOverview) {
-        await this.loadManagementOverviewData();
+        const ready = await this.ensureAdminManagementPreviewReady();
+        if (ready) {
+          await this.loadManagementOverviewData();
+        } else {
+          this.isLoadingSidebar = false;
+          this.isLoadingGoals = false;
+          this.isLoadingMonthlyPointsProgress = false;
+          this.isLoadingKPIs = false;
+          this.isLoadingCarteira = false;
+          this.cdr.markForCheck();
+        }
       } else {
         await this.loadTeamMembersData(teamId, this.calculateDateRange());
         await this.loadTeamData();
@@ -4951,6 +5233,10 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
    * apenas KPIs/progresso agregados do gestor.
    */
   private async loadManagementOverviewData(): Promise<void> {
+    if (this.isAdminManagementPreview() && !this.getManagementDashboardApiUserId()) {
+      return;
+    }
+
     try {
       this.isLoadingSidebar = !this.sidebarLoadedOnce;
       this.isLoadingGoals = true;
@@ -5138,14 +5424,13 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
     this.selectedMonthsAgo = monthsAgo;
     
     // Handle "Toda temporada" (-1) — undefined means no month filtering
-    if (monthsAgo === -1) {
+    if (monthsAgo === MONTH_FILTER_TODA_TEMPORADA) {
       this.selectedMonth = undefined;
       this.announceToScreenReader('Filtro alterado para toda temporada');
     } else {
-      const date = new Date();
-      date.setMonth(date.getMonth() - monthsAgo);
+      const date = dateFromMonthFilterOffset(monthsAgo);
       this.selectedMonth = date;
-      const monthName = date.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+      const monthName = (date ?? new Date()).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
       this.announceToScreenReader(`Mês alterado para ${monthName}`);
     }
     
@@ -5524,7 +5809,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
    */
   private resolveGame4uTeamIdForPickerId(teamPickerId: string): string | undefined {
     const tid = (teamPickerId || '').trim();
-    if (!tid || tid === TeamManagementDashboardComponent.MANAGEMENT_OVERVIEW_TEAM_ID) {
+    if (!tid || isManagementOverviewTeamId(tid)) {
       return undefined;
     }
     const entry = this.teams.find(t => t.id === tid) as (Team & { game4uTeamId?: string }) | undefined;
@@ -5556,8 +5841,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       return [];
     }
     const selected = (this.selectedTeamId || '').trim();
-    const isOverview =
-      selected === '' || selected === TeamManagementDashboardComponent.MANAGEMENT_OVERVIEW_TEAM_ID;
+    const isOverview = selected === '' || isManagementOverviewTeamId(selected);
 
     if (!isOverview && selected) {
       const one = this.resolveGame4uTeamIdForPickerId(selected);
@@ -5566,7 +5850,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
 
     const ids: string[] = [];
     for (const t of this.teams) {
-      if (t.id === TeamManagementDashboardComponent.MANAGEMENT_OVERVIEW_TEAM_ID) {
+      if (isManagementOverviewTeamId(t.id)) {
         continue;
       }
       const resolved = this.resolveGame4uTeamIdForPickerId(t.id);
@@ -5738,8 +6022,9 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
 
   listaEntregaPrazoClasses(cliente: CompanyDisplay): Record<string, boolean> {
     const v = this.getListaEntregaPercent(cliente);
+    const goal = getOnTimeDeliveryGoalForMonth(this.selectedMonth);
     const na = v === null;
-    const good = !na && v > 90;
+    const good = !na && v > goal;
     const below = !na && !good;
     return {
       'carteira-entrega': true,
@@ -5837,7 +6122,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
             .getPlayerKPIs(collaboratorId, this.selectedMonth, this.actionLogService, scope)
             .pipe(takeUntil(this.destroy$))
         );
-        this.teamKPIs = kpis || [];
+        this.teamKPIs = this.kpiService.applyOnTimeDeliveryGoalToKpis(kpis || [], this.selectedMonth);
       } else {
         const panelId = this.getPanelPlayerId();
         if (!panelId) {
@@ -5848,7 +6133,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
               .getPlayerKPIs(panelId, this.selectedMonth, this.actionLogService, scope)
               .pipe(takeUntil(this.destroy$))
           );
-          this.teamKPIs = kpis || [];
+          this.teamKPIs = this.kpiService.applyOnTimeDeliveryGoalToKpis(kpis || [], this.selectedMonth);
         }
         console.log('✅ Team KPIs (mesmo fluxo que gamificação individual, cache por team_id):', this.teamKPIs.length);
       }
@@ -5920,7 +6205,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
 
   private applyTeamEntregasPrazoKpiValue(idx: number, avg: number): void {
     const base = this.teamKPIs[idx];
-    const target = base.target;
+    const target = getOnTimeDeliveryGoalForMonth(this.selectedMonth);
     const superTarget = base.superTarget ?? 100;
     const updated: KPIData = {
       ...base,

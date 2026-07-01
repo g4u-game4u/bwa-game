@@ -3,6 +3,7 @@ import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { Observable, of, firstValueFrom } from 'rxjs';
 import { map, catchError, shareReplay, take } from 'rxjs/operators';
 import { KPIData } from '@model/gamification-dashboard.model';
+import { getOnTimeDeliveryGoalForMonth } from '@app/constants/on-time-delivery-goal';
 import { environment } from '../../environments/environment';
 import {
   buildGamificacaoLookupKeyForParticipacaoRow,
@@ -599,7 +600,7 @@ export class CompanyKpiService {
             processCount: procFin + procPen
           };
 
-          this.applyKpiDataToCompanyDisplay(result, kpiData);
+          this.applyKpiDataToCompanyDisplay(result, kpiData, referenceMonth);
           return result;
         })
       ),
@@ -627,7 +628,8 @@ export class CompanyKpiService {
    * O percentual vem do campo `porcEntregas` da API (normalizado em `entrega` / `porcEntregas` / `deliveryKpi`).
    */
   enrichFromParticipacaoRowKeys(
-    rows: readonly (ParticipacaoRowGamificacaoInput | string)[]
+    rows: readonly (ParticipacaoRowGamificacaoInput | string)[],
+    referenceMonth?: Date | null
   ): Observable<CompanyDisplay[]> {
     if (!rows || rows.length === 0) {
       return of([]);
@@ -686,7 +688,7 @@ export class CompanyKpiService {
             ...(gamificacaoEmpIdUsado ? { gamificacaoEmpIdUsado } : {})
           };
 
-          this.applyKpiDataToCompanyDisplay(result, kpiData);
+          this.applyKpiDataToCompanyDisplay(result, kpiData, referenceMonth);
           return result;
         })
       ),
@@ -738,7 +740,7 @@ export class CompanyKpiService {
           };
 
           const kpiData = this.resolveKpiForActionLogCompany(company, maps);
-          this.applyKpiDataToCompanyDisplay(result, kpiData);
+          this.applyKpiDataToCompanyDisplay(result, kpiData, referenceMonth);
 
           return result;
         });
@@ -762,7 +764,8 @@ export class CompanyKpiService {
   /** Preenche `classificacao` / `entrega` / `porcEntregas` / `deliveryKpi` quando a linha da API existe e há `porcEntregas`. */
   private applyKpiDataToCompanyDisplay(
     result: CompanyDisplay,
-    kpiData: CnpjKpiData | undefined
+    kpiData: CnpjKpiData | undefined,
+    referenceMonth?: Date | null
   ): void {
     if (!kpiData) {
       return;
@@ -780,12 +783,12 @@ export class CompanyKpiService {
       const n = Number(e);
       result.entrega = n;
       result.porcEntregas = n;
-      result.deliveryKpi = this.mapToKpiData(n);
+      result.deliveryKpi = this.mapToKpiData(n, referenceMonth);
     }
   }
 
-  private mapToKpiData(current: number): KPIData {
-    const target = 90;
+  private mapToKpiData(current: number, month?: Date | null): KPIData {
+    const target = getOnTimeDeliveryGoalForMonth(month);
     const percentage = Math.max(0, Math.min((current / target) * 100, 100));
 
     return {

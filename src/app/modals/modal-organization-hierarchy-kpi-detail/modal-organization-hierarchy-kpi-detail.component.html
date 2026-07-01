@@ -259,45 +259,128 @@
 
       <ng-template #deliveriesPanel>
         <ng-container *ngIf="deliveries; else deliveriesEmpty">
-          <div
-            *ngIf="drilldownBanner as banner"
-            class="drilldown-banner drilldown-banner--{{ banner.severity }}"
-            role="note">
-            <i
-              class="drilldown-banner__icon"
-              [class.ri-alarm-warning-fill]="banner.severity === 'critical'"
-              [class.ri-error-warning-line]="banner.severity === 'warning'"
-              [class.ri-information-line]="banner.severity === 'info'"
-              aria-hidden="true"></i>
-            <div class="drilldown-banner__body">
-              <strong class="drilldown-banner__title">{{ banner.title }}</strong>
-              <p class="drilldown-banner__text">{{ banner.body }}</p>
+          <section
+            *ngIf="isCriticalClientDrilldown && criticalClient"
+            class="critical-client-drilldown"
+            aria-label="Resumo do cliente crítico">
+            <div class="critical-client-drilldown__head">
+              <div class="critical-client-drilldown__identity">
+                <span class="critical-tier-badge critical-client-drilldown__tier" [ngClass]="criticalClientTierClass()">
+                  {{ criticalClientTierLabel() }}
+                </span>
+                <h3 class="critical-client-drilldown__name">{{ criticalClient.company_label }}</h3>
+                <div class="critical-client-drilldown__tags" *ngIf="criticalClientTags().length">
+                  <span *ngFor="let tag of criticalClientTags()" class="critical-tag">{{ tag }}</span>
+                </div>
+              </div>
+              <div class="critical-client-drilldown__score" aria-label="Score de risco">
+                <span class="critical-client-drilldown__score-value">{{ criticalClientScoreLabel() }}</span>
+                <span class="critical-client-drilldown__score-label">Score</span>
+              </div>
             </div>
-          </div>
 
-          <div class="multa-summary">
-            <div class="multa-summary__row">
-              <span class="multa-summary__label">Total de entregas</span>
-              <span class="multa-summary__value">
-                <ng-container *ngIf="hasDeliverySearch; else deliveriesFullTotal">
-                  {{ filteredDeliveryTotal | number:'1.0-0':'pt-BR' }}
-                  de {{ deliveries.total_deliveries | number:'1.0-0':'pt-BR' }}
-                </ng-container>
-                <ng-template #deliveriesFullTotal>
+            <div class="critical-client-drilldown__metrics" role="list">
+              <div class="critical-client-drilldown__metric critical-client-drilldown__metric--danger" role="listitem">
+                <span class="critical-client-drilldown__metric-value">
+                  {{ criticalClient.mtd_overdue_unjustified | number:'1.0-0':'pt-BR' }}
+                </span>
+                <span class="critical-client-drilldown__metric-label">Atraso s/ just.</span>
+              </div>
+              <div class="critical-client-drilldown__metric critical-client-drilldown__metric--warning" role="listitem">
+                <span class="critical-client-drilldown__metric-value">
+                  {{ criticalClient.mtd_late_finish | number:'1.0-0':'pt-BR' }}
+                </span>
+                <span class="critical-client-drilldown__metric-label">Entrega tardia</span>
+              </div>
+              <div class="critical-client-drilldown__metric" role="listitem">
+                <span class="critical-client-drilldown__metric-value">
+                  {{ criticalClient.consecutive_issue_months | number:'1.0-0':'pt-BR' }}
+                </span>
+                <span class="critical-client-drilldown__metric-label">Meses c/ prob.</span>
+              </div>
+              <div
+                class="critical-client-drilldown__metric critical-client-drilldown__metric--info"
+                role="listitem">
+                <span
+                  class="critical-client-drilldown__metric-value"
+                  [class.critical-client-drilldown__metric-value--warning]="criticalClientDeliveryCountMismatch">
                   {{ deliveries.total_deliveries | number:'1.0-0':'pt-BR' }}
-                </ng-template>
-              </span>
+                  <ng-container *ngIf="criticalClientExpectedDeliveryCount != null">
+                    / {{ criticalClientExpectedDeliveryCount | number:'1.0-0':'pt-BR' }}
+                  </ng-container>
+                </span>
+                <span class="critical-client-drilldown__metric-label">
+                  {{ criticalClientAllScoringEvents ? 'Eventos (detalhe KPI)' : 'Entregas (resumida)' }}
+                </span>
+              </div>
             </div>
-            <div class="multa-summary__row">
-              <span class="multa-summary__label">{{ deliveriesWindowLabel }}</span>
-              <span class="multa-summary__value">
-                {{ formatIsoDate(deliveries.mtd_start) }} – {{ formatIsoDate(deliveries.mtd_end) }}
-              </span>
+
+            <p class="critical-client-drilldown__window">
+              <i class="ri-calendar-line" aria-hidden="true"></i>
+              MTD {{ formatIsoDate(deliveries.mtd_start) }} – {{ formatIsoDate(deliveries.mtd_end) }}
+              <span *ngIf="deliveries.ref_date"> · ref. {{ formatIsoDate(deliveries.ref_date) }}</span>
+            </p>
+          </section>
+
+          <ng-container *ngIf="!isCriticalClientDrilldown">
+            <div
+              *ngIf="drilldownBanner as banner"
+              class="drilldown-banner drilldown-banner--{{ banner.severity }}"
+              role="note">
+              <i
+                class="drilldown-banner__icon"
+                [class.ri-alarm-warning-fill]="banner.severity === 'critical'"
+                [class.ri-error-warning-line]="banner.severity === 'warning'"
+                [class.ri-information-line]="banner.severity === 'info'"
+                aria-hidden="true"></i>
+              <div class="drilldown-banner__body">
+                <strong class="drilldown-banner__title">{{ banner.title }}</strong>
+                <p class="drilldown-banner__text">{{ banner.body }}</p>
+              </div>
             </div>
-            <div class="multa-summary__row" *ngIf="deliveries.ref_date">
-              <span class="multa-summary__label">Data de referência</span>
-              <span class="multa-summary__value">{{ formatIsoDate(deliveries.ref_date) }}</span>
+
+            <div class="multa-summary">
+              <div class="multa-summary__row">
+                <span class="multa-summary__label">Total de entregas</span>
+                <span class="multa-summary__value">
+                  <ng-container *ngIf="hasDeliverySearch; else deliveriesFullTotal">
+                    {{ filteredDeliveryTotal | number:'1.0-0':'pt-BR' }}
+                    de {{ deliveries.total_deliveries | number:'1.0-0':'pt-BR' }}
+                  </ng-container>
+                  <ng-template #deliveriesFullTotal>
+                    {{ deliveries.total_deliveries | number:'1.0-0':'pt-BR' }}
+                  </ng-template>
+                </span>
+              </div>
+              <div class="multa-summary__row">
+                <span class="multa-summary__label">{{ deliveriesWindowLabel }}</span>
+                <span class="multa-summary__value">
+                  {{ formatIsoDate(deliveries.mtd_start) }} – {{ formatIsoDate(deliveries.mtd_end) }}
+                </span>
+              </div>
+              <div class="multa-summary__row" *ngIf="deliveries.ref_date">
+                <span class="multa-summary__label">Data de referência</span>
+                <span class="multa-summary__value">{{ formatIsoDate(deliveries.ref_date) }}</span>
+              </div>
             </div>
+          </ng-container>
+
+          <div
+            *ngIf="isCriticalClientDrilldown"
+            class="critical-view-modes"
+            role="tablist"
+            aria-label="Modo de visualização das entregas">
+            <button
+              *ngFor="let mode of criticalClientViewModes"
+              type="button"
+              class="critical-view-modes__btn"
+              [class.critical-view-modes__btn--active]="criticalClientAllScoringEvents === mode.allScoringEvents"
+              role="tab"
+              [attr.aria-selected]="criticalClientAllScoringEvents === mode.allScoringEvents"
+              [attr.title]="mode.title"
+              (click)="onCriticalClientViewModeChange(mode.allScoringEvents)">
+              {{ mode.label }}
+            </button>
           </div>
 
           <div
@@ -309,11 +392,12 @@
               *ngFor="let filter of criticalIssueFilters"
               type="button"
               class="critical-issue-filters__btn"
-              [class.critical-issue-filters__btn--active]="issueFilter === filter.id"
+              [class.critical-issue-filters__btn--active]="criticalClientIssueFilter === filter.id"
               role="tab"
-              [attr.aria-selected]="issueFilter === filter.id"
+              [attr.aria-selected]="criticalClientIssueFilter === filter.id"
               (click)="onCriticalIssueFilterChange(filter.id)">
               {{ filter.label }}
+              <span class="critical-issue-filters__count">{{ criticalClientIssueCount(filter.id) }}</span>
             </button>
           </div>
 
@@ -363,7 +447,80 @@
             <span>Nenhuma entrega encontrada para esta busca.</span>
           </div>
 
-          <div class="multa-accordion" *ngIf="filteredDiretorias.length > 0">
+          <div class="org-hierarchy-accordion" *ngIf="isCriticalClientDrilldown && filteredDiretorias.length > 0">
+            <details *ngFor="let dir of filteredDiretorias" open class="org-hierarchy-accordion__block org-hierarchy-accordion__block--diretoria">
+              <summary class="org-hierarchy-accordion__summary">
+                <span class="org-hierarchy-accordion__level">Diretoria</span>
+                <span class="org-hierarchy-accordion__title">{{ dir.label }}</span>
+                <span class="org-hierarchy-accordion__count">{{ dir.delivery_count | number:'1.0-0':'pt-BR' }}</span>
+                <i class="ri-arrow-down-s-line org-hierarchy-accordion__chevron" aria-hidden="true"></i>
+              </summary>
+
+              <div class="org-hierarchy-accordion__body">
+                <details *ngFor="let ger of dir.gerencias" open class="org-hierarchy-accordion__block org-hierarchy-accordion__block--gerencia">
+                  <summary class="org-hierarchy-accordion__summary">
+                    <span class="org-hierarchy-accordion__level">Gerência</span>
+                    <span class="org-hierarchy-accordion__title">{{ ger.label }}</span>
+                    <span class="org-hierarchy-accordion__count">{{ ger.delivery_count | number:'1.0-0':'pt-BR' }}</span>
+                    <i class="ri-arrow-down-s-line org-hierarchy-accordion__chevron" aria-hidden="true"></i>
+                  </summary>
+
+                  <div class="org-hierarchy-accordion__body">
+                    <details *ngFor="let sup of ger.supervisoes" open class="org-hierarchy-accordion__block org-hierarchy-accordion__block--supervisao">
+                      <summary class="org-hierarchy-accordion__summary">
+                        <span class="org-hierarchy-accordion__level">Supervisão</span>
+                        <span class="org-hierarchy-accordion__title">{{ sup.label }}</span>
+                        <span class="org-hierarchy-accordion__count">{{ sup.delivery_count | number:'1.0-0':'pt-BR' }}</span>
+                        <i class="ri-arrow-down-s-line org-hierarchy-accordion__chevron" aria-hidden="true"></i>
+                      </summary>
+
+                      <div class="org-hierarchy-accordion__table-wrap">
+                        <table class="multa-table org-hierarchy-accordion__table" [attr.aria-label]="'Entregas: ' + modalTitle">
+                          <thead>
+                            <tr>
+                              <th>Cliente</th>
+                              <th>Tarefa</th>
+                              <th *ngIf="showDeliveryIssueKindColumn">Problema</th>
+                              <th>Prazo</th>
+                              <th *ngIf="showDeliveryDelayColumn && !showDeliveryFinishedColumn">Atraso</th>
+                              <th *ngIf="showDeliveryDelayColumn && showDeliveryFinishedColumn">Atraso legal</th>
+                              <th *ngIf="showDeliveryFinishedColumn">Conclusão</th>
+                              <th *ngIf="showDeliveryStatusColumn">Status</th>
+                              <th *ngIf="showDeliveryPointsColumn">Pontos</th>
+                              <th>Colaborador</th>
+                              <th>Time</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            <tr *ngFor="let d of sup.deliveries" [ngClass]="deliveryRowClass(d)">
+                              <td>{{ deliveryCompanyLabel(d) }}</td>
+                              <td>{{ deliveryActionTitleLabel(d) }}</td>
+                              <td *ngIf="showDeliveryIssueKindColumn">
+                                <span class="org-hierarchy-accordion__issue" [class.org-hierarchy-accordion__issue--overdue]="d.issue_kind === 'overdue'" [class.org-hierarchy-accordion__issue--late]="d.issue_kind === 'late_finish'">
+                                  {{ deliveryIssueKindLabel(d) }}
+                                </span>
+                              </td>
+                              <td>{{ formatIsoDate(d.dt_prazo) }}</td>
+                              <td *ngIf="showDeliveryDelayColumn">{{ formatIsoDate(d.dt_atraso) }}</td>
+                              <td *ngIf="showDeliveryFinishedColumn">{{ formatIsoDate(d.finished_at) }}</td>
+                              <td *ngIf="showDeliveryStatusColumn">
+                                <span class="multa-table__status">{{ deliveryStatusLabel(d) }}</span>
+                              </td>
+                              <td *ngIf="showDeliveryPointsColumn">{{ formatDeliveryPoints(d.points) }}</td>
+                              <td>{{ deliveryPlayerLabel(d) }}</td>
+                              <td>{{ d.team_name ?? d.team_id }}</td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
+                    </details>
+                  </div>
+                </details>
+              </div>
+            </details>
+          </div>
+
+          <div class="multa-accordion" *ngIf="!isCriticalClientDrilldown && filteredDiretorias.length > 0">
             <details *ngFor="let dir of filteredDiretorias" open class="multa-details">
               <summary class="multa-details__summary">
                 <span class="multa-details__title">{{ dir.label }}</span>

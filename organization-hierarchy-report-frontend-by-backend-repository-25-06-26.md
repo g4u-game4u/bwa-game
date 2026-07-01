@@ -550,7 +550,7 @@ GET /game/reports/organization/hierarchy-report/deliveries?month=2026-06&drilldo
 | `overdue_pending_justified` / `_unjustified` | breakdown | |
 | `critical_client` | `critical_clients.clients[]` ou `top_clients[]` | Entregas problemáticas do cliente (tag churn/onboarding/G4); requer `company_serve_key` |
 
-**Paridade KPI ↔ drill-down:** `total_deliveries` deve bater com o KPI do nó no mesmo escopo. Multas: contagem por **`delivery_id` distinto** por jogador/time (sem dedup global que subcontava vs mart).
+**Paridade KPI ↔ drill-down:** `total_deliveries` deve bater com o KPI do nó no mesmo escopo. Multas: contagem por **`delivery_id` distinto** por jogador/time (sem dedup global que subcontava vs mart). **Cliente crítico:** por padrão o drill-down deduplica por `delivery_id` (1 linha por entrega); use **`all_scoring_events=true`** para listar cada `user_action` que compõe `mtd_overdue_unjustified` / `mtd_late_finish` (paridade com o mart 13).
 
 ### Drill-down de cliente crítico
 
@@ -562,6 +562,7 @@ GET /game/reports/organization/hierarchy-report/deliveries
   &drilldown=critical_client
   &company_serve_key=12345678000199
   &issue=all
+  &all_scoring_events=true
   &node_type=organization
   &node_id=bwa
 ```
@@ -570,6 +571,9 @@ GET /game/reports/organization/hierarchy-report/deliveries
 |-------|-------------|-----------|
 | `company_serve_key` | Sim | Mesmo valor de `clients[].company_serve_key` ou `top_clients[].company_serve_key` |
 | `issue` | Não | `all` (default) · `overdue` · `late_finish` |
+| `all_scoring_events` | Não | `true` = todas as user_actions que entram no score (contadores do KPI); default = 1 linha por `delivery_id` |
+
+**Paridade com KPI:** com `all_scoring_events=true` e `issue=all`, `total_deliveries` ≈ `mtd_overdue_unjustified + mtd_late_finish` do cliente em `critical_clients.clients[]`. Com `issue=overdue` ou `late_finish`, bate só com o contador correspondente.
 
 Cada delivery retorna `issue_kind` (`overdue` \| `late_finish`), `action_title`, `company_serve_key`, **`company_cnpj_digits`**, responsável e hierarquia — mesma estrutura agrupada (`diretorias → gerencias → supervisoes → deliveries`).
 
@@ -583,6 +587,7 @@ deliveries: {
   company_serve_key?: string | null;
   company_cnpj_digits?: string | null;
   issue_kind?: 'overdue' | 'late_finish' | null;
+  user_action_id?: string | null; // quando all_scoring_events=true
   client_key: string | null;
   dt_prazo: string | null;
   dt_atraso: string | null;

@@ -88,13 +88,13 @@ export class ModalSeasonFaqComponent {
         'Compare o realizado com a meta na barra de progresso em Minhas Metas.',
     },
     {
-      title: 'O que significa a meta de 90% de entregas no prazo?',
+      title: 'O que significa a meta de entregas no prazo?',
       icon: 'ri-time-line',
       theme: 'cyan',
       body:
         'É a meta de qualidade operacional com base nas entregas no Acessórias.\n' +
         'O percentual considera entregas de todos os usuários que atenderam cada cliente, não apenas as suas.\n' +
-        'Valores acima de 90% indicam resultado positivo para a carteira.',
+        'A meta vigente aparece no painel (90% até jun/2026; 95% a partir de jul/2026). Valores acima da meta indicam resultado positivo para a carteira.',
     },
     {
       title: 'Como usar Meu Progresso (Pendentes e Finalizados)?',

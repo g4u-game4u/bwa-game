@@ -22,6 +22,8 @@ export interface OrgHierarchyDeliveriesExportOptions {
   includeIssueKindColumn?: boolean;
   /** Coluna CNPJ — somente em exportações Excel. */
   includeCnpj?: boolean;
+  /** Coluna user_action_id — drill-down cliente crítico com all_scoring_events. */
+  includeUserActionId?: boolean;
 }
 
 const DELIVERIES_DRILLDOWN_SLUGS: Record<OrgHierarchyDeliveriesDrilldownKey, string> = {
@@ -89,6 +91,9 @@ function mapDeliveryRowForExport(
 
   if (options.includeIssueKindColumn) {
     row['Tipo de problema'] = formatCriticalClientIssueKindLabel(delivery.issue_kind);
+  }
+  if (options.includeUserActionId) {
+    row['ID ação'] = delivery.user_action_id ?? '';
   }
   if (options.includeDelayColumn || options.includeDelayWithFinished) {
     row['Atraso legal'] = formatExportIsoDate(delivery.dt_atraso);

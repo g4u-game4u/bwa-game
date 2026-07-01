@@ -623,6 +623,17 @@
         color: $text-secondary;
         font-weight: $font-weight-medium;
       }
+
+      .selector-hint {
+        margin: $spacing-xs 0 0;
+        font-size: $font-size-small;
+        color: $text-secondary;
+        line-height: 1.4;
+      }
+
+      .selector-hint--error {
+        color: #f87171;
+      }
       
       .team-display {
         padding: $spacing-sm $spacing-md;

@@ -203,6 +203,8 @@ export interface Game4uReportsManagementFinishedDeliveriesCachedQuery {
   limit?: number;
   /** Só ADMIN/SERVICE: consultar outro gestor. */
   user_id?: string;
+  /** Só ADMIN/SERVICE: simular escopo de GERENTE / DIRETOR / C_LEVEL. */
+  role?: ManagementDashboardUserRole;
 }
 
 /** Resposta paginada de `GET /game/reports/finished/deliveries/cached`. */
@@ -416,6 +418,8 @@ export interface ManagementDashboardOverviewResponse {
 export interface Game4uReportsManagementCachedQuery {
   month: string;
   user_id?: string;
+  /** Só ADMIN/SERVICE: simular escopo de GERENTE / DIRETOR / C_LEVEL. */
+  role?: ManagementDashboardUserRole;
 }
 
 /** Query para `GET /game/reports/management/dashboard/cached/list`. */
@@ -473,6 +477,10 @@ export interface Game4uReportsTeamDailyFinishedStatsQuery {
   status?: string[];
   offset?: number;
   limit?: number;
+  /** Só ADMIN/SERVICE com `team_id=__management_overview__`: simular escopo de gestão. */
+  role?: ManagementDashboardUserRole;
+  /** Só ADMIN/SERVICE com `team_id=__management_overview__`: consultar outro gestor. */
+  user_id?: string;
 }
 
 /**
@@ -510,6 +518,8 @@ export interface Game4uReportsTeamDailyPendingStatsQuery {
   status?: string[];
   /** E-mail opcional do colaborador (drill-down). */
   email?: string;
+  /** Só ADMIN/SERVICE com `team_id=__management_overview__`: simular escopo de gestão. */
+  role?: ManagementDashboardUserRole;
 }
 
 /**
@@ -1079,7 +1089,10 @@ export interface Game4uReportsOrganizationHierarchyCriticalClientsDeliveriesExpo
   month: string; // YYYY-MM
   node_type?: OrgHierarchyNodeType | string;
   node_id?: string;
+  company_serve_key?: string;
   issue?: CriticalClientIssueFilter | string;
+  /** `true` = todas as user_actions que entram no score do cliente crítico. */
+  all_scoring_events?: boolean;
 }
 
 export interface OrganizationHierarchyDeliveryRow {
@@ -1090,6 +1103,8 @@ export interface OrganizationHierarchyDeliveryRow {
   company_serve_key?: string | null;
   company_cnpj_digits?: string | null;
   issue_kind?: CriticalClientIssueKind | null;
+  /** Presente quando `all_scoring_events=true` no drill-down de cliente crítico. */
+  user_action_id?: string | null;
   client_key: string | null;
   client_name?: string | null;
   dt_prazo: string | null;
@@ -1225,6 +1240,7 @@ function normalizeOrganizationHierarchyDeliveryRow(
     company_serve_key: pickNullableString(o, ['company_serve_key', 'companyServeKey']),
     company_cnpj_digits: pickNullableString(o, ['company_cnpj_digits', 'companyCnpjDigits']),
     issue_kind,
+    user_action_id: pickNullableString(o, ['user_action_id', 'userActionId']),
     client_key: pickNullableString(o, [
       'client_name',
       'clientName',
@@ -1360,6 +1376,8 @@ export interface Game4uReportsOrganizationHierarchyDeliveriesQuery {
   node_id?: string;
   company_serve_key?: string;
   issue?: CriticalClientIssueFilter;
+  /** Cliente crítico: `true` lista cada user_action do score (paridade com contadores MTD). */
+  all_scoring_events?: boolean;
 }
 
 /** @deprecated Prefer {@link OrganizationHierarchyDeliveryRow} */

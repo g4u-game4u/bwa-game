@@ -722,8 +722,8 @@
                       <ng-container *ngIf="col.key === 'on_time_pct'; else rankingEssentialDefault">
                         <span
                           class="metric-chip"
-                          [class.metric-chip--success]="(dir.mtd.on_time_pct ?? 0) >= 90"
-                          [class.metric-chip--warning]="(dir.mtd.on_time_pct ?? 0) >= 70 && (dir.mtd.on_time_pct ?? 0) < 90"
+                          [class.metric-chip--success]="(dir.mtd.on_time_pct ?? 0) >= onTimeDeliveryGoalPct"
+                          [class.metric-chip--warning]="(dir.mtd.on_time_pct ?? 0) >= 70 && (dir.mtd.on_time_pct ?? 0) < onTimeDeliveryGoalPct"
                           [class.metric-chip--danger]="(dir.mtd.on_time_pct ?? 0) < 70">
                           {{ rankingMtdCell(dir, col) }}
                         </span>
@@ -1038,6 +1038,7 @@
               [root]="root"
               [expandedIds]="expandedNodeIds"
               [searchHighlightIds]="flowchartSearchHighlightIds"
+              [onTimeDeliveryGoal]="onTimeDeliveryGoalPct"
               (toggleNode)="toggleTreeNode($event)"
               (kpiClick)="openKpiDrillDownFromTree($event)"
               (expandAll)="expandAllTreeNodes()"

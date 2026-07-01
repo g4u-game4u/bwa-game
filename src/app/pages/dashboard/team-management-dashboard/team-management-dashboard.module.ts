@@ -30,6 +30,7 @@ import { ModalCompanyCarteiraDetailModule } from '@modals/modal-company-carteira
 import { C4uDashboardInsightsModule } from '@components/c4u-dashboard-insights/c4u-dashboard-insights.module';
 import { C4uDashboardGoalsSkeletonModule } from '@components/c4u-dashboard-goals-skeleton/c4u-dashboard-goals-skeleton.module';
 import { ModalTeamManagementFaqModule } from '@modals/modal-team-management-faq/modal-team-management-faq.module';
+import { C4uGameRulesUpdateBannerModule } from '@components/c4u-game-rules-update-banner/c4u-game-rules-update-banner.module';
 import { NgbModule } from '@ng-bootstrap/ng-bootstrap';
 
 // Shared modules
@@ -76,6 +77,7 @@ const routes: Routes = [
     ModalCompanyCarteiraDetailModule,
     C4uDashboardInsightsModule,
     C4uDashboardGoalsSkeletonModule,
+    C4uGameRulesUpdateBannerModule,
     ModalTeamManagementFaqModule,
     NgbModule
   ]

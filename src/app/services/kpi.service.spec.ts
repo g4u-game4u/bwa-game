@@ -123,5 +123,21 @@ describe('KPIService', () => {
       expect(carteira?.current).toBe(4);
       expect(ps.getCurrentPlayerData).not.toHaveBeenCalled();
     });
+
+    it('should use 90% entregas meta for June 2026 even when extra.entrega_goal is 90', done => {
+      service.getPlayerKPIs('player@x.com', new Date(2026, 5, 1)).subscribe(kpis => {
+        const entregas = kpis.find(k => k.id === 'entregas-prazo');
+        expect(entregas?.target).toBe(90);
+        done();
+      });
+    });
+
+    it('should use 95% entregas meta for July 2026 regardless of extra.entrega_goal', done => {
+      service.getPlayerKPIs('player@x.com', new Date(2026, 6, 1)).subscribe(kpis => {
+        const entregas = kpis.find(k => k.id === 'entregas-prazo');
+        expect(entregas?.target).toBe(95);
+        done();
+      });
+    });
   });
 });

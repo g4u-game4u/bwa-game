@@ -29,6 +29,8 @@ import { ProgressCardType } from '@components/c4u-activity-progress/c4u-activity
 import { ProgressListType } from '@modals/modal-progress-list/modal-progress-list.component';
 import { ModalSeasonFaqComponent } from '@modals/modal-season-faq/modal-season-faq.component';
 import { PONTOS_POR_ATIVIDADE_FINALIZADA_ACTION_LOG } from '@app/constants/pontos-por-atividade-action-log';
+import { getOnTimeDeliveryGoalForMonth } from '@app/constants/on-time-delivery-goal';
+import { dateFromMonthFilterOffset, MONTH_FILTER_TODA_TEMPORADA } from '@utils/month-filter-offset.util';
 import {
   extractGamificacaoEmpIdFromDeliveryKey,
   extractEmpIdPrefixFromDeliveryIdFirstSegment
@@ -1102,7 +1104,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
 
     try {
       const kpiRows = await firstValueFrom(
-        this.companyKpiService.enrichFromParticipacaoRowKeys(participacaoGamificacaoRows).pipe(take(1))
+        this.companyKpiService.enrichFromParticipacaoRowKeys(participacaoGamificacaoRows, this.selectedMonth).pipe(take(1))
       );
       if (loadGen !== this.participacaoKpiLoadGen) {
         return;
@@ -1225,7 +1227,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
 
   private applyEntregasPrazoKpiValue(idx: number, avg: number): void {
     const base = this.playerKPIs[idx];
-    const target = base.target;
+    const target = getOnTimeDeliveryGoalForMonth(this.selectedMonth);
     const superTarget = base.superTarget ?? 100;
     const updated: KPIData = {
       ...base,
@@ -1264,7 +1266,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
       .subscribe({
         next: (kpis) => {
           console.log('📊 KPIs loaded:', kpis, `(${kpis?.length || 0} KPIs)`);
-          this.playerKPIs = kpis || [];
+          this.playerKPIs = this.kpiService.applyOnTimeDeliveryGoalToKpis(kpis || [], this.selectedMonth);
           this.syncClientesKpiWithTabs();
           if (this.playerService.usesGame4uWalletFromStats()) {
             this.syncEntregasPrazoKpiFromParticipacao();
@@ -1478,17 +1480,15 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   onMonthChange(monthsAgo: number): void {
     console.warn('⚠️ MONTH CHANGE:', monthsAgo); // Use warn so it's visible even with filters
     // Handle "Toda temporada" (-1) — undefined means no month filtering (season-wide)
-    if (monthsAgo === -1) {
+    if (monthsAgo === MONTH_FILTER_TODA_TEMPORADA) {
       this.selectedMonth = undefined;
       console.warn('⚠️ selectedMonth set to undefined (Toda temporada)');
       this.announceToScreenReader('Filtro alterado para toda temporada');
     } else {
-      const date = new Date();
-      date.setDate(1); // Set to 1st to avoid month rollover (e.g. March 30 → setMonth(1) = March 2)
-      date.setMonth(date.getMonth() - monthsAgo);
+      const date = dateFromMonthFilterOffset(monthsAgo);
       this.selectedMonth = date;
-      console.warn('⚠️ selectedMonth set to:', date.toISOString());
-      const monthName = date.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+      console.warn('⚠️ selectedMonth set to:', date?.toISOString());
+      const monthName = (date ?? new Date()).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
       this.announceToScreenReader(`Mês alterado para ${monthName}`);
     }
 
@@ -2074,11 +2074,12 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     return null;
   }
 
-  /** Classes para o % de entregas no prazo na lista «Clientes atendidos»: verde >90%, vermelho caso contrário; n/a permanece neutro. */
+  /** Classes para o % de entregas no prazo na lista «Clientes atendidos»: verde acima da meta vigente. */
   listaEntregaPrazoClasses(cliente: CompanyDisplay): Record<string, boolean> {
     const v = this.getListaEntregaPercent(cliente);
+    const goal = getOnTimeDeliveryGoalForMonth(this.selectedMonth);
     const na = v === null;
-    const good = !na && v > 90;
+    const good = !na && v > goal;
     const below = !na && !good;
     return {
       'carteira-entrega': true,

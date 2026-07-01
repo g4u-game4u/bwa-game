@@ -20,6 +20,10 @@ export class C4uSeletorMesComponent implements OnInit, OnChanges {
   private monthAnchor = moment().startOf('month');
   /** Primeiro mês permitido na campanha. */
   private seasonStartMonth = moment().startOf('month');
+  /** Último mês permitido na campanha. */
+  private seasonEndMonth = moment().startOf('month');
+  /** Evita `ngOnChanges` repopular meses antes de `initializeMonths`. */
+  private monthsReady = false;
 
     @Output()
     onSelectedMonth = new EventEmitter();
@@ -57,30 +61,37 @@ export class C4uSeletorMesComponent implements OnInit, OnChanges {
         if (changes['showTodaTemporadaButton']?.currentValue === false && this.isTodaTemporada) {
             this.isTodaTemporada = false;
         }
-        // const slaDate =
-        //   moment(moment().diff(this.seasonData?.datas.dataInicio)).month() + 1;
-        // const slaDate = this.PREV_MONTHS;
-        this.months = [];
-        this.isLoading = true;
-        this.populateFields(this.PREV_MONTHS);
+        if (!this.monthsReady) {
+            return;
+        }
+        if (changes['playerId']) {
+            this.isLoading = true;
+            void this.refreshMonthsList();
+        }
     }
 
     private async initializeMonths() {
       try {
         this.isLoading = true; // Ativa loading
 
+        const { start, end } = await this.seasonDatesService.getSeasonDates();
+        this.seasonStartMonth = moment(start).startOf('month');
+        this.seasonEndMonth = moment(end).startOf('month');
+
         if (this.sessao.isAdmin()) {
           this.PREV_MONTHS = 6;
           this.monthAnchor = moment().startOf('month');
-          this.seasonStartMonth = moment().subtract(this.PREV_MONTHS - 1, 'months').startOf('month');
+          if (this.monthAnchor.isAfter(this.seasonEndMonth)) {
+            this.monthAnchor = this.seasonEndMonth.clone();
+          }
+          if (this.monthAnchor.isBefore(this.seasonStartMonth)) {
+            this.monthAnchor = this.seasonStartMonth.clone();
+          }
         } else {
-          const { start, end } = await this.seasonDatesService.getSeasonDates();
-          this.seasonStartMonth = moment(start).startOf('month');
-          const seasonEndMonth = moment(end).startOf('month');
           const nowMonth = moment().startOf('month');
           let anchor = nowMonth.clone();
-          if (anchor.isAfter(seasonEndMonth)) {
-            anchor = seasonEndMonth.clone();
+          if (anchor.isAfter(this.seasonEndMonth)) {
+            anchor = this.seasonEndMonth.clone();
           }
           if (anchor.isBefore(this.seasonStartMonth)) {
             anchor = this.seasonStartMonth.clone();
@@ -90,7 +101,7 @@ export class C4uSeletorMesComponent implements OnInit, OnChanges {
             this.monthAnchor.clone().startOf('month').diff(this.seasonStartMonth.clone().startOf('month'), 'months') +
             1;
           const maxSpan =
-            seasonEndMonth.clone().startOf('month').diff(this.seasonStartMonth.clone().startOf('month'), 'months') + 1;
+            this.seasonEndMonth.clone().startOf('month').diff(this.seasonStartMonth.clone().startOf('month'), 'months') + 1;
           this.PREV_MONTHS = Math.max(1, Math.min(span, Math.max(1, maxSpan)));
         }
 
@@ -104,11 +115,14 @@ export class C4uSeletorMesComponent implements OnInit, OnChanges {
         }
 
         this.populateFields(this.PREV_MONTHS, true); // Suppress initial emit - dashboard already loads data
+        this.monthsReady = true;
       } catch (error) {
         this.PREV_MONTHS = 1;
         this.monthAnchor = moment().startOf('month');
         this.seasonStartMonth = moment().subtract(11, 'months').startOf('month');
+        this.seasonEndMonth = moment().add(6, 'months').startOf('month');
         this.populateFields(this.PREV_MONTHS, true);
+        this.monthsReady = true;
       } finally {
         // Garante que loading seja desativado mesmo em caso de erro
         setTimeout(() => {
@@ -169,21 +183,31 @@ export class C4uSeletorMesComponent implements OnInit, OnChanges {
       }
     }
 
+    private async refreshMonthsList(): Promise<void> {
+      try {
+        await this.checkAndIncludeJanuary();
+        this.populateFields(this.PREV_MONTHS);
+      } finally {
+        this.isLoading = false;
+      }
+    }
+
     private populateFields(value: number, suppressEmit: boolean = false) {
         this.months = []; // Limpa meses anteriores
 
         if (value && value > 0) {
             if (this.sessao.isAdmin()) {
-                Array(value)
-                    .fill(0)
-                    .forEach((_, i) => {
-                        const month = moment().subtract(i, 'months');
-                        this.months.push({
-                            id: i,
-                            name: month.format('MMM/YY').toUpperCase(),
-                            monthsAgo: i
-                        });
+                for (let i = 0; i < value; i++) {
+                    const month = this.monthAnchor.clone().subtract(i, 'months');
+                    if (month.isBefore(this.seasonStartMonth, 'month')) {
+                        break;
+                    }
+                    this.months.push({
+                        id: this.months.length,
+                        name: month.format('MMM/YY').toUpperCase(),
+                        monthsAgo: i
                     });
+                }
             } else {
                 for (let i = 0; i < value; i++) {
                     const m = this.monthAnchor.clone().subtract(i, 'months');
@@ -199,26 +223,34 @@ export class C4uSeletorMesComponent implements OnInit, OnChanges {
                 }
             }
         } else {
-            const currentMonth = moment().startOf('month');
+            const currentMonth = this.monthAnchor.clone().startOf('month');
             this.months.push({
                 id: 0,
                 name: currentMonth.format('MMM/YY').toUpperCase(),
-                monthsAgo: 0
+                monthsAgo: moment().startOf('month').diff(currentMonth, 'months')
             });
         }
+
+        this.selected = 0;
 
         setTimeout(() => {
             if (!suppressEmit) {
                 this.onChange();
             } else {
-                // Still update prev/next button states without emitting
-                if (this.months.length > 0) {
-                    this.prevEnabled = (this.selected !== this.months.length - 1);
-                    this.nextEnabled = (this.selected !== 0);
-                }
+                this.syncNavigationButtons();
             }
             this.isLoading = false;
         }, 150);
+    }
+
+    private syncNavigationButtons(): void {
+        if (this.months.length === 0) {
+            this.prevEnabled = false;
+            this.nextEnabled = false;
+            return;
+        }
+        this.prevEnabled = this.selected !== this.months.length - 1;
+        this.nextEnabled = this.selected !== 0;
     }
 
     getPrevMonth() {
@@ -245,8 +277,7 @@ export class C4uSeletorMesComponent implements OnInit, OnChanges {
             return;
         }
         if (this.months.length > 0) {
-            this.prevEnabled = (this.selected !== this.months.length - 1);
-            this.nextEnabled = (this.selected !== 0);
+            this.syncNavigationButtons();
             const row = this.months[this.selected];
             const monthsAgo =
                 row && typeof (row as { monthsAgo?: number }).monthsAgo === 'number'
@@ -293,4 +324,3 @@ export class C4uSeletorMesComponent implements OnInit, OnChanges {
         }
     }
 }
-

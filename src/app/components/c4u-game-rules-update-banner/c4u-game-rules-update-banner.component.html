@@ -1,0 +1,47 @@
+<div class="rules-update-stack" *ngIf="visibleAnnouncements.length > 0" role="region" aria-label="Atualizações de regras do game">
+  <article
+    *ngFor="let item of visibleAnnouncements; trackBy: trackByAnnouncementId"
+    class="rules-update-banner"
+    role="status"
+    [attr.aria-labelledby]="'rules-update-title-' + item.id">
+    <div class="rules-update-banner__accent" aria-hidden="true"></div>
+
+    <div class="rules-update-banner__icon-wrap" aria-hidden="true">
+      <i class="ri-rocket-2-fill rules-update-banner__icon"></i>
+    </div>
+
+    <div class="rules-update-banner__content">
+      <p class="rules-update-banner__eyebrow">
+        <i class="ri-sparkling-2-line" aria-hidden="true"></i>
+        Atualização · {{ item.effectiveMonthLabel }}
+      </p>
+
+      <h2 class="rules-update-banner__title" [id]="'rules-update-title-' + item.id">
+        {{ item.title }}
+      </h2>
+
+      <div class="rules-update-banner__shift" aria-label="Mudança de meta">
+        <span class="rules-update-banner__chip rules-update-banner__chip--from">
+          <span class="rules-update-banner__chip-label">Antes</span>
+          <strong>{{ item.previousValueLabel }}</strong>
+        </span>
+        <i class="ri-arrow-right-line rules-update-banner__arrow" aria-hidden="true"></i>
+        <span class="rules-update-banner__chip rules-update-banner__chip--to">
+          <span class="rules-update-banner__chip-label">Nova meta</span>
+          <strong>{{ item.newValueLabel }}</strong>
+        </span>
+      </div>
+
+      <p class="rules-update-banner__body">{{ item.body }}</p>
+    </div>
+
+    <button
+      type="button"
+      class="rules-update-banner__dismiss"
+      (click)="dismiss(item)"
+      [attr.aria-label]="'Entendi a atualização: ' + item.title">
+      <i class="ri-check-line" aria-hidden="true"></i>
+      <span>Entendi</span>
+    </button>
+  </article>
+</div>
