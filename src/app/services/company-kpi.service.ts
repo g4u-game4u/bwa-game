@@ -575,7 +575,7 @@ export class CompanyKpiService {
     );
   }
 
-  enrichFromCnpjResp(empids: string[]): Observable<CompanyDisplay[]> {
+  enrichFromCnpjResp(empids: string[], referenceMonth?: Date | null): Observable<CompanyDisplay[]> {
     if (!empids || empids.length === 0) {
       return of([]);
     }
@@ -716,7 +716,8 @@ export class CompanyKpiService {
       processCount?: number;
       delivery_title?: string;
       deliveryId?: string;
-    }[]
+    }[],
+    referenceMonth?: Date | null
   ): Observable<CompanyDisplay[]> {
     if (!companies || companies.length === 0) {
       return of([]);
