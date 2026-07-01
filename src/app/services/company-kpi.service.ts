@@ -600,7 +600,7 @@ export class CompanyKpiService {
             processCount: procFin + procPen
           };
 
-          this.applyKpiDataToCompanyDisplay(result, kpiData);
+          this.applyKpiDataToCompanyDisplay(result, kpiData, referenceMonth);
           return result;
         })
       ),
@@ -628,7 +628,8 @@ export class CompanyKpiService {
    * O percentual vem do campo `porcEntregas` da API (normalizado em `entrega` / `porcEntregas` / `deliveryKpi`).
    */
   enrichFromParticipacaoRowKeys(
-    rows: readonly (ParticipacaoRowGamificacaoInput | string)[]
+    rows: readonly (ParticipacaoRowGamificacaoInput | string)[],
+    referenceMonth?: Date | null
   ): Observable<CompanyDisplay[]> {
     if (!rows || rows.length === 0) {
       return of([]);
@@ -687,7 +688,7 @@ export class CompanyKpiService {
             ...(gamificacaoEmpIdUsado ? { gamificacaoEmpIdUsado } : {})
           };
 
-          this.applyKpiDataToCompanyDisplay(result, kpiData);
+          this.applyKpiDataToCompanyDisplay(result, kpiData, referenceMonth);
           return result;
         })
       ),
@@ -739,7 +740,7 @@ export class CompanyKpiService {
           };
 
           const kpiData = this.resolveKpiForActionLogCompany(company, maps);
-          this.applyKpiDataToCompanyDisplay(result, kpiData);
+          this.applyKpiDataToCompanyDisplay(result, kpiData, referenceMonth);
 
           return result;
         });
@@ -763,7 +764,8 @@ export class CompanyKpiService {
   /** Preenche `classificacao` / `entrega` / `porcEntregas` / `deliveryKpi` quando a linha da API existe e há `porcEntregas`. */
   private applyKpiDataToCompanyDisplay(
     result: CompanyDisplay,
-    kpiData: CnpjKpiData | undefined
+    kpiData: CnpjKpiData | undefined,
+    referenceMonth?: Date | null
   ): void {
     if (!kpiData) {
       return;
@@ -781,7 +783,7 @@ export class CompanyKpiService {
       const n = Number(e);
       result.entrega = n;
       result.porcEntregas = n;
-      result.deliveryKpi = this.mapToKpiData(n);
+      result.deliveryKpi = this.mapToKpiData(n, referenceMonth);
     }
   }
 

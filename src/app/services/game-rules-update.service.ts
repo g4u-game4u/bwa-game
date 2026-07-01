@@ -4,6 +4,7 @@ import {
   monthKeyFromDate,
   ON_TIME_DELIVERY_GOAL_CURRENT,
   ON_TIME_DELIVERY_GOAL_EFFECTIVE_FROM,
+  ON_TIME_DELIVERY_GOAL_INCREASE_ENABLED,
   ON_TIME_DELIVERY_GOAL_LEGACY
 } from '@app/constants/on-time-delivery-goal';
 import {
@@ -21,13 +22,15 @@ export class GameRulesUpdateService {
     id: string;
     effectiveFrom: string;
     build: (audience: GameRulesUpdateAudience, effectiveMonth: Date) => GameRulesUpdateAnnouncement;
-  }> = [
-    {
-      id: 'on-time-delivery-goal-2026-07',
-      effectiveFrom: ON_TIME_DELIVERY_GOAL_EFFECTIVE_FROM,
-      build: (audience, effectiveMonth) => this.buildOnTimeGoalJuly2026(audience, effectiveMonth)
-    }
-  ];
+  }> = ON_TIME_DELIVERY_GOAL_INCREASE_ENABLED
+    ? [
+        {
+          id: 'on-time-delivery-goal-2026-07',
+          effectiveFrom: ON_TIME_DELIVERY_GOAL_EFFECTIVE_FROM,
+          build: (audience, effectiveMonth) => this.buildOnTimeGoalJuly2026(audience, effectiveMonth)
+        }
+      ]
+    : [];
 
   getVisibleAnnouncements(
     selectedMonth: Date | undefined | null,

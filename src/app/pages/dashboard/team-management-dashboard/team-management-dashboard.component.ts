@@ -4350,7 +4350,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
 
     try {
       const kpiRows = await firstValueFrom(
-        this.companyKpiService.enrichFromParticipacaoRowKeys(participacaoGamificacaoRows).pipe(take(1))
+        this.companyKpiService.enrichFromParticipacaoRowKeys(participacaoGamificacaoRows, this.selectedMonth).pipe(take(1))
       );
       if (loadGen !== this.participacaoKpiLoadGen) {
         return;
@@ -6122,7 +6122,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
             .getPlayerKPIs(collaboratorId, this.selectedMonth, this.actionLogService, scope)
             .pipe(takeUntil(this.destroy$))
         );
-        this.teamKPIs = kpis || [];
+        this.teamKPIs = this.kpiService.applyOnTimeDeliveryGoalToKpis(kpis || [], this.selectedMonth);
       } else {
         const panelId = this.getPanelPlayerId();
         if (!panelId) {
@@ -6133,7 +6133,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
               .getPlayerKPIs(panelId, this.selectedMonth, this.actionLogService, scope)
               .pipe(takeUntil(this.destroy$))
           );
-          this.teamKPIs = kpis || [];
+          this.teamKPIs = this.kpiService.applyOnTimeDeliveryGoalToKpis(kpis || [], this.selectedMonth);
         }
         console.log('✅ Team KPIs (mesmo fluxo que gamificação individual, cache por team_id):', this.teamKPIs.length);
       }
@@ -6205,7 +6205,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
 
   private applyTeamEntregasPrazoKpiValue(idx: number, avg: number): void {
     const base = this.teamKPIs[idx];
-    const target = base.target;
+    const target = getOnTimeDeliveryGoalForMonth(this.selectedMonth);
     const superTarget = base.superTarget ?? 100;
     const updated: KPIData = {
       ...base,

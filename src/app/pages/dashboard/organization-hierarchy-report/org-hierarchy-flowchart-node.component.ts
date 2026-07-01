@@ -9,6 +9,7 @@ import {
   getOrgPointsGoalTone,
   getOrgHierarchyAreaLabelClass
 } from '@services/org-hierarchy-report.mapper';
+import { ON_TIME_DELIVERY_GOAL_LEGACY } from '@app/constants/on-time-delivery-goal';
 import { normalizeOrgHierarchyNodeType } from '@services/org-hierarchy-segmentation.mapper';
 
 @Component({
@@ -22,6 +23,8 @@ export class C4uOrgHierarchyFlowchartNodeComponent {
   @Input() expandedIds = new Set<string>();
   @Input() searchHighlightIds = new Set<string>();
   @Input() selectedNodeId: string | null = null;
+  /** Meta de % no prazo do mês filtrado (90% ou 95%). */
+  @Input() onTimeDeliveryGoal = ON_TIME_DELIVERY_GOAL_LEGACY;
 
   @Output() toggleNode = new EventEmitter<string>();
   @Output() selectNode = new EventEmitter<string>();
@@ -100,7 +103,7 @@ export class C4uOrgHierarchyFlowchartNodeComponent {
     if (pct == null || !Number.isFinite(pct)) {
       return 'neutral';
     }
-    if (pct >= 90) {
+    if (pct >= this.onTimeDeliveryGoal) {
       return 'success';
     }
     if (pct >= 70) {

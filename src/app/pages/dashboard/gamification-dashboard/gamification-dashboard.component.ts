@@ -1104,7 +1104,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
 
     try {
       const kpiRows = await firstValueFrom(
-        this.companyKpiService.enrichFromParticipacaoRowKeys(participacaoGamificacaoRows).pipe(take(1))
+        this.companyKpiService.enrichFromParticipacaoRowKeys(participacaoGamificacaoRows, this.selectedMonth).pipe(take(1))
       );
       if (loadGen !== this.participacaoKpiLoadGen) {
         return;
@@ -1227,7 +1227,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
 
   private applyEntregasPrazoKpiValue(idx: number, avg: number): void {
     const base = this.playerKPIs[idx];
-    const target = base.target;
+    const target = getOnTimeDeliveryGoalForMonth(this.selectedMonth);
     const superTarget = base.superTarget ?? 100;
     const updated: KPIData = {
       ...base,
@@ -1266,7 +1266,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
       .subscribe({
         next: (kpis) => {
           console.log('📊 KPIs loaded:', kpis, `(${kpis?.length || 0} KPIs)`);
-          this.playerKPIs = kpis || [];
+          this.playerKPIs = this.kpiService.applyOnTimeDeliveryGoalToKpis(kpis || [], this.selectedMonth);
           this.syncClientesKpiWithTabs();
           if (this.playerService.usesGame4uWalletFromStats()) {
             this.syncEntregasPrazoKpiFromParticipacao();

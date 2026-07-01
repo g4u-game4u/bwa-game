@@ -1,4 +1,4 @@
-/** Meta de entregas no prazo antes de jul/2026. */
+/** Meta de entregas no prazo até jun/2026. */
 export const ON_TIME_DELIVERY_GOAL_LEGACY = 90;
 
 /** Meta de entregas no prazo a partir de jul/2026. */
@@ -6,6 +6,9 @@ export const ON_TIME_DELIVERY_GOAL_CURRENT = 95;
 
 /** Primeiro mês (YYYY-MM) em que a meta de 95% entra em vigor. */
 export const ON_TIME_DELIVERY_GOAL_EFFECTIVE_FROM = '2026-07';
+
+/** Aumento da meta de 90% → 95% e banner de comunicação nos painéis. */
+export const ON_TIME_DELIVERY_GOAL_INCREASE_ENABLED = true;
 
 /** @deprecated Use {@link getOnTimeDeliveryGoalForMonth} — valor legado fixo. */
 export const ORG_ON_TIME_PCT_GOAL = ON_TIME_DELIVERY_GOAL_LEGACY;
@@ -18,10 +21,12 @@ export function monthKeyFromDate(date: Date): string {
 
 /** Meta de % entregas no prazo vigente para o mês do filtro do painel. */
 export function getOnTimeDeliveryGoalForMonth(month?: Date | null): number {
-  if (!month) {
-    return ON_TIME_DELIVERY_GOAL_CURRENT;
+  if (!ON_TIME_DELIVERY_GOAL_INCREASE_ENABLED) {
+    return ON_TIME_DELIVERY_GOAL_LEGACY;
   }
-  return monthKeyFromDate(month) >= ON_TIME_DELIVERY_GOAL_EFFECTIVE_FROM
+
+  const ref = month ?? new Date();
+  return monthKeyFromDate(ref) >= ON_TIME_DELIVERY_GOAL_EFFECTIVE_FROM
     ? ON_TIME_DELIVERY_GOAL_CURRENT
     : ON_TIME_DELIVERY_GOAL_LEGACY;
 }

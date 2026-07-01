@@ -18,6 +18,7 @@ import {
   getOrgHierarchyCompareTone,
   formatOrgHierarchyComparePct
 } from '@services/org-hierarchy-report.mapper';
+import { ON_TIME_DELIVERY_GOAL_LEGACY } from '@app/constants/on-time-delivery-goal';
 
 @Component({
   selector: 'c4u-org-hierarchy-flowchart',
@@ -29,6 +30,8 @@ export class C4uOrgHierarchyFlowchartComponent implements AfterViewInit, OnDestr
   @Input() root!: OrgHierarchyNode;
   @Input() expandedIds = new Set<string>();
   @Input() searchHighlightIds = new Set<string>();
+  /** Meta de % no prazo do mês filtrado (90% ou 95%). */
+  @Input() onTimeDeliveryGoal = ON_TIME_DELIVERY_GOAL_LEGACY;
 
   @Output() toggleNode = new EventEmitter<string>();
   @Output() expandAll = new EventEmitter<void>();
@@ -203,7 +206,7 @@ export class C4uOrgHierarchyFlowchartComponent implements AfterViewInit, OnDestr
     if (pct == null || !Number.isFinite(pct)) {
       return 'neutral';
     }
-    if (pct >= 90) {
+    if (pct >= this.onTimeDeliveryGoal) {
       return 'success';
     }
     if (pct >= 70) {

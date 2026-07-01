@@ -618,6 +618,11 @@ export class OrganizationHierarchyReportComponent implements OnInit, OnDestroy {
     return `meta ${getOnTimeDeliveryGoalForMonth(this.selectedMonth)}%`;
   }
 
+  /** Meta de % no prazo vigente no mês filtrado (90% até jun/2026; 95% a partir de jul/2026). */
+  get onTimeDeliveryGoalPct(): number {
+    return getOnTimeDeliveryGoalForMonth(this.selectedMonth);
+  }
+
   get weekdayPeakStat(): OrgHierarchyWeekdayStat | null {
     const stats = this.weekdayStats;
     if (!stats.length) {

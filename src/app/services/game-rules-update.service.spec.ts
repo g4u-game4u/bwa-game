@@ -20,11 +20,11 @@ describe('GameRulesUpdateService', () => {
       jasmine.clock().mockDate(july);
       const items = service.getVisibleAnnouncements(july, 'player');
 
-    expect(items.length).toBe(1);
-    expect(items[0].title).toContain('Nova meta');
-    expect(items[0].previousValueLabel).toBe(`${ON_TIME_DELIVERY_GOAL_LEGACY}%`);
-    expect(items[0].newValueLabel).toBe(`${ON_TIME_DELIVERY_GOAL_CURRENT}%`);
-    expect(items[0].body).toContain('95%');
+      expect(items.length).toBe(1);
+      expect(items[0].title).toContain('Nova meta');
+      expect(items[0].previousValueLabel).toBe(`${ON_TIME_DELIVERY_GOAL_LEGACY}%`);
+      expect(items[0].newValueLabel).toBe(`${ON_TIME_DELIVERY_GOAL_CURRENT}%`);
+      expect(items[0].body).toContain('95%');
     } finally {
       jasmine.clock().uninstall();
     }
@@ -44,9 +44,15 @@ describe('GameRulesUpdateService', () => {
     }
   });
 
-  it('should hide announcement before July 2026', () => {
+  it('should hide announcement before July 2026 in the filter', () => {
     const june = new Date(2026, 5, 1);
-    expect(service.getVisibleAnnouncements(june, 'player')).toEqual([]);
+    jasmine.clock().install();
+    try {
+      jasmine.clock().mockDate(june);
+      expect(service.getVisibleAnnouncements(june, 'player')).toEqual([]);
+    } finally {
+      jasmine.clock().uninstall();
+    }
   });
 
   it('should hide announcement after dismiss', () => {

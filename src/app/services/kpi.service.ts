@@ -148,13 +148,8 @@ export class KPIService {
           percentage: Math.min((companyCount / superTarget) * 100, 100)
         });
 
-        // Entregas no Prazo - from player.extra.entrega
-        // Get entrega target from player's extra.entrega_goal, fallback to meta vigente do mês
-        const entregaGoalRaw = playerStatus.extra?.entrega_goal;
-        const monthGoal = getOnTimeDeliveryGoalForMonth(selectedMonth);
-        const entregaTarget = (entregaGoalRaw !== undefined && entregaGoalRaw !== null)
-          ? (typeof entregaGoalRaw === 'number' ? entregaGoalRaw : parseFloat(String(entregaGoalRaw)))
-          : monthGoal;
+        // Meta de entregas no prazo: sempre pela vigência do mês (90% até jun/2026; 95% a partir de jul/2026).
+        const entregaTarget = getOnTimeDeliveryGoalForMonth(selectedMonth);
         const entregaSuperTarget = 100;
 
         if (playerStatus.extra?.entrega != null && playerStatus.extra.entrega !== '') {
@@ -277,6 +272,22 @@ export class KPIService {
     } else {
       return 'red';
     }
+  }
+
+  /** Garante que o KPI «entregas-prazo» use a meta vigente do mês filtrado (90% ou 95%). */
+  applyOnTimeDeliveryGoalToKpis(kpis: KPIData[], selectedMonth?: Date | null): KPIData[] {
+    const goal = getOnTimeDeliveryGoalForMonth(selectedMonth);
+    return kpis.map(kpi => {
+      if (kpi.id !== 'entregas-prazo') {
+        return kpi;
+      }
+      const superTarget = kpi.superTarget ?? 100;
+      return {
+        ...kpi,
+        target: goal,
+        color: kpi.isMissing ? 'gray' : this.getKPIColorByGoals(kpi.current, goal, superTarget)
+      };
+    });
   }
 
   /**
