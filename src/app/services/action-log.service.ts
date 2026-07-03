@@ -94,6 +94,9 @@ export interface PlayerParticipacaoDeliveryRow {
   fromCachedDeliveries?: boolean;
   loadTasksViaGameReports?: boolean;
   gamificacaoEmpIdUsado?: string | number;
+  is_acessorias_g4?: boolean;
+  is_acessorias_onboarding?: boolean;
+  is_acessorias_risco_de_churn?: boolean;
 }
 
 export interface PlayerParticipacaoDeliveriesPageResult {

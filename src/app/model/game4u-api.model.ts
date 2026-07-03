@@ -180,6 +180,9 @@ export interface Game4uReportsFinishedDeliveryRow {
   /** Tarefas DONE/DELIVERED no mês (`dt_prazo`) nesta entrega; lista só inclui linhas com valor > 0. */
   tasks_total?: number;
   tasks_on_time?: number;
+  is_acessorias_g4?: boolean;
+  is_acessorias_onboarding?: boolean;
+  is_acessorias_risco_de_churn?: boolean;
 }
 
 /** Query `GET /game/reports/finished/deliveries/cached` (informe `email` ou `team_id`). */
@@ -249,6 +252,19 @@ function pickFirstNonEmptyString(obj: Record<string, unknown>, keys: string[]): 
   return undefined;
 }
 
+function pickBooleanField(obj: Record<string, unknown>, keys: string[]): boolean {
+  for (const k of keys) {
+    const v = obj[k];
+    if (v === true || v === 'true' || v === 1 || v === '1') {
+      return true;
+    }
+    if (v === false || v === 'false' || v === 0 || v === '0') {
+      return false;
+    }
+  }
+  return false;
+}
+
 /** Aceita `string[]` legado ou `Record[]` com `delivery_id` / `delivery_title`. */
 export function normalizeGameReportsFinishedDeliveriesPayload(body: unknown): Game4uReportsFinishedDeliveryRow[] {
   if (!Array.isArray(body)) {
@@ -295,6 +311,15 @@ export function normalizeGameReportsFinishedDeliveriesPayload(body: unknown): Ga
       const tasks_total = Number(o['tasks_total'] ?? o['tasksTotal']);
       const tasks_on_time = Number(o['tasks_on_time'] ?? o['tasksOnTime']);
       const extra = normalizeDeliveryRowExtraField(o['extra']);
+      const is_acessorias_g4 = pickBooleanField(o, ['is_acessorias_g4', 'isAcessoriasG4']);
+      const is_acessorias_onboarding = pickBooleanField(o, [
+        'is_acessorias_onboarding',
+        'isAcessoriasOnboarding'
+      ]);
+      const is_acessorias_risco_de_churn = pickBooleanField(o, [
+        'is_acessorias_risco_de_churn',
+        'isAcessoriasRiscoDeChurn'
+      ]);
       out.push({
         delivery_title,
         ...(delivery_id ? { delivery_id } : {}),
@@ -303,7 +328,10 @@ export function normalizeGameReportsFinishedDeliveriesPayload(body: unknown): Ga
         ...(extra ? { extra } : {}),
         ...(on_time_pct != null ? { on_time_pct } : {}),
         ...(Number.isFinite(tasks_total) ? { tasks_total: Math.floor(tasks_total) } : {}),
-        ...(Number.isFinite(tasks_on_time) ? { tasks_on_time: Math.floor(tasks_on_time) } : {})
+        ...(Number.isFinite(tasks_on_time) ? { tasks_on_time: Math.floor(tasks_on_time) } : {}),
+        ...(is_acessorias_g4 ? { is_acessorias_g4: true } : {}),
+        ...(is_acessorias_onboarding ? { is_acessorias_onboarding: true } : {}),
+        ...(is_acessorias_risco_de_churn ? { is_acessorias_risco_de_churn: true } : {})
       });
     }
   }

@@ -33,6 +33,9 @@ export interface TeamFinishedDeliveriesPageResult {
     fromGameReportsDeliveries?: boolean;
     fromCachedDeliveries?: boolean;
     loadTasksViaGameReports?: boolean;
+    is_acessorias_g4?: boolean;
+    is_acessorias_onboarding?: boolean;
+    is_acessorias_risco_de_churn?: boolean;
   }[];
   offset: number;
   limit: number;

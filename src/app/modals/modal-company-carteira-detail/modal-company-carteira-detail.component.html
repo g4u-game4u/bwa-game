@@ -10,6 +10,13 @@
         {{ companyStatus }}
       </span>
     </div>
+    <div *ngIf="isClienteCritico" class="cliente-critico-tags-row" role="region" aria-label="Classificação do cliente crítico">
+      <span
+        *ngFor="let label of clienteCriticoLabels"
+        class="cliente-critico-tag">
+        {{ label }}
+      </span>
+    </div>
     <!-- Loading State -->
     <div *ngIf="isLoading" class="loading-state">
       <i class="ri-loader-4-line loading-icon"></i>

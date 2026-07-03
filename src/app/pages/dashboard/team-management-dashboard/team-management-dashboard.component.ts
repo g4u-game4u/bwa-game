@@ -96,7 +96,7 @@ import {
   ProductivitySegmentationMode,
   resolveProductivitySegmentationMode
 } from '@utils/productivity-segmentation';
-import { CompanyDisplay, CompanyKpiService } from '@services/company-kpi.service';
+import { CompanyDisplay, CompanyKpiService, isCompanyClienteCritico, mergeCompanyClienteCriticoFlags } from '@services/company-kpi.service';
 import { KPIData } from '@app/model/gamification-dashboard.model';
 import { KPIService } from '@services/kpi.service';
 import { CnpjLookupService } from '@services/cnpj-lookup.service';
@@ -188,19 +188,9 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
   managementPreviewManagersLoadError = false;
   /** Lista veio do organograma (fallback) em vez de `management/dashboard/cached/list`. */
   managementPreviewManagersFromOrgChart = false;
-  // Initialize to February 2026 by default (similar to gamification-dashboard)
-  // Calculate months ago from current date to February 2026
-  selectedMonthsAgo: number = (() => {
-    const now = dayjs();
-    const feb2026 = dayjs('2026-02-01');
-    // Calculate how many months ago February 2026 is from now
-    // If we're in February 2026, monthsAgo = 0
-    // If we're in March 2026, monthsAgo = 1 (one month ago)
-    // If we're in January 2026, monthsAgo = -1, but we'll use 0 as minimum
-    const monthsDiff = now.diff(feb2026, 'month', true); // Use true for fractional months
-    return Math.max(0, Math.round(monthsDiff));
-  })();
-  selectedMonth: Date | undefined = new Date(2026, 1, 1); // February 2026 (month is 0-indexed: 1 = February)
+  /** Offset do filtro de mês (`0` = mês atual), alinhado ao `c4u-seletor-mes` na carga inicial. */
+  selectedMonthsAgo: number = 0;
+  selectedMonth: Date | undefined = dateFromMonthFilterOffset(0);
   activeTab: 'goals' | 'productivity' = 'goals';
 
   /** Aba reativada: dados vêm do endpoint Game4U “team daily finished stats”. */
@@ -4233,7 +4223,10 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       ...(i.porcEntregas != null
         ? { porcEntregas: i.porcEntregas, entrega: i.entrega ?? i.porcEntregas }
         : {}),
-      loadTasksViaGameReports: i.loadTasksViaGameReports ?? true
+      loadTasksViaGameReports: i.loadTasksViaGameReports ?? true,
+      ...(i.is_acessorias_g4 ? { is_acessorias_g4: true } : {}),
+      ...(i.is_acessorias_onboarding ? { is_acessorias_onboarding: true } : {}),
+      ...(i.is_acessorias_risco_de_churn ? { is_acessorias_risco_de_churn: true } : {})
     }));
   }
 
@@ -4308,7 +4301,8 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       entrega: keep.entrega ?? add.entrega,
       deliveryKpi: keep.deliveryKpi ?? add.deliveryKpi,
       classificacao: keep.classificacao ?? add.classificacao,
-      gamificacaoEmpIdUsado: keep.gamificacaoEmpIdUsado ?? add.gamificacaoEmpIdUsado
+      gamificacaoEmpIdUsado: keep.gamificacaoEmpIdUsado ?? add.gamificacaoEmpIdUsado,
+      ...mergeCompanyClienteCriticoFlags(keep, add)
     };
   }
 
@@ -6053,6 +6047,10 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       return `${titleParts} | ${base}`;
     }
     return base;
+  }
+
+  isClienteCritico(cliente: CompanyDisplay): boolean {
+    return isCompanyClienteCritico(cliente);
   }
 
   getCompanyStatus(cnpj: string): string {

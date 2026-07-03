@@ -817,6 +817,18 @@
                 color: #dc2626;
               }
             }
+
+            .cliente-critico-badge {
+              font-size: 0.6875rem;
+              font-weight: 700;
+              padding: 2px 6px;
+              border-radius: 4px;
+              white-space: nowrap;
+              flex-shrink: 0;
+              background-color: rgba(245, 158, 11, 0.18);
+              color: #b45309;
+              text-transform: lowercase;
+            }
           }
           
           .carteira-entrega {

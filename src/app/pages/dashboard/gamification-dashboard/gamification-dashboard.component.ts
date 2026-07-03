@@ -24,7 +24,7 @@ import {
   ActivityMetrics,
   ProcessMetrics
 } from '@model/gamification-dashboard.model';
-import { CompanyDisplay, CarteiraSupabaseKpiRow } from '@services/company-kpi.service';
+import { CompanyDisplay, CarteiraSupabaseKpiRow, isCompanyClienteCritico, mergeCompanyClienteCriticoFlags } from '@services/company-kpi.service';
 import { ProgressCardType } from '@components/c4u-activity-progress/c4u-activity-progress.component';
 import { ProgressListType } from '@modals/modal-progress-list/modal-progress-list.component';
 import { ModalSeasonFaqComponent } from '@modals/modal-season-faq/modal-season-faq.component';
@@ -1040,7 +1040,8 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
       entrega: keep.entrega ?? add.entrega,
       deliveryKpi: keep.deliveryKpi ?? add.deliveryKpi,
       classificacao: keep.classificacao ?? add.classificacao,
-      gamificacaoEmpIdUsado: keep.gamificacaoEmpIdUsado ?? add.gamificacaoEmpIdUsado
+      gamificacaoEmpIdUsado: keep.gamificacaoEmpIdUsado ?? add.gamificacaoEmpIdUsado,
+      ...mergeCompanyClienteCriticoFlags(keep, add)
     };
   }
 
@@ -1056,7 +1057,10 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
         ? { porcEntregas: i.porcEntregas, entrega: i.entrega ?? i.porcEntregas }
         : {}),
       ...(i.gamificacaoEmpIdUsado != null ? { gamificacaoEmpIdUsado: String(i.gamificacaoEmpIdUsado) } : {}),
-      loadTasksViaGameReports: i.loadTasksViaGameReports ?? true
+      loadTasksViaGameReports: i.loadTasksViaGameReports ?? true,
+      ...(i.is_acessorias_g4 ? { is_acessorias_g4: true } : {}),
+      ...(i.is_acessorias_onboarding ? { is_acessorias_onboarding: true } : {}),
+      ...(i.is_acessorias_risco_de_churn ? { is_acessorias_risco_de_churn: true } : {})
     };
   }
 
@@ -2092,6 +2096,10 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
   /**
    * Get company status (Ativa/Inativa) from the status map
    */
+  isClienteCritico(cliente: CompanyDisplay): boolean {
+    return isCompanyClienteCritico(cliente);
+  }
+
   getCompanyStatus(cnpj: string): string {
     return this.cnpjStatusMap.get(cnpj) || '';
   }

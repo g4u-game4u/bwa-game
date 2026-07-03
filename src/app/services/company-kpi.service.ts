@@ -77,6 +77,55 @@ export interface CompanyDisplay {
   loadTasksViaGameReports?: boolean;
   /** EmpID usado no mapa `byEmpId` da gamificação (ex.: extraído de `delivery_id` antes da competência). */
   gamificacaoEmpIdUsado?: string;
+  is_acessorias_g4?: boolean;
+  is_acessorias_onboarding?: boolean;
+  is_acessorias_risco_de_churn?: boolean;
+}
+
+export const COMPANY_CLIENTE_CRITICO_LIST_LABEL = 'cliente crítico';
+
+export const COMPANY_CLIENTE_CRITICO_G4_LABEL = 'Cliente G4';
+export const COMPANY_CLIENTE_CRITICO_ONBOARDING_LABEL = 'Cliente em Onboarding';
+export const COMPANY_CLIENTE_CRITICO_RISCO_LABEL = 'Cliente em Risco';
+
+export type CompanyClienteCriticoFields = Pick<
+  CompanyDisplay,
+  'is_acessorias_g4' | 'is_acessorias_onboarding' | 'is_acessorias_risco_de_churn'
+>;
+
+export function isCompanyClienteCritico(company: CompanyClienteCriticoFields): boolean {
+  return !!(
+    company.is_acessorias_g4 ||
+    company.is_acessorias_onboarding ||
+    company.is_acessorias_risco_de_churn
+  );
+}
+
+export function getCompanyClienteCriticoLabels(company: CompanyClienteCriticoFields): string[] {
+  const labels: string[] = [];
+  if (company.is_acessorias_g4) {
+    labels.push(COMPANY_CLIENTE_CRITICO_G4_LABEL);
+  }
+  if (company.is_acessorias_onboarding) {
+    labels.push(COMPANY_CLIENTE_CRITICO_ONBOARDING_LABEL);
+  }
+  if (company.is_acessorias_risco_de_churn) {
+    labels.push(COMPANY_CLIENTE_CRITICO_RISCO_LABEL);
+  }
+  return labels;
+}
+
+export function mergeCompanyClienteCriticoFlags(
+  keep: CompanyClienteCriticoFields,
+  add: CompanyClienteCriticoFields
+): CompanyClienteCriticoFields {
+  return {
+    is_acessorias_g4: !!(keep.is_acessorias_g4 || add.is_acessorias_g4),
+    is_acessorias_onboarding: !!(keep.is_acessorias_onboarding || add.is_acessorias_onboarding),
+    is_acessorias_risco_de_churn: !!(
+      keep.is_acessorias_risco_de_churn || add.is_acessorias_risco_de_churn
+    )
+  };
 }
 
 /** Linha da carteira vinda do Supabase para enriquecer com o GET da gamificação. */

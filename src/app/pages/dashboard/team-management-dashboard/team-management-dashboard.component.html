@@ -948,6 +948,13 @@
                             [class.inactive]="!isCompanyActive(cliente.cnpj)">
                         {{ getCompanyStatus(cliente.cnpj) }}
                       </span>
+                      <span
+                        *ngIf="isClienteCritico(cliente)"
+                        class="cliente-critico-badge"
+                        role="status"
+                        aria-label="Cliente crítico">
+                        cliente crítico
+                      </span>
                     </div>
                     <div class="carteira-item-meta">
                       <span
