@@ -2,7 +2,7 @@
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { ActionLogService, ClienteActionItem } from '@services/action-log.service';
-import { CompanyKpiService, CompanyDisplay } from '@services/company-kpi.service';
+import { CompanyKpiService, CompanyDisplay, getCompanyClienteCriticoLabels, isCompanyClienteCritico } from '@services/company-kpi.service';
 import { isGame4uDataEnabled } from '@model/game4u-api.model';
 import { KPIService } from '@services/kpi.service';
 import { KPIData } from '@model/gamification-dashboard.model';
@@ -395,6 +395,14 @@ export class ModalCompanyCarteiraDetailComponent implements OnInit, OnDestroy {
 
   get isCompanyActive(): boolean {
     return this.companyStatus?.toLowerCase() === 'ativa';
+  }
+
+  get isClienteCritico(): boolean {
+    return this.company ? isCompanyClienteCritico(this.company) : false;
+  }
+
+  get clienteCriticoLabels(): string[] {
+    return this.company ? getCompanyClienteCriticoLabels(this.company) : [];
   }
 
   formatDate(timestamp: number): string {

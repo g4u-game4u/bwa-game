@@ -2079,6 +2079,9 @@ export function mapGame4uFinishedDeliveryRowsToParticipacaoCnpjRows(
   fromCachedDeliveries?: boolean;
   loadTasksViaGameReports?: boolean;
   gamificacaoEmpIdUsado?: string | number;
+  is_acessorias_g4?: boolean;
+  is_acessorias_onboarding?: boolean;
+  is_acessorias_risco_de_churn?: boolean;
 }[] {
   const out: {
     cnpj: string;
@@ -2092,6 +2095,9 @@ export function mapGame4uFinishedDeliveryRowsToParticipacaoCnpjRows(
     fromCachedDeliveries?: boolean;
     loadTasksViaGameReports?: boolean;
     gamificacaoEmpIdUsado?: string | number;
+    is_acessorias_g4?: boolean;
+    is_acessorias_onboarding?: boolean;
+    is_acessorias_risco_de_churn?: boolean;
   }[] = [];
   const seen = new Set<string>();
   const filterByMonthFinished = month != null;
@@ -2121,7 +2127,10 @@ export function mapGame4uFinishedDeliveryRowsToParticipacaoCnpjRows(
       ...(row.emp_id != null ? { gamificacaoEmpIdUsado: row.emp_id } : {}),
       fromGameReportsDeliveries: true,
       ...(hasCachedPct ? { fromCachedDeliveries: true } : {}),
-      loadTasksViaGameReports: true
+      loadTasksViaGameReports: true,
+      ...(row.is_acessorias_g4 ? { is_acessorias_g4: true } : {}),
+      ...(row.is_acessorias_onboarding ? { is_acessorias_onboarding: true } : {}),
+      ...(row.is_acessorias_risco_de_churn ? { is_acessorias_risco_de_churn: true } : {})
     });
   }
   return out;
