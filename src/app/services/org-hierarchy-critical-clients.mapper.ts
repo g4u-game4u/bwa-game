@@ -6,7 +6,8 @@ import {
   CriticalClientIssueFilter,
   OrganizationHierarchyDeliveriesResponse,
   OrganizationHierarchyDeliveriesDiretoriaRow,
-  OrganizationHierarchyDeliveryRow
+  OrganizationHierarchyDeliveryRow,
+  getOrgHierarchyDeliveriesList
 } from '@model/game4u-api.model';
 import { downloadXlsxWorkbook, slugifyExportFilenamePart } from '@utils/spreadsheet-export';
 
@@ -114,9 +115,9 @@ export function formatCriticalClientIssueKindLabel(
 ): string {
   switch (issueKind) {
     case 'overdue':
-      return 'Atraso pendente';
+      return 'Em atraso';
     case 'late_finish':
-      return 'Entrega tardia';
+      return 'Concluída tardia';
     default:
       return '';
   }
@@ -133,7 +134,7 @@ export function getCriticalClientIssueFilterLabel(issue: CriticalClientIssueFilt
   }
 }
 
-/** Contagem MTD esperada no drill-down com `all_scoring_events=true`. */
+/** Contagem MTD esperada no drill-down com `dedupe_deliveries=false` (modo detalhe KPI). */
 export function getCriticalClientExpectedDeliveryCount(
   client: CriticalClientItem,
   issue: CriticalClientIssueFilter
@@ -194,7 +195,7 @@ export function downloadCriticalClientsExcel(options: {
 
 export interface CriticalClientDeliveriesViewOptions {
   issue: CriticalClientIssueFilter;
-  allScoringEvents: boolean;
+  dedupeDeliveries: boolean;
 }
 
 function deliveryIssuePriority(issueKind: CriticalClientIssueKind | null | undefined): number {
@@ -227,13 +228,13 @@ function dedupeDeliveriesByDeliveryId(
 function filterDeliveriesForView(
   deliveries: OrganizationHierarchyDeliveryRow[],
   issue: CriticalClientIssueFilter,
-  allScoringEvents: boolean
+  dedupeDeliveries: boolean
 ): OrganizationHierarchyDeliveryRow[] {
   let rows = deliveries;
   if (issue !== 'all') {
     rows = rows.filter(d => d.issue_kind === issue);
   }
-  if (!allScoringEvents) {
+  if (dedupeDeliveries) {
     rows = dedupeDeliveriesByDeliveryId(rows);
   }
   return rows;
@@ -276,7 +277,15 @@ function mapCriticalClientDeliveriesTree(
     .filter((dir): dir is OrganizationHierarchyDeliveriesDiretoriaRow => dir != null);
 }
 
-/** Aplica filtro de problema e modo resumido/detalhe KPI em memória (após fetch robusto). */
+function mapCriticalClientDeliveriesFlat(
+  source: OrganizationHierarchyDeliveriesResponse,
+  mapDeliveries: (deliveries: OrganizationHierarchyDeliveryRow[]) => OrganizationHierarchyDeliveryRow[]
+): OrganizationHierarchyDeliveryRow[] {
+  const all = getOrgHierarchyDeliveriesList(source);
+  return mapDeliveries(all);
+}
+
+/** Aplica filtro de problema e modo resumido/detalhe KPI em memória (após fetch único). */
 export function buildCriticalClientDeliveriesView(
   source: OrganizationHierarchyDeliveriesResponse | null | undefined,
   options: CriticalClientDeliveriesViewOptions
@@ -284,14 +293,38 @@ export function buildCriticalClientDeliveriesView(
   if (!source) {
     return null;
   }
-  const diretorias = mapCriticalClientDeliveriesTree(source, deliveries =>
-    filterDeliveriesForView(deliveries, options.issue, options.allScoringEvents)
-  );
-  const total_deliveries = diretorias.reduce((sum, dir) => sum + dir.delivery_count, 0);
+  const mapDeliveries = (deliveries: OrganizationHierarchyDeliveryRow[]) =>
+    filterDeliveriesForView(deliveries, options.issue, options.dedupeDeliveries);
+
+  if (!options.dedupeDeliveries) {
+    const deliveries_flat = mapCriticalClientDeliveriesFlat(source, mapDeliveries);
+    return {
+      ...source,
+      include_hierarchy: false,
+      diretorias: [],
+      deliveries_flat,
+      total_deliveries: deliveries_flat.length
+    };
+  }
+
+  if (source.diretorias?.length) {
+    const diretorias = mapCriticalClientDeliveriesTree(source, mapDeliveries);
+    const total_deliveries = diretorias.reduce((sum, dir) => sum + dir.delivery_count, 0);
+    return {
+      ...source,
+      include_hierarchy: true,
+      total_deliveries,
+      diretorias
+    };
+  }
+
+  const deliveries_flat = mapCriticalClientDeliveriesFlat(source, mapDeliveries);
   return {
     ...source,
-    total_deliveries,
-    diretorias
+    include_hierarchy: false,
+    diretorias: [],
+    deliveries_flat,
+    total_deliveries: deliveries_flat.length
   };
 }
 
@@ -302,10 +335,76 @@ export function countCriticalClientDeliveriesInView(
   return buildCriticalClientDeliveriesView(source, options)?.total_deliveries ?? 0;
 }
 
+export function criticalClientDeliveriesUseFlatList(
+  response: OrganizationHierarchyDeliveriesResponse | null | undefined
+): boolean {
+  return response?.include_hierarchy === false && (response.deliveries_flat?.length ?? 0) > 0;
+}
+
 export function countCriticalClientDeliveriesByIssue(
   source: OrganizationHierarchyDeliveriesResponse | null | undefined,
   issue: CriticalClientIssueFilter,
-  allScoringEvents: boolean
+  dedupeDeliveries: boolean
 ): number {
-  return countCriticalClientDeliveriesInView(source, { issue, allScoringEvents });
+  if (!source) {
+    return 0;
+  }
+  const counts = source.scoring_event_counts;
+  if (counts) {
+    switch (issue) {
+      case 'overdue':
+        return counts.overdue;
+      case 'late_finish':
+        return counts.late_finish;
+      default:
+        return dedupeDeliveries ? counts.distinct_delivery_ids || counts.total : counts.total;
+    }
+  }
+  return countCriticalClientDeliveriesInView(source, { issue, dedupeDeliveries });
+}
+
+export function resolveCriticalClientKpiParityMismatch(
+  source: OrganizationHierarchyDeliveriesResponse | null | undefined,
+  client: CriticalClientItem | null,
+  issue: CriticalClientIssueFilter,
+  dedupeDeliveries: boolean
+): boolean {
+  if (!source) {
+    return false;
+  }
+  if (source.kpi_parity_ok === false) {
+    return true;
+  }
+  if (source.kpi_parity_ok === true) {
+    return false;
+  }
+  if (!client || dedupeDeliveries) {
+    return false;
+  }
+  const expected = getCriticalClientExpectedDeliveryCount(client, issue);
+  return source.total_deliveries !== expected;
+}
+
+export function resolveCriticalClientExpectedDeliveryCount(
+  source: OrganizationHierarchyDeliveriesResponse | null | undefined,
+  client: CriticalClientItem | null,
+  issue: CriticalClientIssueFilter,
+  dedupeDeliveries: boolean
+): number | null {
+  if (!client || dedupeDeliveries) {
+    return null;
+  }
+  if (source?.kpi_expected) {
+    switch (issue) {
+      case 'overdue':
+        return source.kpi_expected.mtd_overdue_unjustified;
+      case 'late_finish':
+        return source.kpi_expected.mtd_late_finish;
+      default:
+        return (
+          source.kpi_expected.mtd_overdue_unjustified + source.kpi_expected.mtd_late_finish
+        );
+    }
+  }
+  return getCriticalClientExpectedDeliveryCount(client, issue);
 }

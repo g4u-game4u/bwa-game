@@ -4,6 +4,8 @@ export interface OrgPaceMetricCard {
   key: string;
   label: string;
   value: string;
+  /** Texto complementar exibido ao lado do valor (ex.: % da meta). */
+  valueMeta?: string;
   hint?: string;
   tone?: 'positive' | 'negative' | 'neutral' | 'warning';
 }
@@ -165,10 +167,13 @@ export function buildOrgPaceSupportingCards(
 
   if (mtd.projected_points_month_end != null && mtd.goal_points != null) {
     const projectedGap = mtd.projected_points_month_end - mtd.goal_points;
+    const projectedGoalPct =
+      mtd.goal_points > 0 ? (mtd.projected_points_month_end / mtd.goal_points) * 100 : null;
     cards.push({
       key: 'projected_points',
       label: 'Projeção fim do mês',
       value: formatOrgPaceNumber(mtd.projected_points_month_end),
+      valueMeta: projectedGoalPct != null ? `${formatOrgPacePct(projectedGoalPct)} da meta` : undefined,
       hint:
         projectedGap >= 0
           ? `Acima da meta em ${formatOrgPaceNumber(projectedGap)} pts`

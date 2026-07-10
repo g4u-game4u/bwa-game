@@ -43,7 +43,7 @@
         <span class="org-tree-node__metric-label">vs MTD ant.</span>
       </div>
       <div class="org-tree-node__metric" *ngIf="node.balance_score != null">
-        <span class="org-tree-node__metric-value">{{ node.balance_score | number:'1.1-1':'pt-BR' }}</span>
+        <span class="org-tree-node__metric-value">{{ node.balance_score | number:'1.1-1':'pt-BR' }}%</span>
         <span class="org-tree-node__metric-label">Balance score</span>
       </div>
       <div class="org-tree-node__metric" *ngIf="showSimulation && node.simulation">

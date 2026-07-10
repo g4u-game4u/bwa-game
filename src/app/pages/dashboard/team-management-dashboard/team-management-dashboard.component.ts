@@ -1819,6 +1819,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
       this.isLoadingKPIs = true;
       this.isLoadingCollaborators = true;
       this.isLoadingMonthlyPointsProgress = true;
+      this.teamKPIs = [];
       this.cdr.markForCheck();
 
       this.companyKpiService.prefetchGamificacaoSnapshot();
@@ -6174,6 +6175,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
     const fromCache = this.getEntregasPrazoPercentFromSupervisionCache();
     if (fromCache !== null) {
       this.applyTeamEntregasPrazoKpiValue(idx, fromCache);
+      this.teamKPIs = this.kpiService.applyOnTimeDeliveryGoalToKpis(this.teamKPIs, this.selectedMonth);
       return;
     }
 
@@ -6185,9 +6187,11 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
     const avg = this.getEntregasPrazoPercentFromParticipacao();
 
     if (avg === null) {
+      const target = getOnTimeDeliveryGoalForMonth(this.selectedMonth);
       const updated: KPIData = {
         ...base,
         current: 0,
+        target,
         percentage: 0,
         color: 'gray',
         isMissing: true
@@ -6199,6 +6203,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
     }
 
     this.applyTeamEntregasPrazoKpiValue(idx, avg);
+    this.teamKPIs = this.kpiService.applyOnTimeDeliveryGoalToKpis(this.teamKPIs, this.selectedMonth);
   }
 
   private applyTeamEntregasPrazoKpiValue(idx: number, avg: number): void {
@@ -6208,6 +6213,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
     const updated: KPIData = {
       ...base,
       current: avg,
+      target,
       isMissing: false,
       percentage: Math.min(avg, 100),
       color: this.kpiService.getKPIColorByGoals(avg, target, superTarget)
@@ -6295,9 +6301,22 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
     return `${this.roundValue(kpi.current)}${kpi.unit || ''}`;
   }
 
+  /** Meta vigente de % no prazo no mês filtrado (90% até jun/2026; 95% a partir de jul/2026). */
+  get onTimeDeliveryGoalPct(): number {
+    return getOnTimeDeliveryGoalForMonth(this.selectedMonth);
+  }
+
+  getKpiTargetValue(kpi: KPIData): number {
+    if (kpi.id === 'entregas-prazo') {
+      return this.onTimeDeliveryGoalPct;
+    }
+    return kpi.target;
+  }
+
   kpiSidebarTitle(kpi: KPIData): string {
     if (kpi.id === 'entregas-prazo') {
-      return `${kpi.label}: ${this.kpiSidebarValue(kpi)} (meta ${kpi.target}${kpi.unit || '%'})`;
+      const target = this.getKpiTargetValue(kpi);
+      return `${kpi.label}: ${this.kpiSidebarValue(kpi)} (meta ${target}${kpi.unit || '%'})`;
     }
     return `${kpi.label}: ${this.roundValue(kpi.current)} / ${this.roundValue(kpi.target)}${kpi.unit ? ' ' + kpi.unit : ''}`;
   }
@@ -6406,7 +6425,9 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
     // Calculate metas from team KPIs
     // Metas = count of KPIs where current >= target
     const totalKPIs = this.teamKPIs ? this.teamKPIs.length : 0;
-    const metasAchieved = this.teamKPIs ? this.teamKPIs.filter(kpi => kpi.current >= kpi.target).length : 0;
+    const metasAchieved = this.teamKPIs
+      ? this.teamKPIs.filter(kpi => this.getKpiCurrentValue(kpi) >= this.getKpiTargetValue(kpi)).length
+      : 0;
     
     // Convert progressMetrics to SeasonProgress format
     // For teams, we use:

@@ -1,0 +1,67 @@
+<aside
+  *ngIf="hasJobs"
+  class="org-export-jobs"
+  role="status"
+  aria-live="polite"
+  aria-label="Exportações em andamento"
+>
+  <header class="org-export-jobs__header">
+    <button
+      type="button"
+      class="org-export-jobs__toggle"
+      (click)="toggleCollapsed()"
+      [attr.aria-expanded]="!collapsed"
+    >
+      <i class="ri-file-excel-2-line" aria-hidden="true"></i>
+      <span class="org-export-jobs__title">
+        Exportações
+        <span *ngIf="activeCount > 0" class="org-export-jobs__badge">{{ activeCount }}</span>
+      </span>
+      <i
+        class="org-export-jobs__chevron"
+        [class.ri-arrow-down-s-line]="collapsed"
+        [class.ri-arrow-up-s-line]="!collapsed"
+        aria-hidden="true"
+      ></i>
+    </button>
+  </header>
+
+  <ul *ngIf="!collapsed" class="org-export-jobs__list">
+    <li
+      *ngFor="let job of jobs; trackBy: trackByLocalId"
+      class="org-export-jobs__item"
+      [class.org-export-jobs__item--failed]="job.status === 'failed'"
+      [class.org-export-jobs__item--completed]="job.status === 'completed'"
+    >
+      <div class="org-export-jobs__item-head">
+        <strong class="org-export-jobs__item-title">{{ job.label }}</strong>
+        <button
+          type="button"
+          class="org-export-jobs__dismiss"
+          (click)="dismiss(job)"
+          aria-label="Ocultar exportação"
+        >
+          <i class="ri-close-line" aria-hidden="true"></i>
+        </button>
+      </div>
+
+      <p class="org-export-jobs__status">{{ statusLabel(job) }}</p>
+      <p *ngIf="job.rowCount != null" class="org-export-jobs__meta">
+        {{ job.rowCount | number: '1.0-0' }} linhas
+      </p>
+      <p *ngIf="job.errorMessage" class="org-export-jobs__error">{{ job.errorMessage }}</p>
+
+      <div
+        *ngIf="job.status === 'queued' || job.status === 'processing'"
+        class="org-export-jobs__progress"
+        [class.org-export-jobs__progress--indeterminate]="isIndeterminate(job)"
+      >
+        <span class="org-export-jobs__progress-bar" [style.width]="progressWidth(job)"></span>
+      </div>
+
+      <p *ngIf="job.status === 'completed' && job.filename" class="org-export-jobs__filename">
+        {{ job.filename }}
+      </p>
+    </li>
+  </ul>
+</aside>

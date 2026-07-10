@@ -55,10 +55,10 @@ import {
   OrgGlobalMtdMetric,
   OrgPipelineSegment,
   mapOrgPipelineSegments,
+  mapOrgPipelineLegendSegments,
   orgPipelineSegmentWidthPct,
   orgPipelineSegmentsTotal,
   buildOrgOperationalRiskAlerts,
-  filterOrgPipelineLegendSegments,
   OrgOperationalRiskAlert,
   computeFinishedVsOpenPct,
   formatOrgGlobalMtdValue,
@@ -120,14 +120,7 @@ import {
   orgHierarchyInsightsSourceLabel,
   parseOrgHierarchyInsightsError
 } from '@services/org-hierarchy-insights.mapper';
-import {
-  buildOrgHierarchyCriticalClientsDeliveriesExportFilename
-} from '@services/org-hierarchy-kpi-export.mapper';
-import { buildOrgHierarchyClientListExportFilename } from '@services/org-hierarchy-client-lists.mapper';
-import {
-  downloadBlobFile,
-  parseHttpContentDispositionFilename
-} from '@utils/spreadsheet-export';
+import { OrgHierarchyExportJobService } from '@services/org-hierarchy-export-job.service';
 
 @Component({
   selector: 'app-organization-hierarchy-report',
@@ -152,8 +145,6 @@ export class OrganizationHierarchyReportComponent implements OnInit, OnDestroy {
   isLoading = true;
   isLoadingInsights = false;
   isGeneratingInsights = false;
-  isExportingCriticalClientsDeliveries = false;
-  isExportingClientsServed = false;
   criticalClientsModalOpen = false;
   hasLoadError = false;
   isEmpty = false;
@@ -220,7 +211,7 @@ export class OrganizationHierarchyReportComponent implements OnInit, OnDestroy {
   readonly peopleOnTimeColumn = ORG_HIGHLIGHT_MTD_COLUMNS.find(c => c.key === 'on_time_pct')!;
   readonly peopleFinishedColumn = ORG_HIGHLIGHT_MTD_COLUMNS.find(c => c.key === 'finished')!;
   readonly peopleClientsColumn = ORG_HIGHLIGHT_MTD_COLUMNS.find(c => c.key === 'clients_served')!;
-  readonly peopleOnboardingColumn = ORG_HIGHLIGHT_MTD_COLUMNS.find(c => c.key === 'clients_onboarding')!;
+  readonly peopleOnboardingColumn = ORG_HIGHLIGHT_MTD_COLUMNS.find(c => c.key === 'clients_acessorias_onboarding')!;
   readonly peopleChurnColumn = ORG_HIGHLIGHT_MTD_COLUMNS.find(c => c.key === 'clients_acessorias_risco_de_churn')!;
   readonly peoplePointsColumn = ORG_HIGHLIGHT_MTD_COLUMNS.find(c => c.key === 'points_delivered')!;
 
@@ -252,6 +243,7 @@ export class OrganizationHierarchyReportComponent implements OnInit, OnDestroy {
 
   constructor(
     private readonly actionLogService: ActionLogService,
+    private readonly exportJobService: OrgHierarchyExportJobService,
     private readonly sessaoProvider: SessaoProvider,
     private readonly toastService: ToastService,
     private readonly cdr: ChangeDetectorRef
@@ -266,6 +258,17 @@ export class OrganizationHierarchyReportComponent implements OnInit, OnDestroy {
         void this.loadReport();
       });
     void this.loadReport();
+    this.exportJobService.jobs$.pipe(takeUntil(this.destroy$)).subscribe(() => {
+      this.cdr.markForCheck();
+    });
+  }
+
+  get isExportingClientsServed(): boolean {
+    return this.exportJobService.hasActiveJob('clients_served_xlsx');
+  }
+
+  get isExportingCriticalClientsDeliveries(): boolean {
+    return this.exportJobService.hasActiveJob('critical_clients_deliveries');
   }
 
   ngOnDestroy(): void {
@@ -375,7 +378,7 @@ export class OrganizationHierarchyReportComponent implements OnInit, OnDestroy {
   }
 
   get pipelineLegendSegments(): OrgPipelineSegment[] {
-    return filterOrgPipelineLegendSegments(this.pipelineSegments);
+    return mapOrgPipelineLegendSegments(this.root?.mtd);
   }
 
   get operationalRiskAlerts(): OrgOperationalRiskAlert[] {
@@ -1077,46 +1080,13 @@ export class OrganizationHierarchyReportComponent implements OnInit, OnDestroy {
     if (this.isExportingClientsServed || !this.root) {
       return;
     }
-    this.isExportingClientsServed = true;
+    this.exportJobService.startClientsServedExport({
+      month: this.selectedMonth,
+      nodeType: this.root.node_type,
+      nodeId: this.root.node_id,
+      scopeLabel: this.root.label
+    });
     this.cdr.markForCheck();
-
-    this.actionLogService
-      .exportOrganizationHierarchyClientsServedXlsx({
-        month: this.selectedMonth,
-        nodeType: this.root.node_type,
-        nodeId: this.root.node_id
-      })
-      .pipe(takeUntil(this.destroy$))
-      .subscribe({
-        next: res => {
-          this.isExportingClientsServed = false;
-          const blob = res.body;
-          if (!blob || blob.size === 0) {
-            this.toastService.error('Não foi possível exportar os clientes.', false);
-            this.cdr.markForCheck();
-            return;
-          }
-          const headerFilename = parseHttpContentDispositionFilename(
-            res.headers.get('Content-Disposition')
-          );
-          const filename =
-            headerFilename ??
-            buildOrgHierarchyClientListExportFilename({
-              listKey: 'clients_served',
-              month: this.selectedMonth,
-              scopeLabel: this.root?.label,
-              format: 'xlsx'
-            });
-          downloadBlobFile(blob, filename);
-          this.toastService.success('Arquivo Excel exportado.');
-          this.cdr.markForCheck();
-        },
-        error: () => {
-          this.isExportingClientsServed = false;
-          this.toastService.error('Falha ao exportar clientes atendidos.', false);
-          this.cdr.markForCheck();
-        }
-      });
   }
 
   openCriticalClientDrillDown(
@@ -1148,46 +1118,14 @@ export class OrganizationHierarchyReportComponent implements OnInit, OnDestroy {
       return;
     }
 
-    this.isExportingCriticalClientsDeliveries = true;
+    this.exportJobService.startCriticalClientsDeliveriesExport({
+      month: this.selectedMonth,
+      nodeType: node.node_type,
+      nodeId: node.node_id,
+      scopeLabel: node.label,
+      issue: 'all'
+    });
     this.cdr.markForCheck();
-
-    this.actionLogService
-      .exportOrganizationHierarchyCriticalClientsDeliveries({
-        month: this.selectedMonth,
-        nodeType: node.node_type,
-        nodeId: node.node_id,
-        issue: 'all'
-      })
-      .pipe(takeUntil(this.destroy$))
-      .subscribe({
-        next: res => {
-          this.isExportingCriticalClientsDeliveries = false;
-          const blob = res.body;
-          if (!blob || blob.size === 0) {
-            this.toastService.error('Não foi possível exportar as entregas.', false);
-            this.cdr.markForCheck();
-            return;
-          }
-          const headerFilename = parseHttpContentDispositionFilename(
-            res.headers.get('Content-Disposition')
-          );
-          const filename =
-            headerFilename ??
-            buildOrgHierarchyCriticalClientsDeliveriesExportFilename({
-              month: this.selectedMonth,
-              scopeLabel: node.label,
-              issue: 'all'
-            });
-          downloadBlobFile(blob, filename);
-          this.toastService.success('Arquivo Excel exportado.');
-          this.cdr.markForCheck();
-        },
-        error: () => {
-          this.isExportingCriticalClientsDeliveries = false;
-          this.toastService.error('Falha ao exportar entregas de clientes críticos.', false);
-          this.cdr.markForCheck();
-        }
-      });
   }
 
   onCriticalClientIssueFilterChange(issue: CriticalClientIssueFilter): void {

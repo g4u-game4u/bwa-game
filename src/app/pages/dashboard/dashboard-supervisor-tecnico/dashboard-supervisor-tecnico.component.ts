@@ -13,6 +13,7 @@ import { TeamAggregateService } from '@services/team-aggregate.service';
 import { ActionLogService } from '@services/action-log.service';
 import { SeasonDatesService } from '@services/season-dates.service';
 import { CompanyKpiService, CompanyDisplay } from '@services/company-kpi.service';
+import { getOnTimeDeliveryGoalForMonth } from '@app/constants/on-time-delivery-goal';
 import { CnpjLookupService } from '@services/cnpj-lookup.service';
 import { SupabaseCompaniesService } from '@services/supabase-companies.service';
 import {
@@ -414,7 +415,7 @@ export class DashboardSupervisorTecnicoComponent implements OnInit, OnDestroy {
         const entregaMetric = extra.entrega ? parseFloat(extra.entrega) : 0;
 
         const cnpjGoal = extra.cnpj_goal != null ? Number(extra.cnpj_goal) : 100;
-        const entregaGoal = extra.entrega_goal != null ? Number(extra.entrega_goal) : 90;
+        const entregaGoal = getOnTimeDeliveryGoalForMonth(this.selectedMonth);
         const cnpjSuperTarget = Math.ceil(cnpjGoal * 1.5);
 
         const kpis: KPIData[] = [
@@ -659,16 +660,7 @@ export class DashboardSupervisorTecnicoComponent implements OnInit, OnDestroy {
               .map(p => parseFloat(p.entrega || '0'))
               .filter(v => !isNaN(v));
 
-            let targetEntregas = 90;
-            if (playerEntregas.length > 0) {
-              const entregaGoalSum = playerEntregas.reduce((sum: number, player) => {
-                const entregaGoal = player.entrega_goal;
-                if (entregaGoal === undefined || entregaGoal === null) return sum + 90;
-                const numValue = typeof entregaGoal === 'number' ? entregaGoal : parseFloat(String(entregaGoal));
-                return sum + (isNaN(numValue) ? 90 : numValue);
-              }, 0);
-              targetEntregas = Math.round((entregaGoalSum / playerEntregas.length) * 100) / 100;
-            }
+            const targetEntregas = getOnTimeDeliveryGoalForMonth(this.selectedMonth);
 
             if (validEntregas.length > 0) {
               const mediaEntregas = validEntregas.reduce((sum, v) => sum + v, 0) / validEntregas.length;
@@ -792,7 +784,7 @@ export class DashboardSupervisorTecnicoComponent implements OnInit, OnDestroy {
         const entregaMetric = extra.entrega ? parseFloat(extra.entrega) : 0;
 
         const cnpjGoal = extra.cnpj_goal != null ? Number(extra.cnpj_goal) : 100;
-        const entregaGoal = extra.entrega_goal != null ? Number(extra.entrega_goal) : 90;
+        const entregaGoal = getOnTimeDeliveryGoalForMonth(this.selectedMonth);
         const cnpjSuperTarget = Math.ceil(cnpjGoal * 1.5);
         const cnpjRespRaw: string = extra.cnpj_resp || '';
 

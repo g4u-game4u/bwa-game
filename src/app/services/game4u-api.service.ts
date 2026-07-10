@@ -52,6 +52,9 @@ import {
   Game4uReportsOrganizationHierarchyDeliveriesQuery,
   Game4uReportsOrganizationHierarchyClientsServedExportQuery,
   Game4uReportsOrganizationHierarchyCriticalClientsDeliveriesExportQuery,
+  Game4uReportsOrganizationHierarchyExportJobBody,
+  OrganizationHierarchyExportJobCreateResponse,
+  OrganizationHierarchyExportJobStatusResponse,
   OrganizationHierarchyDeliveriesResponse,
   Game4uReportsOrganizationHierarchyInsightsQuery,
   Game4uReportsOrganizationHierarchyInsightsBody,
@@ -1225,14 +1228,95 @@ export class Game4uApiService {
     if (companyServeKey) {
       params = params.set('company_serve_key', companyServeKey);
     }
-    if (q.all_scoring_events) {
-      params = params.set('all_scoring_events', 'true');
+    if (q.dedupe_deliveries === false) {
+      params = params.set('dedupe_deliveries', 'false');
+    } else if (q.dedupe_deliveries === true) {
+      params = params.set('dedupe_deliveries', 'true');
     }
     return this.http.get(
       `${this.baseUrl}/game/reports/organization/hierarchy-report/critical-clients/deliveries/export`,
       {
         headers: this.headers(),
         params,
+        observe: 'response',
+        responseType: 'blob'
+      }
+    );
+  }
+
+  /**
+   * `POST /game/reports/organization/hierarchy-report/exports` — enfileira export assíncrono.
+   */
+  postGameReportsOrganizationHierarchyExportJob(
+    body: Game4uReportsOrganizationHierarchyExportJobBody
+  ): Observable<OrganizationHierarchyExportJobCreateResponse> {
+    if (!this.isConfigured()) {
+      return throwError(
+        () =>
+          new Error(
+            '[Game4U] reports/organization/hierarchy-report/exports: defina backend_url_base.'
+          )
+      );
+    }
+    const month = (body.month ?? '').trim();
+    if (!month) {
+      return throwError(
+        () => new Error('[Game4U] hierarchy-report/exports: informe month (YYYY-MM).')
+      );
+    }
+    return this.http.post<OrganizationHierarchyExportJobCreateResponse>(
+      `${this.baseUrl}/game/reports/organization/hierarchy-report/exports`,
+      body,
+      { headers: this.headers() }
+    );
+  }
+
+  /**
+   * `GET /game/reports/organization/hierarchy-report/exports/:jobId` — status do job.
+   */
+  getGameReportsOrganizationHierarchyExportJobStatus(
+    jobId: string
+  ): Observable<OrganizationHierarchyExportJobStatusResponse> {
+    if (!this.isConfigured()) {
+      return throwError(
+        () =>
+          new Error(
+            '[Game4U] reports/organization/hierarchy-report/exports/:jobId: defina backend_url_base.'
+          )
+      );
+    }
+    const id = (jobId ?? '').trim();
+    if (!id) {
+      return throwError(() => new Error('[Game4U] export job status: informe job_id.'));
+    }
+    return this.http.get<OrganizationHierarchyExportJobStatusResponse>(
+      `${this.baseUrl}/game/reports/organization/hierarchy-report/exports/${encodeURIComponent(id)}`,
+      { headers: this.headers() }
+    );
+  }
+
+  /**
+   * `GET /game/reports/organization/hierarchy-report/exports/:jobId/download` — arquivo pronto.
+   */
+  getGameReportsOrganizationHierarchyExportJobDownload(
+    jobId: string
+  ): Observable<HttpResponse<Blob>> {
+    if (!this.isConfigured()) {
+      return throwError(
+        () =>
+          new Error(
+            '[Game4U] reports/organization/hierarchy-report/exports/:jobId/download: defina backend_url_base.'
+          )
+      );
+    }
+    const id = (jobId ?? '').trim();
+    if (!id) {
+      return throwError(() => new Error('[Game4U] export job download: informe job_id.'));
+    }
+    return this.http.get(
+      `${this.baseUrl}/game/reports/organization/hierarchy-report/exports/${encodeURIComponent(id)}/download`,
+      {
+        headers: this.headers(),
         observe: 'response',
         responseType: 'blob'
       }
@@ -1264,7 +1348,7 @@ export class Game4uApiService {
     const nodeType = (q.node_type ?? '').trim();
     const nodeId = (q.node_id ?? '').trim();
 
-    const key = `org-hierarchy-deliveries|${month}|${drilldown}|${nodeType}|${nodeId}|${(q.company_serve_key ?? '').trim()}|${(q.issue ?? '').trim()}|${q.all_scoring_events ? '1' : '0'}`;
+    const key = `org-hierarchy-deliveries|${month}|${drilldown}|${nodeType}|${nodeId}|${(q.company_serve_key ?? '').trim()}|${(q.issue ?? '').trim()}|${q.dedupe_deliveries === false ? '0' : q.dedupe_deliveries === true ? '1' : 'd'}|${q.include_hierarchy === false ? '0' : q.include_hierarchy === true ? '1' : 'd'}`;
     return this.shareGame4uDedupe(key, this.reportsOrganizationHierarchyDeliveriesCache, () => {
       let params = new HttpParams().set('month', month).set('drilldown', drilldown);
       if (nodeType) {
@@ -1281,8 +1365,15 @@ export class Game4uApiService {
       if (issue) {
         params = params.set('issue', issue);
       }
-      if (q.all_scoring_events) {
-        params = params.set('all_scoring_events', 'true');
+      if (q.dedupe_deliveries === false) {
+        params = params.set('dedupe_deliveries', 'false');
+      } else if (q.dedupe_deliveries === true) {
+        params = params.set('dedupe_deliveries', 'true');
+      }
+      if (q.include_hierarchy === false) {
+        params = params.set('include_hierarchy', 'false');
+      } else if (q.include_hierarchy === true) {
+        params = params.set('include_hierarchy', 'true');
       }
       return this.http.get<OrganizationHierarchyDeliveriesResponse>(
         `${this.baseUrl}/game/reports/organization/hierarchy-report/deliveries`,

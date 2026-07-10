@@ -1119,8 +1119,50 @@ export interface Game4uReportsOrganizationHierarchyCriticalClientsDeliveriesExpo
   node_id?: string;
   company_serve_key?: string;
   issue?: CriticalClientIssueFilter | string;
-  /** `true` = todas as user_actions que entram no score do cliente crítico. */
-  all_scoring_events?: boolean;
+  /** `true` (default) = 1 linha por entrega × issue; `false` = cada user_action. */
+  dedupe_deliveries?: boolean;
+}
+
+/** Tipos de export assíncrono do relatório organizacional. */
+export type OrgHierarchyAsyncExportType =
+  | 'clients_served_xlsx'
+  | 'critical_clients_deliveries';
+
+export type OrgHierarchyAsyncExportJobStatus =
+  | 'queued'
+  | 'processing'
+  | 'completed'
+  | 'failed'
+  | 'cancelled';
+
+/** Body para `POST /game/reports/organization/hierarchy-report/exports`. */
+export interface Game4uReportsOrganizationHierarchyExportJobBody {
+  export_type: OrgHierarchyAsyncExportType;
+  month: string; // YYYY-MM
+  node_type?: OrgHierarchyNodeType | string;
+  node_id?: string;
+  company_serve_key?: string;
+  issue?: CriticalClientIssueFilter | string;
+  dedupe_deliveries?: boolean;
+}
+
+/** Resposta de criação de job (`POST .../exports`). */
+export interface OrganizationHierarchyExportJobCreateResponse {
+  job_id: string;
+  status: OrgHierarchyAsyncExportJobStatus;
+  estimated_seconds?: number | null;
+}
+
+/** Resposta de status (`GET .../exports/:jobId`). */
+export interface OrganizationHierarchyExportJobStatusResponse {
+  job_id: string;
+  status: OrgHierarchyAsyncExportJobStatus;
+  progress_pct?: number | null;
+  phase?: string | null;
+  row_count?: number | null;
+  error_message?: string | null;
+  filename?: string | null;
+  expires_at?: string | null;
 }
 
 export interface OrganizationHierarchyDeliveryRow {
@@ -1131,7 +1173,7 @@ export interface OrganizationHierarchyDeliveryRow {
   company_serve_key?: string | null;
   company_cnpj_digits?: string | null;
   issue_kind?: CriticalClientIssueKind | null;
-  /** Presente quando `all_scoring_events=true` no drill-down de cliente crítico. */
+  /** Presente quando `dedupe_deliveries=false` no drill-down de cliente crítico. */
   user_action_id?: string | null;
   client_key: string | null;
   client_name?: string | null;
@@ -1169,6 +1211,20 @@ export interface OrganizationHierarchyDeliveriesDiretoriaRow {
   gerencias: OrganizationHierarchyDeliveriesGerenciaRow[];
 }
 
+export interface OrganizationHierarchyDeliveriesScoringEventCounts {
+  overdue: number;
+  late_finish: number;
+  total: number;
+  distinct_delivery_ids: number;
+}
+
+export interface OrganizationHierarchyDeliveriesKpiExpected {
+  mtd_overdue_unjustified: number;
+  mtd_late_finish: number;
+  source_node_type: string;
+  source_node_id: string;
+}
+
 export interface OrganizationHierarchyDeliveriesResponse {
   cache_month: string;
   mtd_start: string;
@@ -1177,7 +1233,19 @@ export interface OrganizationHierarchyDeliveriesResponse {
   drilldown_label?: string;
   ref_date?: string;
   total_deliveries: number;
+  include_hierarchy?: boolean;
   diretorias: OrganizationHierarchyDeliveriesDiretoriaRow[];
+  /** Preenchido quando `include_hierarchy=false`. */
+  deliveries_flat?: OrganizationHierarchyDeliveryRow[];
+  /** Somente `drilldown=critical_client`. */
+  company_serve_key?: string;
+  critical_client_issue?: CriticalClientIssueFilter;
+  dedupe_deliveries?: boolean;
+  /** @deprecated Espelha `!dedupe_deliveries`. */
+  all_scoring_events?: boolean;
+  scoring_event_counts?: OrganizationHierarchyDeliveriesScoringEventCounts;
+  kpi_expected?: OrganizationHierarchyDeliveriesKpiExpected;
+  kpi_parity_ok?: boolean;
 }
 
 function pickOptionalString(
@@ -1379,7 +1447,47 @@ export function normalizeOrganizationHierarchyDeliveriesResponse(
         .map(item => normalizeOrganizationHierarchyDeliveriesDiretoriaRow(item))
         .filter((item): item is OrganizationHierarchyDeliveriesDiretoriaRow => item != null)
     : [];
+  const deliveries_flat = Array.isArray(o['deliveries_flat'])
+    ? o['deliveries_flat']
+        .map(item => normalizeOrganizationHierarchyDeliveryRow(item))
+        .filter((item): item is OrganizationHierarchyDeliveryRow => item != null)
+    : Array.isArray(o['deliveriesFlat'])
+      ? o['deliveriesFlat']
+          .map(item => normalizeOrganizationHierarchyDeliveryRow(item))
+          .filter((item): item is OrganizationHierarchyDeliveryRow => item != null)
+      : undefined;
   const total_deliveries = Number(o['total_deliveries'] ?? o['totalDeliveries']);
+  const include_hierarchy = pickOptionalBoolean(o, ['include_hierarchy', 'includeHierarchy']);
+  const dedupe_deliveries = pickOptionalBoolean(o, ['dedupe_deliveries', 'dedupeDeliveries']);
+  const all_scoring_events = pickOptionalBoolean(o, ['all_scoring_events', 'allScoringEvents']);
+  const kpi_parity_ok = pickOptionalBoolean(o, ['kpi_parity_ok', 'kpiParityOk']);
+  const scoringRaw = o['scoring_event_counts'] ?? o['scoringEventCounts'];
+  let scoring_event_counts: OrganizationHierarchyDeliveriesScoringEventCounts | undefined;
+  if (scoringRaw && typeof scoringRaw === 'object') {
+    const s = scoringRaw as Record<string, unknown>;
+    scoring_event_counts = {
+      overdue: Number(s['overdue'] ?? 0),
+      late_finish: Number(s['late_finish'] ?? s['lateFinish'] ?? 0),
+      total: Number(s['total'] ?? 0),
+      distinct_delivery_ids: Number(s['distinct_delivery_ids'] ?? s['distinctDeliveryIds'] ?? 0)
+    };
+  }
+  const kpiExpectedRaw = o['kpi_expected'] ?? o['kpiExpected'];
+  let kpi_expected: OrganizationHierarchyDeliveriesKpiExpected | undefined;
+  if (kpiExpectedRaw && typeof kpiExpectedRaw === 'object') {
+    const k = kpiExpectedRaw as Record<string, unknown>;
+    kpi_expected = {
+      mtd_overdue_unjustified: Number(k['mtd_overdue_unjustified'] ?? k['mtdOverdueUnjustified'] ?? 0),
+      mtd_late_finish: Number(k['mtd_late_finish'] ?? k['mtdLateFinish'] ?? 0),
+      source_node_type: pickFirstNonEmptyString(k, ['source_node_type', 'sourceNodeType']) ?? '',
+      source_node_id: pickFirstNonEmptyString(k, ['source_node_id', 'sourceNodeId']) ?? ''
+    };
+  }
+  const resolvedTotal = Number.isFinite(total_deliveries)
+    ? total_deliveries
+    : include_hierarchy === false && deliveries_flat?.length
+      ? deliveries_flat.length
+      : diretorias.reduce((sum, dir) => sum + dir.delivery_count, 0);
   return {
     cache_month:
       pickFirstNonEmptyString(o, ['cache_month', 'cacheMonth']) ??
@@ -1390,10 +1498,19 @@ export function normalizeOrganizationHierarchyDeliveriesResponse(
     drilldown: pickOptionalString(o, ['drilldown']),
     drilldown_label: pickOptionalString(o, ['drilldown_label', 'drilldownLabel']),
     ref_date: pickOptionalString(o, ['ref_date', 'refDate']),
-    total_deliveries: Number.isFinite(total_deliveries)
-      ? total_deliveries
-      : diretorias.reduce((sum, dir) => sum + dir.delivery_count, 0),
-    diretorias
+    total_deliveries: resolvedTotal,
+    include_hierarchy: include_hierarchy ?? undefined,
+    diretorias,
+    ...(deliveries_flat?.length ? { deliveries_flat } : {}),
+    company_serve_key: pickOptionalString(o, ['company_serve_key', 'companyServeKey']),
+    critical_client_issue: pickOptionalString(o, ['critical_client_issue', 'criticalClientIssue']) as
+      | CriticalClientIssueFilter
+      | undefined,
+    dedupe_deliveries: dedupe_deliveries ?? undefined,
+    all_scoring_events: all_scoring_events ?? undefined,
+    scoring_event_counts,
+    kpi_expected,
+    kpi_parity_ok: kpi_parity_ok ?? undefined
   };
 }
 
@@ -1404,8 +1521,27 @@ export interface Game4uReportsOrganizationHierarchyDeliveriesQuery {
   node_id?: string;
   company_serve_key?: string;
   issue?: CriticalClientIssueFilter;
-  /** Cliente crítico: `true` lista cada user_action do score (paridade com contadores MTD). */
-  all_scoring_events?: boolean;
+  /** Cliente crítico: omitir = default API (`true`). `false` = cada user_action. */
+  dedupe_deliveries?: boolean;
+  /** Omitir = default da API (geralmente `true` quando dedupe; `false` quando não dedupe). */
+  include_hierarchy?: boolean;
+}
+
+/** Lista plana de entregas, independente do formato retornado pela API. */
+export function getOrgHierarchyDeliveriesList(
+  response: OrganizationHierarchyDeliveriesResponse | null | undefined
+): OrganizationHierarchyDeliveryRow[] {
+  if (!response) {
+    return [];
+  }
+  if (response.include_hierarchy === false && response.deliveries_flat?.length) {
+    return response.deliveries_flat;
+  }
+  return (response.diretorias ?? []).flatMap(dir =>
+    (dir.gerencias ?? []).flatMap(ger =>
+      (ger.supervisoes ?? []).flatMap(sup => sup.deliveries ?? [])
+    )
+  );
 }
 
 /** @deprecated Prefer {@link OrganizationHierarchyDeliveryRow} */

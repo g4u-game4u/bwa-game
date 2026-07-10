@@ -400,7 +400,7 @@
                     *ngIf="kpi.id !== 'numero-empresas'"
                     [label]="kpi.label"
                     [current]="kpi.id === 'entregas-prazo' ? getKpiCurrentValue(kpi) : roundValue(getKpiCurrentValue(kpi))"
-                    [target]="roundValue(kpi.target)"
+                    [target]="roundValue(getKpiTargetValue(kpi))"
                     [superTarget]="kpi.superTarget ? roundValue(kpi.superTarget) : undefined"
                     [color]="kpi.color"
                     [unit]="kpi.unit"

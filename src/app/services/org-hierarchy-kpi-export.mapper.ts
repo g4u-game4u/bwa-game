@@ -6,6 +6,7 @@ import type {
   OrgHierarchyDeliveriesDrilldownKey,
   OrgHierarchyKpiDetailKey
 } from '@model/game4u-api.model';
+import { getOrgHierarchyDeliveriesList } from '@model/game4u-api.model';
 import { slugifyExportFilenamePart } from '@utils/spreadsheet-export';
 import {
   getOrgHierarchyDeliveryActionTitle,
@@ -22,7 +23,7 @@ export interface OrgHierarchyDeliveriesExportOptions {
   includeIssueKindColumn?: boolean;
   /** Coluna CNPJ — somente em exportações Excel. */
   includeCnpj?: boolean;
-  /** Coluna user_action_id — drill-down cliente crítico com all_scoring_events. */
+  /** Coluna user_action_id — drill-down cliente crítico com dedupe_deliveries=false. */
   includeUserActionId?: boolean;
 }
 
@@ -64,6 +65,29 @@ export function flattenOrgHierarchyDeliveriesForExport(
   }
 
   return rows;
+}
+
+/** Exportação a partir de lista plana (`deliveries_flat` ou árvore achatada). */
+export function flattenOrgHierarchyDeliveriesListForExport(
+  deliveries: OrganizationHierarchyDeliveryRow[],
+  options: OrgHierarchyDeliveriesExportOptions
+): Record<string, string | number>[] {
+  return deliveries.map(delivery =>
+    mapDeliveryRowForExport(delivery, '', '', '', options)
+  );
+}
+
+export function flattenOrgHierarchyDeliveriesResponseForExport(
+  response: { diretorias?: OrganizationHierarchyDeliveriesDiretoriaRow[] } | null | undefined,
+  options: OrgHierarchyDeliveriesExportOptions
+): Record<string, string | number>[] {
+  const list = getOrgHierarchyDeliveriesList(
+    response as Parameters<typeof getOrgHierarchyDeliveriesList>[0]
+  );
+  if (list.length) {
+    return flattenOrgHierarchyDeliveriesListForExport(list, options);
+  }
+  return flattenOrgHierarchyDeliveriesForExport(response?.diretorias ?? [], options);
 }
 
 function mapDeliveryRowForExport(
