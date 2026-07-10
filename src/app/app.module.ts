@@ -23,6 +23,7 @@ import { GameReportsInterceptor } from './providers/game-reports.interceptor';
 import { NotificationService } from './services/notification.service';
 import { OverlayModule } from '@angular/cdk/overlay';
 import { HelpButtonComponent } from './components/c4u-help-button/c4u-help-button.component';
+import { C4uOrgHierarchyExportJobsComponent } from './components/c4u-org-hierarchy-export-jobs/c4u-org-hierarchy-export-jobs.component';
 
 Chart.register(...registerables);
 
@@ -49,6 +50,7 @@ Chart.register(...registerables);
     C4uSpinnerModule,
     OverlayModule,
     HelpButtonComponent,
+    C4uOrgHierarchyExportJobsComponent,
     // ToastrModule.forRoot({
     //   timeOut: 5000,
     //   positionClass: 'toast-top-right',

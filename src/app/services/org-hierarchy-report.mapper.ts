@@ -201,9 +201,9 @@ export const ORG_RANKING_ESSENTIAL_COLUMNS: readonly OrgRankingColumn[] = [
 /** Colunas detalhadas do ranking (toggle "Ver detalhes"). */
 export const ORG_RANKING_DETAIL_COLUMNS: readonly OrgHighlightMtdColumn[] = [
   { key: 'clients_served', label: 'Clientes', format: 'number', title: 'Clientes atendidos' },
-  { key: 'clients_onboarding', label: 'Onboarding', format: 'number' },
   { key: 'clients_acessorias_g4', label: 'G4', format: 'number', title: 'Clientes Acessórias G4' },
-  { key: 'clients_acessorias_risco_de_churn', label: 'Churn', format: 'number', title: 'Clientes Acessórias com risco de churn' },
+  { key: 'clients_acessorias_onboarding', label: 'Em onboarding', format: 'number', title: 'Clientes Acessórias em onboarding' },
+  { key: 'clients_acessorias_risco_de_churn', label: 'Risco churn', format: 'number', title: 'Clientes Acessórias com risco de churn' },
   { key: 'pending_open', label: 'Pendentes', format: 'number' },
   { key: 'multa_risk', label: 'Risco multa', format: 'number' },
   { key: 'multa_incurred', label: 'Multa incorr.', format: 'number', title: 'Multas incorridas (concluídas após dt_atraso)' },
@@ -213,23 +213,17 @@ export const ORG_RANKING_DETAIL_COLUMNS: readonly OrgHighlightMtdColumn[] = [
 /** Colunas compactas da árvore hierárquica (toggle "Mostrar todas as métricas"). */
 export const ORG_TREE_COMPACT_COLUMNS: readonly OrgHighlightMtdColumn[] = [
   { key: 'clients_served', label: 'Clientes', format: 'number', title: 'Clientes atendidos' },
-  { key: 'clients_onboarding', label: 'Onboarding', format: 'number' },
+  { key: 'clients_acessorias_onboarding', label: 'Em onboarding', format: 'number', title: 'Clientes Acessórias em onboarding' },
   { key: 'on_time_pct', label: '% Prazo', format: 'pct', title: 'Percentual de entregas no prazo' },
   { key: 'pending_open', label: 'Pendentes', format: 'number' }
 ];
 
+/** Segmentos da barra de saúde operacional (soma ≈ `pending_open`). */
 export function mapOrgPipelineSegments(mtd: OrgMetricsWindow | undefined | null): OrgPipelineSegment[] {
   if (!mtd) {
     return [];
   }
   return [
-    {
-      key: 'pending_open',
-      label: 'Pendentes em aberto',
-      value: mtd.pending_open ?? 0,
-      tone: 'info',
-      kpi: 'pending_open'
-    },
     {
       key: 'near_due',
       label: 'Próx. vencimento',
@@ -250,25 +244,29 @@ export function mapOrgPipelineSegments(mtd: OrgMetricsWindow | undefined | null)
       value: mtd.overdue_pending_unjustified ?? 0,
       tone: 'destructive',
       kpi: 'overdue_pending_unjustified'
-    },
-    {
-      key: 'multa_risk',
-      label: 'Risco de multa',
-      value: mtd.multa_risk ?? 0,
-      tone: 'destructive',
-      kpi: 'multa_risk',
-      emphasis: (mtd.multa_risk ?? 0) > 0,
-      tooltip: 'Pendente + EntMulta na janela técnico→legal'
-    },
-    {
-      key: 'multa_incurred',
-      label: 'Multas incorridas',
-      value: mtd.multa_incurred ?? 0,
-      tone: 'destructive',
-      kpi: 'multa_incurred',
-      emphasis: (mtd.multa_incurred ?? 0) > 0,
-      tooltip: 'Concluída MTD com EntMulta após dt_atraso (exceto justificada)'
     }
+  ];
+}
+
+/** Legenda da saúde operacional: total + segmentos da barra (sem multa). */
+export function mapOrgPipelineLegendSegments(mtd: OrgMetricsWindow | undefined | null): OrgPipelineSegment[] {
+  if (!mtd) {
+    return [];
+  }
+  const barSegments = mapOrgPipelineSegments(mtd);
+  const pendingOpen = mtd.pending_open ?? 0;
+  if (pendingOpen <= 0) {
+    return barSegments;
+  }
+  return [
+    {
+      key: 'pending_open',
+      label: 'Pendentes em aberto total',
+      value: pendingOpen,
+      tone: 'info',
+      kpi: 'pending_open'
+    },
+    ...barSegments
   ];
 }
 
@@ -939,10 +937,9 @@ export const ORG_HIGHLIGHT_MTD_COLUMNS: readonly OrgHighlightMtdColumn[] = [
   { key: 'on_time_pct', label: '% prazo', format: 'pct', title: 'Percentual de entregas no prazo' },
   { key: 'finished', label: 'Entregas', format: 'number' },
   { key: 'clients_served', label: 'Clientes', format: 'number', title: 'Clientes atendidos' },
-  { key: 'clients_onboarding', label: 'Onboarding', format: 'number' },
-  { key: 'clients_acessorias_g4', label: 'Acess. G4', format: 'number', title: 'Clientes Acessórias G4' },
-  { key: 'clients_acessorias_onboarding', label: 'Acess. onboard.', format: 'number', title: 'Clientes Acessórias em onboarding' },
-  { key: 'clients_acessorias_risco_de_churn', label: 'Acess. churn', format: 'number', title: 'Clientes Acessórias com risco de churn' },
+  { key: 'clients_acessorias_g4', label: 'G4', format: 'number', title: 'Clientes Acessórias G4' },
+  { key: 'clients_acessorias_onboarding', label: 'Em onboarding', format: 'number', title: 'Clientes Acessórias em onboarding' },
+  { key: 'clients_acessorias_risco_de_churn', label: 'Risco churn', format: 'number', title: 'Clientes Acessórias com risco de churn' },
   { key: 'points_delivered', label: 'Pontos', format: 'number', title: 'Pontos entregues' },
   { key: 'goal_points', label: 'Meta', format: 'number', title: 'Meta de pontos' },
   { key: 'pending_open', label: 'Pendentes', format: 'number' },

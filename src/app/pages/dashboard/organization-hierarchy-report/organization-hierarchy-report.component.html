@@ -181,22 +181,22 @@
                 (click)="openKpiDrillDown('points_delivered', root!)"
                 [attr.aria-label]="'Abrir histórico de pontos entregues (MTD)'">
                 <p class="hero-kpi__label">Pontos entregues (MTD)</p>
-                <p class="hero-kpi__value" *ngIf="showHeroPointsGoal; else heroPointsRawValue">
-                  {{ heroPointsGoalPctLabel }}
-                </p>
+                <div class="hero-kpi__row" *ngIf="showHeroPointsGoal; else heroPointsRawValue">
+                  <p class="hero-kpi__value">{{ heroPointsGoalPctLabel }}</p>
+                  <div class="hero-kpi__gauge" aria-hidden="true">
+                    <div
+                      class="hero-kpi__gauge-fill"
+                      [class.hero-kpi__gauge-fill--positive]="heroPointsGoalTone === 'positive'"
+                      [class.hero-kpi__gauge-fill--negative]="heroPointsGoalTone === 'negative'"
+                      [style.width.%]="heroPointsGoalPctBar">
+                    </div>
+                  </div>
+                </div>
                 <ng-template #heroPointsRawValue>
                   <p class="hero-kpi__value">{{ root.mtd.points_delivered | number:'1.0-0':'pt-BR' }}</p>
                 </ng-template>
-                <div class="hero-kpi__progress" *ngIf="showHeroPointsGoal" aria-hidden="true">
-                  <div
-                    class="hero-kpi__progress-fill"
-                    [class.hero-kpi__progress-fill--positive]="heroPointsGoalTone === 'positive'"
-                    [class.hero-kpi__progress-fill--negative]="heroPointsGoalTone === 'negative'"
-                    [style.width.%]="heroPointsGoalPctBar">
-                  </div>
-                </div>
                 <div class="hero-kpi__delta">
-                  <span class="hero-kpi__hint" *ngIf="heroPointsDetailLabel">{{ heroPointsDetailLabel }}</span>
+                  <span class="hero-kpi__hint hero-kpi__hint--full" *ngIf="heroPointsDetailLabel">{{ heroPointsDetailLabel }}</span>
                   <span
                     class="delta-pill"
                     [class.delta-pill--positive]="mtdCompareTone(root.compare.vs_prev_mtd_points_pct) === 'positive'"
@@ -245,23 +245,33 @@
                 (click)="openKpiDrillDown('finished', root!)"
                 [attr.aria-label]="'Abrir histórico de entregas concluídas (MTD)'">
                 <p class="hero-kpi__label">Entregas concluídas</p>
-                <p class="hero-kpi__value" *ngIf="showHeroDeliveriesGoal; else heroFinishedRawValue">
-                  {{ heroDeliveriesGoalPctLabel }}
-                </p>
-                <ng-template #heroFinishedRawValue>
-                  <p class="hero-kpi__value">{{ root.mtd.finished | number:'1.0-0':'pt-BR' }}</p>
-                </ng-template>
-                <div
-                  class="hero-kpi__progress"
-                  *ngIf="showHeroDeliveriesGoal || finishedVsOpenPct != null"
-                  aria-hidden="true">
-                  <div
-                    class="hero-kpi__progress-fill"
-                    [class.hero-kpi__progress-fill--positive]="finishedHeroProgressTone === 'positive'"
-                    [class.hero-kpi__progress-fill--negative]="finishedHeroProgressTone === 'negative'"
-                    [style.width.%]="finishedHeroProgressPct">
+                <ng-container *ngIf="showHeroDeliveriesGoal; else heroFinishedNoGoal">
+                  <div class="hero-kpi__row">
+                    <p class="hero-kpi__value">{{ heroDeliveriesGoalPctLabel }}</p>
+                    <div class="hero-kpi__gauge" aria-hidden="true">
+                      <div
+                        class="hero-kpi__gauge-fill"
+                        [class.hero-kpi__gauge-fill--positive]="finishedHeroProgressTone === 'positive'"
+                        [class.hero-kpi__gauge-fill--negative]="finishedHeroProgressTone === 'negative'"
+                        [style.width.%]="finishedHeroProgressPct">
+                      </div>
+                    </div>
                   </div>
-                </div>
+                </ng-container>
+                <ng-template #heroFinishedNoGoal>
+                  <div class="hero-kpi__row" *ngIf="finishedVsOpenPct != null; else heroFinishedCountOnly">
+                    <p class="hero-kpi__value">{{ finishedVsOpenPct | number:'1.1-1':'pt-BR' }}%</p>
+                    <div class="hero-kpi__gauge" aria-hidden="true">
+                      <div
+                        class="hero-kpi__gauge-fill"
+                        [style.width.%]="finishedHeroProgressPct">
+                      </div>
+                    </div>
+                  </div>
+                  <ng-template #heroFinishedCountOnly>
+                    <p class="hero-kpi__value">{{ root.mtd.finished | number:'1.0-0':'pt-BR' }}</p>
+                  </ng-template>
+                </ng-template>
                 <div class="hero-kpi__delta">
                   <span class="hero-kpi__hint" *ngIf="heroDeliveriesDetailLabel">{{ heroDeliveriesDetailLabel }}</span>
                   <span class="hero-kpi__hint" *ngIf="!showHeroDeliveriesGoal && finishedVsOpenPct != null">
@@ -336,41 +346,38 @@
                 </div>
               </div>
 
-              <div class="pace-compare__metrics">
-                <div class="pace-compare__metric">
-                  <div class="pace-compare__metric-head">
-                    <span class="pace-compare__metric-label">Ritmo atual</span>
-                    <span class="pace-compare__metric-value">{{ cmp.currentPaceLabel }} <span class="pace-compare__metric-unit">pts/dia</span></span>
-                  </div>
-                  <div class="pace-compare__bar" aria-hidden="true">
-                    <div
-                      class="pace-compare__bar-fill pace-compare__bar-fill--current"
-                      [class.pace-compare__bar-fill--positive]="cmp.tone === 'positive'"
-                      [class.pace-compare__bar-fill--warning]="cmp.tone === 'warning' || cmp.tone === 'negative'"
-                      [style.width.%]="cmp.currentBarPct">
-                    </div>
+              <div class="pace-compare__metric">
+                <div class="pace-compare__metric-head">
+                  <span class="pace-compare__metric-label">Ritmo (pts/dia)</span>
+                </div>
+                <div class="pace-compare__metric-row">
+                  <span
+                    class="pace-compare__metric-value"
+                    [class.pace-compare__metric-value--positive]="cmp.tone === 'positive'"
+                    [class.pace-compare__metric-value--warning]="cmp.tone === 'warning' || cmp.tone === 'negative'">
+                    {{ cmp.currentPaceLabel }}
+                  </span>
+                  <span class="pace-compare__metric-separator">de</span>
+                  <span class="pace-compare__metric-value pace-compare__metric-value--required">{{ cmp.requiredPaceLabel }}</span>
+                  <span class="pace-compare__metric-unit">necessários</span>
+                </div>
+                <div class="pace-compare__bar" aria-hidden="true">
+                  <div
+                    class="pace-compare__bar-fill pace-compare__bar-fill--current"
+                    [class.pace-compare__bar-fill--positive]="cmp.tone === 'positive'"
+                    [class.pace-compare__bar-fill--warning]="cmp.tone === 'warning' || cmp.tone === 'negative'"
+                    [style.width.%]="cmp.paceRatioPct > 100 ? 100 : cmp.paceRatioPct">
                   </div>
                 </div>
-
-                <div class="pace-compare__metric">
-                  <div class="pace-compare__metric-head">
-                    <span class="pace-compare__metric-label">Ritmo necessário</span>
-                    <span class="pace-compare__metric-value">{{ cmp.requiredPaceLabel }} <span class="pace-compare__metric-unit">pts/dia</span></span>
-                  </div>
-                  <div class="pace-compare__bar" aria-hidden="true">
-                    <div class="pace-compare__bar-fill pace-compare__bar-fill--required" [style.width.%]="cmp.requiredBarPct"></div>
-                  </div>
-                </div>
+                <p class="pace-compare__gap">
+                  Diferença:
+                  <strong
+                    [class.pace-compare__gap--positive]="cmp.paceGapPerDay >= 0"
+                    [class.pace-compare__gap--negative]="cmp.paceGapPerDay < 0">
+                    {{ cmp.paceGapPerDayLabel }}
+                  </strong>
+                </p>
               </div>
-
-              <p class="pace-compare__gap">
-                Diferença:
-                <strong
-                  [class.pace-compare__gap--positive]="cmp.paceGapPerDay >= 0"
-                  [class.pace-compare__gap--negative]="cmp.paceGapPerDay < 0">
-                  {{ cmp.paceGapPerDayLabel }}
-                </strong>
-              </p>
             </div>
 
             <div class="pace-cards" *ngIf="paceSupportingCards.length">
@@ -381,7 +388,10 @@
                 [class.pace-card--negative]="card.tone === 'negative'"
                 [class.pace-card--warning]="card.tone === 'warning'">
                 <p class="pace-card__label">{{ card.label }}</p>
-                <p class="pace-card__value">{{ card.value }}</p>
+                <div class="pace-card__value-row">
+                  <p class="pace-card__value">{{ card.value }}</p>
+                  <span class="pace-card__value-meta" *ngIf="card.valueMeta">{{ card.valueMeta }}</span>
+                </div>
                 <p class="pace-card__hint" *ngIf="card.hint">{{ card.hint }}</p>
               </div>
             </div>
@@ -400,7 +410,7 @@
               </div>
               <div class="operational-health__total">
                 <p class="operational-health__total-value">{{ pipelineTotal | number:'1.0-0':'pt-BR' }}</p>
-                <p class="operational-health__total-label">Total em aberto</p>
+                <p class="operational-health__total-label">Pendentes em aberto total</p>
               </div>
             </div>
 
@@ -428,7 +438,7 @@
               </button>
             </div>
 
-            <div class="pipeline-bar" role="img" [attr.aria-label]="'Distribuição do pipeline operacional'">
+            <div class="pipeline-bar" role="img" [attr.aria-label]="'Distribuição dos pendentes em aberto'">
               <button
                 *ngFor="let seg of pipelineSegments; trackBy: trackByPipelineSegment"
                 type="button"
@@ -759,7 +769,7 @@
                         [class.balance-badge--success]="(dir.balance_score ?? 0) >= 100"
                         [class.balance-badge--info]="(dir.balance_score ?? 0) >= 60 && (dir.balance_score ?? 0) < 100"
                         [class.balance-badge--warning]="(dir.balance_score ?? 0) < 60">
-                        {{ dir.balance_score != null ? (dir.balance_score | number:'1.0-0':'pt-BR') : '—' }}
+                        {{ dir.balance_score != null ? (dir.balance_score | number:'1.0-0':'pt-BR') + '%' : '—' }}
                       </span>
                     </td>
                   </tr>
@@ -835,8 +845,8 @@
                     <th class="simple-table__num">% Prazo</th>
                     <th class="simple-table__num">Entregas</th>
                     <th class="simple-table__num">Clientes</th>
-                    <th class="simple-table__num">Onboarding</th>
-                    <th class="simple-table__num">Acess. churn</th>
+                    <th class="simple-table__num">Em onboarding</th>
+                    <th class="simple-table__num">Risco churn</th>
                     <th class="simple-table__num">Pontos</th>
                   </tr>
                 </thead>

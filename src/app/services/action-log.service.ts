@@ -42,7 +42,10 @@ import type {
   OrganizationHierarchyDeliveriesResponse,
   OrgHierarchyDeliveriesDrilldownKey,
   CriticalClientIssueFilter,
-  Game4uReportsOrganizationHierarchyInsightsQuery
+  Game4uReportsOrganizationHierarchyInsightsQuery,
+  Game4uReportsOrganizationHierarchyExportJobBody,
+  OrganizationHierarchyExportJobCreateResponse,
+  OrganizationHierarchyExportJobStatusResponse
 } from '@model/game4u-api.model';
 import { SessaoProvider } from '@providers/sessao/sessao.provider';
 import {
@@ -946,7 +949,7 @@ export class ActionLogService {
     nodeId?: string;
     companyServeKey?: string;
     issue?: CriticalClientIssueFilter;
-    allScoringEvents?: boolean;
+    dedupeDeliveries?: boolean;
   }): Observable<HttpResponse<Blob>> {
     if (!(isGame4uDataEnabled() && this.game4u.isConfigured())) {
       return throwError(
@@ -967,7 +970,7 @@ export class ActionLogService {
         ...(nodeType ? { node_type: nodeType } : {}),
         ...(nodeId ? { node_id: nodeId } : {}),
         ...(companyServeKey ? { company_serve_key: companyServeKey } : {}),
-        ...(options.allScoringEvents ? { all_scoring_events: true } : {})
+        ...(options.dedupeDeliveries === false ? { dedupe_deliveries: false } : {})
       })
       .pipe(
         catchError(err => {
@@ -975,6 +978,49 @@ export class ActionLogService {
           return throwError(() => err);
         })
       );
+  }
+
+  /**
+   * `POST /game/reports/organization/hierarchy-report/exports`
+   */
+  createOrganizationHierarchyExportJob(
+    body: Game4uReportsOrganizationHierarchyExportJobBody
+  ): Observable<OrganizationHierarchyExportJobCreateResponse> {
+    if (!(isGame4uDataEnabled() && this.game4u.isConfigured())) {
+      return throwError(() => new Error('[Game4U] export job: backend não configurado.'));
+    }
+    return this.game4u.postGameReportsOrganizationHierarchyExportJob(body).pipe(
+      catchError(err => {
+        console.error('Error creating organization/hierarchy-report export job:', err);
+        return throwError(() => err);
+      })
+    );
+  }
+
+  getOrganizationHierarchyExportJobStatus(
+    jobId: string
+  ): Observable<OrganizationHierarchyExportJobStatusResponse> {
+    if (!(isGame4uDataEnabled() && this.game4u.isConfigured())) {
+      return throwError(() => new Error('[Game4U] export job status: backend não configurado.'));
+    }
+    return this.game4u.getGameReportsOrganizationHierarchyExportJobStatus(jobId).pipe(
+      catchError(err => {
+        console.error('Error fetching organization/hierarchy-report export job status:', err);
+        return throwError(() => err);
+      })
+    );
+  }
+
+  downloadOrganizationHierarchyExportJob(jobId: string): Observable<HttpResponse<Blob>> {
+    if (!(isGame4uDataEnabled() && this.game4u.isConfigured())) {
+      return throwError(() => new Error('[Game4U] export job download: backend não configurado.'));
+    }
+    return this.game4u.getGameReportsOrganizationHierarchyExportJobDownload(jobId).pipe(
+      catchError(err => {
+        console.error('Error downloading organization/hierarchy-report export job:', err);
+        return throwError(() => err);
+      })
+    );
   }
 
   /**
@@ -1035,7 +1081,8 @@ export class ActionLogService {
     nodeId?: string;
     companyServeKey?: string;
     issue?: CriticalClientIssueFilter;
-    allScoringEvents?: boolean;
+    dedupeDeliveries?: boolean;
+    includeHierarchy?: boolean;
   }): Observable<OrganizationHierarchyDeliveriesResponse | null> {
     if (!(isGame4uDataEnabled() && this.game4u.isConfigured())) {
       return of(null);
@@ -1047,9 +1094,10 @@ export class ActionLogService {
     const nodeId = (options.nodeId ?? '').trim();
     const companyServeKey = (options.companyServeKey ?? '').trim();
     const issue = (options.issue ?? '').trim();
-    const allScoringEvents = options.allScoringEvents === true;
+    const dedupeDeliveries = options.dedupeDeliveries;
+    const includeHierarchy = options.includeHierarchy;
 
-    const cacheKey = `g4u_org_hierarchy_deliveries_${monthParam}_${drilldown}_${nodeType}_${nodeId}_${companyServeKey}_${issue}_${allScoringEvents ? '1' : '0'}`;
+    const cacheKey = `g4u_org_hierarchy_deliveries_${monthParam}_${drilldown}_${nodeType}_${nodeId}_${companyServeKey}_${issue}_${dedupeDeliveries === false ? '0' : dedupeDeliveries === true ? '1' : 'd'}_${includeHierarchy === false ? '0' : includeHierarchy === true ? '1' : 'd'}`;
     const cached = this.getCachedData(
       this.game4uOrganizationHierarchyDeliveriesCache,
       cacheKey,
@@ -1067,13 +1115,19 @@ export class ActionLogService {
         ...(nodeId ? { node_id: nodeId } : {}),
         ...(companyServeKey ? { company_serve_key: companyServeKey } : {}),
         ...(issue ? { issue: issue as CriticalClientIssueFilter } : {}),
-        ...(allScoringEvents ? { all_scoring_events: true } : {})
+        ...(dedupeDeliveries === false ? { dedupe_deliveries: false } : {}),
+        ...(dedupeDeliveries === true ? { dedupe_deliveries: true } : {}),
+        ...(includeHierarchy === false ? { include_hierarchy: false } : {}),
+        ...(includeHierarchy === true ? { include_hierarchy: true } : {})
       })
       .pipe(
         map(body => normalizeOrganizationHierarchyDeliveriesResponse(body)),
         catchError(err => {
           if (err instanceof HttpErrorResponse && err.status === 404) {
             return of(null);
+          }
+          if (err instanceof HttpErrorResponse && err.status === 400) {
+            return throwError(() => err);
           }
           console.error('Error fetching organization/hierarchy-report/deliveries:', err);
           return of(null);

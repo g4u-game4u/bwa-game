@@ -18,6 +18,7 @@ export const environment = {
   
   // Feature Flags
   enableAnalytics: false,
+  orgHierarchyAsyncExport: true,
   
   // Logo Configuration (supports both uppercase and lowercase env var names)
   logoUrl: process.env['LOGO_URL'] || process.env['logo_url'] || '',

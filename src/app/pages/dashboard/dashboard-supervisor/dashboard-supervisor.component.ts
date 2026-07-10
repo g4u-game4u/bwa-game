@@ -16,6 +16,8 @@ import { SessaoProvider } from '@providers/sessao/sessao.provider';
 import { CacheManagerService } from '@services/cache-manager.service';
 import { SupabaseCompaniesService } from '@services/supabase-companies.service';
 import { Company, KPIData } from '@model/gamification-dashboard.model';
+import { getOnTimeDeliveryGoalForMonth } from '@app/constants/on-time-delivery-goal';
+import { dateFromMonthFilterOffset } from '@utils/month-filter-offset.util';
 
 /** View mode toggle for the main content area */
 export type SupervisorViewMode = 'card' | 'table';
@@ -165,7 +167,7 @@ export class DashboardSupervisorComponent implements OnInit, OnDestroy {
 
           // Goals
           const cnpjGoal = extra.cnpj_goal != null ? Number(extra.cnpj_goal) : 100;
-          const entregaGoal = extra.entrega_goal != null ? Number(extra.entrega_goal) : 90;
+          const entregaGoal = this.getEntregaGoalForSelectedMonth();
 
           this.supervisorInfo = {
             name: playerData.name || '',
@@ -377,7 +379,7 @@ export class DashboardSupervisorComponent implements OnInit, OnDestroy {
 
     // Goals
     const cnpjGoal = extra.cnpj_goal != null ? Number(extra.cnpj_goal) : 100;
-    const entregaGoal = extra.entrega_goal != null ? Number(extra.entrega_goal) : 90;
+    const entregaGoal = this.getEntregaGoalForSelectedMonth();
 
     const cnpjSuperTarget = Math.ceil(cnpjGoal * 1.5);
 
@@ -711,6 +713,10 @@ export class DashboardSupervisorComponent implements OnInit, OnDestroy {
   /** Round a value for display */
   roundValue(value: number): number {
     return Math.round(value);
+  }
+
+  private getEntregaGoalForSelectedMonth(): number {
+    return getOnTimeDeliveryGoalForMonth(dateFromMonthFilterOffset(this.selectedMonthsAgo));
   }
 
   /** Get clean company display name from CNPJ using the enriched name map */

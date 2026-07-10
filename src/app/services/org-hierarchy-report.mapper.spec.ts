@@ -28,7 +28,10 @@ import {
   mapPlayerAccessRows,
   avgAccessSessionsPerActiveUser,
   weekdayMaxAccessDays,
-  weekdayMaxAccessSessions
+  weekdayMaxAccessSessions,
+  mapOrgPipelineSegments,
+  mapOrgPipelineLegendSegments,
+  orgPipelineSegmentsTotal
 } from './org-hierarchy-report.mapper';
 
 describe('org-hierarchy-report.mapper highlights', () => {
@@ -504,6 +507,47 @@ describe('org-hierarchy-report.mapper access', () => {
   it('computes avg sessions per active user', () => {
     expect(avgAccessSessionsPerActiveUser(25, 5)).toBe(5);
     expect(avgAccessSessionsPerActiveUser(10, 0)).toBeNull();
+  });
+});
+
+describe('org-hierarchy-report.mapper pipeline', () => {
+  it('maps pipeline bar segments without pending_open total', () => {
+    const segments = mapOrgPipelineSegments({
+      pending_open: 3179,
+      near_due: 1645,
+      overdue_pending_justified: 294,
+      overdue_pending_unjustified: 1240,
+      multa_risk: 222,
+      multa_incurred: 15
+    });
+
+    expect(segments.map((seg) => seg.key)).toEqual([
+      'near_due',
+      'overdue_pending_justified',
+      'overdue_pending_unjustified'
+    ]);
+    expect(segments.find((seg) => seg.key === 'pending_open')).toBeUndefined();
+    expect(orgPipelineSegmentsTotal(segments)).toBe(1645 + 294 + 1240);
+  });
+
+  it('maps pipeline legend with pending_open total chip outside the bar', () => {
+    const mtd = {
+      pending_open: 3179,
+      near_due: 1645,
+      overdue_pending_justified: 294,
+      overdue_pending_unjustified: 1240
+    };
+
+    const legend = mapOrgPipelineLegendSegments(mtd);
+
+    expect(legend.map((seg) => seg.key)).toEqual([
+      'pending_open',
+      'near_due',
+      'overdue_pending_justified',
+      'overdue_pending_unjustified'
+    ]);
+    expect(legend[0].label).toBe('Pendentes em aberto total');
+    expect(legend[0].value).toBe(3179);
   });
 });
 

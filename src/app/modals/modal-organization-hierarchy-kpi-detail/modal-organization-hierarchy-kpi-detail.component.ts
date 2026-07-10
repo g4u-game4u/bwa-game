@@ -12,6 +12,7 @@ import {
 } from '@angular/core';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
+import { HttpErrorResponse } from '@angular/common/http';
 import type {
   CriticalClientItem,
   CriticalClientIssueFilter,
@@ -26,6 +27,7 @@ import type {
   OrganizationHierarchyKpiDetailResponse,
   OrganizationHierarchyReportParams
 } from '@model/game4u-api.model';
+import { getOrgHierarchyDeliveriesList } from '@model/game4u-api.model';
 import type { ChartDataset } from '@model/gamification-dashboard.model';
 import { ActionLogService } from '@services/action-log.service';
 import {
@@ -36,7 +38,8 @@ import {
 } from '@services/org-hierarchy-report.mapper';
 import {
   buildOrgHierarchyDeliveriesExportFilename,
-  flattenOrgHierarchyDeliveriesForExport
+  flattenOrgHierarchyDeliveriesForExport,
+  flattenOrgHierarchyDeliveriesListForExport
 } from '@services/org-hierarchy-kpi-export.mapper';
 import {
   formatCriticalClientIssueKindLabel,
@@ -47,13 +50,15 @@ import {
   getCriticalClientTierClass,
   formatCriticalClientRiskScore,
   buildCriticalClientDeliveriesView,
-  countCriticalClientDeliveriesByIssue
+  countCriticalClientDeliveriesByIssue,
+  criticalClientDeliveriesUseFlatList,
+  resolveCriticalClientExpectedDeliveryCount,
+  resolveCriticalClientKpiParityMismatch
 } from '@services/org-hierarchy-critical-clients.mapper';
 import { ToastService } from '@services/toast.service';
+import { OrgHierarchyExportJobService } from '@services/org-hierarchy-export-job.service';
 import {
   downloadSpreadsheetFile,
-  downloadBlobFile,
-  parseHttpContentDispositionFilename,
   type SpreadsheetExportFormat
 } from '@utils/spreadsheet-export';
 import {
@@ -107,14 +112,13 @@ export class ModalOrganizationHierarchyKpiDetailComponent implements OnInit, OnC
   private readonly destroy$ = new Subject<void>();
 
   isLoading = false;
-  isExportingClientsServed = false;
   kpiDetail: OrganizationHierarchyKpiDetailResponse | null = null;
   deliveries: OrganizationHierarchyDeliveriesResponse | null = null;
   deliverySearchQuery = '';
   clientListSearchQuery = '';
   clientListFilter: OrgHierarchyClientListKey = 'clients_served';
-  /** `false` = lista resumida (1 linha/entrega); `true` = detalhe alinhado aos contadores KPI. */
-  criticalClientAllScoringEvents = false;
+  /** `true` = 1 linha por entrega (default API); `false` = cada user_action (detalhe KPI). */
+  criticalClientDedupeDeliveries = true;
   criticalClientIssueFilter: CriticalClientIssueFilter = 'all';
   private criticalClientDeliveriesSource: OrganizationHierarchyDeliveriesResponse | null = null;
 
@@ -124,17 +128,25 @@ export class ModalOrganizationHierarchyKpiDetailComponent implements OnInit, OnC
 
   constructor(
     private readonly actionLogService: ActionLogService,
+    private readonly exportJobService: OrgHierarchyExportJobService,
     private readonly toastService: ToastService,
     private readonly cdr: ChangeDetectorRef
   ) {}
 
+  get isExportingClientsServed(): boolean {
+    return this.exportJobService.hasActiveJob('clients_served_xlsx');
+  }
+
   ngOnInit(): void {
     void this.load();
+    this.exportJobService.jobs$.pipe(takeUntil(this.destroy$)).subscribe(() => {
+      this.cdr.markForCheck();
+    });
   }
 
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['criticalClient']) {
-      this.criticalClientAllScoringEvents = false;
+      this.criticalClientDedupeDeliveries = true;
       this.criticalClientIssueFilter = this.issueFilter ?? 'all';
     }
     if (
@@ -179,19 +191,19 @@ export class ModalOrganizationHierarchyKpiDetailComponent implements OnInit, OnC
   ];
 
   readonly criticalClientViewModes: ReadonlyArray<{
-    allScoringEvents: boolean;
+    dedupeDeliveries: boolean;
     label: string;
     title: string;
   }> = [
     {
-      allScoringEvents: false,
+      dedupeDeliveries: true,
       label: 'Resumida',
-      title: 'Uma linha por entrega problemática'
+      title: 'Uma linha por entrega problemática (paridade com KPI)'
     },
     {
-      allScoringEvents: true,
+      dedupeDeliveries: false,
       label: 'Detalhe KPI',
-      title: 'Eventos alinhados aos contadores MTD (atraso + entrega tardia)'
+      title: 'Cada evento de pontuação (user_action) alinhado aos contadores MTD'
     }
   ];
 
@@ -365,29 +377,59 @@ export class ModalOrganizationHierarchyKpiDetailComponent implements OnInit, OnC
     return this.filterDiretoriasBySearch(source, term);
   }
 
+  get criticalClientUsesFlatList(): boolean {
+    return criticalClientDeliveriesUseFlatList(this.deliveries);
+  }
+
+  get filteredFlatDeliveries(): OrganizationHierarchyDeliveryRow[] {
+    const source = getOrgHierarchyDeliveriesList(this.deliveries);
+    const term = this.normalizeSearchTerm(this.deliverySearchQuery);
+    if (!term) {
+      return source;
+    }
+    return source.filter(delivery => this.deliveryMatchesSearch(delivery, {
+      diretoriaLabel: '',
+      gerenciaLabel: '',
+      supervisorLabel: ''
+    }, term));
+  }
+
+  get hasDeliveriesToShow(): boolean {
+    return this.criticalClientUsesFlatList
+      ? this.filteredFlatDeliveries.length > 0
+      : this.filteredDiretorias.length > 0;
+  }
+
   get filteredDeliveryTotal(): number {
+    if (this.criticalClientUsesFlatList) {
+      return this.filteredFlatDeliveries.length;
+    }
     return this.filteredDiretorias.reduce((sum, dir) => sum + (dir.delivery_count ?? 0), 0);
   }
 
   get criticalClientExpectedDeliveryCount(): number | null {
-    if (!this.criticalClient || !this.criticalClientAllScoringEvents) {
-      return null;
-    }
-    return getCriticalClientExpectedDeliveryCount(this.criticalClient, this.criticalClientIssueFilter);
+    return resolveCriticalClientExpectedDeliveryCount(
+      this.criticalClientDeliveriesSource,
+      this.criticalClient,
+      this.criticalClientIssueFilter,
+      this.criticalClientDedupeDeliveries
+    );
   }
 
   get criticalClientDeliveryCountMismatch(): boolean {
-    if (!this.criticalClientAllScoringEvents || !this.deliveries || this.criticalClientExpectedDeliveryCount == null) {
-      return false;
-    }
-    return this.deliveries.total_deliveries !== this.criticalClientExpectedDeliveryCount;
+    return resolveCriticalClientKpiParityMismatch(
+      this.criticalClientDeliveriesSource,
+      this.criticalClient,
+      this.criticalClientIssueFilter,
+      this.criticalClientDedupeDeliveries
+    );
   }
 
   criticalClientIssueCount(issue: CriticalClientIssueFilter): number {
     return countCriticalClientDeliveriesByIssue(
       this.criticalClientDeliveriesSource,
       issue,
-      this.criticalClientAllScoringEvents
+      this.criticalClientDedupeDeliveries
     );
   }
 
@@ -407,11 +449,11 @@ export class ModalOrganizationHierarchyKpiDetailComponent implements OnInit, OnC
     return this.criticalClient ? formatCriticalClientRiskScore(this.criticalClient.risk_score) : '—';
   }
 
-  onCriticalClientViewModeChange(allScoringEvents: boolean): void {
-    if (this.criticalClientAllScoringEvents === allScoringEvents) {
+  onCriticalClientViewModeChange(dedupeDeliveries: boolean): void {
+    if (this.criticalClientDedupeDeliveries === dedupeDeliveries) {
       return;
     }
-    this.criticalClientAllScoringEvents = allScoringEvents;
+    this.criticalClientDedupeDeliveries = dedupeDeliveries;
     this.applyCriticalClientDeliveriesView();
     this.cdr.markForCheck();
   }
@@ -531,7 +573,6 @@ export class ModalOrganizationHierarchyKpiDetailComponent implements OnInit, OnC
 
   private resetState(): void {
     this.isLoading = true;
-    this.isExportingClientsServed = false;
     this.kpiDetail = null;
     this.deliveries = null;
     this.criticalClientDeliveriesSource = null;
@@ -648,6 +689,11 @@ export class ModalOrganizationHierarchyKpiDetailComponent implements OnInit, OnC
     if (!this.criticalClient) {
       return;
     }
+    this.isLoading = true;
+    this.deliveries = null;
+    this.criticalClientDeliveriesSource = null;
+    this.cdr.markForCheck();
+
     this.actionLogService
       .fetchOrganizationHierarchyDeliveries({
         month: this.month,
@@ -655,8 +701,7 @@ export class ModalOrganizationHierarchyKpiDetailComponent implements OnInit, OnC
         nodeType: this.nodeType,
         nodeId: this.nodeId,
         companyServeKey: this.criticalClient.company_serve_key,
-        issue: 'all',
-        allScoringEvents: true
+        issue: 'all'
       })
       .pipe(takeUntil(this.destroy$))
       .subscribe({
@@ -666,10 +711,16 @@ export class ModalOrganizationHierarchyKpiDetailComponent implements OnInit, OnC
           this.isLoading = false;
           this.cdr.markForCheck();
         },
-        error: () => {
+        error: err => {
           this.criticalClientDeliveriesSource = null;
           this.deliveries = null;
           this.isLoading = false;
+          if (err instanceof HttpErrorResponse && err.status === 400) {
+            this.toastService.error(
+              'Lista muito grande; use visão resumida ou filtre por tipo de problema.',
+              false
+            );
+          }
           this.cdr.markForCheck();
         }
       });
@@ -678,7 +729,7 @@ export class ModalOrganizationHierarchyKpiDetailComponent implements OnInit, OnC
   private applyCriticalClientDeliveriesView(): void {
     this.deliveries = buildCriticalClientDeliveriesView(this.criticalClientDeliveriesSource, {
       issue: this.criticalClientIssueFilter,
-      allScoringEvents: this.criticalClientAllScoringEvents
+      dedupeDeliveries: this.criticalClientDedupeDeliveries
     });
   }
 
@@ -738,7 +789,7 @@ export class ModalOrganizationHierarchyKpiDetailComponent implements OnInit, OnC
   }
 
   exportDeliveries(format: SpreadsheetExportFormat): void {
-    const rows = flattenOrgHierarchyDeliveriesForExport(this.filteredDiretorias, {
+    const exportOptions = {
       includeDelayColumn: this.showDeliveryDelayColumn && !this.showDeliveryFinishedColumn,
       includeFinishedColumn: this.showDeliveryFinishedColumn,
       includePointsColumn: this.showDeliveryPointsColumn,
@@ -746,8 +797,11 @@ export class ModalOrganizationHierarchyKpiDetailComponent implements OnInit, OnC
       includeDelayWithFinished: this.kpi === 'multa_incurred' || this.isCriticalClientDrilldown,
       includeIssueKindColumn: this.showDeliveryIssueKindColumn,
       includeCnpj: format === 'xlsx',
-      includeUserActionId: this.isCriticalClientDrilldown && this.criticalClientAllScoringEvents
-    });
+      includeUserActionId: this.isCriticalClientDrilldown && !this.criticalClientDedupeDeliveries
+    };
+    const rows = this.criticalClientUsesFlatList
+      ? flattenOrgHierarchyDeliveriesListForExport(this.filteredFlatDeliveries, exportOptions)
+      : flattenOrgHierarchyDeliveriesForExport(this.filteredDiretorias, exportOptions);
     if (rows.length === 0) {
       this.toastService.error('Nenhuma entrega para exportar.', false);
       return;
@@ -850,46 +904,13 @@ export class ModalOrganizationHierarchyKpiDetailComponent implements OnInit, OnC
     if (this.isExportingClientsServed || this.kpi !== 'clients_served') {
       return;
     }
-    this.isExportingClientsServed = true;
+    this.exportJobService.startClientsServedExport({
+      month: this.month,
+      nodeType: this.nodeType,
+      nodeId: this.nodeId,
+      scopeLabel: this.nodeLabel
+    });
     this.cdr.markForCheck();
-
-    this.actionLogService
-      .exportOrganizationHierarchyClientsServedXlsx({
-        month: this.month,
-        nodeType: this.nodeType,
-        nodeId: this.nodeId
-      })
-      .pipe(takeUntil(this.destroy$))
-      .subscribe({
-        next: res => {
-          this.isExportingClientsServed = false;
-          const blob = res.body;
-          if (!blob || blob.size === 0) {
-            this.toastService.error('Não foi possível exportar os clientes.', false);
-            this.cdr.markForCheck();
-            return;
-          }
-          const headerFilename = parseHttpContentDispositionFilename(
-            res.headers.get('Content-Disposition')
-          );
-          const filename =
-            headerFilename ??
-            buildOrgHierarchyClientListExportFilename({
-              listKey: 'clients_served',
-              month: this.month,
-              scopeLabel: this.nodeLabel,
-              format: 'xlsx'
-            });
-          downloadBlobFile(blob, filename);
-          this.toastService.success('Arquivo Excel exportado.');
-          this.cdr.markForCheck();
-        },
-        error: () => {
-          this.isExportingClientsServed = false;
-          this.toastService.error('Falha ao exportar clientes atendidos.', false);
-          this.cdr.markForCheck();
-        }
-      });
   }
 
   trackByClientListItem(_index: number, client: OrgHierarchyClientListItem): string {

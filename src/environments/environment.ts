@@ -28,6 +28,14 @@ export const environment = {
   
   // Feature Flags
   enableAnalytics: false,
+  /**
+   * Tenta `POST .../hierarchy-report/exports` + polling antes do GET síncrono legado.
+   * Desligar: ORG_HIERARCHY_ASYNC_EXPORT=false
+   */
+  orgHierarchyAsyncExport:
+    String(process.env['ORG_HIERARCHY_ASYNC_EXPORT'] ?? process.env['org_hierarchy_async_export'] ?? 'true')
+      .trim()
+      .toLowerCase() !== 'false',
   
   // Logo Configuration
   logoUrl: '', // Empty string means use default logo

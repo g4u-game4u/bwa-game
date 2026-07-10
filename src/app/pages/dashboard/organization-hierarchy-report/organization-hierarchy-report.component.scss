@@ -2030,6 +2030,10 @@
     align-items: center;
     gap: $spacing-sm;
     width: 100%;
+
+    .hero-kpi__value {
+      flex-shrink: 0;
+    }
   }
 
   &__gauge {
@@ -2064,6 +2068,10 @@
   &__hint {
     font-size: $font-size-caption;
     color: $text-secondary;
+
+    &--full {
+      flex-basis: 100%;
+    }
   }
 
   &__progress {
@@ -2559,12 +2567,26 @@
   }
 
   &__metrics {
-    display: grid;
-    gap: $spacing-md;
+    display: block;
+  }
 
-    @media (min-width: 768px) {
-      grid-template-columns: 1fr 1fr;
-    }
+  &__metric {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  &__metric-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 8px;
+  }
+
+  &__metric-separator {
+    font-size: $font-size-caption;
+    font-weight: 600;
+    color: $text-secondary;
   }
 
   &__metric-head {
@@ -2573,7 +2595,6 @@
     justify-content: space-between;
     align-items: baseline;
     gap: 8px;
-    margin-bottom: 8px;
   }
 
   &__metric-label {
@@ -2588,15 +2609,28 @@
     font-size: 1.35rem;
     font-weight: 700;
     font-variant-numeric: tabular-nums;
+
+    &--positive {
+      color: #4ade80;
+    }
+
+    &--warning {
+      color: #fbbf24;
+    }
+
+    &--required {
+      color: $text-primary;
+    }
   }
 
   &__metric-unit {
-    font-size: 0.8rem;
+    font-size: $font-size-caption;
     font-weight: 600;
     color: $text-secondary;
   }
 
   &__bar {
+    width: 100%;
     height: 10px;
     border-radius: 999px;
     background: rgba(255, 255, 255, 0.08);
@@ -2663,10 +2697,25 @@
     color: $text-secondary;
   }
 
+  &__value-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 8px;
+    margin-top: 4px;
+  }
+
   &__value {
-    margin: 4px 0 0;
+    margin: 0;
     font-size: 1.25rem;
     font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+
+  &__value-meta {
+    font-size: $font-size-caption;
+    font-weight: 600;
+    color: $text-secondary;
     font-variant-numeric: tabular-nums;
   }
 

@@ -310,7 +310,7 @@
                   </ng-container>
                 </span>
                 <span class="critical-client-drilldown__metric-label">
-                  {{ criticalClientAllScoringEvents ? 'Eventos (detalhe KPI)' : 'Entregas (resumida)' }}
+                  {{ criticalClientDedupeDeliveries ? 'Entregas (resumida)' : 'Eventos (detalhe KPI)' }}
                 </span>
               </div>
             </div>
@@ -374,11 +374,11 @@
               *ngFor="let mode of criticalClientViewModes"
               type="button"
               class="critical-view-modes__btn"
-              [class.critical-view-modes__btn--active]="criticalClientAllScoringEvents === mode.allScoringEvents"
+              [class.critical-view-modes__btn--active]="criticalClientDedupeDeliveries === mode.dedupeDeliveries"
               role="tab"
-              [attr.aria-selected]="criticalClientAllScoringEvents === mode.allScoringEvents"
+              [attr.aria-selected]="criticalClientDedupeDeliveries === mode.dedupeDeliveries"
               [attr.title]="mode.title"
-              (click)="onCriticalClientViewModeChange(mode.allScoringEvents)">
+              (click)="onCriticalClientViewModeChange(mode.dedupeDeliveries)">
               {{ mode.label }}
             </button>
           </div>
@@ -420,7 +420,7 @@
             </button>
           </div>
 
-          <div class="kpi-detail-modal__export-bar" *ngIf="filteredDiretorias.length > 0">
+          <div class="kpi-detail-modal__export-bar" *ngIf="hasDeliveriesToShow">
             <button
               type="button"
               class="kpi-detail-modal__export-btn"
@@ -440,14 +440,14 @@
           </div>
 
           <div
-            *ngIf="hasDeliverySearch && filteredDiretorias.length === 0"
+            *ngIf="hasDeliverySearch && !hasDeliveriesToShow"
             class="kpi-detail-modal__empty deliveries-search-empty"
             role="status">
             <i class="ri-search-line" aria-hidden="true"></i>
             <span>Nenhuma entrega encontrada para esta busca.</span>
           </div>
 
-          <div class="org-hierarchy-accordion" *ngIf="isCriticalClientDrilldown && filteredDiretorias.length > 0">
+          <div class="org-hierarchy-accordion" *ngIf="isCriticalClientDrilldown && !criticalClientUsesFlatList && filteredDiretorias.length > 0">
             <details *ngFor="let dir of filteredDiretorias" open class="org-hierarchy-accordion__block org-hierarchy-accordion__block--diretoria">
               <summary class="org-hierarchy-accordion__summary">
                 <span class="org-hierarchy-accordion__level">Diretoria</span>
@@ -518,6 +518,51 @@
                 </details>
               </div>
             </details>
+          </div>
+
+          <div
+            *ngIf="isCriticalClientDrilldown && criticalClientUsesFlatList && filteredFlatDeliveries.length > 0"
+            class="org-hierarchy-accordion__table-wrap critical-client-flat-table">
+            <table class="multa-table org-hierarchy-accordion__table" [attr.aria-label]="'Entregas: ' + modalTitle">
+              <thead>
+                <tr>
+                  <th>Cliente</th>
+                  <th>Tarefa</th>
+                  <th *ngIf="showDeliveryIssueKindColumn">Problema</th>
+                  <th>Prazo</th>
+                  <th *ngIf="showDeliveryDelayColumn && !showDeliveryFinishedColumn">Atraso</th>
+                  <th *ngIf="showDeliveryDelayColumn && showDeliveryFinishedColumn">Atraso legal</th>
+                  <th *ngIf="showDeliveryFinishedColumn">Conclusão</th>
+                  <th *ngIf="showDeliveryStatusColumn">Status</th>
+                  <th *ngIf="showDeliveryPointsColumn">Pontos</th>
+                  <th>Colaborador</th>
+                  <th>Time</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr *ngFor="let d of filteredFlatDeliveries" [ngClass]="deliveryRowClass(d)">
+                  <td>{{ deliveryCompanyLabel(d) }}</td>
+                  <td>{{ deliveryActionTitleLabel(d) }}</td>
+                  <td *ngIf="showDeliveryIssueKindColumn">
+                    <span
+                      class="org-hierarchy-accordion__issue"
+                      [class.org-hierarchy-accordion__issue--overdue]="d.issue_kind === 'overdue'"
+                      [class.org-hierarchy-accordion__issue--late]="d.issue_kind === 'late_finish'">
+                      {{ deliveryIssueKindLabel(d) }}
+                    </span>
+                  </td>
+                  <td>{{ formatIsoDate(d.dt_prazo) }}</td>
+                  <td *ngIf="showDeliveryDelayColumn">{{ formatIsoDate(d.dt_atraso) }}</td>
+                  <td *ngIf="showDeliveryFinishedColumn">{{ formatIsoDate(d.finished_at) }}</td>
+                  <td *ngIf="showDeliveryStatusColumn">
+                    <span class="multa-table__status">{{ deliveryStatusLabel(d) }}</span>
+                  </td>
+                  <td *ngIf="showDeliveryPointsColumn">{{ formatDeliveryPoints(d.points) }}</td>
+                  <td>{{ deliveryPlayerLabel(d) }}</td>
+                  <td>{{ d.team_name ?? d.team_id }}</td>
+                </tr>
+              </tbody>
+            </table>
           </div>
 
           <div class="multa-accordion" *ngIf="!isCriticalClientDrilldown && filteredDiretorias.length > 0">

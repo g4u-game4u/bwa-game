@@ -1202,6 +1202,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     const fromCache = this.getEntregasPrazoPercentFromDashboardCache();
     if (fromCache !== null) {
       this.applyEntregasPrazoKpiValue(idx, fromCache);
+      this.playerKPIs = this.kpiService.applyOnTimeDeliveryGoalToKpis(this.playerKPIs, this.selectedMonth);
       return;
     }
     if (this.isLoadingParticipacao || this.isLoadingParticipacaoKpi) {
@@ -1212,9 +1213,11 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     const avg = this.getEntregasPrazoPercentFromParticipacao();
 
     if (avg === null) {
+      const target = getOnTimeDeliveryGoalForMonth(this.selectedMonth);
       const updated: KPIData = {
         ...base,
         current: 0,
+        target,
         percentage: 0,
         color: 'gray',
         isMissing: true
@@ -1227,6 +1230,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     }
 
     this.applyEntregasPrazoKpiValue(idx, avg);
+    this.playerKPIs = this.kpiService.applyOnTimeDeliveryGoalToKpis(this.playerKPIs, this.selectedMonth);
   }
 
   private applyEntregasPrazoKpiValue(idx: number, avg: number): void {
@@ -1236,6 +1240,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     const updated: KPIData = {
       ...base,
       current: avg,
+      target,
       isMissing: false,
       percentage: Math.min(avg, 100),
       color: this.kpiService.getKPIColorByGoals(avg, target, superTarget)
@@ -1312,7 +1317,7 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     // Allow empty array - this means 0/0 (no KPIs available)
     const totalKPIs = kpis ? kpis.length : 0;
     const metasAchieved = kpis
-      ? kpis.filter(kpi => this.getKpiCurrentValue(kpi) >= kpi.target).length
+      ? kpis.filter(kpi => this.getKpiCurrentValue(kpi) >= this.getKpiTargetValue(kpi)).length
       : 0;
     
     // Update with KPI-based values
@@ -1856,9 +1861,22 @@ export class GamificationDashboardComponent implements OnInit, OnDestroy, AfterV
     return `${this.roundValue(kpi.current)}${kpi.unit || ''}`;
   }
 
+  /** Meta vigente do KPI (entregas no prazo respeita o mês filtrado: 90% ou 95%). */
+  get onTimeDeliveryGoalPct(): number {
+    return getOnTimeDeliveryGoalForMonth(this.selectedMonth);
+  }
+
+  getKpiTargetValue(kpi: KPIData): number {
+    if (kpi.id === 'entregas-prazo') {
+      return this.onTimeDeliveryGoalPct;
+    }
+    return kpi.target;
+  }
+
   kpiSidebarTitle(kpi: KPIData): string {
     if (kpi.id === 'entregas-prazo') {
-      return `${kpi.label}: ${this.kpiSidebarValue(kpi)} (meta ${kpi.target}${kpi.unit || '%'})`;
+      const target = this.getKpiTargetValue(kpi);
+      return `${kpi.label}: ${this.kpiSidebarValue(kpi)} (meta ${target}${kpi.unit || '%'})`;
     }
     return `${kpi.label}: ${this.roundValue(kpi.current)} / ${this.roundValue(kpi.target)}${kpi.unit ? ' ' + kpi.unit : ''}`;
   }
