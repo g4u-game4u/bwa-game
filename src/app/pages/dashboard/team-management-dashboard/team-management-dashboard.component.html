@@ -463,7 +463,7 @@
                     [audience]="executiveInsightsAudience">
                   </c4u-dashboard-insights>
 
-                  <div class="executive-kpi-row">
+                  <div *ngIf="!selectedCollaborator" class="executive-kpi-row">
                     <div *ngFor="let _ of executiveSkeletonKpiSlots" class="executive-skeleton-kpi">
                       <div class="executive-skeleton-bone executive-skeleton-kpi-icon"></div>
                       <div class="executive-skeleton-kpi-content">
@@ -513,53 +513,12 @@
                   </c4u-dashboard-insights>
 
                   <!-- KPI cards (row) -->
-                  <div class="executive-kpi-row" role="list" aria-label="Indicadores executivos do mês">
+                  <div
+                    *ngIf="!selectedCollaborator"
+                    class="executive-kpi-row"
+                    role="list"
+                    aria-label="Indicadores executivos do mês">
                     <div class="executive-kpi" role="listitem">
-                      <div class="executive-kpi-icon executive-kpi-icon--tasks" aria-hidden="true">
-                        <i class="ri-checkbox-circle-line"></i>
-                      </div>
-                      <div class="executive-kpi-content">
-                        <span class="executive-kpi-value">
-                          {{ executiveInsightsTotalTasks | number:'1.0-0':'pt-BR' }}
-                        </span>
-                        <span class="executive-kpi-label">Entregas finalizadas</span>
-                        <span
-                          *ngIf="executiveInsightsActivePlayers > 0 && !selectedCollaborator"
-                          class="executive-kpi-hint">
-                          ~{{ executiveInsightsAvgTasksPerActivePlayer | number:'1.0-1':'pt-BR' }} por pessoa ativa
-                        </span>
-                      </div>
-                    </div>
-
-                    <div class="executive-kpi" role="listitem">
-                      <div
-                        class="executive-kpi-icon executive-kpi-icon--ontime"
-                        [ngClass]="getExecutiveOnTimeBadgeClass(executiveInsightsOnTimePctOverall)"
-                        aria-hidden="true">
-                        <i class="ri-time-line"></i>
-                      </div>
-                      <div class="executive-kpi-content">
-                        <ng-container *ngIf="executiveInsightsOnTimePctOverall != null; else noOnTime">
-                          <span class="executive-kpi-value">
-                            {{ executiveInsightsOnTimePctOverall | number:'1.0-1':'pt-BR' }}%
-                          </span>
-                          <span class="executive-kpi-label">Entregas no prazo</span>
-                          <span
-                            *ngIf="executiveInsightsJudgedPrazoTasks > 0"
-                            class="executive-kpi-hint">
-                            {{ executiveInsightsOnTimeTasks | number:'1.0-0':'pt-BR' }} de
-                            {{ executiveInsightsJudgedPrazoTasks | number:'1.0-0':'pt-BR' }}
-                            {{ executiveInsightsJudgedPrazoTasks === 1 ? 'tarefa' : 'tarefas' }}
-                          </span>
-                        </ng-container>
-                        <ng-template #noOnTime>
-                          <span class="executive-kpi-value executive-kpi-value--muted">n/a</span>
-                          <span class="executive-kpi-label">Entregas no prazo</span>
-                        </ng-template>
-                      </div>
-                    </div>
-
-                    <div *ngIf="!selectedCollaborator" class="executive-kpi" role="listitem">
                       <div class="executive-kpi-icon executive-kpi-icon--people" aria-hidden="true">
                         <i class="ri-team-line"></i>
                       </div>
