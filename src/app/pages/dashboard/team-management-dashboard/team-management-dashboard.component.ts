@@ -399,7 +399,7 @@ export class TeamManagementDashboardComponent implements OnInit, OnDestroy {
   /** % de tarefas no prazo (média ponderada das linhas com `on_time_pct`). */
   executiveInsightsOnTimePctOverall: number | null = null;
 
-  readonly executiveSkeletonKpiSlots = [0, 1, 2];
+  readonly executiveSkeletonKpiSlots = [0];
   readonly executiveSkeletonProcessSlots = [0, 1, 2, 3];
   readonly executiveSkeletonPlayerBlocks = [0, 1];
   readonly executiveSkeletonPlayerSlots = [0, 1, 2];
